@@ -13,32 +13,27 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl diags [--log-dir=<LOG_DIR>] [--runtime=<RUNTIME>]
+  calicoctl diags [--log-dir=<LOG_DIR>]
 
 Description:
   Save diagnostic information
 
 Options:
   --log-dir=<LOG_DIR>  The directory for logs [default: /var/log/calico]
-  --runtime=<RUNTIME>  Specify the runtime used to run the calico/node 
-                       container, either "docker" or "rkt". 
-                       [default: docker]
 """
 import sys
-import sh
 import os
 from datetime import datetime
 import tarfile
-import socket
 import tempfile
 import traceback
 import subprocess
 
+import re
 from etcd import EtcdException
 from pycalico.datastore import DatastoreClient
 from shutil import copytree, ignore_patterns
 
-from utils import hostname
 from utils import print_paragraph
 
 
@@ -50,133 +45,38 @@ def diags(arguments):
     this file's docstring with docopt
     :return: None
     """
-    print("Collecting diags")
-
-    # Check runtime.  
-    runtime = arguments.get("--runtime")
-    if not runtime in ["docker", "rkt"]:
-        print "Invalid runtime specified: '%s'" % runtime
-        sys.exit(1)
-
-    save_diags(arguments["--log-dir"], runtime)
+    print("Collecting diagnostics")
+    save_diags(arguments["--log-dir"])
     sys.exit(0)
 
+temp_diags_dir = None
 
-def save_diags(log_dir, runtime="docker"):
+def save_diags(log_dir):
     # Create temp directory
     temp_dir = tempfile.mkdtemp()
+    global temp_diags_dir
     temp_diags_dir = os.path.join(temp_dir, 'diagnostics')
     os.mkdir(temp_diags_dir)
     print("Using temp dir: %s" % temp_dir)
 
-    # Write date to file
-    with DiagsErrorWriter(temp_diags_dir, 'date') as f:
-        f.write("DATE=%s" % datetime.strftime(datetime.today(),
-                                              "%Y-%m-%d_%H-%M-%S"))
-
-    # Write hostname to file
-    with DiagsErrorWriter(temp_diags_dir, 'hostname') as f:
-        f.write(str(hostname))
-
-    # Write netstat output to file
-    with DiagsErrorWriter(temp_diags_dir, 'netstat') as f:
-        try:
-            print("Dumping netstat output")
-            netstat = sh.Command._create("netstat")
-
-            f.writelines(netstat(
-                # Display all sockets (default: connected)
-                all=True,
-                # Don't resolve names
-                numeric=True))
-
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-
-    # Write routes
-    print("Dumping routes")
-    with DiagsErrorWriter(temp_diags_dir, 'route') as f:
-        try:
-            route = sh.Command._create("route")
-            f.write("route --numeric\n")
-            f.writelines(route(numeric=True))
-            f.write('\n')
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-
-        try:
-            ip = sh.Command._create("ip")
-            f.write("ip route\n")
-            f.writelines(ip("route"))
-            f.write('\n')
-
-            f.write("ip -6 route\n")
-            f.writelines(ip("-6", "route"))
-            f.write('\n')
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-
-    # Write interface info
-    print("Dumping ip addr")
-    with DiagsErrorWriter(temp_diags_dir, 'ip_addr') as f:
-        try:
-            ip = sh.Command._create("ip")
-            f.write("ip addr\n")
-            f.writelines(ip("addr"))
-            f.write('\n')
-
-            f.write("ip -6 addr\n")
-            f.writelines(ip("-6", "addr"))
-            f.write('\n')
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-
-    # Dump iptables
-    with DiagsErrorWriter(temp_diags_dir, 'iptables') as f:
-        try:
-            iptables_save = sh.Command._create("iptables-save")
-            print("Dumping iptables")
-            f.writelines(iptables_save())
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-
-    # Dump ipset list
-    # TODO: ipset might not be installed on the host. But we don't want to
-    # gather the diags in the container because it might not be running...
-    with DiagsErrorWriter(temp_diags_dir, 'ipset') as f:
-        try:
-            ipset = sh.Command._create("ipset")
-            print("Dumping ipset")
-            f.writelines(ipset("list"))
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-        except sh.ErrorReturnCode_1 as e:
-            print "  - Error running ipset. Maybe you need to run as root."
-            f.writelines("Error running ipset: %s\n" % e)
+    write_diags(None, "date")
+    write_diags(None, "hostname")
+    write_diags("Dumping netstat", "netstat --all --numeric")
+    write_diags("Dumping routes (IPv4)", "ip -4 route")
+    write_diags("Dumping routes (IPv6)", "ip -6 route")
+    write_diags("Dumping interface info (IPv4)", "ip -4 addr")
+    write_diags("Dumping interface info (IPv6)", "ip -6 addr")
+    write_diags("Dumping iptables (IPv4)", "iptables-save")
+    write_diags("Dumping iptables (IPv6)", "ip6tables-save")
+    write_diags("Dumping ipsets", "ipset list")
+    # If running under rkt, get the journal for the calico/node container.
+    write_diags("Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager")
 
     # Ask Felix to dump stats to its log file - ignore errors as the
     # calico/node container might not be running.  Gathering of the logs is
     # dependent on environment.
+    print("Dumping felix stats")
     subprocess.call(["pkill", "-SIGUSR1", "felix"])
-
-    # If running under rkt, get the journal for the calico/node container.
-    print "Copying journal for calico-node.service"
-    with DiagsErrorWriter(temp_diags_dir, "calico-node.journal") as f:
-        try:
-            journalctl = sh.Command._create("journalctl")
-            f.write(journalctl("-u", "calico-node.service", "--no-pager"))
-        except sh.CommandNotFound as e:
-            print "  - Missing command: %s" % e.message
-            f.writelines("Missing command: %s\n" % e.message)
-        except sh.ErrorReturnCode_1 as e:
-            print "  - Error running journalctl."
-            f.writelines("Error running journalctl: %s\n" % e)
 
     # Otherwise, calico logs are in the log directory.
     if os.path.isdir(log_dir):
@@ -189,7 +89,6 @@ def save_diags(log_dir, runtime="docker"):
 
     # Dump the contents of the etcd datastore.
     print("Dumping datastore")
-    # TODO: May want to move this into datastore.py as a dump-calico function
     with DiagsErrorWriter(temp_diags_dir, 'etcd_calico') as f:
         try:
             datastore_client = DatastoreClient()
@@ -220,6 +119,28 @@ def save_diags(log_dir, runtime="docker"):
                     "similar.  For example:")
     print("  curl --upload-file %s https://transfer.sh/%s" %
              (full_tar_path, os.path.basename(full_tar_path)))
+
+
+def write_diags(comment, command):
+    if comment:
+        print comment
+
+    # Strip out non letters and numbers from the command to form the filename
+    filename = re.sub(r'[^a-zA-Z0-9 -]', "", command)
+
+    # And substitute underscore for spaces
+    filename = re.sub(r'\s', "_", filename)
+
+    with DiagsErrorWriter(temp_diags_dir, filename) as f:
+        try:
+            output = subprocess.check_output(command,
+                                             shell=True,
+                                             stderr=subprocess.STDOUT)
+            f.write(output)
+        except subprocess.CalledProcessError as e:
+            print "Problem running command: %s\n  %s" % (command, e.output)
+            f.write("Problem running command: %s\n\n" % command)
+            f.write("%s\n" % e.output)
 
 
 class DiagsErrorWriter(object):
