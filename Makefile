@@ -28,27 +28,28 @@ dist/calico-ipam: $(SRCFILES) update-version
 	calico/build:v0.11.0 \
 	pyinstaller ipam.py -ayF -n calico-ipam
 
-# Updates the version information in __init__.py
+# Updates the version information in version.py
 update-version:
-	echo "# Auto-generated contents.  Do not manually edit!" > calico_cni/__init__.py
-	echo "__version__ = '$(shell git describe --tags)'" >> calico_cni/__init__.py
-	echo "__commit__ = '$(shell git rev-parse HEAD)'" >> calico_cni/__init__.py 
-	echo "__branch__ = '$(shell git rev-parse --abbrev-ref HEAD)'" >> calico_cni/__init__.py
+	echo "# Auto-generated contents.  Do not manually edit" > calico_cni/version.py
+	echo "# or check in this file." >> calico_cni/version.py
+	echo "__version__ = '$(shell git describe --tags)'" >> calico_cni/version.py
+	echo "__commit__ = '$(shell git rev-parse HEAD)'" >> calico_cni/version.py 
+	echo "__branch__ = '$(shell git rev-parse --abbrev-ref HEAD)'" >> calico_cni/version.py
 
 # Run the unit tests.
-ut:
+ut: update-version
 	docker run --rm -v `pwd`:/code \
 	calico/test \
 	nosetests tests/unit -c nose.cfg
 
 # Run the fv tests.
-fv: 
+fv: update-version
 	docker run --rm -v `pwd`:/code \
 	calico/test \
 	nosetests tests/fv -c nose.cfg
 
 # Makes tests on Circle CI.
-test-circle: 
+test-circle: update-version 
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
@@ -63,9 +64,9 @@ test-circle:
 clean:
 	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
-	-rm -rf dist
+	-sudo rm -rf dist
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
-
+	rm -f calico_cni/version.py
 
 ## Run etcd in a container. Generally useful.
 run-etcd:
