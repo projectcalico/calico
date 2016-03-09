@@ -31,9 +31,9 @@ These instructions allow you to set up a Kubernetes v1.1.4 cluster with [Calico 
     
 ### 1.3 Startup and SSH
 
-Edit `calico-containers/docs/cni/kubernetes/node-config.yaml` and replace all instances of `kubernetes-master` with the IP address `172.18.18.101`.
+Edit `calico-containers/docs/cni/kubernetes/cloud-config/node-config.yaml` and replace all instances of `kubernetes-master` with the IP address `172.18.18.101`.
 
-Edit `calico-containers/docs/cni/kubernetes/master-config.yaml` and remove the following line in `calico-node.service` to disable IP-in-IP, which is not needed for this guide.
+Edit `calico-containers/docs/cni/kubernetes/cloud-config/master-config.yaml` and remove the following line in `calico-node.service` to disable IP-in-IP, which is not needed for this guide.
 ```
 ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
