@@ -233,8 +233,8 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         except OSError:
             pass
 
-        # We will always want to setup IP forwarding
         _setup_ip_forwarding()
+        _set_nf_conntrack_max()
 
     # Print warnings for any known system issues before continuing
         if runtime == 'docker' and not running_in_container():
@@ -558,7 +558,7 @@ def _setup_ip_forwarding():
     try:
         with open('/proc/sys/net/ipv4/ip_forward', 'w') as f:
             f.write("1")
-    except:
+    except Exception:
         print "ERROR: Could not enable ipv4 forwarding."
         sys.exit(1)
 
@@ -566,10 +566,26 @@ def _setup_ip_forwarding():
         if ipv6_enabled():
             with open('/proc/sys/net/ipv6/conf/all/forwarding', 'w') as f:
                 f.write("1")
-    except:
+    except Exception:
         print "ERROR: Could not enable ipv6 forwarding."
         sys.exit(1)
 
+def _set_nf_conntrack_max():
+    """
+    A common problem on Linux systems is running out of space in the conntrack
+    table, which can cause poor iptables performance. This can happen if you
+    run a lot of workloads on a given host, or if your workloads create a lot
+    of TCP connections or bidirectional UDP streams.
+
+    To avoid this becoming a problem, we recommend increasing the conntrack
+    table size. To do so, run the following commands:
+    """
+    try:
+        with open('/proc/sys/net/netfilter/nf_conntrack_max', 'w') as f:
+            f.write("1000000")
+    except Exception:
+        print "WARNING: Could not set nf_contrack_max. This may have an impact at scale."
+        print "See http://docs.projectcalico.org/en/latest/configuration.html#system-configuration for more details"
 
 def node_stop(force):
     """

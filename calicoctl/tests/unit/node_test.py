@@ -176,6 +176,7 @@ class TestNode(unittest.TestCase):
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -192,7 +193,7 @@ class TestNode(unittest.TestCase):
                                    m_docker_client, m_client,
                                    m_error_if_bgp_ip_conflict,
                                    m_warn_if_hostname_conflict,
-                                   m_warn_if_unknown_ip, m_get_host_ips,
+                                   m_warn_if_unknown_ip, m_get_host_ips, m_conntrack,
                                    m_setup_ip, m_check_system, m_os_makedirs,
                                    m_os_path_exists, m_ipv6_enabled):
         """
@@ -262,6 +263,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -275,7 +277,7 @@ class TestNode(unittest.TestCase):
                         m_find_or_pull_node_image, m_docker,
                         m_docker_client, m_client,
                         m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
-                        m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip,
+                        m_warn_if_unknown_ip, m_get_host_ips, m_conntrack, m_setup_ip,
                         m_check_system, m_ensure_host_tunnel_addr,
                         m_remove_host_tunnel_addr, m_container, m_call,
                         m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
@@ -389,6 +391,7 @@ class TestNode(unittest.TestCase):
     @patch('calico_ctl.node._ensure_host_tunnel_addr', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -405,7 +408,7 @@ class TestNode(unittest.TestCase):
                                m_docker_client, m_client,
                                m_error_if_bgp_ip_conflict,
                                m_warn_if_hostname_conflict, m_warn_if_unknown_ip,
-                               m_get_host_ips, m_setup_ip, m_check_system,
+                               m_get_host_ips, m_conntrack, m_setup_ip, m_check_system,
                                m_ensure_host_tunnel_addr,
                                m_remove_host_tunnel_addr, m_os_getenv,
                                m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
@@ -558,6 +561,7 @@ class TestNode(unittest.TestCase):
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -569,7 +573,7 @@ class TestNode(unittest.TestCase):
     def test_node_start_remove_container_error(
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
+            m_warn_if_unknown_ip, m_get_host_ips, m_conntrack, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the docker client raises an APIError when it fails to
@@ -601,6 +605,7 @@ class TestNode(unittest.TestCase):
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -612,7 +617,7 @@ class TestNode(unittest.TestCase):
     def test_node_start_no_detected_ips(
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
+            m_warn_if_unknown_ip, m_get_host_ips, m_conntrack, m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_sys_exit, m_ipv6_enabled):
         """
         Test that system exits when no ip is provided and host ips cannot be
@@ -644,6 +649,7 @@ class TestNode(unittest.TestCase):
     @patch('os.makedirs', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
     @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node._set_nf_conntrack_max', autospec=True)
     @patch('calico_ctl.node.get_host_ips', autospec=True)
     @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
     @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
@@ -655,7 +661,7 @@ class TestNode(unittest.TestCase):
     def test_node_start_create_default_ip_pools(
             self, m_docker, m_docker_client, m_client, m_call,
             m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
-            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
+            m_warn_if_unknown_ip, m_get_host_ips, m_conntrack,  m_setup_ip, m_check_system,
             m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
         """
         Test that the client creates default ipv4 and ipv6 pools when the
