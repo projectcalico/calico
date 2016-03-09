@@ -235,9 +235,12 @@ def cut_release():
            "the pull request after comparing.")
     bullet("Create a GitHub release called '%s'" % new_version)
 
-    para("Attach the calicoctl binary to the release.  It can be downloaded "
-         "from the following URL:")
+    para("Attach the calicoctl binaries to the release.  "
+         "For linux, It can be downloaded from the following URL:")
     print "http://www.projectcalico.org/builds/calicoctl?circleci-branch=%s-candidate" % new_version
+    para("For Windows and Mac it can be downloaded from")
+    print "http://capitalship:8080/job/calicoctl-mac/"
+    print "http://capitalship:8080/job/calicoctl-windows/"
 
     para("Once the release has been created on GitHub, perform a final test "
          "of the release:")
