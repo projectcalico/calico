@@ -8,7 +8,7 @@
 
 # Deploying Calico and Kubernetes on CoreOS using Vagrant and VirtualBox
 
-These instructions allow you to set up a Kubernetes v1.1.4 cluster with [Calico networking][calico-networking] using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
+These instructions allow you to set up a Kubernetes cluster with [Calico networking][calico-networking] using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
 
 ## 1. Deploy cluster using Vagrant 
 
@@ -30,20 +30,6 @@ These instructions allow you to set up a Kubernetes v1.1.4 cluster with [Calico 
 <!--- end of master only -->
     
 ### 1.3 Startup and SSH
-
-Edit `calico-containers/docs/cni/kubernetes/cloud-config/node-config.yaml` and replace all instances of `kubernetes-master` with the IP address `172.18.18.101`.
-
-Edit `calico-containers/docs/cni/kubernetes/cloud-config/master-config.yaml` and remove the following line in `calico-node.service` to disable IP-in-IP, which is not needed for this guide.
-```
-ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-```
-
-And replace it with this line
-
-```
-ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --nat-outgoing
-```
-
 
 Change into the directory for this guide:
 
@@ -90,17 +76,27 @@ And finally check that Docker is running on both hosts by running
     docker ps
     
 ## 2. Using your cluster 
-### 2.1 Deploying SkyDNS
+### 2.1 Deploy Calico Policy Agent 
+The Calico Policy Agent enables network policy on Kubenrnetes. 
+
+To install it: 
+
+Log on to the master.
+```
+vagrant ssh calico-01
+```
+
+Create the agent.
+```
+kubectl create -f calico-policy-services.yaml
+```
+
+### 2.2 Deploying SkyDNS
 You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
 
 Log on to the master node.
 ```
 vagrant ssh calico-01
-```
-
-Check that all your nodes have registered. You should see an entry for each node.
-```
-kubectl get nodes
 ```
 
 Deploy the SkyDNS application using the provided Kubernetes manifest.
@@ -120,49 +116,17 @@ NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
 kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
 ```
 
-Check that the DNS pod has been networked using Calico.  You should see a single Calico endpoint. 
+Check that the DNS pod has been networked using Calico.  You should see a Calico endpoint created for the DNS pod. 
 ```
 calicoctl endpoint show --detailed
 ```
-
-### 2.2 Deploying the guestbook application
-You're now ready to deploy applications on your Cluster.  The following steps describe how to deploy the Kubernetes [guestbook application][guestbook].
-
-Log on to the master node.
-```
-vagrant ssh calico-01
-```
-
-Create the guestbook application pods and services using the provided manifest.
-```
-kubectl create -f guestbook.yaml
-```
-
-Check that the redis-master, redis-slave, and frontend pods are running correctly.  After a few minutes, the following command should show all pods in `Running` state.
-```
-kubectl get pods
-```
-> Note: The guestbook demo relies on a number of docker images which may take up to 5 minutes to download.
-
-Check that Calico endpoints have been created for the guestbook pods.
-```
-calicoctl endpoint show --detailed
-```
-
-The above manifests configure a web appliation that is exposed on port 30001 on each of your nodes using the Kubernetes NodePort mechanism. 
-```
-kubectl describe svc frontend
-```
-The service is available internally via a `10.100.0.X` IP address on port `80`, and outside the cluster using the NodePort `30001`.
-
-To access the guestbook application frontend, visit `http://172.18.18.101:30001` in your favorite browser.  Because we used a NodePort service to expose it outside the cluster, it should also be available at `http://172.18.18.102:30001`.
 
 ### 2.3 Next Steps
+Try deploying an application to the cluster.
+- [Calico Policy Demo](stars-demo/README.md)
+- [Kubernetes guestbook](vagrant-coreos/guestbook.md)
 
-Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
-
-You can also take a look at how you can use Calico [network policy on Kubernetes](Policy.md).
-
+You can also take a look at the various Kubernetes [example applications][examples].
 
 [calico-networking]: https://github.com/projectcalico/calico-containers
 [calico-cni]: https://github.com/projectcalico/calico-cni
@@ -170,7 +134,6 @@ You can also take a look at how you can use Calico [network policy on Kubernetes
 [vagrant]: https://www.vagrantup.com/downloads.html
 [using-coreos]: http://coreos.com/docs/using-coreos/
 [git]: http://git-scm.com/
-[guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
 [examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)

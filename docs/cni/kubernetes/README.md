@@ -24,7 +24,13 @@ Bare-metal guides:
 - [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
 
 # Kubernetes with Calico policy
-Calico can provide network policy for Kubernetes clusters.  This feature is currently experimental and disabled by default. [The policy documentation](Policy.md) explains how to enable and use Calico policy in a Kubernetes cluster.
+Calico can provide network policy for Kubernetes clusters using the v1alpha1 Kubernetes network-policy API.
+
+This feature is currently in alpha and disabled by default.  The following guide explains how to enable and use Calico policy on Kubernetes. 
+- [Kubernetes v1alpha1 Network Policy](NetworkPolicy.md)
+
+Calico also supports network policy using annotaions.  This method is deprecated, and as such is not recommended.
+- [Calico policy using Annotations](AnnotationPolicy.md) [Deprecated]
 
 # Requirements
 - The kube-proxy must be started in `iptables` proxy mode.

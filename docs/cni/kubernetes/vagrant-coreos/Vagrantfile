@@ -1,5 +1,5 @@
 # Size of the cluster created by Vagrant
-num_instances=2
+num_instances=3
 
 # Change basename of the VM
 instance_name_prefix="calico"
@@ -36,12 +36,14 @@ Vagrant.configure("2") do |config|
         # Configure the master.
         host.vm.provision :file, :source => "../manifests/skydns.yaml", :destination => "/home/core/skydns.yaml"
         host.vm.provision :file, :source => "../manifests/guestbook.yaml", :destination => "/home/core/guestbook.yaml"
-        host.vm.provision :file, :source => "../cloud-config/master-config.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :file, :source => "cloud-config/master-config.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :file, :source => "manifests/calico-policy-services.yaml", :destination => "/home/core/calico-policy-services.yaml"
+        host.vm.provision :file, :source => "../stars-demo", :destination => "/home/core/stars-demo"
         host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       else
         # Configure a node.
 	host.vm.provision :docker, images: ["busybox:latest", "gcr.io/google_containers/pause:0.8.0"] 
-        host.vm.provision :file, :source => "../cloud-config/node-config.yaml", :destination => "/tmp/vagrantfile-user-data"
+        host.vm.provision :file, :source => "cloud-config/node-config.yaml", :destination => "/tmp/vagrantfile-user-data"
         host.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       end
     end
