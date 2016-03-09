@@ -36,6 +36,10 @@ update-version:
 	echo "__commit__ = '$(shell git rev-parse HEAD)'" >> calico_cni/version.py 
 	echo "__branch__ = '$(shell git rev-parse --abbrev-ref HEAD)'" >> calico_cni/version.py
 
+# Copy the plugin into place
+deploy-rkt: dist/calicoctl
+	cp dist/calico /etc/rkt/net.d
+
 # Run the unit tests.
 ut: update-version
 	docker run --rm -v `pwd`:/code \
