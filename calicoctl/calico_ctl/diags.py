@@ -34,7 +34,7 @@ from etcd import EtcdException
 from pycalico.datastore import DatastoreClient
 from shutil import copytree, ignore_patterns
 
-from utils import print_paragraph
+from utils import print_paragraph, enforce_root
 
 
 def diags(arguments):
@@ -45,6 +45,8 @@ def diags(arguments):
     this file's docstring with docopt
     :return: None
     """
+    # The command has to be run as root for ipset collections (and iptables)
+    enforce_root()
     print("Collecting diagnostics")
     save_diags(arguments["--log-dir"])
     sys.exit(0)
