@@ -73,7 +73,7 @@ def parse_cni_args(cni_args):
     _log.debug("Parsing CNI_ARGS: %s", cni_args)
     for k, v in CNI_ARGS_RE.findall(cni_args):
         _log.debug("\tCNI_ARG: %s=%s", k, v)
-        args_to_return[k.strip()] = v.strip()
+        args_to_return[k.strip().upper()] = v.strip()
     _log.debug("Parsed CNI_ARGS: %s", args_to_return)
     return args_to_return
 

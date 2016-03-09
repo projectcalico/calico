@@ -16,9 +16,11 @@ import json
 import unittest
 from StringIO import StringIO
 
+from pycalico.block import AlreadyAssignedError
+
 from ipam import IpamPlugin, _exit_on_error, main
-from mock import patch, MagicMock, ANY
-from netaddr import IPNetwork
+from mock import patch, MagicMock, ANY, Mock
+from netaddr import IPNetwork, AddrFormatError
 from nose.tools import assert_equal, assert_raises
 from pycalico.ipam import IPAMClient
 
@@ -106,6 +108,22 @@ class CniIpamTest(unittest.TestCase):
         expected = ''
         assert_equal(m_stdout.getvalue().strip(), expected)
 
+    @patch('sys.stdout', new_callable=StringIO)
+    def test_execute_add_user_supplied(self, m_stdout):
+        # Mock
+        self.plugin.command = CNI_CMD_ADD
+        self.plugin.ip = "1.2.3.4"
+        ip4 = IPNetwork("1.2.3.4/32")
+        self.plugin._assign_existing_address = MagicMock(spec=self.plugin._assign_existing_address)
+        self.plugin._assign_existing_address.return_value = ip4
+
+        # Call
+        ret = self.plugin.execute()
+
+        # Assert
+        expected = json.dumps({"ip4": {"ip": "1.2.3.4/32"}})
+        assert_equal(ret, expected)
+
     def test_assign_address_mainline(self):
         # Mock
         ip4 = IPNetwork("1.2.3.4/32")
@@ -171,6 +189,58 @@ class CniIpamTest(unittest.TestCase):
         e = err.exception
 
         # Assert
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_assign_address_user_supplied_mainline(self):
+        # Mock
+        input_address = "192.123.123.123"
+        expected = IPNetwork(input_address)
+
+        self.plugin.ip = input_address
+        self.plugin.datastore_client.assign_ip = Mock(spec=self.plugin._assign_existing_address())
+
+        # Call
+        ipv4 = self.plugin._assign_existing_address()
+
+        # Assert
+        assert_equal(ipv4, expected)
+
+    def test_assign_address_user_supplied_malformed(self):
+        # Mock
+        input_address = "192.123.123.321"
+
+        self.plugin.ip = input_address
+
+        # Call
+        with assert_raises(CniError) as err:
+            self.plugin._assign_existing_address()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_assign_address_user_supplied_already_assigned(self):
+        # Mock
+        input_address = "192.123.123.123"
+
+        self.plugin.ip = input_address
+        self.plugin.datastore_client.assign_ip = Mock(spec=self.plugin._assign_existing_address())
+        self.plugin.datastore_client.assign_ip.side_effect = AlreadyAssignedError()
+
+        with assert_raises(CniError) as err:
+            self.plugin._assign_existing_address()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_assign_address_user_supplied_runtime_error(self):
+        # Mock
+        input_address = "192.123.123.123"
+
+        self.plugin.ip = input_address
+        self.plugin.datastore_client.assign_ip = Mock(spec=self.plugin._assign_existing_address())
+        self.plugin.datastore_client.assign_ip.side_effect = RuntimeError()
+
+        with assert_raises(CniError) as err:
+            self.plugin._assign_existing_address()
+        e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
     def test_parse_environment_no_command(self):

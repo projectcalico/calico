@@ -18,7 +18,8 @@ import os
 import sys
 
 from docopt import docopt
-from netaddr import IPNetwork
+from netaddr import IPNetwork, IPAddress, AddrFormatError
+from pycalico.block import AlreadyAssignedError
 
 from pycalico.ipam import IPAMClient
 from calico_cni import __version__, __commit__, __branch__
@@ -62,12 +63,12 @@ class IpamPlugin(object):
 
         self.assign_ipv4 = ipam_config.get(ASSIGN_IPV4_KEY, "true") == "true"
         """
-        Whether we should assign an IPv4 address - defaults to True.
+        Whether we should auto assign an IPv4 address - defaults to True.
         """
 
         self.assign_ipv6 = ipam_config.get(ASSIGN_IPV6_KEY, "false") == "true"
         """
-        Whether we should assign an IPv6 address - defaults to False.
+        Whether we should auto assign an IPv6 address - defaults to False.
         """
 
         cni_args = parse_cni_args(environment.get(CNI_ARGS_ENV, ""))
@@ -76,6 +77,11 @@ class IpamPlugin(object):
         """
         Only populated when running under Kubernetes.
         """
+
+        """
+        Only populated if the user requests a specific IP address.
+        """
+        self.ip = cni_args.get(CNI_ARGS_IP)
 
         # Validate the given environment and set fields.
         self._parse_environment(environment)
@@ -98,9 +104,18 @@ class IpamPlugin(object):
         :return: CNI ipam dictionary for ADD, None for DEL.
         """
         if self.command == "ADD":
-            # Assign an IP address for this workload.
-            _log.info("Assigning address to workload: %s", self.workload_id)
-            ipv4, ipv6 = self._assign_address(handle_id=self.workload_id)
+            if self.ip:
+                # The user has specifically requested an IP (v4) address.
+                _log.info("User assigned address: %s for workload: %s",
+                          self.ip,
+                          self.workload_id)
+
+                ipv4 = self._assign_existing_address()
+                ipv6 = None
+            else:
+                # Auto-assign an IP address for this workload.
+                _log.info("Assigning address to workload: %s", self.workload_id)
+                ipv4, ipv6 = self._assign_address(handle_id=self.workload_id)
 
             # Build response dictionary.
             response = {}
@@ -137,7 +152,7 @@ class IpamPlugin(object):
 
     def _assign_address(self, handle_id):
         """
-        Assigns an IPv4 and an IPv6 address.
+        Automatically assigns an IPv4 and an IPv6 address.
 
         :return: A tuple of (IPv4, IPv6) address assigned.
         """
@@ -178,6 +193,33 @@ class IpamPlugin(object):
 
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
             return ipv4, ipv6
+
+    def _assign_existing_address(self):
+        """
+        Assign an address chosen by the user. IPv4 only.
+
+        :return: The IPNetwork if successfully assigned.
+        """
+        try:
+            address = IPAddress(self.ip, version=4)
+        except AddrFormatError as e:
+            _log.error("User requested IP: %s is invalid", self.ip)
+            raise CniError(ERR_CODE_GENERIC,
+                           msg="Failed to assign IP address",
+                           details=e.message)
+        try:
+            self.datastore_client.assign_ip(address, self.workload_id, None)
+        except AlreadyAssignedError as e:
+            _log.error("User requested IP: %s is already assigned", self.ip)
+            raise CniError(ERR_CODE_GENERIC,
+                           msg="Failed to assign IP address",
+                           details=e.message)
+        except RuntimeError as e:
+            _log.error("Cannot assign IPAddress: %s", e.message)
+            raise CniError(ERR_CODE_GENERIC,
+                           msg="Failed to assign IP address",
+                           details=e.message)
+        return IPNetwork(address)
 
     def _parse_environment(self, env):
         """

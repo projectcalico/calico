@@ -39,7 +39,7 @@ class UtilTest(unittest.TestCase):
         assert_equal(parsed["ARG_2"], "VAL_2")
         assert_equal(parsed["ARG-3"], "786.3")
         assert_equal(parsed["KEY"], "VAL")
-        assert_equal(parsed["string"], "This is a string")
+        assert_equal(parsed["STRING"], "This is a string")
 
     def test_parse_cni_args_invalid(self):
         # Missing equals sign.
