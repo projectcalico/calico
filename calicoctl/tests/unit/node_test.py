@@ -596,6 +596,52 @@ class TestNode(unittest.TestCase):
                           libnetwork)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
+    @patch('os.path.exists', autospec=True)
+    @patch('os.makedirs', autospec=True)
+    @patch('calico_ctl.node.check_system', autospec=True)
+    @patch('calico_ctl.node._setup_ip_forwarding', autospec=True)
+    @patch('calico_ctl.node.get_host_ips', autospec=True)
+    @patch('calico_ctl.node.warn_if_unknown_ip', autospec=True)
+    @patch('calico_ctl.node.warn_if_hostname_conflict', autospec=True)
+    @patch('calico_ctl.node.error_if_bgp_ip_conflict', autospec=True)
+    @patch('calico_ctl.node.call', autospec=True)
+    @patch('calico_ctl.node.client', autospec=True)
+    @patch('calico_ctl.node.docker_client', autospec=True)
+    @patch('calico_ctl.node.docker', autospec=True)
+    def test_node_start_etcd_docker_error(
+            self, m_docker, m_docker_client, m_client, m_call,
+            m_error_if_bgp_ip_conflict, m_warn_if_hostname_conflict,
+            m_warn_if_unknown_ip, m_get_host_ips, m_setup_ip, m_check_system,
+            m_os_makedirs, m_os_path_exists, m_ipv6_enabled):
+        """
+        Test that the node command fails if etcd or docker are not functional
+        """
+        # Set up mock objects
+        # Set up arguments
+        node_image = 'node_image'
+        runtime = 'docker'
+        log_dir = './log_dir'
+        ip = ''
+        ip6 = 'aa:bb::zz'
+        as_num = ''
+        detach = False
+        libnetwork = False
+
+        # Return False for etcd status (failure)
+        m_check_system.return_value = [True, True, False]
+        self.assertRaises(SystemExit, node.node_start,
+                          node_image, runtime, log_dir, ip, ip6, as_num, detach,
+                          libnetwork)
+
+        # Return False for Docker status (failure)
+        m_check_system.return_value = [True, False, True]
+
+        # Testing expecting APIError exception
+        self.assertRaises(SystemExit, node.node_start,
+                          node_image, runtime, log_dir, ip, ip6, as_num, detach,
+                          libnetwork)
+
+    @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('sys.exit', autospec=True)
     @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
