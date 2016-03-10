@@ -255,6 +255,12 @@ class PolicyAgent(object):
                                           block=True,
                                           timeout=QUEUE_PUT_TIMEOUT)
 
+                    # Extract the latest resource version.
+                    new_ver = parsed["object"]["metadata"]["resourceVersion"]
+                    _log.debug("Update resourceVersion, was: %s, now: %s",
+                               resource_version, new_ver)
+                    resource_version = new_ver
+
     def _api_get(self, path, stream, resource_version=None):
         """
         Get or stream from the API, given a resource.
