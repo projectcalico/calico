@@ -14,12 +14,26 @@
 FROM gliderlabs/alpine:edge
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-ADD start_runit /sbin/
+ENV GLIBC_VERSION 2.23-r1
+
+# Download and install glibc for use by the startup script
+RUN apk add --update curl && \
+  curl -o glibc.apk -L "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk" && \
+  apk add --allow-untrusted glibc.apk && \
+  curl -o glibc-bin.apk -L "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk" && \
+  apk add --allow-untrusted glibc-bin.apk && \
+  /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc/usr/lib && \
+  echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
+  apk del curl && \
+  rm -f glibc.apk glibc-bin.apk && \
+  rm -rf /var/cache/apk/*
+
 ADD build.sh /build.sh
 RUN /build.sh
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's the thing they're most likely to change.
+ADD start_runit /sbin/
 COPY filesystem /
 COPY restart-calico-confd /usr/local/bin/
 

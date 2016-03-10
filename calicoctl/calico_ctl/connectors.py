@@ -40,5 +40,5 @@ except DataStoreError as e:
     print_paragraph(e.message)
     sys.exit(1)
 
-DOCKER_URL=os.getenv("DOCKER_HOST", "unix://var/run/docker.sock")
+DOCKER_URL = os.getenv("DOCKER_HOST", "unix://var/run/docker.sock")
 docker_client = docker.Client(version=DOCKER_VERSION, base_url=DOCKER_URL)
