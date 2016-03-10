@@ -195,7 +195,8 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
         """Generates rules based on Kubernetes annotations. 
         """
         # Get the pod from the API.
-        self.pod = self._get_api_pod()
+        if self.namespace != "kube-system":
+            self.pod = self._get_api_pod()
 
         # Get any annotations.
         annotations = self._get_metadata("annotations")
