@@ -246,7 +246,7 @@ class TestDispatcherExpire(_TestPathDispatcherBase):
 class TestEtcdClientOwner(BaseTestCase):
     @patch("etcd.Client", autospec=True)
     def test_create(self, m_client_cls):
-        owner = EtcdClientOwner("localhost:1234",
+        owner = EtcdClientOwner(["localhost:1234"],
                                 etcd_scheme="https",
                                 etcd_key="/path/to/key",
                                 etcd_cert="/path/to/cert",
@@ -266,10 +266,20 @@ class TestEtcdClientOwner(BaseTestCase):
 
     @patch("etcd.Client", autospec=True)
     def test_create_default(self, m_client):
-        owner = EtcdClientOwner("localhost")
+        owner = EtcdClientOwner(["localhost"])
         self.assertEqual(m_client.mock_calls,
                          [call(host="localhost", port=4001,
                                expected_cluster_id=None,
+                               cert=None, ca_cert=None, protocol="http")])
+
+    @patch("etcd.Client", autospec=True)
+    def test_create_multiple(self, m_client):
+        owner = EtcdClientOwner(["etcd1:1234", "etcd2:2345"])
+        self.assertEqual(m_client.mock_calls,
+                         [call(host=(("etcd1", 1234),
+                                     ("etcd2", 2345)),
+                               expected_cluster_id=None,
+                               allow_reconnect=True,
                                cert=None, ca_cert=None, protocol="http")])
 
 
@@ -278,7 +288,7 @@ class TestEtcdWatcher(BaseTestCase):
         super(TestEtcdWatcher, self).setUp()
         self.reconnect_patch = patch("calico.etcdutils.EtcdWatcher.reconnect")
         self.m_reconnect = self.reconnect_patch.start()
-        self.watcher = EtcdWatcher("foobar:4001", "/calico")
+        self.watcher = EtcdWatcher(["foobar:4001"], "/calico")
         self.m_client = Mock()
         self.watcher.client = self.m_client
         self.m_dispatcher = Mock(spec=PathDispatcher)

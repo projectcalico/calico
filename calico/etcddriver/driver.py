@@ -44,7 +44,7 @@ try:
     import simplejson as json
 except ImportError:
     import json
-from threading import Thread, Event
+from threading import Thread, Event, Lock
 import time
 from urlparse import urlparse
 
@@ -55,7 +55,7 @@ import httplib
 
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
-    MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
+    MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
     MSG_KEY_SEV_SYSLOG, MSG_KEY_SEV_SCREEN, STATUS_WAIT_FOR_READY,
     STATUS_RESYNC, STATUS_IN_SYNC, MSG_TYPE_CONFIG_LOADED,
     MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, MSG_TYPE_UPDATE, MSG_KEY_KEY,
@@ -128,6 +128,12 @@ class EtcdDriver(object):
         self._init_received = Event()
         # Initial config, received in the init message.
         self._etcd_base_url = None
+        self._etcd_other_urls = []
+        # Lock for the etcd url fields: this is the only lock, and no thread
+        # ever recursively acquires it, so it cannot deadlock.  Must be locked
+        # to access the _etcd_base_url and _etcd_other_urls fields (after they
+        # are initialized).
+        self._etcd_url_lock = Lock()
         self._hostname = None
         # Set by the reader thread once the logging config has been received
         # from Felix.  Triggers the first resync.
@@ -210,8 +216,9 @@ class EtcdDriver(object):
         """
         # OK to dump the msg, it's a one-off.
         _log.info("Got init message from Felix %s", msg)
-        self._etcd_base_url = msg[MSG_KEY_ETCD_URL].rstrip("/")
+        self._etcd_base_url = msg[MSG_KEY_ETCD_URLS][0].rstrip("/")
         self._etcd_url_parts = urlparse(self._etcd_base_url)
+        self._etcd_other_urls = msg[MSG_KEY_ETCD_URLS][1:]
         self._etcd_key_file = msg[MSG_KEY_KEY_FILE]
         self._etcd_cert_file = msg[MSG_KEY_CERT_FILE]
         self._etcd_ca_file = msg[MSG_KEY_CA_FILE]
@@ -283,6 +290,7 @@ class EtcdDriver(object):
                     socket.error) as e:
                 _log.error("Request to etcd failed: %r; resyncing.", e)
                 self._stop_watcher()
+                self._rotate_etcd_url()  # Try a different etcd URL if possible
                 if monotonic_time() - loop_start < 1:
                     _log.warning("May be tight looping, sleeping...")
                     time.sleep(1)
@@ -304,6 +312,18 @@ class EtcdDriver(object):
                 self._first_resync = False
                 self._resync_requested = False
         _log.info("Stop event set, exiting resync loop.")
+
+    def _rotate_etcd_url(self):
+        """
+        Rotate the in use etcd URL if more than one is configured,
+        """
+        if len(self._etcd_other_urls) > 0:
+            self._etcd_url_lock.acquire()
+            self._etcd_other_urls.append(self._etcd_base_url)
+            self._etcd_base_url = self._etcd_other_urls.pop(0).rstrip("/")
+            self._etcd_url_parts = urlparse(self._etcd_base_url)
+            _log.info("Rotated etcd URL to: %s", self._etcd_base_url)
+            self._etcd_url_lock.release()
 
     def _wait_for_config(self):
         while not self._config_received.is_set():
@@ -653,11 +673,12 @@ class EtcdDriver(object):
             self._watcher_stop_event = None
 
     def get_etcd_connection(self):
+        self._etcd_url_lock.acquire()
         port = self._etcd_url_parts.port or 2379
         if self._etcd_url_parts.scheme == "https":
             _log.debug("Getting new HTTPS connection to %s:%s",
                        self._etcd_url_parts.hostname, port)
-            return HTTPSConnectionPool(self._etcd_url_parts.hostname,
+            pool = HTTPSConnectionPool(self._etcd_url_parts.hostname,
                                        port,
                                        key_file=self._etcd_key_file,
                                        cert_file=self._etcd_cert_file,
@@ -666,9 +687,12 @@ class EtcdDriver(object):
         else:
             _log.debug("Getting new HTTP connection to %s:%s",
                        self._etcd_url_parts.hostname, port)
-            return HTTPConnectionPool(self._etcd_url_parts.hostname,
+            pool = HTTPConnectionPool(self._etcd_url_parts.hostname,
                                       port,
                                       maxsize=1)
+        self._etcd_url_lock.release()
+        return pool
+
 
     def _on_key_updated(self, key, value):
         """
@@ -708,7 +732,10 @@ class EtcdDriver(object):
         )
 
     def _calculate_url(self, etcd_key):
-        return self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
+        self._etcd_url_lock.acquire()
+        url = self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
+        self._etcd_url_lock.release()
+        return url
 
     def _reset_resync_thread_stats(self):
         for stat in self._resync_stats:
@@ -807,6 +834,9 @@ class EtcdDriver(object):
                         _log.warning("Connection to etcd failed with %r, "
                                      "restarting watch at index %s "
                                      "immediately", e, next_index)
+                    # If available, connect to a different etcd URL in case
+                    # only the previous one has failed.
+                    self._rotate_etcd_url()
                     # Workaround urllib3 bug #718.  After a ReadTimeout, the
                     # connection is incorrectly recycled.
                     http = None

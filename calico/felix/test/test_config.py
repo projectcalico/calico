@@ -78,7 +78,7 @@ class TestConfig(unittest.TestCase):
                                  global_dict=global_dict)
 
             # Test defaulting.
-            self.assertEqual(config.ETCD_ADDR, "localhost:4001")
+            self.assertEqual(config.ETCD_ADDRS, ["localhost:4001"])
             self.assertEqual(config.ETCD_SCHEME, "http")
             self.assertEqual(config.ETCD_KEY_FILE, None)
             self.assertEqual(config.ETCD_CERT_FILE, None)
@@ -117,6 +117,24 @@ class TestConfig(unittest.TestCase):
         with self.assertRaisesRegexp(ConfigException,
                                      "Invalid field value"):
             config = Config("calico/felix/test/data/felix_invalid_action.cfg")
+
+    def test_etcd_endpoints(self):
+        env_dict = { "FELIX_ETCDENDPOINTS": "http://localhost:1, http://localhost:2,http://localhost:3 "}
+        conf = load_config("felix_default.cfg", env_dict=env_dict)
+        self.assertEqual(conf.ETCD_ADDRS, ["localhost:1", "localhost:2", "localhost:3"])
+        self.assertEqual(conf.ETCD_SCHEME, "http")
+
+    def test_etcd_endpoints_inconsistent_protocols(self):
+        env_dict = { "FELIX_ETCDENDPOINTS": "https://a:1, http://b:2,http://c:3 "}
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Inconsistent protocols in EtcdEndpoints"):
+            conf = load_config("felix_default.cfg", env_dict=env_dict)
+
+    def test_etcd_endpoints_format(self):
+        env_dict = { "FELIX_ETCDENDPOINTS": "https://a:1, b:2"}
+        with self.assertRaisesRegexp(ConfigException,
+                                     "Invalid format of EtcdEndpoints"):
+            conf = load_config("felix_default.cfg", env_dict=env_dict)
 
     def test_invalid_etcd(self):
         """
