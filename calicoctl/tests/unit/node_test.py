@@ -637,7 +637,7 @@ class TestNode(unittest.TestCase):
         endpoint2 = Mock()
         endpoint2.name = "vethname2"
         m_client.get_endpoints.return_value = [endpoint1, endpoint2]
-        node.node_remove(True)
+        node.node_remove(True, False)
 
         # Assert
         m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
@@ -654,7 +654,7 @@ class TestNode(unittest.TestCase):
         node_remove is invoked.
         """
         # Assert
-        self.assertRaises(SystemExit, node.node_remove, True)
+        self.assertRaises(SystemExit, node.node_remove, True, False)
         self.assertEquals(m_client.get_endpoints.call_count, 0)
         self.assertEquals(m_client.remove_host.call_count, 0)
         self.assertEquals(m_veth.call_count, 0)
@@ -669,12 +669,67 @@ class TestNode(unittest.TestCase):
         """
         # Call method under test
         m_client.get_endpoints.return_value = [Mock()]
-        self.assertRaises(SystemExit, node.node_remove, False)
+        self.assertRaises(SystemExit, node.node_remove, False, False)
 
         # Assert
         m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
         self.assertEquals(m_client.remove_host.call_count, 0)
         self.assertEquals(m_veth.call_count, 0)
+
+    @patch('calico_ctl.node.remove_veth', autospec=True)
+    @patch('calico_ctl.node._container_running', autospec=True, return_value=False)
+    @patch('calico_ctl.node.client', autospec=True)
+    def test_node_remove_specific_host(self, m_client, m_cont_running, m_veth):
+        """
+        Test the client removes the specific host when node_remove called, and
+        that endpoints are removed when remove_endpoints flag is set.
+        """
+        # Call method under test
+        endpoint1 = Mock()
+        endpoint1.name = "vethname1"
+        endpoint2 = Mock()
+        endpoint2.name = "vethname2"
+        m_client.get_endpoints.return_value = [endpoint1, endpoint2]
+        # This should not cause a failure with specific host
+        m_cont_running.return_value = True
+        node.node_remove(True, "other-host")
+
+        # Assert
+        m_client.get_endpoints.assert_called_once_with(hostname="other-host")
+        m_client.remove_host.assert_called_once_with("other-host")
+        m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
+
+    @patch('calico_ctl.node.client')
+    def test_node_show(self, m_client):
+        """
+        Test that correct client methods are called with node_show.
+        """
+        host_dict = {"host1": {"as_num": "22",
+                               "ip_addr_v4": "1.2.3.4",
+                               "ip_addr_v6": "a:b:c::d",
+                               "peer_v4": [{"ip":"1.1.1.1", "as_num": "22"},
+                                           {"ip":"2.2.2.2", "as_num": "22"}],
+                               "peer_v6": [{"ip":"a::b", "as_num": "22"}]}}
+        m_client.get_hosts_data_dict.return_value = host_dict
+        node.node_show()
+        m_client.get_hosts_data_dict.assert_called_once_with()
+        self.assertFalse(m_client.get_default_node_as.called)
+
+    @patch('calico_ctl.node.client')
+    def test_node_show_default_as(self, m_client):
+        """
+        Test node_show gets default AS for host with no specific AS num.
+        """
+        host_dict = {"host":{"as_num": "",
+                             "ip_addr_v4": "1.2.3.4",
+                             "ip_addr_v6": "a:b:c::d",
+                             "peer_v4": [],
+                             "peer_v6": []}}
+        m_client.get_hosts_data_dict.return_value = host_dict
+
+        node.node_show()
+        m_client.get_hosts_data_dict.assert_called_once_with()
+        m_client.get_default_node_as.assert_called_once_with()
 
     @patch('calico_ctl.node.docker_client', autospec=True)
     def test_container_running_no_cont(self, m_docker_client):
