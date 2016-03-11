@@ -16,7 +16,10 @@ import unittest
 
 from mock import patch, Mock
 from nose_parameterized import parameterized
-from pycalico.block import CidrTooSmallError
+from netaddr import IPNetwork
+from pycalico.datastore_datatypes import IPPool
+from pycalico.datastore_errors import InvalidBlockSizeError
+from pycalico.ipam import HostAffinityClaimedError
 
 from calico_ctl import pool
 
@@ -56,7 +59,7 @@ class TestPool(unittest.TestCase):
         """
         Test ip_pool_add exits when pool with bad prefix is passed in.
         """
-        m_IPPool.side_effect = CidrTooSmallError
+        m_IPPool.side_effect = InvalidBlockSizeError
         with patch('sys.exit', autospec=True) as m_sys_exit:
             # Call method under test
             pool.ip_pool_add(["10.10.10.10/32"], 4, False, False)
@@ -72,10 +75,30 @@ class TestPool(unittest.TestCase):
         """
         m_client.get_ip_pools = Mock()
         m_client.get_ip_pools.return_value = []
-        m_IPPool.side_effect = CidrTooSmallError
+        m_IPPool.side_effect = InvalidBlockSizeError
         with patch('sys.exit', autospec=True) as m_sys_exit:
             # Call method under test
             pool.ip_pool_range_add("10.10.10.10", "10.10.11.10", 4, False, False)
 
             # Call method under test for each test case
             self.assertTrue(m_sys_exit.called)
+
+    @patch("time.sleep")
+    @patch("calico_ctl.pool.client", autospec=True)
+    def test_ip_pool_remove(self, m_client, m_sleep):
+        """
+        Test mainline function of ip_pool_remove.
+        """
+        net1 = IPNetwork("1.2.3.0/24")
+        m_client.remove_ip_pool.side_effect = HostAffinityClaimedError
+
+        m_pool = IPPool(net1)
+        m_pool.cidr = net1.ip
+        m_client.get_ip_pool_config.return_value = m_pool
+
+        self.assertRaises(SystemExit, pool.ip_pool_remove, [str(net1)], 4)
+        m_client.get_ip_pool_config.assert_called_once_with(4, net1)
+        m_client.set_ip_pool_config.assert_called_once_with(4, m_pool)
+        self.assertEqual(m_pool.disabled, True)
+        m_client.release_pool_affinities.assert_called_once_with(m_pool)
+        m_client.remove_ip_pool.assert_called_once_with(4, net1.ip)

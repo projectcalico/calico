@@ -33,7 +33,7 @@ from netaddr import IPAddress, IPNetwork
 from calico_ctl import endpoint
 from pycalico import netns
 from pycalico.datastore_datatypes import Endpoint
-from pycalico.ipam import AlreadyAssignedError
+from pycalico.block import AlreadyAssignedError
 
 from connectors import client
 from connectors import docker_client
@@ -443,7 +443,6 @@ def container_ip_remove(container_id, ip, interface):
     # The netns manipulations must be done as root.
     enforce_root()
 
-    pool = get_pool_or_exit(address)
     if container_id.startswith("/") and os.path.exists(container_id):
         # The ID is a path. Don't do any docker lookups
         workload_id = escape_etcd(container_id)
@@ -497,28 +496,48 @@ def container_ip_remove(container_id, ip, interface):
     print "IP %s removed from %s" % (ip, container_id)
 
 
-def get_ip_and_pool(ip):
-    if ip.lower() in ("ipv4", "ipv6"):
-        if ip[-1] == '4':
+def get_ip_and_pool(ip_or_pool):
+    """
+    Return the IP address and associated pool to use when creating a container.
+
+    :param ip_or_pool:  (string) The requested IP address, pool CIDR, or
+    special values "ipv4" and "ipv6".  When an IP address is specified, that
+    IP address is used.  When a pool CIDR is specified, an IP address is
+    allocated from that pool.  IF either "ipv6" or "ipv6" are specified, then
+    an IP address is allocated from an arbitrary IPv4 or IPv6 pool
+    respectively.
+    :return: A tuple of (IPAddress, IPPool)
+    """
+    if ip_or_pool.lower() in ("ipv4", "ipv6"):
+        # Requested to auto-assign an IP address
+        if ip_or_pool[-1] == '4':
             result = assign_any(1, 0)
             ip = result[0][0]
         else:
             result = assign_any(0, 1)
             ip = result[1][0]
-        pool = get_pool_or_exit(ip)
-    elif ip is not None and '/' in ip:
-        cidr = IPNetwork(ip)
+
+        # We can't get the pool until we have the IP address.  If we fail to
+        # get the pool (very small timing window if another client deletes the
+        # pool) we must release the IP.
+        try:
+            pool = get_pool_or_exit(ip)
+        except SystemExit:
+            client.release_ips({ip})
+            raise
+    elif ip_or_pool is not None and '/' in ip_or_pool:
+        # Requested to assign an IP address from a specified pool.
+        cidr = IPNetwork(ip_or_pool)
         pool = get_pool_by_cidr_or_exit(cidr)
-        if IPNetwork(ip).version == 4:
+        if cidr.version == 4:
             result = assign_any(1, 0, pool=(pool, None))
             ip = result[0][0]
         else:
             result = assign_any(0, 1, pool=(None, pool))
             ip = result[1][0]
     else:
-        # Check the IP is in the allocation pool.  If it isn't, BIRD won't
-        # export it.
-        ip = IPAddress(ip)
+        # Requested a specific IP address to use.
+        ip = IPAddress(ip_or_pool)
         pool = get_pool_or_exit(ip)
 
         # Assign the IP
@@ -533,12 +552,18 @@ def get_ip_and_pool(ip):
 
 
 def get_pool_by_cidr_or_exit(cidr):
-    pools = client.get_ip_pools(cidr.version)
-    for pool in pools:
-        if pool.cidr == cidr:
-            return pool
-    print "%s is not found" % cidr
-    sys.exit(1)
+    """
+    Locate the IP Pool from the specified CIDR, and exit if not found.
+    :param cidr:  The pool CIDR.
+    :return:  The IPPool.
+    """
+    try:
+        pool = client.get_ip_pool_config(cidr.version, cidr)
+    except KeyError:
+        print "Pool %s is not found" % cidr
+        sys.exit(1)
+    else:
+        return pool
 
 
 def get_pool_or_exit(ip):
@@ -548,12 +573,7 @@ def get_pool_or_exit(ip):
     :param ip: The IPAddress to find the pool for.
     :return: The pool or sys.exit
     """
-    pools = client.get_ip_pools(ip.version)
-    pool = None
-    for candidate_pool in pools:
-        if ip in candidate_pool:
-            pool = candidate_pool
-            break
+    pool = client.get_pool(ip)
     if pool is None:
         print "%s is not in any configured pools" % ip
         sys.exit(1)

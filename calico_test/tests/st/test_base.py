@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import os
+import json
 import subprocess
 from unittest import TestCase
 
@@ -42,17 +42,7 @@ class TestBase(TestCase):
 
         # Delete /calico if it exists. This ensures each test has an empty data
         # store at start of day.
-        if ETCD_SCHEME == "https":
-            # Etcd is running with SSL/TLS, require key/certificates
-            subprocess.check_output(
-                "curl --cacert %s --cert %s --key %s "
-                "-sL https://%s:2379/v2/keys/calico?recursive=true -XDELETE"
-                % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL),
-                shell=True)
-        else:
-            subprocess.check_output(
-                "curl -sL http://%s:2379/v2/keys/calico?recursive=true -XDELETE"
-                % self.ip, shell=True)
+        self.curl_etcd("calico", options=["-XDELETE"])
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
@@ -99,3 +89,27 @@ class TestBase(TestCase):
                 workload.assert_can_ping(ip)
             for ip in ip_fail_list:
                 workload.assert_cant_ping(ip)
+
+    def curl_etcd(self, path, options=[], recursive=True):
+        """
+        Perform a curl to etcd, returning JSON decoded response.
+        :param path:  The key path to query
+        :param options:  Additional options to include in the curl
+        :param recursive:  Whether we want recursive query or not
+        :return:  The JSON decoded response.
+        """
+        if ETCD_SCHEME == "https":
+            # Etcd is running with SSL/TLS, require key/certificates
+            rc = subprocess.check_output(
+                "curl --cacert %s --cert %s --key %s "
+                "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
+                % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
+                   path, str(recursive).lower(), " ".join(options)),
+                shell=True)
+        else:
+            rc = subprocess.check_output(
+                "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
+                % (self.ip, path, str(recursive).lower(), " ".join(options)),
+                shell=True)
+
+        return json.loads(rc.strip())
