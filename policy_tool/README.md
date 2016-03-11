@@ -1,6 +1,6 @@
 # A tool for managing NetworkPolicy objects
 ```
-wget https://github.com/projectcalico/k8s-policy/releases/download/v0.1.0/policy
+wget https://github.com/projectcalico/k8s-policy/releases/download/v0.1.1/policy
 chmod +x ./policy
 ```
 
