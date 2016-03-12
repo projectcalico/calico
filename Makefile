@@ -15,7 +15,7 @@ TEST_CONTAINER_DIR=calico_test
 TEST_CONTAINER_FILES=$(shell find calico_test/ -type f ! -name '*.created')
 
 NODE_CONTAINER_DIR=calico_node
-NODE_CONTAINER_FILES=$(shell find calico_node/ -type f ! -name '*.created')
+NODE_CONTAINER_FILES=$(shell find calico_node/ -type f ! -name '*.created') calico_node/filesystem/startup
 
 WHEEL_VERSION=0.0.0
 
@@ -34,6 +34,10 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl
 	-docker run -v `pwd`:/code --rm \
 	 calico/build:latest \
 	 pyinstaller calicoctl.spec -ayF
+
+calico_node/filesystem/startup: calicoctl/startup.py $(CALICOCTL_FILE)
+	docker run -v `pwd`:/code --rm calico/build:latest \
+	pyinstaller calicoctl/startup.py -ayF --distpath calico_node/filesystem
 
 simple-binary:
 	pip install git+https://github.com/projectcalico/libcalico.git@master

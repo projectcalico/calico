@@ -1,3 +1,5 @@
+calico_node/filesystem/startup
+startup.spec
 build
 dist
 venv

@@ -92,7 +92,7 @@ def check_system(quit_if_error=False, libnetwork=False, check_docker=True,
     enforce_root()
     modules_ok = _check_modules() if check_modules else True
     docker_ok = _check_docker_version(libnetwork) if check_docker else True
-    etcd_ok = _check_etcd_version() if check_etcd else True
+    etcd_ok = check_etcd_version() if check_etcd else True
     kernel_ok = _check_kernel_version() if check_kernel else True
 
     system_ok = modules_ok and docker_ok and etcd_ok and kernel_ok
@@ -209,7 +209,7 @@ def _check_docker_version(libnetwork=False):
     return system_ok
 
 
-def _check_etcd_version():
+def check_etcd_version():
     """
     Check that etcd is running and supported.
 

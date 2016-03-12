@@ -26,7 +26,6 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_SCHEME_DEFAULT)
 from pycalico.datastore_datatypes import BGPPeer, IPPool
 from pycalico.netns import remove_veth
-from pycalico.util import get_host_ips
 from subprocess32 import call
 
 from checksystem import check_system
@@ -254,55 +253,6 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # Get IP address of host, if none was specified
-    if not ip:
-        ips = get_host_ips(exclude=["^docker.*", "^cbr.*",
-                                    "virbr.*", "lxcbr.*", "veth.*",
-                                    "cali.*", "tunl.*"])
-        try:
-            ip = ips.pop()
-        except IndexError:
-            print "Couldn't autodetect a management IP address. Please provide" \
-                  " an IP by rerunning the command with the --ip=<IP_ADDRESS> flag."
-            sys.exit(1)
-        else:
-            print "No IP provided. Using detected IP: %s" % ip
-
-    # Verify that IPs are not already in use by another host.
-    error_if_bgp_ip_conflict(ip, ip6)
-
-    # Verify that the chosen IP exists on the current host
-    warn_if_unknown_ip(ip, ip6)
-
-    # Warn if this hostname conflicts with an existing host
-    warn_if_hostname_conflict(ip)
-
-    # Set up etcd
-    ipv4_pools = client.get_ip_pools(4)
-    ipv6_pools = client.get_ip_pools(6)
-
-    # Create default pools if required
-    if not ipv4_pools:
-        client.add_ip_pool(4, DEFAULT_IPV4_POOL)
-    if not ipv6_pools and ipv6_enabled():
-        client.add_ip_pool(6, DEFAULT_IPV6_POOL)
-
-    client.ensure_global_config()
-    client.create_host(hostname, ip, ip6, as_num)
-
-    # If IPIP is enabled, the host requires an IP address for its tunnel
-    # device, which is in an IPIP pool.  Without this, a host can't originate
-    # traffic to a pool address because the response traffic would not be
-    # routed via the tunnel (likely being dropped by RPF checks in the fabric).
-    ipv4_pools = client.get_ip_pools(4)
-    ipip_pools = [p for p in ipv4_pools if p.ipip]
-    if ipip_pools:
-        # IPIP is enabled, make sure the host has an address for its tunnel.
-        _ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
-    else:
-        # No IPIP pools, clean up any old address.
-        _remove_host_tunnel_addr()
-
     # The format of the authority string has already been validated.
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
 
@@ -316,53 +266,47 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     etcd_binds = {}
     etcd_envs = ["ETCD_AUTHORITY=%s" % etcd_authority,
                  "ETCD_SCHEME=%s" % etcd_scheme]
-    felix_envs = ["FELIX_ETCDADDR=%s" % etcd_authority,
-                  "FELIX_ETCDSCHEME=%s" % etcd_scheme]
 
     if etcd_ca_cert_file and etcd_key_file and etcd_cert_file:
         etcd_volumes.append(ETCD_CA_CERT_NODE_FILE)
         etcd_binds[etcd_ca_cert_file] = {"bind": ETCD_CA_CERT_NODE_FILE,
                                          "ro": True}
         etcd_envs.append("ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE)
-        felix_envs.append("FELIX_ETCDCAFILE=%s" % ETCD_CA_CERT_NODE_FILE)
 
         etcd_volumes.append(ETCD_KEY_NODE_FILE)
         etcd_binds[etcd_key_file] = {"bind": ETCD_KEY_NODE_FILE,
                                      "ro": True}
         etcd_envs.append("ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE)
-        felix_envs.append("FELIX_ETCDKEYFILE=%s" % ETCD_KEY_NODE_FILE)
 
         etcd_volumes.append(ETCD_CERT_NODE_FILE)
         etcd_binds[etcd_cert_file] = {"bind": ETCD_CERT_NODE_FILE,
                                       "ro": True}
         etcd_envs.append("ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE)
-        felix_envs.append("FELIX_ETCDCERTFILE=%s" % ETCD_CERT_NODE_FILE)
 
     if runtime == 'docker':
-        _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs,
-                                     felix_envs, etcd_volumes, etcd_binds)
+        _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
+                                     etcd_volumes, etcd_binds)
         if libnetwork_image:
             _start_libnetwork_container(libnetwork_image, etcd_envs,
                                         etcd_volumes, etcd_binds)
     if runtime == 'rkt':
-        _start_node_container_rkt(ip, ip6, node_image, etcd_envs, felix_envs,
+        _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
                                   etcd_volumes, etcd_binds)
 
 
-
-def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs,
-                                 felix_envs, etcd_volumes, etcd_binds):
+def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
+                                 etcd_volumes, etcd_binds):
     """
     Start the main Calico node container.
 
     :param ip:  The IPv4 address of the host.
     :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param as_num: The AS number for the host
     :param log_dir:  The log directory to use.
     :param node_image:  The calico-node image to use.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
     :param etcd_envs: Etcd environment variables to pass into the container
-    :param felix_envs: Felix environment variables to pass into the container
     :param etcd_volumes: List of mount_paths for etcd files to mount on the
     container
     :param etcd_binds: Dictionary of host file and mount file pairs for etcd
@@ -384,10 +328,11 @@ def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs
 
     environment = [
         "HOSTNAME=%s" % hostname,
-        "IP=%s" % ip,
+        "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
-        "CALICO_NETWORKING=%s" % calico_networking
-    ] + etcd_envs + felix_envs
+        "CALICO_NETWORKING=%s" % calico_networking,
+        "AS=%s" % (as_num or "")
+    ] + etcd_envs
 
     binds = {
         log_dir:
@@ -419,23 +364,34 @@ def _start_node_container_docker(ip, ip6, log_dir, node_image, detach, etcd_envs
         volumes=volumes)
     cid = container["Id"]
 
+    env_string = ""
+    for an_env in environment:
+        env_string += " -e " + an_env
+
+    vol_string = ""
+    for a_vol in binds:
+        vol_string += " -v %s:%s" % (a_vol, binds[a_vol]["bind"])
+
+    detach_string = " -d" if detach else ""
+
+    print "Running Docker container with the following command:\n"
+    print "docker run%s --restart=always --net=host --privileged --name=calico-node%s%s %s\n" % \
+          (detach_string, env_string, vol_string, node_image)
     docker_client.start(container)
     print "Calico node is running with id: %s" % cid
+    print "Waiting for successful startup"
+    _attach_and_stream(container, detach)
 
-    if not detach:
-        _attach_and_stream(container)
-
-
-def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
-                                 felix_envs, etcd_volumes, etcd_binds):
+def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
+                              etcd_volumes, etcd_binds):
     """
     Start the main Calico node container using rkt
 
     :param ip:  The IPv4 address of the host.
     :param ip6:  The IPv6 address of the host (or None if not configured)
+    :param as_num: The AS number for the host.
     :param node_image:  The calico-node image to use.
     :param etcd_envs: Etcd environment variables to pass into the container
-    :param felix_envs: Felix environment variables to pass into the container
     :param etcd_volumes: List of mount_paths for etcd files to mount on the
     container
     :param etcd_binds: Dictionary of host file and mount file pairs for etcd
@@ -454,8 +410,9 @@ def _start_node_container_rkt(ip, ip6, node_image, etcd_envs,
         "HOSTNAME=%s" % hostname,
         "IP=%s" % ip,
         "IP6=%s" % (ip6 or ""),
-        "CALICO_NETWORKING=%s" % calico_networking
-    ] + etcd_envs + felix_envs
+        "CALICO_NETWORKING=%s" % calico_networking,
+        "AS=%s" % as_num
+    ] + etcd_envs
 
     # TODO No support for SSL (etcd binds) yet
     
@@ -660,8 +617,14 @@ def node_remove(remove_endpoints):
 
     # If the host had an IPIP tunnel address, release it back to the IPAM pool
     # so that we don't leak it when we delete the config.
-    _remove_host_tunnel_addr()
+    raw_addr = client.get_per_host_config(hostname, "IpInIpTunnelAddr")
+    try:
+        ip_addr = IPAddress(raw_addr)
+        client.release_ips({ip_addr})
+    except (AddrFormatError, ValueError, TypeError):
+        pass
 
+    client.remove_per_host_config(hostname, "IpInIpTunnelAddr")
     client.remove_host(hostname)
 
     print "Node configuration removed"
@@ -732,106 +695,6 @@ def node_bgppeer_show(version):
         print "No IPv%s BGP Peers defined for this node.\n" % version
 
 
-def warn_if_unknown_ip(ip, ip6):
-    """
-    Prints a warning message if the IP addresses are not assigned to interfaces
-    on the current host.
-
-    :param ip: IPv4 address which should be present on the host.
-    :param ip6: IPv6 address which should be present on the host.
-    :return: None
-    """
-    if ip and ip not in get_host_ips(version=4, exclude=["docker0"]):
-        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
-              " to this host."
-
-    if ip6 and ip6 not in get_host_ips(version=6, exclude=["docker0"]):
-        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
-              " to this host."
-
-
-def warn_if_hostname_conflict(ip):
-    """
-    Prints a warning message if it seems like an existing host is already running
-    calico using this hostname.
-
-    :param ip: User-provided IP address to start this node with.
-    :return: Nothing
-    """
-    # If there's already a calico-node container on this host, they're probably
-    # just re-running node to update one of the ip addresses, so skip.
-    try:
-        current_ipv4, ipv6 = client.get_host_bgp_ips(hostname)
-    except KeyError:
-        # No other machine has registered configuration under this hostname.
-        # This must be a new host with a unique hostname, which is the
-        # expected behavior.
-        pass
-    else:
-        if current_ipv4 != "" and current_ipv4 != ip:
-            hostname_warning = "WARNING: Hostname '%s' is already in use " \
-                               "with IP address %s. Calico requires each " \
-                               "compute host to have a unique hostname. " \
-                               "If this is your first time running " \
-                               "'calicoctl node' on this host, ensure " \
-                               "that another host is not already using the " \
-                               "same hostname." % (hostname, ip)
-            try:
-                if not docker_client.containers(filters={'name': 'calico-node'}):
-                    # Calico-node isn't running on this host.
-                    # There may be another host using this hostname.
-                    print_paragraph(hostname_warning)
-            except IOError:
-                # Couldn't connect to docker to confirm calico-node is running.
-                print_paragraph(hostname_warning)
-
-def error_if_bgp_ip_conflict(ip, ip6):
-    """
-    Prints an error message and exits if either of the IPv4 or IPv6 addresses
-    is already in use by another calico BGP host.
-
-    :param ip: User-provided IPv4 address to start this node with.
-    :param ip6: User-provided IPv6 address to start this node with.
-    :return: Nothing
-    """
-    ip_list = []
-    if ip:
-        ip_list.append(ip)
-    if ip6:
-        ip_list.append(ip6)
-    try:
-        # Get hostname of host that already uses the given IP, if it exists
-        ip_conflicts = client.get_hostnames_from_ips(ip_list)
-    except KeyError:
-        # No hosts have been configured in etcd, so there cannot be a conflict
-        return
-
-    if ip_conflicts.keys():
-        ip_error = "ERROR: IP address %s is already in use by host %s. " \
-                   "Calico requires each compute host to have a unique IP. " \
-                   "If this is your first time running 'calicoctl node' on " \
-                   "this host, ensure that another host is not already using " \
-                   "the same IP address."
-        try:
-            if ip_conflicts[ip] != hostname:
-                ip_error = ip_error % (ip, str(ip_conflicts[ip]))
-                print_paragraph(ip_error)
-                sys.exit(1)
-        except KeyError:
-            # IP address was not found in ip-host dictionary
-            pass
-        try:
-            if ip6 and ip_conflicts[ip6] != hostname:
-                ip_error = ip_error % (ip6, str(ip_conflicts[ip6]))
-                print_paragraph(ip_error)
-                sys.exit(1)
-        except KeyError:
-            # IP address was not found in ip-host dictionary
-            pass
-
-
-#TODO: Write UTs
-
 def _find_or_pull_node_image(image_name):
     """
     Check if Docker has a cached copy of an image, and if not, attempt to pull
@@ -862,13 +725,13 @@ def _find_or_pull_node_image(image_name):
                 sys.exit(1)
 
 
-def _attach_and_stream(container):
+def _attach_and_stream(container, startup_only):
     """
     Attach to a container and stream its stdout and stderr output to this
-    process's stdout, until the container stops.  If the user presses Ctrl-C or
-    the process is killed, also stop the Docker container.
+    process's stdout.  If the user presses Ctrl-C or the process is killed,
+    also stop the Docker container.
 
-    Used to run the calico-node as a foreground attached service.
+    If startup_only is set, then only attach until the container starts up successfully.
 
     :param container: Docker container to attach to.
     :return: None.
@@ -881,123 +744,20 @@ def _attach_and_stream(container):
         docker_client.stop(container)
         sys.exit(0)
     signal.signal(signal.SIGTERM, handle_sigterm)
+    stop_container_on_exit = True
 
     output = docker_client.attach(container, stream=True)
     try:
         for raw_data in output:
             sys.stdout.write(raw_data)
+            if "Calico node started successfully" in raw_data and startup_only:
+                stop_container_on_exit = False
+                break
     except KeyboardInterrupt:
-        # mainline.  someone press Ctrl-C.
+        # Mainline. Someone pressed Ctrl-C.
         print "Stopping Calico node..."
     finally:
         # Could either be this process is being killed, or output generator
         # raises an exception.
-        docker_client.stop(container)
-
-
-def _ensure_host_tunnel_addr(ipv4_pools, ipip_pools):
-    """
-    Ensure the host has a valid IP address for its IPIP tunnel device.
-
-    This must be an IP address claimed from one of the IPIP pools.
-    Handles re-allocating the address if it finds an existing address
-    that is not from an IPIP pool.
-
-    :param ipv4_pools: List of all IPv4 pools.
-    :param ipip_pools: List of IPIP-enabled pools.
-    """
-    ip_addr = _get_host_tunnel_ip()
-    if ip_addr:
-        # Host already has a tunnel IP assigned, verify that it's still valid.
-        pool = _find_pool(ip_addr, ipv4_pools)
-        if pool and not pool.ipip:
-            # No longer an IPIP pool. Release the IP, it's no good to us.
-            client.release_ips({ip_addr})
-            ip_addr = None
-        elif not pool:
-            # Not in any IPIP pool.  IP must be stale.  Since it's not in any
-            # pool, we can't release it.
-            ip_addr = None
-    if not ip_addr:
-        # Either there was no IP or the IP needs to be replaced.  Try to
-        # get an IP from one of the IPIP-enabled pools.
-        _assign_host_tunnel_addr(ipip_pools)
-
-
-def _find_pool(ip_addr, ipv4_pools):
-    """
-    Find the pool containing the given IP.
-
-    :param ip_addr:  IP address to find.
-    :param ipv4_pools:  iterable containing IPPools.
-    :return: The pool, or None if not found
-    """
-    for pool in ipv4_pools:
-        if ip_addr in pool.cidr:
-            return pool
-    else:
-        return None
-
-
-def _assign_host_tunnel_addr(ipip_pools):
-    """
-    Claims an IPIP-enabled IP address from the first pool with some
-    space.
-
-    Stores the result in the host's config as its tunnel address.
-
-    Exits on failure.
-    :param ipip_pools:  List of IPPools to search for an address.
-    """
-    for ipip_pool in ipip_pools:
-        v4_addrs, _ = client.auto_assign_ips(
-            num_v4=1, num_v6=0,
-            handle_id=None,
-            attributes={},
-            pool=(ipip_pool, None),
-            host=hostname
-        )
-        if v4_addrs:
-            # Successfully allocated an address.  Unpack the list.
-            [ip_addr] = v4_addrs
-            break
-    else:
-        # Failed to allocate an address, the pools must be full.
-        print_paragraph(
-            "Failed to allocate an IP address from an IPIP-enabled pool "
-            "for the host's IPIP tunnel device.  Pools are likely "
-            "exhausted."
-        )
-        sys.exit(1)
-    # If we get here, we've allocated a new IPIP-enabled address,
-    # Store it in etcd so that Felix will pick it up.
-    client.set_per_host_config(hostname, "IpInIpTunnelAddr",
-                               str(ip_addr))
-
-
-def _remove_host_tunnel_addr():
-    """
-    Remove any existing IP address for this host's IPIP tunnel device.
-
-    Idempotent; does nothing if there is no IP assigned.  Releases the
-    IP from IPAM.
-    """
-    ip_addr = _get_host_tunnel_ip()
-    if ip_addr:
-        client.release_ips({ip_addr})
-    client.remove_per_host_config(hostname, "IpInIpTunnelAddr")
-
-
-def _get_host_tunnel_ip():
-    """
-    :return: The IPAddress of the host's IPIP tunnel or None if not
-             present/invalid.
-    """
-    raw_addr = client.get_per_host_config(hostname, "IpInIpTunnelAddr")
-    try:
-        ip_addr = IPAddress(raw_addr)
-    except (AddrFormatError, ValueError, TypeError):
-        # Either there's no address or the data is bad.  Treat as missing.
-        ip_addr = None
-    return ip_addr
-
+        if stop_container_on_exit:
+            docker_client.stop(container)

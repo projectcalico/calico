@@ -25,7 +25,7 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True, return_value=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True, return_value=True)
-    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
+    @patch('calico_ctl.checksystem.check_etcd_version', autospec=True, return_value=True)
     def test_check_system(self, m_check_etcd_version, m_check_docker_version,
                           m_check_kernel_modules, m_enforce_root):
         """
@@ -51,7 +51,7 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
-    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
+    @patch('calico_ctl.checksystem.check_etcd_version', autospec=True, return_value=True)
     def test_check_system_bad_state_do_not_quit(
             self, kernel_status, docker_version_status, m_check_etcd_version,
             m_check_docker_version, m_check_kernel_modules, m_enforce_root):
@@ -81,7 +81,7 @@ class TestCheckSystem(unittest.TestCase):
     @patch('calico_ctl.checksystem.enforce_root', autospec=True)
     @patch('calico_ctl.checksystem._check_modules', autospec=True)
     @patch('calico_ctl.checksystem._check_docker_version', autospec=True)
-    @patch('calico_ctl.checksystem._check_etcd_version', autospec=True, return_value=True)
+    @patch('calico_ctl.checksystem.check_etcd_version', autospec=True, return_value=True)
     def test_check_system_bad_state_quit(
             self, kernel_status, docker_version_status, m_check_etcd_version,
             m_check_docker_version, m_check_kernel_modules, m_enforce_root):
