@@ -25,6 +25,7 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
                                 ETCD_SCHEME_DEFAULT)
 from pycalico.datastore_datatypes import BGPPeer, IPPool
+from pycalico.datastore_errors import DataStoreError
 from pycalico.netns import remove_veth
 from subprocess32 import call
 
@@ -42,7 +43,8 @@ Usage:
     [--detach=<DETACH>]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
-  calicoctl node remove [--remove-endpoints]
+  calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
+  calicoctl node show
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
   calicoctl node bgp peer show [--ipv4 | --ipv6]
@@ -52,32 +54,32 @@ Description:
   for this node.
 
 Options:
-  --force                   Stop the Calico node even if there are still
-                            endpoints configured.
-  --remove-endpoints        Remove the endpoint data when deleting the node
-                            from the Calico network.
-  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
-                            container. [default: calico/node:latest]
+  --as=<AS_NUM>             The default AS number for this node.
   --detach=<DETACH>         Set "true" to run Calico service as detached,
                             "false" to run in the foreground.  When using
                             libnetwork, this may not be set to "false".
                             When using --runtime=rkt, --detach is always false.
                             [default: true]
-  --runtime=<RUNTIME>       Specify how Calico services should be
-                            launched.  When set to "docker" or "rkt", services
-                            will be launched via the calico-node container,
-                            whereas a value of "none" will not launch them at
-                            all. [default: docker]
-  --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --force                   Forcefully stop the Calico node
+  --hostname=<HOSTNAME>     The hostname from which to remove the Calico node.
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
-  --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
+  --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
+                            container. [default: calico/node:latest]
+  --remove-endpoints        Remove the endpoint data when deleting the node
+                            from the Calico network.
+  --runtime=<RUNTIME>       Specify how Calico services should be
+                            launched.  When set to "docker" or "rkt", services
+                            will be launched via the calico-node container,
+                            whereas a value of "none" will not launch them at
+                            all. [default: docker]
 """
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
@@ -183,7 +185,10 @@ def node(arguments):
     elif arguments.get("stop"):
         node_stop(arguments.get("--force"))
     elif arguments.get("remove"):
-        node_remove(arguments.get("--remove-endpoints"))
+        node_remove(arguments.get("--remove-endpoints"),
+                    arguments.get("--hostname"))
+    elif arguments.get("show"):
+        node_show()
     else:
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
@@ -588,20 +593,26 @@ def node_stop(force):
     print "Node stopped"
 
 
-def node_remove(remove_endpoints):
+def node_remove(remove_endpoints, host):
     """
     Remove a node from the Calico network.
     :param remove_endpoints: Whether the endpoint data should be forcibly
     removed.
+    :param host: The hostname of the host whose node will be removed, or None if
+    removing this host's node.
+    :return: None.
     """
-    if _container_running("calico-node") or \
-       _container_running("calico-libnetwork"):
+    # TODO: Reassign IPAM blocks when a host with IPAM blocks is removed
+    host_to_remove = host or hostname
+
+    if host_to_remove == hostname and (_container_running("calico-node") or
+                                       _container_running("calico-libnetwork")):
         print_paragraph("The node cannot be removed while it is running.  "
                         "Please run 'calicoctl node stop' to stop the node "
                         "before removing it.")
         sys.exit(1)
 
-    endpoints = client.get_endpoints(hostname=hostname)
+    endpoints = client.get_endpoints(hostname=host_to_remove)
     if endpoints and not remove_endpoints:
         print_paragraph("The node has active Calico endpoints so can't be "
                         "deleted. Force with --remove-endpoints")
@@ -617,15 +628,15 @@ def node_remove(remove_endpoints):
 
     # If the host had an IPIP tunnel address, release it back to the IPAM pool
     # so that we don't leak it when we delete the config.
-    raw_addr = client.get_per_host_config(hostname, "IpInIpTunnelAddr")
+    raw_addr = client.get_per_host_config(host_to_remove, "IpInIpTunnelAddr")
     try:
         ip_addr = IPAddress(raw_addr)
         client.release_ips({ip_addr})
     except (AddrFormatError, ValueError, TypeError):
         pass
 
-    client.remove_per_host_config(hostname, "IpInIpTunnelAddr")
-    client.remove_host(hostname)
+    client.remove_per_host_config(host_to_remove, "IpInIpTunnelAddr")
+    client.remove_host(host_to_remove)
 
     print "Node configuration removed"
 
@@ -644,6 +655,48 @@ def _container_running(container_name):
         return False
     else:
         return cdata["State"]["Running"]
+
+
+def node_show():
+    """
+    Show hostname and node information for each node in the Calico cluster.
+    """
+    # Set up output table
+    headings = ["Hostname",
+                "Bird IPv4",
+                "Bird IPv6",
+                "AS Num",
+                "BGP Peers v4",
+                "BGP Peers v6"]
+    x = PrettyTable(headings, sortby="Hostname")
+
+    try:
+        # Get dictionary of host data, indexed by hostname
+        hosts = client.get_hosts_data_dict()
+        for (host, data) in hosts.iteritems():
+
+            # Combine BGP peer IP and AS numbers into single values
+            peer_v4_list = [peer["ip"] + " as " + peer["as_num"]
+                            for peer in data["peer_v4"]]
+            peer_v6_list = [peer["ip"] + " as " + peer["as_num"]
+                            for peer in data["peer_v6"]]
+
+            if data["as_num"]:
+                bgp_as = data["as_num"]
+            else:
+                bgp_as = client.get_default_node_as()
+                bgp_as += " (inherited)"
+            x.add_row([host,
+                       data["ip_addr_v4"],
+                       data["ip_addr_v6"],
+                       bgp_as,
+                       "\n".join(peer_v4_list),
+                       "\n".join(peer_v6_list)])
+    except DataStoreError:
+        print "Error connecting to etcd."
+        sys.exit(1)
+
+    print str(x) + "\n"
 
 
 def node_bgppeer_add(ip, version, as_num):
