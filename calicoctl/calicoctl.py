@@ -53,32 +53,27 @@ Usage: calicoctl <command> [<args>...]
 See 'calicoctl <command> --help' to read about a specific subcommand.
 """
 
-import sys
 import signal
+import sys
 import traceback
+from sys import platform as _platform
 
 from docopt import docopt
 from pycalico.datastore_errors import DataStoreError
 
-import calico_ctl.node
-import calico_ctl.container
-import calico_ctl.profile
-import calico_ctl.endpoint
-import calico_ctl.pool
 import calico_ctl.bgp
 import calico_ctl.checksystem
-import calico_ctl.status
-import calico_ctl.diags
-import calico_ctl.version
 import calico_ctl.config
+import calico_ctl.container
+import calico_ctl.diags
+import calico_ctl.endpoint
 import calico_ctl.ipam
+import calico_ctl.node
+import calico_ctl.pool
+import calico_ctl.profile
+import calico_ctl.status
+import calico_ctl.version
 from calico_ctl.utils import print_paragraph
-from sys import platform as _platform
-# TODO: Implement secure platform support for urllib3. Temporarily ignore
-# insecure platform warnings when running calicoctl commands with secure etcd.
-# See https://github.com/projectcalico/calico-containers/issues/682
-import logging
-logging.captureWarnings(True)
 
 
 def keyboard_interrupt_handler(signal, frame):
