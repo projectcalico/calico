@@ -36,7 +36,8 @@ Usage:
     [--detach=<DETACH>]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
-  calicoctl node remove [--remove-endpoints]
+  calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
+  calicoctl node show
   calicoctl node bgp peer add <PEER_IP> as <AS_NUM>
   calicoctl node bgp peer remove <PEER_IP>
   calicoctl node bgp peer show [--ipv4 | --ipv6]
@@ -46,32 +47,32 @@ Description:
   for this node.
 
 Options:
-  --force                   Stop the Calico node even if there are still
-                            endpoints configured.
-  --remove-endpoints        Remove the endpoint data when deleting the node
-                            from the Calico network.
-  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
-                            container. [default: calico/node:latest]
+  --as=<AS_NUM>             The default AS number for this node.
   --detach=<DETACH>         Set "true" to run Calico service as detached,
                             "false" to run in the foreground.  When using
                             libnetwork, this may not be set to "false".
+                            When using --runtime=rkt, --detach is always false.
                             [default: true]
-  --runtime=<RUNTIME>       Specify how Calico services should be
-                            launched.  When set to "docker", services will be
-                            launched via the calico-node container, whereas a
-                            value of "none" will not launch them at all.
-                            [default: docker]
-  --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --force                   Forcefully stop the Calico node
+  --hostname=<HOSTNAME>     The hostname from which to remove the Calico node.
   --ip=<IP>                 The local management address to use.
   --ip6=<IP6>               The local IPv6 management address to use.
-  --as=<AS_NUM>             The default AS number for this node.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
-
+  --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
+                            container. [default: calico/node:latest]
+  --remove-endpoints        Remove the endpoint data when deleting the node
+                            from the Calico network.
+  --runtime=<RUNTIME>       Specify how Calico services should be
+                            launched.  When set to "docker" or "rkt", services
+                            will be launched via the calico-node container,
+                            whereas a value of "none" will not launch them at
+                            all. [default: docker]
 ```
 
 ## calicoctl node commands
@@ -219,16 +220,27 @@ manually clean up any workloads that were uncleanly stopped with the
 `calicoctl endpoint remove` command, and then run the `calicoctl node stop`
 command to stop the node before removing it.
 
-This command must be run as root and must be run on the specific Calico node 
-that you are configuring.
+You can remove endpoint configuration from the node by passing in the
+`--remove-endpoints` flag.  This flag is required to remove a node that
+contains endpoint config.
+
+You can remove the Calico node on a different host by passing in the hostname
+of the node to remove with the `--hostname=<HOSTNAME>` parameter. If you do not
+know the hostname of the machine, you can view node information using the
+`calicoctl node show` command, as seen in this doc. You may want to do this if,
+for example, a node in the cluster is no longer in use, yet the data for the
+host still appears in the datastore.
+
+This command must be run as root.
 
 Command syntax:
 
 ```
-calicoctl node remove [--remove-endpoints]
+calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
 
-    --remove-endpoints:  Remove the endpoint data when deleting the node
-                         from the Calico network.
+    --hostname=<HOSTNAME>: The hostname from which to remove the Calico node.
+    --remove-endpoints:    Remove the endpoint data when deleting the node
+                           from the Calico network.
 ```
 
 Examples:
@@ -236,6 +248,29 @@ Examples:
 ```
 $ calicoctl node remove
 Node configuration removed
+```
+
+### calicoctl node show
+This command is used to show hostname, IP address, and BGP data for all nodes
+in the cluster.
+
+Command syntax:
+
+```
+calicoctl node show
+```
+
+Examples:
+
+```
+$ calicoctl node show
++------------+--------------+-----------+-------------------+-----------------------+--------------+
+|  Hostname  |  Bird IPv4   | Bird IPv6 |       AS Num      |      BGP Peers v4     | BGP Peers v6 |
++------------+--------------+-----------+-------------------+-----------------------+--------------+
+| calico-01  | 172.17.8.101 |           | 64511 (inherited) |                       |              |
+| calico-02  | 172.25.20.5  |           |       63333       | 172.25.10.10 as 63333 |              |
++------------+--------------+-----------+-------------------+-----------------------+--------------+
+
 ```
 
 ### calicoctl node bgp peer add \<PEER_IP\> as \<AS_NUM\>
