@@ -256,18 +256,19 @@ def main():
     # Verify that the chosen IP exists on the current host
     warn_if_unknown_ip(ip, ip6)
 
-    # Set up etcd
-    ipv4_pools = client.get_ip_pools(4)
-    ipv6_pools = client.get_ip_pools(6)
+    if os.getenv("NO_DEFAULT_POOLS", "").lower() != "true":
+        # Set up etcd
+        ipv4_pools = client.get_ip_pools(4)
+        ipv6_pools = client.get_ip_pools(6)
 
-    # Create default pools if required
-    if not ipv4_pools:
-        client.add_ip_pool(4, DEFAULT_IPV4_POOL)
+        # Create default pools if required
+        if not ipv4_pools:
+            client.add_ip_pool(4, DEFAULT_IPV4_POOL)
 
-    # If the OS has not been built with IPv6 then the /proc config for IPv6
-    # will not be present.
-    if not ipv6_pools and os.path.exists('/proc/sys/net/ipv6'):
-        client.add_ip_pool(6, DEFAULT_IPV6_POOL)
+        # If the OS has not been built with IPv6 then the /proc config for IPv6
+        # will not be present.
+        if not ipv6_pools and os.path.exists('/proc/sys/net/ipv6'):
+            client.add_ip_pool(6, DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
     client.create_host(hostname, ip, ip6, as_num)

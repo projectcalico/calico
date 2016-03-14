@@ -87,6 +87,8 @@ Options:
 CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
 CALICO_NETWORKING_DEFAULT = "true"
 
+NO_DEFAULT_POOLS_ENV = "NO_DEFAULT_POOLS"
+
 ETCD_KEY_NODE_FILE = "/etc/calico/certs/key.pem"
 ETCD_CERT_NODE_FILE = "/etc/calico/certs/cert.crt"
 ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
@@ -325,6 +327,8 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     calico_networking = os.getenv(CALICO_NETWORKING_ENV,
                                   CALICO_NETWORKING_DEFAULT)
 
+    no_default_pools = os.getenv(NO_DEFAULT_POOLS_ENV)
+
     if not no_pull:
         # Make sure the required image is pulled before removing the old one.
         # This minimizes downtime during upgrade.
@@ -341,7 +345,8 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
         "CALICO_NETWORKING=%s" % calico_networking,
-        "AS=%s" % (as_num or "")
+        "AS=%s" % (as_num or ""),
+        "NO_DEFAULT_POOLS=%s" % (no_default_pools or "")
     ] + etcd_envs
 
     binds = {
@@ -415,13 +420,16 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
     calico_networking = os.getenv(CALICO_NETWORKING_ENV,
                                   CALICO_NETWORKING_DEFAULT)
 
+    no_default_pools = os.getenv(NO_DEFAULT_POOLS_ENV)
+
     environment = [
         "CALICO_DISABLE_FILE_LOGGING=true",
         "HOSTNAME=%s" % hostname,
         "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
         "CALICO_NETWORKING=%s" % calico_networking,
-        "AS=%s" % (as_num or "")
+        "AS=%s" % (as_num or ""),
+        "NO_DEFAULT_POOLS=%s" % (no_default_pools or "")
     ] + etcd_envs
 
     # TODO No support for SSL (etcd binds) yet
