@@ -236,7 +236,7 @@ def main():
     if not ip:
         ips = get_host_ips(exclude=["^docker.*", "^cbr.*",
                                     "virbr.*", "lxcbr.*", "veth.*",
-                                    "cali.*", "tunl.*"])
+                                    "cali.*", "tunl.*", "flannel.*"])
         try:
             ip = ips.pop()
         except IndexError:
