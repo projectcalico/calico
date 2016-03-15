@@ -45,8 +45,9 @@ from calico.felix.fplugin import FelixPlugin
 from calico.felix.profilerules import UnsupportedICMPType
 from calico.felix.frules import (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT,
                                  CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
-                                 CHAIN_PREROUTING, CHAIN_INPUT, CHAIN_FORWARD,
-                                 FELIX_PREFIX)
+                                 CHAIN_PREROUTING, CHAIN_POSTROUTING,
+                                 CHAIN_INPUT, CHAIN_FORWARD,
+                                 FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT)
 
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
@@ -110,36 +111,55 @@ class FelixIptablesGenerator(FelixPlugin):
 
     def nat_prerouting_chain(self, ip_version):
         """
-        Generate the NAT felix-PREROUTING chain -- currently only IPv4.
+        Generate the NAT felix-PREROUTING chain.
 
         Returns a list of iptables fragments with which to program the
-        felix-PREROUTING chain which is unconditionally invoked from the IPv4
+        felix-PREROUTING chain which is unconditionally invoked from the
         NAT PREROUTING chain.
 
         Note that the list returned here should be the complete set of rules
         required as any existing chain will be overwritten.
 
-        :param ip_version.  Currently always 4.
+        :param ip_version.
         :returns Tuple: list of rules, set of deps.
         """
 
-        # We only program this chain for IPv4
-        assert ip_version == 4
+        chain = ["--append %s --jump %s" % (CHAIN_PREROUTING, CHAIN_FIP_DNAT)]
+        deps = set([CHAIN_FIP_DNAT])
 
-        chain = []
-        if self.METADATA_IP is not None:
+        if ip_version == 4 and self.METADATA_IP is not None:
             # Need to expose the metadata server on a link-local.
             #  DNAT tcp -- any any anywhere 169.254.169.254
             #              tcp dpt:http to:127.0.0.1:9697
-            chain = [
+            chain.append(
                 "--append " + CHAIN_PREROUTING + " "
                 "--protocol tcp "
                 "--dport 80 "
                 "--destination 169.254.169.254/32 "
                 "--jump DNAT --to-destination %s:%s" %
-                (self.METADATA_IP, self.METADATA_PORT)]
+                (self.METADATA_IP, self.METADATA_PORT))
 
-        return chain, {}
+        return chain, deps
+
+    def nat_postrouting_chain(self, ip_version):
+        """
+        Generate the NAT felix-POSTROUTING chain.
+
+        Returns a list of iptables fragments with which to program the
+        felix-POSTROUTING chain which is unconditionally invoked from the
+        NAT POSTROUTING chain.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = ["--append %s --jump %s" % (CHAIN_POSTROUTING, CHAIN_FIP_SNAT)]
+        deps = set([CHAIN_FIP_SNAT])
+
+        return chain, deps
 
     def filter_input_chain(self, ip_version, hosts_set_name=None):
         """

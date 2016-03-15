@@ -211,15 +211,10 @@ perform the following steps:
 
        sudo apt-get install calico-control
 
-3. Edit the ``/etc/neutron/plugins/ml2/ml2_conf.ini`` file.  In the `[ml2]`
-   section:
+3. Edit the ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:
 
-   -  Find the line beginning with ``type_drivers``, and change it to
-      read ``type_drivers = local, flat``.
-   -  Find the line beginning with ``mechanism_drivers``, and change it
-      to read ``mechanism_drivers = calico``.
-   -  Find the line beginning with ``tenant_network_types``, and change
-      it to read ``tenant_network_types = local``.
+   -  Find the line beginning with ``core_plugin``, and change it to read
+      ``core_plugin = calico``.
 
 4. With OpenStack releases earlier than Liberty, edit the
    ``/etc/neutron/neutron.conf`` file.  In the `[DEFAULT]` section:

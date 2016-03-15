@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
+# Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -179,12 +180,15 @@ CHAIN_FROM_LEAF = FELIX_PREFIX + "FROM-EP-PFX"
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PREROUTING = FELIX_PREFIX + "PREROUTING"
+CHAIN_POSTROUTING = FELIX_PREFIX + "POSTROUTING"
 CHAIN_INPUT = FELIX_PREFIX + "INPUT"
 CHAIN_FORWARD = FELIX_PREFIX + "FORWARD"
+CHAIN_FIP_DNAT = FELIX_PREFIX + 'FIP-DNAT'
+CHAIN_FIP_SNAT = FELIX_PREFIX + 'FIP-SNAT'
 
 
 def install_global_rules(config, v4_filter_updater, v6_filter_updater,
-                         v4_nat_updater, v6_raw_updater):
+                         v4_nat_updater, v6_nat_updater, v6_raw_updater):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change (such as the rules that send all
@@ -246,18 +250,31 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
         (iface_match, CHAIN_PREROUTING),
         async=False)
 
-    # The IPV4 nat table first. This must have a felix-PREROUTING chain.
-    # Write the chain first and then udpate the v4 NAT kernel chain to
-    # reference it.
-    prerouting_chain, prerouting_deps = (
-        iptables_generator.nat_prerouting_chain(ip_version=4)
-    )
-    v4_nat_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain},
-                                  {CHAIN_PREROUTING: prerouting_deps},
-                                  async=False)
+    # Both IPV4 and IPV6 nat tables need felix-PREROUTING and
+    # felix-POSTROUTING, along with the dependent DNAT and SNAT tables
+    # required for NAT/floating IP support.
+    for ip_version, iptables_updater in [
+            (4, v4_nat_updater),
+            (6, v6_nat_updater)]:
 
-    v4_nat_updater.ensure_rule_inserted(
-        "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
+        prerouting_chain, prerouting_deps = (
+            iptables_generator.nat_prerouting_chain(ip_version=ip_version)
+        )
+        postrouting_chain, postrouting_deps = (
+            iptables_generator.nat_postrouting_chain(ip_version=ip_version)
+        )
+        iptables_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain,
+                                         CHAIN_POSTROUTING: postrouting_chain,
+                                         CHAIN_FIP_DNAT: [],
+                                         CHAIN_FIP_SNAT: []},
+                                        {CHAIN_PREROUTING: prerouting_deps,
+                                         CHAIN_POSTROUTING: postrouting_deps},
+                                        async=False)
+
+        iptables_updater.ensure_rule_inserted(
+            "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
+        iptables_updater.ensure_rule_inserted(
+            "POSTROUTING --jump %s" % CHAIN_POSTROUTING, async=False)
 
     # Now the filter table. This needs to have felix-FORWARD and felix-INPUT
     # chains, which we must create before adding any rules that send to them.

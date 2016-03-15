@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2014, 2015 Metaswitch Networks
+# Copyright 2015 Cisco Systems
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -93,6 +94,33 @@ class TestCommon(unittest.TestCase):
             'profile_ids':['prof1'],
         })
 
+    def test_validate_endpoint_mainline_fip(self):
+        endpoint = {
+            "state": "active",
+            "name": "tap1234",
+            "mac": "AA:bb:cc:dd:ee:ff",
+            "ipv4_nat": [{"int_ip": "10.0.0.1", "ext_ip": "192.168.1"}],
+            "ipv4_nets": ["10.0.0.1/32"],
+            "ipv4_gateway": "11.0.0.1",
+            "ipv6_nat": [{"int_ip": "2001::1", "ext_ip": "2001::2"}],
+            "ipv6_nets": ["2001::1/128"],
+            "ipv6_gateway": "fe80:0::1",
+            "profile_id": "prof1",
+        }
+        common.validate_endpoint(self.m_config, self.m_id, endpoint)
+        self.assertEqual(endpoint, {
+            'state': 'active',
+            'name': 'tap1234',
+            'mac': 'aa:bb:cc:dd:ee:ff',
+            'ipv4_nets': ['10.0.0.1/32'],
+            "ipv4_nat": [{"int_ip": "10.0.0.1", "ext_ip": "192.168.0.1"}],
+            'ipv4_gateway': '11.0.0.1',
+            'ipv6_nat': [{'int_ip': '2001::1', 'ext_ip': '2001::2'}],
+            'ipv6_nets': ['2001::1/128'],
+            'ipv6_gateway': 'fe80::1',
+            'profile_ids':['prof1'],
+        })
+
     def test_validate_endpoint_mainline_profile_ids(self):
         endpoint = {
             "state": "active",
@@ -152,6 +180,9 @@ class TestCommon(unittest.TestCase):
         self.assert_tweak_invalidates_endpoint(ipv6_nets=["not an IP"])
         self.assert_tweak_invalidates_endpoint(ipv6_nets=["12345"])
         self.assert_tweak_invalidates_endpoint(ipv6_nets=["10.0.0.0/8"])
+
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["10.1.2.3/32"],
+                ipv4_nat=[{"int_ip": "10.1.2.4", "ext_ip": "1.2.3.4"}])
 
     def assert_invalid_endpoint(self, bad_value):
         self.assertRaises(common.ValidationFailed, common.validate_endpoint,

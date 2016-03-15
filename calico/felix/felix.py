@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+# Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -45,6 +46,7 @@ from calico.felix.devices import InterfaceWatcher
 from calico.felix.endpoint import EndpointManager
 from calico.felix.ipsets import IpsetManager, IpsetActor, HOSTS_IPSET_V4
 from calico.felix.masq import MasqueradeManager
+from calico.felix.fipmanager import FloatingIPManager
 from calico.felix.fetcd import EtcdAPI
 
 _log = logging.getLogger(__name__)
@@ -82,27 +84,32 @@ def _main_greenlet(config):
                                         v4_filter_updater,
                                         v4_ipset_mgr)
         v4_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
+        v4_fip_manager = FloatingIPManager(config, 4, v4_nat_updater)
         v4_ep_manager = EndpointManager(config,
                                         IPV4,
                                         v4_filter_updater,
                                         v4_dispatch_chains,
                                         v4_rules_manager,
+                                        v4_fip_manager,
                                         etcd_api.status_reporter)
 
         v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
         v6_filter_updater = IptablesUpdater("filter", ip_version=6,
                                             config=config)
+        v6_nat_updater = IptablesUpdater("nat", ip_version=6, config=config)
         v6_ipset_mgr = IpsetManager(IPV6, config)
         v6_rules_manager = RulesManager(config,
                                         6,
                                         v6_filter_updater,
                                         v6_ipset_mgr)
         v6_dispatch_chains = DispatchChains(config, 6, v6_filter_updater)
+        v6_fip_manager = FloatingIPManager(config, 6, v6_nat_updater)
         v6_ep_manager = EndpointManager(config,
                                         IPV6,
                                         v6_filter_updater,
                                         v6_dispatch_chains,
                                         v6_rules_manager,
+                                        v6_fip_manager,
                                         etcd_api.status_reporter)
         cleanup_mgr = CleanupManager(
             config,
@@ -116,6 +123,7 @@ def _main_greenlet(config):
                 v4_ep_manager, v6_ep_manager,
                 v6_raw_updater,
                 v4_masq_manager,
+                v4_nat_updater, v6_nat_updater,
                 cleanup_mgr,
             ]
         )
@@ -132,13 +140,16 @@ def _main_greenlet(config):
         v4_rules_manager.start()
         v4_dispatch_chains.start()
         v4_ep_manager.start()
+        v4_fip_manager.start()
 
         v6_raw_updater.start()
         v6_filter_updater.start()
+        v6_nat_updater.start()
         v6_ipset_mgr.start()
         v6_rules_manager.start()
         v6_dispatch_chains.start()
         v6_ep_manager.start()
+        v6_fip_manager.start()
 
         iface_watcher.start()
 
@@ -146,7 +157,6 @@ def _main_greenlet(config):
             hosts_ipset_v4,
             cleanup_mgr,
 
-            v4_nat_updater,
             v4_filter_updater,
             v4_nat_updater,
             v4_ipset_mgr,
@@ -154,13 +164,16 @@ def _main_greenlet(config):
             v4_rules_manager,
             v4_dispatch_chains,
             v4_ep_manager,
+            v4_fip_manager,
 
             v6_raw_updater,
             v6_filter_updater,
+            v6_nat_updater,
             v6_ipset_mgr,
             v6_rules_manager,
             v6_dispatch_chains,
             v6_ep_manager,
+            v6_fip_manager,
 
             iface_watcher,
             etcd_api,
@@ -171,7 +184,7 @@ def _main_greenlet(config):
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
         install_global_rules(config, v4_filter_updater, v6_filter_updater,
-                             v4_nat_updater, v6_raw_updater)
+                             v4_nat_updater, v6_nat_updater, v6_raw_updater)
 
         # Start polling for updates. These kicks make the actors poll
         # indefinitely.

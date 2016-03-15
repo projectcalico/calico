@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0-pre1
+
+- Add floating IP support (via 1:1 NAT) in Felix.
+
 ## 1.3.0
 
 - Felix now parses the etcd snapshot in parallel with the event stream;
