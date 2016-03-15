@@ -82,9 +82,6 @@ Options:
                             all. [default: docker]
 """
 
-DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
-DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
-
 CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
 CALICO_NETWORKING_DEFAULT = "true"
 
