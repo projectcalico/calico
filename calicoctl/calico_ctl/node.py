@@ -602,7 +602,6 @@ def node_remove(remove_endpoints, host):
     removing this host's node.
     :return: None.
     """
-    # TODO: Reassign IPAM blocks when a host with IPAM blocks is removed
     host_to_remove = host or hostname
 
     if host_to_remove == hostname and (_container_running("calico-node") or
@@ -623,8 +622,18 @@ def node_remove(remove_endpoints, host):
                         "in the normal way.")
         sys.exit(1)
 
+    # Remove the veths, and release all IPs associated with the endpoints.  To
+    # release the IPs, we construct a set of all IP addresses across all
+    # endpoints (this assumes the endpoint nets are all single IPs).
+    ips = set()
     for endpoint in endpoints:
         remove_veth(endpoint.name)
+        ips |= {net.ip for net in endpoint.ipv4_nets}
+        ips |= {net.ip for net in endpoint.ipv6_nets}
+    client.release_ips(ips)
+
+    # Remove the IPAM host data.
+    client.remove_ipam_host(host_to_remove)
 
     # If the host had an IPIP tunnel address, release it back to the IPAM pool
     # so that we don't leak it when we delete the config.

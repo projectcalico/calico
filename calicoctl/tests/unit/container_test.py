@@ -23,7 +23,7 @@ from calico_ctl.bgp import *
 from calico_ctl import container
 from calico_ctl import utils
 from pycalico.datastore_datatypes import Endpoint
-from pycalico.ipam import AlreadyAssignedError
+from pycalico.block import AlreadyAssignedError
 
 
 class TestContainer(unittest.TestCase):
@@ -946,17 +946,15 @@ class TestContainer(unittest.TestCase):
         self.assertFalse(m_netns.add_ip_to_ns_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
     def test_container_ip_remove_ipv4(self, m_netns, m_client,
-            m_get_container_info_or_exit, m_get_pool_or_exit, m_enforce_root):
+            m_get_container_info_or_exit,  m_enforce_root):
         """
         Test container_ip_remove with an ipv4 ip argument
         """
         # Set up mock objects
-        m_get_pool_or_exit.return_value = 'pool'
         m_get_container_info_or_exit.return_value = {
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
@@ -979,7 +977,6 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_pool_or_exit.assert_called_once_with(IPAddress(ip))
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
@@ -994,17 +991,15 @@ class TestContainer(unittest.TestCase):
         m_client.release_ips.assert_called_once_with({IPAddress(ip)})
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
     def test_container_ip_remove_ipv6(self, m_netns, m_client,
-            m_get_container_info_or_exit, m_get_pool_or_exit, m_enforce_root):
+            m_get_container_info_or_exit, m_enforce_root):
         """
         Test for container_ip_remove with an ipv6 ip argument
         """
         # Set up mock objects
-        m_get_pool_or_exit.return_value = 'pool'
         m_get_container_info_or_exit.return_value = {
             'Id': 666,
             'State': {'Running': 1, 'Pid': 'Pid_info'}
@@ -1027,7 +1022,6 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         m_enforce_root.assert_called_once_with()
-        m_get_pool_or_exit.assert_called_once_with(IPAddress(ip))
         m_get_container_info_or_exit.assert_called_once_with(container_name)
         m_client.get_endpoint.assert_called_once_with(
             hostname=utils.hostname,
@@ -1042,12 +1036,11 @@ class TestContainer(unittest.TestCase):
         m_client.release_ips.assert_called_once_with({IPAddress(ip)})
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     def test_container_ip_remove_not_running(
             self, m_client, m_get_container_info_or_exit,
-            m_get_pool_or_exit, m_enforce_root):
+            m_enforce_root):
         """
         Test for container_ip_remove when the container is not running
 
@@ -1071,16 +1064,14 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertFalse(m_client.get_endpoint.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     def test_container_ip_remove_ip_not_assigned(
-            self, m_client, m_get_container_info_or_exit, m_get_pool_or_exit,
+            self, m_client, m_get_container_info_or_exit,
             m_enforce_root):
         """
         Test container_ip_remove when an IP address is not assigned to a container
@@ -1109,18 +1100,15 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertFalse(m_client.update_endpoint.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     def test_container_ip_remove_container_not_on_calico(
-            self, m_client, m_get_container_info_or_exit, m_get_pool_or_exit,
-            m_enforce_root):
+            self, m_client, m_get_container_info_or_exit, m_enforce_root):
         """
         Test for container_ip_remove when container is not networked into Calico
 
@@ -1145,19 +1133,17 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertFalse(m_client.update_endpoint.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
     def test_container_ip_remove_fail_updating_datastore(
             self, m_netns, m_client, m_get_container_info_or_exit,
-            m_get_pool_or_exit, m_enforce_root):
+            m_enforce_root):
         """
         Test container_ip_remove when client fails to update endpoint in datastore
 
@@ -1187,20 +1173,18 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_client.update_endpoint.called)
         self.assertFalse(m_netns.remove_ip_from_ns_veth.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
     @patch('calico_ctl.container.client', autospec=True)
     @patch('calico_ctl.container.netns', autospec=True)
     def test_container_ip_remove_netns_error(
             self, m_netns, m_client, m_get_container_info_or_exit,
-            m_get_pool_or_exit, m_enforce_root):
+            m_enforce_root):
         """
         Test container_ip_remove when client fails on removing ip from interface
 
@@ -1231,7 +1215,6 @@ class TestContainer(unittest.TestCase):
 
         # Assert
         self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_pool_or_exit.called)
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_client.update_endpoint.called)

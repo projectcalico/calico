@@ -634,16 +634,23 @@ class TestNode(unittest.TestCase):
         # Call method under test
         endpoint1 = Mock()
         endpoint1.name = "vethname1"
+        endpoint1.ipv4_nets = {IPNetwork("1.2.3.4/32")}
+        endpoint1.ipv6_nets = set()
         endpoint2 = Mock()
         endpoint2.name = "vethname2"
+        endpoint2.ipv4_nets = set()
+        endpoint2.ipv6_nets = {IPNetwork("aa:bb::cc/128")}
         m_client.get_endpoints.return_value = [endpoint1, endpoint2]
         node.node_remove(True, False)
 
         # Assert
         m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
-        m_client.remove_host.assert_called_once_with(node.hostname)
+        m_client.release_ips.assert_called_once_with({IPAddress("1.2.3.4"),
+                                                      IPAddress("aa:bb::cc")})
+        m_client.remove_ipam_host.assert_called_once_with(node.hostname)
         m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
         m_cont_running.assert_has_calls([call("calico-node"), call("calico-libnetwork")])
+        m_client.remove_host.assert_called_once_with(node.hostname)
 
     @patch('calico_ctl.node.remove_veth', autospec=True)
     @patch('calico_ctl.node._container_running', autospec=True, return_value=True)
@@ -687,8 +694,12 @@ class TestNode(unittest.TestCase):
         # Call method under test
         endpoint1 = Mock()
         endpoint1.name = "vethname1"
+        endpoint1.ipv4_nets = {IPNetwork("1.2.3.4/32")}
+        endpoint1.ipv6_nets = set()
         endpoint2 = Mock()
         endpoint2.name = "vethname2"
+        endpoint2.ipv4_nets = set()
+        endpoint2.ipv6_nets = set()
         m_client.get_endpoints.return_value = [endpoint1, endpoint2]
         # This should not cause a failure with specific host
         m_cont_running.return_value = True
@@ -696,6 +707,8 @@ class TestNode(unittest.TestCase):
 
         # Assert
         m_client.get_endpoints.assert_called_once_with(hostname="other-host")
+        m_client.release_ips.assert_called_once_with({IPAddress("1.2.3.4")})
+        m_client.remove_ipam_host.assert_called_once_with("other-host")
         m_client.remove_host.assert_called_once_with("other-host")
         m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
 

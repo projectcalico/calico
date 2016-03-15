@@ -23,18 +23,13 @@ Warnings:
   -  Releasing an in-use IP address can result in it being assigned to multiple
      workloads.
 """
-import re
 import sys
 
-from etcd import EtcdKeyNotFound
 from netaddr import IPAddress
 from pycalico.block import AddressNotAssignedError
-from pycalico.datastore import handle_errors
-from pycalico.datastore import CONFIG_PATH, BGP_HOST_PATH, BGP_GLOBAL_PATH
 
 from connectors import client
-from utils import print_paragraph, validate_ip
-from utils import hostname
+from utils import validate_ip
 
 
 def validate_arguments(arguments):

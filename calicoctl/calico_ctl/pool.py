@@ -28,16 +28,20 @@ Options:
   --ipip          Use IP-over-IP encapsulation across hosts
  """
 import sys
+import time
 
 import netaddr
 from netaddr import IPNetwork, IPRange, IPAddress
 from prettytable import PrettyTable
 from pycalico.datastore_datatypes import IPPool
-from pycalico.block import CidrTooSmallError, BLOCK_PREFIXLEN
+from pycalico.datastore_errors import InvalidBlockSizeError
+from pycalico.block import BLOCK_PREFIXLEN
+from pycalico.ipam import HostAffinityClaimedError
 
 from connectors import client
 from utils import (validate_cidr, validate_ip,
-                   get_container_ipv_from_arguments)
+                   get_container_ipv_from_arguments,
+                   print_paragraph)
 
 
 def validate_arguments(arguments):
@@ -123,7 +127,7 @@ def ip_pool_add(cidrs, version, ipip, masquerade):
     for cidr in cidrs:
         try:
             pools.append(IPPool(cidr, ipip=ipip, masquerade=masquerade))
-        except CidrTooSmallError:
+        except InvalidBlockSizeError:
             print "An IPv%s pool must have a prefix length of %s or lower." \
                   "\nGiven: %s.\nNo pools added." % \
                   (version, BLOCK_PREFIXLEN[version], cidr)
@@ -166,7 +170,7 @@ def ip_pool_range_add(start_ip, end_ip, version, ipip, masquerade):
     for ip_net in cidrs:
         try:
             new_pools.append(IPPool(ip_net.cidr, ipip=ipip, masquerade=masquerade))
-        except CidrTooSmallError:
+        except InvalidBlockSizeError:
             pool_strings = [str(net) for net in cidrs]
             print "IPv%s ranges are split into pools, with the smallest pool " \
                   "size allowed having a prefix length of /%s. One or more " \
@@ -188,10 +192,41 @@ def ip_pool_remove(cidrs, version):
     :return: None
     """
     for cidr in cidrs:
+        # Get the existing IP Pool so that we can disable it,
         try:
-            client.remove_ip_pool(version, IPNetwork(cidr))
+            pool = client.get_ip_pool_config(version, IPNetwork(cidr))
         except KeyError:
             print "%s is not a configured pool." % cidr
+            sys.exit(1)
+
+        try:
+            # Disable the pool to prevent any further allocation blocks from
+            # being assigned from the pool.  Existing allocation blocks will
+            # still exist and may be allocated from until affinity is removed
+            # from the blocks.
+            print "Disabling IP Pool"
+            pool.disabled = True
+            client.set_ip_pool_config(version, pool)
+
+            # Remove affinity from the allocation blocks for the pool.  This
+            # will prevent these blocks from being used for auto-allocations.
+            # We pause before removing the affinities and the pool to allow
+            # any in-progress IP allocations to complete - there is a known
+            # timing window here, which can be closed but at the expense of
+            # additional etcd reads for each affine block allocation - since
+            # deletion of a pool is not common, it is simplest to pause in
+            # between disabling and deleting the pool.
+            print "Removing IPAM configuration for pool"
+            time.sleep(3)
+            client.release_pool_affinities(pool)
+            client.remove_ip_pool(version, pool.cidr)
+
+            print "Deleted IP Pool"
+        except (KeyError, HostAffinityClaimedError):
+            print_paragraph("Conflicting modifications have been made to the "
+                            "IPAM configuration for this pool.  Please retry "
+                            "the command.")
+            sys.exit(1)
 
 
 def ip_pool_show(version):

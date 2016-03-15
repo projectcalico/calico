@@ -13,6 +13,7 @@
 # limitations under the License.
 from test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.exceptions import CommandExecError
 
 """
 Test calicoctl pool
@@ -61,3 +62,7 @@ class TestPool(TestBase):
             # Assert the pool show output does not contain either pool
             self.assertNotIn(ipv4_pool, pool_out)
             self.assertNotIn(ipv6_pool, pool_out)
+
+            # Assert that deleting the pool again fails.
+            self.assertRaises(CommandExecError,
+                              host.calicoctl, "pool remove %s" % ipv4_pool)
