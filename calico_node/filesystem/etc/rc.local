@@ -1,4 +1,4 @@
-/startup || exit 1
+python startup.py || exit 1
 
 if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
 	rm -r /etc/service/bird/log

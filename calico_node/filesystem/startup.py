@@ -3,14 +3,31 @@ import sys
 
 import netaddr
 from netaddr import AddrFormatError, IPAddress
+from pycalico.datastore_datatypes import IPPool
 from pycalico.ipam import IPAMClient
 from pycalico.util import get_host_ips
 
-from calico_ctl.node import DEFAULT_IPV4_POOL
-from calico_ctl.node import DEFAULT_IPV6_POOL
-from calico_ctl.utils import ipv6_enabled, print_paragraph, validate_asn
-from calico_ctl.checksystem import check_etcd_version
+DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
+DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
+def validate_asn(asn):
+    """
+    Validate the format of a 2-byte or 4-byte autonomous system number
+
+    :param asn: User input of AS number
+    :return: Boolean: True if valid format, False if invalid format
+    """
+    try:
+        if "." in str(asn):
+            left_asn, right_asn = str(asn).split(".")
+            asn_ok = (0 <= int(left_asn) <= 65535) and \
+                     (0 <= int(right_asn) <= 65535)
+        else:
+            asn_ok = 0 <= int(asn) <= 4294967295
+    except ValueError:
+        asn_ok = False
+
+    return asn_ok
 
 def _find_pool(ip_addr, ipv4_pools):
     """
@@ -80,11 +97,10 @@ def _assign_host_tunnel_addr(ipip_pools):
             break
     else:
         # Failed to allocate an address, the pools must be full.
-        print_paragraph(
-            "Failed to allocate an IP address from an IPIP-enabled pool "
-            "for the host's IPIP tunnel device.  Pools are likely "
+        print "Failed to allocate an IP address from an IPIP-enabled pool " \
+            "for the host's IPIP tunnel device.  Pools are likely " \
             "exhausted."
-        )
+
         sys.exit(1)
     # If we get here, we've allocated a new IPIP-enabled address,
     # Store it in etcd so that Felix will pick it up.
@@ -149,7 +165,7 @@ def error_if_bgp_ip_conflict(ip, ip6):
         try:
             if ip_conflicts[ip] != hostname:
                 ip_error = ip_error % (ip, str(ip_conflicts[ip]))
-                print_paragraph(ip_error)
+                print ip_error
                 sys.exit(1)
         except KeyError:
             # IP address was not found in ip-host dictionary
@@ -157,7 +173,7 @@ def error_if_bgp_ip_conflict(ip, ip6):
         try:
             if ip6 and ip_conflicts[ip6] != hostname:
                 ip_error = ip_error % (ip6, str(ip_conflicts[ip6]))
-                print_paragraph(ip_error)
+                print ip_error
                 sys.exit(1)
         except KeyError:
             # IP address was not found in ip-host dictionary
@@ -206,7 +222,7 @@ def warn_if_hostname_conflict(ip):
                                "the Calico node on this host, ensure " \
                                "that another host is not already using the " \
                                "same hostname." % (hostname, current_ipv4)
-            print_paragraph(hostname_warning)
+            print hostname_warning
 
 
 def main():
@@ -226,10 +242,6 @@ def main():
     as_num = as_num or None
     if as_num and not validate_asn(as_num):
         print "AS environment (%s) is not a AS number." % as_num
-        sys.exit(1)
-
-    # Check etcd connectivity first.
-    if not check_etcd_version():
         sys.exit(1)
 
     # Get IP address of host, if none was specified
@@ -262,7 +274,7 @@ def main():
     # Create default pools if required
     if not ipv4_pools:
         client.add_ip_pool(4, DEFAULT_IPV4_POOL)
-    if not ipv6_pools and ipv6_enabled():
+    if not ipv6_pools and os.path.exists('/proc/sys/net/ipv6'):
         client.add_ip_pool(6, DEFAULT_IPV6_POOL)
 
     client.ensure_global_config()
