@@ -33,7 +33,7 @@ calicoctl node commands.
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>]
+    [--detach=<DETACH>] [--no-pull]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
@@ -64,6 +64,7 @@ Options:
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --no-pull                 Prevent from pulling the Calico node Docker images.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
                             container. [default: calico/node:latest]
   --remove-endpoints        Remove the endpoint data when deleting the node
@@ -100,7 +101,7 @@ Command syntax:
 ```
 calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] 
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>]
+    [--detach=<DETACH>] [--no-pull]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
 
     <IP>: Unique IPv4 address associated with an interface on the host machine.
@@ -118,6 +119,7 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
                              using the Docker libnetwork driver.
 
     --libnetwork: Download and run the calico/node-libnetwork Docker image.
+    --no-pull: Prevent from pulling the Calico node Docker images.
 ```
 
 When running the `calicoctl node` command with the `--libnetwork` plugin, the 
@@ -138,6 +140,12 @@ used to identify source addresses for BGP peering, allowing an interface
 through the host system over which traffic will flow to the workloads.
 
 The `--detach` option should be used if you are adding Calico to an init system.
+
+The `--no-pull` flag will prevent calico-node from pulling the Calico node
+Docker image to use.  This is useful if you want to run Calico with a custom
+node image that you have stored locally on your machine.  You may also want
+to pull an image using the `docker pull` command to get the image with specific
+`docker pull` parameters.
 
 Examples:
 

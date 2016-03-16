@@ -214,10 +214,11 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = True
         libnetwork = False
+        no_pull = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork)
+                        libnetwork, no_pull)
 
         # Assert
         m_os_path_exists.assert_called_once_with(log_dir)
@@ -283,10 +284,12 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         libnetwork = False
+        # Don't pull the node image
+        no_pull = True
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork)
+                        libnetwork, no_pull)
 
         # Set up variables used in assertion statements
         environment = [
@@ -329,7 +332,7 @@ class TestNode(unittest.TestCase):
             network_mode="host",
             binds=binds
         )
-        m_find_or_pull_node_image.assert_called_once_with('node_image')
+        self.assertFalse(m_find_or_pull_node_image.called)
         m_docker_client.create_container.assert_called_once_with(
             node_image,
             name='calico-node',
@@ -401,10 +404,11 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         libnetwork_image = 'libnetwork_image'
+        no_pull = False
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image)
+                        libnetwork_image, no_pull)
 
         # Set up variables used in assertion statements
         environment_node = [
@@ -522,11 +526,12 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         libnetwork = False
+        no_pull = False
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork)
+                          libnetwork, no_pull)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
@@ -554,12 +559,13 @@ class TestNode(unittest.TestCase):
         as_num = ''
         detach = False
         libnetwork = False
+        no_pull = False
 
         # Return False for etcd status (failure)
         m_check_system.return_value = [True, True, False]
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork)
+                          libnetwork, no_pull)
 
         # Return False for Docker status (failure)
         m_check_system.return_value = [True, False, True]
@@ -567,7 +573,7 @@ class TestNode(unittest.TestCase):
         # Testing expecting APIError exception
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork)
+                          libnetwork, no_pull)
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)

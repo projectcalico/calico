@@ -40,7 +40,7 @@ __doc__ = """
 Usage:
   calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
-    [--detach=<DETACH>]
+    [--detach=<DETACH>] [--no-pull]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
   calicoctl node stop [--force]
   calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
@@ -71,6 +71,7 @@ Options:
                             Calico's libnetwork driver.
                             [default: calico/node-libnetwork:latest]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
+  --no-pull                 Prevent from pulling the Calico node Docker images.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
                             container. [default: calico/node:latest]
   --remove-endpoints        Remove the endpoint data when deleting the node
@@ -199,11 +200,12 @@ def node(arguments):
                    ip6=arguments.get("--ip6"),
                    as_num=as_num,
                    detach=detach,
-                   libnetwork_image=libnetwork_image)
+                   libnetwork_image=libnetwork_image,
+                   no_pull=arguments.get("--no-pull"))
 
 
 def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-               libnetwork_image):
+               libnetwork_image, no_pull):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -217,6 +219,8 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     attached.
     :param libnetwork_image: The name of the Calico libnetwork driver image to
     use.  None, if not using libnetwork.
+    :param no_pull: Boolean, True to prevent function from pulling the Calico
+    node Docker images.
     :return:  None.
     """
     # The command has to be run as root to access iptables and services
@@ -286,18 +290,18 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         etcd_envs.append("ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE)
 
     if runtime == 'docker':
-        _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
-                                     etcd_volumes, etcd_binds)
+        _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach,
+                                     etcd_envs, etcd_volumes, etcd_binds, no_pull)
         if libnetwork_image:
             _start_libnetwork_container(libnetwork_image, etcd_envs,
-                                        etcd_volumes, etcd_binds)
+                                        etcd_volumes, etcd_binds, no_pull)
     if runtime == 'rkt':
         _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
                                   etcd_volumes, etcd_binds)
 
 
 def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
-                                 etcd_volumes, etcd_binds):
+                                 etcd_volumes, etcd_binds, no_pull):
     """
     Start the main Calico node container.
 
@@ -313,14 +317,17 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     container
     :param etcd_binds: Dictionary of host file and mount file pairs for etcd
     files to mount on the container
+    :param no_pull: Boolean, True to prevent function from pulling the Calico
+    node Docker image.
     :return: None.
     """
     calico_networking = os.getenv(CALICO_NETWORKING_ENV,
                                   CALICO_NETWORKING_DEFAULT)
 
-    # Make sure the required image is pulled before removing the old one.
-    # This minimizes downtime during upgrade.
-    _find_or_pull_node_image(node_image)
+    if not no_pull:
+        # Make sure the required image is pulled before removing the old one.
+        # This minimizes downtime during upgrade.
+        _find_or_pull_node_image(node_image)
 
     try:
         docker_client.remove_container("calico-node", force=True)
@@ -453,7 +460,7 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
 
 
 def _start_libnetwork_container(libnetwork_image, etcd_envs, etcd_volumes,
-                                etcd_binds):
+                                etcd_binds, no_pull):
     """
     Start the libnetwork driver container.
 
@@ -464,11 +471,14 @@ def _start_libnetwork_container(libnetwork_image, etcd_envs, etcd_volumes,
     container
     :param etcd_binds: Dictionary of host file and mount file pairs for etcd
     files to mount on the container
+    :param no_pull: Boolean, True to prevent function from pulling the Calico
+    node libnetwork Docker image.
     :return:  None
     """
-    # Make sure the required image is pulled before removing the old one.
-    # This minimizes downtime during upgrade.
-    _find_or_pull_node_image(libnetwork_image)
+    if not no_pull:
+        # Make sure the required image is pulled before removing the old one.
+        # This minimizes downtime during upgrade.
+        _find_or_pull_node_image(libnetwork_image)
 
     try:
         docker_client.remove_container("calico-libnetwork", force=True)
