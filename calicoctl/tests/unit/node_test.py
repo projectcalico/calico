@@ -200,7 +200,7 @@ class TestNode(unittest.TestCase):
         m_enforce_root.return_value = False
         m_container.return_value = False
         m_os_path_exists.return_value = False
-        m_docker.utils.create_host_config.return_value = 'host_config'
+        m_docker_client.create_host_config.return_value = 'host_config'
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
         m_check_system.return_value = [True, True, True]
@@ -230,7 +230,7 @@ class TestNode(unittest.TestCase):
         m_setup_ip.assert_called_once_with()
 
         self.assertFalse(m_docker_client.remove_container.called)
-        self.assertFalse(m_docker.utils.create_host_config.called)
+        self.assertFalse(m_docker_client.create_host_config.called)
         self.assertFalse(m_find_or_pull_node_image.called)
         self.assertFalse(m_docker_client.create_container.called)
         self.assertFalse(m_docker_client.start.called)
@@ -265,7 +265,7 @@ class TestNode(unittest.TestCase):
         m_root.return_value = False
         m_os_path_exists.return_value = False
         ip_2 = '2.2.2.2'
-        m_docker.utils.create_host_config.return_value = 'host_config'
+        m_docker_client.create_host_config.return_value = 'host_config'
         container = {'Id': 666}
         m_docker_client.create_container.return_value = container
         m_check_system.return_value = [True, True, True]
@@ -323,7 +323,7 @@ class TestNode(unittest.TestCase):
         m_docker_client.remove_container.assert_called_once_with(
             'calico-node', force=True
         )
-        m_docker.utils.create_host_config.assert_called_once_with(
+        m_docker_client.create_host_config.assert_called_once_with(
             privileged=True,
             restart_policy={"Name": "always"},
             network_mode="host",
@@ -374,7 +374,7 @@ class TestNode(unittest.TestCase):
         container2 = {'Id': 222}
         m_docker_client.create_container.side_effect = iter([container1,
                                                              container2])
-        m_docker.utils.create_host_config.return_value = 'host_config'
+        m_docker_client.create_host_config.return_value = 'host_config'
         m_os_path_exists.return_value = True
         m_check_system.return_value = [True, True, True]
 
@@ -457,7 +457,7 @@ class TestNode(unittest.TestCase):
             call('calico-node', force=True),
             call('calico-libnetwork', force=True)
         ])
-        m_docker.utils.create_host_config.assert_has_calls([
+        m_docker_client.create_host_config.assert_has_calls([
             call(privileged=True,
                  restart_policy={"Name": "always"},
                  network_mode="host",

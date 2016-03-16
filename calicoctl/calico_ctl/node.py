@@ -350,7 +350,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     }
     binds.update(etcd_binds)
 
-    host_config = docker.utils.create_host_config(
+    host_config = docker_client.create_host_config(
         privileged=True,
         restart_policy={"Name": "always"},
         network_mode="host",
@@ -487,7 +487,7 @@ def _start_libnetwork_container(libnetwork_image, etcd_envs, etcd_volumes,
     }
     binds.update(etcd_binds)
 
-    host_config = docker.utils.create_host_config(
+    host_config = docker_client.create_host_config(
         privileged=True, # Needed since the plugin does "ip link" commands.
         restart_policy={"Name": "always"},
         network_mode="host",
