@@ -65,7 +65,7 @@ class EndpointManager(ReferenceManager):
 
         # All endpoint dicts that are on this host.
         self.endpoints_by_id = {}
-        # Dict that maps from interface name ("tap1234") to endpoint ID.
+        # Dict that maps from int`erface name ("tap1234") to endpoint ID.
         self.endpoint_id_by_iface_name = {}
 
         # Set of endpoints that are live on this host.  I.e. ones that we've
