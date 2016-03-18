@@ -18,13 +18,14 @@ from datetime import datetime
 import json
 import logging
 
+from calico.felix.selectors import parse_selector
 from etcd import EtcdResult, EtcdException
 import etcd
 from gevent.event import Event
 import gevent
 from mock import Mock, call, patch, ANY
 
-from calico.datamodel_v1 import EndpointId
+from calico.datamodel_v1 import EndpointId, TieredPolicyId
 from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
@@ -68,6 +69,19 @@ TAGS_STR = json.dumps(TAGS)
 
 ETCD_ADDRESS = 'localhost:4001'
 
+POLICY_ID = TieredPolicyId("tiername", "polname")
+POLICY = {
+    "selector": "a == 'b'",
+    "inbound_rules": [],
+    "outbound_rules": [],
+    "order": 10,
+}
+SELECTOR = parse_selector(POLICY["selector"])
+POLICY_PARSED = {
+    "inbound_rules": [],
+    "outbound_rules": [],
+}
+POLICY_STR = json.dumps(POLICY)
 
 class TestEtcdAPI(BaseTestCase):
     def setUp(self):
@@ -400,6 +414,79 @@ class TestEtcdWatcher(BaseTestCase):
             None,
         )
 
+    def test_prof_labels_set(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/labels", "set",
+                      value='{"a": "b"}')
+        self.m_splitter.on_prof_labels_set.assert_called_once_with("prof1",
+                                                                   {"a": "b"})
+
+    def test_prof_labels_set_bad_data(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/labels", "set",
+                      value='{"a": "b}')
+        self.m_splitter.on_prof_labels_set.assert_called_once_with("prof1",
+                                                                   None)
+
+    def test_prof_labels_del(self):
+        self.dispatch("/calico/v1/policy/profile/prof1/labels", "delete")
+        self.m_splitter.on_prof_labels_set.assert_called_once_with("prof1",
+                                                                   None)
+
+    def test_on_tiered_policy_set(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/policy/polname", "set",
+                      value=POLICY_STR)
+        self.m_splitter.on_rules_update.assert_called_once_with(
+            POLICY_ID,
+            POLICY_PARSED
+        )
+        self.m_splitter.on_policy_selector_update.assert_called_once_with(
+            POLICY_ID, SELECTOR, 10
+        )
+
+    def test_on_tiered_policy_set_bad_data(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/policy/polname", "set",
+                      value=POLICY_STR[:10])
+        self.m_splitter.on_rules_update.assert_called_once_with(
+            POLICY_ID,
+            None
+        )
+        self.m_splitter.on_policy_selector_update.assert_called_once_with(
+            POLICY_ID, None, None
+        )
+
+    def test_on_tiered_policy_del(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/policy/polname",
+                      "delete")
+        self.m_splitter.on_rules_update.assert_called_once_with(
+            POLICY_ID,
+            None
+        )
+        self.m_splitter.on_policy_selector_update.assert_called_once_with(
+            POLICY_ID, None, None
+        )
+
+    def test_on_tier_data_set(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/metadata", "set",
+                      value='{"order": 10}')
+        self.m_splitter.on_tier_data_update.assert_called_once_with(
+            "tiername",
+            {"order": 10}
+        )
+
+    def test_on_tier_data_set_bad_data(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/metadata", "set",
+                      value='{"order": 10')
+        self.m_splitter.on_tier_data_update.assert_called_once_with(
+            "tiername",
+            None
+        )
+
+    def test_on_tier_data_del(self):
+        self.dispatch("/calico/v1/policy/tier/tiername/metadata", "delete")
+        self.m_splitter.on_tier_data_update.assert_called_once_with(
+            "tiername",
+            None
+        )
+
     def test_rules_set(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
                       value=RULES_STR)
@@ -519,12 +606,12 @@ class TestEtcdWatcher(BaseTestCase):
 
     def test_ipam_pool_set(self):
         self.dispatch("/calico/v1/ipam/v4/pool/1234", action="set", value="{}")
-        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+        self.assertEqual(self.m_splitter.on_ipam_pool_updated.mock_calls,
                          [call("1234", None)])
 
     def test_ipam_pool_del(self):
         self.dispatch("/calico/v1/ipam/v4/pool/1234", action="delete")
-        self.assertEqual(self.m_splitter.on_ipam_pool_update.mock_calls,
+        self.assertEqual(self.m_splitter.on_ipam_pool_updated.mock_calls,
                          [call("1234", None)])
 
     @patch("os._exit", autospec=True)

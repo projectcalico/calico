@@ -18,128 +18,64 @@ felix.test.test_splitter
 
 Tests of the actor that splits update messages to multiple manager actors.
 """
+import inspect
+import logging
+
 import mock
-from calico.felix.masq import MasqueradeManager
 
 from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 
+_log = logging.getLogger(__name__)
+
 
 class TestUpdateSplitter(BaseTestCase):
     """
-    Tests for the UpdateSplitter actor.
+    Tests for the UpdateSplitter class.
     """
     def setUp(self):
         super(TestUpdateSplitter, self).setUp()
+        # Inspect the update splitter to find all its on_... methods then
+        # construct a dummy manager class with a matching method for each one.
+        self.mgrs_by_method = {}
+        mgrs = []
+        for attr_name in UpdateSplitter.__dict__:
+            if attr_name.startswith("on_"):
+                class Mgr(object):
+                    locals()[attr_name] = mock.Mock()
+                mgr = Mgr()
+                self.mgrs_by_method[attr_name] = mgr
+                mgrs.append(mgr)
+        self.splitter = UpdateSplitter(mgrs)
 
-        self.ipsets_mgrs = [mock.MagicMock(), mock.MagicMock()]
-        self.rules_mgrs = [mock.MagicMock(), mock.MagicMock()]
-        self.endpoint_mgrs = [mock.MagicMock(), mock.MagicMock()]
-        self.iptables_updaters = [mock.MagicMock(), mock.MagicMock()]
-        self.masq_manager = mock.Mock(spec=MasqueradeManager)
-
-    def get_splitter(self):
-        return UpdateSplitter(
-            self.ipsets_mgrs +
-            self.rules_mgrs +
-            self.endpoint_mgrs +
-            self.iptables_updaters +
-            [self.masq_manager]
-        )
-
-    def test_on_datamodel_in_sync(self):
-        s = self.get_splitter()
-        s.on_datamodel_in_sync()
-        for mgr in self.ipsets_mgrs + self.rules_mgrs + self.endpoint_mgrs:
-            self.assertEqual(mgr.on_datamodel_in_sync.mock_calls,
-                             [mock.call(async=True)])
-
-    def test_rule_updates_propagate(self):
+    def test_pass_through(self):
         """
-        Test that the on_rules_update message propagates correctly.
+        Test that the update splitter fans out requests to the correct methods.
         """
-        s = self.get_splitter()
-        profile = 'profileA'
-        rules = ['first rule', 'second rule']
-
-        # Apply the rules update
-        s.on_rules_update(profile, rules)
-
-        # Confirm that the rules update propagates.
-        for mgr in self.rules_mgrs:
-            mgr.on_rules_update.assert_called_once_with(
-                profile, rules, async=True
-            )
-
-    def test_tags_updates_propagate(self):
-        """
-        Test that the on_tags_update message propagates correctly.
-        """
-        s = self.get_splitter()
-        profile = 'profileA'
-        tags = ['first tag', 'second tag']
-
-        # Apply the tags update
-        s.on_tags_update(profile, tags)
-
-        # Confirm that the rules update propagates.
-        for mgr in self.ipsets_mgrs:
-            mgr.on_tags_update.assert_called_once_with(
-                profile, tags, async=True
-            )
-
-    def test_interface_updates_propagate(self):
-        """
-        Test that the on_interface_update message propagates correctly.
-        """
-        s = self.get_splitter()
-        interface = 'tapABCDEF'
-
-        # Apply the interface update
-        s.on_interface_update(interface, iface_up=True)
-
-        # Confirm that the interface update propagates.
-        for mgr in self.endpoint_mgrs:
-            mgr.on_interface_update.assert_called_once_with(interface,
-                                                            True,
-                                                            async=True)
-
-    def test_endpoint_updates_propagate(self):
-        """
-        Test that the on_endpoint_update message propagates correctly.
-        """
-        s = self.get_splitter()
-        endpoint = 'endpointA'
-        endpoint_object = 'endpoint'
-
-        # Apply the endpoint update
-        s.on_endpoint_update(endpoint, endpoint_object)
-
-        # Confirm that the endpoint update propagates.
-        for mgr in self.ipsets_mgrs:
-            mgr.on_endpoint_update.assert_called_once_with(
-                endpoint, endpoint_object, async=True
-            )
-        for mgr in self.endpoint_mgrs:
-            mgr.on_endpoint_update.assert_called_once_with(
-                endpoint, endpoint_object, async=True
-            )
-
-    def test_on_ipam_pool_updated(self):
-        """
-        Test that the on_ipam_pool_update message propagates correctly
-        """
-        s = self.get_splitter()
-        pool_id = "foo"
-        pool = {"cidr": "10/16", "masquerade": False}
-
-        # Apply the IPAM pool update
-        s.on_ipam_pool_update(pool_id, pool)
-
-        # Confirm that the pool update propagates
-        self.masq_manager.on_ipam_pool_updated.assert_called_once_with(
-            pool_id, pool, async=True
-        )
+        for meth_name, mgr in self.mgrs_by_method.iteritems():
+            _log.info("Checking that method %s is passed through to relevant"
+                      "managers", meth_name)
+            # Extract the splitter's copy of the method and generate some
+            # plausible arguments.
+            meth = getattr(self.splitter, meth_name)
+            arg_spec = inspect.getargspec(meth)
+            m_args = [mock.Mock() for _ in arg_spec.args[:-1]]
+            # Call the method, we expect it to pass through its arguments to
+            # the mock manager.
+            meth(*m_args)
+            try:
+                m_mgr_meth = getattr(mgr, meth_name)
+            except:
+                raise AttributeError(dir(mgr))
+            try:
+                # Method should be passed though with additional async=True
+                # flag.
+                self.assertEqual(m_mgr_meth.mock_calls,
+                                 [mock.call(*m_args, async=True)])
+            except:
+                _log.exception("Failure while checking pass-through of %s",
+                               meth_name)
+                raise
 
 
 class TestCleanupManager(BaseTestCase):

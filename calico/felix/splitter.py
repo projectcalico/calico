@@ -51,6 +51,9 @@ class UpdateSplitter(object):
         self.iface_upd_mgrs = self._managers_with("on_interface_update")
         self.ep_upd_mgrs = self._managers_with("on_endpoint_update")
         self.ipam_upd_mgrs = self._managers_with("on_ipam_pool_updated")
+        self.selector_mgrs = self._managers_with("on_policy_selector_update")
+        self.tier_data_mgrs = self._managers_with("on_tier_data_update")
+        self.prof_labels_mgrs = self._managers_with("on_prof_labels_set")
 
     def _managers_with(self, method_name):
         return [m for m in self.managers if hasattr(m, method_name)]
@@ -65,7 +68,7 @@ class UpdateSplitter(object):
     def on_rules_update(self, profile_id, rules):
         """
         Process an update to the rules of the given profile.
-        :param str profile_id: Profile ID in question
+        :param str|TieredPolicyId profile_id: Profile ID in question
         :param dict[str,list[dict]] rules: New set of inbound/outbound rules
             or None if the rules have been deleted.
         """
@@ -83,6 +86,38 @@ class UpdateSplitter(object):
         _log.info("Tags for profile %s updated", profile_id)
         for mgr in self.tags_upd_mgrs:
             mgr.on_tags_update(profile_id, tags, async=True)
+
+    def on_prof_labels_set(self, profile_id, labels):
+        """
+        Called when the labels for a policy profile are updated.
+        :param str profile_id: ID of the profile.
+        :param labels: dict or, None to signify deletion.
+        """
+        _log.info("Profile %s labels updated", profile_id)
+        for mgr in self.prof_labels_mgrs:
+            mgr.on_prof_labels_set(profile_id, labels, async=True)
+
+    def on_tier_data_update(self, tier, data_or_none):
+        """
+        Called when the metadata for a profile tier is updated.
+        :param str tier: name of the tier.
+        :param dict|NoneType data_or_none: dict containing its data or None.
+        """
+        _log.info("Data for tier %s updated", tier)
+        for mgr in self.tier_data_mgrs:
+            mgr.on_tier_data_update(tier, data_or_none, async=True)
+
+    def on_policy_selector_update(self, policy_id, selector_or_none,
+                                  order_or_none):
+        """
+        Called when the selector for a profile is updated.
+        :param policy_id:
+        :param selector_or_none:
+        """
+        _log.info("Selector for profile %s updated", policy_id)
+        for mgr in self.selector_mgrs:
+            mgr.on_policy_selector_update(policy_id, selector_or_none,
+                                          order_or_none, async=True)
 
     def on_interface_update(self, name, iface_up):
         """
@@ -107,7 +142,7 @@ class UpdateSplitter(object):
         for mgr in self.ep_upd_mgrs:
             mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
 
-    def on_ipam_pool_update(self, pool_id, pool):
+    def on_ipam_pool_updated(self, pool_id, pool):
         """
         Fan out an update to the given IPAM pool.
 
@@ -162,8 +197,8 @@ class CleanupManager(Actor):
             for ipset_mgr in self.ipsets_mgrs:
                 ipset_mgr.cleanup(async=False)
 
-            # We've cleaned up any unused ipsets and iptables.   Let any plugins
-            # know in case they want to take any action.
+            # We've cleaned up any unused ipsets and iptables.   Let any
+            # plugins know in case they want to take any action.
             for plugin_name, plugin in self.config.plugins.iteritems():
                 _log.info("Invoking cleanup_complete for plugin %s",
                           plugin_name)
@@ -173,5 +208,3 @@ class CleanupManager(Actor):
                            "exiting")
             os._exit(1)
             raise  # Keep linter happy.
-
-

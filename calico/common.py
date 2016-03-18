@@ -24,6 +24,7 @@ Calico common utilities.
 import errno
 import logging
 import logging.handlers
+import numbers
 import os
 import re
 import sys
@@ -33,6 +34,9 @@ import netaddr
 import netaddr.core
 from netaddr.strategy import eui48
 from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
+
+from calico.datamodel_v1 import TieredPolicyId, LABEL_CHARS
+from calico.felix.selectors import parse_selector, BadSelector
 
 _log = logging.getLogger(__name__)
 
@@ -71,18 +75,27 @@ KNOWN_RULE_KEYS = set([
     "protocol",
     "src_net",
     "src_tag",
+    "src_selector",
     "src_ports",
     "dst_net",
     "dst_tag",
+    "dst_selector",
     "dst_ports",
     "icmp_type",
     "icmp_code",
     "ip_version",
 ])
 
+# Valid actions to see in a rule.
+KNOWN_ACTIONS = set(["allow", "deny", "next-tier"])
+
 # Regex that matches only names with valid characters in them. The list of
 # valid characters is the same for endpoints, profiles, and tags.
-VALID_ID_RE = re.compile('^[a-zA-Z0-9_\.\-]+$')
+VALID_ID_RE = re.compile(r'^[a-zA-Z0-9_\.\-]+$')
+
+# Regex for validating the names of labels, which need to be rich enough to
+# allow for Kubernetes implementation, for example.
+VALID_LABEL_NAME_RE = re.compile(r'^[%s]+$' % re.escape(LABEL_CHARS))
 
 VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
 
@@ -362,6 +375,9 @@ def validate_endpoint(config, combined_id, endpoint):
         issues.append("Interface %r does not start with %r." %
                       (endpoint["name"], config.IFACE_PREFIX))
 
+    if "labels" in endpoint:
+        _validate_label_dict(issues, endpoint["labels"])
+
     for version in (4, 6):
         nets = "ipv%d_nets" % version
         if nets not in endpoint:
@@ -435,34 +451,68 @@ def validate_endpoint(config, combined_id, endpoint):
         raise ValidationFailed(" ".join(issues))
 
 
-def validate_rules(profile_id, rules):
-    """
-    Ensures that the supplied rules are valid. Once this routine has returned
-    successfully, we know that all required fields are present and have valid
-    values.
+def validate_tier_data(tier, data):
+    issues = []
+    if not VALID_ID_RE.match(tier):
+        issues.append("Invalid profile_id '%r'." % tier)
 
-    :param profile_id: Profile ID from etcd
-    :param rules: rules list as read from etcd
+    if not isinstance(data, dict):
+        raise ValidationFailed("Expected tier data to be a dict.")
+
+    if "order" in data:
+        order = data["order"]
+        if not isinstance(order, numbers.Number):
+            issues.append("Tier data contained non-numeric order field")
+    else:
+        issues.append("Missing 'order' field in tier data")
+
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def validate_profile(profile_id, profile, require_selector=False,
+                     require_order=False):
+    """
+    Validates and normalises the given rules dictionary.
+
+    As side effects to the input dict:
+
+    * Fields that are set to None are removed completely.
+    * Selectors are replaced with SelectorExpression objects.  Parsing now
+      ensures that the selectors are valid and ensures that equal selectors
+      compare and hash equally.  For example: "a == 'b'" and "a=='b'" are
+      different strings that parse to the same selector.
+
+    Once this routine has returned successfully, we know that all
+    required fields are present and have valid values.
+
+    :param str|TieredPolicyId profile_id: Profile ID from etcd
+    :param dict profile: profile dict as read from etcd
     :raises ValidationFailed
     """
     issues = []
 
-    if not isinstance(rules, dict):
+    if not isinstance(profile, dict):
         raise ValidationFailed("Expected rules to be a dict.")
 
-    if not VALID_ID_RE.match(profile_id):
-        issues.append("Invalid profile_id '%r'." % profile_id)
+    if isinstance(profile_id, TieredPolicyId):
+        profile_id_parts = profile_id.tier, profile_id.policy_id
+    else:
+        profile_id_parts = [profile_id]
+    for part in profile_id_parts:
+        if not VALID_ID_RE.match(part):
+            issues.append("Invalid profile ID '%r'." % profile_id)
 
     for dirn in ("inbound_rules", "outbound_rules"):
-        if dirn not in rules:
+        if dirn not in profile:
             issues.append("No %s in rules." % dirn)
             continue
 
-        if not isinstance(rules[dirn], list):
+        if not isinstance(profile[dirn], list):
             issues.append("Expected rules[%s] to be a list." % dirn)
             continue
 
-        for rule in rules[dirn]:
+        for rule in profile[dirn]:
             if not isinstance(rule, dict):
                 issues.append("Rules should be dicts.")
                 break
@@ -497,7 +547,21 @@ def validate_rules(profile_id, rules):
                 if tag is None:
                     continue
                 if not VALID_ID_RE.match(tag):
-                    issues.append("Invalid %s '%r'." % (tag_type, tag))
+                    issues.append("Invalid %s %r." % (tag_type, tag))
+
+            # For selectors, we replace the value with the parsed selector.
+            # This avoids having to re-parse it later and it ensures that
+            # equivalent selectors compare equal.
+            for sel_type in ('src_selector', 'dst_selector'):
+                sel_str = rule.get(sel_type)
+                if sel_str is None:
+                    continue
+                try:
+                    sel = parse_selector(sel_str)
+                except BadSelector:
+                    issues.append("Invalid %s: %r" % (sel_type, sel_str))
+                else:
+                    rule[sel_type] = sel
 
             for key in ("src_net", "dst_net"):
                 network = rule.get(key)
@@ -527,7 +591,7 @@ def validate_rules(profile_id, rules):
 
             action = rule.get('action')
             if (action is not None and
-                    action not in ("allow", "deny")):
+                    action not in KNOWN_ACTIONS):
                 issues.append("Invalid action in rule %s." % rule)
 
             icmp_type = rule.get('icmp_type')
@@ -546,13 +610,30 @@ def validate_rules(profile_id, rules):
                 elif not 0 <= icmp_code <= 255:
                     issues.append("ICMP code is out of range.")
                 if icmp_type is None:
-                    # TODO: ICMP code without ICMP type not supported by iptables
-                    # Firewall against that for now.
+                    # ICMP code without ICMP type not supported by iptables;
+                    # firewall against that.
                     issues.append("ICMP code specified without ICMP type.")
 
             unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
             if unknown_keys:
                 issues.append("Rule contains unknown keys: %s." % unknown_keys)
+
+    if "selector" in profile:
+        try:
+            selector = parse_selector(profile["selector"])
+        except BadSelector:
+            issues.append("Failed to parse selector %s" % profile["selector"])
+        else:
+            profile["selector"] = selector
+    elif require_selector:
+        issues.append("Profile missing required selector field")
+
+    if "order" in profile:
+        if not isinstance(profile["order"], numbers.Number):
+            issues.append("Order should be a number, not %s" %
+                          profile["order"])
+    elif require_order:
+        issues.append("Profile missing required selector field")
 
     if issues:
         raise ValidationFailed(" ".join(issues))
@@ -620,6 +701,29 @@ def validate_tags(profile_id, tags):
 
     if issues:
         raise ValidationFailed(" ".join(issues))
+
+
+def validate_labels(profile_id, labels):
+    issues = []
+
+    if not VALID_ID_RE.match(profile_id):
+        issues.append("Invalid profile_id '%r'." % profile_id)
+    _validate_label_dict(issues, labels)
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def _validate_label_dict(issues, labels):
+    if not isinstance(labels, dict):
+        issues.append("Expected labels to be a dict.")
+    else:
+        for label_name, value in labels.iteritems():
+            if not VALID_LABEL_NAME_RE.match(label_name):
+                issues.append("Invalid label name %r." % label_name)
+            if isinstance(value, basestring):
+                continue
+            else:
+                issues.append("Invalid label value")
 
 
 def validate_ipam_pool(pool_id, pool, ip_version):
