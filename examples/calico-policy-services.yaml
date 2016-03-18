@@ -27,5 +27,5 @@ spec:
           image: caseydavenport/k8s-policy-agent
           imagePullPolicy: Always
           env:
-          - name: ETCD_AUTHORITY
-            value: "<ETCD_HOST>:<ETCD_PORT>"
+          - name: ETCD_ENDPOINTS
+            value: "http://<ETCD_HOST>:<ETCD_PORT>"
