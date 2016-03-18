@@ -40,6 +40,7 @@ import re
 import itertools
 
 from calico.common import KNOWN_RULE_KEYS
+from calico.datamodel_v1 import TieredPolicyId
 from calico.felix import futils
 from calico.felix.fplugin import FelixPlugin
 from calico.felix.profilerules import UnsupportedICMPType
@@ -407,7 +408,8 @@ class FelixIptablesGenerator(FelixPlugin):
                     self._profile_to_chain_name("outbound", profile_id)])
 
     def profile_updates(self, profile_id, profile, ip_version, tag_to_ipset,
-                        on_allow="ACCEPT", on_deny="DROP", comment_tag=None):
+                        selector_to_ipset, on_allow="ACCEPT", on_deny="DROP",
+                        comment_tag=None):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given profile.
@@ -448,6 +450,7 @@ class FelixIptablesGenerator(FelixPlugin):
                         r,
                         ip_version,
                         tag_to_ipset,
+                        selector_to_ipset,
                         on_allow=on_allow,
                         on_deny=on_deny))
 
@@ -585,12 +588,15 @@ class FelixIptablesGenerator(FelixPlugin):
         :param profile_id: The profile ID we want to know a name for.
         :returns string: The name of the chain
         """
+        if isinstance(profile_id, TieredPolicyId):
+            profile_id = "%s/%s" % (profile_id.tier, profile_id.policy_id)
         profile_string = futils.uniquely_shorten(profile_id, 16)
         return CHAIN_PROFILE_PREFIX + "%s-%s" % (profile_string,
                                                  inbound_or_outbound[:1])
 
     def _rule_to_iptables_fragments(self, chain_name, rule, ip_version,
-                                    tag_to_ipset, on_allow="ACCEPT",
+                                    tag_to_ipset, selector_to_ipset,
+                                    on_allow="ACCEPT",
                                     on_deny="DROP"):
         """
         Convert a rule dict to a list of iptables fragments suitable to use
@@ -604,6 +610,8 @@ class FelixIptablesGenerator(FelixPlugin):
         :param ip_version.  Whether these are for the IPv4 or IPv6 iptables.
         :param dict[str] tag_to_ipset: dictionary mapping from tag key to ipset
                name.
+        :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
+               from selector to the name of the ipset that represents it.
         :param str on_allow: iptables action to use when the rule allows
                traffic.  For example: "ACCEPT" or "RETURN".
         :param str on_deny: iptables action to use when the rule denies
@@ -638,6 +646,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     rule_copy,
                     ip_version,
                     tag_to_ipset,
+                    selector_to_ipset,
                     on_allow=on_allow,
                     on_deny=on_deny)
                 fragments.extend(frags)
@@ -685,7 +694,8 @@ class FelixIptablesGenerator(FelixPlugin):
         return chunks
 
     def _rule_to_iptables_fragments_inner(self, chain_name, rule, ip_version,
-                                          tag_to_ipset, on_allow="ACCEPT",
+                                          tag_to_ipset, selector_to_ipset,
+                                          on_allow="ACCEPT",
                                           on_deny="DROP"):
         """
         Convert a rule dict to iptables fragments suitable to use with
@@ -697,6 +707,8 @@ class FelixIptablesGenerator(FelixPlugin):
         :param ip_version.  Whether these are for the IPv4 or IPv6 iptables.
         :param dict[str] tag_to_ipset: dictionary mapping from tag key to ipset
                name.
+        :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
+               from selector to the name of the ipset that represents it.
         :param str on_allow: iptables action to use when the rule allows
                 traffic. For example: "ACCEPT" or "RETURN".
         :param str on_deny: iptables action to use when the rule denies
@@ -732,6 +744,11 @@ class FelixIptablesGenerator(FelixPlugin):
             tag_key = dirn + "_tag"
             if tag_key in rule and rule[tag_key] is not None:
                 ipset_name = tag_to_ipset[rule[tag_key]]
+                append("--match set", "--match-set", ipset_name, dirn)
+
+            sel_key = dirn + "_selector"
+            if sel_key in rule and rule[sel_key] is not None:
+                ipset_name = selector_to_ipset[rule[sel_key]]
                 append("--match set", "--match-set", ipset_name, dirn)
 
             # Port lists/ranges, which we map to multiport. Ignore not just

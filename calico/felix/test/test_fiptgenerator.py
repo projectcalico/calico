@@ -20,7 +20,12 @@ Tests of iptables rules generation function.
 """
 
 import logging
+from collections import OrderedDict
+
+from calico.felix.selectors import parse_selector
 from mock import Mock
+
+from calico.datamodel_v1 import TieredPolicyId
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.profilerules import UnsupportedICMPType
 from calico.felix.test.base import BaseTestCase, load_config
@@ -297,6 +302,14 @@ class TestRules(BaseTestCase):
         chain_names = self.iptables_generator.profile_chain_names("prof1")
         self.assertEqual(chain_names, set(["felix-p-prof1-i", "felix-p-prof1-o"]))
 
+    def test_tiered_policy_chain_names(self):
+        chain_names = self.iptables_generator.profile_chain_names(
+            TieredPolicyId("tier", "pol")
+        )
+        self.assertEqual(chain_names,
+                         set(['felix-p-tier/pol-o',
+                              'felix-p-tier/pol-i']))
+
     def test_split_port_lists(self):
         self.assertEqual(
             self.iptables_generator._split_port_lists([1, 2, 3, 4, 5, 6, 7, 8, 9,
@@ -326,6 +339,7 @@ class TestRules(BaseTestCase):
                 test["profile"],
                 test["ip_version"],
                 test["tag_to_ipset"],
+                selector_to_ipset=test.get("sel_to_ipset", {}),
                 on_allow=test.get("on_allow", "RETURN"),
                 on_deny=test.get("on_deny", "DROP")
             )
@@ -333,14 +347,15 @@ class TestRules(BaseTestCase):
 
     def test_bad_icmp_type(self):
         with self.assertRaises(UnsupportedICMPType):
-            self.iptables_generator._rule_to_iptables_fragments_inner("foo",
-                                                                 {"icmp_type": 255}, 4, {})
+            self.iptables_generator._rule_to_iptables_fragments_inner(
+                "foo", {"icmp_type": 255}, 4, {}, {}
+            )
 
     def test_bad_protocol_with_ports(self):
         with self.assertRaises(AssertionError):
-            self.iptables_generator._rule_to_iptables_fragments_inner("foo",
-                                                                 {"protocol": "10",
-                                               "src_ports": [1]}, 4, {})
+            self.iptables_generator._rule_to_iptables_fragments_inner(
+                "foo", {"protocol": "10", "src_ports": [1]}, 4, {}, {}
+            )
 
 
 class TestEndpoint(BaseTestCase):

@@ -18,11 +18,12 @@ felix.profilerules
 
 ProfileRules actor, handles local profile chains.
 """
-
 import logging
+
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
+from calico.felix.selectors import SelectorExpression
 
 _log = logging.getLogger(__name__)
 
@@ -127,7 +128,8 @@ class ProfileRules(RefCountedActor):
         self._pending_profile = None
         # Currently-programmed profile dictionary.
         self._profile = None
-        self._required_tags = set()
+        # The IDs of the tags and selector ipsets it requires.
+        self._required_ipsets = set()
 
         # State flags.
         self._notified_ready = False
@@ -194,17 +196,19 @@ class ProfileRules(RefCountedActor):
         else:
             if self._pending_profile != self._profile:
                 _log.debug("Profile data changed, updating ipset references.")
-                # Make sure that all the new tags are active.  We can't
-                # discard unneeded tags until we've updated iptables.
-                self._required_tags = extract_tags_from_profile(
+                # Make sure that all the new tags and selectors are active.
+                # We can't discard unneeded ones until we've updated iptables.
+                new_tags_and_sels = extract_tags_and_selectors_from_profile(
                     self._pending_profile
                 )
-                for tag in self._required_tags:
-                    _log.debug("Requesting ipset for tag %s", tag)
+                for tag_or_sel in new_tags_and_sels:
+                    _log.debug("Requesting ipset for tag %s", tag_or_sel)
                     # Note: acquire_ref() is a no-op if already acquired.
-                    self._ipset_refs.acquire_ref(tag)
+                    self._ipset_refs.acquire_ref(tag_or_sel)
+
                 self._dirty = True
                 self._profile = self._pending_profile
+                self._required_ipsets = new_tags_and_sels
 
             if (self._dirty and
                     self._ipset_refs.ready and
@@ -218,7 +222,7 @@ class ProfileRules(RefCountedActor):
                 else:
                     # Now we've updated iptables, we can tell the RefHelper
                     # to discard the tags we no longer need.
-                    self._ipset_refs.replace_all(self._required_tags)
+                    self._ipset_refs.replace_all(self._required_ipsets)
                     self._dirty = False
             elif not self._dirty:
                 _log.debug("No changes to program.")
@@ -259,11 +263,14 @@ class ProfileRules(RefCountedActor):
         """
         _log.info("%s Programming iptables with our chains.", self)
         assert self._pending_profile is not None, \
-               "_update_chains called with no _pending_profile"
-
+            "_update_chains called with no _pending_profile"
         tag_to_ip_set_name = {}
-        for tag, ipset in self._ipset_refs.iteritems():
-            tag_to_ip_set_name[tag] = ipset.ipset_name
+        sel_to_ip_set_name = {}
+        for tag_or_sel, ipset in self._ipset_refs.iteritems():
+            if isinstance(tag_or_sel, SelectorExpression):
+                sel_to_ip_set_name[tag_or_sel] = ipset.ipset_name
+            else:
+                tag_to_ip_set_name[tag_or_sel] = ipset.ipset_name
 
         _log.info("Updating chains for profile %s", self.id)
         _log.debug("Profile %s: %s", self.id, self._profile)
@@ -272,7 +279,8 @@ class ProfileRules(RefCountedActor):
             self.id,
             self._pending_profile,
             self.ip_version,
-            tag_to_ip_set_name,
+            tag_to_ipset=tag_to_ip_set_name,
+            selector_to_ipset=sel_to_ip_set_name,
             on_allow="RETURN",
             comment_tag=self.id)
 
@@ -282,19 +290,16 @@ class ProfileRules(RefCountedActor):
         self._iptables_updater.rewrite_chains(updates, deps, async=False)
 
 
-def extract_tags_from_profile(profile):
+def extract_tags_and_selectors_from_profile(profile):
     if profile is None:
         return set()
-    tags = set()
+    tags_and_sels = set()
     for in_or_out in ["inbound_rules", "outbound_rules"]:
         for rule in profile.get(in_or_out, []):
-            tags.update(extract_tags_from_rule(rule))
-    return tags
-
-
-def extract_tags_from_rule(rule):
-    return set(rule[key] for key in ["src_tag", "dst_tag"]
-               if key in rule and rule[key] is not None)
+            for key in ["src_tag", "dst_tag", "src_selector", "dst_selector"]:
+                if key in rule:
+                    tags_and_sels.add(rule[key])
+    return tags_and_sels
 
 
 class UnsupportedICMPType(Exception):
