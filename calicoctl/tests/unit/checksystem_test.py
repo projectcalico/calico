@@ -13,7 +13,6 @@
 # limitations under the License.
 import unittest
 from mock import patch, Mock, call
-from sh import Command, ErrorReturnCode
 from subprocess32 import CalledProcessError
 from nose_parameterized import parameterized
 from calico_ctl.checksystem import (check_system, _check_modules,

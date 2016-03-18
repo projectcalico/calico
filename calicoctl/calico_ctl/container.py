@@ -26,6 +26,8 @@ import sys
 import uuid
 
 import docker.errors
+from pycalico.util import validate_cidr
+from pycalico.util import validate_ip
 from requests.exceptions import ConnectionError
 from urllib3.exceptions import MaxRetryError
 from subprocess import CalledProcessError
@@ -41,8 +43,6 @@ from utils import hostname, DOCKER_ORCHESTRATOR_ID, NAMESPACE_ORCHESTRATOR_ID, \
     escape_etcd
 from utils import enforce_root
 from utils import print_paragraph
-from utils import validate_cidr
-from utils import validate_ip
 
 
 def assign_any(v4_count, v6_count, pool=(None, None)):

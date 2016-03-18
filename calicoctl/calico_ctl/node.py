@@ -24,16 +24,17 @@ from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
                                 ETCD_SCHEME_DEFAULT)
-from pycalico.datastore_datatypes import BGPPeer, IPPool
+from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore_errors import DataStoreError
 from pycalico.netns import remove_veth
+from pycalico.util import validate_asn, validate_ip
 from subprocess32 import call
 
 from checksystem import check_system
 from connectors import client, docker_client
 from utils import (REQUIRED_MODULES, running_in_container, enforce_root,
                    get_container_ipv_from_arguments, hostname, print_paragraph,
-                   validate_ip, validate_asn, convert_asn_to_asplain,
+                   convert_asn_to_asplain,
                    ipv6_enabled)
 
 __doc__ = """
@@ -417,10 +418,10 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
     environment = [
         "CALICO_DISABLE_FILE_LOGGING=true",
         "HOSTNAME=%s" % hostname,
-        "IP=%s" % ip,
+        "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
         "CALICO_NETWORKING=%s" % calico_networking,
-        "AS=%s" % as_num
+        "AS=%s" % (as_num or "")
     ] + etcd_envs
 
     # TODO No support for SSL (etcd binds) yet

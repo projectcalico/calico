@@ -14,6 +14,7 @@
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.utils import get_ip
 from tests.st.utils.workload import NET_NONE
 
 
@@ -23,7 +24,10 @@ class TestNoOrchestratorMultiHost(TestBase):
         Test mainline functionality without using an orchestrator plugin on
         multiple hosts.
         """
-        with DockerHost('host1') as host1, DockerHost('host2') as host2:
+        with DockerHost('host1') as host1, DockerHost('host2', start_calico=False) as host2:
+            # Start calico manually on host2
+            host2.start_calico_node_with_docker()
+
             # TODO ipv6 too
             host1.calicoctl("profile add TEST_GROUP")
 

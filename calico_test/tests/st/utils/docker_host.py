@@ -144,6 +144,28 @@ class DockerHost(object):
         cmd = ' '.join(args)
         self.calicoctl(cmd)
 
+    def start_calico_node_with_docker(self):
+        """
+        Start calico in a container inside a host by calling docker directly.
+        """
+        if ETCD_SCHEME == "https":
+            etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
+        else:
+            etcd_auth = "%s:2379" % get_ip()
+
+        self.execute("docker run -d --net=host --privileged "
+                          "--name=calico-node -e IP=%s "
+                          "-e ETCD_AUTHORITY=%s "
+                          "-e ETCD_SCHEME=%s "
+                          "-e ETCD_CA_CERT_FILE=%s "
+                          "-e ETCD_CERT_FILE=%s "
+                          "-e ETCD_KEY_FILE=%s "
+                          "-v /var/log/calico:/var/log/calico "
+                          "-v /var/run/calico:/var/run/calico "
+                          "calico/node:latest" % (self.ip, etcd_auth,
+                                                  ETCD_SCHEME, ETCD_CA,
+                                                  ETCD_CERT, ETCD_KEY))
+
 
     def remove_workloads(self):
         """

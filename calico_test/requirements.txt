@@ -1,7 +1,6 @@
 coverage
 coveralls
 mock==1.0.1
-sh
 nose
 nose-timer
 nose-parameterized

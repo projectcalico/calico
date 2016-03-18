@@ -1,5 +1,8 @@
 python startup.py || exit 1
 
+# Source any additional environment that was added by the startup script
+. startup.env
+
 if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
 	rm -r /etc/service/bird/log
 	rm -r /etc/service/bird6/log
@@ -26,10 +29,10 @@ else
     # running twice ensures our starting configuration is correct.
     confd -confdir=/etc/calico/confd -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
           -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-          -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} >/felix-startup-1.log 2>&1 || true
+          -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} -keep-stage-file >/felix-startup-1.log 2>&1 || true
     confd -confdir=/etc/calico/confd -onetime -node=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY} \
           -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-          -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} >/felix-startup-2.log 2>&1 || true
+          -client-ca-keys=${ETCD_CA_CERT_FILE} -scheme=${ETCD_SCHEME:=http} -keep-stage-file >/felix-startup-2.log 2>&1 || true
 fi
 
 echo "Calico node started successfully"

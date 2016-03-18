@@ -27,9 +27,9 @@ import sys
 
 from netaddr import IPAddress
 from pycalico.block import AddressNotAssignedError
+from pycalico.util import validate_ip
 
 from connectors import client
-from utils import validate_ip
 
 
 def validate_arguments(arguments):

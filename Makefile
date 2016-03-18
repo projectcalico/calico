@@ -73,6 +73,10 @@ certs/.certificates.created:
 calico-node.tar: calico_node/.calico_node.created
 	docker save --output calico-node.tar calico/node:latest
 
+# Get docker2aci from https://github.com/appc/docker2aci
+calico-node-latest.aci: calico-node.tar
+	docker2aci calico-node.tar
+
 busybox.tar:
 	docker pull busybox:latest
 	docker save --output busybox.tar busybox:latest
@@ -94,6 +98,8 @@ birdcl:
 ut: calico_test/.calico_test.created
 	docker run --rm -v `pwd`/calicoctl:/code calico/test \
 		nosetests $(UT_TO_RUN) -c nose.cfg
+	docker run --rm -v `pwd`/calico_node:/code calico/test \
+		nosetests filesystem/tests --with-coverage --cover-package=filesystem
 
 ut-circle: calico_test/.calico_test.created dist/calicoctl
 	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
@@ -108,6 +114,9 @@ ut-circle: calico_test/.calico_test.created dist/calicoctl
 	cd calicoctl; nosetests tests/unit -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
+
+	docker run -v `pwd`/calico_node:/code calico/test \
+		nosetests filesystem/tests --with-coverage --cover-package=filesystem
 
 ## Run etcd in a container. Used by the STs and generally useful.
 run-etcd:
