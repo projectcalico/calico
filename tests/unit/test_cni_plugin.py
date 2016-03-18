@@ -42,6 +42,8 @@ class CniPluginTest(unittest.TestCase):
         self.container_id = "ff3afbd1-17ad-499d-b514-72438c009e81"
         self.network_config = {
             "name": "ut-network",
+            "etcd_authority": "dummy_value:1234",
+            "etcd_endpoints": "http://dummy_value:1234",
             "type": "calico",
             "ipam": {
                 "type": "calico-ipam",
