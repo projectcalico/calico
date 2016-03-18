@@ -243,29 +243,29 @@ FROM_ENDPOINT_CHAIN = [
                '--jump DROP -m comment --comment '
                '"Incorrect source MAC"',
 
-    # Now the tiered profiles.  For each tier we reset the "next tier" mark.
+    # Now the tiered policies.  For each tier we reset the "next tier" mark.
     '--append felix-from-abcd --jump MARK --set-mark 0/0x2000000 '
               '--match comment --comment "Start of tier tier_1"',
-    # Then, for each profile, we jump to the profile, and check if it set the
+    # Then, for each policies, we jump to the policies, and check if it set the
     # accept mark, which immediately accepts.
     '--append felix-from-abcd '
               '--match mark --mark 0/0x2000000 --jump felix-p-t1p1-o',
     '--append felix-from-abcd '
               '--match mark --mark 0x1000000/0x1000000 '
-              '--match comment --comment "Return if profile accepted" '
+              '--match comment --comment "Return if policy accepted" '
               '--jump RETURN',
 
     '--append felix-from-abcd '
               '--match mark --mark 0/0x2000000 --jump felix-p-t1p2-o',
     '--append felix-from-abcd '
               '--match mark --mark 0x1000000/0x1000000 '
-              '--match comment --comment "Return if profile accepted" '
+              '--match comment --comment "Return if policy accepted" '
               '--jump RETURN',
     # Then, at the end of the tier, drop if nothing in the tier did a
     # "next-tier"
     '--append felix-from-abcd '
               '--match mark --mark 0/0x2000000 '
-              '--match comment --comment "Drop if no profile in tier passed" '
+              '--match comment --comment "Drop if no policy in tier passed" '
               '--jump DROP',
 
     # Now the second tier...
@@ -276,10 +276,10 @@ FROM_ENDPOINT_CHAIN = [
               '--match mark --mark 0/0x2000000 --jump felix-p-t2p1-o',
     '--append felix-from-abcd '
               '--match mark --mark 0x1000000/0x1000000 --match comment '
-              '--comment "Return if profile accepted" --jump RETURN',
+              '--comment "Return if policy accepted" --jump RETURN',
     '--append felix-from-abcd '
               '--match mark --mark 0/0x2000000 --match comment '
-              '--comment "Drop if no profile in tier passed" --jump DROP',
+              '--comment "Drop if no policy in tier passed" --jump DROP',
 
     # Jump to the first profile.
     '--append felix-from-abcd --jump felix-p-prof-1-o',
@@ -304,19 +304,19 @@ TO_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
     '--append felix-to-abcd --jump MARK --set-mark 0/0x1000000',
 
-    # Then do the tiered profiles in order.  Tier 1:
+    # Then do the tiered policies in order.  Tier 1:
     '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
             '--match comment --comment "Start of tier tier_1"',
     '--append felix-to-abcd --match mark --mark 0/0x2000000 '
             '--jump felix-p-t1p1-i',
     '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
-            '--match comment --comment "Return if profile accepted" --jump RETURN',
+            '--match comment --comment "Return if policy accepted" --jump RETURN',
     '--append felix-to-abcd --match mark --mark 0/0x2000000 '
             '--jump felix-p-t1p2-i',
     '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
-            '--match comment --comment "Return if profile accepted" --jump RETURN',
+            '--match comment --comment "Return if policy accepted" --jump RETURN',
     '--append felix-to-abcd --match mark --mark 0/0x2000000 '
-            '--match comment --comment "Drop if no profile in tier passed" '
+            '--match comment --comment "Drop if no policy in tier passed" '
             '--jump DROP',
     # Tier 2:
     '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
@@ -324,10 +324,10 @@ TO_ENDPOINT_CHAIN = [
     '--append felix-to-abcd --match mark --mark 0/0x2000000 '
             '--jump felix-p-t2p1-i',
     '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
-            '--match comment --comment "Return if profile accepted" '
+            '--match comment --comment "Return if policy accepted" '
             '--jump RETURN',
     '--append felix-to-abcd --match mark --mark 0/0x2000000 '
-            '--match comment --comment "Drop if no profile in tier passed" '
+            '--match comment --comment "Drop if no policy in tier passed" '
             '--jump DROP',
 
     # Jump to first profile and return iff it matched.

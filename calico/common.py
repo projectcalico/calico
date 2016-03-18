@@ -457,7 +457,7 @@ def validate_tier_data(tier, data):
         issues.append("Invalid profile_id '%r'." % tier)
 
     if not isinstance(data, dict):
-        raise ValidationFailed("Expected tier data to be a dict.")
+        raise ValidationFailed("Expected tier data to be a dict not %r" % data)
 
     if "order" in data:
         order = data["order"]
@@ -470,14 +470,13 @@ def validate_tier_data(tier, data):
         raise ValidationFailed(" ".join(issues))
 
 
-def validate_profile(profile_id, profile, require_selector=False,
-                     require_order=False):
+def validate_policy(policy_id, policy):
     """
-    Validates and normalises the given rules dictionary.
+    Validates and normalises the given policy dictionary.
 
     As side effects to the input dict:
 
-    * Fields that are set to None are removed completely.
+    * Fields that are set to None in rules are removed completely.
     * Selectors are replaced with SelectorExpression objects.  Parsing now
       ensures that the selectors are valid and ensures that equal selectors
       compare and hash equally.  For example: "a == 'b'" and "a=='b'" are
@@ -486,35 +485,116 @@ def validate_profile(profile_id, profile, require_selector=False,
     Once this routine has returned successfully, we know that all
     required fields are present and have valid values.
 
-    :param str|TieredPolicyId profile_id: Profile ID from etcd
-    :param dict profile: profile dict as read from etcd
+    :param TieredPolicyId policy_id: The ID of the profile, which is also
+           validated.
+    :param policy: The profile dict.  For example,
+           {"inbound_rules": [...],
+            "outbound_rules": [...],
+            "selector": "foo == 'bar'",
+            "order": 123}
     :raises ValidationFailed
     """
+    # The code below relies on the top-level object to be a dict.  Check
+    # that first.
+    if not isinstance(policy, dict):
+        raise ValidationFailed("Expected policy '%s' to be a dict, not %r." %
+                               (policy_id, policy))
+
     issues = []
 
-    if not isinstance(profile, dict):
-        raise ValidationFailed("Expected rules to be a dict.")
-
-    if isinstance(profile_id, TieredPolicyId):
-        profile_id_parts = profile_id.tier, profile_id.policy_id
-    else:
-        profile_id_parts = [profile_id]
-    for part in profile_id_parts:
+    for part in policy_id.tier, policy_id.policy_id:
         if not VALID_ID_RE.match(part):
-            issues.append("Invalid profile ID '%r'." % profile_id)
+            issues.append("Invalid profile ID '%r'." % policy_id)
 
+    _validate_rules(policy, issues)
+
+    if "selector" in policy:
+        try:
+            selector = parse_selector(policy["selector"])
+        except BadSelector:
+            issues.append("Failed to parse selector %s" % policy["selector"])
+        else:
+            policy["selector"] = selector
+    else:
+        issues.append("Profile missing required selector field")
+
+    if "order" in policy:
+        if not isinstance(policy["order"], numbers.Number):
+            issues.append("Order should be a number, not %s" %
+                          policy["order"])
+    else:
+        issues.append("Profile missing required order field")
+
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def validate_profile(profile_id, profile):
+    """
+    Validates and normalises the given profile dictionary.
+
+    As side effects to the input dict:
+
+    * Fields that are set to None in rules are removed completely.
+    * Selectors are replaced with SelectorExpression objects.  Parsing now
+      ensures that the selectors are valid and ensures that equal selectors
+      compare and hash equally.  For example: "a == 'b'" and "a=='b'" are
+      different strings that parse to the same selector.
+
+    Once this routine has returned successfully, we know that all
+    required fields are present and have valid values.
+
+    :param str profile_id: The ID of the profile, which is also validated.
+    :param profile: The profile dict.  For example,
+          {"inbound_rules": [...], "outbound_rules": [...]}
+    :raises ValidationFailed
+    """
+    # The code below relies on the top-level object to be a dict.  Check
+    # that first.
+    if not isinstance(profile, dict):
+        raise ValidationFailed("Expected profile %r to be a dict, not %r." %
+                               (profile_id, profile))
+
+    issues = []
+    if not VALID_ID_RE.match(profile_id):
+        issues.append("Invalid profile ID '%r'." % profile_id)
+
+    _validate_rules(profile, issues)
+
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def _validate_rules(rules_dict, issues):
+    """
+    Validates and normalises the given rules dictionary.
+
+    As side effects to the input dict:
+
+    * Fields that are set to None in rules are removed completely.
+    * Selectors are replaced with SelectorExpression objects.  Parsing now
+      ensures that the selectors are valid and ensures that equal selectors
+      compare and hash equally.  For example: "a == 'b'" and "a=='b'" are
+      different strings that parse to the same selector.
+
+    Once this routine has returned successfully, we know that all
+    required fields are present and have valid values.
+
+    :param dict rules_dict: profile dict as read from etcd
+    :param list issues: Updated with any issues discovered.
+    """
     for dirn in ("inbound_rules", "outbound_rules"):
-        if dirn not in profile:
+        if dirn not in rules_dict:
             issues.append("No %s in rules." % dirn)
             continue
 
-        if not isinstance(profile[dirn], list):
+        if not isinstance(rules_dict[dirn], list):
             issues.append("Expected rules[%s] to be a list." % dirn)
             continue
 
-        for rule in profile[dirn]:
+        for rule in rules_dict[dirn]:
             if not isinstance(rule, dict):
-                issues.append("Rules should be dicts.")
+                issues.append("Rule should be a dict: %r" % rule)
                 break
 
             for key, value in rule.items():
@@ -547,7 +627,7 @@ def validate_profile(profile_id, profile, require_selector=False,
                 if tag is None:
                     continue
                 if not VALID_ID_RE.match(tag):
-                    issues.append("Invalid %s %r." % (tag_type, tag))
+                    issues.append("Invalid %s: %r." % (tag_type, tag))
 
             # For selectors, we replace the value with the parsed selector.
             # This avoids having to re-parse it later and it ensures that
@@ -555,6 +635,7 @@ def validate_profile(profile_id, profile, require_selector=False,
             for sel_type in ('src_selector', 'dst_selector'):
                 sel_str = rule.get(sel_type)
                 if sel_str is None:
+                    # sel_type wasn't present.
                     continue
                 try:
                     sel = parse_selector(sel_str)
@@ -617,26 +698,6 @@ def validate_profile(profile_id, profile, require_selector=False,
             unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
             if unknown_keys:
                 issues.append("Rule contains unknown keys: %s." % unknown_keys)
-
-    if "selector" in profile:
-        try:
-            selector = parse_selector(profile["selector"])
-        except BadSelector:
-            issues.append("Failed to parse selector %s" % profile["selector"])
-        else:
-            profile["selector"] = selector
-    elif require_selector:
-        issues.append("Profile missing required selector field")
-
-    if "order" in profile:
-        if not isinstance(profile["order"], numbers.Number):
-            issues.append("Order should be a number, not %s" %
-                          profile["order"])
-    elif require_order:
-        issues.append("Profile missing required selector field")
-
-    if issues:
-        raise ValidationFailed(" ".join(issues))
 
 
 def validate_rule_port(port):
@@ -707,7 +768,7 @@ def validate_labels(profile_id, labels):
     issues = []
 
     if not VALID_ID_RE.match(profile_id):
-        issues.append("Invalid profile_id '%r'." % profile_id)
+        issues.append("Invalid profile_id %r." % profile_id)
     _validate_label_dict(issues, labels)
     if issues:
         raise ValidationFailed(" ".join(issues))
@@ -715,7 +776,7 @@ def validate_labels(profile_id, labels):
 
 def _validate_label_dict(issues, labels):
     if not isinstance(labels, dict):
-        issues.append("Expected labels to be a dict.")
+        issues.append("Expected labels to be a dict, not %r." % labels)
     else:
         for label_name, value in labels.iteritems():
             if not VALID_LABEL_NAME_RE.match(label_name):
@@ -723,7 +784,7 @@ def _validate_label_dict(issues, labels):
             if isinstance(value, basestring):
                 continue
             else:
-                issues.append("Invalid label value")
+                issues.append("Invalid label value %r." % value)
 
 
 def validate_ipam_pool(pool_id, pool, ip_version):

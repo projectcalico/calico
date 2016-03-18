@@ -14,16 +14,33 @@
 # limitations under the License.
 import logging
 
-from calico.calcollections import OneToManyIndex
-from calico.felix.selectors import LabelToLiteralEquality, LabelInSetLiteral
+from calico.calcollections import MultiDict
+from calico.felix.selectors import LabelToLiteralEqualityNode, LabelInSetLiteralNode
 
 _log = logging.getLogger(__name__)
 
 
 class LinearScanLabelIndex(object):
     """
-    A simple baseline implementation of a label index.  Every update
-    is handled by a full linear scan.
+    A label index matches a set of SelectorExpressions against a set of
+    label dicts.  As the matches between the two collections change,
+    it triggers calls to on_match_started/on_match_stopped.
+
+    LabelNode dicts are identified by their "item_id", which is an opaque
+    (hashable) ID for the item that the labels apply to.
+
+    Similarly, selector expressions are identified by an opaque expr_id.
+
+    A simple implementation of a label index.  Every update is handled by
+    a full linear scan.
+
+    This class has a few purposes:
+
+    - it provides a benchmark against which other implementations can be
+      measured
+    - since it's simple, it's useful for comparative testing; any
+      other label index implementation should give the same end result.
+    - it's a base class for more advanced implementations.
     """
 
     def __init__(self):
@@ -32,26 +49,51 @@ class LinearScanLabelIndex(object):
         # All expressions by ID.
         self.expressions_by_id = {}
         # Map from expression ID to matching item_ids.
-        self.matches_by_expr_id = OneToManyIndex()
-        self.matches_by_item_id = OneToManyIndex()
-        self.total_evaluations = 0
+        self.matches_by_expr_id = MultiDict()
+        self.matches_by_item_id = MultiDict()
 
     def on_expression_update(self, expr_id, expr):
+        """
+        Called to update a particular expression.
+
+        Triggers events for match changes.
+        :param expr_id: an opaque (hashable) ID to associate with the
+               expression.  There can only be one expression per ID.
+        :param expr: The SelectorExpression to add to the index or None to
+               remove it.
+        """
         _log.debug("Expression %s updated to %s", expr_id, expr)
         self._scan_all_labels(expr_id, expr)
         self._store_expression(expr_id, expr)
 
     def on_labels_update(self, item_id, new_labels):
+        """
+        Called to update a particular set of labels.
+
+        Triggers events for match changes.
+        :param item_id: an opaque (hashable) ID to associate with the
+               labels.  There can only be one set of labels per ID.
+        :param new_labels: The labels dict to add to the index or None to
+               remove it.
+        """
         _log.debug("Labels for %s now %s", item_id, new_labels)
         self._scan_all_expressions(item_id, new_labels)
         self._store_labels(item_id, new_labels)
 
     def _scan_all_labels(self, expr_id, expr):
+        """
+        Check the given expression against all label dicts and emit
+        events for changes in the matching labels.
+        """
         _log.debug("Doing full label scan against expression %s", expr_id)
         for item_id, label_values in self.labels_by_item_id.iteritems():
             self._update_matches(expr_id, expr, item_id, label_values)
 
     def _scan_all_expressions(self, item_id, new_labels):
+        """
+        Check the given labels against all expressions and emit
+        events for changes in the matching labels.
+        """
         _log.debug("Doing full expression scan against item %s", item_id)
         for expr_id, expr in self.expressions_by_id.iteritems():
             self._update_matches(expr_id, expr, item_id, new_labels)
@@ -79,7 +121,6 @@ class LinearScanLabelIndex(object):
                    label_values)
         if expr is not None and label_values is not None:
             now_matches = expr.evaluate(label_values)
-            self.total_evaluations += 1
             _log.debug("After evaluation, now matches: %s", now_matches)
         else:
             _log.debug("Expr or labels missing: no match")
@@ -114,33 +155,60 @@ class LinearScanLabelIndex(object):
         """
         previously_matched = self.matches_by_expr_id.contains(expr_id, item_id)
         if previously_matched:
-            _log.debug("%s no-longer matches %s", expr_id, item_id)
+            _log.debug("%s no longer matches %s", expr_id, item_id)
             self.matches_by_expr_id.discard(expr_id, item_id)
             self.matches_by_item_id.discard(item_id, expr_id)
             self.on_match_stopped(expr_id, item_id)
 
     def on_match_started(self, expr_id, item_id):
+        """
+        Called when an expression starts matching a particular set of
+        labels.
+
+        Intended to be assigned/overriden.
+        """
         _log.debug("SelectorExpression %s now matches item %s",
                    expr_id, item_id)
 
     def on_match_stopped(self, expr_id, item_id):
+        """
+        Called when an expression stops matching a particular set of
+        labels.
+
+        Intended to be assigned/overriden.
+        """
         _log.debug("SelectorExpression %s no longer matches item %s",
                    expr_id, item_id)
 
 
 class LabelValueIndex(LinearScanLabelIndex):
     """
-    Label index that indexes the values of labels, allowing for efficient
-    calculation of selectors of the form 'a == "b" && c == "d"', which
-    are the mainline.
+    LabelNode index that indexes the values of labels, allowing for efficient
+    (re)calculation of the matches for selectors of the form
+    'a == "b" && c == "d" && ...', which are the mainline.
     """
     def __init__(self):
         super(LabelValueIndex, self).__init__()
-        self.item_ids_by_key_value = OneToManyIndex()
-        self.kv_to_literal_expr = OneToManyIndex()
+        self.item_ids_by_key_value = MultiDict()
+        # Maps tuples of (a, b) to the set of expressions that are trivially
+        # satisfied by label dicts with label a = value b.  For example,
+        # trivial expressions of the form a == "b", and a in {"b", "c", ...}
+        # can be evaluated by look-up in this dict.
+        self.literal_exprs_by_kv = MultiDict()
+        # Mapping from expression ID to any expressions that can't be
+        # represented in the way described above.
         self.non_kv_expressions_by_id = {}
 
     def on_labels_update(self, item_id, new_labels):
+        """
+        Called to update a particular set of labels.
+
+        Triggers events for match changes.
+        :param item_id: an opaque (hashable) ID to associate with the
+               labels.  There can only be one set of labels per ID.
+        :param new_labels: The labels dict to add to the index or None to
+               remove it.
+        """
         _log.debug("Updating labels for %s to %s", item_id, new_labels)
         # Find any old labels associated with this item_id and remove the
         # ones that have changed from the index.
@@ -165,7 +233,7 @@ class LabelValueIndex(LinearScanLabelIndex):
             for k_v in new_labels.iteritems():
                 _log.debug("Adding (%s, %s) to index", *k_v)
                 self.item_ids_by_key_value.add(k_v, item_id)
-                for expr_id in self.kv_to_literal_expr.iter_values(k_v):
+                for expr_id in self.literal_exprs_by_kv.iter_values(k_v):
                     if expr_id in seen_expr_ids:
                         continue
                     self._store_match(expr_id, item_id)
@@ -181,25 +249,37 @@ class LabelValueIndex(LinearScanLabelIndex):
         self._store_labels(item_id, new_labels)
 
     def on_expression_update(self, expr_id, expr):
+        """
+        Called to update a particular expression.
+
+        Triggers events for match changes.
+        :param expr_id: an opaque (hashable) ID to associate with the
+               expression.  There can only be one expression per ID.
+        :param expr: The SelectorExpression to add to the index or None to
+               remove it.
+        """
+        old_expr = self.expressions_by_id.get(expr_id)
+        if expr == old_expr:
+            _log.debug("Expression %s unchanged, ignoring", expr_id)
+            return
+
         # Remove any old value from the indexes.  We'll then add the expression
         # back in if it's suitable below.
         _log.debug("Expression %s updated to %s", expr_id, expr)
-        old_expr = self.expressions_by_id.get(expr_id)
-
-        if old_expr and isinstance(old_expr.expr_op, (LabelToLiteralEquality,
-                                                      LabelInSetLiteral)):
+        if old_expr and isinstance(old_expr.expr_op, (LabelToLiteralEqualityNode,
+                                                      LabelInSetLiteralNode)):
             # Either an expression of the form a == "b", or one of the form
             # a in {"b", "c", ...}.  Undo our index for the old entry, we'll
             # then add it back in below.
             label_name = old_expr.expr_op.lhs
-            if isinstance(old_expr.expr_op, LabelToLiteralEquality):
+            if isinstance(old_expr.expr_op, LabelToLiteralEqualityNode):
                 values = [old_expr.expr_op.rhs]
             else:
                 values = old_expr.expr_op.rhs
             for value in values:
                 _log.debug("Old expression was indexed, removing")
                 k_v = label_name, value
-                self.kv_to_literal_expr.discard(k_v, expr_id)
+                self.literal_exprs_by_kv.discard(k_v, expr_id)
 
         self.non_kv_expressions_by_id.pop(expr_id, None)
 
@@ -210,32 +290,32 @@ class LabelValueIndex(LinearScanLabelIndex):
                            item_id)
                 self._update_matches(expr_id, None, item_id,
                                      self.labels_by_item_id[item_id])
-        elif isinstance(expr.expr_op, (LabelToLiteralEquality,
-                                       LabelInSetLiteral)):
+        elif isinstance(expr.expr_op, (LabelToLiteralEqualityNode,
+                                       LabelInSetLiteralNode)):
             # Either an expression of the form a == "b", or one of the form
             # a in {"b", "c", ...}.  We can optimise these forms so that
             # they can be evaluated by an exact lookup.
             label_name = expr.expr_op.lhs
-            if isinstance(expr.expr_op, LabelToLiteralEquality):
+            if isinstance(expr.expr_op, LabelToLiteralEqualityNode):
                 values = [expr.expr_op.rhs]
             else:
                 values = expr.expr_op.rhs
 
             # Get the old matches as a set.  Then we can discard the items
-            # that still match, leaving us with the ones that no-longer
+            # that still match, leaving us with the ones that no longer
             # match.
             old_matches = set(self.matches_by_expr_id.iter_values(expr_id))
             for value in values:
-                _log.debug("New expression is a LabelToLiteralEquality, using "
+                _log.debug("New expression is a LabelToLiteralEqualityNode, using "
                            "index")
                 k_v = label_name, value
                 for item_id in self.item_ids_by_key_value.iter_values(k_v):
                     _log.debug("From index, %s matches %s", expr_id, item_id)
                     old_matches.discard(item_id)
                     self._store_match(expr_id, item_id)
-                self.kv_to_literal_expr.add(k_v, expr_id)
+                self.literal_exprs_by_kv.add(k_v, expr_id)
             # old_matches now contains only the items that this expression
-            # previously matched but no-longer does.  Remove them.
+            # previously matched but no longer does.  Remove them.
             for item_id in old_matches:
                 _log.debug("Removing old match %s, %s", expr_id, item_id)
                 self._discard_match(expr_id, item_id)
@@ -306,10 +386,19 @@ class LabelInheritanceIndex(object):
         self.labels_by_item_id = {}
         self.labels_by_parent_id = {}
         self.parent_ids_by_item_id = {}
-        self.item_ids_by_parent_id = OneToManyIndex()
+        self.item_ids_by_parent_id = MultiDict()
         self._dirty_items = set()
 
     def on_item_update(self, item_id, labels_or_none, parents_or_none):
+        """
+        Called when the labels and/or parents associated with an item are
+        updated.
+
+        :param item_id: opaque hashable item ID.
+        :param labels_or_none: Dict of labels, or None for a deletion.
+        :param parents_or_none: List of parents, or None for a deletion.
+        :return:
+        """
         _log.debug("Item %s updated: %s, %s", item_id,
                    labels_or_none, parents_or_none)
         self._on_item_labels_update(item_id, labels_or_none)
@@ -319,6 +408,8 @@ class LabelInheritanceIndex(object):
     def _on_item_parents_update(self, item_id, parents):
         old_parents = self.parent_ids_by_item_id.get(item_id)
         if old_parents != parents:
+            # Parents have changed.  Update the index from parent ID to
+            # item.
             if old_parents:
                 for parent_id in old_parents:
                     self.item_ids_by_parent_id.discard(parent_id, item_id)
@@ -328,10 +419,13 @@ class LabelInheritanceIndex(object):
                 self.parent_ids_by_item_id[item_id] = parents
             else:
                 del self.parent_ids_by_item_id[item_id]
+            # Mark item dirty so that we'll re-evaluate its labels.
             self._dirty_items.add(item_id)
 
     def _on_item_labels_update(self, item_id, labels):
         if self.labels_by_item_id.get(item_id) != labels:
+            # Labels changed, update the index and mark dirty so that we'll
+            # re-evaluate its labels.
             if labels is not None:
                 self.labels_by_item_id[item_id] = labels
             else:
@@ -339,14 +433,21 @@ class LabelInheritanceIndex(object):
             self._dirty_items.add(item_id)
 
     def on_parent_labels_update(self, parent_id, labels_or_none):
+        """
+        Called when the labels attached to a parent change.
+        :param parent_id: Opaque (hashable) ID of the parent.
+        :param labels_or_none: Dict of labels or None for a deletion.
+        """
         _log.debug("Parent labels for %s updated: %s", parent_id,
                    labels_or_none)
         old_parent_labels = self.labels_by_parent_id.get(parent_id)
         if old_parent_labels != labels_or_none:
+            # Labels changed, record the update.
             if labels_or_none is not None:
                 self.labels_by_parent_id[parent_id] = labels_or_none
             else:
                 del self.labels_by_parent_id[parent_id]
+            # Mark all the endpoints with this parent dirty.
             self._dirty_items.update(
                 self.item_ids_by_parent_id.iter_values(parent_id)
             )
@@ -359,6 +460,10 @@ class LabelInheritanceIndex(object):
         self._dirty_items.clear()
 
     def _flush_item(self, item_id):
+        """
+        Re-evaluates the labels for a given item ID, combining it with
+        its parents and updates the wrapped label index.
+        """
         try:
             item_labels = self.labels_by_item_id[item_id]
         except KeyError:

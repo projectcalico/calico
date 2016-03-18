@@ -77,26 +77,40 @@ class SetDelta(object):
         return not (self.added_entries or self.removed_entries)
 
 
-class OneToManyIndex(object):
+class MultiDict(object):
     """
     Represents a mapping from key to a set of values.
+
+    Implementation note: as an occupancy optimization, if there is only
+    one value for a given key, it is stored as a bare value rather than
+    a set of one item.
     """
 
     def __init__(self, set_cls=set):
+        """Constructor.
+        :param set_cls: The type of set to use to hold values.  For
+               example, setting this to an ordered set type would result in
+               the values being sorted.
+        """
         self._set_cls = set_cls
         self._index = {}
 
     def add(self, key, value):
-        """Add a mapping to the index.
+        """Add value to the set of values for the given key.
 
         Idempotent: does nothing if the mapping is already present.
         """
+        # As an occupancy optimization, we only store a set of items if there's
+        # more than one.  Otherwise, we store the item itself in the index.
+
+        # Use setdefault to insert the item only if it's not present.
         index_entry = self._index.setdefault(key, value)
         if index_entry != value:
             # Failed to insert the new value as the single entry, examine
             # what we got.
             if isinstance(index_entry, self._set_cls):
-                # Already have multiple values for that entry, add the new one.
+                # Already have multiple values for that entry, add the new one
+                # to the set.
                 index_entry.add(value)
             else:
                 # There was an entry but it wasn't the one we tried to add,
@@ -105,21 +119,27 @@ class OneToManyIndex(object):
                 self._index[key] = index_entry
 
     def discard(self, key, value):
-        """Discards a mapping from the index.
+        """Discards a value from the set associated with the given key.
 
         Idempotent: does nothing if the mapping is already gone.
         """
         if key in self._index:
             index_entry = self._index[key]
             if isinstance(index_entry, self._set_cls):
+                # Had multiple values for this key before, remove just this
+                # value.
                 index_entry.discard(value)
                 if len(index_entry) == 1:
+                    # No-longer have multiple values go back to storing just a
+                    # single value.
                     index_entry = index_entry.pop()
                     self._index[key] = index_entry
             elif index_entry == value:
+                # Entry was the only value for this key.  Delete it completely.
                 del self._index[key]
 
     def __contains__(self, item):
+        """Implements the 'in' operator, True if the key is present."""
         return item in self._index
 
     def contains(self, key, value):
@@ -135,7 +155,7 @@ class OneToManyIndex(object):
     def iter_values(self, key):
         """
         :return: an iterator over the values for the given key.  WARNING:
-                 care should be taken not o modify the values associated with
+                 care should be taken not to modify the values associated with
                  that key while iterating.
         """
         if key in self._index:
@@ -160,4 +180,5 @@ class OneToManyIndex(object):
         return 0
 
     def __nonzero__(self):
+        """Implement bool(<multidict>). True if we have some entries."""
         return bool(self._index)

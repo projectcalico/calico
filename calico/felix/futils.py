@@ -487,6 +487,10 @@ def iso_utc_timestamp():
 def find_set_bits(mask):
     """Generates an integer for each set bit in the input.
 
+    - The integer is the value of the relevant bit (as opposed to, say,
+      its position).
+    - Bits are returned in least to most significant order.
+
     :param int mask: The mask to choose bits from.
     """
     while mask > 0:

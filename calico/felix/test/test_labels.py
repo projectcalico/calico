@@ -288,5 +288,5 @@ class TestLabelValueIndex(TestLinearScanLabelIndex):
     def assert_indexes_empty(self):
         super(TestLabelValueIndex, self).assert_indexes_empty()
         self.assertFalse(self.index.item_ids_by_key_value)
-        self.assertFalse(self.index.kv_to_literal_expr)
+        self.assertFalse(self.index.literal_exprs_by_kv)
         self.assertFalse(self.index.non_kv_expressions_by_id)

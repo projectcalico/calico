@@ -76,7 +76,7 @@ class IpsetManager(ReferenceManager):
         # Set of EndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
-        # Label index, used to cross-reference endpoint labels against
+        # LabelNode index, used to cross-reference endpoint labels against
         # selectors.
         self._label_index = LabelValueIndex()
         self._label_index.on_match_started = self._on_label_match_started
@@ -211,7 +211,7 @@ class IpsetManager(ReferenceManager):
         deleted.
 
         Updates the indices and notifies any live RefCountedIpsetActor
-        objects of any any changes that affect them.
+        objects of any changes that affect them.
 
         :param str profile_id: Profile ID affected.
         :param list[str]|NoneType tags: List of tags for the given profile or

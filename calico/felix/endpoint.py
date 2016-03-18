@@ -22,9 +22,7 @@ Endpoint management.
 from collections import OrderedDict
 import logging
 
-from blist import sortedset
-
-from calico.calcollections import OneToManyIndex
+from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
     ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR
@@ -65,7 +63,7 @@ class EndpointManager(ReferenceManager):
 
         # All endpoint dicts that are on this host.
         self.endpoints_by_id = {}
-        # Dict that maps from int`erface name ("tap1234") to endpoint ID.
+        # Dict that maps from interface name ("tap1234") to endpoint ID.
         self.endpoint_id_by_iface_name = {}
 
         # Set of endpoints that are live on this host.  I.e. ones that we've
@@ -77,15 +75,15 @@ class EndpointManager(ReferenceManager):
         self.policy_index.on_match_started = self.on_policy_match_started
         self.policy_index.on_match_stopped = self.on_policy_match_stopped
         self._label_inherit_idx = LabelInheritanceIndex(self.policy_index)
-        # Tier orders by tier ID.  Tiers with lower orders are applied first.
+        # Tier orders by tier ID.  We use this to look up the order when we're
+        # sorting the tiers.
         self.tier_orders = {}
+        # Cache of the current ordering of tier IDs.
         self.tier_sequence = []
-        # All tiered profile selectors by profile ID.
-        self.selectors_by_pol_id = {}
         # And their associated orders.
         self.profile_orders = {}
-        # Ordered list of profile IDs to apply to each endpoint ID.
-        self.pol_ids_by_ep_id = OneToManyIndex(set_cls=sortedset)
+        # Set of profile IDs to apply to each endpoint ID.
+        self.pol_ids_by_ep_id = MultiDict()
         self.endpoints_with_dirty_policy = set()
 
         self._data_model_in_sync = False
@@ -106,13 +104,15 @@ class EndpointManager(ReferenceManager):
     @actor_message()
     def on_tier_data_update(self, tier, data):
         """
-        Message received when the metadata for a profile tier is updated
+        Message received when the metadata for a policy tier is updated
         in etcd.
 
         :param str tier: The name of the tier.
         :param dict|NoneType data: The dict or None, for a deletion.
         """
-        _log.debug("Data for security tier %s updated to %s", tier, data)
+        _log.debug("Data for policy tier %s updated to %s", tier, data)
+
+        # Currently, the only data we care about is the order.
         order = None if data is None else data["order"]
         if self.tier_orders.get(tier) == order:
             _log.debug("No change, ignoring")
@@ -137,7 +137,10 @@ class EndpointManager(ReferenceManager):
     @actor_message()
     def on_prof_labels_set(self, profile_id, labels):
         _log.debug("Profile labels updated for %s: %s", profile_id, labels)
+        # Defer to the label index, which will call us back synchronously
+        # with any match changes.
         self._label_inherit_idx.on_parent_labels_update(profile_id, labels)
+        # Process any match changes that we've recorded in the callbacks.
         self._update_dirty_policy()
 
     @actor_message()
@@ -145,15 +148,10 @@ class EndpointManager(ReferenceManager):
                                   order_or_none):
         _log.debug("Policy %s selector updated to %s (%s)", policy_id,
                    selector_or_none, order_or_none)
-        if selector_or_none != self.selectors_by_pol_id.get(policy_id):
-            if selector_or_none is not None:
-                self.selectors_by_pol_id[policy_id] = selector_or_none
-            else:
-                del self.selectors_by_pol_id[policy_id]
-            # Defer to the label index, which will call us back via
-            # on_policy_match_started and on_policy_match_stopped.
-            self.policy_index.on_expression_update(policy_id,
-                                                   selector_or_none)
+        # Defer to the label index, which will call us back synchronously
+        # via on_policy_match_started and on_policy_match_stopped.
+        self.policy_index.on_expression_update(policy_id,
+                                               selector_or_none)
 
         # Before we update the policies, check if the order has changed,
         # which would mean we need to refresh all endpoints with this policy
@@ -171,11 +169,21 @@ class EndpointManager(ReferenceManager):
         self._update_dirty_policy()
 
     def on_policy_match_started(self, expr_id, item_id):
+        """Called by the label index when a new match is started.
+
+        Records the update but processing is deferred to
+        the next call to self._update_dirty_policy().
+        """
         _log.info("Policy %s now applies to endpoint %s", expr_id, item_id)
         self.pol_ids_by_ep_id.add(item_id, expr_id)
         self.endpoints_with_dirty_policy.add(item_id)
 
     def on_policy_match_stopped(self, expr_id, item_id):
+        """Called by the label index when a match stops.
+
+        Records the update but processing is deferred to
+        the next call to self._update_dirty_policy().
+        """
         _log.info("Policy %s no longer applies to endpoint %s",
                   expr_id, item_id)
         self.pol_ids_by_ep_id.discard(item_id, expr_id)
@@ -316,11 +324,11 @@ class EndpointManager(ReferenceManager):
         for pol_id in self.pol_ids_by_ep_id.iter_values(ep_id):
             try:
                 tier_order = self.tier_orders[pol_id.tier]
-                profile_order = self.profile_orders[pol_id]
             except KeyError:
                 _log.warn("Ignoring profile %s because its tier metadata is "
                           "missing.")
                 continue
+            profile_order = self.profile_orders[pol_id]
             profiles.append((tier_order, pol_id.tier,
                              profile_order, pol_id.policy_id,
                              pol_id))
@@ -371,7 +379,7 @@ class LocalEndpoint(RefCountedActor):
                                            self._on_profiles_ready)
 
         # List of global policies that we care about.
-        self._pol_ids_by_tier = {}
+        self._pol_ids_by_tier = OrderedDict()
 
         # List of explicit profile IDs that we've processed.
         self._explicit_profile_ids = None
@@ -438,6 +446,11 @@ class LocalEndpoint(RefCountedActor):
 
     @actor_message()
     def on_tiered_policy_update(self, pols_by_tier):
+        """Called to update the ordered set of tiered policies that apply.
+
+        :param OrderedDict pols_by_tier: Ordered mapping from tier name to
+               list of policies to apply in that tier.
+        """
         _log.debug("New policy IDs for %s: %s", self.combined_id,
                    pols_by_tier)
         if pols_by_tier != self._pol_ids_by_tier:

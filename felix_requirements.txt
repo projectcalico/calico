@@ -1,4 +1,3 @@
-blist>=1.3.4
 gevent
 greenlet
 netaddr

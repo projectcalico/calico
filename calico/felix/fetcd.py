@@ -51,13 +51,11 @@ from calico.etcdutils import (
     EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent,
     safe_decode_json, intern_list
 )
-from calico.felix import selectors
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (
     logging_exceptions, iso_utc_timestamp, IPV4,
     IPV6, StatCounter
 )
-from calico.felix.selectors import BadSelector
 from calico.monotonic import monotonic_time
 
 _log = logging.getLogger(__name__)
@@ -672,9 +670,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.debug("Rules for %s/%s set", tier, policy_id)
         _stats.increment("Tiered rules created/updated")
         policy_id = TieredPolicyId(tier, policy_id)
-        rules = parse_profile(policy_id, response.value,
-                              require_selector=True,
-                              require_order=True)
+        rules = parse_policy(policy_id, response.value)
         if rules is not None:
             selector = rules.pop("selector")
             order = rules.pop("order")
@@ -999,15 +995,26 @@ def parse_profile(profile_id, raw_json, require_selector=False,
                   require_order=False):
     rules = safe_decode_json(raw_json, log_tag="rules %s" % profile_id)
     try:
-        common.validate_profile(profile_id, rules,
-                                require_selector=require_selector,
-                                require_order=require_order)
+        common.validate_profile(profile_id, rules)
     except ValidationFailed as e:
-        _log.exception("Validation failed for profile %s rules: %s; %r",
-                       profile_id, rules, e)
+        _log.exception("Validation failed for profile %s rules: %s",
+                       profile_id, rules)
         return None
     else:
         return rules
+
+
+def parse_policy(profile_id, raw_json, require_selector=False,
+                  require_order=False):
+    policy = safe_decode_json(raw_json, log_tag="policy %s" % profile_id)
+    try:
+        common.validate_policy(profile_id, policy)
+    except ValidationFailed as e:
+        _log.exception("Validation failed for policy %s: %s",
+                       profile_id, policy)
+        return None
+    else:
+        return policy
 
 
 def parse_tags(profile_id, raw_json):

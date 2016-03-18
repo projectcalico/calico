@@ -412,7 +412,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
         self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
-        self.assertEqual(config.IPTABLES_MARK_NEXT_POL, "0x2000000")
+        self.assertEqual(config.IPTABLES_MARK_NEXT_TIER, "0x2000000")
 
     def test_exact_mark_bits(self):
         """
@@ -427,7 +427,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.IPTABLES_MARK_MASK, 0x0000000c)
         self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x4")
-        self.assertEqual(config.IPTABLES_MARK_NEXT_POL, "0x8")
+        self.assertEqual(config.IPTABLES_MARK_NEXT_TIER, "0x8")
 
     def test_too_many_mark_bits(self):
         """
@@ -439,7 +439,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
         self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
-        self.assertEqual(config.IPTABLES_MARK_NEXT_POL, "0x2000000")
+        self.assertEqual(config.IPTABLES_MARK_NEXT_TIER, "0x2000000")
 
     def test_hex_mark(self):
         """
@@ -451,7 +451,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.IPTABLES_MARK_MASK, 0x00000060)
         self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x20")
-        self.assertEqual(config.IPTABLES_MARK_NEXT_POL, "0x40")
+        self.assertEqual(config.IPTABLES_MARK_NEXT_TIER, "0x40")
 
     def test_default_ttl(self):
         """

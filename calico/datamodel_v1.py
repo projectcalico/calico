@@ -231,7 +231,10 @@ class TieredPolicyId(object):
     __slots__ = ["tier", "policy_id"]
 
     def __init__(self, tier, profile_id):
-        # Intern the strings, which may occur in many IDs.
+        # Intern the strings, which may occur in many IDs.  We can't intern
+        # unicode strings so we encode them as utf-8 byte strings.  In
+        # common.py, we'll validate that the strings only contain our expected
+        # character set.
         self.tier = intern(tier.encode("utf8"))
         self.policy_id = intern(profile_id.encode("utf8"))
 
@@ -251,7 +254,7 @@ class TieredPolicyId(object):
                 other.policy_id == self.policy_id)
 
     def __ne__(self, other):
-        return not (self == other)
+        return not self.__eq__(other)
 
     def __hash__(self):
         return hash(self.tier) * 37 + hash(self.policy_id)

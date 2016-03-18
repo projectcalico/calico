@@ -132,7 +132,7 @@ def test_repr():
                  "SelectorExpression<((a == 'a' && c != 'd') || "
                  "e in {'f'} || d not in {'g'})>")
     assert_equal(repr(e.expr_op),
-                 "OrOp<((a == 'a' && c != 'd') || "
+                 "OrNode<((a == 'a' && c != 'd') || "
                  "e in {'f'} || d not in {'g'})>")
 
 

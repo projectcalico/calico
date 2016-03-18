@@ -528,7 +528,8 @@ class TestCommon(unittest.TestCase):
         common.validate_profile(profile_id, rules.copy())
 
         with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected rules to be a dict"):
+                                     "Expected profile 'valid_name-ok.' to "
+                                     "be a dict"):
             common.validate_profile(profile_id, [])
 
         with self.assertRaisesRegexp(ValidationFailed,
@@ -536,20 +537,20 @@ class TestCommon(unittest.TestCase):
             common.validate_profile("a&b", rules.copy())
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid profile ID"):
-            common.validate_profile(TieredPolicyId("+123", "abc"),
-                                    rules.copy())
+            common.validate_policy(TieredPolicyId("+123", "abc"),
+                                   rules.copy())
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid profile ID"):
-            common.validate_profile(TieredPolicyId("abc", "+"),
-                                    rules.copy())
+            common.validate_policy(TieredPolicyId("abc", "+"),
+                                   rules.copy())
 
         # No rules.
         with self.assertRaisesRegexp(ValidationFailed,
                                      "No outbound_rules"):
-            common.validate_profile(profile_id, {'inbound_rules':[]})
+            common.validate_profile(profile_id, {'inbound_rules': []})
         with self.assertRaisesRegexp(ValidationFailed,
                                      "No inbound_rules"):
-            common.validate_profile(profile_id, {'outbound_rules':[]})
+            common.validate_profile(profile_id, {'outbound_rules': []})
 
         rules = {'inbound_rules': 3,
                  'outbound_rules': []}
@@ -561,7 +562,7 @@ class TestCommon(unittest.TestCase):
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
-                                     "Rules should be dicts"):
+                                     "Rule should be a dict"):
             common.validate_profile(profile_id, rules.copy())
 
         rule = {'bad_key': ""}
@@ -642,13 +643,6 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid dst_tag"):
-            common.validate_profile(profile_id, rules)
-
-        rules = {'selector': "+abcd",
-                 'inbound_rules': [],
-                 'outbound_rules': []}
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Failed to parse selector"):
             common.validate_profile(profile_id, rules)
 
         rule = {'src_selector': "a!b"}
@@ -753,12 +747,26 @@ class TestCommon(unittest.TestCase):
                                      "ICMP code specified without ICMP type"):
             common.validate_profile(profile_id, rules)
 
+    def test_validate_policy(self):
+        policy_id = TieredPolicyId("a", "b")
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected policy 'a/b' to "
+                                     "be a dict"):
+            common.validate_policy(policy_id, [])
+
+        rules = {'selector': "+abcd", # Bad selector
+                 'inbound_rules': [],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Failed to parse selector"):
+            common.validate_policy(policy_id, rules)
+
     def test_replace_selector_with_object(self):
         """
         Checks that the validate_profile() method replaces selectors
         (with their object representations).
         """
-        profile = {
+        policy = {
             "selector": "a == 'b'",
             "inbound_rules": [
                 {"src_selector": "b == 'c'", "dst_selector": "e == 'f'"}
@@ -766,53 +774,52 @@ class TestCommon(unittest.TestCase):
             "outbound_rules": [
                 {"src_selector": "h == 'c'", "dst_selector": "i == 'f'"}
             ],
+            "order": 10
         }
-        common.validate_profile(TieredPolicyId("a", "b"), profile)
-        self.assertEqual(profile["selector"], parse_selector("a == 'b'"))
-        self.assertEqual(profile["inbound_rules"][0]["src_selector"],
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
+        self.assertEqual(policy["selector"], parse_selector("a == 'b'"))
+        self.assertEqual(policy["inbound_rules"][0]["src_selector"],
                          parse_selector("b == 'c'"))
-        self.assertEqual(profile["inbound_rules"][0]["dst_selector"],
+        self.assertEqual(policy["inbound_rules"][0]["dst_selector"],
                          parse_selector("e == 'f'"))
-        self.assertEqual(profile["outbound_rules"][0]["src_selector"],
+        self.assertEqual(policy["outbound_rules"][0]["src_selector"],
                          parse_selector("h == 'c'"))
-        self.assertEqual(profile["outbound_rules"][0]["dst_selector"],
+        self.assertEqual(policy["outbound_rules"][0]["dst_selector"],
                          parse_selector("i == 'f'"))
 
     def test_validate_order(self):
-        profile = {
+        policy = {
             "selector": "a == 'b'",
             "order": 10,
             "inbound_rules": [],
             "outbound_rules": [],
         }
-        common.validate_profile(TieredPolicyId("a", "b"), profile)
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
 
-        profile = {
+        policy = {
             "selector": "a == 'b'",
             "order": "10",
             "inbound_rules": [],
             "outbound_rules": [],
         }
         with self.assertRaises(ValidationFailed):
-            common.validate_profile(TieredPolicyId("a", "b"), profile)
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
 
-        profile = {
+        policy = {
             "selector": "a == 'b'",
             "inbound_rules": [],
             "outbound_rules": [],
         }
         with self.assertRaises(ValidationFailed):
-            common.validate_profile(TieredPolicyId("a", "b"), profile,
-                                    require_order=True)
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
 
-        profile = {
+        policy = {
             "order": 10,
             "inbound_rules": [],
             "outbound_rules": [],
         }
         with self.assertRaises(ValidationFailed):
-            common.validate_profile(TieredPolicyId("a", "b"), profile,
-                                    require_selector=True)
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
 
     def test_validate_rule_port(self):
         self.assertEqual(common.validate_rule_port(73), None)

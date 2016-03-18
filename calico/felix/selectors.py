@@ -28,6 +28,23 @@ or
 
 The main entry point is the parse_selector() function, which converts the
 string representation of a selector into an object.
+
+Selector expressions follow this syntax, defined as a grammar in the
+_define_grammar() function:
+
+    label == "string_literal"  ->  comparison, e.g. my_label == "foo bar"
+    label != "string_literal"   ->  not equal; also matches if label is not
+                                    present
+    label in { "a", "b", "c", ... }  ->  true if the value of label X is one
+                                         of "a", "b", "c"
+    label not in { "a", "b", "c", ... }  ->  true if the value of label X is
+                                             not one of "a", "b", "c"
+    has(label_name)  -> True if that label is present
+    expr && expr  -> Short-circuit and
+    expr || expr  -> Short-circuit or
+    ( expr ) -> parens for grouping
+    all() or the empty selector -> matches all endpoints.
+
 """
 
 from base64 import b64encode
@@ -46,6 +63,12 @@ _log = logging.getLogger(__name__)
 
 
 class ExprNode(object):
+    """
+    Base class for nodes in the AST of the grammar.
+
+    Note: to minimize occupancy, nodes should use the __slots__ mechanism
+    to name their fields.
+    """
     __slots__ = []
 
     def collect_reqd_values(self, pr_set):
@@ -76,10 +99,10 @@ class ExprNode(object):
         # version of the expression.
         fragments = []
         self.collect_str_fragments(fragments)
-        # Update the hash.  Wrapping with 'selector<...>' prevents the hash
+        # Update the hash.  Wrapping with 'node<...>' prevents the hash
         # from being extended in a way that would clash with something we can
         # generate.  (Probably not an important concern but it doesn't hurt.)
-        h.update("selector<")
+        h.update("node<")
         for f in fragments:
             h.update(f)
         h.update(">")
@@ -97,13 +120,16 @@ class NotPresent(object):
     """
     Special value returned when evaluating a missing label.
 
-    It's main purpose is to be unequal to anything that we might compare
+    Its main purpose is to be unequal to anything that we might compare
     it to.
     """
     pass
 
 
-class Label(ExprNode):
+class LabelNode(ExprNode):
+    """
+    AST node for a label.
+    """
     __slots__ = ["label_name"]
 
     def __init__(self, parse_str=None, location=None, tokens=None):
@@ -126,7 +152,10 @@ class Label(ExprNode):
         fragment_list.append(self.label_name)
 
 
-class HasOp(ExprNode):
+class HasNode(ExprNode):
+    """
+    AST node for a has(label) term.
+    """
     __slots__ = ["label_name"]
 
     def __init__(self, parse_str=None, location=None, tokens=None):
@@ -146,7 +175,10 @@ class HasOp(ExprNode):
         fragment_list.append("has(%s)" % self.label_name)
 
 
-class Literal(ExprNode):
+class LiteralNode(ExprNode):
+    """
+    AST node for a string literal.
+    """
     __slots__ = ["value"]
 
     def __init__(self, parse_str=None, location=None, tokens=None):
@@ -166,7 +198,10 @@ class Literal(ExprNode):
         fragment_list.append(repr(self.value))
 
 
-class SetLiteral(ExprNode):
+class SetLiteralNode(ExprNode):
+    """
+    AST node for a set literal.
+    """
     __slots__ = ["value"]
 
     def __init__(self, parse_str=None, location=None, tokens=None):
@@ -187,6 +222,9 @@ class SetLiteral(ExprNode):
 
 
 def collect_set_string_fragments(fragment_list, the_set):
+    """
+    Appends string fragments to fragment_list to represent a set literal.
+    """
     fragment_list.append("{")
     first = True
     for v in the_set:
@@ -198,37 +236,17 @@ def collect_set_string_fragments(fragment_list, the_set):
     fragment_list.append("}")
 
 
-def equality_op(parse_str=None, location=None, tokens=None):
-    lhs, rhs = tokens
-    assert isinstance(lhs, Label) and isinstance(rhs, Literal)
-    return LabelToLiteralEquality(lhs.label_name, rhs.value)
-
-
-def inequality_op(parse_str=None, location=None, tokens=None):
-    lhs, rhs = tokens
-    return InequalityOp(lhs, rhs)
-
-
-def in_op(parse_str=None, location=None, tokens=None):
-    lhs, rhs = tokens
-    assert isinstance(lhs, Label)
-    assert isinstance(rhs, SetLiteral)
-    return LabelInSetLiteral(lhs.label_name, rhs.value)
-
-
-def not_in_op(parse_str=None, location=None, tokens=None):
-    lhs, rhs = tokens
-    return NotInOp(lhs, rhs)
-
-
-class BinaryOp(ExprNode):
+class BaseBinaryOpNode(ExprNode):
+    """
+    Base class for binary operators.  Provides common function, such as
+    generating a hash code and simple evaluation.
+    """
     __slots__ = ["lhs", "rhs"]
     operation = None
     operation_str = None
 
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
-        self.rhs = rhs
+    def __init__(self, parse_str=None, location=None, tokens=None):
+        self.lhs, self.rhs = tokens
 
     def evaluate(self, labels):
         return self.operation(self.lhs.evaluate(labels),
@@ -253,7 +271,7 @@ class BinaryOp(ExprNode):
         self.rhs.collect_str_fragments(fragment_list)
 
 
-class LabelToLiteralEquality(BinaryOp):
+class LabelToLiteralEqualityNode(BaseBinaryOpNode):
     """
     Represents the sub-expression label == "value".
 
@@ -263,6 +281,18 @@ class LabelToLiteralEquality(BinaryOp):
     __slots__ = []
     operation = operator.eq
     operation_str = "=="
+
+    def __init__(self, parse_str=None, location=None, tokens=None):
+        # As an occupancy optimization, avoid storing the label and value
+        # AST nodes and swap them for the string values.
+        label, literal = tokens
+        key = label.label_name
+        value = literal.value
+        super(LabelToLiteralEqualityNode, self).__init__(
+            parse_str=parse_str,
+            location=location,
+            tokens=[key, value]
+        )
 
     def evaluate(self, labels):
         # Since we store the label name and value directly, we need a
@@ -278,7 +308,7 @@ class LabelToLiteralEquality(BinaryOp):
         fragment_list.append(repr(self.rhs))
 
 
-class LabelInSetLiteral(BinaryOp):
+class LabelInSetLiteralNode(BaseBinaryOpNode):
     """
     Represents the sub-expression label in {"value", "value2" ...}.
 
@@ -287,6 +317,18 @@ class LabelInSetLiteral(BinaryOp):
     """
     __slots__ = []
     operation_str = "in"
+
+    def __init__(self, parse_str=None, location=None, tokens=None):
+        # As an occupancy optimization, avoid storing the label and value
+        # AST nodes and swap them for the string/set values.
+        label, literal = tokens
+        key = label.label_name
+        value = literal.value
+        super(LabelInSetLiteralNode, self).__init__(
+            parse_str=parse_str,
+            location=location,
+            tokens=[key, value]
+        )
 
     def evaluate(self, labels):
         # Since we store the label name and value directly, we need a
@@ -305,13 +347,15 @@ class LabelInSetLiteral(BinaryOp):
         collect_set_string_fragments(fragment_list, self.rhs)
 
 
-class InequalityOp(BinaryOp):
+class InequalityNode(BaseBinaryOpNode):
+    """AST node for a '!=' operator."""
     __slots__ = []
     operation = operator.ne
     operation_str = "!="
 
 
-class NotInOp(BinaryOp):
+class NotInNode(BaseBinaryOpNode):
+    """AST node for a 'not in' operator."""
     __slots__ = []
     operation_str = "not in"
 
@@ -320,7 +364,14 @@ class NotInOp(BinaryOp):
         return a not in b
 
 
-class ListOp(ExprNode):
+class BaseListNode(ExprNode):
+    """
+    Base class for '&&' and '||' operators, which are parsed as lists of
+    subterms.  For example:  a || b || c would be parsed to a list [a, b, c]
+    and passed to the OrNode subclass.
+
+    Provides common stringification/hashing function.
+    """
     __slots__ = ["exprs"]
     operator_str = None
 
@@ -352,7 +403,9 @@ class ListOp(ExprNode):
         fragment_list.append(")")
 
 
-class AndOp(ListOp):
+class AndNode(BaseListNode):
+    """AST node for '&&'."""
+
     __slots__ = []
     operator_str = "&&"
 
@@ -368,14 +421,16 @@ class AndOp(ListOp):
             expr.collect_reqd_values(pr_set)
 
 
-def and_op(parse_str=None, location=None, tokens=None):
+def simplify_and_node(parse_str=None, location=None, tokens=None):
+    """Parse action for '&&', creates the relevant AST node."""
     if len(tokens) == 1:
         return tokens[0]
     else:
-        return AndOp(tokens.asList())
+        return AndNode(tokens.asList())
 
 
-class OrOp(ListOp):
+class OrNode(BaseListNode):
+    """AST node for '||'."""
     __slots__ = []
     operator_str = "||"
 
@@ -398,14 +453,18 @@ class OrOp(ListOp):
                 pr_set.intersection_update(next_prs)
 
 
-def or_op(parse_str=None, location=None, tokens=None):
+def simplify_or_node(parse_str=None, location=None, tokens=None):
+    """Parse action for '||', creates the relevant AST node."""
     if len(tokens) == 1:
+        # Only one child in the "or"; simplify to return only the child.
         return tokens[0]
     else:
-        return OrOp(tokens.asList())
+        # More than one child, generate an or node.
+        return OrNode(tokens.asList())
 
 
-class AllOp(ExprNode):
+class AllNode(ExprNode):
+    """AST node for 'all()' expression."""
     __slots__ = []
 
     def evaluate(self, labels):
@@ -421,7 +480,7 @@ class AllOp(ExprNode):
         fragment_list.append("all()")
 
 
-ALL_OP = AllOp()
+ALL_OP = AllNode()
 
 
 class SelectorExpression(object):
@@ -502,33 +561,33 @@ def _define_grammar():
     expr = Forward()
 
     label_name = Word(LABEL_CHARS)
-    label_name.setParseAction(Label)
+    label_name.setParseAction(LabelNode)
 
     string_literal = QuotedString('"') | QuotedString("'")
-    string_literal.setParseAction(Literal)
+    string_literal.setParseAction(LiteralNode)
 
     set_literal = (Suppress("{") +
                    delimitedList(QuotedString('"') | QuotedString("'"), ",") +
                    Suppress("}"))
-    set_literal.setParseAction(SetLiteral)
+    set_literal.setParseAction(SetLiteralNode)
 
     eq_comparison = label_name + Suppress("==") + string_literal
-    eq_comparison.setParseAction(equality_op)
+    eq_comparison.setParseAction(LabelToLiteralEqualityNode)
 
     not_eq_comparison = label_name + Suppress("!=") + string_literal
-    not_eq_comparison.setParseAction(inequality_op)
+    not_eq_comparison.setParseAction(InequalityNode)
 
     in_comparison = label_name + Suppress(Keyword("in")) + set_literal
-    in_comparison.setParseAction(in_op)
+    in_comparison.setParseAction(LabelInSetLiteralNode)
 
     not_in = Suppress(Keyword("not") + Keyword("in"))
     not_in_comparison = label_name + not_in + set_literal
-    not_in_comparison.setParseAction(not_in_op)
+    not_in_comparison.setParseAction(NotInNode)
 
     has_check = (Suppress("has(") +
                  Word(LABEL_CHARS) +
                  Suppress(")"))
-    has_check.setParseAction(HasOp)
+    has_check.setParseAction(HasNode)
 
     comparison = (eq_comparison |
                   not_eq_comparison |
@@ -541,10 +600,10 @@ def _define_grammar():
     value = comparison | paren_expr
 
     and_expr = value + ZeroOrMore(Suppress("&&") + value)
-    and_expr.setParseAction(and_op)
+    and_expr.setParseAction(simplify_and_node)
 
     or_expr = and_expr + ZeroOrMore(Suppress("||") + and_expr)
-    or_expr.setParseAction(or_op)
+    or_expr.setParseAction(simplify_or_node)
 
     expr << or_expr
 

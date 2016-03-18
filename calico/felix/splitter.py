@@ -99,7 +99,7 @@ class UpdateSplitter(object):
 
     def on_tier_data_update(self, tier, data_or_none):
         """
-        Called when the metadata for a profile tier is updated.
+        Called when the metadata for a policy tier is updated.
         :param str tier: name of the tier.
         :param dict|NoneType data_or_none: dict containing its data or None.
         """
@@ -110,7 +110,7 @@ class UpdateSplitter(object):
     def on_policy_selector_update(self, policy_id, selector_or_none,
                                   order_or_none):
         """
-        Called when the selector for a profile is updated.
+        Called when the selector for a tiered-policy is updated.
         :param policy_id:
         :param selector_or_none:
         """

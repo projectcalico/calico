@@ -346,11 +346,14 @@ class Config(object):
         self._validate_cfg(final=final)
 
         # Now the config has been validated, generate the IPTables mark masks
-        # we'll actually use internally.
+        # we'll actually use internally.  From least to most significant bits
+        # of the mask we use them for:
+        # - signalling that a profile accepted a packet
+        # - signalling that a packet should move to the next policy tier.
         mark_mask = self.IPTABLES_MARK_MASK
         set_bits = find_set_bits(mark_mask)
         self.IPTABLES_MARK_ACCEPT = "0x%x" % next(set_bits)
-        self.IPTABLES_MARK_NEXT_POL = "0x%x" % next(set_bits)
+        self.IPTABLES_MARK_NEXT_TIER = "0x%x" % next(set_bits)
 
         for plugin in self.plugins.itervalues():
             # Plugins don't get loaded and registered until we've read config

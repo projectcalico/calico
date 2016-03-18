@@ -1,15 +1,15 @@
-env*/
+/env*
 *.pyc
 *.egg-info/
 tmp/
 *.log
-.coverage
+/.coverage
 /htmlcov
 /.dir-locals.el
 /.tox
 /docs/build
-.idea/
-.eggs/
-.hypothesis/
-coverage.xml
+/.idea
+/.eggs
+/.hypothesis
+/coverage.xml
 

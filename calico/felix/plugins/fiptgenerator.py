@@ -71,7 +71,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_IP = None
         self.METADATA_PORT = None
         self.IPTABLES_MARK_ACCEPT = None
-        self.IPTABLES_MARK_NEXT_POL = None
+        self.IPTABLES_MARK_NEXT_TIER = None
 
     def store_and_validate_config(self, config):
         # We don't have any plugin specific parameters, but we need to save
@@ -85,7 +85,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_PORT = config.METADATA_PORT
         self.DEFAULT_INPUT_CHAIN_ACTION = config.DEFAULT_INPUT_CHAIN_ACTION
         self.IPTABLES_MARK_ACCEPT = config.IPTABLES_MARK_ACCEPT
-        self.IPTABLES_MARK_NEXT_POL = config.IPTABLES_MARK_NEXT_POL
+        self.IPTABLES_MARK_NEXT_TIER = config.IPTABLES_MARK_NEXT_TIER
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -546,56 +546,55 @@ class FelixIptablesGenerator(FelixPlugin):
                 "--match mac ! --mac-source %s" % expected_mac,
                 "Incorrect source MAC"))
 
-        # Tiered profiles come first.
+        # Tiered policies come first.
         deps = set()
         # Each tier must either accept the packet outright or pass it to the
         # next tier for further processing.
-        for tier, prof_ids in prof_ids_by_tier.iteritems():
-            # Zero the "next-tier packet" mark.  Then process each profile
+        for tier, pol_ids in prof_ids_by_tier.iteritems():
+            # Zero the "next-tier packet" mark.  Then process each policy
             # in turn.
             chain.append('--append %(chain)s '
                          '--jump MARK --set-mark 0/%(mark)s '
                          '--match comment --comment "Start of tier %(tier)s"' %
                          {
                              "chain": chain_name,
-                             "mark": self.IPTABLES_MARK_NEXT_POL,
+                             "mark": self.IPTABLES_MARK_NEXT_TIER,
                              "tier": tier,
                          })
-            for profile_id in prof_ids:
-                profile_chain = self._profile_to_chain_name(direction,
-                                                            profile_id)
-                deps.add(profile_chain)
+            for pol_id in pol_ids:
+                policy_chain = self._profile_to_chain_name(direction, pol_id)
+                deps.add(policy_chain)
                 # Only process the profile if none of the previous profiles
                 # set the next-tier mark.
                 chain.append("--append %(chain)s "
                              "--match mark --mark 0/%(mark)s "
-                             "--jump %(profile)s" %
+                             "--jump %(pol_chain)s" %
                              {
                                  "chain": chain_name,
-                                 "mark": self.IPTABLES_MARK_NEXT_POL,
-                                 "profile": profile_chain,
+                                 "mark": self.IPTABLES_MARK_NEXT_TIER,
+                                 "pol_chain": policy_chain,
                              })
-                # If the profile accepted the packet, it sets the Accept
+                # If the policy accepted the packet, it sets the Accept
                 # MARK==1. Immediately RETURN the packet to signal that it's
                 # been accepted.
                 chain.append('--append %(chain)s '
                              '--match mark --mark %(mark)s/%(mark)s '
                              '--match comment '
-                             '--comment "Return if profile accepted" '
+                             '--comment "Return if policy accepted" '
                              '--jump RETURN' %
                              {
                                  "chain": chain_name,
                                  "mark": self.IPTABLES_MARK_ACCEPT,
                              })
-            # If the next-tier mark bit is still clear then no profile
+            # If the next-tier mark bit is still clear then no policy
             # in the tier allowed the packet through, drop it.
             chain.append('--append %(chain)s --match mark --mark 0/%(mark)s '
                          '--match comment '
-                         '--comment "Drop if no profile in tier passed" '
+                         '--comment "Drop if no policy in tier passed" '
                          '--jump DROP' %
                          {
                              "chain": chain_name,
-                             "mark": self.IPTABLES_MARK_NEXT_POL,
+                             "mark": self.IPTABLES_MARK_NEXT_TIER,
                          })
 
         # Then, jump to each directly-referenced profile in turn.  The profile
@@ -608,9 +607,9 @@ class FelixIptablesGenerator(FelixPlugin):
         #   the packet.  In which case, we carry on and process the next
         #   profile.
         for profile_id in profile_ids:
-            profile_chain = self._profile_to_chain_name(direction, profile_id)
-            deps.add(profile_chain)
-            chain.append("--append %s --jump %s" % (chain_name, profile_chain))
+            policy_chain = self._profile_to_chain_name(direction, profile_id)
+            deps.add(policy_chain)
+            chain.append("--append %s --jump %s" % (chain_name, policy_chain))
             # If the profile accepted the packet, it sets Accept MARK==1.
             # Immediately RETURN the packet to signal that it's been accepted.
             chain.append(
@@ -859,14 +858,14 @@ class FelixIptablesGenerator(FelixPlugin):
             # next-tier requires two rules, one to mark the packet and another
             # to return the packet to the calling chain.
             ipt_target = "MARK --set-mark %(mark)s/%(mark)s" % {
-                "mark": self.IPTABLES_MARK_NEXT_POL
+                "mark": self.IPTABLES_MARK_NEXT_TIER
             }
             extra_rule = (
                 "--append %(chain)s --match mark --mark %(mark)s/%(mark)s "
                 "--jump RETURN" %
                 {
                     "chain": chain_name,
-                    "mark": self.IPTABLES_MARK_NEXT_POL,
+                    "mark": self.IPTABLES_MARK_NEXT_TIER,
                 }
             )
         else:

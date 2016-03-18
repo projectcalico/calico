@@ -22,7 +22,7 @@ Test for collections library.
 import logging
 from mock import Mock, call, patch
 
-from calico.calcollections import SetDelta, OneToManyIndex
+from calico.calcollections import SetDelta, MultiDict
 from unittest2 import TestCase
 
 _log = logging.getLogger(__name__)
@@ -85,10 +85,10 @@ class TestSetDelta(TestCase):
         self.assertEqual(self.delta.resulting_size, 3)
 
 
-class TestOneToManyIndex(TestCase):
+class TestMultiDict(TestCase):
     def setUp(self):
-        super(TestOneToManyIndex, self).setUp()
-        self.index = OneToManyIndex()
+        super(TestMultiDict, self).setUp()
+        self.index = MultiDict()
 
     def test_add_single(self):
         self.index.add("k", "v")
