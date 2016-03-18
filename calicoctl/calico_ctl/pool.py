@@ -122,19 +122,65 @@ def ip_pool_add(cidrs, version, ipip, masquerade):
         print "IP in IP not supported for IPv6 pools"
         sys.exit(1)
 
-    # TODO Reject any cidrs that overlap with existing cidrs in the pool
-    pools = []
+    current_pools = client.get_ip_pools(version)
+    new_pools = []
+
+    # Ensure new pools are valid and do not overlap with each other or existing
+    # pools.
     for cidr in cidrs:
+
         try:
-            pools.append(IPPool(cidr, ipip=ipip, masquerade=masquerade))
+            pool = IPPool(cidr, ipip=ipip, masquerade=masquerade)
+
         except InvalidBlockSizeError:
             print "An IPv%s pool must have a prefix length of %s or lower." \
                   "\nGiven: %s.\nNo pools added." % \
                   (version, BLOCK_PREFIXLEN[version], cidr)
             sys.exit(1)
-    for pool in pools:
-        client.add_ip_pool(version, pool)
 
+        # Check if new pool overlaps with any existing pool
+        overlapping_pool = _get_overlapping_pool(pool, current_pools)
+        if overlapping_pool:
+            print "Cannot add IP pool %s - pool overlaps with an " \
+                  "existing pool %s" % (cidr, overlapping_pool.cidr)
+            sys.exit(1)
+
+        # Check if this new pool overlaps with any other new pool
+        overlapping_pool = _get_overlapping_pool(pool, new_pools)
+        if overlapping_pool:
+            print "Cannot add IP pool %s - pool overlaps with another " \
+                  "new pool %s" % (cidr, overlapping_pool.cidr)
+            sys.exit(1)
+
+        # Append pool to pending list of new pools to add to Calico
+        new_pools.append(pool)
+
+
+    # Make client call to add each pool to Calico
+    for new_pool in new_pools:
+        client.add_ip_pool(version, new_pool)
+
+
+def _get_overlapping_pool(pool, other_pools):
+    """
+    Check if the given pool overlaps with any pool in the list of other_pools.
+
+    Ignore when a pool's CIDR is an exact match of another pool's CIDR in case
+    a pool is being updated.
+
+    :param pool: IPPool to check overlap for.
+    :param other_pools: List of IPPools to check for overlap.
+    :return: The first IPPool in other_pools that overlaps with pool, or None if
+    no overlap.
+    """
+    for other_pool in other_pools:
+        # Allow the cidr to be exactly the same in case pool is being updated,
+        # for example to add/remove IP-IP support.
+        if ((pool.cidr in other_pool.cidr or other_pool.cidr in pool.cidr) and
+            (pool.cidr != other_pool.cidr)):
+            return other_pool
+
+    return None
 
 def ip_pool_range_add(start_ip, end_ip, version, ipip, masquerade):
     """

@@ -54,18 +54,15 @@ class TestPool(unittest.TestCase):
             # Call method under test for each test case
             self.assertEqual(m_sys_exit.called, sys_exit_called)
 
+    @patch("calico_ctl.pool.client", autospec=True)
     @patch("calico_ctl.pool.IPPool", autospec=True)
-    def test_add_bad_pool_size(self, m_IPPool):
+    def test_add_bad_pool_size(self, m_IPPool, m_client):
         """
         Test ip_pool_add exits when pool with bad prefix is passed in.
         """
         m_IPPool.side_effect = InvalidBlockSizeError
-        with patch('sys.exit', autospec=True) as m_sys_exit:
-            # Call method under test
-            pool.ip_pool_add(["10.10.10.10/32"], 4, False, False)
-
-            # Call method under test for each test case
-            self.assertTrue(m_sys_exit.called)
+        self.assertRaises(SystemExit, pool.ip_pool_add, cidrs=["10.10.10.10/32"],
+                          version=4, ipip=False, masquerade=False)
 
     @patch("calico_ctl.pool.client", autospec=True)
     @patch("calico_ctl.pool.IPPool", autospec=True)
@@ -73,14 +70,12 @@ class TestPool(unittest.TestCase):
         """
         Test ip_pool_range_add exits when range with bad prefix is passed in.
         """
-        m_client.get_ip_pools = Mock()
         m_client.get_ip_pools.return_value = []
         m_IPPool.side_effect = InvalidBlockSizeError
         with patch('sys.exit', autospec=True) as m_sys_exit:
             # Call method under test
             pool.ip_pool_range_add("10.10.10.10", "10.10.11.10", 4, False, False)
 
-            # Call method under test for each test case
             self.assertTrue(m_sys_exit.called)
 
     @patch("time.sleep")
@@ -102,3 +97,45 @@ class TestPool(unittest.TestCase):
         self.assertEqual(m_pool.disabled, True)
         m_client.release_pool_affinities.assert_called_once_with(m_pool)
         m_client.remove_ip_pool.assert_called_once_with(4, net1.ip)
+
+    @patch("calico_ctl.pool.client", autospec=True)
+    def test_add_overlapping_existing_pool(self, m_client):
+        """
+        Test ip_pool_add exits when a pool is added that falls within an
+        existing pool.
+        """
+        m_client.get_ip_pools.return_value = [IPPool("10.10.10.0/24")]
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            pool.ip_pool_add(cidrs=["10.10.10.0/25"], version=4,
+                             ipip=False, masquerade=False)
+
+            self.assertTrue(m_sys_exit.called)
+
+    @patch("calico_ctl.pool.client", autospec=True)
+    def test_add_overlapping_existing_pool_2(self, m_client):
+        """
+        Test ip_pool_add exits when a pool is added that fully encompasses an
+        existing pool.
+        """
+        m_client.get_ip_pools.return_value = [IPPool("10.10.10.0/26")]
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            pool.ip_pool_add(cidrs=["10.10.10.0/24"], version=4,
+                             ipip=False, masquerade=False)
+
+            self.assertTrue(m_sys_exit.called)
+
+    @patch("calico_ctl.pool.client", autospec=True)
+    def test_add_overlapping_new_pools(self, m_client):
+        """
+        Test ip_pool_add exits when two new pools overlap with
+        each other.
+        """
+        m_client.get_ip_pools.return_value = []
+        with patch('sys.exit', autospec=True) as m_sys_exit:
+            # Call method under test
+            pool.ip_pool_add(cidrs=["10.10.10.0/25", "10.10.10.0/26"],
+                             version=4, ipip=False, masquerade=False)
+
+            self.assertTrue(m_sys_exit.called)
