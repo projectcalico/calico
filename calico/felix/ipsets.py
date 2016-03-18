@@ -28,7 +28,9 @@ from calico.felix import futils
 from calico.calcollections import SetDelta
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
 from calico.felix.actor import actor_message, Actor
+from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor
+from calico.felix.selectors import SelectorExpression
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +38,11 @@ FELIX_PFX = "felix-"
 IPSET_PREFIX = {IPV4: FELIX_PFX+"v4-", IPV6: FELIX_PFX+"v6-"}
 IPSET_TMP_PREFIX = {IPV4: FELIX_PFX+"tmp-v4-", IPV6: FELIX_PFX+"tmp-v6-"}
 DEFAULT_IPSET_SIZE = 2**20
+DUMMY_PROFILE = "dummy"
+
+# Number of chars we have left over in the ipset name after we take out the
+# "felix-tmp-v4" prefix.
+MAX_NAME_LENGTH = 16
 
 
 class IpsetManager(ReferenceManager):
@@ -69,15 +76,40 @@ class IpsetManager(ReferenceManager):
         # Set of EndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
+        # Label index, used to cross-reference endpoint labels against
+        # selectors.
+        self._label_index = LabelValueIndex()
+        self._label_index.on_match_started = self._on_label_match_started
+        self._label_index.on_match_stopped = self._on_label_match_stopped
+        self._label_inherit_idx = LabelInheritanceIndex(self._label_index)
+        # Sets used to defer updates of the label match cache until we're ready
+        # to handle them.
+        self._started_label_matches = set()
+        self._stopped_label_matches = set()
+
         # One-way flag set when we know the datamodel is in sync.  We can't
         # rewrite any ipsets before we're in sync or we risk omitting some
         # values.
         self._datamodel_in_sync = False
 
-    def _create(self, tag_id):
-        active_ipset = TagIpset(futils.uniquely_shorten(tag_id, 16),
-                                self.ip_type,
-                                max_elem=self._config.MAX_IPSET_SIZE)
+    def _create(self, tag_id_or_sel):
+        if isinstance(tag_id_or_sel, SelectorExpression):
+            _log.debug("Creating ipset for expression %s", tag_id_or_sel)
+            sel = tag_id_or_sel
+            self._label_index.on_expression_update(sel, sel)
+            ipset_name = futils.uniquely_shorten(sel.unique_id,
+                                                 MAX_NAME_LENGTH)
+            self._process_stopped_label_matches()
+            self._process_started_label_matches()
+        else:
+            _log.debug("Creating ipset for tag %s", tag_id_or_sel)
+            ipset_name = futils.uniquely_shorten(tag_id_or_sel,
+                                                 MAX_NAME_LENGTH)
+        active_ipset = RefCountedIpsetActor(
+            ipset_name,
+            self.ip_type,
+            max_elem=self._config.MAX_IPSET_SIZE
+        )
         return active_ipset
 
     def _maybe_start(self, obj_id):
@@ -85,11 +117,11 @@ class IpsetManager(ReferenceManager):
             _log.debug("Datamodel is in-sync, deferring to superclass.")
             return super(IpsetManager, self)._maybe_start(obj_id)
         else:
-            _log.info("Delaying startup of tag %s because datamodel is"
+            _log.info("Delaying startup of ipset for %s because datamodel is "
                       "not in sync.", obj_id)
 
     def _on_object_started(self, tag_id, active_ipset):
-        _log.debug("TagIpset actor for %s started", tag_id)
+        _log.debug("RefCountedIpsetActor actor for %s started", tag_id)
         # Fill the ipset in with its members, this will trigger its first
         # programming, after which it will call us back to tell us it is ready.
         # We can't use self._dirty_tags to defer this in case the set becomes
@@ -152,8 +184,8 @@ class IpsetManager(ReferenceManager):
                                                       n.startswith(tmppfx))])
         whitelist = set()
         live_ipsets = self.objects_by_id.itervalues()
-        # stopping_objects_by_id is a dict of sets of TagIpset objects,
-        # chain them together.
+        # stopping_objects_by_id is a dict of sets of RefCountedIpsetActor
+        # objects, chain them together.
         stopping_ipsets = chain.from_iterable(
             self.stopping_objects_by_id.itervalues())
         for ipset in chain(live_ipsets, stopping_ipsets):
@@ -178,8 +210,8 @@ class IpsetManager(ReferenceManager):
         Called when the tag list of the given profile has changed or been
         deleted.
 
-        Updates the indices and notifies any live TagIpset objects of any
-        any changes that affect them.
+        Updates the indices and notifies any live RefCountedIpsetActor
+        objects of any any changes that affect them.
 
         :param str profile_id: Profile ID affected.
         :param list[str]|NoneType tags: List of tags for the given profile or
@@ -219,6 +251,14 @@ class IpsetManager(ReferenceManager):
             self.tags_by_prof_id[profile_id] = tags
 
     @actor_message()
+    def on_prof_labels_set(self, profile_id, labels):
+        _log.debug("Profile labels updated for %s: %s", profile_id, labels)
+        self._label_inherit_idx.on_parent_labels_update(profile_id, labels)
+        # Flush the updates.
+        self._process_stopped_label_matches()
+        self._process_started_label_matches()
+
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
         Update tag memberships and indices with the new endpoint dict.
@@ -229,7 +269,53 @@ class IpsetManager(ReferenceManager):
 
         """
         endpoint_data = self._endpoint_data_from_dict(endpoint_id, endpoint)
+        if endpoint and endpoint_data != EMPTY_ENDPOINT_DATA:
+            # This endpoint makes a contribution to the IP addresses, we need
+            # to index its labels.
+            labels = endpoint.get("labels", {})
+            prof_ids = endpoint.get("profile_ids", [])
+        else:
+            labels = None
+            prof_ids = None
+        # Remove the endpoint from the label index so that we clean up its
+        # old IP addresses.
+        self._label_inherit_idx.on_item_update(endpoint_id, None, None)
+        self._process_stopped_label_matches()
+        # Now update the main cache of endpoint data.
         self._on_endpoint_data_update(endpoint_id, endpoint_data)
+        # And then, if not doing a deletion, add the endpoint back into the
+        # label index.
+        if labels is not None:
+            self._label_inherit_idx.on_item_update(endpoint_id, labels,
+                                                   prof_ids)
+            self._process_started_label_matches()
+
+    def _on_label_match_started(self, expr_id, item_id):
+        """Callback from the label index to tell us that a match started."""
+        _log.debug("SelectorExpression %s now matches %s", expr_id, item_id)
+        self._started_label_matches.add((expr_id, item_id))
+
+    def _on_label_match_stopped(self, expr_id, item_id):
+        """Callback from the label index to tell us that a match stopped."""
+        _log.debug("SelectorExpression %s no longer matches %s",
+                   expr_id, item_id)
+        self._stopped_label_matches.add((expr_id, item_id))
+
+    def _process_started_label_matches(self):
+        for selector, item_id in self._started_label_matches:
+            ep_data = self.endpoint_data_by_ep_id[item_id]
+            ip_addrs = ep_data.ip_addresses
+            _log.debug("Adding %s to expression %s", ip_addrs, selector)
+            for ip in ip_addrs:
+                self._add_mapping(selector, DUMMY_PROFILE, item_id, ip)
+        self._started_label_matches.clear()
+
+    def _process_stopped_label_matches(self):
+        for selector, item_id in self._stopped_label_matches:
+            ep_data = self.endpoint_data_by_ep_id[item_id]
+            for ip in ep_data.ip_addresses:
+                self._remove_mapping(selector, DUMMY_PROFILE, item_id, ip)
+        self._stopped_label_matches.clear()
 
     def _endpoint_data_from_dict(self, endpoint_id, endpoint_dict):
         """
@@ -246,9 +332,9 @@ class IpsetManager(ReferenceManager):
         if endpoint_dict is not None:
             profile_ids = endpoint_dict.get("profile_ids", [])
             nets_list = endpoint_dict.get(self.nets_key, [])
-            if profile_ids and nets_list:
+            if nets_list:
                 # Optimization: only return an object if this endpoint makes
-                # some contribution to the IP addresses in the tags.
+                # some contribution to the IP addresses.
                 ips = map(futils.net_to_ip, nets_list)
                 return EndpointData(profile_ids, ips)
             else:
@@ -365,7 +451,7 @@ class IpsetManager(ReferenceManager):
     def _finish_msg_batch(self, batch, results):
         """
         Called after a batch of messages is finished, processes any
-        pending TagIpset member updates.
+        pending RefCountedIpsetActor member updates.
 
         Doing that here allows us to lots of updates into one replace
         operation.  It also avoid wasted effort if tags are flapping.
@@ -671,25 +757,25 @@ class IpsetActor(Actor):
         _log.debug("Finished syncing %s to kernel", self.name)
 
 
-class TagIpset(IpsetActor, RefCountedActor):
+class RefCountedIpsetActor(IpsetActor, RefCountedActor):
     """
-    Specialised, RefCountedActor managing a single tag's ipset.
+    Specialised, RefCountedActor managing a single ipset for a tag or
+    selector.
     """
 
-    def __init__(self, tag, ip_type, max_elem=DEFAULT_IPSET_SIZE):
+    def __init__(self, name_stem, ip_type, max_elem=DEFAULT_IPSET_SIZE):
         """
-        :param str tag: Name of tag that this ipset represents.  Note: not
-            the name of the ipset itself.  The name of the ipset is derived
-            from this value.
+        :param str name_stem: ipset name suffix. The name of the ipset is
+               derived from this value.
         :param ip_type: One of the constants, futils.IPV4 or futils.IPV6
         """
-        self.tag = tag
-        name = tag_to_ipset_name(ip_type, tag)
-        tmpname = tag_to_ipset_name(ip_type, tag, tmp=True)
+        self.name_stem = name_stem
+        suffix = tag_to_ipset_name(ip_type, name_stem)
+        tmpname = tag_to_ipset_name(ip_type, name_stem, tmp=True)
         family = "inet" if ip_type == IPV4 else "inet6"
         # Helper class, used to do atomic rewrites of ipsets.
-        ipset = Ipset(name, tmpname, family, "hash:ip", max_elem=max_elem)
-        super(TagIpset, self).__init__(ipset, qualifier=tag)
+        ipset = Ipset(suffix, tmpname, family, "hash:ip", max_elem=max_elem)
+        super(RefCountedIpsetActor, self).__init__(ipset, qualifier=suffix)
 
         # Notified ready?
         self.notified_ready = False
@@ -705,13 +791,16 @@ class TagIpset(IpsetActor, RefCountedActor):
             self._notify_cleanup_complete()
 
     def _finish_msg_batch(self, batch, results):
-        _log.debug("_finish_msg_batch on TagIpset")
-        super(TagIpset, self)._finish_msg_batch(batch, results)
+        _log.debug("_finish_msg_batch on RefCountedIpsetActor")
+        super(RefCountedIpsetActor, self)._finish_msg_batch(batch, results)
         if not self.notified_ready:
             # We have created the set, so we are now ready.
-            _log.debug("TagIpset _finish_msg_batch notifying ready")
+            _log.debug("RefCountedIpsetActor notifying ready")
             self.notified_ready = True
             self._notify_ready()
+
+    def __str__(self):
+        return self.__class__.__name__ + "<%s,%s>" % (self._id, self.name)
 
 
 class Ipset(object):
