@@ -800,8 +800,8 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
                 try:
                     self._write_endpoint_status_to_etcd(ep_id, status)
                 except EtcdException:
-                    _log.error("Failed to report status for %s, will retry",
-                               ep_id)
+                    _log.exception("Failed to report status for %s, will "
+                                   "retry", ep_id)
                     # Add it into the next dirty set.  Retrying in the next
                     # batch ensures that we try to update all of the dirty
                     # endpoints before we do any retries, ensuring fairness.
