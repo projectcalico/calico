@@ -37,10 +37,10 @@ from pycalico.datastore_datatypes import IPPool
 from pycalico.datastore_errors import InvalidBlockSizeError
 from pycalico.block import BLOCK_PREFIXLEN
 from pycalico.ipam import HostAffinityClaimedError
+from pycalico.util import validate_ip, validate_cidr
 
 from connectors import client
-from utils import (validate_cidr, validate_ip,
-                   get_container_ipv_from_arguments,
+from utils import (get_container_ipv_from_arguments,
                    print_paragraph)
 
 

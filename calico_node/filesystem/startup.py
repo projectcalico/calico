@@ -5,29 +5,11 @@ import netaddr
 from netaddr import AddrFormatError, IPAddress
 from pycalico.datastore_datatypes import IPPool
 from pycalico.ipam import IPAMClient
-from pycalico.util import get_host_ips
+from pycalico.util import get_host_ips, validate_asn
 
 DEFAULT_IPV4_POOL = IPPool("192.168.0.0/16")
 DEFAULT_IPV6_POOL = IPPool("fd80:24e2:f998:72d6::/64")
 
-def validate_asn(asn):
-    """
-    Validate the format of a 2-byte or 4-byte autonomous system number
-
-    :param asn: User input of AS number
-    :return: Boolean: True if valid format, False if invalid format
-    """
-    try:
-        if "." in str(asn):
-            left_asn, right_asn = str(asn).split(".")
-            asn_ok = (0 <= int(left_asn) <= 65535) and \
-                     (0 <= int(right_asn) <= 65535)
-        else:
-            asn_ok = 0 <= int(asn) <= 4294967295
-    except ValueError:
-        asn_ok = False
-
-    return asn_ok
 
 def _find_pool(ip_addr, ipv4_pools):
     """
@@ -259,6 +241,13 @@ def main():
         else:
             print "No IP provided. Using detected IP: %s" % ip
 
+    # Write a startup environment file containing the IP address that may have
+    # just been detected.
+    # This is required because the confd templates expect to be able to fill in
+    #  the IP by fetching it from the environment.
+    with open('startup.env', 'w') as f:
+        f.write("IP=" + ip)
+
     warn_if_hostname_conflict(ip)
 
     # Verify that IPs are not already in use by another host.
@@ -274,6 +263,9 @@ def main():
     # Create default pools if required
     if not ipv4_pools:
         client.add_ip_pool(4, DEFAULT_IPV4_POOL)
+
+    # If the OS has not been built with IPv6 then the /proc config for IPv6
+    # will not be present.
     if not ipv6_pools and os.path.exists('/proc/sys/net/ipv6'):
         client.add_ip_pool(6, DEFAULT_IPV6_POOL)
 

@@ -33,10 +33,11 @@ import sys
 from pycalico.datastore_datatypes import BGPPeer
 from netaddr import IPAddress
 from prettytable import PrettyTable
+from pycalico.util import validate_asn, validate_ip
 
 from connectors import client
 from utils import get_container_ipv_from_arguments
-from utils import validate_ip, validate_asn, convert_asn_to_asplain
+from utils import convert_asn_to_asplain
 
 
 def validate_arguments(arguments):

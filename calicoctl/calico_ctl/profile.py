@@ -78,8 +78,7 @@ from connectors import client, DOCKER_URL
 from utils import print_paragraph, DOCKER_LIBNETWORK_VERSION
 from pycalico.datastore_datatypes import Profile
 from pycalico.util import (validate_characters, validate_ports,
-                           validate_icmp_type)
-from utils import validate_cidr, validate_cidr_versions
+                           validate_icmp_type, validate_cidr, validate_cidr_versions)
 
 
 def validate_arguments(arguments):
