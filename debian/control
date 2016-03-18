@@ -12,6 +12,7 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends},
+ python-pyparsing,
  python-etcd (>= 0.4.1+calico.1),
  python-ijson (>= 2.2-1),
  python-datrie (>= 0.7-1),
