@@ -78,7 +78,46 @@ INPUT_CHAINS = {
     ]
 }
 
+SELECTOR_A_EQ_B = parse_selector("a == 'b'")
 RULES_TESTS = [
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {},
+        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {"src_selector": SELECTOR_A_EQ_B,
+                 "action": "next-tier"}
+            ],
+            "outbound_rules": [
+                {"dst_selector": SELECTOR_A_EQ_B,
+                 "action": "next-tier"}
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i':
+                [
+                    DEFAULT_MARK % "felix-p-prof1-i",
+                    '--append felix-p-prof1-i '
+                    '--match set --match-set a-eq-b src '
+                    '--jump MARK --set-mark 0x2000000/0x2000000',
+                    '--append felix-p-prof1-i --match mark '
+                    '--mark 0x2000000/0x2000000 --jump RETURN',
+                    DEFAULT_UNMARK % "felix-p-prof1-i",
+                ],
+            'felix-p-prof1-o':
+                [
+                    DEFAULT_MARK % "felix-p-prof1-o",
+                    '--append felix-p-prof1-o '
+                    '--match set --match-set a-eq-b dst '
+                    '--jump MARK --set-mark 0x2000000/0x2000000',
+                    '--append felix-p-prof1-o --match mark '
+                    '--mark 0x2000000/0x2000000 --jump RETURN',
+                    DEFAULT_UNMARK % "felix-p-prof1-o",
+                ]
+        },
+    },
     {
         "ip_version": 4,
         "tag_to_ipset": {
@@ -204,6 +243,44 @@ FROM_ENDPOINT_CHAIN = [
                '--jump DROP -m comment --comment '
                '"Incorrect source MAC"',
 
+    # Now the tiered profiles.  For each tier we reset the "next tier" mark.
+    '--append felix-from-abcd --jump MARK --set-mark 0/0x2000000 '
+              '--match comment --comment "Start of tier tier_1"',
+    # Then, for each profile, we jump to the profile, and check if it set the
+    # accept mark, which immediately accepts.
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t1p1-o',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 '
+              '--match comment --comment "Return if profile accepted" '
+              '--jump RETURN',
+
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t1p2-o',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 '
+              '--match comment --comment "Return if profile accepted" '
+              '--jump RETURN',
+    # Then, at the end of the tier, drop if nothing in the tier did a
+    # "next-tier"
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 '
+              '--match comment --comment "Drop if no profile in tier passed" '
+              '--jump DROP',
+
+    # Now the second tier...
+    '--append felix-from-abcd '
+              '--jump MARK --set-mark 0/0x2000000 --match comment '
+              '--comment "Start of tier tier_2"',
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t2p1-o',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 --match comment '
+              '--comment "Return if profile accepted" --jump RETURN',
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --match comment '
+              '--comment "Drop if no profile in tier passed" --jump DROP',
+
     # Jump to the first profile.
     '--append felix-from-abcd --jump felix-p-prof-1-o',
     # Short-circuit: return if the first profile matched.
@@ -226,6 +303,32 @@ FROM_ENDPOINT_CHAIN = [
 TO_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
     '--append felix-to-abcd --jump MARK --set-mark 0/0x1000000',
+
+    # Then do the tiered profiles in order.  Tier 1:
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
+            '--match comment --comment "Start of tier tier_1"',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t1p1-i',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if profile accepted" --jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t1p2-i',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if profile accepted" --jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--match comment --comment "Drop if no profile in tier passed" '
+            '--jump DROP',
+    # Tier 2:
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
+            '--match comment --comment "Start of tier tier_2"',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t2p1-i',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if profile accepted" '
+            '--jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--match comment --comment "Drop if no profile in tier passed" '
+            '--jump DROP',
 
     # Jump to first profile and return iff it matched.
     '--append felix-to-abcd --jump felix-p-prof-1-i',
@@ -345,6 +448,51 @@ class TestRules(BaseTestCase):
             )
             self.assertEqual((updates, deps), (test["updates"], {}))
 
+    def test_unknown_action(self):
+        updates, deps = self.iptables_generator.profile_updates(
+            "prof1",
+            {
+                "inbound_rules": [{"action": "unknown"}],
+                "outbound_rules": [{"action": "unknown"}],
+            },
+            4,
+            {},
+            selector_to_ipset={},
+        )
+        self.maxDiff = None
+        # Should get back a drop rule.
+        drop_rules_i = self.iptables_generator.drop_rules(
+            4,
+            "felix-p-prof1-i",
+            None,
+            "ERROR failed to parse rules",
+        )
+        drop_rules_o = self.iptables_generator.drop_rules(
+            4,
+            "felix-p-prof1-o",
+            None,
+            "ERROR failed to parse rules",
+        )
+        self.assertEqual(
+            updates,
+            {
+                'felix-p-prof1-i':
+                    ['--append felix-p-prof1-i --jump MARK '
+                     '--set-mark 0x1000000/0x1000000'] +
+                    drop_rules_i +
+                    ['--append felix-p-prof1-i --match comment '
+                     '--comment "No match, fall through to next profile" '
+                     '--jump MARK --set-mark 0/0x1000000'],
+                'felix-p-prof1-o':
+                    ['--append felix-p-prof1-o --jump MARK '
+                     '--set-mark 0x1000000/0x1000000'] +
+                    drop_rules_o +
+                    ['--append felix-p-prof1-o --match comment '
+                     '--comment "No match, fall through to next profile" '
+                     '--jump MARK --set-mark 0/0x1000000']
+            }
+        )
+
     def test_bad_icmp_type(self):
         with self.assertRaises(UnsupportedICMPType):
             self.iptables_generator._rule_to_iptables_fragments_inner(
@@ -379,15 +527,25 @@ class TestEndpoint(BaseTestCase):
             {
                 # From chain depends on the outbound profiles.
                 'felix-from-abcd': set(['felix-p-prof-1-o',
-                                        'felix-p-prof-2-o']),
+                                        'felix-p-prof-2-o',
+                                        'felix-p-t1p1-o',
+                                        'felix-p-t1p2-o',
+                                        'felix-p-t2p1-o',]),
                 # To chain depends on the inbound profiles.
                 'felix-to-abcd': set(['felix-p-prof-1-i',
-                                      'felix-p-prof-2-i'])
+                                      'felix-p-prof-2-i',
+                                      'felix-p-t1p1-i',
+                                      'felix-p-t1p2-i',
+                                      'felix-p-t2p1-i',])
             }
         )
+        tiered_policies = OrderedDict()
+        tiered_policies["tier_1"] = ["t1p1", "t1p2"]
+        tiered_policies["tier_2"] = ["t2p1"]
         result = self.iptables_generator.endpoint_updates(4, "e1", "abcd",
-                                              "aa:22:33:44:55:66",
-                                              ["prof-1", "prof-2"])
+                                                          "aa:22:33:44:55:66",
+                                                          ["prof-1", "prof-2"],
+                                                          tiered_policies)
 
         # Log the whole diff if the comparison fails.
         self.maxDiff = None

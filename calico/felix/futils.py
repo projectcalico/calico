@@ -482,3 +482,14 @@ def iso_utc_timestamp():
     time_now = datetime.utcnow()
     time_formatted = time_now.replace(microsecond=0).isoformat() + 'Z'
     return time_formatted
+
+
+def find_set_bits(mask):
+    """Generates an integer for each set bit in the input.
+
+    :param int mask: The mask to choose bits from.
+    """
+    while mask > 0:
+        next_mask = mask & (mask - 1)
+        yield mask - next_mask
+        mask = next_mask

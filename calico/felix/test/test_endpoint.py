@@ -19,8 +19,13 @@ felix.test.test_endpoint
 
 Tests of endpoint module.
 """
+from collections import OrderedDict
 from contextlib import nested
 import logging
+
+from calico.felix.plugins.fiptgenerator import FelixIptablesGenerator
+from calico.felix.selectors import parse_selector
+
 from calico.felix.endpoint import EndpointManager, LocalEndpoint
 from calico.felix.fetcd import EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
@@ -36,13 +41,14 @@ from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.test import stub_utils
 from calico.felix import endpoint
 from calico.felix import futils
-from calico.datamodel_v1 import EndpointId
+from calico.datamodel_v1 import EndpointId, TieredPolicyId
 
 _log = logging.getLogger(__name__)
 
 mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
 
 ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
+ENDPOINT_ID_2 = EndpointId("hostname", "b", "c1", "d1")
 
 
 class TestEndpointManager(BaseTestCase):
@@ -72,6 +78,7 @@ class TestEndpointManager(BaseTestCase):
                                     async=True)
         self.step_actor(self.mgr)
         m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         self.mgr._on_object_started(ENDPOINT_ID, m_endpoint)
         self.assertEqual(
             m_endpoint.on_endpoint_update.mock_calls,
@@ -95,6 +102,147 @@ class TestEndpointManager(BaseTestCase):
         self.mgr.on_datamodel_in_sync(async=True)
         self.step_actor(self.mgr)
         self.assertEqual(self.m_dispatch.apply_snapshot.mock_calls, [])
+
+    def test_tiered_policy_ordering_and_updates(self):
+        """
+        Check that the tier_sequence ordering is updated correctly as we
+        add and remove tiers and policies.
+        """
+        # Make sure we have an endpoint so that we can check that it gets
+        # put in the dirty set.
+        self.mgr.on_datamodel_in_sync(async=True)
+        self.mgr.on_endpoint_update(ENDPOINT_ID,
+                                    {"name": "tap12345"},
+                                    async=True)
+        self.step_actor(self.mgr)
+
+        # Pretend that the endpoint is alive so that we'll send updates to id.
+        m_endpoint = Mock(spec=LocalEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
+        self.mgr._is_starting_or_live = Mock(return_value=True)
+
+        # Add a profile into the tier so it'll apply to the endpoint.
+        pol_id_a = TieredPolicyId("a", "a1")
+        self.mgr.on_policy_selector_update(pol_id_a, parse_selector("all()"),
+                                           10, async=True)
+        pol_id_b = TieredPolicyId("b", "b1")
+        self.mgr.on_policy_selector_update(pol_id_b, parse_selector("all()"),
+                                           10, async=True)
+        pol_id_c1 = TieredPolicyId("c1", "c1")
+        self.mgr.on_policy_selector_update(pol_id_c1, parse_selector("all()"),
+                                           10, async=True)
+        pol_id_c2 = TieredPolicyId("c2", "c2")
+        self.mgr.on_policy_selector_update(pol_id_c2, parse_selector("all()"),
+                                           10, async=True)
+        pol_id_c3 = TieredPolicyId("c3", "c3")
+        self.mgr.on_policy_selector_update(pol_id_c3, parse_selector("all()"),
+                                           10, async=True)
+        self.step_actor(self.mgr)
+        # Since we haven't set the tier ID yet, the policy won't get applied...
+        self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
+                         [mock.call(OrderedDict(), async=True)] * 5)
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+        # Adding a tier should trigger an update, adding the tier and policy.
+        self.mgr.on_tier_data_update("a", {"order": 1}, async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(self.mgr.endpoints_with_dirty_policy, set())
+        tiers = OrderedDict()
+        tiers["a"] = [pol_id_a]
+        self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
+                         [mock.call(tiers, async=True)])
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+        # Idempotent update should get squashed.
+        self.mgr.on_tier_data_update("a", {"order": 2}, async=True)
+        self.mgr.on_tier_data_update("a", {"order": 2}, async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls, [])
+
+        # Adding another tier should trigger an update.
+        self.mgr.on_tier_data_update("b", {"order": 3}, async=True)
+        self.step_actor(self.mgr)
+        tiers = OrderedDict()
+        tiers["a"] = [pol_id_a]
+        tiers["b"] = [pol_id_b]
+        self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
+                         [mock.call(tiers, async=True)])
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+        # Swapping the order should trigger an update.
+        self.mgr.on_tier_data_update("b", {"order": 1}, async=True)
+        self.step_actor(self.mgr)
+        tiers = OrderedDict()
+        tiers["b"] = [pol_id_b]
+        tiers["a"] = [pol_id_a]
+        self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
+                         [mock.call(tiers, async=True)])
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+        # Check deletion and that it's idempotent.
+        self.mgr.on_tier_data_update("b", None, async=True)
+        self.step_actor(self.mgr)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.step_actor(self.mgr)
+        self.mgr.on_tier_data_update("b", None, async=True)
+        self.step_actor(self.mgr)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.step_actor(self.mgr)
+        tiers = OrderedDict()
+        tiers["a"] = [pol_id_a]
+        self.assertEqual(
+            m_endpoint.on_tiered_policy_update.mock_calls,
+            [mock.call(tiers, async=True)] * 2  # One for policy, one for tier.
+        )
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+        # Check lexicographic tie-breaker.
+        self.mgr.on_tier_data_update("c1", {"order": 0}, async=True)
+        self.mgr.on_tier_data_update("c2", {"order": 0}, async=True)
+        self.mgr.on_tier_data_update("c3", {"order": 0}, async=True)
+        self.step_actor(self.mgr)
+        tiers = OrderedDict()
+        # All 'c's should sort before 'a' due to explicit ordering but 'c's
+        # should sort in lexicographic order.
+        tiers["c1"] = [pol_id_c1]
+        tiers["c2"] = [pol_id_c2]
+        tiers["c3"] = [pol_id_c3]
+        tiers["a"] = [pol_id_a]
+        actual_call = m_endpoint.on_tiered_policy_update.mock_calls[-1]
+        expected_call = mock.call(tiers, async=True)
+        self.assertEqual(actual_call, expected_call,
+                         msg="\nExpected: %s\n Got:     %s" %
+                             (expected_call, actual_call))
+        m_endpoint.on_tiered_policy_update.reset_mock()
+
+    def test_label_inheritance(self):
+        # Make sure we have an endpoint so that we can check that it gets
+        # put in the dirty set.  These have no labels at all so we test
+        # that no labels gets translated to an empty dict.
+        self.mgr.on_endpoint_update(ENDPOINT_ID, {"name": "tap12345",
+                                                  "profile_ids": ["prof1"]},
+                                    async=True)
+        self.mgr.on_endpoint_update(ENDPOINT_ID_2, {"name": "tap23456",
+                                                    "profile_ids": ["prof2"]},
+                                    async=True)
+        # And we need a selector to pick out one of the endpoints by the labels
+        # attached to its parent.
+        self.mgr.on_policy_selector_update(TieredPolicyId("a", "b"),
+                                           parse_selector('a == "b"'),
+                                           10,
+                                           async=True)
+        self.step_actor(self.mgr)
+
+        with mock.patch.object(self.mgr, "_update_dirty_policy") as m_update:
+            self.mgr.on_prof_labels_set("prof1", {"a": "b"}, async=True)
+            self.step_actor(self.mgr)
+            # Only the first endpoint should end up matching the selector.
+            self.assertEqual(self.mgr.endpoints_with_dirty_policy,
+                             set([ENDPOINT_ID]))
+            # And an update should be triggered.
+            self.assertEqual(m_update.mock_calls, [mock.call()])
 
     def test_endpoint_update_not_our_host(self):
         ep = {"name": "tap1234"}
@@ -174,6 +322,8 @@ class TestLocalEndpoint(BaseTestCase):
         super(TestLocalEndpoint, self).setUp()
         self.config = load_config("felix_default.cfg", global_dict={
             "EndpointReportingEnabled": "False"})
+        self.m_ipt_gen = Mock(spec=FelixIptablesGenerator)
+        self.m_ipt_gen.endpoint_updates.return_value = {}, {}
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch_chains = Mock(spec=DispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
@@ -439,6 +589,49 @@ class TestLocalEndpoint(BaseTestCase):
                                                      reset_arp=True)
                 self.assertTrue(local_ep._device_in_sync)
 
+    @mock.patch("calico.felix.endpoint.devices", autospec=True)
+    def test_tiered_policy_mainline(self, m_devices):
+        self.config.plugins["iptables_generator"] = self.m_ipt_gen
+        ep = self.get_local_endpoint(ENDPOINT_ID, futils.IPV4)
+        mac = stub_utils.get_mac()
+        ep.on_endpoint_update(
+            {
+                'state': "active",
+                'endpoint': "endpoint_id",
+                'mac': mac,
+                'name': "tap1234",
+                'ipv4_nets': ["10.0.0.1"],
+                'profile_ids': ["prof1"]
+            },
+            async=True)
+        self.step_actor(ep)
+
+        self.assertEqual(
+            self.m_ipt_gen.endpoint_updates.mock_calls,
+            [
+                mock.call(4, 'd', '1234', mac, ['prof1'], {}),
+            ]
+        )
+        self.m_ipt_gen.endpoint_updates.reset_mock()
+
+        tiers = OrderedDict()
+        t1_1 = TieredPolicyId("t1", "t1_1")
+        t1_2 = TieredPolicyId("t1", "t1_2")
+        tiers["t1"] = [t1_1, t1_2]
+        t2_1 = TieredPolicyId("t2", "t2_1")
+        tiers["t2"] = [t2_1]
+        ep.on_tiered_policy_update(tiers, async=True)
+        self.step_actor(ep)
+
+        self.assertEqual(
+            self.m_ipt_gen.endpoint_updates.mock_calls,
+            [
+                mock.call(4, 'd', '1234', mac, ['prof1'],
+                          OrderedDict([('t1', [TieredPolicyId('t1','t1_1'),
+                                               TieredPolicyId('t1','t1_2')]),
+                                       ('t2', [TieredPolicyId('t2','t2_1')])]))
+            ])
+
     def test_on_interface_update_v6(self):
         combined_id = EndpointId("host_id", "orchestrator_id",
                                  "workload_id", "endpoint_id")
@@ -559,11 +752,11 @@ class TestLocalEndpoint(BaseTestCase):
                 "state": "active"}
         local_ep._pending_endpoint = data.copy()
         local_ep._apply_endpoint_update()
-        self.assertFalse(local_ep._iptables_in_sync)
-        local_ep._iptables_in_sync = True
+        self.assertFalse(local_ep._iptables_in_sync)  # Check...
+        local_ep._iptables_in_sync = True  # ...then reset
         self.assertTrue(local_ep._device_in_sync)
 
-        # IP update.  Should update routing.
+        # IP update.  Should update routing but not iptables.
         data = {'endpoint': "endpoint_id", 'mac': mac,
                 'name': iface, 'ipv4_nets': ["10.0.0.2"],
                 'profile_ids': ["prof2"],

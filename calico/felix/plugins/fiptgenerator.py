@@ -71,6 +71,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_IP = None
         self.METADATA_PORT = None
         self.IPTABLES_MARK_ACCEPT = None
+        self.IPTABLES_MARK_NEXT_POL = None
 
     def store_and_validate_config(self, config):
         # We don't have any plugin specific parameters, but we need to save
@@ -84,6 +85,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_PORT = config.METADATA_PORT
         self.DEFAULT_INPUT_CHAIN_ACTION = config.DEFAULT_INPUT_CHAIN_ACTION
         self.IPTABLES_MARK_ACCEPT = config.IPTABLES_MARK_ACCEPT
+        self.IPTABLES_MARK_NEXT_POL = config.IPTABLES_MARK_NEXT_POL
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -351,7 +353,7 @@ class FelixIptablesGenerator(FelixPlugin):
         return set([to_chain_name, from_chain_name])
 
     def endpoint_updates(self, ip_version, endpoint_id, suffix, mac,
-                         profile_ids):
+                         profile_ids, prof_ids_by_tier):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given endpoint.
@@ -368,6 +370,8 @@ class FelixIptablesGenerator(FelixPlugin):
         :param mac: The endpoint's MAC address
         :param profile_ids: the set of profile_ids associated with this
         endpoint
+        :param OrderedDict prof_ids_by_tier: ordered dict mapping tier name
+               to list of profiles.
 
         :returns Tuple: updates, deps
         """
@@ -379,6 +383,7 @@ class FelixIptablesGenerator(FelixPlugin):
             ip_version,
             endpoint_id,
             profile_ids,
+            prof_ids_by_tier,
             to_chain_name,
             "inbound"
         )
@@ -386,6 +391,7 @@ class FelixIptablesGenerator(FelixPlugin):
             ip_version,
             endpoint_id,
             profile_ids,
+            prof_ids_by_tier,
             from_chain_name,
             "outbound",
             expected_mac=mac,
@@ -503,7 +509,8 @@ class FelixIptablesGenerator(FelixPlugin):
         return [' '.join(parts)]
 
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
-                                chain_name, direction, expected_mac=None):
+                                prof_ids_by_tier, chain_name, direction,
+                                expected_mac=None):
         """
         Generate the necessary set of iptables fragments for a to or from
         chain for a given endpoint.
@@ -539,15 +546,67 @@ class FelixIptablesGenerator(FelixPlugin):
                 "--match mac ! --mac-source %s" % expected_mac,
                 "Incorrect source MAC"))
 
-        # Jump to each profile in turn.  The profile will do one of the
-        # following:
+        # Tiered profiles come first.
+        deps = set()
+        # Each tier must either accept the packet outright or pass it to the
+        # next tier for further processing.
+        for tier, prof_ids in prof_ids_by_tier.iteritems():
+            # Zero the "next-tier packet" mark.  Then process each profile
+            # in turn.
+            chain.append('--append %(chain)s '
+                         '--jump MARK --set-mark 0/%(mark)s '
+                         '--match comment --comment "Start of tier %(tier)s"' %
+                         {
+                             "chain": chain_name,
+                             "mark": self.IPTABLES_MARK_NEXT_POL,
+                             "tier": tier,
+                         })
+            for profile_id in prof_ids:
+                profile_chain = self._profile_to_chain_name(direction,
+                                                            profile_id)
+                deps.add(profile_chain)
+                # Only process the profile if none of the previous profiles
+                # set the next-tier mark.
+                chain.append("--append %(chain)s "
+                             "--match mark --mark 0/%(mark)s "
+                             "--jump %(profile)s" %
+                             {
+                                 "chain": chain_name,
+                                 "mark": self.IPTABLES_MARK_NEXT_POL,
+                                 "profile": profile_chain,
+                             })
+                # If the profile accepted the packet, it sets the Accept
+                # MARK==1. Immediately RETURN the packet to signal that it's
+                # been accepted.
+                chain.append('--append %(chain)s '
+                             '--match mark --mark %(mark)s/%(mark)s '
+                             '--match comment '
+                             '--comment "Return if profile accepted" '
+                             '--jump RETURN' %
+                             {
+                                 "chain": chain_name,
+                                 "mark": self.IPTABLES_MARK_ACCEPT,
+                             })
+            # If the next-tier mark bit is still clear then no profile
+            # in the tier allowed the packet through, drop it.
+            chain.append('--append %(chain)s --match mark --mark 0/%(mark)s '
+                         '--match comment '
+                         '--comment "Drop if no profile in tier passed" '
+                         '--jump DROP' %
+                         {
+                             "chain": chain_name,
+                             "mark": self.IPTABLES_MARK_NEXT_POL,
+                         })
+
+        # Then, jump to each directly-referenced profile in turn.  The profile
+        # will do one of the following:
+        #
         # * DROP the packet; in which case we won't see it again.
         # * RETURN the packet with Accept MARK==1, indicating it accepted the
         #   packet.  In which case, we RETURN and skip further profiles.
         # * RETURN the packet with Accept MARK==0, indicating it did not match
         #   the packet.  In which case, we carry on and process the next
         #   profile.
-        deps = set()
         for profile_id in profile_ids:
             profile_chain = self._profile_to_chain_name(direction, profile_id)
             deps.add(profile_chain)
@@ -790,16 +849,38 @@ class FelixIptablesGenerator(FelixPlugin):
                 # Note variant spelling of icmp[v]6
                 append("--match icmp6", "--icmpv6-type", icmp_filter)
 
-        action = on_allow if rule.get("action", "allow") == "allow" \
-                 else on_deny
+        action = rule.get("action", "allow")
+        extra_rule = None
+        if action == "allow":
+            ipt_target = on_allow
+        elif action == "deny":
+            ipt_target = on_deny
+        elif action == "next-tier":
+            # next-tier requires two rules, one to mark the packet and another
+            # to return the packet to the calling chain.
+            ipt_target = "MARK --set-mark %(mark)s/%(mark)s" % {
+                "mark": self.IPTABLES_MARK_NEXT_POL
+            }
+            extra_rule = (
+                "--append %(chain)s --match mark --mark %(mark)s/%(mark)s "
+                "--jump RETURN" %
+                {
+                    "chain": chain_name,
+                    "mark": self.IPTABLES_MARK_NEXT_POL,
+                }
+            )
+        else:
+            # Validation should prevent unknown actions from getting this
+            # far.
+            raise ValueError("Unknown rule action %s" % action)
+
         rule_spec_str = " ".join(str(x) for x in rule_spec)
 
-        if action == "DROP":
-            return self.drop_rules(ip_version, chain_name, rule_spec_str, None)
+        if ipt_target == "DROP":
+            rules = self.drop_rules(ip_version, chain_name, rule_spec_str, None)
         else:
-            return [" ".join([
-                    "--append",
-                    chain_name,
-                    rule_spec_str,
-                    "--jump",
-                    action])]
+            rules = [" ".join(["--append", chain_name, rule_spec_str,
+                               "--jump", ipt_target])]
+            if extra_rule:
+                rules.append(extra_rule)
+        return rules
