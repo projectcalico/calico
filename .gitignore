@@ -1,4 +1,4 @@
-env/
+env*/
 *.pyc
 *.egg-info/
 tmp/
@@ -9,3 +9,7 @@ tmp/
 /.tox
 /docs/build
 .idea/
+.eggs/
+.hypothesis/
+coverage.xml
+
