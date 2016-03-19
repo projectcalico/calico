@@ -60,8 +60,10 @@ class TestRules(BaseTestCase):
         m_v4_nat_upd = Mock(spec=IptablesUpdater)
         m_v6_nat_upd = Mock(spec=IptablesUpdater)
 
-        frules.install_global_rules(config, m_v4_upd, m_v6_upd, m_v4_nat_upd,
-                                    m_v6_nat_upd, m_v6_raw_upd)
+        frules.install_global_rules(config, m_v4_upd, m_v4_nat_upd,
+                                    ip_version=4)
+        frules.install_global_rules(config, m_v6_upd, m_v6_nat_upd,
+                                    ip_version=6, raw_updater=m_v6_raw_upd)
 
         self.assertEqual(
             m_v4_nat_upd.ensure_rule_inserted.mock_calls,
@@ -72,7 +74,13 @@ class TestRules(BaseTestCase):
                                   "-j MASQUERADE",
                                   async=False),
                 call("PREROUTING --jump felix-PREROUTING", async=False),
-                call("POSTROUTING --jump felix-POSTROUTING", async=False),
+                call("POSTROUTING --jump felix-POSTROUTING", async=False)
+            ]
+        )
+
+        m_v4_upd.ensure_rule_inserted.assert_has_calls([
+                call("INPUT --jump felix-INPUT", async=False),
+                call("FORWARD --jump felix-FORWARD", async=False)
             ]
         )
 
@@ -89,76 +97,10 @@ class TestRules(BaseTestCase):
             ]
         }
         m_v4_nat_upd.rewrite_chains.assert_called_once_with(
-            expected_chains, {
-                'felix-PREROUTING': set(['felix-FIP-DNAT']),
-                'felix-POSTROUTING': set(['felix-FIP-SNAT'])
-            }, async=False
-        )
-
-        self.assertEqual(
-            m_v6_nat_upd.ensure_rule_inserted.mock_calls,
-            [
-                call("PREROUTING --jump felix-PREROUTING", async=False),
-                call("POSTROUTING --jump felix-POSTROUTING", async=False),
-            ]
-        )
-
-        expected_chains = {
-            'felix-FIP-DNAT': [],
-            'felix-FIP-SNAT': [],
-            'felix-PREROUTING': [
-                '--append felix-PREROUTING --jump felix-FIP-DNAT'
-            ],
-            'felix-POSTROUTING': [
-                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
-            ]
-        }
-        m_v6_nat_upd.rewrite_chains.assert_called_once_with(
-            expected_chains, {
-                'felix-PREROUTING': set(['felix-FIP-DNAT']),
-                'felix-POSTROUTING': set(['felix-FIP-SNAT'])
-            }, async=False
-        )
-
-        self.assertEqual(
-            m_v4_nat_upd.ensure_rule_inserted.mock_calls,
-            [call("POSTROUTING --out-interface tunl0 "
-                  "-m addrtype ! --src-type LOCAL --limit-iface-out "
-                  "-m addrtype --src-type LOCAL "
-                  "-j MASQUERADE",
-                  async=False),
-             call("PREROUTING --jump felix-PREROUTING", async=False),
-             call("POSTROUTING --jump felix-POSTROUTING", async=False)]
-        )
-
-        m_v6_raw_upd.ensure_rule_inserted.assert_called_once_with(
-            'PREROUTING --in-interface tap+ --match rpfilter --invert --jump '
-            'felix-PREROUTING',
-            async=False,
-        )
-        m_v6_raw_upd.rewrite_chains.assert_called_once_with(
-            {'felix-PREROUTING': [
-                '--append felix-PREROUTING --jump DROP -m comment '
-                '--comment "IPv6 rpfilter failed"'
-            ]},
-            {
-                'felix-PREROUTING': {}
-            },
+            expected_chains,
+            {'felix-PREROUTING': set(['felix-FIP-DNAT']),
+             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
             async=False
-        )
-
-        m_ipset.ensure_exists.assert_called_once_with()
-        self.assertEqual(
-            m_check_call.mock_calls,
-            [
-                call(["ip", "tunnel", "add", "tunl0", "mode", "ipip"]),
-                call(["ip", "link", "set", "tunl0", "mtu", "1480"]),
-                call(["ip", "link", "set", "tunl0", "up"]),
-            ]
-        )
-        self.assertEqual(
-            m_set_ips.mock_calls,
-            [call(IPV4, "tunl0", set([IPAddress("10.0.0.1")]))]
         )
 
         expected_chains = {
@@ -184,22 +126,66 @@ class TestRules(BaseTestCase):
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {
-                'felix-INPUT': set(['felix-FROM-ENDPOINT']),
-                'felix-FORWARD': set([
-                    'felix-FROM-ENDPOINT',
-                    'felix-TO-ENDPOINT'
-                ])
-            },
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
+                                   'felix-TO-ENDPOINT'])},
             async=False
         )
 
         self.assertEqual(
-            m_v4_upd.ensure_rule_inserted.mock_calls,
+            m_v6_nat_upd.ensure_rule_inserted.mock_calls,
             [
-                call("INPUT --jump felix-INPUT", async=False),
-                call("FORWARD --jump felix-FORWARD", async=False),
+                call("PREROUTING --jump felix-PREROUTING", async=False),
+                call("POSTROUTING --jump felix-POSTROUTING", async=False),
             ]
+        )
+
+        m_v6_upd.ensure_rule_inserted.assert_has_calls([
+                call("INPUT --jump felix-INPUT", async=False),
+                call("FORWARD --jump felix-FORWARD", async=False)
+            ]
+        )
+
+        expected_chains = {
+            'felix-FIP-DNAT': [],
+            'felix-FIP-SNAT': [],
+            'felix-PREROUTING': [
+                '--append felix-PREROUTING --jump felix-FIP-DNAT'
+            ],
+            'felix-POSTROUTING': [
+                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ]
+        }
+        m_v6_nat_upd.rewrite_chains.assert_called_once_with(
+            expected_chains, {
+                'felix-PREROUTING': set(['felix-FIP-DNAT']),
+                'felix-POSTROUTING': set(['felix-FIP-SNAT'])
+            }, async=False
+        )
+
+        m_v6_raw_upd.rewrite_chains.assert_called_once_with(
+            {'felix-PREROUTING': [
+                '--append felix-PREROUTING --jump DROP -m comment '
+                '--comment "IPv6 rpfilter failed"'
+            ]},
+            {
+                'felix-PREROUTING': {}
+            },
+            async=False
+        )
+
+        m_ipset.ensure_exists.assert_called_once_with()
+        self.assertEqual(
+            m_check_call.mock_calls,
+            [
+                call(["ip", "tunnel", "add", "tunl0", "mode", "ipip"]),
+                call(["ip", "link", "set", "tunl0", "mtu", "1480"]),
+                call(["ip", "link", "set", "tunl0", "up"]),
+            ]
+        )
+        self.assertEqual(
+            m_set_ips.mock_calls,
+            [call(IPV4, "tunl0", set([IPAddress("10.0.0.1")]))]
         )
 
     @patch("calico.felix.futils.check_call", autospec=True)
@@ -228,14 +214,23 @@ class TestRules(BaseTestCase):
         m_v6_nat_upd = Mock(spec=IptablesUpdater)
         m_v4_nat_upd = Mock(spec=IptablesUpdater)
 
-        frules.install_global_rules(config, m_v4_upd, m_v6_upd, m_v4_nat_upd,
-                                    m_v6_nat_upd, m_v6_raw_upd)
+        frules.install_global_rules(config, m_v4_upd, m_v4_nat_upd,
+                                    ip_version=4)
+        frules.install_global_rules(config, m_v6_upd, m_v6_nat_upd,
+                                    ip_version=6, raw_updater=m_v6_raw_upd)
 
         self.assertEqual(
             m_v4_nat_upd.ensure_rule_inserted.mock_calls,
             [call("PREROUTING --jump felix-PREROUTING", async=False),
              call("POSTROUTING --jump felix-POSTROUTING", async=False)]
         )
+
+        m_v4_upd.ensure_rule_inserted.assert_has_calls([
+                call("INPUT --jump felix-INPUT", async=False),
+                call("FORWARD --jump felix-FORWARD", async=False)
+            ]
+        )
+
         self.assertEqual(
             m_v4_nat_upd.ensure_rule_removed.mock_calls,
             [call("POSTROUTING --out-interface tunl0 "
@@ -266,6 +261,25 @@ class TestRules(BaseTestCase):
         self.assertFalse(m_set_ips.called)
 
         expected_chains = {
+            'felix-FIP-DNAT': [],
+            'felix-FIP-SNAT': [],
+            'felix-PREROUTING': [
+                '--append felix-PREROUTING --jump felix-FIP-DNAT',
+                '--append felix-PREROUTING --protocol tcp --dport 80 --destination '
+                    '169.254.169.254/32 --jump DNAT --to-destination 123.0.0.1:1234'
+            ],
+            'felix-POSTROUTING': [
+                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ]
+        }
+        m_v4_nat_upd.rewrite_chains.assert_called_once_with(
+            expected_chains,
+            {'felix-PREROUTING': set(['felix-FIP-DNAT']),
+             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+            async=False
+        )
+
+        expected_chains = {
             'felix-INPUT': [
                 '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
@@ -288,22 +302,156 @@ class TestRules(BaseTestCase):
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {
-                'felix-INPUT': set(['felix-FROM-ENDPOINT']),
-                'felix-FORWARD': set([
-                    'felix-FROM-ENDPOINT',
-                    'felix-TO-ENDPOINT'
-                ])
-            },
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
+                                   'felix-TO-ENDPOINT'])},
             async=False
         )
 
+    @patch("calico.felix.futils.check_call", autospec=True)
+    @patch("calico.felix.frules.devices", autospec=True)
+    @patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
+    def test_install_global_no_ipv6(self, m_ipset, m_devices, m_check_call):
+        m_devices.interface_exists.return_value = False
+        m_devices.interface_up.return_value = False
+        m_set_ips = m_devices.set_interface_ips
+
+        env_dict = {
+            "FELIX_ETCDADDR": "localhost:4001",
+            "FELIX_HOSTNAME": "myhost",
+            "FELIX_INTERFACEPREFIX": "tap",
+            "FELIX_METADATAADDR": "123.0.0.1",
+            "FELIX_METADATAPORT": "1234",
+            "FELIX_IPINIPENABLED": "false",
+            "FELIX_IPINIPMTU": "1480",
+            "FELIX_DEFAULTENDPOINTTOHOSTACTION": "RETURN"
+        }
+        config = load_config("felix_missing.cfg", env_dict=env_dict)
+
+        m_v4_upd = Mock(spec=IptablesUpdater)
+        m_v4_nat_upd = Mock(spec=IptablesUpdater)
+
+        frules.install_global_rules(config, m_v4_upd, m_v4_nat_upd,
+                                    ip_version=4)
+
         self.assertEqual(
-            m_v4_upd.ensure_rule_inserted.mock_calls,
-            [
+            m_v4_nat_upd.ensure_rule_inserted.mock_calls,
+            [call("PREROUTING --jump felix-PREROUTING", async=False),
+             call("POSTROUTING --jump felix-POSTROUTING", async=False)]
+        )
+
+        m_v4_upd.ensure_rule_inserted.assert_has_calls([
                 call("INPUT --jump felix-INPUT", async=False),
-                call("FORWARD --jump felix-FORWARD", async=False),
+                call("FORWARD --jump felix-FORWARD", async=False)
             ]
+        )
+
+        self.assertEqual(
+            m_v4_nat_upd.ensure_rule_removed.mock_calls,
+            [call("POSTROUTING --out-interface tunl0 "
+                  "-m addrtype ! --src-type LOCAL --limit-iface-out "
+                  "-m addrtype --src-type LOCAL "
+                  "-j MASQUERADE",
+                  async=False)]
+        )
+
+        self.assertFalse(m_ipset.ensure_exists.called)
+        self.assertFalse(m_check_call.called)
+        self.assertFalse(m_set_ips.called)
+
+        """
+        expected_chains = {
+            'felix-FIP-DNAT': [],
+            'felix-FIP-SNAT': [],
+            'felix-PREROUTING': [
+                '--append felix-PREROUTING --jump felix-FIP-DNAT',
+                '--append felix-PREROUTING --protocol tcp --dport 80 --destination '
+                    '169.254.169.254/32 --jump DNAT --to-destination 123.0.0.1:1234'
+            ],
+            'felix-POSTROUTING': [
+                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ]
+        }
+        expected_chains_2 = {
+            'felix-INPUT': [
+                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+                '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
+                '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
+                '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+                '--append felix-INPUT --jump felix-FROM-ENDPOINT'
+            ],
+            'felix-FORWARD': [
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
+                '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
+                '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+            ]
+        }
+        m_v4_upd.rewrite_chains.has_calls(
+            [call(expected_chains,
+                  {'felix-PREROUTING': set(['felix-FIP-DNAT']),
+                   'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+                  async=False),
+             call(expected_chains_2,
+                  {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+                   'felix-FORWARD': set(['felix-FROM-ENDPOINT',
+                                         'felix-TO-ENDPOINT'])},
+                  async=False)]
+        )
+        """
+
+        expected_chains = {
+            'felix-FIP-DNAT': [],
+            'felix-FIP-SNAT': [],
+            'felix-PREROUTING': [
+                '--append felix-PREROUTING --jump felix-FIP-DNAT',
+                '--append felix-PREROUTING --protocol tcp --dport 80 --destination '
+                    '169.254.169.254/32 --jump DNAT --to-destination 123.0.0.1:1234'
+            ],
+            'felix-POSTROUTING': [
+                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ]
+        }
+        m_v4_nat_upd.rewrite_chains.assert_called_once_with(
+            expected_chains,
+            {'felix-PREROUTING': set(['felix-FIP-DNAT']),
+             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+            async=False
+        )
+
+        expected_chains = {
+            'felix-INPUT': [
+                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
+                '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
+                '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
+                '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
+                '--append felix-INPUT --jump felix-FROM-ENDPOINT'
+            ],
+            'felix-FORWARD': [
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
+                '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
+                '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+            ]
+        }
+        m_v4_upd.rewrite_chains.assert_called_once_with(
+            expected_chains,
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
+                                   'felix-TO-ENDPOINT'])},
+            async=False
         )
 
     def test_install_global_rules_retries_ipip(self):
@@ -314,7 +462,7 @@ class TestRules(BaseTestCase):
             m_ipip.side_effect = FailedSystemCall("", [], 1, "", "")
             self.assertRaises(FailedSystemCall,
                               frules.install_global_rules,
-                              m_config, None, None, None, None, None)
+                              m_config, None, None, 4)
             self.assertEqual(m_ipip.mock_calls,
                              [
                                  call(m_config),

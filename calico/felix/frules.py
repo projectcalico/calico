@@ -187,8 +187,8 @@ CHAIN_FIP_DNAT = FELIX_PREFIX + 'FIP-DNAT'
 CHAIN_FIP_SNAT = FELIX_PREFIX + 'FIP-SNAT'
 
 
-def install_global_rules(config, v4_filter_updater, v6_filter_updater,
-                         v4_nat_updater, v6_nat_updater, v6_raw_updater):
+def install_global_rules(config, filter_updater, nat_updater, ip_version,
+                         raw_updater=None):
     """
     Set up global iptables rules. These are rules that do not change with
     endpoint, and are expected never to change (such as the rules that send all
@@ -204,115 +204,108 @@ def install_global_rules(config, v4_filter_updater, v6_filter_updater,
     # then this string is "tap+".
     iface_match = config.IFACE_PREFIX + "+"
 
-    # If enabled, create the IP-in-IP device
-    if config.IP_IN_IP_ENABLED:
-        _log.info("IP-in-IP enabled, ensuring device exists.")
-        try:
-            _configure_ipip_device(config)
-        except FailedSystemCall:
-            # We've seen this fail occasionally if the kernel is concurrently
-            # starting the tunl0 device.  Retry.
-            _log.exception("Failed to configure IPIP device, retrying...")
-            time.sleep(1)
-            _configure_ipip_device(config)
+    # If enabled, create the IP-in-IP device, but only for IPv4
+    if ip_version == 4:
+        if config.IP_IN_IP_ENABLED:
+            _log.info("IP-in-IP enabled, ensuring device exists.")
+            try:
+                _configure_ipip_device(config)
+            except FailedSystemCall:
+                # We've seen this fail occasionally if the kernel is concurrently
+                # starting the tunl0 device.  Retry.
+                _log.exception("Failed to configure IPIP device, retrying...")
+                time.sleep(1)
+                _configure_ipip_device(config)
 
-    if config.IP_IN_IP_ENABLED and config.IP_IN_IP_ADDR:
-        # Add a rule to catch packets originated by this host that are going
-        # down the tunnel with the wrong source address.  NAT them to use the
-        # address of the tunnel device instead.  See comment on the constant
-        # for more details.
-        _log.info("IPIP enabled and tunnel address set: inserting MASQUERADE "
-                  "rule to ensure tunnelled packets have correct source.")
-        v4_nat_updater.ensure_rule_inserted(POSTROUTING_LOCAL_NAT_FRAGMENT,
+        if config.IP_IN_IP_ENABLED and config.IP_IN_IP_ADDR:
+            # Add a rule to catch packets originated by this host that are going
+            # down the tunnel with the wrong source address.  NAT them to use the
+            # address of the tunnel device instead.  See comment on the constant
+            # for more details.
+            _log.info("IPIP enabled and tunnel address set: inserting MASQUERADE "
+                      "rule to ensure tunnelled packets have correct source.")
+            nat_updater.ensure_rule_inserted(POSTROUTING_LOCAL_NAT_FRAGMENT,
+                                                async=False)
+        else:
+            # Clean up the rule that we insert above if IPIP is enabled.
+            _log.info("IPIP disabled or no tunnel address set: removing "
+                      "MASQUERADE rule.")
+            nat_updater.ensure_rule_removed(POSTROUTING_LOCAL_NAT_FRAGMENT,
                                             async=False)
-    else:
-        # Clean up the rule that we insert above if IPIP is enabled.
-        _log.info("IPIP disabled or no tunnel address set: removing "
-                  "MASQUERADE rule.")
-        v4_nat_updater.ensure_rule_removed(POSTROUTING_LOCAL_NAT_FRAGMENT,
-                                           async=False)
-
 
     # Ensure that Calico-controlled IPv6 hosts cannot spoof their IP addresses.
     # (For IPv4, this is controlled by a per-interface sysctl.)
     iptables_generator = config.plugins["iptables_generator"]
-    v6_raw_prerouting_chain, v6_raw_prerouting_deps = (
-        iptables_generator.raw_rpfilter_failed_chain(ip_version=6)
-    )
 
-    v6_raw_updater.rewrite_chains({CHAIN_PREROUTING: v6_raw_prerouting_chain},
-                                  {CHAIN_PREROUTING: v6_raw_prerouting_deps},
-                                  async=False)
+    if raw_updater:
+        raw_prerouting_chain, raw_prerouting_deps = (
+            iptables_generator.raw_rpfilter_failed_chain(ip_version=ip_version)
+        )
+        raw_updater.rewrite_chains({CHAIN_PREROUTING: raw_prerouting_chain},
+                                   {CHAIN_PREROUTING: raw_prerouting_deps},
+                                   async=False)
 
-    v6_raw_updater.ensure_rule_inserted(
-        "PREROUTING --in-interface %s --match rpfilter --invert "
-        "--jump %s" %
-        (iface_match, CHAIN_PREROUTING),
-        async=False)
+        raw_updater.ensure_rule_inserted(
+            "PREROUTING --in-interface %s --match rpfilter --invert "
+            "--jump %s" %
+            (iface_match, CHAIN_PREROUTING),
+            async=False)
 
     # Both IPV4 and IPV6 nat tables need felix-PREROUTING and
     # felix-POSTROUTING, along with the dependent DNAT and SNAT tables
     # required for NAT/floating IP support.
-    for ip_version, iptables_updater in [
-            (4, v4_nat_updater),
-            (6, v6_nat_updater)]:
 
-        prerouting_chain, prerouting_deps = (
-            iptables_generator.nat_prerouting_chain(ip_version=ip_version)
-        )
-        postrouting_chain, postrouting_deps = (
-            iptables_generator.nat_postrouting_chain(ip_version=ip_version)
-        )
-        iptables_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain,
-                                         CHAIN_POSTROUTING: postrouting_chain,
-                                         CHAIN_FIP_DNAT: [],
-                                         CHAIN_FIP_SNAT: []},
-                                        {CHAIN_PREROUTING: prerouting_deps,
-                                         CHAIN_POSTROUTING: postrouting_deps},
-                                        async=False)
+    prerouting_chain, prerouting_deps = (
+        iptables_generator.nat_prerouting_chain(ip_version=ip_version)
+    )
+    postrouting_chain, postrouting_deps = (
+        iptables_generator.nat_postrouting_chain(ip_version=ip_version)
+    )
+    nat_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain,
+                                CHAIN_POSTROUTING: postrouting_chain,
+                                CHAIN_FIP_DNAT: [],
+                                CHAIN_FIP_SNAT: []},
+                               {CHAIN_PREROUTING: prerouting_deps,
+                                CHAIN_POSTROUTING: postrouting_deps},
+                               async=False)
 
-        iptables_updater.ensure_rule_inserted(
-            "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
-        iptables_updater.ensure_rule_inserted(
-            "POSTROUTING --jump %s" % CHAIN_POSTROUTING, async=False)
+    nat_updater.ensure_rule_inserted(
+        "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
+    nat_updater.ensure_rule_inserted(
+        "POSTROUTING --jump %s" % CHAIN_POSTROUTING, async=False)
 
     # Now the filter table. This needs to have felix-FORWARD and felix-INPUT
     # chains, which we must create before adding any rules that send to them.
-    for ip_version, iptables_updater, hosts_set in [
-            (4, v4_filter_updater, HOSTS_IPSET_V4),
-                # FIXME support IP-in-IP for IPv6.
-            (6, v6_filter_updater, None)]:
+    if ip_version == 4 and config.IP_IN_IP_ENABLED:
+        hosts_set_name = HOSTS_IPSET_V4.set_name
+        HOSTS_IPSET_V4.ensure_exists()
+    else:
+        hosts_set_name = None
 
-        if hosts_set and config.IP_IN_IP_ENABLED:
-            hosts_set_name = hosts_set.set_name
-            hosts_set.ensure_exists()
-        else:
-            hosts_set_name = None
+    input_chain, input_deps = (
+        iptables_generator.filter_input_chain(ip_version, hosts_set_name)
+    )
+    forward_chain, forward_deps = (
+        iptables_generator.filter_forward_chain(ip_version)
+    )
 
-        input_chain, input_deps = (
-            iptables_generator.filter_input_chain(ip_version, hosts_set_name)
-        )
-        forward_chain, forward_deps = (
-            iptables_generator.filter_forward_chain(ip_version)
-        )
+    filter_updater.rewrite_chains(
+        {
+            CHAIN_FORWARD: forward_chain,
+            CHAIN_INPUT: input_chain,
+        },
+        {
+            CHAIN_FORWARD: forward_deps,
+            CHAIN_INPUT: input_deps,
+        },
+        async=False)
 
-        iptables_updater.rewrite_chains(
-            {
-                CHAIN_FORWARD: forward_chain,
-                CHAIN_INPUT: input_chain,
-            },
-            {
-                CHAIN_FORWARD: forward_deps,
-                CHAIN_INPUT: input_deps,
-            },
-            async=False)
-
-        iptables_updater.ensure_rule_inserted(
-            "INPUT --jump %s" % CHAIN_INPUT,
-            async=False)
-        iptables_updater.ensure_rule_inserted(
-            "FORWARD --jump %s" % CHAIN_FORWARD,
-            async=False)
+    filter_updater.ensure_rule_inserted(
+        "INPUT --jump %s" % CHAIN_INPUT,
+        async=False)
+    filter_updater.ensure_rule_inserted(
+        "FORWARD --jump %s" % CHAIN_FORWARD,
+        async=False)
 
 
 def _configure_ipip_device(config):
