@@ -298,6 +298,7 @@ class TestNode(unittest.TestCase):
             "IP6=%s" % ip6,
             "CALICO_NETWORKING=%s" % node.CALICO_NETWORKING_DEFAULT,
             "AS=",
+            "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % ETCD_SCHEME_DEFAULT,
         ]
@@ -384,7 +385,8 @@ class TestNode(unittest.TestCase):
         etcd_ca_path = "/path/to/ca.crt"
         etcd_cert_path = "/path/to/cert.crt"
         etcd_key_path = "/path/to/key.pem"
-        env = {"CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
+        env = {"NO_DEFAULT_POOLS": "",
+               "CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
                ETCD_SCHEME_ENV: "https",
                ETCD_CA_CERT_FILE_ENV: etcd_ca_path,
@@ -417,6 +419,7 @@ class TestNode(unittest.TestCase):
             "IP6=%s" % ip6,
             "CALICO_NETWORKING=%s" % CALICO_NETWORKING_DEFAULT,
             "AS=",
+            "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
             "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,

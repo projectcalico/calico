@@ -147,6 +147,10 @@ node image that you have stored locally on your machine.  You may also want
 to pull an image using the `docker pull` command to get the image with specific
 `docker pull` parameters.
 
+By default, when the `calico-node` container starts it will create default
+pools if no pools exist. This behavior can be suppressed by setting the
+`NO_DEFAULT_POOLS` environment variable to `TRUE`.
+
 Examples:
 
 ```
