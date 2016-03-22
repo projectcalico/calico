@@ -307,7 +307,7 @@ class TestConfig(unittest.TestCase):
             config = load_config(filename)
 
             # Test that read ignoring sections.
-            self.assertEqual(config.ETCD_ADDR, "localhost:4001")
+            self.assertEqual(config.ETCD_ADDRS, ["localhost:4001"])
             self.assertEqual(config.HOSTNAME, socket.gethostname())
             self.assertEqual(config.LOGFILE, "/log/nowhere.log")
             self.assertEqual(config.IFACE_PREFIX, "whatever")
@@ -344,7 +344,7 @@ class TestConfig(unittest.TestCase):
                              global_dict=global_dict,
                              host_dict=host_dict)
 
-        self.assertEqual(config.ETCD_ADDR, "9.9.9.9:1234")
+        self.assertEqual(config.ETCD_ADDRS, ["9.9.9.9:1234"])
         self.assertEqual(config.HOSTNAME, socket.gethostname())
         self.assertEqual(config.LOGFILE, "/log/nowhere.log")
         self.assertEqual(config.IFACE_PREFIX, "whatever")

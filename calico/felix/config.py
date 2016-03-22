@@ -164,7 +164,7 @@ class Config(object):
         - global etcd (/calico/vX/host/<host>/config)
 
         After object creation, the environment variables and config file have
-        been read, and the variables ETCD_ADDR and HOSTNAME have been set and
+        been read, and the variables ETCD_ADDRS and HOSTNAME have been set and
         validated. The caller is then responsible for reading the remaining
         config from etcd and calling report_etcd_config with the returned
         values before the rest of the config structure can be used.
@@ -315,7 +315,6 @@ class Config(object):
 
         self.HOSTNAME = self.parameters["FelixHostname"].value
         self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
-        self.ETCD_ADDR = self.parameters["EtcdAddr"].value
         self.ETCD_ENDPOINTS = self.parameters["EtcdEndpoints"].value
         self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
         self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
@@ -362,7 +361,7 @@ class Config(object):
             self.ETCD_ADDRS = [e.split("://")[1] for e in endpoints]
         else:
             self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
-            self.ETCD_ADDRS = [self.ETCD_ADDR]
+            self.ETCD_ADDRS = [self.parameters["EtcdAddr"].value]
 
         # Generate the IPTables mark masks we'll actually use internally.
         # From least to most significant bits of the mask we use them for:
@@ -437,7 +436,7 @@ class Config(object):
         Report configuration parameters read from etcd to the config
         component. This must be called only once, after configuration is
         initially read and before the config structure is used (except for
-        ETCD_ADDR and HOSTNAME).
+        ETCD_ADDRS and HOSTNAME).
 
         :param host_dict: Dictionary of etcd parameters
         :param global_dict: Dictionary of global parameters
@@ -500,7 +499,7 @@ class Config(object):
         else:
             addr_opt = "EtcdAddr"
             scheme_opt = "EtcdScheme"
-            addrs = [self.ETCD_ADDR]
+            addrs = [self.parameters["EtcdAddr"].value]
             scheme = self.ETCD_SCHEME
 
         for addr in addrs:
