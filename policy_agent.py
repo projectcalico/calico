@@ -102,7 +102,8 @@ class PolicyAgent(object):
         Loops to read responses from the Queue as they come in.
         """
         # Ensure the tier exists.
-        self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, 50)
+        metadata = {"order": 50}
+        self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
 
         # Read initial state from Kubernetes API.
         self.read_initial_state()
