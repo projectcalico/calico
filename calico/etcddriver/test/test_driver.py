@@ -683,7 +683,7 @@ class TestEtcdDriverFV(TestCase):
         self.msg_reader.send_msg(
             MSG_TYPE_INIT,
             {
-                MSG_KEY_ETCD_URL: "http://localhost:4001",
+                MSG_KEY_ETCD_URLS: ["http://localhost:4001"],
                 MSG_KEY_HOSTNAME: "thehostname",
                 MSG_KEY_KEY_FILE: None,
                 MSG_KEY_CERT_FILE: None,
@@ -695,7 +695,7 @@ class TestEtcdDriverFV(TestCase):
         self.msg_reader.send_msg(
             MSG_TYPE_INIT,
             {
-                MSG_KEY_ETCD_URL: "https://localhost:4001",
+                MSG_KEY_ETCD_URLS: ["https://localhost:4001"],
                 MSG_KEY_HOSTNAME: "thehostname",
                 MSG_KEY_KEY_FILE: "/path/to/key",
                 MSG_KEY_CERT_FILE: "/path/to/cert",
@@ -804,7 +804,7 @@ class TestDriver(TestCase):
     def test_issue_etcd_request_basic_get(self):
         # Initialise the etcd URL.
         self.driver._handle_init({
-            MSG_KEY_ETCD_URL: "http://localhost:4001/",
+            MSG_KEY_ETCD_URLS: ["http://localhost:4001/"],
             MSG_KEY_HOSTNAME: "ourhost",
             MSG_KEY_KEY_FILE: None,
             MSG_KEY_CERT_FILE: None,
@@ -824,7 +824,7 @@ class TestDriver(TestCase):
     def test_issue_etcd_request_recursive_watch(self):
         # Initialise the etcd URL.
         self.driver._handle_init({
-            MSG_KEY_ETCD_URL: "http://localhost:4001/",
+            MSG_KEY_ETCD_URLS: ["http://localhost:4001/"],
             MSG_KEY_HOSTNAME: "ourhost",
             MSG_KEY_KEY_FILE: None,
             MSG_KEY_CERT_FILE: None,

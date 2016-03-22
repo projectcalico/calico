@@ -1,4 +1,5 @@
 # Copyright (c) Metaswitch Networks 2015-2016. All rights reserved.
+import random
 from collections import namedtuple
 
 import functools
@@ -101,13 +102,39 @@ class EtcdClientOwner(object):
     """
 
     def __init__(self,
-                 etcd_authority,
+                 etcd_addrs,
                  etcd_scheme="http",
                  etcd_key=None,
                  etcd_cert=None,
                  etcd_ca=None):
+        """Constructor.
+        :param str|list[str] etcd_addrs: Either an authority string, such as
+               'localhost:1234' to connect to a single server (or proxy) or a
+               list of authority strings to connect to a cluster.
+        :param str etcd_scheme: "http" or "https"
+        :param etcd_key: Required if using HTTPS, path to the key file.
+        :param etcd_cert: Required if using HTTPS, path to the client cert
+               file.
+        :param etcd_ca: Required if using HTTPS, path to the CA cert.
+        """
         super(EtcdClientOwner, self).__init__()
-        self.etcd_authority = etcd_authority
+        if isinstance(etcd_addrs, basestring):
+            # For back-compatibility, allow a single authority string to be
+            # supplied instead of a list.
+            _log.debug("Single etcd address: %s, wrapping in list.",
+                       etcd_addrs)
+            etcd_addrs = [etcd_addrs]
+        self.etcd_hosts = []
+        for addr in etcd_addrs:
+            host = None
+            port = None
+            if ":" in addr:
+                host, port = addr.split(":")
+                port = int(port)
+            else:
+                host = addr
+                port = 4001
+            self.etcd_hosts.append((host, port))
         self.etcd_scheme = etcd_scheme
         self.etcd_key = etcd_key
         self.etcd_cert = etcd_cert
@@ -119,12 +146,6 @@ class EtcdClientOwner(object):
         """
         Reconnects the etcd client.
         """
-        if ":" in self.etcd_authority:
-            host, port = self.etcd_authority.split(":")
-            port = int(port)
-        else:
-            host = self.etcd_authority
-            port = 4001
         if self.client and copy_cluster_id:
             old_cluster_id = self.client.expected_cluster_id
             _log.info("(Re)connecting to etcd. Old etcd cluster ID was %s.",
@@ -137,14 +158,32 @@ class EtcdClientOwner(object):
         if self.etcd_cert and self.etcd_key:
             key_pair = (self.etcd_cert, self.etcd_key)
 
-        self.client = etcd.Client(
-            host=host,
-            port=port,
-            protocol=self.etcd_scheme,
-            cert=key_pair,
-            ca_cert=self.etcd_ca,
-            expected_cluster_id=old_cluster_id
-        )
+        # Shuffle the list of hosts so that each client will fail over to
+        # a different etcd host on failure, spreading the load.
+        random.shuffle(self.etcd_hosts)
+
+        # python-etcd requires a single etcd endpoint to be specified using the
+        # host=, port= parameters, but requires a different syntax for
+        # multiple (>1): host=((host, port), ...).  Allow_reconnect only makes
+        # sense when multiple endpoints are available.
+        if len(self.etcd_hosts) == 1:
+            self.client = etcd.Client(
+                host=self.etcd_hosts[0][0],
+                port=self.etcd_hosts[0][1],
+                protocol=self.etcd_scheme,
+                cert=key_pair,
+                ca_cert=self.etcd_ca,
+                expected_cluster_id=old_cluster_id
+            )
+        else:
+            self.client = etcd.Client(
+                host=tuple(self.etcd_hosts),
+                protocol=self.etcd_scheme,
+                cert=key_pair,
+                ca_cert=self.etcd_ca,
+                expected_cluster_id=old_cluster_id,
+                allow_reconnect=True
+            )
 
 
 class EtcdWatcher(EtcdClientOwner):
@@ -154,13 +193,13 @@ class EtcdWatcher(EtcdClientOwner):
     """
 
     def __init__(self,
-                 etcd_authority,
+                 etcd_addrs,
                  key_to_poll,
                  etcd_scheme="http",
                  etcd_key=None,
                  etcd_cert=None,
                  etcd_ca=None):
-        super(EtcdWatcher, self).__init__(etcd_authority,
+        super(EtcdWatcher, self).__init__(etcd_addrs,
                                           etcd_scheme=etcd_scheme,
                                           etcd_key=etcd_key,
                                           etcd_cert=etcd_cert,

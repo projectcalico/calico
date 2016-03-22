@@ -164,7 +164,7 @@ class Config(object):
         - global etcd (/calico/vX/host/<host>/config)
 
         After object creation, the environment variables and config file have
-        been read, and the variables ETCD_ADDR and HOSTNAME have been set and
+        been read, and the variables ETCD_ADDRS and HOSTNAME have been set and
         validated. The caller is then responsible for reading the remaining
         config from etcd and calling report_etcd_config with the returned
         values before the rest of the config structure can be used.
@@ -186,6 +186,12 @@ class Config(object):
                            "none", sources=[ENV, FILE])
         self.add_parameter("EtcdCaFile", "Path to etcd CA certificate file",
                            "none", sources=[ENV, FILE])
+        self.add_parameter("EtcdEndpoints", "Comma separated list of etcd "
+                           "endpoints, of the form scheme://address:port.  "
+                           "For example "
+                           "\"https://1.2.3.4:2379,https://1.2.3.5:2379\".  "
+                           "This option overrides EtcdScheme and EtcdAddr.",
+                           "", sources=[ENV, FILE])
 
         self.add_parameter("StartupCleanupDelay",
                            "Delay before cleanup starts",
@@ -306,9 +312,10 @@ class Config(object):
         :param final: Have we completed (rather than just read env and config
                       file)
         """
-        self.ETCD_ADDR = self.parameters["EtcdAddr"].value
+
         self.HOSTNAME = self.parameters["FelixHostname"].value
         self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
+        self.ETCD_ENDPOINTS = self.parameters["EtcdEndpoints"].value
         self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
         self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
         self.ETCD_CA_FILE = self.parameters["EtcdCaFile"].value
@@ -345,9 +352,19 @@ class Config(object):
 
         self._validate_cfg(final=final)
 
-        # Now the config has been validated, generate the IPTables mark masks
-        # we'll actually use internally.  From least to most significant bits
-        # of the mask we use them for:
+        # Now calculate config options that rely on parameter validation.
+
+        # Determine the ETCD addresses to use.
+        endpoints = [x.strip() for x in self.ETCD_ENDPOINTS.split(",")]
+        if len(endpoints[0]) > 0:
+            self.ETCD_SCHEME = endpoints[0].split("://")[0]
+            self.ETCD_ADDRS = [e.split("://")[1] for e in endpoints]
+        else:
+            self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
+            self.ETCD_ADDRS = [self.parameters["EtcdAddr"].value]
+
+        # Generate the IPTables mark masks we'll actually use internally.
+        # From least to most significant bits of the mask we use them for:
         # - signalling that a profile accepted a packet
         # - signalling that a packet should move to the next policy tier.
         mark_mask = self.IPTABLES_MARK_MASK
@@ -419,7 +436,7 @@ class Config(object):
         Report configuration parameters read from etcd to the config
         component. This must be called only once, after configuration is
         initially read and before the config structure is used (except for
-        ETCD_ADDR and HOSTNAME).
+        ETCD_ADDRS and HOSTNAME).
 
         :param host_dict: Dictionary of etcd parameters
         :param global_dict: Dictionary of global parameters
@@ -444,18 +461,6 @@ class Config(object):
         :param final: Is this after final etcd config has been read?
         :raises ConfigException
         """
-        fields = self.ETCD_ADDR.split(":")
-        if len(fields) != 2:
-            raise ConfigException("Invalid format for field - must be "
-                                  "hostname:port", self.parameters["EtcdAddr"])
-        self._validate_addr("EtcdAddr", fields[0])
-
-        try:
-            int(fields[1])
-        except ValueError:
-            raise ConfigException("Invalid port in field",
-                                  self.parameters["EtcdAddr"])
-
         # Set default or python None value for each etcd "none" config value
         if self.ETCD_SCHEME.lower() == "none":
             self.ETCD_SCHEME = "http"
@@ -466,7 +471,51 @@ class Config(object):
         if self.ETCD_CA_FILE == "none":
             self.ETCD_CA_FILE = None
 
-        if self.ETCD_SCHEME == "https":
+        # Determine which etcd scheme and addresses will be used.
+        addrs = []
+        addr_opt = None
+        scheme = None
+        scheme_opt = None
+        if self.ETCD_ENDPOINTS != "":
+            addr_opt = "EtcdEndpoints"
+            scheme_opt = "EtcdEndpoints"
+            endpoints = [x.strip() for x in self.ETCD_ENDPOINTS.split(",")]
+            try:
+                for e in endpoints:
+                    s, a = e.split("://")
+                    addrs.append(a)
+                    if scheme == None:
+                        scheme = s
+                    else:
+                        if scheme != s:
+                            raise ConfigException("Inconsistent protocols in "
+                                                  "EtcdEndpoints.",
+                                                  self.parameters[scheme_opt])
+            except ValueError:
+                raise ConfigException("Invalid format of EtcdEndpoints, must "
+                                      "be `ENDPOINT[,ENDPOINT][,...]` where "
+                                      "ENDPOINT:=`http[s]://ADDRESS:PORT`.",
+                                      self.parameters[scheme_opt])
+        else:
+            addr_opt = "EtcdAddr"
+            scheme_opt = "EtcdScheme"
+            addrs = [self.parameters["EtcdAddr"].value]
+            scheme = self.ETCD_SCHEME
+
+        for addr in addrs:
+            fields = addr.split(":")
+            if len(fields) != 2:
+                raise ConfigException("Invalid format for field - must be "
+                                  "hostname:port", self.parameters[addr_opt])
+            self._validate_addr(addr_opt, fields[0])
+
+            try:
+                int(fields[1])
+            except ValueError:
+                raise ConfigException("Invalid port in field",
+                                      self.parameters[addr_opt])
+
+        if scheme == "https":
             # key and certificate must be both specified or both not specified
             if bool(self.ETCD_KEY_FILE) != bool(self.ETCD_CERT_FILE):
                 if not self.ETCD_KEY_FILE:
@@ -501,10 +550,10 @@ class Config(object):
                                       "unreadable. Value must be readable "
                                       "file path.",
                                       self.parameters["EtcdCaFile"])
-        elif self.ETCD_SCHEME != "http":
+        elif scheme != "http":
             raise ConfigException("Invalid protocol scheme. Value must be one "
                                   "of: \"\", \"http\", \"https\".",
-                                  self.parameters["EtcdScheme"])
+                                  self.parameters[scheme_opt])
 
         try:
             self.LOGLEVFILE = LOGLEVELS[self.LOGLEVFILE.lower()]

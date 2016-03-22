@@ -41,7 +41,7 @@ from calico.datamodel_v1 import (
     POLICY_DIR, TieredPolicyId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
-    MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
+    MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
     MSG_KEY_SEV_SYSLOG, MSG_KEY_SEV_SCREEN, STATUS_IN_SYNC,
     MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG,
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MessageWriter,
@@ -108,7 +108,7 @@ class EtcdAPI(EtcdClientOwner, Actor):
     """
 
     def __init__(self, config, hosts_ipset):
-        super(EtcdAPI, self).__init__(config.ETCD_ADDR,
+        super(EtcdAPI, self).__init__(config.ETCD_ADDRS,
                                       etcd_scheme=config.ETCD_SCHEME,
                                       etcd_key=config.ETCD_KEY_FILE,
                                       etcd_cert=config.ETCD_CERT_FILE,
@@ -583,8 +583,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         writer.send_message(
             MSG_TYPE_INIT,
             {
-                MSG_KEY_ETCD_URL: self._config.ETCD_SCHEME + "://" +
-                                  self._config.ETCD_ADDR,
+                MSG_KEY_ETCD_URLS: [self._config.ETCD_SCHEME + "://" +
+                                    addr for addr in self._config.ETCD_ADDRS],
                 MSG_KEY_HOSTNAME: self._config.HOSTNAME,
                 MSG_KEY_KEY_FILE: self._config.ETCD_KEY_FILE,
                 MSG_KEY_CERT_FILE: self._config.ETCD_CERT_FILE,
@@ -759,7 +759,7 @@ class EtcdStatusReporter(EtcdClientOwner, Actor):
 
     def __init__(self, config):
         super(EtcdStatusReporter, self).__init__(
-                                               config.ETCD_ADDR,
+                                               config.ETCD_ADDRS,
                                                etcd_scheme=config.ETCD_SCHEME,
                                                etcd_key=config.ETCD_KEY_FILE,
                                                etcd_cert=config.ETCD_CERT_FILE,
