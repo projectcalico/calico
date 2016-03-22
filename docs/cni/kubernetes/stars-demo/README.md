@@ -8,7 +8,7 @@ This guide includes the [files necessary for this example](.).
 # Running the stars example 
 1) Log on to your Kubernetes master.
 ```
-vagrant ssh calico-01
+vagrant ssh k8s-master
 ```
 
 2) Download and configure the [policy tool](https://github.com/projectcalico/k8s-policy/blob/master/policy_tool/README.md) for NetworkPolicy management.
