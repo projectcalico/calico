@@ -51,8 +51,8 @@ calico_node/.calico_node.created: $(NODE_CONTAINER_FILES)
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
 	mkdir -p certs
-	curl -L "https://pkg.cfssl.org/R1.1/cfssl_linux-amd64" -o certs/cfssl
-	curl -L "https://pkg.cfssl.org/R1.1/cfssljson_linux-amd64" -o certs/cfssljson
+	curl -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
+	curl -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
 	chmod a+x certs/cfssl
 	chmod a+x certs/cfssljson
 
@@ -211,8 +211,8 @@ semaphore: docker
 	make st
 
 	# Run subset of STs with secure etcd
-	#ST_TO_RUN=tests/st/no_orchestrator/ make st-ssl
-	#ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
+	ST_TO_RUN=tests/st/no_orchestrator/ make st-ssl
+	ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
 
 
 ## Run a Docker in Docker (DinD) container.
