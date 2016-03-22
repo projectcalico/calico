@@ -27,5 +27,5 @@ spec:
           image: calico/k8s-policy-agent:v0.1.1
           imagePullPolicy: Always
           env:
-          - name: ETCD_AUTHORITY
-            value: "<ETCD_HOST>:<ETCD_PORT>"
+          - name: ETCD_ENDPOINTS
+            value: "http://<ETCD_HOST>:<ETCD_PORT>"
