@@ -48,6 +48,7 @@ K8S_POD_INFRA_CONTAINER_ID = "K8S_POD_INFRA_CONTAINER_ID"
 # Constants for getting Calico configuration from the network
 # configuration file.
 ETCD_AUTHORITY_KEY = "etcd_authority"
+ETCD_ENDPOINTS_KEY = "etcd_endpoints"
 LOG_LEVEL_KEY = "log_level"
 POLICY_KEY = "policy"
 ASSIGN_IPV4_KEY = "assign_ipv4"

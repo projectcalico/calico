@@ -25,7 +25,7 @@ from netaddr import IPNetwork, AddrFormatError
 from pycalico import netns
 from pycalico.netns import Namespace, CalledProcessError
 from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV,
-                                ETCD_AUTHORITY_DEFAULT)
+                                ETCD_ENDPOINTS_ENV)
 from pycalico.datastore_errors import MultipleEndpointsMatch
 
 from calico_cni import __version__, __commit__, __branch__
@@ -665,12 +665,16 @@ def main():
     _log.debug("Loaded network config:\n%s",
                json.dumps(network_config, indent=2))
 
-    # Get the etcd authority from the config file. Set the
-    # environment variable.
-    etcd_authority = network_config.get(ETCD_AUTHORITY_KEY,
-                                        ETCD_AUTHORITY_DEFAULT)
-    os.environ[ETCD_AUTHORITY_ENV] = etcd_authority
-    _log.debug("Using ETCD_AUTHORITY=%s", etcd_authority)
+    # Get the etcd configuration from the config file. Set the
+    # environment variables.
+    etcd_authority = network_config.get(ETCD_AUTHORITY_KEY)
+    etcd_endpoints = network_config.get(ETCD_ENDPOINTS_KEY)
+    if etcd_authority:
+        os.environ[ETCD_AUTHORITY_ENV] = etcd_authority
+        _log.debug("Using %s=%s", ETCD_AUTHORITY_ENV, etcd_authority)
+    if etcd_endpoints:
+        os.environ[ETCD_ENDPOINTS_ENV] = etcd_endpoints
+        _log.debug("Using %s=%s", ETCD_ENDPOINTS_ENV, etcd_endpoints)
 
     # Get the CNI environment.
     env = os.environ.copy()
