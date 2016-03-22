@@ -48,6 +48,7 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("os.path.exists", autospec=True, return_value=True)
     @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
     @mock.patch("calico.felix.devices.configure_global_kernel_config",
                 autospec=True)
@@ -68,7 +69,7 @@ class TestBasic(BaseTestCase):
                            m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
                            m_iface_up, m_configure_global_kernel_config,
-                           m_list_interface_ips):
+                           m_list_interface_ips, m_path_exists):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
@@ -96,4 +97,52 @@ class TestBasic(BaseTestCase):
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")
         m_configure_global_kernel_config.assert_called_once_with()
+
+    @mock.patch("calico.felix.felix.install_global_rules", autospec=True)
+    @mock.patch("os.path.exists", autospec=True, return_value=False)
+    @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
+    @mock.patch("calico.felix.devices.configure_global_kernel_config",
+                autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
+    @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
+    @mock.patch("gevent.Greenlet.start", autospec=True)
+    @mock.patch("calico.felix.felix.UpdateSplitter", autospec=True)
+    @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
+    @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
+    @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
+    def test_main_greenlet_no_ipv6(self, m_iwait, m_MasqueradeManager,
+                                   m_IptablesUpdater, m_UpdateSplitter,
+                                   m_start, m_load,
+                                   m_ipset_4, m_check_call,
+                                   m_configure_global_kernel_config,
+                                   m_list_interface_ips, m_path_exists,
+                                   m_install_globals):
+        m_IptablesUpdater.return_value.greenlet = mock.Mock()
+        m_MasqueradeManager.return_value.greenlet = mock.Mock()
+        m_UpdateSplitter.return_value.greenlet = mock.Mock()
+        m_list_interface_ips.return_value = set()
+        env_dict = {
+            "FELIX_ETCDADDR": "localhost:4001",
+            "FELIX_ETCDSCHEME": "http",
+            "FELIX_ETCDKEYFILE": "none",
+            "FELIX_ETCDCERTFILE": "none",
+            "FELIX_ETCDCAFILE": "none",
+            "FELIX_FELIXHOSTNAME": "myhost",
+            "FELIX_INTERFACEPREFIX": "tap",
+            "FELIX_METADATAIP": "10.0.0.1",
+            "FELIX_METADATAPORT": "1234",
+            "FELIX_IPINIPENABLED": "True",
+            "FELIX_IPINIPMTU": "1480",
+            "FELIX_DEFAULTINPUTCHAINACTION": "RETURN"
+        }
+        config = load_config("felix_missing.cfg", env_dict=env_dict)
+
+        with gevent.Timeout(5):
+            self.assertRaises(TestException,
+                              felix._main_greenlet, config)
+        m_load.assert_called_once_with(async=False)
+        m_configure_global_kernel_config.assert_called_once_with()
+        m_install_globals.assert_called_once_with(mock.ANY, mock.ANY, mock.ANY,
+                                                  ip_version=4)
 
