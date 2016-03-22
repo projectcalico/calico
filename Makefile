@@ -1,7 +1,7 @@
 .PHONY: all binary test plugin ipam ut clean update-version
 
-# The current CNI repo version.
-CALICO_CNI_VERSION=v1.0.2-dev
+# Version of calico/build to use.
+BUILD_VERSION=latest
 
 SRCFILES=$(shell find calico_cni) calico.py ipam.py
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -18,14 +18,14 @@ ipam: dist/calico-ipam
 dist/calico: $(SRCFILES) update-version 
 	docker run  --rm \
 	-v `pwd`:/code \
-	calico/build:v0.11.0 \
+	calico/build:$(BUILD_VERSION) \
 	pyinstaller calico.py -ayF
 
 # Makes the IPAM plugin.
 dist/calico-ipam: $(SRCFILES) update-version
 	docker run --rm \
 	-v `pwd`:/code \
-	calico/build:v0.11.0 \
+	calico/build:$(BUILD_VERSION) \
 	pyinstaller ipam.py -ayF -n calico-ipam
 
 # Updates the version information in version.py
