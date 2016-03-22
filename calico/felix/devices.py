@@ -293,7 +293,6 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
     removed_ips = (current_ips - ips)
     for ip in removed_ips:
         del_route(ip_type, ip, interface)
-    remove_conntrack_flows(removed_ips, 4 if ip_type == futils.IPV4 else 6)
     for ip in (ips - current_ips):
         add_route(ip_type, ip, interface, mac)
     if reset_arp:

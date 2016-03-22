@@ -388,6 +388,8 @@ class LocalEndpoint(RefCountedActor):
         self._pending_endpoint = None
         self._endpoint_update_pending = False
         self._mac_changed = False
+        # IPs that no longer belong to this endpoint and need cleaning up.
+        self._removed_ips = set()
 
         # Current endpoint data.
         self.endpoint = None
@@ -421,6 +423,10 @@ class LocalEndpoint(RefCountedActor):
             return "ipv4_nets"
         else:
             return "ipv6_nets"
+
+    @property
+    def nat_key(self):
+        return nat_key(self.ip_type)
 
     @property
     def _admin_up(self):
@@ -530,6 +536,11 @@ class LocalEndpoint(RefCountedActor):
                 _log.debug("Device is out-of-sync, trying to de-configure it")
                 self._deconfigure_interface()
 
+        if self._removed_ips:
+            # Some IPs have been removed, clean up conntrack.
+            _log.debug("Some IPs were removed, cleaning up conntrack")
+            self._clean_up_conntrack_entries()
+
         if self._unreferenced:
             # Endpoint is being removed, clean up...
             _log.debug("Cleaning up after endpoint unreferenced")
@@ -600,6 +611,17 @@ class LocalEndpoint(RefCountedActor):
             _log.debug("Endpoint hasn't changed, nothing to do")
             return
 
+        # Calculate the set of IPs that we had before this update.  Needed on
+        # the update and delete code paths below.
+        if self.endpoint:
+            old_ips = set(futils.net_to_ip(n) for n in
+                          self.endpoint.get(self.nets_key, []))
+            old_nat_mappings = self.endpoint.get(self.nat_key, [])
+        else:
+            old_ips = set()
+            old_nat_mappings = []
+        all_old_ips = old_ips | set([n["ext_ip"] for n in old_nat_mappings])
+
         if pending_endpoint:
             # Update/create.
             if pending_endpoint['mac'] != self._mac:
@@ -650,23 +672,33 @@ class LocalEndpoint(RefCountedActor):
                     _log.debug("Desired interface state updated.")
                     self._device_in_sync = False
                     self._iptables_in_sync = False
-                if (self.endpoint[self.nets_key] !=
-                        pending_endpoint[self.nets_key]):
+                new_ips = set(futils.net_to_ip(n) for n in
+                              pending_endpoint.get(self.nets_key, []))
+                if old_ips != new_ips:
                     # IP addresses have changed, need to update the routing
                     # table.
                     _log.debug("IP addresses changed, need to update routing")
                     self._device_in_sync = False
-                for key in "ipv4_nat", "ipv6_nat":
-                    if (self.endpoint.get(key, None) !=
-                            pending_endpoint.get(key, None)):
-                        _log.debug("NAT mappings have changed, refreshing.")
-                        self._device_in_sync = False
-                        self._iptables_in_sync = False
+                new_nat_mappings = pending_endpoint.get(self.nat_key, [])
+                if old_nat_mappings != new_nat_mappings:
+                    _log.debug("NAT mappings have changed, refreshing.")
+                    self._device_in_sync = False
+                    self._iptables_in_sync = False
+                all_new_ips = new_ips | set([n["ext_ip"] for n in
+                                             new_nat_mappings])
+                if all_old_ips != all_new_ips:
+                    # Ensure we clean up any conntrack entries for IPs that
+                    # have been removed.
+                    _log.debug("Set of all IPs changed from %s to %s",
+                               all_old_ips, all_new_ips)
+                    self._removed_ips |= all_old_ips
+                    self._removed_ips -= all_new_ips
         else:
             # Delete of the endpoint.  Need to resync everything.
             self._profile_ids_dirty = True
             self._iptables_in_sync = False
             self._device_in_sync = False
+            self._removed_ips |= all_old_ips
 
         self.endpoint = pending_endpoint
         self._endpoint_update_pending = False
@@ -696,8 +728,11 @@ class LocalEndpoint(RefCountedActor):
             self._pol_ids_by_tier)
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
-            self.fip_manager.update_endpoint(self.combined_id,
-                    self.endpoint.get(nat_key(self.ip_type), None), async=True)
+            self.fip_manager.update_endpoint(
+                self.combined_id,
+                self.endpoint.get(self.nat_key, None),
+                async=True
+            )
         except FailedSystemCall:
             _log.exception("Failed to program chains for %s. Removing.", self)
             try:
@@ -793,6 +828,17 @@ class LocalEndpoint(RefCountedActor):
         else:
             _log.info("Interface %s deconfigured", self._iface_name)
             self._device_in_sync = True
+
+    def _clean_up_conntrack_entries(self):
+        """Removes conntrack entries for all the IPs in self._removed_ips."""
+        _log.debug("Cleaning up conntrack for old IPs: %s", self._removed_ips)
+        devices.remove_conntrack_flows(
+            self._removed_ips,
+            4 if self.ip_type == futils.IPV4 else 6
+        )
+        # We could use self._removed_ips.clear() but it's hard to UT because
+        # the UT sees the update.
+        self._removed_ips = set()
 
     def _on_profiles_ready(self):
         # We don't actually need to talk to the profiles, just log.

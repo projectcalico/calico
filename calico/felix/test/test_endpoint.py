@@ -353,7 +353,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep.on_endpoint_update(None, async=True)
         self.step_actor(local_ep)
 
-        ips = ["1.2.3.4"]
+        ips = ["1.2.3.4/32"]
         iface = "tapabcdef"
         data = {
             'state': "active",
@@ -365,12 +365,11 @@ class TestLocalEndpoint(BaseTestCase):
         }
 
         # Report an initial update (endpoint creation) and check configured
-        with nested(
-                mock.patch('calico.felix.devices.set_routes'),
-                mock.patch('calico.felix.devices.configure_interface_ipv4'),
-                mock.patch('calico.felix.devices.interface_exists'),
-                mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
+        with mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack,\
+                mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv4') as m_conf,\
+                mock.patch('calico.felix.devices.interface_exists') as m_iface_exists,\
+                mock.patch('calico.felix.devices.interface_up') as m_iface_up:
             m_iface_exists.return_value = True
             m_iface_up.return_value = True
 
@@ -380,20 +379,22 @@ class TestLocalEndpoint(BaseTestCase):
             self.assertEqual(local_ep._mac, data['mac'])
             m_conf.assert_called_once_with(iface)
             m_set_routes.assert_called_once_with(ip_type,
-                                                 set(ips),
+                                                 set(["1.2.3.4"]),
                                                  iface,
                                                  data['mac'],
                                                  reset_arp=True)
+            self.assertFalse(m_rem_conntrack.called)
 
         # Send through an update with no changes - should be a no-op.
-        with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
-            with mock.patch('calico.felix.devices.'
-                            'configure_interface_ipv4') as m_conf:
-                local_ep.on_endpoint_update(data, async=True)
-                self.step_actor(local_ep)
-                self.assertEqual(local_ep._mac, data['mac'])
-                self.assertFalse(m_conf.called)
-                self.assertFalse(m_set_routes.called)
+        with mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack,\
+                mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv4') as m_conf:
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+            self.assertEqual(local_ep._mac, data['mac'])
+            self.assertFalse(m_conf.called)
+            self.assertFalse(m_set_routes.called)
+            self.assertFalse(m_rem_conntrack.called)
 
         # Change the MAC address and try again, leading to reset of ARP
         data = data.copy()
@@ -406,37 +407,114 @@ class TestLocalEndpoint(BaseTestCase):
                 self.assertEqual(local_ep._mac, data['mac'])
                 m_conf.assert_called_once_with(iface)
                 m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
+                                                     set(["1.2.3.4"]),
                                                      iface,
                                                      data['mac'],
                                                      reset_arp=True)
 
+        # Change the IP address, causing an iptables and route refresh.
+        data = data.copy()
+        data["ipv4_nets"] = ["1.2.3.5"]
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv4') as _m_conf,\
+                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c,\
+                mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+            m_set_routes.assert_called_once_with(ip_type,
+                                                 set(["1.2.3.5"]),
+                                                 iface,
+                                                 data['mac'],
+                                                 reset_arp=True)
+            self.assertFalse(local_ep._update_chains.called)
+            m_rem_conntrack.assert_called_once_with(set(["1.2.3.4"]), 4)
+
         # Change the nat mappings, causing an iptables and route refresh.
         data = data.copy()
-        ips.append('5.6.7.8')
         data['ipv4_nat'] = [
             {
                 'int_ip': '1.2.3.4',
                 'ext_ip': '5.6.7.8'
             }
         ]
-        with nested(
-                mock.patch('calico.felix.devices.set_routes'),
-                mock.patch('calico.felix.devices.configure_interface_ipv4'),
-                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains'),
-        ) as [m_set_routes, _m_conf, _m_up_c]:
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv4') as _m_conf,\
+                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c,\
+                mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
-            m_set_routes.assert_called_once_with(ip_type, set(ips), iface,
-                                                 data['mac'], reset_arp=True)
+            m_set_routes.assert_called_once_with(ip_type,
+                                                 set(["1.2.3.5", "5.6.7.8"]),
+                                                 iface,
+                                                 data['mac'],
+                                                 reset_arp=True)
             local_ep._update_chains.assert_called_once_with()
+            self.assertFalse(m_rem_conntrack.called)
 
         # Send empty data, which deletes the endpoint.
-        with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+               mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
             local_ep.on_endpoint_update(None, async=True)
             self.step_actor(local_ep)
             m_set_routes.assert_called_once_with(ip_type, set(),
                                                  data["name"], None)
+            # Should clean up conntrack entries for all IPs.
+            m_rem_conntrack.assert_called_once_with(
+                set(['1.2.3.5', '5.6.7.8']), 4
+            )
+
+    def test_on_endpoint_update_delete_fail(self):
+        combined_id = EndpointId("host_id", "orchestrator_id",
+                                 "workload_id", "endpoint_id")
+        ip_type = futils.IPV4
+        local_ep = self.get_local_endpoint(combined_id, ip_type)
+
+        ips = ["1.2.3.4/32"]
+        iface = "tapabcdef"
+        data = {
+            'state': "active",
+            'endpoint': "endpoint_id",
+            'mac': stub_utils.get_mac(),
+            'name': iface,
+            'ipv4_nets': ips,
+            'profile_ids': ["prof1"]
+        }
+
+        # Report an initial update (endpoint creation) and check configured
+        with mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack,\
+                mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv4') as m_conf,\
+                mock.patch('calico.felix.devices.interface_exists') as m_iface_exists,\
+                mock.patch('calico.felix.devices.interface_up') as m_iface_up:
+            m_iface_exists.return_value = True
+            m_iface_up.return_value = True
+
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+
+            self.assertEqual(local_ep._mac, data['mac'])
+            m_conf.assert_called_once_with(iface)
+            m_set_routes.assert_called_once_with(ip_type,
+                                                 set(["1.2.3.4"]),
+                                                 iface,
+                                                 data['mac'],
+                                                 reset_arp=True)
+            self.assertFalse(m_rem_conntrack.called)
+
+        # Send empty data, which deletes the endpoint.  Raise an exception
+        # from set_routes to check that it's handled.
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+               mock.patch('calico.felix.devices.interface_exists', return_value=True),\
+               mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
+            m_set_routes.side_effect = FailedSystemCall("", [], 1, "", "")
+            local_ep.on_endpoint_update(None, async=True)
+            self.step_actor(local_ep)
+            m_set_routes.assert_called_once_with(ip_type, set(),
+                                                 data["name"], None)
+            # Should clean up conntrack entries for all IPs.
+            m_rem_conntrack.assert_called_once_with(
+                set(['1.2.3.4']), 4
+            )
 
     def test_on_endpoint_update_v6(self):
         combined_id = EndpointId("host_id", "orchestrator_id",
@@ -448,7 +526,7 @@ class TestLocalEndpoint(BaseTestCase):
         local_ep.on_endpoint_update(None, async=True)
         self.step_actor(local_ep)
 
-        ips = ["2001::abcd"]
+        nets = ["2001::abcd/128"]
         gway = "2020:ab::9876"
         iface = "tapabcdef"
         data = {
@@ -456,29 +534,29 @@ class TestLocalEndpoint(BaseTestCase):
             'endpoint': "endpoint_id",
             'mac': stub_utils.get_mac(),
             'name': iface,
-            'ipv6_nets': ips,
+            'ipv6_nets': nets,
             'ipv6_gateway': gway,
             'profile_ids': ["prof1"]
         }
 
         # Report an initial update (endpoint creation) and check configured
-        with nested(
-                mock.patch('calico.felix.devices.set_routes'),
-                mock.patch('calico.felix.devices.configure_interface_ipv6'),
-                mock.patch('calico.felix.devices.interface_exists'),
-                mock.patch('calico.felix.devices.interface_up'),
-        ) as [m_set_routes, m_conf, m_iface_exists, m_iface_up]:
-                m_iface_exists.return_value = True
-                m_iface_up.return_value = True
-                local_ep.on_endpoint_update(data, async=True)
-                self.step_actor(local_ep)
-                self.assertEqual(local_ep._mac, data['mac'])
-                m_conf.assert_called_once_with(iface, gway)
-                m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
-                                                     iface,
-                                                     data['mac'],
-                                                     reset_arp=False)
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv6') as m_conf,\
+                mock.patch('calico.felix.devices.interface_exists') as m_iface_exists,\
+                mock.patch('calico.felix.devices.interface_up') as m_iface_up, \
+                mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
+            m_iface_exists.return_value = True
+            m_iface_up.return_value = True
+            local_ep.on_endpoint_update(data, async=True)
+            self.step_actor(local_ep)
+            self.assertEqual(local_ep._mac, data['mac'])
+            m_conf.assert_called_once_with(iface, gway)
+            m_set_routes.assert_called_once_with(ip_type,
+                                                 set(["2001::abcd"]),
+                                                 iface,
+                                                 data['mac'],
+                                                 reset_arp=False)
+            self.assertFalse(m_rem_conntrack.called)
 
         # Send through an update with no changes but a force update.  Should
         # force a re-write to iptables.
@@ -504,33 +582,37 @@ class TestLocalEndpoint(BaseTestCase):
                 self.assertEqual(local_ep._mac, data['mac'])
                 m_conf.assert_called_once_with(iface, gway)
                 m_set_routes.assert_called_once_with(ip_type,
-                                                     set(ips),
+                                                     set(["2001::abcd"]),
                                                      iface,
                                                      data['mac'],
                                                      reset_arp=False)
 
         # Change the nat mappings, causing an iptables and route refresh.
         data = data.copy()
-        ips.append('2001::abce')
+        nets.append('2001::abce/128')
         data['ipv6_nat'] = [
             {
                 'int_ip': '2001::abcd',
                 'ext_ip': '2001::abce'
             }
         ]
-        with nested(
-                mock.patch('calico.felix.devices.set_routes'),
-                mock.patch('calico.felix.devices.configure_interface_ipv6'),
-                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains'),
-        ) as [m_set_routes, _m_conf, _m_up_c]:
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.configure_interface_ipv6') as m_conf,\
+                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c:
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
-            m_set_routes.assert_called_once_with(ip_type, set(ips), iface,
-                                                 data['mac'], reset_arp=False)
+            m_set_routes.assert_called_once_with(
+                ip_type,
+                set(["2001::abcd", "2001::abce"]),
+                iface,
+                data['mac'],
+                reset_arp=False
+            )
             local_ep._update_chains.assert_called_once_with()
 
         # Send empty data, which deletes the endpoint.
-        with mock.patch('calico.felix.devices.set_routes') as m_set_routes:
+        with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
+                mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
             local_ep.on_endpoint_update(None, async=True)
             local_ep.on_unreferenced(async=True)
             self.step_actor(local_ep)
@@ -542,6 +624,8 @@ class TestLocalEndpoint(BaseTestCase):
                 local_ep,
                 async=True,
             )
+            m_rem_conntrack.assert_called_once_with(set(['2001::abcd',
+                                                         '2001::abce']), 6)
 
     def test_on_interface_update_v4(self):
         combined_id = EndpointId("host_id", "orchestrator_id",

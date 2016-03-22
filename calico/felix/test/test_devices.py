@@ -165,8 +165,7 @@ class TestDevices(unittest.TestCase):
             devices.set_routes(futils.IPV6, ips, interface, mac=mac,
                                reset_arp=True)
 
-    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
-    def test_set_routes_mainline(self, m_remove_conntrack):
+    def test_set_routes_mainline(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
@@ -183,10 +182,8 @@ class TestDevices(unittest.TestCase):
                 devices.set_routes(type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
-                m_remove_conntrack.assert_called_once_with(set(), 4)
 
-    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
-    def test_set_routes_nothing_to_do(self, m_remove_conntrack):
+    def test_set_routes_nothing_to_do(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         retcode = futils.CommandOutput("", "")
@@ -198,10 +195,8 @@ class TestDevices(unittest.TestCase):
                             return_value=ips):
                 devices.set_routes(type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, 0)
-                m_remove_conntrack.assert_called_once_with(set(), 4)
 
-    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
-    def test_set_routes_changed_ips(self, m_remove_conntrack):
+    def test_set_routes_changed_ips(self):
         ip_type = futils.IPV4
         current_ips = set(["2.3.4.5", "3.4.5.6"])
         ips = set(["1.2.3.4", "2.3.4.5"])
@@ -221,10 +216,8 @@ class TestDevices(unittest.TestCase):
                 devices.set_routes(ip_type, ips, interface, mac)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
-                m_remove_conntrack.assert_called_once_with(set(["3.4.5.6"]), 4)
 
-    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
-    def test_set_routes_changed_ips_reset_arp(self, m_remove_conntrack):
+    def test_set_routes_changed_ips_reset_arp(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
@@ -242,10 +235,8 @@ class TestDevices(unittest.TestCase):
                 devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
-                m_remove_conntrack.assert_called_once_with(set(["3.4.5.6"]), 4)
 
-    @mock.patch("calico.felix.devices.remove_conntrack_flows", autospec=True)
-    def test_set_routes_add_ips(self, m_remove_conntrack):
+    def test_set_routes_add_ips(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
@@ -265,7 +256,6 @@ class TestDevices(unittest.TestCase):
                 devices.set_routes(type, ips, interface, mac, reset_arp=True)
                 self.assertEqual(futils.check_call.call_count, len(calls))
                 futils.check_call.assert_has_calls(calls, any_order=True)
-                m_remove_conntrack.assert_called_once_with(set(), 4)
 
     def test_list_interface_no_ips(self):
         retcode = futils.CommandOutput(
