@@ -53,7 +53,7 @@ fv: update-version
 	nosetests tests/fv -c nose.cfg
 
 # Makes tests on Circle CI.
-test-circle: update-version 
+test-circle: dist/calico
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
