@@ -1,4 +1,5 @@
 # Copyright (c) Metaswitch Networks 2015-2016. All rights reserved.
+import random
 from collections import namedtuple
 
 import functools
@@ -106,7 +107,23 @@ class EtcdClientOwner(object):
                  etcd_key=None,
                  etcd_cert=None,
                  etcd_ca=None):
+        """Constructor.
+        :param str|list[str] etcd_addrs: Either an authority string, such as
+               'localhost:1234' to connect to a single server (or proxy) or a
+               list of authority strings to connect to a cluster.
+        :param str etcd_scheme: "http" or "https"
+        :param etcd_key: Required if using HTTPS, path to the key file.
+        :param etcd_cert: Required if using HTTPS, path to the client cert
+               file.
+        :param etcd_ca: Required if using HTTPS, path to the CA cert.
+        """
         super(EtcdClientOwner, self).__init__()
+        if isinstance(etcd_addrs, basestring):
+            # For back-compatibility, allow a single authority string to be
+            # supplied instead of a list.
+            _log.debug("Single etcd address: %s, wrapping in list.",
+                       etcd_addrs)
+            etcd_addrs = [etcd_addrs]
         self.etcd_hosts = []
         for addr in etcd_addrs:
             host = None
@@ -140,6 +157,10 @@ class EtcdClientOwner(object):
         key_pair = None
         if self.etcd_cert and self.etcd_key:
             key_pair = (self.etcd_cert, self.etcd_key)
+
+        # Shuffle the list of hosts so that each client will fail over to
+        # a different etcd host on failure, spreading the load.
+        random.shuffle(self.etcd_hosts)
 
         # python-etcd requires a single etcd endpoint to be specified using the
         # host=, port= parameters, but requires a different syntax for

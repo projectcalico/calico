@@ -31,6 +31,7 @@ The driver is responsible for
   Felix about all the individual keys that are deleted.
 """
 import logging
+import random
 import socket
 from Queue import Queue, Empty
 from functools import partial
@@ -216,9 +217,13 @@ class EtcdDriver(object):
         """
         # OK to dump the msg, it's a one-off.
         _log.info("Got init message from Felix %s", msg)
-        self._etcd_base_url = msg[MSG_KEY_ETCD_URLS][0].rstrip("/")
+        etcd_urls = msg[MSG_KEY_ETCD_URLS]
+        # Shuffle the etcd URLs so that each client connects to different
+        # cluster nodes.
+        random.shuffle(etcd_urls)
+        self._etcd_base_url = etcd_urls[0].rstrip("/")
         self._etcd_url_parts = urlparse(self._etcd_base_url)
-        self._etcd_other_urls = msg[MSG_KEY_ETCD_URLS][1:]
+        self._etcd_other_urls = etcd_urls[1:]
         self._etcd_key_file = msg[MSG_KEY_KEY_FILE]
         self._etcd_cert_file = msg[MSG_KEY_CERT_FILE]
         self._etcd_ca_file = msg[MSG_KEY_CA_FILE]
@@ -318,12 +323,11 @@ class EtcdDriver(object):
         Rotate the in use etcd URL if more than one is configured,
         """
         if len(self._etcd_other_urls) > 0:
-            self._etcd_url_lock.acquire()
-            self._etcd_other_urls.append(self._etcd_base_url)
-            self._etcd_base_url = self._etcd_other_urls.pop(0).rstrip("/")
-            self._etcd_url_parts = urlparse(self._etcd_base_url)
-            _log.info("Rotated etcd URL to: %s", self._etcd_base_url)
-            self._etcd_url_lock.release()
+            with self._etcd_url_lock:
+                self._etcd_other_urls.append(self._etcd_base_url)
+                self._etcd_base_url = self._etcd_other_urls.pop(0).rstrip("/")
+                self._etcd_url_parts = urlparse(self._etcd_base_url)
+                _log.info("Rotated etcd URL to: %s", self._etcd_base_url)
 
     def _wait_for_config(self):
         while not self._config_received.is_set():
@@ -673,26 +677,24 @@ class EtcdDriver(object):
             self._watcher_stop_event = None
 
     def get_etcd_connection(self):
-        self._etcd_url_lock.acquire()
-        port = self._etcd_url_parts.port or 2379
-        if self._etcd_url_parts.scheme == "https":
-            _log.debug("Getting new HTTPS connection to %s:%s",
-                       self._etcd_url_parts.hostname, port)
-            pool = HTTPSConnectionPool(self._etcd_url_parts.hostname,
-                                       port,
-                                       key_file=self._etcd_key_file,
-                                       cert_file=self._etcd_cert_file,
-                                       ca_certs=self._etcd_ca_file,
-                                       maxsize=1)
-        else:
-            _log.debug("Getting new HTTP connection to %s:%s",
-                       self._etcd_url_parts.hostname, port)
-            pool = HTTPConnectionPool(self._etcd_url_parts.hostname,
-                                      port,
-                                      maxsize=1)
-        self._etcd_url_lock.release()
-        return pool
-
+        with self._etcd_url_lock:
+            port = self._etcd_url_parts.port or 2379
+            if self._etcd_url_parts.scheme == "https":
+                _log.debug("Getting new HTTPS connection to %s:%s",
+                           self._etcd_url_parts.hostname, port)
+                pool = HTTPSConnectionPool(self._etcd_url_parts.hostname,
+                                           port,
+                                           key_file=self._etcd_key_file,
+                                           cert_file=self._etcd_cert_file,
+                                           ca_certs=self._etcd_ca_file,
+                                           maxsize=1)
+            else:
+                _log.debug("Getting new HTTP connection to %s:%s",
+                           self._etcd_url_parts.hostname, port)
+                pool = HTTPConnectionPool(self._etcd_url_parts.hostname,
+                                          port,
+                                          maxsize=1)
+            return pool
 
     def _on_key_updated(self, key, value):
         """
@@ -732,9 +734,8 @@ class EtcdDriver(object):
         )
 
     def _calculate_url(self, etcd_key):
-        self._etcd_url_lock.acquire()
-        url = self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
-        self._etcd_url_lock.release()
+        with self._etcd_url_lock:
+            url = self._etcd_base_url + "/v2/keys/" + etcd_key.strip("/")
         return url
 
     def _reset_resync_thread_stats(self):

@@ -23,7 +23,7 @@ import logging
 import types
 
 from etcd import EtcdException
-from mock import Mock, patch, call
+from mock import Mock, patch, call, ANY
 from urllib3.exceptions import ReadTimeoutError
 
 from calico.etcdutils import (
@@ -246,7 +246,17 @@ class TestDispatcherExpire(_TestPathDispatcherBase):
 class TestEtcdClientOwner(BaseTestCase):
     @patch("etcd.Client", autospec=True)
     def test_create(self, m_client_cls):
-        owner = EtcdClientOwner(["localhost:1234"],
+        # Check creation with a single string, which is required for
+        # back-compatibility.
+        self._test_create_internal("localhost:1234", m_client_cls)
+
+    @patch("etcd.Client", autospec=True)
+    def test_create_list(self, m_client_cls):
+        # Check creation with a list of servers.
+        self._test_create_internal(["localhost:1234"], m_client_cls)
+
+    def _test_create_internal(self, etcd_addrs, m_client_cls):
+        owner = EtcdClientOwner(etcd_addrs,
                                 etcd_scheme="https",
                                 etcd_key="/path/to/key",
                                 etcd_cert="/path/to/cert",
@@ -276,11 +286,15 @@ class TestEtcdClientOwner(BaseTestCase):
     def test_create_multiple(self, m_client):
         owner = EtcdClientOwner(["etcd1:1234", "etcd2:2345"])
         self.assertEqual(m_client.mock_calls,
-                         [call(host=(("etcd1", 1234),
-                                     ("etcd2", 2345)),
+                         [call(host=ANY,
                                expected_cluster_id=None,
                                allow_reconnect=True,
                                cert=None, ca_cert=None, protocol="http")])
+        # We shuffle the hosts so we need to check them by hand.
+        _, _, kwargs = m_client.mock_calls[0]
+        hosts = kwargs["host"]
+        self.assertIsInstance(hosts, tuple)
+        self.assertEqual(sorted(hosts), [("etcd1", 1234), ("etcd2", 2345)])
 
 
 class TestEtcdWatcher(BaseTestCase):
