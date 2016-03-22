@@ -257,6 +257,7 @@ class RefHelper(object):
         """
         Change the set of references we require to the given set.
         """
+        _log.debug("Setting required refs to %s", new_obj_ids)
         for obj_id in new_obj_ids:
             self.acquire_ref(obj_id)
         for obj_id in [r for r in self.required_refs if r not in new_obj_ids]:

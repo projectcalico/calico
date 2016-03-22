@@ -113,3 +113,25 @@ class TestEndpointId(unittest.TestCase):
                                         "workload", "notanendpoint")
         self.assertFalse(ep_id == bad_endpoint_ep_id)
         self.assertTrue(ep_id != bad_endpoint_ep_id)
+
+
+class TestTieredPolicyId(unittest.TestCase):
+    def setUp(self):
+        super(TestTieredPolicyId, self).setUp()
+        self.tp_id = TieredPolicyId("a", "b")
+        self.tp_id = TieredPolicyId("a", "b")
+
+    def test_str(self):
+        self.assertEqual(str(self.tp_id), "a/b")
+
+    def test_repr(self):
+        self.assertEqual(repr(self.tp_id), "TieredPolicyId('a','b')")
+
+    def test_eq(self):
+        self.assertEqual(self.tp_id, self.tp_id)
+        self.assertEqual(self.tp_id, TieredPolicyId("a", "b"))
+        self.assertEqual(hash(self.tp_id), hash(TieredPolicyId("a", "b")))
+        self.assertNotEqual(self.tp_id, TieredPolicyId("a", "c"))
+        self.assertNotEqual(self.tp_id, TieredPolicyId("c", "b"))
+        self.assertNotEqual(self.tp_id, None)
+        self.assertNotEqual(self.tp_id, 1234)

@@ -15,11 +15,14 @@
 #    under the License.
 """
 felix.endpoint
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 Endpoint management.
 """
+from collections import OrderedDict
 import logging
+
+from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
     ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR
@@ -28,6 +31,7 @@ from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
+from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
@@ -66,6 +70,22 @@ class EndpointManager(ReferenceManager):
         # increffed.
         self.local_endpoint_ids = set()
 
+        # Index tracking what policy applies to what endpoints.
+        self.policy_index = LabelValueIndex()
+        self.policy_index.on_match_started = self.on_policy_match_started
+        self.policy_index.on_match_stopped = self.on_policy_match_stopped
+        self._label_inherit_idx = LabelInheritanceIndex(self.policy_index)
+        # Tier orders by tier ID.  We use this to look up the order when we're
+        # sorting the tiers.
+        self.tier_orders = {}
+        # Cache of the current ordering of tier IDs.
+        self.tier_sequence = []
+        # And their associated orders.
+        self.profile_orders = {}
+        # Set of profile IDs to apply to each endpoint ID.
+        self.pol_ids_by_ep_id = MultiDict()
+        self.endpoints_with_dirty_policy = set()
+
         self._data_model_in_sync = False
 
     def _create(self, combined_id):
@@ -81,6 +101,94 @@ class EndpointManager(ReferenceManager):
                              self.fip_manager,
                              self.status_reporter)
 
+    @actor_message()
+    def on_tier_data_update(self, tier, data):
+        """
+        Message received when the metadata for a policy tier is updated
+        in etcd.
+
+        :param str tier: The name of the tier.
+        :param dict|NoneType data: The dict or None, for a deletion.
+        """
+        _log.debug("Data for policy tier %s updated to %s", tier, data)
+
+        # Currently, the only data we care about is the order.
+        order = None if data is None else data["order"]
+        if self.tier_orders.get(tier) == order:
+            _log.debug("No change, ignoring")
+            return
+
+        if order is not None:
+            self.tier_orders[tier] = order
+        else:
+            del self.tier_orders[tier]
+
+        new_tier_sequence = sorted(self.tier_orders.iterkeys(),
+                                   key=lambda k: (self.tier_orders[k], k))
+        if self.tier_sequence != new_tier_sequence:
+            _log.info("Sequence of profile tiers changed, refreshing all "
+                      "endpoints")
+            self.tier_sequence = new_tier_sequence
+            self.endpoints_with_dirty_policy.update(
+                self.endpoints_by_id.keys()
+            )
+            self._update_dirty_policy()
+
+    @actor_message()
+    def on_prof_labels_set(self, profile_id, labels):
+        _log.debug("Profile labels updated for %s: %s", profile_id, labels)
+        # Defer to the label index, which will call us back synchronously
+        # with any match changes.
+        self._label_inherit_idx.on_parent_labels_update(profile_id, labels)
+        # Process any match changes that we've recorded in the callbacks.
+        self._update_dirty_policy()
+
+    @actor_message()
+    def on_policy_selector_update(self, policy_id, selector_or_none,
+                                  order_or_none):
+        _log.debug("Policy %s selector updated to %s (%s)", policy_id,
+                   selector_or_none, order_or_none)
+        # Defer to the label index, which will call us back synchronously
+        # via on_policy_match_started and on_policy_match_stopped.
+        self.policy_index.on_expression_update(policy_id,
+                                               selector_or_none)
+
+        # Before we update the policies, check if the order has changed,
+        # which would mean we need to refresh all endpoints with this policy
+        # too.
+        if order_or_none != self.profile_orders.get(policy_id):
+            if order_or_none is not None:
+                self.profile_orders[policy_id] = order_or_none
+            else:
+                del self.profile_orders[policy_id]
+            self.endpoints_with_dirty_policy.update(
+                self.policy_index.matches_by_expr_id.iter_values(policy_id)
+            )
+
+        # Finally, flush any updates to our waiting endpoints.
+        self._update_dirty_policy()
+
+    def on_policy_match_started(self, expr_id, item_id):
+        """Called by the label index when a new match is started.
+
+        Records the update but processing is deferred to
+        the next call to self._update_dirty_policy().
+        """
+        _log.info("Policy %s now applies to endpoint %s", expr_id, item_id)
+        self.pol_ids_by_ep_id.add(item_id, expr_id)
+        self.endpoints_with_dirty_policy.add(item_id)
+
+    def on_policy_match_stopped(self, expr_id, item_id):
+        """Called by the label index when a match stops.
+
+        Records the update but processing is deferred to
+        the next call to self._update_dirty_policy().
+        """
+        _log.info("Policy %s no longer applies to endpoint %s",
+                  expr_id, item_id)
+        self.pol_ids_by_ep_id.discard(item_id, expr_id)
+        self.endpoints_with_dirty_policy.add(item_id)
+
     def _on_object_started(self, endpoint_id, obj):
         """
         Callback from a LocalEndpoint to report that it has started.
@@ -88,6 +196,7 @@ class EndpointManager(ReferenceManager):
         """
         ep = self.endpoints_by_id.get(endpoint_id)
         obj.on_endpoint_update(ep, async=True)
+        self._update_tiered_policy(endpoint_id)
 
     @actor_message()
     def on_datamodel_in_sync(self):
@@ -106,6 +215,7 @@ class EndpointManager(ReferenceManager):
             # to re-apply the update when it catches up to the snapshot.
             local_ifaces = frozenset(self.endpoint_id_by_iface_name.keys())
             self.dispatch_chains.apply_snapshot(local_ifaces, async=True)
+            self._update_dirty_policy()
 
             nat_maps = {}
             for ep_id, ep in self.endpoints_by_id.iteritems():
@@ -146,6 +256,8 @@ class EndpointManager(ReferenceManager):
             if endpoint_id in self.local_endpoint_ids:
                 self.decref(endpoint_id)
                 self.local_endpoint_ids.remove(endpoint_id)
+                self._label_inherit_idx.on_item_update(endpoint_id, None, None)
+                assert endpoint_id not in self.pol_ids_by_ep_id
         else:
             # Creation or modification
             _log.info("Endpoint %s modified or created", endpoint_id)
@@ -154,8 +266,16 @@ class EndpointManager(ReferenceManager):
             if endpoint_id not in self.local_endpoint_ids:
                 # This will trigger _on_object_activated to pass the endpoint
                 # we just saved off to the endpoint.
+                _log.debug("Endpoint wasn't known before, increffing it")
                 self.local_endpoint_ids.add(endpoint_id)
                 self.get_and_incref(endpoint_id)
+            self._label_inherit_idx.on_item_update(
+                endpoint_id,
+                endpoint.get("labels", {}),
+                endpoint.get("profile_ids", [])
+            )
+
+        self._update_dirty_policy()
 
     @actor_message()
     def on_interface_update(self, name, iface_up):
@@ -177,6 +297,49 @@ class EndpointManager(ReferenceManager):
                 # LocalEndpoint is running, so tell it about the change.
                 ep = self.objects_by_id[endpoint_id]
                 ep.on_interface_update(iface_up, async=True)
+
+    def _update_dirty_policy(self):
+        if not self._data_model_in_sync:
+            _log.debug("Datamodel not in sync, postponing update to policy")
+            return
+        _log.debug("Endpoints with dirty policy: %s",
+                   self.endpoints_with_dirty_policy)
+        while self.endpoints_with_dirty_policy:
+            ep_id = self.endpoints_with_dirty_policy.pop()
+            if self._is_starting_or_live(ep_id):
+                self._update_tiered_policy(ep_id)
+
+    def _update_tiered_policy(self, ep_id):
+        """
+        Sends an updated list of tiered policy to an endpoint.
+
+        Recalculates the list.
+        :param ep_id: ID of the endpoint to send an update to.
+        """
+        _log.debug("Updating policies for %s from %s", ep_id,
+                   self.pol_ids_by_ep_id)
+        # Order the profiles by tier and profile order, using the name of the
+        # tier and profile as a tie-breaker if the orders are the same.
+        profiles = []
+        for pol_id in self.pol_ids_by_ep_id.iter_values(ep_id):
+            try:
+                tier_order = self.tier_orders[pol_id.tier]
+            except KeyError:
+                _log.warn("Ignoring profile %s because its tier metadata is "
+                          "missing.")
+                continue
+            profile_order = self.profile_orders[pol_id]
+            profiles.append((tier_order, pol_id.tier,
+                             profile_order, pol_id.policy_id,
+                             pol_id))
+        profiles.sort()
+        # Convert to an ordered dict from tier to list of profiles.
+        pols_by_tier = OrderedDict()
+        for _, tier, _, _, pol_id in profiles:
+            pols_by_tier.setdefault(tier, []).append(pol_id)
+
+        endpoint = self.objects_by_id[ep_id]
+        endpoint.on_tiered_policy_update(pols_by_tier, async=True)
 
 
 class LocalEndpoint(RefCountedActor):
@@ -212,8 +375,14 @@ class LocalEndpoint(RefCountedActor):
         self.fip_manager = fip_manager
 
         # Helper for acquiring/releasing profiles.
-        self.rules_ref_helper = RefHelper(self, rules_manager,
-                                          self._on_profiles_ready)
+        self._rules_ref_helper = RefHelper(self, rules_manager,
+                                           self._on_profiles_ready)
+
+        # List of global policies that we care about.
+        self._pol_ids_by_tier = OrderedDict()
+
+        # List of explicit profile IDs that we've processed.
+        self._explicit_profile_ids = None
 
         # Per-batch state.
         self._pending_endpoint = None
@@ -233,6 +402,7 @@ class LocalEndpoint(RefCountedActor):
         self._chains_programmed = False
         self._iptables_in_sync = False
         self._device_in_sync = False
+        self._profile_ids_dirty = False
 
         # Oper-state of the Linux interface.
         self._device_is_up = None  # Unknown
@@ -273,6 +443,20 @@ class LocalEndpoint(RefCountedActor):
         if force_reprogram:
             self._iptables_in_sync = False
             self._device_in_sync = False
+
+    @actor_message()
+    def on_tiered_policy_update(self, pols_by_tier):
+        """Called to update the ordered set of tiered policies that apply.
+
+        :param OrderedDict pols_by_tier: Ordered mapping from tier name to
+               list of policies to apply in that tier.
+        """
+        _log.debug("New policy IDs for %s: %s", self.combined_id,
+                   pols_by_tier)
+        if pols_by_tier != self._pol_ids_by_tier:
+            self._pol_ids_by_tier = pols_by_tier
+            self._iptables_in_sync = False
+            self._profile_ids_dirty = True
 
     @actor_message()
     def on_interface_update(self, iface_up):
@@ -317,6 +501,10 @@ class LocalEndpoint(RefCountedActor):
             _log.debug("Endpoint update pending: %s", self._pending_endpoint)
             self._apply_endpoint_update()
 
+        if self._profile_ids_dirty:
+            _log.debug("Profile references need updating")
+            self._update_profile_references()
+
         if not self._iptables_in_sync:
             # Try to update iptables, if successful, will set the
             # _iptables_in_sync flag.
@@ -347,7 +535,7 @@ class LocalEndpoint(RefCountedActor):
             _log.debug("Cleaning up after endpoint unreferenced")
             self.dispatch_chains.on_endpoint_removed(self._iface_name,
                                                      async=True)
-            self.rules_ref_helper.discard_all()
+            self._rules_ref_helper.discard_all()
             self._notify_cleanup_complete()
             self._cleaned_up = True
         elif not self._added_to_dispatch_chains and self._iface_name:
@@ -446,11 +634,15 @@ class LocalEndpoint(RefCountedActor):
             # Check if the profile ID or IP addresses have changed, requiring
             # a refresh of the dataplane.
             profile_ids = set(pending_endpoint.get("profile_ids", []))
-            if profile_ids != self.rules_ref_helper.required_refs:
-                # Profile ID update required iptables update but not device
+            if profile_ids != self._explicit_profile_ids:
+                # Profile ID update requires iptables update but not device
                 # update.
-                _log.debug("Profile IDs changed, need to update iptables")
+                _log.debug("Profile IDs changed from %s to %s, need to update "
+                           "iptables", self._rules_ref_helper.required_refs,
+                           profile_ids)
+                self._explicit_profile_ids = profile_ids
                 self._iptables_in_sync = False
+                self._profile_ids_dirty = True
 
             # Check for changes to values that require a device update.
             if self.endpoint:
@@ -472,17 +664,27 @@ class LocalEndpoint(RefCountedActor):
                         self._iptables_in_sync = False
         else:
             # Delete of the endpoint.  Need to resync everything.
-            profile_ids = set()
+            self._profile_ids_dirty = True
             self._iptables_in_sync = False
             self._device_in_sync = False
-
-        # Note: we don't actually need to wait for the activation to finish
-        # due to the dependency management in the iptables layer.
-        self.rules_ref_helper.replace_all(profile_ids)
 
         self.endpoint = pending_endpoint
         self._endpoint_update_pending = False
         self._pending_endpoint = None
+
+    def _update_profile_references(self):
+        if self.endpoint:
+            # Combine the explicit profile IDs with the set of policy IDs
+            # for our matching selectors.
+            profile_ids = set(self._explicit_profile_ids)
+            for pol_ids in self._pol_ids_by_tier.itervalues():
+                profile_ids.update(pol_ids)
+        else:
+            profile_ids = set()
+        # Note: we don't actually need to wait for the activation to finish
+        # due to the dependency management in the iptables layer.
+        self._rules_ref_helper.replace_all(profile_ids)
+        self._profile_ids_dirty = False
 
     def _update_chains(self):
         updates, deps = self.iptables_generator.endpoint_updates(
@@ -490,7 +692,8 @@ class LocalEndpoint(RefCountedActor):
             self.combined_id.endpoint,
             self._suffix,
             self._mac,
-            self.endpoint["profile_ids"])
+            self.endpoint["profile_ids"],
+            self._pol_ids_by_tier)
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
             self.fip_manager.update_endpoint(self.combined_id,

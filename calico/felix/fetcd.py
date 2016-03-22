@@ -37,8 +37,8 @@ from calico.datamodel_v1 import (
     VERSION_DIR, CONFIG_DIR, dir_for_per_host_config, PROFILE_DIR, HOST_DIR,
     EndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
-    ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP
-)
+    ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP,
+    POLICY_DIR, TieredPolicyId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
     MSG_KEY_ETCD_URL, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
@@ -68,6 +68,7 @@ RETRY_DELAY = 5
 PER_PROFILE_DIR = PROFILE_DIR + "/<profile_id>"
 TAGS_KEY = PER_PROFILE_DIR + "/tags"
 RULES_KEY = PER_PROFILE_DIR + "/rules"
+PROFILE_LABELS_KEY = PER_PROFILE_DIR + "/labels"
 PER_HOST_DIR = HOST_DIR + "/<hostname>"
 HOST_IP_KEY = PER_HOST_DIR + "/bird_ip"
 WORKLOAD_DIR = PER_HOST_DIR + "/workload"
@@ -77,6 +78,8 @@ ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
 PER_ENDPOINT_KEY = ENDPOINT_DIR + "/<endpoint_id>"
 CONFIG_PARAM_KEY = CONFIG_DIR + "/<config_param>"
 PER_HOST_CONFIG_PARAM_KEY = PER_HOST_DIR + "/config/<config_param>"
+TIER_DATA = POLICY_DIR + "/tier/<tier>/metadata"
+TIERED_PROFILE = POLICY_DIR + "/tier/<tier>/policy/<policy_id>"
 
 IPAM_DIR = VERSION_DIR + "/ipam"
 IPAM_V4_DIR = IPAM_DIR + "/v4"
@@ -334,6 +337,16 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         # Profiles and their contents.
         reg(TAGS_KEY, on_set=self.on_tags_set, on_del=self.on_tags_delete)
         reg(RULES_KEY, on_set=self.on_rules_set, on_del=self.on_rules_delete)
+        reg(PROFILE_LABELS_KEY,
+            on_set=self.on_prof_labels_set,
+            on_del=self.on_prof_labels_delete)
+        # Tiered policy
+        reg(TIER_DATA,
+            on_set=self.on_tier_data_set,
+            on_del=self.on_tier_data_delete)
+        reg(TIERED_PROFILE,
+            on_set=self.on_tiered_policy_set,
+            on_del=self.on_tiered_policy_delete)
         # Hosts and endpoints.
         reg(HOST_IP_KEY,
             on_set=self.on_host_ip_set,
@@ -603,7 +616,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         """Handler for rules updates, passes the update to the splitter."""
         _log.debug("Rules for %s set", profile_id)
         _stats.increment("Rules created/updated")
-        rules = parse_rules(profile_id, response.value)
+        rules = parse_profile(profile_id, response.value)
         profile_id = intern(profile_id.encode("utf8"))
         self.splitter.on_rules_update(profile_id, rules)
 
@@ -626,6 +639,55 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.debug("Tags for %s deleted", profile_id)
         _stats.increment("Tags deleted")
         self.splitter.on_tags_update(profile_id, None)
+
+    def on_prof_labels_set(self, response, profile_id):
+        """Handler for profile labels, passes update to the splitter."""
+        _log.debug("Labels for profile %s created/updated", profile_id)
+        labels = parse_labels(profile_id, response.value)
+        profile_id = intern(profile_id.encode("utf8"))
+        self.splitter.on_prof_labels_set(profile_id, labels)
+
+    def on_prof_labels_delete(self, response, profile_id):
+        """Handler for profile label deletion
+
+        passed update to the splitter."""
+        _log.debug("Labels for profile %s deleted", profile_id)
+        profile_id = intern(profile_id.encode("utf8"))
+        self.splitter.on_prof_labels_set(profile_id, None)
+
+    def on_tier_data_set(self, response, tier):
+        _log.debug("Tier data set for tier %s", tier)
+        _stats.increment("Tier data created/updated")
+        data = parse_tier_data(tier, response.value)
+        self.splitter.on_tier_data_update(tier, data)
+
+    def on_tier_data_delete(self, response, tier):
+        _log.debug("Tier data deleted for tier %s", tier)
+        _stats.increment("Tier data deleted")
+        self.splitter.on_tier_data_update(tier, None)
+
+    def on_tiered_policy_set(self, response, tier, policy_id):
+        _log.debug("Rules for %s/%s set", tier, policy_id)
+        _stats.increment("Tiered rules created/updated")
+        policy_id = TieredPolicyId(tier, policy_id)
+        rules = parse_policy(policy_id, response.value)
+        if rules is not None:
+            selector = rules.pop("selector")
+            order = rules.pop("order")
+            self.splitter.on_rules_update(policy_id, rules)
+            self.splitter.on_policy_selector_update(policy_id, selector,
+                                                     order)
+        else:
+            self.splitter.on_rules_update(policy_id, None)
+            self.splitter.on_policy_selector_update(policy_id, None, None)
+
+    def on_tiered_policy_delete(self, response, tier, policy_id):
+        """Handler for tiered rules deletes, passes update to the splitter."""
+        _log.debug("Rules for %s/%s deleted", tier, policy_id)
+        _stats.increment("tiered rules deleted")
+        policy_id = TieredPolicyId(tier, policy_id)
+        self.splitter.on_rules_update(policy_id, None)
+        self.splitter.on_policy_selector_update(policy_id, None, None)
 
     def on_host_ip_set(self, response, hostname):
         if not self._config.IP_IN_IP_ENABLED:
@@ -682,11 +744,11 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_ipam_v4_pool_set(self, response, pool_id):
         _stats.increment("IPAM pool created/updated")
         pool = parse_ipam_pool(pool_id, response.value)
-        self.splitter.on_ipam_pool_update(pool_id, pool)
+        self.splitter.on_ipam_pool_updated(pool_id, pool)
 
     def on_ipam_v4_pool_delete(self, response, pool_id):
         _stats.increment("IPAM pool deleted")
-        self.splitter.on_ipam_pool_update(pool_id, None)
+        self.splitter.on_ipam_pool_updated(pool_id, None)
 
 
 class EtcdStatusReporter(EtcdClientOwner, Actor):
@@ -917,16 +979,42 @@ def parse_endpoint(config, combined_id, raw_json):
     return endpoint
 
 
-def parse_rules(profile_id, raw_json):
+def parse_tier_data(tier, data):
+    data = safe_decode_json(data, log_tag="tier %s" % tier)
+    try:
+        common.validate_tier_data(tier, data)
+    except ValidationFailed as e:
+        _log.error("Validation failed for tier data for tier %s: %r",
+                   tier, e)
+        return None
+    else:
+        return data
+
+
+def parse_profile(profile_id, raw_json, require_selector=False,
+                  require_order=False):
     rules = safe_decode_json(raw_json, log_tag="rules %s" % profile_id)
     try:
-        common.validate_rules(profile_id, rules)
+        common.validate_profile(profile_id, rules)
     except ValidationFailed as e:
-        _log.exception("Validation failed for profile %s rules: %s; %r",
-                       profile_id, rules, e)
+        _log.exception("Validation failed for profile %s rules: %s",
+                       profile_id, rules)
         return None
     else:
         return rules
+
+
+def parse_policy(profile_id, raw_json, require_selector=False,
+                  require_order=False):
+    policy = safe_decode_json(raw_json, log_tag="policy %s" % profile_id)
+    try:
+        common.validate_policy(profile_id, policy)
+    except ValidationFailed as e:
+        _log.exception("Validation failed for policy %s: %s",
+                       profile_id, policy)
+        return None
+    else:
+        return policy
 
 
 def parse_tags(profile_id, raw_json):
@@ -941,6 +1029,19 @@ def parse_tags(profile_id, raw_json):
         # The tags aren't in a top-level object so we need to manually
         # intern them here.
         return intern_list(tags)
+
+
+def parse_labels(profile_id, raw_json):
+    labels = safe_decode_json(raw_json,
+                              log_tag="profile labels for %s" % profile_id)
+    try:
+        common.validate_labels(profile_id, labels)
+    except ValidationFailed:
+        _log.exception("Validation failed for profile %s labels : %s",
+                       profile_id, labels)
+        return None
+    else:
+        return labels
 
 
 def parse_host_ip(hostname, raw_value):

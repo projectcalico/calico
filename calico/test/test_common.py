@@ -20,10 +20,17 @@ test.test_common
 Test common utility code.
 """
 import copy
+import re
 from collections import namedtuple
 import logging
 import mock
 import sys
+
+from hypothesis import given, example, assume
+from hypothesis.strategies import text
+from nose.tools import assert_raises
+
+from calico.felix.selectors import parse_selector, BadSelector
 
 if sys.version_info < (2, 7):
     import unittest2 as unittest
@@ -33,7 +40,7 @@ else:
 
 import calico.common as common
 from calico.common import ValidationFailed
-from calico.datamodel_v1 import EndpointId
+from calico.datamodel_v1 import EndpointId, TieredPolicyId
 
 Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
 
@@ -238,7 +245,7 @@ class TestCommon(unittest.TestCase):
                  "action": "deny"}
             ],
         }
-        common.validate_rules("profile_id", rules)
+        common.validate_profile("profile_id", rules)
         # Check IPs get made canonical.
         self.assertEqual(rules, {
             "inbound_rules": [
@@ -468,47 +475,102 @@ class TestCommon(unittest.TestCase):
                                      "not a valid IPv6 gateway"):
             common.validate_endpoint(config, combined_id, bad_dict.copy())
 
+        # Labels, empty.
+        good_dict["labels"] = {}
+        common.validate_endpoint(config, combined_id, good_dict)
+        self.assertEqual(good_dict["labels"], {})
+        # Labels, valid.
+        good_dict["labels"] = {"a": "b"}
+        common.validate_endpoint(config, combined_id, good_dict)
+        self.assertEqual(good_dict["labels"], {"a": "b"})
+        # Labels, bad type.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = []
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected labels to be a dict"):
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
+        # Labels, bad value.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = {"a": {}}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid label value"):
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
+        # Labels, bad key.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = {"a+|%": {}}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid label name 'a+|%'."):
+            common.validate_endpoint(config, combined_id, bad_dict.copy())
+
+    def test_validate_tier_data(self):
+        good_data = {"order": 10}
+        common.validate_tier_data("abcd_-ef", good_data)
+        with self.assertRaises(ValidationFailed):
+            # Bad name
+            common.validate_tier_data("", good_data)
+        with self.assertRaises(ValidationFailed):
+            # Bad name
+            common.validate_tier_data("+|$", good_data)
+        with self.assertRaises(ValidationFailed):
+            # Bad order value
+            common.validate_tier_data("abc", {"order": "10"})
+        with self.assertRaises(ValidationFailed):
+            # Missing order.
+            common.validate_tier_data("abc", {})
+        with self.assertRaises(ValidationFailed):
+            # Non-dict.
+            common.validate_tier_data("abc", "foo")
+
     def test_validate_rules(self):
         profile_id = "valid_name-ok."
         rules = {'inbound_rules': [],
                  'outbound_rules': []}
-        common.validate_rules(profile_id, rules.copy())
+        common.validate_profile(profile_id, rules.copy())
 
         with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected rules to be a dict"):
-            common.validate_rules(profile_id, [])
+                                     "Expected profile 'valid_name-ok.' to "
+                                     "be a dict"):
+            common.validate_profile(profile_id, [])
 
         with self.assertRaisesRegexp(ValidationFailed,
-                                     "Invalid profile_id"):
-            common.validate_rules("a&b", rules.copy())
+                                     "Invalid profile ID"):
+            common.validate_profile("a&b", rules.copy())
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid profile ID"):
+            common.validate_policy(TieredPolicyId("+123", "abc"),
+                                   rules.copy())
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid profile ID"):
+            common.validate_policy(TieredPolicyId("abc", "+"),
+                                   rules.copy())
 
         # No rules.
         with self.assertRaisesRegexp(ValidationFailed,
                                      "No outbound_rules"):
-            common.validate_rules(profile_id, {'inbound_rules':[]})
+            common.validate_profile(profile_id, {'inbound_rules': []})
         with self.assertRaisesRegexp(ValidationFailed,
                                      "No inbound_rules"):
-            common.validate_rules(profile_id, {'outbound_rules':[]})
+            common.validate_profile(profile_id, {'outbound_rules': []})
 
         rules = {'inbound_rules': 3,
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                             "Expected rules\[inbound_rules\] to be a list"):
-            common.validate_rules(profile_id, rules.copy())
+            common.validate_profile(profile_id, rules.copy())
 
         rule = "not a dict"
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
-                            "Rules should be dicts"):
-            common.validate_rules(profile_id, rules.copy())
+                                     "Rule should be a dict"):
+            common.validate_profile(profile_id, rules.copy())
 
         rule = {'bad_key': ""}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Rule contains unknown keys"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'protocol': "bloop"}
         rules = {'inbound_rules': [rule],
@@ -516,14 +578,14 @@ class TestCommon(unittest.TestCase):
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid protocol bloop in rule "
                                      "{'protocol': 'bloop'}"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'ip_version': 5}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid ip_version in rule"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'ip_version': 4,
                 'protocol': "icmpv6"}
@@ -531,7 +593,7 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Using icmpv6 with IPv4"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'ip_version': 6,
                 'protocol': "icmp"}
@@ -539,33 +601,33 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Using icmp with IPv6"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'src_tag': "abc",
                 'protocol': "icmp"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
-        common.validate_rules(profile_id, rules)
+        common.validate_profile(profile_id, rules)
 
         rule = {'src_tag': "abc",
                 'protocol': "123"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
-        common.validate_rules(profile_id, rules)
+        common.validate_profile(profile_id, rules)
 
         rule = {'protocol': "256"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid protocol 256 in rule"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'protocol': "0"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid protocol 0 in rule"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'src_tag': "a!b",
                 'protocol': "icmp"}
@@ -573,7 +635,7 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid src_tag"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'dst_tag': "x,y",
                 'protocol': "icmp"}
@@ -581,14 +643,28 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid dst_tag"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
+
+        rule = {'src_selector': "a!b"}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid src_selector"):
+            common.validate_profile(profile_id, rules)
+
+        rule = {'dst_selector': "+b"}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid dst_selector"):
+            common.validate_profile(profile_id, rules)
 
         rule = {'src_net': "nonsense"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid CIDR"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'dst_net': "1.2.3.4/16",
                 'ip_version': 6}
@@ -596,49 +672,49 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid CIDR"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'src_ports': "nonsense"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected ports to be a list"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'dst_ports': [32, "nonsense"]}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid port"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'action': "nonsense"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid action"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': "nonsense"}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP type is not an integer"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': -1}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP type is out of range"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': 256}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP type is out of range"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': 22,
                 'icmp_code': "2"}
@@ -646,7 +722,7 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP code is not an integer"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': 0,
                 'icmp_code': -1}
@@ -654,7 +730,7 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP code is out of range"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_type': 0,
                 'icmp_code': 256}
@@ -662,14 +738,88 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP code is out of range"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
 
         rule = {'icmp_code': 2}
         rules = {'inbound_rules': [rule],
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP code specified without ICMP type"):
-            common.validate_rules(profile_id, rules)
+            common.validate_profile(profile_id, rules)
+
+    def test_validate_policy(self):
+        policy_id = TieredPolicyId("a", "b")
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected policy 'a/b' to "
+                                     "be a dict"):
+            common.validate_policy(policy_id, [])
+
+        rules = {'selector': "+abcd", # Bad selector
+                 'inbound_rules': [],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Failed to parse selector"):
+            common.validate_policy(policy_id, rules)
+
+    def test_replace_selector_with_object(self):
+        """
+        Checks that the validate_profile() method replaces selectors
+        (with their object representations).
+        """
+        policy = {
+            "selector": "a == 'b'",
+            "inbound_rules": [
+                {"src_selector": "b == 'c'", "dst_selector": "e == 'f'"}
+            ],
+            "outbound_rules": [
+                {"src_selector": "h == 'c'", "dst_selector": "i == 'f'"}
+            ],
+            "order": 10
+        }
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
+        self.assertEqual(policy["selector"], parse_selector("a == 'b'"))
+        self.assertEqual(policy["inbound_rules"][0]["src_selector"],
+                         parse_selector("b == 'c'"))
+        self.assertEqual(policy["inbound_rules"][0]["dst_selector"],
+                         parse_selector("e == 'f'"))
+        self.assertEqual(policy["outbound_rules"][0]["src_selector"],
+                         parse_selector("h == 'c'"))
+        self.assertEqual(policy["outbound_rules"][0]["dst_selector"],
+                         parse_selector("i == 'f'"))
+
+    def test_validate_order(self):
+        policy = {
+            "selector": "a == 'b'",
+            "order": 10,
+            "inbound_rules": [],
+            "outbound_rules": [],
+        }
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
+
+        policy = {
+            "selector": "a == 'b'",
+            "order": "10",
+            "inbound_rules": [],
+            "outbound_rules": [],
+        }
+        with self.assertRaises(ValidationFailed):
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
+
+        policy = {
+            "selector": "a == 'b'",
+            "inbound_rules": [],
+            "outbound_rules": [],
+        }
+        with self.assertRaises(ValidationFailed):
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
+
+        policy = {
+            "order": 10,
+            "inbound_rules": [],
+            "outbound_rules": [],
+        }
+        with self.assertRaises(ValidationFailed):
+            common.validate_policy(TieredPolicyId("a", "b"), policy)
 
     def test_validate_rule_port(self):
         self.assertEqual(common.validate_rule_port(73), None)
@@ -737,3 +887,40 @@ class TestCommon(unittest.TestCase):
     def assert_ipam_pool_invalid(self, pool, version, pool_id="1234-5"):
         self.assertRaises(ValidationFailed,
                           common.validate_ipam_pool, pool_id, pool, version)
+
+    def test_labels_validation(self):
+        common.validate_labels("prof_id", {"a": "b"})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "prof_id", {"a": ["b"]})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "prof_id", {"a": [1]})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "prof_id", {"a": [None]})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "prof_id", {"a": None})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "prof_id", {"a": 1})
+        assert_raises(ValidationFailed,
+                      common.validate_labels, "+", {"a": "b"})
+
+    @given(text())
+    @example("calico/k8s_namespace")
+    @example("kubernetes.io/somet_-hing.boo")
+    @example("!")
+    def test_label_regex(self, label):
+        """
+        Test that the label validation logic matches the selector parsing
+        logic in what it allows.
+        """
+        # Whitespace is ignored in selectors.
+        assume(not re.search(r'\s', label))
+        try:
+            common.validate_labels("foo", {label: "foo"})
+        except ValidationFailed:
+            # Validation failed, should fail to parse as a selector too.
+            _log.exception("Validation failed for label %r", label)
+            assert_raises(BadSelector, parse_selector,
+                          "%s == 'a'" % label)
+        else:
+            # Validation passed, should be allowed in expression too.
+            parse_selector("%s == 'a'" % label)

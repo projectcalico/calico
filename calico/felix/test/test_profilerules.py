@@ -20,11 +20,13 @@ Tests for the profilerules module.
 """
 
 import logging
+
+from calico.felix.selectors import parse_selector, SelectorExpression
 from mock import Mock, call, patch
 from calico.felix import refcount
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.futils import FailedSystemCall
-from calico.felix.ipsets import IpsetManager, TagIpset
+from calico.felix.ipsets import IpsetManager, RefCountedIpsetActor
 from calico.felix.profilerules import ProfileRules, RulesManager
 
 from calico.felix.test.base import BaseTestCase, load_config
@@ -64,11 +66,12 @@ RULES_1_CHAINS = {
     ]
 }
 
-
+SELECTOR_1 = parse_selector("a == 'a1'")
 RULES_2 = {
     "id": "prof1",
     "inbound_rules": [
-        {"src_tag": "src-tag-added"}
+        {"src_tag": "src-tag-added",
+         "src_selector": SELECTOR_1}
     ],
     "outbound_rules": [
         {"dst_tag": "dst-tag"}
@@ -79,7 +82,9 @@ RULES_2_CHAINS = {
     'felix-p-prof1-i': [
         '--append felix-p-prof1-i --jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-i --match set '
-            '--match-set src-tag-added-name src --jump RETURN',
+            '--match-set src-tag-added-name src '
+            '--match set '
+            '--match-set selector-1-name src --jump RETURN',
         '--append felix-p-prof1-i '
             '--match comment '
             '--comment "No match, fall through to next profile" '
@@ -357,7 +362,8 @@ class TestProfileRules(BaseTestCase):
         self.step_actor(self.rules)
         # New tag should be added but old tag shouldn't be removed until
         # iptables updated.
-        expected_tags = set(["src-tag", "src-tag-added", "dst-tag"])
+        expected_tags = set(["src-tag", "src-tag-added", "dst-tag",
+                             SELECTOR_1])
         self.assertEqual(self.rules._ipset_refs.required_refs,
                          expected_tags)
         # But the ref helper will already have sent an incref for "src-tag".
@@ -366,7 +372,7 @@ class TestProfileRules(BaseTestCase):
             RULES_2_CHAINS, {}, async=False)
         # Processing the ipset refs triggers iptables update, which triggers
         # tag to be freed.
-        expected_tags = set(["src-tag-added", "dst-tag"])
+        expected_tags = set(["src-tag-added", "dst-tag", SELECTOR_1])
         self.assertEqual(self.rules._ipset_refs.required_refs,
                          expected_tags)
 
@@ -457,8 +463,11 @@ class TestProfileRules(BaseTestCase):
             obj_id = args[0]
             callback = kwargs["callback"]
             seen_tags.add(obj_id)
-            m_ipset = Mock(spec=TagIpset)
-            m_ipset.ipset_name = obj_id + "-name"
+            m_ipset = Mock(spec=RefCountedIpsetActor)
+            if obj_id == SELECTOR_1:
+                m_ipset.ipset_name = "selector-1-name"
+            else:
+                m_ipset.ipset_name = obj_id + "-name"
             callback(obj_id, m_ipset)
             self.step_actor(self.rules)
         self.m_ips_mgr.get_and_incref.reset_mock()

@@ -36,6 +36,8 @@ import pkg_resources
 from calico import common
 
 # Logger
+from calico.felix.futils import find_set_bits
+
 log = logging.getLogger(__name__)
 
 FELIX_IPT_GENERATOR_PLUGIN_NAME = "calico.felix.iptables_generator"
@@ -344,13 +346,14 @@ class Config(object):
         self._validate_cfg(final=final)
 
         # Now the config has been validated, generate the IPTables mark masks
-        # we'll actually use internally.
+        # we'll actually use internally.  From least to most significant bits
+        # of the mask we use them for:
+        # - signalling that a profile accepted a packet
+        # - signalling that a packet should move to the next policy tier.
         mark_mask = self.IPTABLES_MARK_MASK
-
-        # Extract the least significant bit and use it as the accept mask.
-        next_mask = mark_mask & (mark_mask - 1)
-        self.IPTABLES_MARK_ACCEPT = "0x%x" % (mark_mask - next_mask)
-        mark_mask = next_mask
+        set_bits = find_set_bits(mark_mask)
+        self.IPTABLES_MARK_ACCEPT = "0x%x" % next(set_bits)
+        self.IPTABLES_MARK_NEXT_TIER = "0x%x" % next(set_bits)
 
         for plugin in self.plugins.itervalues():
             # Plugins don't get loaded and registered until we've read config

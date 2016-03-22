@@ -27,6 +27,8 @@ migrations.
 import logging
 import re
 
+from pyparsing import alphanums
+
 _log = logging.getLogger(__name__)
 
 # All Calico data is stored under this path.
@@ -89,6 +91,9 @@ ENDPOINT_STATUS_ERROR = "error"
 # Information intended for use by the DHCP agent.
 DHCP_DIR = ROOT_DIR + "/dhcp" + DHCP_VERSION
 SUBNET_DIR= DHCP_DIR + "/subnet"
+
+# Characters valid in a label ID.
+LABEL_CHARS = alphanums + "_.-/"
 
 
 def dir_for_host(hostname):
@@ -220,3 +225,36 @@ class EndpointId(object):
 
     def __hash__(self):
         return hash(self.endpoint) + hash(self.workload)
+
+
+class TieredPolicyId(object):
+    __slots__ = ["tier", "policy_id"]
+
+    def __init__(self, tier, profile_id):
+        # Intern the strings, which may occur in many IDs.  We can't intern
+        # unicode strings so we encode them as utf-8 byte strings.  In
+        # common.py, we'll validate that the strings only contain our expected
+        # character set.
+        self.tier = intern(tier.encode("utf8"))
+        self.policy_id = intern(profile_id.encode("utf8"))
+
+    def __str__(self):
+        return "%s/%s" % (self.tier, self.policy_id)
+
+    def __repr__(self):
+        return self.__class__.__name__ + ("(%r,%r)" % (self.tier,
+                                                       self.policy_id))
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, TieredPolicyId):
+            return False
+        return (other.tier == self.tier and
+                other.policy_id == self.policy_id)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.tier) * 37 + hash(self.policy_id)

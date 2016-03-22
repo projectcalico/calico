@@ -3,6 +3,8 @@
 ## 1.4.0-pre1
 
 - Add floating IP support (via 1:1 NAT) in Felix.
+- Add tiered security policy based on labels and selectors (PR #979).  Allows
+  for a rich, hierarchical security model.
 
 ## 1.3.0
 

@@ -22,13 +22,15 @@ from collections import defaultdict
 
 import logging
 from pprint import pformat
+
+from calico.felix.selectors import parse_selector, SelectorExpression
 from mock import *
 from netaddr import IPAddress
 
 from calico.datamodel_v1 import EndpointId
 from calico.felix.futils import IPV4, FailedSystemCall, CommandOutput
 from calico.felix.ipsets import (EndpointData, IpsetManager, IpsetActor,
-                                 TagIpset, EMPTY_ENDPOINT_DATA, Ipset,
+                                 RefCountedIpsetActor, EMPTY_ENDPOINT_DATA, Ipset,
                                  list_ipset_names)
 from calico.felix.refcount import CREATED
 from calico.felix.test.base import BaseTestCase
@@ -43,6 +45,20 @@ EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
 EP_1_1 = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.1/32"],
+}
+EP_1_1_LABELS = {
+    "profile_ids": ["prof1", "prof2"],
+    "ipv4_nets": ["10.0.0.1/32"],
+    "labels": {
+        "a": "a1",
+    }
+}
+EP_1_1_LABELS_NEW_IP = {
+    "profile_ids": ["prof1", "prof2"],
+    "ipv4_nets": ["10.0.0.2/32"],
+    "labels": {
+        "a": "a1",
+    }
 }
 EP_DATA_1_1 = EndpointData(["prof1", "prof2"], ["10.0.0.1"])
 EP_1_1_NEW_IP = {
@@ -102,29 +118,38 @@ class TestIpsetManager(BaseTestCase):
         self.mgr = IpsetManager(IPV4, self.config)
         self.m_create = Mock(spec=self.mgr._create,
                              side_effect = self.m_create)
+        self.real_create = self.mgr._create
         self.mgr._create = self.m_create
 
-    def m_create(self, tag_id):
-        _log.info("Creating ipset %s", tag_id)
-        ipset = Mock(spec=TagIpset)
+    def m_create(self, tag_or_sel):
+        _log.info("Creating ipset %s", tag_or_sel)
+
+        # Do the real creation, to kick off selector indexing, for example.
+        with patch("calico.felix.ipsets.RefCountedIpsetActor", autospec=True):
+            self.real_create(tag_or_sel)
+
+        # But return a mock...
+        ipset = Mock(spec=RefCountedIpsetActor)
 
         ipset._manager = None
         ipset._id = None
         ipset.ref_mgmt_state = CREATED
         ipset.ref_count = 0
-        ipset.owned_ipset_names.return_value = ["felix-v4-" + tag_id,
-                                                "felix-v4-tmp-" + tag_id]
-
-        ipset.tag = tag_id
-        self.created_refs[tag_id].append(ipset)
+        if isinstance(tag_or_sel, SelectorExpression):
+            name_stem = tag_or_sel.unique_id[:8]
+        else:
+            name_stem = tag_or_sel
+        ipset.owned_ipset_names.return_value = ["felix-v4-" + name_stem,
+                                                "felix-v4-tmp-" + name_stem]
+        ipset.name_stem = name_stem
+        self.created_refs[tag_or_sel].append(ipset)
         return ipset
 
     def test_create(self):
         with patch("calico.felix.ipsets.Ipset") as m_Ipset:
             mgr = IpsetManager(IPV4, self.config)
             tag_ipset = mgr._create("tagid")
-        self.assertEqual(tag_ipset.tag, "tagid")
-        self.assertEqual(tag_ipset.tag, "tagid")
+        self.assertEqual(tag_ipset.name_stem, "tagid")
         m_Ipset.assert_called_once_with('felix-v4-tagid',
                                         'felix-tmp-v4-tagid',
                                         'inet', 'hash:ip',
@@ -179,6 +204,121 @@ class TestIpsetManager(BaseTestCase):
         self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
             "tag1": {
                 "10.0.0.1": ("prof1", EP_ID_1_1),
+            }
+        })
+
+    def test_selector_then_endpoint(self):
+        # Send in the messages.  this selector should match even though there
+        # are no labels in the endpoint.
+        selector = parse_selector("all()")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
+        # Let the actor process them.
+        self.step_mgr()
+
+        self.assert_one_selector_one_ep(selector)
+
+        # Undo our messages to check that the index is correctly updated.
+        self.mgr.decref(selector, async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
+
+    def test_endpoint_then_selector(self):
+        # Send in the messages.
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
+        selector = parse_selector("all()")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        # Let the actor process them.
+        self.step_mgr()
+
+        self.assert_one_selector_one_ep(selector)
+
+        # Undo our messages to check that the index is correctly updated.
+        self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
+        self.mgr.decref(selector, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
+
+    def test_non_trivial_selector_parent_match(self):
+        """
+        Test a selector that relies on both directly-set labels and
+        inherited ones.
+        """
+        # Send in the messages.  this selector should match even though there
+        # are no labels in the endpoint.
+        selector = parse_selector("a == 'a1' && p == 'p1'")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1_LABELS, async=True)
+        # Let the actor process them.
+        self.step_mgr()
+
+        # Should be no match yet.
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {})
+
+        # Now fire in a parent label.
+        self.mgr.on_prof_labels_set("prof1", {"p": "p1"}, async=True)
+        self.step_mgr()
+
+        # Should now have a match.
+        self.assert_one_selector_one_ep(selector)
+
+        # Undo our messages to check that the index is correctly updated.
+        self.mgr.on_prof_labels_set("prof1", None, async=True)
+        self.step_mgr()
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {})
+        self.mgr.decref(selector, async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
+
+    def test_endpoint_ip_update_with_selector_match(self):
+        """
+        Test a selector that relies on both directly-set labels and
+        inherited ones.
+        """
+        # Send in the messages.  this selector should match even though there
+        # are no labels in the endpoint.
+        selector = parse_selector("a == 'a1'")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1_LABELS, async=True)
+        self.step_mgr()
+
+        # Should now have a match.
+        self.assert_one_selector_one_ep(selector)
+
+        # Now update the IPs, should update the index.
+        self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1_LABELS_NEW_IP,
+                                    async=True)
+        self.step_mgr()
+
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
+            selector: {
+                "10.0.0.2": ("dummy", EP_ID_1_1),
+            }
+        })
+
+        # Undo our messages to check that the index is correctly updated.
+        self.mgr.decref(selector, async=True)
+        self.mgr.on_endpoint_update(EP_ID_1_1, None, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
+
+    def assert_one_selector_one_ep(self, selector):
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            EP_ID_1_1: EP_DATA_1_1,
+        })
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
+            selector: {
+                "10.0.0.1": ("dummy", EP_ID_1_1),
             }
         })
 
@@ -405,7 +545,7 @@ class TestIpsetManager(BaseTestCase):
 
     def test_update_dirty(self):
         self.mgr._datamodel_in_sync = True
-        m_ipset = Mock(spec=TagIpset)
+        m_ipset = Mock(spec=RefCountedIpsetActor)
         self.mgr.objects_by_id["tag-123"] = m_ipset
         with patch.object(self.mgr, "_is_starting_or_live",
                           autospec=True) as m_sol:
@@ -566,7 +706,7 @@ class TestTagIpsetActor(BaseTestCase):
         self.m_ipset.max_elem = 1234
         self.m_ipset.set_name = "felix-a_set_name"
         self.m_ipset.temp_set_name = "felix-a_set_name-tmp"
-        self.tag_ipset = TagIpset("tag-123", "IPv4", max_elem=1024)
+        self.tag_ipset = RefCountedIpsetActor("tag-123", "IPv4", max_elem=1024)
         self.tag_ipset._ipset = self.m_ipset
         self.m_mgr = Mock()
         self.tag_ipset._manager = self.m_mgr
