@@ -100,9 +100,9 @@ The Calico Docker system tests provide detailed testing of the `calicoctl` comma
 container image.  The tests cover multiple topologies and covers most of the available `calicoctl` command line
 options.
 
-The full suite of system tests takes approximately 30 minutes to complete.  If you are developing code for Calico
-Docker, and are regularly running the system tests, a faster subset of system tests may be run which covers most
-mainline function.
+The full suite of system tests takes approximately 30 minutes to complete. 
+If you are developing code for Calico Docker and are regularly running
+the system tests, you can run a [subset of the tests](./Building.md#running-a-subset-of-system-tests) instead.
 
 Both STs start an etcd server bound to a local IP address (automatically determined).  If you have
 multiple local IP addresses and wish to explicitly select an IP address to bind to, set the environment variable
@@ -124,16 +124,6 @@ From the root directory of the checked out repository, run
 
 The full ST suite builds the calicoctl binary and calico/node docker image.  It starts a container running etcd, and then runs all of the tests defined in tests/st, using the built calicoctl and calico/node to run the tests.
 
-#### The fast ST suite
-
-From the root directory of the checked out repository, run
-
-    sudo make fast-st
-
-Unlike the full ST suite, the fast ST suite does not build the calicoctl binary - instead it runs calicoctl directly
-from the python interpreter.  It starts a container running etcd, and then runs all of the tests defined in
-tests/st that do not have the "slow" attribute assigned to them.
-
 #### Running a subset of system tests
 
 If you wish to test a single system test module (particularly useful when writing a new system test, or running a
@@ -142,10 +132,10 @@ to run, or a directory containing a set of modules to run.  For example:
 
 To run all of the BGP tests:
 
-    sudo ST_TO_RUN=calico_containers/tests/st/bgp make st
+    sudo ST_TO_RUN=tests/st/bgp make st
 
 To run the single no-orchestrator, mainline multi-host test:
 
-    sudo ST_TO_RUN=calico_containers/tests/st/no_orchestrator/test_mainline_multi_host.py make st
+    sudo ST_TO_RUN=tests/st/no_orchestrator/test_mainline_multi_host.py make st
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/Building.md?pixel)](https://github.com/igrigorik/ga-beacon)
