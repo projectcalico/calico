@@ -5,7 +5,7 @@ metadata:
   name: frontend-policy
 spec:
   podSelector:
-    tier: frontend 
+    role: frontend 
   ingress:
     - from:
         - namespaces:

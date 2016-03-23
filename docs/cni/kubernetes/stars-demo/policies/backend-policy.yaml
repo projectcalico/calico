@@ -5,11 +5,11 @@ metadata:
   name: backend-policy
 spec:
   podSelector:
-    tier: backend
+    role: backend
   ingress:
     - from:
         - pods:
-            tier: frontend
+            role: frontend
       ports:
         - protocol: TCP
           port: 6379

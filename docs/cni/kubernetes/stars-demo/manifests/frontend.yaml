@@ -4,12 +4,11 @@ metadata:
   name: frontend 
   namespace: stars
 spec:
-  type: NodePort
   ports:
   - port: 80 
     targetPort: 80 
   selector:
-    tier: frontend 
+    role: frontend 
 ---
 apiVersion: v1
 kind: ReplicationController
@@ -21,7 +20,7 @@ spec:
   template:
     metadata:
       labels:
-        tier: frontend 
+        role: frontend 
     spec:
       containers:
       - name: frontend 
