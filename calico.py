@@ -15,6 +15,7 @@
 from __future__ import print_function
 import logging
 import json
+import yaml
 import os
 import sys
 
@@ -654,8 +655,12 @@ def main():
     """
     # Read the network config file from stdin. Replace newline characters
     # so that we can properly load it as json.
+    # The python json library loads strings as as the unicode type. This causes
+    # problems when loading values into os.environ.
+    # Rather than try to encode them as strings, just use the yaml library.
+    # For more details see http://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-ones-from-json-in-python
     config_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
-    network_config = json.loads(config_raw)
+    network_config = yaml.safe_load(config_raw)
 
     # Get the log level from the config file, default to INFO.
     log_level = network_config.get(LOG_LEVEL_KEY, "INFO").upper()
