@@ -316,7 +316,7 @@ def configure_etc_hosts():
     """
     k8s_host = os.environ.get(K8S_SERVICE_HOST, "10.100.0.1")
     with open("/etc/hosts", "a") as f:
-        f.write("%s    kubernetes.default" % k8s_host)
+        f.write("%s    kubernetes.default\n" % k8s_host)
     _log.info("Appended 'kubernetes.default  -> %s' to /etc/hosts", k8s_host)
 
 
