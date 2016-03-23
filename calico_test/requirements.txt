@@ -12,3 +12,4 @@ flask
 gunicorn
 monotime
 ConcurrentLogHandler
+pyyaml
