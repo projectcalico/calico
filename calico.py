@@ -665,8 +665,13 @@ def main():
     # Get the log level from the config file, default to INFO.
     log_level = network_config.get(LOG_LEVEL_KEY, "INFO").upper()
 
-    # Configure logging.
+    # Configure logging for CNI
     configure_logging(_log, LOG_FILENAME, log_level=log_level)
+
+    # Configure logging for libcalico (pycalico)
+    configure_logging(logging.getLogger("pycalico"), LOG_FILENAME,
+                      log_level=log_level)
+
     _log.debug("Loaded network config:\n%s",
                json.dumps(network_config, indent=2))
 
