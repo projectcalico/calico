@@ -16,7 +16,9 @@
 
 # Two usage strings - 1 for linux and 1 for other OSes (e.g. Mac and Windows) which can't run the full set of commands.
 
-linux_usage = """Override the host:port of the ETCD server by setting the environment variable
+linux_usage = """Override the host:port of the ETCD server by setting the environment variable:
+ETCD_ENDPOINTS [example: http://1.2.3.4:2379,http://1.2.3.5:2379]
+or, if ETCD_ENDPOINTS is left unset:
 ETCD_AUTHORITY [default: 127.0.0.1:2379]
 
 Usage: calicoctl <command> [<args>...]
@@ -37,7 +39,9 @@ Usage: calicoctl <command> [<args>...]
 See 'calicoctl <command> --help' to read about a specific subcommand.
 """
 
-otheros_usage = """Override the host:port of the ETCD server by setting the environment variable
+otheros_usage = """Override the host:port of the ETCD server by setting the environment variable:
+ETCD_ENDPOINTS [example: http://1.2.3.4:2379,http://1.2.3.5:2379]
+or, if ETCD_ENDPOINTS is left unset:
 ETCD_AUTHORITY [default: 127.0.0.1:2379]
 
 Usage: calicoctl <command> [<args>...]

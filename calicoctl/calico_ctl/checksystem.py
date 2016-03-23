@@ -21,10 +21,11 @@ Description:
 Options:
   --fix  DEPRECATED: checksystem no longer fixes issues that it detects
   --libnetwork  Check for the correct docker version for libnetwork deployments
-  --runtime=<RUNTIME>  Specify the runtime used to run the calico/node 
-                       container, either "docker" or "rkt". 
+  --runtime=<RUNTIME>  Specify the runtime used to run the calico/node
+                       container, either "docker" or "rkt".
                        [default: docker]
 """
+import os
 import platform
 import re
 import sys
@@ -37,7 +38,9 @@ from subprocess32 import check_output
 from utils import DOCKER_VERSION, DOCKER_LIBNETWORK_VERSION, REQUIRED_MODULES, \
     ETCD_VERSION
 from utils import enforce_root
-from connectors import docker_client, client, etcd_authority
+from connectors import docker_client, client
+from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
+                                ETCD_ENDPOINTS_ENV)
 
 # The minimum allowed linux kernel version is 2.6.24, which introduced network
 # namespaces and veth pairs.
@@ -224,8 +227,11 @@ def check_etcd_version():
         detected_version_string_raw = \
             client.etcd_client.api_execute("/version", 'GET').data
     except EtcdConnectionFailed:
+        etcd_env = os.getenv(ETCD_ENDPOINTS_ENV)
+        if not etcd_env:
+            etcd_env = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
         print >> sys.stderr, "ERROR: Could not connect to etcd at %s" % \
-            etcd_authority
+            etcd_env
         system_ok = False
     else:
         # Different version of etcd provide different version strings e.g.
