@@ -48,6 +48,7 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("calico.felix.felix.load_nf_conntrack", autospec=True)
     @mock.patch("os.path.exists", autospec=True, return_value=True)
     @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
     @mock.patch("calico.felix.devices.configure_global_kernel_config",
@@ -69,7 +70,7 @@ class TestBasic(BaseTestCase):
                            m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
                            m_iface_up, m_configure_global_kernel_config,
-                           m_list_interface_ips, m_path_exists):
+                           m_list_interface_ips, m_path_exists, m_conntrack):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
@@ -97,7 +98,9 @@ class TestBasic(BaseTestCase):
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")
         m_configure_global_kernel_config.assert_called_once_with()
+        m_conntrack.assert_called_once_with()
 
+    @mock.patch("calico.felix.felix.load_nf_conntrack", autospec=True)
     @mock.patch("calico.felix.felix.install_global_rules", autospec=True)
     @mock.patch("os.path.exists", autospec=True, return_value=False)
     @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
@@ -117,7 +120,7 @@ class TestBasic(BaseTestCase):
                                    m_ipset_4, m_check_call,
                                    m_configure_global_kernel_config,
                                    m_list_interface_ips, m_path_exists,
-                                   m_install_globals):
+                                   m_install_globals, m_conntrack):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
@@ -145,4 +148,5 @@ class TestBasic(BaseTestCase):
         m_configure_global_kernel_config.assert_called_once_with()
         m_install_globals.assert_called_once_with(mock.ANY, mock.ANY, mock.ANY,
                                                   ip_version=4)
+        m_conntrack.assert_called_once_with()
 
