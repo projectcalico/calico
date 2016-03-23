@@ -1,31 +1,31 @@
 .PHONY: all binary test plugin ipam ut clean update-version
 
-# The current CNI repo version.
-CALICO_CNI_VERSION=v1.0.2-dev
+# Version of calico/build to use.
+BUILD_VERSION=latest
 
-SRCFILES=$(shell find calico_cni) calico.py ipam.py
+SRCFILES=$(shell find calico_cni -type f ! -path calico_cni/version.py) calico.py ipam.py
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 default: all
 all: binary test
-binary: dist/calico dist/calico-ipam
+binary: update-version dist/calico dist/calico-ipam
 test: ut fv
 plugin: dist/calico
 ipam: dist/calico-ipam
 
 
 # Builds the Calico CNI plugin binary.
-dist/calico: $(SRCFILES) update-version 
+dist/calico: $(SRCFILES) 
 	docker run  --rm \
 	-v `pwd`:/code \
-	calico/build:v0.11.0 \
+	calico/build:$(BUILD_VERSION) \
 	pyinstaller calico.py -ayF
 
 # Makes the IPAM plugin.
-dist/calico-ipam: $(SRCFILES) update-version
+dist/calico-ipam: $(SRCFILES) 
 	docker run --rm \
 	-v `pwd`:/code \
-	calico/build:v0.11.0 \
+	calico/build:$(BUILD_VERSION) \
 	pyinstaller ipam.py -ayF -n calico-ipam
 
 # Updates the version information in version.py
@@ -53,7 +53,7 @@ fv: update-version
 	nosetests tests/fv -c nose.cfg
 
 # Makes tests on Circle CI.
-test-circle: dist/calico
+test-circle: update-version dist/calico dist/calico-ipam
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
 	docker run \
