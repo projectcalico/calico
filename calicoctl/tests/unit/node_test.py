@@ -28,7 +28,7 @@ from nose_parameterized import parameterized
 from pycalico.datastore import (ETCD_AUTHORITY_DEFAULT, ETCD_SCHEME_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
-                                ETCD_AUTHORITY_ENV)
+                                ETCD_AUTHORITY_ENV, ETCD_ENDPOINTS_ENV)
 
 from calico_ctl import node
 from calico_ctl.node import (ETCD_CA_CERT_NODE_FILE, ETCD_CERT_NODE_FILE,
@@ -188,7 +188,6 @@ class TestNode(unittest.TestCase):
     def test_node_dockerless_start(self, m_enforce_root, m_container, m_attach_and_stream,
                                    m_find_or_pull_node_image, m_call, m_docker,
                                    m_docker_client, m_client,
-                                   
                                    m_conntrack,
                                    m_setup_ip, m_check_system, m_os_makedirs,
                                    m_os_path_exists, m_ipv6_enabled):
@@ -385,9 +384,11 @@ class TestNode(unittest.TestCase):
         etcd_ca_path = "/path/to/ca.crt"
         etcd_cert_path = "/path/to/cert.crt"
         etcd_key_path = "/path/to/key.pem"
+        etcd_endpoints = "https://1.2.3.4:2379"
         env = {"NO_DEFAULT_POOLS": "",
                "CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
+               ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
                ETCD_CA_CERT_FILE_ENV: etcd_ca_path,
                ETCD_CERT_FILE_ENV: etcd_cert_path,
@@ -422,6 +423,7 @@ class TestNode(unittest.TestCase):
             "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
+            "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
             "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,
             "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
             "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,
@@ -430,6 +432,7 @@ class TestNode(unittest.TestCase):
             "HOSTNAME=%s" % node.hostname,
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
+            "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
             "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,
             "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
             "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,

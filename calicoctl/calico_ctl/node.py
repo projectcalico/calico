@@ -23,7 +23,7 @@ from prettytable import PrettyTable
 from pycalico.datastore import (ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT,
                                 ETCD_KEY_FILE_ENV, ETCD_CERT_FILE_ENV,
                                 ETCD_CA_CERT_FILE_ENV, ETCD_SCHEME_ENV,
-                                ETCD_SCHEME_DEFAULT)
+                                ETCD_SCHEME_DEFAULT, ETCD_ENDPOINTS_ENV)
 from pycalico.datastore_datatypes import BGPPeer
 from pycalico.datastore_errors import DataStoreError
 from pycalico.netns import remove_veth
@@ -262,19 +262,24 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    # The format of the authority string has already been validated.
+    # The format of the authority and endpoints strings have already been
+    # validated.
     etcd_authority = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
+    etcd_endpoints = os.getenv(ETCD_ENDPOINTS_ENV)
 
     # Get etcd SSL environment variables if they exist
     etcd_scheme = os.getenv(ETCD_SCHEME_ENV, ETCD_SCHEME_DEFAULT)
-    etcd_key_file = os.getenv(ETCD_KEY_FILE_ENV, None)
-    etcd_cert_file = os.getenv(ETCD_CERT_FILE_ENV, None)
-    etcd_ca_cert_file = os.getenv(ETCD_CA_CERT_FILE_ENV, None)
+    etcd_key_file = os.getenv(ETCD_KEY_FILE_ENV)
+    etcd_cert_file = os.getenv(ETCD_CERT_FILE_ENV)
+    etcd_ca_cert_file = os.getenv(ETCD_CA_CERT_FILE_ENV)
 
     etcd_volumes = []
     etcd_binds = {}
     etcd_envs = ["ETCD_AUTHORITY=%s" % etcd_authority,
                  "ETCD_SCHEME=%s" % etcd_scheme]
+
+    if etcd_endpoints:
+        etcd_envs.append("ETCD_ENDPOINTS=%s" % etcd_endpoints)
 
     if etcd_ca_cert_file and etcd_key_file and etcd_cert_file:
         etcd_volumes.append(ETCD_CA_CERT_NODE_FILE)
@@ -433,12 +438,12 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
     ] + etcd_envs
 
     # TODO No support for SSL (etcd binds) yet
-    
+
     env_commands = []
     for env_var in environment:
         env_commands += ["--set-env=%s" % (env_var)]
 
-    # Ensure /var/run/calico exists on the host machine so it can be 
+    # Ensure /var/run/calico exists on the host machine so it can be
     # mounted into the node container.
     if not os.path.exists("/var/run/calico"):
         os.makedirs("/var/run/calico")
