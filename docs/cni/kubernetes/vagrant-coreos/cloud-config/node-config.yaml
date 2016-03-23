@@ -67,7 +67,7 @@ coreos:
         User=root
         Environment=ETCD_AUTHORITY=172.18.18.101:2379
         PermissionsStartOnly=true
-        ExecStartPre=/usr/bin/wget -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/wget -O /opt/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v0.17.0/calicoctl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
         ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false --node-image=calico/node:v0.17.0-k8s-policy
         Restart=always
