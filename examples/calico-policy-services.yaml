@@ -9,22 +9,22 @@ metadata:
   name: calico-policy-agent
   namespace: calico-system 
   labels:
-    version: v0.1.1
+    version: v0.1.2
     projectcalico.org/app: "policy-agent"
 spec:
   replicas: 1
   selector:
-    version: v0.1.1
+    version: v0.1.2
     projectcalico.org/app: "policy-agent"
   template:
     metadata:
       labels:
-        version: v0.1.1
+        version: v0.1.2
         projectcalico.org/app: "policy-agent"
     spec:
       containers:
         - name: policyagent
-          image: calico/k8s-policy-agent:v0.1.1
+          image: calico/k8s-policy-agent:v0.1.2
           imagePullPolicy: Always
           env:
           - name: ETCD_AUTHORITY
