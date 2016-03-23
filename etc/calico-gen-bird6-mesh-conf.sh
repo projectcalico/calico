@@ -7,31 +7,33 @@ else
     BIRD_CONF=/etc/bird/bird6.conf
 fi
 
-BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird6.conf.template
-BIRD_CONF_PEER_TEMPLATE=/usr/share/calico/bird/calico-bird6-peer.conf.template
+TEMPLATE_DIR=${TEMPLATE_DIR:-/usr/share/calico/bird}
+BIRD_CONF_TEMPLATE=${TEMPLATE_DIR}/calico-bird6.conf.template
+BIRD_CONF_PEER_TEMPLATE=${TEMPLATE_DIR}/calico-bird6-peer.conf.template
 
-# Require 4 arguments.
-[ $# -eq 4 ] || cat <<EOF
+# Require at least 4 arguments.
+[ $# -ge 3 ] || cat <<EOF
 
-Usage: $0 <my-ipv4-address> <my-ipv6-address> <rr-ipv6-address> <as-number>
+Usage: $0 <my-ipv4-address> <my-ipv6-address> <as-number> <peer-ipv6-address> ...
 
 where
   <my-ipv4-address> is the external IPv4 address of the local machine
   <my-ipv6-address> is the external IPv6 address of the local machine
-  <rr-ipv6-address> is the IPv6 address of the route reflector that
-      the local BIRD6 should peer with
-  <as-number> is the BGP AS number that the route reflector is using.
-
-Please specify exactly these 4 required arguments.
+  <as-number> is the BGP AS number that we should use
+  each <peer-ipv6-address> is the IPv6 address of another BGP speaker that
+      the local BIRD should peer with.
 
 EOF
-[ $# -eq 4 ] || exit -1
+[ $# -ge 3 ] || exit -1
 
 # Name the arguments.
 my_ipv4_address=$1
-my_ipv6_address=$2
-rr_ipv6_address=$3
-as_number=$4
+shift
+my_ipv6_address=$1
+shift
+as_number=$1
+shift
+peer_ips="$@"
 
 # Generate peer-independent BIRD config.
 mkdir -p $(dirname $BIRD_CONF)
@@ -39,14 +41,16 @@ sed -e "
 s/@MY_IPV4_ADDRESS@/$my_ipv4_address/;
 " < $BIRD_CONF_TEMPLATE > $BIRD_CONF
 
-# Generate config to peer with route reflector.
-sed -e "
-s/@ID@/N1/;
-s/@DESCRIPTION@/Connection to BGP route reflector/;
+# Generate peering config.
+for peer_ip in $peer_ips; do
+    sed -e "
+s/@ID@/$peer_ip/;
+s/@DESCRIPTION@/Connection to $peer_ip/;
 s/@MY_IPV6_ADDRESS@/$my_ipv6_address/;
-s/@PEER_IPV6_ADDRESS@/$rr_ipv6_address/;
+s/@PEER_IPV6_ADDRESS@/$peer_ip/;
 s/@AS_NUMBER@/$as_number/;
 " < $BIRD_CONF_PEER_TEMPLATE >> $BIRD_CONF
+done
 
 echo BIRD6 configuration generated at $BIRD_CONF
 
