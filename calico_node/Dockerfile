@@ -29,7 +29,7 @@ RUN apk add --update curl && \
   rm -rf /var/cache/apk/*
 
 ADD build.sh /build.sh
-RUN /build.sh
+RUN /build.sh # 23MAR2016
 
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's the thing they're most likely to change.
