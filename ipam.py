@@ -274,6 +274,9 @@ def main():
     configure_logging(_log, LOG_FILENAME,
                       log_level=log_level,
                       stderr_level=logging.INFO)
+    configure_logging(logging.getLogger("pycalico"), LOG_FILENAME,
+                      log_level=log_level,
+                      stderr_level=logging.INFO)
 
     # Get copy of environment.
     env = os.environ.copy()
