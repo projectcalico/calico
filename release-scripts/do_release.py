@@ -54,7 +54,7 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git@master'),
      'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
 
-    (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git'),
+    (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git[^@]'),
      'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
 
     (re.compile(r'calico_docker_ver\s*=\s*"latest"'),
