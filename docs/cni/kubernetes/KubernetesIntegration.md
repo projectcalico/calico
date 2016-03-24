@@ -6,7 +6,7 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Add Calico to an Existing Kubernetes Cluster 
+# Add Calico to an Existing Kubernetes Cluster
 
 This document describes the steps required to install Calico on an existing
 Kubernetes cluster.
@@ -38,7 +38,7 @@ storing the required information can be achieved using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget http://www.projectcalico.org/builds/calicoctl 
+wget http://www.projectcalico.org/builds/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -107,7 +107,7 @@ The `kubelet` can be configured to use Calico by starting it with the following 
 - `--network-plugin=cni`
 - `--network-plugin-dir=/etc/cni/net.d`
 
-See the [`kubelet` documentation](http://kubernetes.io/v1.1/docs/admin/kubelet.html)
+See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
 for more details.
 
 #### Example systemd unit file (kubelet.service)
@@ -146,7 +146,7 @@ This unit file ensures that the `kubelet` binary and the `calico` plugin are pre
 ### Configuring the Kube-Proxy
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must
 be configured to leave the source address of service bound traffic intact.
-This feature is first officially supported in Kubernetes v1.1.0. 
+This feature is first officially supported in Kubernetes v1.1.0.
 
 We highly recommend using the latest stable Kubernetes release, but if you're using an older release
 there are two ways to enable this behavior.
@@ -154,7 +154,7 @@ there are two ways to enable this behavior.
 - Option 2: Annotate the Kubernetes Node API object with
 `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
 
-See the [kube-proxy documentation](http://kubernetes.io/v1.1/docs/admin/kube-proxy.html)
+See the [kube-proxy documentation](http://kubernetes.io/docs/admin/kube-proxy/)
 for more details.
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/KubernetesIntegration.md?pixel)](https://github.com/igrigorik/ga-beacon)
