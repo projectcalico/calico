@@ -8,7 +8,7 @@
 
 # Calico Policy for Kubernetes
 Calico supports the v1alpha1 network policy API for Kubernetes.
-> *Note*: The Kubernetes network policy API is currently in alpha and is subject to change. Calico support for this API is in beta and so is also subject to change. 
+> *Note*: The Kubernetes network policy API is currently in alpha and is subject to change. Calico support for this API is in beta and so is also subject to change.
 
 ## Prerequisites
 * A Kubernetes v1.1+ deployment using the [Calico CNI plugin v1.1](https://github.com/projectcalico/calico-cni/releases/latest) or greater.
@@ -19,7 +19,7 @@ Calico supports the v1alpha1 network policy API for Kubernetes.
 ## Behavior
 Calico implements the behavior of the Kubernetes [v1alpha1 network policy API](https://github.com/caseydavenport/kubernetes/blob/network-policy/docs/admin/network-policy.md#network-policy-in-kubernetes).
 
-## Enabling v1alpha1 policy support 
+## Enabling v1alpha1 policy support
 
 To enable annotation-based policy in the Calico CNI plugin, add the `policy` section to your CNI network config file as shown - you will need to make this change on each Kubernetes worker node in your cluster (any node that allows scheduling of pods).  The CNI network configuration file can usually be found in the `/etc/cni/net.d/` directory.
 ```
@@ -38,7 +38,7 @@ $ cat /etc/cni/net.d/10-calico.conf
 }
 ```
 
-This will disable inbound traffic to pods by default, delegating policy configuration to the [Calico policy agent](https://github.com/projectcalico/k8s-policy). 
+This will disable inbound traffic to pods by default, delegating policy configuration to the [Calico policy agent](https://github.com/projectcalico/k8s-policy).
 
 Once you have modified the network configuration file as shown above, you will need to restart the `kubelet` to pick up the changes.
 
@@ -47,11 +47,11 @@ Once you have modified the network configuration file as shown above, you will n
 sudo systemctl restart kubelet
 ```
 
-## Running the Calico policy agent 
-In order to use the Kubernetes v1alpha1 network policy API, you must run the 
-Calico Kubernetes policy agent.  The policy agent runs as a pod on your 
-Kubernetes cluster.  It reads policy information from the Kubernetes API and 
-configures Calico appropriately. 
+## Running the Calico policy agent
+In order to use the Kubernetes v1alpha1 network policy API, you must run the
+Calico Kubernetes policy agent.  The policy agent runs as a pod on your
+Kubernetes cluster.  It reads policy information from the Kubernetes API and
+configures Calico appropriately.
 
 To run the Calico Kubernetes policy agent:
 
@@ -74,10 +74,10 @@ NAME                        READY     STATUS    RESTARTS   AGE
 calico-policy-agent-axg63   1/1       Running   0          1m
 ```
 
-## Next Steps 
-- Install the [policy tool](https://github.com/projectcalico/k8s-policy/blob/master/policy_tool/README.md) for easy management of NetworkPolicy objects. 
+## Next Steps
+- Install the [policy tool](https://github.com/projectcalico/k8s-policy/blob/master/policy_tool/README.md) for easy management of NetworkPolicy objects.
 
-- Once you have enabled network policy on your cluster and configured Calico to use the Kubernetes network 
+- Once you have enabled network policy on your cluster and configured Calico to use the Kubernetes network
 policy API, you can deploy our [Kubernetes policy example application](stars-demo/README.md).
 
-[![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/NetworkPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/NetworkPolicy.md?pixel)](https://github.com/igrigorik/ga-beacon)

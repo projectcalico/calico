@@ -301,7 +301,7 @@ You should now be able to access the guestbook application from a browser at `ht
 
 Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
 
-You can also take a look at how you can use Calico [network policy on Kubernetes](Policy.md).
+You can also take a look at how you can use Calico [network policy on Kubernetes](NetworkPolicy.md).
 
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
