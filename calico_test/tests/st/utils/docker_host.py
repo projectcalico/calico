@@ -150,21 +150,25 @@ class DockerHost(object):
         """
         if ETCD_SCHEME == "https":
             etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
+            ssl_args = "-e ETCD_CA_CERT_FILE=%s " \
+                       "-e ETCD_CERT_FILE=%s " \
+                       "-e ETCD_KEY_FILE=%s " \
+                       "-v %s/certs:%s/certs " \
+                       % (ETCD_CA, ETCD_CERT, ETCD_KEY,
+                          CHECKOUT_DIR, CHECKOUT_DIR)
+
         else:
             etcd_auth = "%s:2379" % get_ip()
+            ssl_args = ""
 
         self.execute("docker run -d --net=host --privileged "
-                          "--name=calico-node -e IP=%s "
-                          "-e ETCD_AUTHORITY=%s "
-                          "-e ETCD_SCHEME=%s "
-                          "-e ETCD_CA_CERT_FILE=%s "
-                          "-e ETCD_CERT_FILE=%s "
-                          "-e ETCD_KEY_FILE=%s "
-                          "-v /var/log/calico:/var/log/calico "
-                          "-v /var/run/calico:/var/run/calico "
-                          "calico/node:latest" % (self.ip, etcd_auth,
-                                                  ETCD_SCHEME, ETCD_CA,
-                                                  ETCD_CERT, ETCD_KEY))
+                     "--name=calico-node "
+                     "-e IP=%s -e ETCD_AUTHORITY=%s "
+                     "-e ETCD_SCHEME=%s %s "
+                     "-v /var/log/calico:/var/log/calico "
+                     "-v /var/run/calico:/var/run/calico "
+                     "calico/node:latest" % (self.ip, etcd_auth,
+                                             ETCD_SCHEME, ssl_args))
 
 
     def remove_workloads(self):
