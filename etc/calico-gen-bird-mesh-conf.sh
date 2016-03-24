@@ -11,7 +11,7 @@ TEMPLATE_DIR=${TEMPLATE_DIR:-/usr/share/calico/bird}
 BIRD_CONF_TEMPLATE=${TEMPLATE_DIR}/calico-bird.conf.template
 BIRD_CONF_PEER_TEMPLATE=${TEMPLATE_DIR}/calico-bird-peer.conf.template
 
-# Require at least 3 arguments.
+# Require at least 2 arguments.
 [ $# -ge 2 ] || cat <<EOF
 
 Usage: $0 <my-ip-address> <as-number> <peer-ip-address> ...
