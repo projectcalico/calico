@@ -1014,7 +1014,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         else:
             rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
-        common.validate_rules("profile_id", rules)
+        common.validate_profile("profile_id", rules)
 
 
 class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
