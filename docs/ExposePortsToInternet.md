@@ -8,22 +8,22 @@
 
 # Expose Container Port to Host Interface / Internet
 
-In the [Calico without Docker networking tutorial](calico-with-docker/without-docker-networking/README.md) 
+In the [Calico without Docker networking tutorial](calico-with-docker/without-docker-networking/README.md)
 or the [Calico as a Docker network plugin tutorial](calico-with-docker/docker-network-plugin/README.md)
 we created containers and assigned endpoints (a container interface) to them. This is used for Container-
 To-Container communication.
 
-The example below shows how to expose a port of a container to the host interface so this container is 
+The example below shows how to expose a port of a container to the host interface so this container is
 reachable from outside / the internet.
 
 ## Why isn't the `-p` flag on `docker run` working as expected?
-If you connect containers to the `docker0` bridge interface, Calico would not 
+If you connect containers to the `docker0` bridge interface, Calico would not
 be able to enforce security rules between workloads on the same host; all
 containers on the bridge would be able to communicate freely with one other.
 
-> Note: Using Docker networking with the Docker default IPAM driver instructs the 
+> Note: Using Docker networking with the Docker default IPAM driver instructs the
 > Calico network driver to route non-network traffic (i.e. destinations outside
-> the network CIDR) via the Docker gateway bridge.  Traffic routed through the 
+> the network CIDR) via the Docker gateway bridge.  Traffic routed through the
 > bridge may not be subjected to the policy configured on the host vRouter.
 
 ## Exposing Container Port to the Internet (via host interface)
@@ -52,6 +52,6 @@ iptables -t nat -A OUTPUT -p tcp -o lo --dport 80 -j DNAT --to-destination 192.1
 Now all traffic to your host interface on port 80 will be forwarded to the container IP 192.168.0.1.
 
 For additional information on managing policy for your containers, you can read
-the [Advanced Network Policy Guide](docs/AdvancedNetworkPolicy.md).
+the [Advanced Network Policy Guide](AdvancedNetworkPolicy.md).
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExposePortsToInternet.md?pixel)](https://github.com/igrigorik/ga-beacon)
