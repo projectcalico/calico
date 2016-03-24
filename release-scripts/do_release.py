@@ -27,6 +27,8 @@ from calico_ctl import __felix_version__
 # replacements, but replaces build artifact URLs with a dynamic URL that
 # can return an artifact for an arbitrary branch.  This is replaced with the
 # GitHub release artifact just before the release is actually cut.
+# These run from top to bottom.  Be sure to put more specific substitutions
+# before more general ones.
 CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'__version__\s*=\s*".*"'),
      '__version__ = "{version-no-v}"'),
@@ -43,11 +45,14 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'\*\*release\*\*'),
      '{version}'),
 
-    (re.compile('http://www\.projectcalico\.org/builds/calicoctl'),
+    (re.compile(r'http://www\.projectcalico\.org/builds/calicoctl'),
      'http://www.projectcalico.org/builds/calicoctl?circleci-branch={version}-candidate'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/calico\.git'),
      'git+https://github.com/projectcalico/calico.git@{calico-version}'),
+
+    (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git@master'),
+     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git'),
      'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
@@ -55,25 +60,22 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'calico_docker_ver\s*=\s*"latest"'),
      'calico_docker_ver = "{version}"'),
 
-    (re.compile('calico_node_ver\s*=\s*"latest"'),
+    (re.compile(r'calico_node_ver\s*=\s*"latest"'),
      'calico_node_ver = "{version}"'),
 
-    (re.compile('calico/node:latest'),
+    (re.compile(r'calico/node:latest'),
      'calico/node:{version}'),
 
-    (re.compile('calico/build:latest'),
+    (re.compile(r'calico/build:latest'),
      'calico/build:{libcalico-version}'),
 
-    (re.compile('git+https://github.com/projectcalico/libcalico.git@master'),
-     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
-
-    (re.compile('https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements-nosh.txt'),
+    (re.compile(r'https://raw\.githubusercontent\.com/projectcalico/libcalico/master/build-requirements-nosh\.txt'),
      'https://raw.githubusercontent.com/projectcalico/libcalico/{libcalico-version}/build-requirements-nosh.txt'),
 
-    (re.compile('calico/node-libnetwork:latest'),
+    (re.compile(r'calico/node-libnetwork:latest'),
      'calico/node-libnetwork:{libnetwork-version}'),
 
-    (re.compile('calico_libnetwork_ver\s*=\s*"latest"'),
+    (re.compile(r'calico_libnetwork_ver\s*=\s*"latest"'),
      'calico_libnetwork_ver = "{libnetwork-version}"')
 ]
 
