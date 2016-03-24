@@ -13,7 +13,7 @@ rkt is used for running both the Calico components and the workloads.
 
 ## 1. Environment setup
 
-This tutorial walks through getting a cluster set up with Vagrant. 
+This tutorial walks through getting a cluster set up with Vagrant.
 
 ### 1.1 Install dependencies
 
@@ -31,10 +31,10 @@ This tutorial walks through getting a cluster set up with Vagrant.
     git clone https://github.com/projectcalico/calico-containers.git
     git checkout tags/**release**
 <!--- end of master only -->
-    
+
 ### 1.3 Startup and SSH
 Change into the directory for this guide:
-  
+
     cd calico-containers/docs/cni/rkt
 
 Run
@@ -50,7 +50,7 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have two CoreOS servers. The servers are named calico-01 and calico-02 
+You should now have two CoreOS servers. The servers are named calico-01 and calico-02
 and have IP addresses 172.18.18.101 and 172.18.18.102.
 
 At this point, it's worth checking that your servers can ping each other.
@@ -63,8 +63,8 @@ From calico-02
 
     ping 172.18.18.101
 
-If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should 
-check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also 
+If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should
+check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also
 help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
@@ -144,9 +144,9 @@ Normal [systemd commands][systemd-run] can then be used to get the status of the
 	05f8779a	node	registry-1.docker.io/calico/node:latest		running	1 hour ago	1 hour ago
 	c89f2f35	busybox	registry-1.docker.io/library/busybox:latest	running	2 seconds ago	1 second ago	frontend:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
 
- 
+
 We now have a `busybox` container running on the network `frontend` with an IP address of `192.168.0.0`
-rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking.md#the-default-restricted-network)
+rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network)
 
 ### On calico-02
 
@@ -274,7 +274,7 @@ If you want to start again from the beginning, then run the following commands o
 For more information on managing the `calico/node` container please refer to the [rkt and systemd](systemd/README.md) documentation.
 
 For details on configuring Calico for different network topologies and to
-learn more about Calico under-the-covers please refer to the 
+learn more about Calico under-the-covers please refer to the
 [Further Reading](../../../README.md#further-reading) section on the main
 documentation README.
 

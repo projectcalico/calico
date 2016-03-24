@@ -1,14 +1,14 @@
 <!--- master only -->
-> ![warning](../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
+> ![warning](../../../images/warning.png) This document applies to the HEAD of the calico-containers source tree.
 >
 > View the calico-containers documentation for the latest release [here](https://github.com/projectcalico/calico-containers/blob/v0.14.0/README.md).
 <!--- else
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Manage `calico/node` using systemd 
+# Manage `calico/node` using systemd
 
-It is recommended to use systemd to run the `calico/node` container in production.  This directory contains a sample `systemd` unit file to manage the `calico/node` container using rkt.  
+It is recommended to use systemd to run the `calico/node` container in production.  This directory contains a sample `systemd` unit file to manage the `calico/node` container using rkt.
 
 ### 1. Configure environment variables
 To use this unit file,  first open `calico-node.service` and fill in the following environment variables to match your system:
@@ -57,3 +57,4 @@ And you should see the `calico/node` container running in `rkt list`.
 sudo rkt list
 ```
 
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/rkt/systemd/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
