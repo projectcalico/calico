@@ -246,37 +246,20 @@ def container_add(container_id, ip, interface):
                         "Networking." % container_id)
         sys.exit(1)
 
-    ip, pool = get_ip_and_pool(ip)
-
-    try:
-        # The next hop IPs for this host are stored in etcd.
-        next_hops = client.get_default_next_hops(hostname)
-        next_hops[ip.version]
-    except KeyError:
-        print_paragraph("This node is not configured for IPv%d.  "
-                        "Is calico-node running?" % ip.version)
-        unallocated_ips = client.release_ips({ip})
-        if unallocated_ips:
-            print_paragraph("Error during cleanup. %s was already"
-                            "unallocated." % ip)
-        sys.exit(1)
-
-    # Get the next hop for the IP address.
-    next_hop = next_hops[ip.version]
-
-    network = IPNetwork(IPAddress(ip))
     ep = Endpoint(hostname=hostname,
                   orchestrator_id=DOCKER_ORCHESTRATOR_ID,
                   workload_id=workload_id,
                   endpoint_id=uuid.uuid1().hex,
                   state="active",
                   mac=None)
+
+    ip, _ = get_ip_and_pool(ip)
+
+    network = IPNetwork(ip)
     if network.version == 4:
         ep.ipv4_nets.add(network)
-        ep.ipv4_gateway = next_hop
     else:
         ep.ipv6_nets.add(network)
-        ep.ipv6_gateway = next_hop
 
     # Create the veth, move into the container namespace, add the IP and
     # set up the default routes.
@@ -284,7 +267,7 @@ def container_add(container_id, ip, interface):
     netns.create_veth(ep.name, ep.temp_interface_name)
     netns.move_veth_into_ns(namespace, ep.temp_interface_name, interface)
     netns.add_ip_to_ns_veth(namespace, ip, interface)
-    netns.add_ns_default_route(namespace, next_hop, interface)
+    netns.add_ns_default_route(namespace, ep.name, interface)
 
     # Grab the MAC assigned to the veth in the namespace.
     ep.mac = netns.get_ns_veth_mac(namespace, interface)

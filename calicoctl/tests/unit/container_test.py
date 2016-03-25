@@ -72,7 +72,6 @@ class TestContainer(unittest.TestCase):
             'HostConfig': {'NetworkMode': "not host"}
         }
         m_client.get_endpoint.side_effect = KeyError
-        m_client.get_default_next_hops.return_value = 'next_hops'
 
         # Call method under test
         test_return = container.container_add('container1', '1.1.1.1', 'interface')
@@ -86,7 +85,6 @@ class TestContainer(unittest.TestCase):
             workload_id=666
         )
         m_get_pool_or_exit.assert_called_once_with(IPAddress('1.1.1.1'))
-        m_client.get_default_next_hops.assert_called_once_with(utils.hostname)
 
         # Check an enpoint object was returned
         self.assertTrue(isinstance(test_return, Endpoint))
@@ -173,36 +171,6 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertFalse(m_get_pool_or_exit.called)
 
-    @patch('calico_ctl.container.enforce_root', autospec=True)
-    @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
-    @patch('calico_ctl.container.client', autospec=True)
-    @patch('calico_ctl.container.get_pool_or_exit', autospec=True)
-    def test_container_add_not_ipv4_configured(
-            self, m_get_pool_or_exit, m_client, m_get_container_info_or_exit,
-            m_enforce_root):
-        """
-        Test container_add when the client cannot obtain next hop IPs
-
-        client.get_default_next_hops returns an empty dictionary, which
-        produces a KeyError when trying to determine the IP.
-        Assert that the system then exits and all expected calls are made
-        """
-        # Set up mock objects
-        m_client.get_endpoint.side_effect = KeyError
-        m_client.get_default_next_hops.return_value = {}
-
-        # Call method under test expecting a SystemExit
-        self.assertRaises(SystemExit, container.container_add,
-                          'container1', '1.1.1.1', 'interface')
-
-        # Assert only expected calls were made
-        self.assertTrue(m_enforce_root.called)
-        self.assertTrue(m_get_container_info_or_exit.called)
-        self.assertTrue(m_client.get_endpoint.called)
-        self.assertTrue(m_get_pool_or_exit.called)
-        self.assertTrue(m_client.get_default_next_hops.called)
-        self.assertTrue(m_client.assign_ip.called)
-        self.assertTrue(m_client.release_ips.called)
 
     @patch('calico_ctl.container.enforce_root', autospec=True)
     @patch('calico_ctl.container.get_container_info_or_exit', autospec=True)
@@ -231,7 +199,6 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_get_container_info_or_exit.called)
         self.assertTrue(m_client.get_endpoint.called)
         self.assertTrue(m_get_pool_or_exit.called)
-        self.assertFalse(m_client.get_default_next_hops.called)
         self.assertFalse(m_client.release_ips.called)
         self.assertFalse(m_netns.increment_metrics.called)
         self.assertFalse(m_netns.create_veth.called)
