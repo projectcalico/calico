@@ -16,7 +16,7 @@ def add_update_network_policy(key, policy):
     Takes a new network policy from the Kubernetes API and
     creates the corresponding Calico policy configuration.
     """
-    _log.info("Adding new network policy: %s", key)
+    _log.debug("Adding new network policy: %s", key)
 
     # Parse this network policy so we can convert it to the appropriate
     # Calico policy.  First, get the selector from the API object.
@@ -53,7 +53,7 @@ def add_update_network_policy(key, policy):
         # Create the network policy using the calculated selector and rules.
         client.create_policy(NET_POL_TIER_NAME, name,
                              selector, order=10, rules=rules)
-        _log.info("Updated policy '%s' for NetworkPolicy %s", name, key)
+        _log.debug("Updated policy '%s' for NetworkPolicy %s", name, key)
 
 
 def delete_network_policy(key, policy):
@@ -61,7 +61,7 @@ def delete_network_policy(key, policy):
     Takes a deleted network policy and removes the corresponding
     configuration from the Calico datastore.
     """
-    _log.info("Deleting network policy: %s", key)
+    _log.debug("Deleting network policy: %s", key)
 
     # Determine the name for this policy.
     name = "%s.%s" % (policy["metadata"]["namespace"],
