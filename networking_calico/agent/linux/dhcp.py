@@ -17,10 +17,20 @@ import copy
 import re
 
 from neutron.agent.linux import dhcp
+from oslo_log import log as logging
+
+
+LOG = logging.getLogger(__name__)
 
 
 class DnsmasqRouted(dhcp.Dnsmasq):
     """Dnsmasq DHCP driver for routed virtual interfaces."""
+
+    def __init__(self, conf, network, process_monitor,
+                 version=None, plugin=None):
+        super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
+                                            version, plugin)
+        self.device_manager = CalicoDeviceManager(self.conf, plugin)
 
     def _build_cmdline_callback(self, pid_file):
         cmd = super(DnsmasqRouted, self)._build_cmdline_callback(pid_file)
@@ -38,3 +48,20 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         cmd.append('--enable-ra')
 
         return cmd
+
+    def _destroy_namespace_and_port(self):
+        try:
+            self.device_manager.destroy(self.network, self.interface_name)
+        except RuntimeError:
+            LOG.warning('Failed trying to delete interface: %s',
+                        self.interface_name)
+
+
+class CalicoDeviceManager(dhcp.DeviceManager):
+    """Device manager for the default namespace that Calico operates in."""
+
+    def _set_default_route(self, network, device_name):
+        pass
+
+    def _cleanup_stale_devices(self, network, dhcp_port):
+        pass

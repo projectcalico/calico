@@ -298,14 +298,11 @@ class TestDhcpAgent(base.BaseTestCase):
 
     @mock.patch('etcd.Client')
     def test_dir_delete(self, etcd_client_cls):
+        LOG.debug('test_dir_delete')
+
         # Create the DHCP agent.
         agent = CalicoDhcpAgent()
         etcd_client = etcd_client_cls.return_value
-
-        # Notify initial snapshot (empty).
-        etcd_snapshot_response = mock.Mock()
-        etcd_snapshot_response.leaves = []
-        agent.etcd._on_snapshot_loaded(etcd_snapshot_response)
 
         def etcd_client_read(key, **kwargs):
             LOG.info('etcd_client_read %s %s', key, kwargs)
@@ -323,7 +320,14 @@ class TestDhcpAgent(base.BaseTestCase):
             eventlet.sleep(10)
             return None
 
+        LOG.debug('etcd_client=%r', etcd_client)
         etcd_client.read.side_effect = etcd_client_read
+
+        # Notify initial snapshot (empty).
+        etcd_snapshot_response = mock.Mock()
+        etcd_snapshot_response.leaves = []
+        LOG.debug('Call _on_snapshot_loaded')
+        agent.etcd._on_snapshot_loaded(etcd_snapshot_response)
 
         with mock.patch.object(agent, 'call_driver') as call_driver:
             # Notify an endpoint.
@@ -474,15 +478,26 @@ class TestDhcpAgent(base.BaseTestCase):
         )
         etcd_client.read.reset_mock()
 
+commonutils = 'neutron.agent.linux.dhcp.commonutils'
+try:
+    from neutron.agent.linux.dhcp import commonutils as xxx  # noqa
+except Exception:
+    # In Mitaka the import name changed to 'common_utils'.
+    commonutils = 'neutron.agent.linux.dhcp.common_utils'
+
 
 class TestDnsmasqRouted(base.BaseTestCase):
     def setUp(self):
         super(TestDnsmasqRouted, self).setUp()
         register_options(cfg.CONF)
         cfg.CONF.set_override('dhcp_confs', '/run')
+        cfg.CONF.set_override(
+            'interface_driver',
+            'networking_calico.agent.linux.interface.RoutedInterfaceDriver'
+        )
 
     @mock.patch('neutron.agent.linux.dhcp.DeviceManager')
-    @mock.patch('neutron.agent.linux.dhcp.commonutils')
+    @mock.patch(commonutils)
     def test_build_cmdline(self, commonutils, device_mgr_cls):
         v4subnet = mock.Mock()
         v4subnet.id = 'subnet-1'
@@ -499,6 +514,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
         network = mock.Mock()
         network.id = 'calico'
         network.subnets = [v4subnet, v6subnet]
+        network.mtu = 0
         device_mgr_cls.return_value.driver.bridged = False
         cmdline = DnsmasqRouted(cfg.CONF,
                                 network,

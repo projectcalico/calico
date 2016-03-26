@@ -17,7 +17,6 @@ import netaddr
 
 from neutron.agent.linux import interface
 from neutron.agent.linux import ip_lib
-from neutron.common import exceptions
 from neutron.i18n import _LE
 from oslo_log import log as logging
 
@@ -33,14 +32,6 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
     def __init__(self, conf):
         super(RoutedInterfaceDriver, self).__init__(conf)
 
-        # Require use_namespaces to be False.  Routed networking does
-        # not use namespaces.
-        if self.conf.use_namespaces:
-            raise exceptions.InvalidConfigurationOption(
-                opt_name='use_namespaces',
-                opt_value='True'
-            )
-
     @property
     def use_gateway_ips(self):
         # Routed networking does not bridge across compute hosts or
@@ -51,7 +42,7 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         return True
 
     def plug_new(self, network_id, port_id, device_name, mac_address,
-                 bridge=None, namespace=None, prefix=None):
+                 bridge=None, namespace=None, prefix=None, mtu=None):
         """Plugin the interface."""
         ip = ip_lib.IPWrapper()
 
@@ -71,14 +62,8 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         Extend LinuxInterfaceDriver.init_l3 to remove the subnet
         route(s) that Linux automatically creates.
         """
-        super(RoutedInterfaceDriver, self).init_l3(device_name,
-                                                   ip_cidrs,
-                                                   namespace,
-                                                   preserve_ips,
-                                                   gateway,
-                                                   extra_subnets)
-        device = ip_lib.IPDevice(device_name,
-                                 namespace=namespace)
+        super(RoutedInterfaceDriver, self).init_l3(device_name, ip_cidrs)
+        device = ip_lib.IPDevice(device_name)
         device.set_log_fail_as_error(False)
         for ip_cidr in ip_cidrs:
             LOG.debug("Remove subnet route for cidr %s" % ip_cidr)

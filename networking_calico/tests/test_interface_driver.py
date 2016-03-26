@@ -25,21 +25,14 @@ class TestInterfaceDriver(base.BaseTestCase):
     def setUp(self):
         super(TestInterfaceDriver, self).setUp()
         config.register_interface_driver_opts_helper(cfg.CONF)
-        config.register_use_namespaces_opts_helper(cfg.CONF)
         cfg.CONF.register_opts(interface.OPTS)
-        cfg.CONF.set_override('use_namespaces', False)
 
     @mock.patch('neutron.agent.linux.ip_lib.IPDevice')
     @mock.patch.object(interface.LinuxInterfaceDriver, 'init_l3')
     def test_init_l3(self, init_l3, ipdev_cls):
         self.driver = RoutedInterfaceDriver(cfg.CONF)
         self.driver.init_l3('ns-dhcp', ['10.65.0.1/24'])
-        init_l3.assert_called_with('ns-dhcp',
-                                   ['10.65.0.1/24'],
-                                   None,
-                                   [],
-                                   None,
-                                   [])
-        ipdev_cls.assert_called_with('ns-dhcp', namespace=None)
+        init_l3.assert_called_with('ns-dhcp', ['10.65.0.1/24'])
+        ipdev_cls.assert_called_with('ns-dhcp')
         ipdev = ipdev_cls.return_value
         ipdev.route.delete_onlink_route.assert_called_with('10.65.0.0/24')
