@@ -55,6 +55,14 @@ set -ex
 #     change, before running this script; for example:
 #
 #         export TEST_GERRIT_CHANGE=219646/1
+#
+# DEVSTACK_BRANCH
+#
+#     By default this script uses the master branch of devstack.  To use a
+#     different branch, set the DEVSTACK_BRANCH environment variable before
+#     running this script; for example:
+#
+#         export DEVSTACK_BRANCH=stable/liberty
 # ------------------------------------------------------------------------------
 
 # Assume that we are starting from the home directory of a non-root
@@ -95,10 +103,13 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Clone the DevStack repository.
 git clone https://git.openstack.org/openstack-dev/devstack
-
-# Use the stable/liberty branch.
 cd devstack
-git checkout stable/liberty
+
+# If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
+# use DevStack's master branch.)
+if [ -n "$DEVSTACK_BRANCH" ]; then
+    git checkout ${DEVSTACK_BRANCH}
+fi
 
 # Prepare DevStack config.
 cat > local.conf <<EOF
@@ -124,5 +135,5 @@ EOF
 if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
     . openrc admin admin
     neutron net-create --shared --provider:network_type local calico
-    neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0/24
+    neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
 fi

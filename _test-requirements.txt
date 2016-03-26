@@ -19,4 +19,4 @@ testscenarios>=0.4
 testtools>=0.9.36,!=1.2.0
 
 -e git+https://github.com/projectcalico/calico.git#egg=calico-git
--e git://git.openstack.org/openstack/neutron.git@stable/liberty#egg=neutron
+-e git://git.openstack.org/openstack/neutron.git#egg=neutron
