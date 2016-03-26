@@ -19,34 +19,43 @@ set -ex
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
 #
-# This script can be used to bootstrap a single or multi-node
-# Calico/DevStack cluster.  Please note that it has not been
-# exhaustively reviewed or tested and safety, and is designed for use
-# on a fresh Ubuntu Trusty VM, with no data that you would care about
-# losing.  We recommend that you review the following code, before
-# running the script.
+# This script can be used to bootstrap a single or multi-node Calico/DevStack
+# cluster.  Please note that it has not been exhaustively reviewed or tested
+# for safety, and is designed for use on a fresh Ubuntu Trusty VM, with no data
+# that you would care about losing.  We recommend that you review the following
+# code, before running the script.
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Environment Variables
 #
-# If the SERVICE_HOST environment variable is already set when
-# ./stack.sh is run, and is _different_ from the local machine's
-# hostname, the networking-calico DevStack plugin will interpret that
-# as a request to set up a compute-only node, that points to
-# $SERVICE_HOST as its controller.
+# SERVICE_HOST
 #
-# On the other hand, if SERVICE_HOST is not set, or is the _same_ as
-# the local hostname, the plugin will set up a combined controller and
-# compute node.
+#     If the SERVICE_HOST environment variable is already set when ./stack.sh
+#     is run, and is _different_ from the local machine's hostname, the
+#     networking-calico DevStack plugin will interpret that as a request to set
+#     up a compute-only node, that points to $SERVICE_HOST as its controller.
 #
-# Therefore, to bring up a multi-node Calico/DevStack cluster, set and
-# export SERVICE_HOST in the environment, to the hostname for the chosen
-# controller node in your cluster, before invoking this script.
+#     On the other hand, if SERVICE_HOST is not set, or is the _same_ as the
+#     local hostname, the plugin will set up a combined controller and compute
+#     node.
 #
-# For a single node Calico/DevStack cluster, the environment should
-# leave SERVICE_HOST unset.
-#------------------------------------------------------------------------------
+#     Therefore, to bring up a multi-node Calico/DevStack cluster, set and
+#     export SERVICE_HOST in the environment, to the hostname for the chosen
+#     controller node in your cluster, before invoking this script.
+#
+#     For a single node Calico/DevStack cluster, the environment should leave
+#     SERVICE_HOST unset.
+#
+# TEST_GERRIT_CHANGE
+#
+#     By default this script uses the master branch of networking-calico.  To
+#     test a networking-calico change in Gerrit that hasn't yet been merged to
+#     master, set the TEST_GERRIT_CHANGE environment variable to indicate that
+#     change, before running this script; for example:
+#
+#         export TEST_GERRIT_CHANGE=219646/1
+# ------------------------------------------------------------------------------
 
 # Assume that we are starting from the home directory of a non-root
 # user that can sudo, and hence is suitable for running DevStack.  For
@@ -66,13 +75,7 @@ sudo apt-get -y install git
 git clone https://git.openstack.org/openstack/networking-calico
 cd networking-calico
 
-# If you want to test a networking-calico change in Gerrit that hasn't
-# yet been merged to master, set the TEST_GERRIT_CHANGE environment
-# variable to indicate that change, before running this script; for
-# example:
-#
-#    export TEST_GERRIT_CHANGE=219646/1
-#
+# If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
 if [ -n "$TEST_GERRIT_CHANGE" ]; then
     git fetch https://review.openstack.org/openstack/networking-calico \
 	refs/changes/${TEST_GERRIT_CHANGE:4:2}/${TEST_GERRIT_CHANGE}
