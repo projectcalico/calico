@@ -714,7 +714,7 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         m_plugin.assert_called_once_with(self.network_config, self.env)
-        m_conf_log.assert_called_with(ANY, "cni.log", log_level="INFO")
+        m_conf_log.assert_called_with(ANY, "WARNING", "WARNING", "cni.log")
         m_sys.exit.assert_called_once_with(0)
 
     @patch("calico.os", autospec=True)
