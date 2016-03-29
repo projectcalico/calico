@@ -38,7 +38,7 @@ from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
-from calico.felix.frules import install_global_rules
+from calico.felix.frules import install_global_rules, load_nf_conntrack
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
@@ -189,6 +189,12 @@ def _main_greenlet(config):
             ]
 
         monitored_items = [actor.greenlet for actor in top_level_actors]
+
+        # Try to ensure that the nf_conntrack_netlink kernel module is present.
+        # This works around an issue[1] where the first call to the "conntrack"
+        # command fails while waiting for the module to load.
+        # [1] https://github.com/projectcalico/calico/issues/986
+        load_nf_conntrack()
 
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")

@@ -187,6 +187,23 @@ CHAIN_FIP_DNAT = FELIX_PREFIX + 'FIP-DNAT'
 CHAIN_FIP_SNAT = FELIX_PREFIX + 'FIP-SNAT'
 
 
+def load_nf_conntrack():
+    """
+    Try to force the nf_conntrack_netlink kernel module to be loaded.
+    """
+    _log.info("Running conntrack command to force load of "
+              "nf_conntrack_netlink module.")
+    try:
+        # Running the stats command is enough to make conntrack load the
+        # kernel module if needed.  We don't use modprobe here because it's
+        # not smart enough to tell if the module is compiled in.
+        futils.check_call(["conntrack", "-S"])
+    except FailedSystemCall:
+        _log.exception("Failed to execute conntrack command to force load of "
+                       "nf_conntrack_netlink module.  conntrack commands may "
+                       "fail later.")
+
+
 def install_global_rules(config, filter_updater, nat_updater, ip_version,
                          raw_updater=None):
     """
@@ -211,19 +228,20 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
             try:
                 _configure_ipip_device(config)
             except FailedSystemCall:
-                # We've seen this fail occasionally if the kernel is concurrently
-                # starting the tunl0 device.  Retry.
+                # We've seen this fail occasionally if the kernel is
+                # concurrently starting the tunl0 device.  Retry.
                 _log.exception("Failed to configure IPIP device, retrying...")
                 time.sleep(1)
                 _configure_ipip_device(config)
 
         if config.IP_IN_IP_ENABLED and config.IP_IN_IP_ADDR:
-            # Add a rule to catch packets originated by this host that are going
-            # down the tunnel with the wrong source address.  NAT them to use the
-            # address of the tunnel device instead.  See comment on the constant
-            # for more details.
-            _log.info("IPIP enabled and tunnel address set: inserting MASQUERADE "
-                      "rule to ensure tunnelled packets have correct source.")
+            # Add a rule to catch packets originated by this host that are
+            # going down the tunnel with the wrong source address.  NAT them
+            # to use the address of the tunnel device instead.  See comment
+            # on the constant for more details.
+            _log.info("IPIP enabled and tunnel address set: inserting "
+                      "MASQUERADE rule to ensure tunnelled packets have "
+                      "correct source.")
             nat_updater.ensure_rule_inserted(POSTROUTING_LOCAL_NAT_FRAGMENT,
                                                 async=False)
         else:
