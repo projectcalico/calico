@@ -296,9 +296,12 @@ def extract_tags_and_selectors_from_profile(profile):
     tags_and_sels = set()
     for in_or_out in ["inbound_rules", "outbound_rules"]:
         for rule in profile.get(in_or_out, []):
-            for key in ["src_tag", "dst_tag", "src_selector", "dst_selector"]:
-                if key in rule:
-                    tags_and_sels.add(rule[key])
+            for neg_pfx in ["", "!"]:
+                for suffix in ["src_tag", "dst_tag",
+                               "src_selector", "dst_selector"]:
+                    key = neg_pfx + suffix
+                    if key in rule:
+                        tags_and_sels.add(rule[key])
     return tags_and_sels
 
 

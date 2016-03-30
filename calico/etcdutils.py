@@ -501,8 +501,11 @@ FIELDS_TO_INTERN = set([
 
     # Rules dicts.
     "protocol",
+    "!protocol",
     "src_tag",
+    "!src_tag",
     "dst_tag",
+    "!dst_tag",
     "action",
 ])
 json_decoder = json.JSONDecoder(
