@@ -92,6 +92,11 @@ class CniPlugin(object):
         Type of IPAM to use, e.g calico-ipam.
         """
 
+        self.hostname = network_config.get("hostname", socket.gethostname())
+        """
+        The hostname to register endpoints under.
+        """
+
         self.policy_driver = get_policy_driver(self.k8s_pod_name,
                                                self.k8s_namespace,
                                                self.network_config)
@@ -480,7 +485,7 @@ class CniPlugin(object):
         _log.debug("Creating Calico endpoint with workload_id=%s",
                    self.workload_id)
         try:
-            endpoint = self._client.create_endpoint(HOSTNAME,
+            endpoint = self._client.create_endpoint(self.hostname,
                                                     self.orchestrator_id,
                                                     self.workload_id,
                                                     ip_list)
@@ -518,7 +523,7 @@ class CniPlugin(object):
         """
         try:
             _log.info("Removing Calico workload '%s'", self.workload_id)
-            self._client.remove_workload(hostname=HOSTNAME,
+            self._client.remove_workload(hostname=self.hostname,
                                          orchestrator_id=self.orchestrator_id,
                                          workload_id=self.workload_id)
         except KeyError:
@@ -529,7 +534,7 @@ class CniPlugin(object):
             _log.debug("Could not find workload with workload ID %s.",
                          self.workload_id)
             try:
-                self._client.remove_workload(hostname=HOSTNAME,
+                self._client.remove_workload(hostname=self.hostname,
                                              orchestrator_id="cni",
                                              workload_id=self.container_id)
             except KeyError:
@@ -597,7 +602,7 @@ class CniPlugin(object):
             _log.debug("Looking for endpoint that matches workload ID %s",
                        self.workload_id)
             endpoint = self._client.get_endpoint(
-                hostname=HOSTNAME,
+                hostname=self.hostname,
                 orchestrator_id=self.orchestrator_id,
                 workload_id=self.workload_id
             )
@@ -608,7 +613,7 @@ class CniPlugin(object):
                        self.workload_id)
             try:
                 endpoint = self._client.get_endpoint(
-                    hostname=HOSTNAME,
+                    hostname=self.hostname,
                     orchestrator_id="cni",
                     workload_id=self.container_id
                 )

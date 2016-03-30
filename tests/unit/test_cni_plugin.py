@@ -45,6 +45,7 @@ class CniPluginTest(unittest.TestCase):
             "etcd_authority": "dummy_value:1234",
             "etcd_endpoints": "http://dummy_value:1234",
             "type": "calico",
+            "hostname": "test-host",
             "ipam": {
                 "type": "calico-ipam",
                 "subnet": "10.22.0.0/16",
