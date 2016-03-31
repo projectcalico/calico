@@ -13,14 +13,14 @@ def add_update_namespace(key, namespace):
     namespace.  Uses the `net.alpha.kubernetes.io/network-isolation`
     annotation.
     """
-    _log.info("Adding/updating namespace: %s", key)
+    _log.debug("Adding/updating namespace: %s", key)
 
     # Determine the type of network-isolation specified by this namespace.
     # This defaults to no isolation.
     annotations = namespace["metadata"].get("annotations", {})
     _log.debug("Namespace %s has annotations: %s", key, annotations)
     net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no") == "yes"
-    _log.info("Namespace %s has network-isolation? %s", key, net_isolation)
+    _log.debug("Namespace %s has network-isolation? %s", key, net_isolation)
 
     # Determine the profile name to create.
     namespace_name = namespace["metadata"]["name"]
@@ -47,7 +47,7 @@ def add_update_namespace(key, namespace):
     # update it if it already exists.
     client.create_profile(profile_name, rules, labels)
 
-    _log.info("Created/updated profile for namespace %s", namespace_name)
+    _log.debug("Created/updated profile for namespace %s", namespace_name)
 
 
 def delete_namespace(key, namespace):
@@ -55,7 +55,7 @@ def delete_namespace(key, namespace):
     Takes a deleted namespace and removes the corresponding
     configuration from the Calico datastore.
     """
-    _log.info("Deleting namespace: %s", key)
+    _log.debug("Deleting namespace: %s", key)
 
     # Delete the Calico policy which represnets this namespace.
     namespace_name = namespace["metadata"]["name"]
