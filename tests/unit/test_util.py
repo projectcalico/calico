@@ -98,7 +98,7 @@ class UtilTest(unittest.TestCase):
         path ="/some/path/to/filename.log"
         m_os.path.exists.return_value = False
         m_os.path.join.return_value = path 
-        configure_logging(log, filename)
+        configure_logging(log, "INFO", "INFO", filename)
         m_os.makedirs.assert_called_once_with("/var/log/calico/cni")
 
     @parameterized.expand([

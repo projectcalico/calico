@@ -39,9 +39,7 @@ Options:
 """
 
 # Logging config.
-LOG_FILENAME = "ipam.log"
 _log = logging.getLogger("calico_cni")
-
 
 class IpamPlugin(object):
     def __init__(self, environment, ipam_config):
@@ -267,16 +265,17 @@ def main():
     config = json.loads(conf_raw)
 
     # Get the log level from the config file, default to INFO.
-    log_level = config.get(LOG_LEVEL_KEY, "INFO").upper()
+    log_level_file = config.get(LOG_LEVEL_FILE_KEY, "NONE").upper()
+    log_level_stderr = config.get(LOG_LEVEL_STDERR_KEY, "INFO").upper()
 
-    # Setup logger. We log to file and to stderr based on the
-    # log level provided in the network configuration file.
-    configure_logging(_log, LOG_FILENAME,
-                      log_level=log_level,
-                      stderr_level=logging.INFO)
-    configure_logging(logging.getLogger("pycalico"), LOG_FILENAME,
-                      log_level=log_level,
-                      stderr_level=logging.INFO)
+    log_filename = "ipam.log"
+
+    # Configure logging for CNI
+    configure_logging(_log, log_level_file, log_level_stderr, log_filename)
+
+    # Configure logging for libcalico (pycalico)
+    configure_logging(logging.getLogger("pycalico"), "ERROR", "ERROR",
+                      log_filename)
 
     # Get copy of environment.
     env = os.environ.copy()

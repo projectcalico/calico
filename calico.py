@@ -39,7 +39,6 @@ from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
 from ipam import IpamPlugin
 
 # Logging configuration.
-LOG_FILENAME = "cni.log"
 _log = logging.getLogger("calico_cni")
 
 __doc__ = """
@@ -668,14 +667,16 @@ def main():
     network_config = yaml.safe_load(config_raw)
 
     # Get the log level from the config file, default to INFO.
-    log_level = network_config.get(LOG_LEVEL_KEY, "INFO").upper()
+    log_level_file = network_config.get(LOG_LEVEL_FILE_KEY, "INFO").upper()
+    log_level_stderr = network_config.get(LOG_LEVEL_STDERR_KEY, "ERROR").upper()
 
+    log_filename = "cni.log"
     # Configure logging for CNI
-    configure_logging(_log, LOG_FILENAME, log_level=log_level)
+    configure_logging(_log, log_level_file, log_level_stderr, log_filename)
 
     # Configure logging for libcalico (pycalico)
-    configure_logging(logging.getLogger("pycalico"), LOG_FILENAME,
-                      log_level=log_level)
+    configure_logging(logging.getLogger("pycalico"), "WARNING", "WARNING",
+                      log_filename)
 
     _log.debug("Loaded network config:\n%s",
                json.dumps(network_config, indent=2))

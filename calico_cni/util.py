@@ -24,38 +24,40 @@ from pycalico.datastore_errors import DataStoreError
 _log = logging.getLogger("calico_cni")
 
 
-def configure_logging(logger, log_filename, log_level=logging.INFO, 
-        stderr_level=logging.ERROR, log_dir=LOG_DIR):
+def configure_logging(logger, log_level_file, log_level_stderr, filename):
     """Configures logging for given logger using the given filename.
 
     :return None.
     """
-    # If the logging directory doesn't exist, create it.
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    # Determine path to log file.
-    log_path = os.path.join(log_dir, log_filename)
-
     # Create an IdentityFilter.
     identity = get_identifier()
     identity_filter = IdentityFilter(identity=identity)
-
-    # Create a log handler and formatter and apply to _log.
-    handler = ConcurrentRotatingFileHandler(filename=log_path,
-                                            maxBytes=1000000,
-                                            backupCount=5)
-    handler.addFilter(identity_filter)
     formatter = logging.Formatter(LOG_FORMAT)
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(log_level)
 
-    # Attach a stderr handler to the log.
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setLevel(stderr_level)
-    stderr_handler.setFormatter(formatter)
-    logger.addHandler(stderr_handler)
+    if log_level_file != "NONE":
+        # If the logging directory doesn't exist, create it.
+        if not os.path.exists(LOG_DIR):
+            os.makedirs(LOG_DIR)
+
+        # Determine path to log file.
+        log_path = os.path.join(LOG_DIR, filename)
+
+        # Create a log handler and formatter and apply to _log.
+        handler = ConcurrentRotatingFileHandler(filename=log_path,
+                                                maxBytes=1000000,
+                                                backupCount=5)
+        handler.addFilter(identity_filter)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(log_level_file)
+
+    if log_level_stderr != "NONE":
+        # Attach a stderr handler to the log.
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(log_level_stderr)
+        stderr_handler.addFilter(identity_filter)
+        stderr_handler.setFormatter(formatter)
+        logger.addHandler(stderr_handler)
 
 
 def parse_cni_args(cni_args):
