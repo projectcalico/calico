@@ -11,7 +11,7 @@ _log = logging.getLogger("__main__")
 client = DatastoreClient()
 
 
-def add_update_network_policy(key, policy):
+def add_update_network_policy(key, policy, cache):
     """
     Takes a new network policy from the Kubernetes API and
     creates the corresponding Calico policy configuration.
@@ -56,7 +56,7 @@ def add_update_network_policy(key, policy):
         _log.debug("Updated policy '%s' for NetworkPolicy %s", name, key)
 
 
-def delete_network_policy(key, policy):
+def delete_network_policy(key, policy, cache):
     """
     Takes a deleted network policy and removes the corresponding
     configuration from the Calico datastore.

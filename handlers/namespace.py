@@ -7,7 +7,7 @@ _log = logging.getLogger("__main__")
 client = DatastoreClient()
 
 
-def add_update_namespace(key, namespace):
+def add_update_namespace(key, namespace, cache):
     """
     Configures the necessary policy in Calico for this
     namespace.  Uses the `net.alpha.kubernetes.io/network-isolation`
@@ -50,7 +50,7 @@ def add_update_namespace(key, namespace):
     _log.debug("Created/updated profile for namespace %s", namespace_name)
 
 
-def delete_namespace(key, namespace):
+def delete_namespace(key, namespace, cache):
     """
     Takes a deleted namespace and removes the corresponding
     configuration from the Calico datastore.

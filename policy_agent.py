@@ -57,6 +57,12 @@ class PolicyAgent(object):
         Client for accessing the Calico datastore.
         """
 
+        self.cache = {}
+        """
+        Cache of data stored to etcd, keyed off of Kubernetes API obj keys.
+        Used to track whether we need to update etcd or not.
+        """
+
         self._handlers = {}
         self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_ADDED,
                          add_update_network_policy)
@@ -106,6 +112,15 @@ class PolicyAgent(object):
         _log.debug("Looking up handler for event: %s", key)
         return self._handlers[key]
 
+    def load_cache(self):
+        """
+        Loads cache from etcd.
+        """
+        endpoints = self._client.get_endpoints(orchestrator_id="k8s")
+        for ep in endpoints:
+            self.cache[str(ep.workload_id)] = ep.labels
+        _log.info("Loaded cache")
+
     def run(self):
         """
         PolicyAgent.run() is called at program init to spawn watch threads,
@@ -114,6 +129,9 @@ class PolicyAgent(object):
         # Ensure the tier exists.
         metadata = {"order": 50}
         self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
+
+        # Load pod cache.
+        self.load_cache()
 
         # Read initial state from Kubernetes API.
         self.start_workers()
@@ -172,6 +190,10 @@ class PolicyAgent(object):
             finally:
                 self._event_queue.task_done()
 
+                # Log out when the queue is empty.
+                if self._event_queue.empty():
+                    _log.info("Emptied the event queue")
+
     def _process_update(self, event_type, resource_type, resource):
         """
         Takes an event updates our state accordingly.
@@ -191,10 +213,10 @@ class PolicyAgent(object):
             _log.warning("No %s handlers for: %s",
                          event_type, resource_type)
         else:
-            _log.debug("Calling handler: %s", handler)
             try:
-                handler(key, resource)
-                _log.debug("%s %s: %s", event_type, resource_type, key)
+                handler(key, resource, self.cache)
+                _log.debug("Handled %s for %s: %s",
+                           event_type, resource_type, key)
             except KeyError:
                 _log.exception("Invalid %s: %s", resource_type,
                                json.dumps(resource, indent=2))
@@ -219,6 +241,8 @@ class PolicyAgent(object):
             except KubernetesApiError:
                 _log.exception("Kubernetes API error managing %s",
                                resource_type)
+            except Queue.Full:
+                _log.exception("Event queue full")
             finally:
                 # Sleep for a second so that we don't tight-loop.
                 _log.warning("Re-starting watch on resource: %s",
@@ -306,7 +330,7 @@ class PolicyAgent(object):
                                   block=True,
                                   timeout=QUEUE_PUT_TIMEOUT)
 
-        _log.info("Done adding %s - new resourceVersion: %s",
+        _log.info("Done getting %s(s) - new resourceVersion: %s",
                   resource_type, resource_version)
         return resource_version
 
