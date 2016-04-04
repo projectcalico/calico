@@ -31,7 +31,7 @@ class PolicyParser(object):
 
         # Iterate through and create the appropriate Calico Rules.
         allow_incomings = self.policy["spec"].get("ingress") or []
-        _log.info("Found %s ingress rules", len(allow_incomings))
+        _log.debug("Found %s ingress rules", len(allow_incomings))
         for allow_incoming_clause in allow_incomings:
             # Convert each allow_incoming_clause into one or more
             # Calico Rule objects.

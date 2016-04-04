@@ -45,9 +45,9 @@ NS_PROFILE_FMT = "k8s_ns.%s"
 NS_LABEL_KEY_FMT = "k8s_ns/label/%s"
 
 # Max number of updates to queue.
-# Assuming 10 pods per host, 1000 hosts, we may queue up to
-# 10,000 updates at start of day.
-MAX_QUEUE_SIZE = 10000
+# Assuming 100 pods per host, 1000 hosts, we may queue
+# about 100,000 updates at start of day.
+MAX_QUEUE_SIZE = 100000
 
 # Seconds to wait when adding to a full queue.
 # It should easily not take more than a second to complete processing of
