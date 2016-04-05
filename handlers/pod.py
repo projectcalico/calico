@@ -67,7 +67,7 @@ def add_update_pod(key, pod, cache):
     _log.debug("Updated labels on pod %s", key)
 
     # Update the pod cache.
-    cache[key] = labels
+    cache[workload_id] = labels
 
 
 def delete_pod(key, pod, cache):
