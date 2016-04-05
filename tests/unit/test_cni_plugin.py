@@ -57,7 +57,7 @@ class CniPluginTest(unittest.TestCase):
         self.env = {
                 CNI_CONTAINERID_ENV: self.container_id,
                 CNI_IFNAME_ENV: "eth0",
-                CNI_ARGS_ENV: "",
+                CNI_ARGS_ENV: "IP=1.2.3.4",
                 CNI_COMMAND_ENV: CNI_CMD_ADD, 
                 CNI_PATH_ENV: "/usr/bin/rkt/",
                 CNI_NETNS_ENV: "netns",

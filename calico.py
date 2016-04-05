@@ -157,6 +157,14 @@ class CniPlugin(object):
         orchestrator_id: Either "k8s" or "cni".
         """
 
+        # Ensure that the ipam_env CNI_ARGS contains the IgnoreUnknown=1 option
+        # See https://github.com/appc/cni/pull/158
+        # And https://github.com/appc/cni/pull/127
+        self.ipam_env[CNI_ARGS_ENV] = 'IgnoreUnknown=1'
+        if env.get(CNI_ARGS_ENV):
+            # Append any existing args - if they are set.
+            self.ipam_env[CNI_ARGS_ENV] += ";%s" % env.get(CNI_ARGS_ENV)
+
     def execute(self):
         """
         Execute the CNI plugin - uses the given CNI_COMMAND to determine
