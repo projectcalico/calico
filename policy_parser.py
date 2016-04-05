@@ -1,11 +1,8 @@
 #!/usr/bin/python
-import sys
 import logging
 
-from pycalico.datastore_datatypes import Rules, Rule
-from cloghandler import ConcurrentRotatingFileHandler
-
 from constants import *
+from pycalico.datastore_datatypes import Rule
 
 _log = logging.getLogger("__main__")
 
@@ -24,12 +21,12 @@ class PolicyParser(object):
     def calculate_inbound_rules(self):
         """
         Takes a NetworkPolicy object from the API and returns a list of
-        Calico Rules objects which should be applied on ingress.
+        Calico Rule objects which should be applied on ingress.
         """
         _log.debug("Calculating inbound rules")
         rules = []
 
-        # Iterate through and create the appropriate Calico Rules.
+        # Iterate through and create the appropriate Calico Rule objects.
         allow_incomings = self.policy["spec"].get("ingress") or []
         _log.debug("Found %s ingress rules", len(allow_incomings))
         for allow_incoming_clause in allow_incomings:

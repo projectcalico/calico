@@ -7,23 +7,24 @@ _log = logging.getLogger("__main__")
 client = DatastoreClient()
 
 
-def add_update_namespace(key, namespace, cache):
+def add_update_namespace(namespace):
     """
     Configures the necessary policy in Calico for this
     namespace.  Uses the `net.alpha.kubernetes.io/network-isolation`
     annotation.
     """
-    _log.debug("Adding/updating namespace: %s", key)
+    namespace_name = namespace["metadata"]["name"]
+    _log.debug("Adding/updating namespace: %s", namespace_name)
 
     # Determine the type of network-isolation specified by this namespace.
     # This defaults to no isolation.
     annotations = namespace["metadata"].get("annotations", {})
-    _log.debug("Namespace %s has annotations: %s", key, annotations)
+    _log.debug("Namespace %s has annotations: %s", namespace_name, annotations)
     net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no") == "yes"
-    _log.debug("Namespace %s has network-isolation? %s", key, net_isolation)
+    _log.debug("Namespace %s has network-isolation? %s",
+               namespace_name, net_isolation)
 
     # Determine the profile name to create.
-    namespace_name = namespace["metadata"]["name"]
     profile_name = NS_PROFILE_FMT % namespace_name
 
     # Determine the rules to use.
@@ -50,17 +51,16 @@ def add_update_namespace(key, namespace, cache):
     _log.debug("Created/updated profile for namespace %s", namespace_name)
 
 
-def delete_namespace(key, namespace, cache):
+def delete_namespace(namespace):
     """
     Takes a deleted namespace and removes the corresponding
     configuration from the Calico datastore.
     """
-    _log.debug("Deleting namespace: %s", key)
-
     # Delete the Calico policy which represnets this namespace.
     namespace_name = namespace["metadata"]["name"]
     profile_name = NS_PROFILE_FMT % namespace_name
+    _log.debug("Deleting namespace profile: %s", profile_name)
     try:
         client.remove_profile(profile_name)
     except KeyError:
-        _log.info("Unable to find profile for namespace '%s'", key)
+        _log.info("Unable to find profile for namespace '%s'", namespace_name)

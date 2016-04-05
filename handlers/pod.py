@@ -1,22 +1,20 @@
 import logging
 from constants import *
 from pycalico.datastore import DatastoreClient
-from pycalico.datastore_errors import MultipleEndpointsMatch
 
 _log = logging.getLogger("__main__")
 client = DatastoreClient()
 
+label_cache = {}
+endpoint_cache = {}
 
-def add_update_pod(key, pod, cache):
-    """
-    Takes a new or updated pod from the Kubernetes API and
-    creates the corresponding Calico configuration.
-    """
-    _log.debug("Adding new pod: %s", key)
 
+def parse_pod(pod):
+    """
+    Return the labels for this pod.
+    """
     # Get Kubernetes labels.
     labels = pod["metadata"].get("labels", {})
-    _log.debug("Pod '%s' has labels: %s", key, labels)
 
     # Extract information.
     namespace = pod["metadata"]["namespace"]
@@ -27,63 +25,110 @@ def add_update_pod(key, pod, cache):
     # by selector-based policies to select all pods in a given namespace.
     labels[K8S_NAMESPACE_LABEL] = namespace
 
-    # Check if the labels have changed - if they haven't, just return.
-    old_labels = cache.get(workload_id)
-    _log.debug("Comparing labels: cached=%s, new=%s", old_labels, labels)
+    return workload_id, namespace, name, labels
+
+
+def add_pod(pod):
+    """
+    Called when a Pod update with type ADDED is received.
+
+    Simply store the pod's labels in the label cache so that we
+    can accurately determine if an endpoint must be updated on subsequent
+    updates.  The Calico CNI plugin has already configured this pod's
+    endpoint with the correct labels, so we don't need to modify the
+    endpoint object.
+    """
+    workload_id, _, _, labels = parse_pod(pod)
+    label_cache[workload_id] = labels
+    _log.debug("Updated label cache with %s: %s", workload_id, labels)
+
+
+def update_pod(pod):
+    """
+    Called when a Pod update with type MODIFIED is received.
+
+    Compares if the labels have changed.  If they have, updates
+    the Calico endpoint for this pod.
+    """
+    # Get Kubernetes labels and metadata.
+    workload_id, namespace, name, labels = parse_pod(pod)
+    _log.debug("Updating pod: %s", workload_id)
+
+    # Check if the labels have changed for this pod.  If they haven't,
+    # do nothing.
+    old_labels = label_cache.get(workload_id)
+    _log.debug("Compare labels on %s. cached: %s, new: %s",
+               workload_id, old_labels, labels)
     if old_labels == labels:
-        _log.debug("Ignoring update with no label change")
+        _log.debug("Ignoring updated for %s with no label change", workload_id)
         return
 
-    # Get the Calico endpoint.  This may or may not have already been
-    # created by the CNI plugin.  If it hasn't been created, we need to
-    # wait until is has before we can do any meaningful work.
-    try:
-        _log.debug("Looking for endpoint that matches workload_id=%s",
-                   workload_id)
-        endpoint = client.get_endpoint(
-            orchestrator_id="k8s",
-            workload_id=workload_id
-        )
-    except KeyError:
-        # We don't need to do anything special here, just return.
-        # We'll receive another update when the Pod enters running state.
-        _log.debug("No endpoint for '%s', wait until running", workload_id)
-        return
-    except MultipleEndpointsMatch:
-        # We should never have multiple endpoints with the same
-        # workload_id.  This could theoretically occur if the Calico
-        # datastore is out-of-sync with what pods actually exist, but
-        # this is an error state and indicates a problem elsewhere.
-        _log.error("Multiple Endpoints found matching ID %s", workload_id)
-        sys.exit(1)
+    # Labels have changed.
+    # Check our cache to see if we already know about this endpoint.  If not,
+    # re-load the entire cache from etcd and try again.
+    _log.info("Labels for %s have been updated", workload_id)
+    endpoint = endpoint_cache.get(workload_id)
+    if not endpoint:
+        # No endpoint in our cache.
+        _log.info("No endpoint for %s in cache, loading", workload_id)
+        load_caches()
+        endpoint = endpoint_cache.get(workload_id)
+        if not endpoint:
+            # No endpoint in etcd - this means the pod hasn't been
+            # created by the CNI plugin yet.  Just wait until it has been.
+            # This can only be hit when labels for a pod change before
+            # the pod has been deployed, so should be pretty uncommon.
+            _log.info("No endpoint for pod %s - wait for creation",
+                      workload_id)
+            return
+    _log.debug("Found endpoint for %s", workload_id)
 
-    # Determine the namespace profile name.
-    ns_profile = NS_PROFILE_FMT % namespace
-
-    # Set the labels / profile on the endpoint.
+    # Update the labels on the endpoint.
     endpoint.labels = labels
-    endpoint.profile_ids = [ns_profile]
     client.set_endpoint(endpoint)
-    _log.debug("Updated labels on pod %s", key)
 
-    # Update the pod cache.
-    cache[workload_id] = labels
+    # Update the label cache with the new labels.
+    label_cache[workload_id] = labels
+
+    # Update the endpoint cache with the modified endpoint.
+    endpoint_cache[workload_id] = endpoint
 
 
-def delete_pod(key, pod, cache):
+def load_caches():
+    """
+    Loads endpoint and label caches from etcd.
+
+    We need to do this when we've received a MODIFIED event
+    indicating that labels have changed for a pod that is not
+    already in our cache. This can also happen if there are no labels
+    cached for the MODIFIED pod.
+    """
+    endpoints = client.get_endpoints(orchestrator_id="k8s")
+    for ep in endpoints:
+        endpoint_cache[ep.workload_id] = ep
+        label_cache[ep.workload_id] = ep.labels
+    _log.info("Loaded endpoint and label caches")
+
+
+def delete_pod(pod):
     """
     We don't need to do anything when a pod is deleted - the CNI plugin
-    handles the deletion of the endpoint.
+    handles the deletion of the endpoint.  Just update the caches.
     """
-    _log.debug("Pod deleted: %s", key)
-
     # Extract information.
-    namespace = pod["metadata"]["namespace"]
-    name = pod["metadata"]["name"]
-    workload_id = "%s.%s" % (namespace, name)
+    workload_id, _, _, _ = parse_pod(pod)
+    _log.debug("Pod deleted: %s", workload_id)
 
-    # Delete from cache.
+    # Delete from label cache.
     try:
-        del cache[workload_id]
+        del label_cache[workload_id]
+        _log.debug("Removed %s from label cache", workload_id)
+    except KeyError:
+        pass
+
+    # Delete from endpoint cache.
+    try:
+        del endpoint_cache[workload_id]
+        _log.debug("Removed %s from endpoint cache", workload_id)
     except KeyError:
         pass
