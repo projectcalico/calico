@@ -26,7 +26,8 @@ You can install Calico via any of the following methods:
 - an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see
   :doc:`redhat-opens-install`
 
-- our integration of Calico with Mirantis Fuel 6.1 - see :doc:`fuel-integration`
+- our integration of Calico with Mirantis Fuel 6.1 or 7.0 - see
+  :doc:`fuel-integration`
 
 - our integration with Canonical's Juju Charms - see :doc:`juju-opens-install`
 

@@ -12,14 +12,31 @@
    #    implied. See the License for the specific language governing
    #    permissions and limitations under the License.
 
-Integration with Mirantis Fuel 6.1
-==================================
+==============================
+Integration with Mirantis Fuel
+==============================
 
-This document describes our integration of Calico with the
-Mirantis Fuel system for rapidly deploying an OpenStack cluster.
+Calico plugins are available for Fuel 6.1 and 7.0.
 
-It is presented in sections covering the following aspects of our integration
-work.
+Fuel 7.0
+========
+
+The plugin for Fuel 7.0 is currently undergoing final review and certification;
+you can find the plugin code at git.openstack.org, and its documentation in
+pending changes on review.openstack.org:
+
+- Code: https://git.openstack.org/cgit/openstack/fuel-plugin-calico/log/?h=7.0
+
+- User Guide: https://review.openstack.org/#/c/281239/
+
+- Test Plan and Report: https://review.openstack.org/#/c/282362/
+
+Fuel 6.1
+========
+
+The rest of this document describes our integration of Calico with Mirantis
+Fuel 6.1.  It is presented in sections covering the following aspects of our
+integration work.
 
 - Objective: The system that we are aiming to deploy.
 - Cluster Deployment: The procedure to follow to deploy such a system.
@@ -200,9 +217,9 @@ simplify the web UI for Calico networking.
 Check BGP connectivity on the controller
 ----------------------------------------
 
-Once the deployment is complete, you may wish to verify that the route 
-reflector running on the controller node has established BGP sessions 
-to all of the compute nodes. 
+Once the deployment is complete, you may wish to verify that the route
+reflector running on the controller node has established BGP sessions
+to all of the compute nodes.
 
 To do this, log onto the controller node and run::
 
