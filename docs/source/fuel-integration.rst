@@ -16,7 +16,9 @@
 Integration with Mirantis Fuel
 ==============================
 
-Calico plugins are available for Fuel 6.1 and 7.0.
+Calico plugins are available for Fuel 6.1 and 7.0.  We don't yet support Fuel
+8, but plan to work on that soon (summer 2016 - please get in touch if this is
+important to you).
 
 Fuel 7.0
 ========
