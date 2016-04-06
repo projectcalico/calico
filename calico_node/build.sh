@@ -6,7 +6,7 @@ set -x
 echo "http://alpine.gliderlabs.com/alpine/edge/testing" >> /etc/apk/repositories
 
 # These packages make it into the final image.
-apk -U add runit python py-setuptools libffi ip6tables ipset iputils iproute2 yajl
+apk -U add runit python py-setuptools libffi ip6tables ipset iputils iproute2 yajl conntrack-tools
 
 # These packages are only used for building and get removed.
 apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk curl
@@ -21,7 +21,7 @@ curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bi
 chmod +x /sbin/*
 
 # Install Felix and libcalico
-pip install git+https://github.com/projectcalico/calico.git@e4ed181f61b55fceb22bc277f1634873b4d51483
+pip install git+https://github.com/projectcalico/calico.git
 pip install git+https://github.com/projectcalico/libcalico.git
 
 # Output the python library list
