@@ -60,8 +60,8 @@ AUTH_TOKEN_KEY = "k8s_auth_token"
 ERR_CODE_GENERIC = 100   # Use this for all errors.
 
 # Policy modes.
-POLICY_MODE_ANNOTATIONS = "k8s-annotations"
-POLICY_MODE_DENY_INBOUND = "default-deny-inbound"
+POLICY_MODE_KUBERNETES_ANNOTATIONS = "k8s-annotations"
+POLICY_MODE_KUBERNETES = "k8s"
 
 # Logging Configuration
 LOG_DIR = "/var/log/calico/cni"

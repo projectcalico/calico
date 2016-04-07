@@ -28,7 +28,7 @@ from calico_cni import container_engines
 from calico_cni.constants import *
 from calico_cni.container_engines import DockerEngine
 from calico_cni.policy_drivers import (DefaultPolicyDriver,
-        KubernetesDefaultPolicyDriver, KubernetesAnnotationDriver)
+                                       KubernetesNoPolicyDriver, KubernetesAnnotationDriver)
 
 
 class CniPluginFvTest(unittest.TestCase):
@@ -192,7 +192,7 @@ class CniPluginFvTest(unittest.TestCase):
         p.execute()
         
         # Assert the correct policy driver was chosen.
-        assert_true(isinstance(p.policy_driver, KubernetesDefaultPolicyDriver)) 
+        assert_true(isinstance(p.policy_driver, KubernetesNoPolicyDriver))
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 

@@ -21,12 +21,12 @@ from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Endpoint, Rule, Rules
 
 from calico_cni.constants import ERR_CODE_GENERIC
-from calico_cni.policy_drivers import (ApplyProfileError, 
-                        get_policy_driver,
-                        DefaultPolicyDriver,
-                        KubernetesDefaultPolicyDriver,
-                        KubernetesAnnotationDriver,
-                        DefaultDenyInboundDriver)
+from calico_cni.policy_drivers import (ApplyProfileError,
+                                       get_policy_driver,
+                                       DefaultPolicyDriver,
+                                       KubernetesNoPolicyDriver,
+                                       KubernetesAnnotationDriver,
+                                       KubernetesPolicyDriver)
 
 
 class DefaultPolicyDriverTest(unittest.TestCase):
@@ -103,7 +103,7 @@ class KubernetesDefaultPolicyDriverTest(unittest.TestCase):
     """
     def setUp(self):
         self.network_name = "test_net_name"
-        self.driver = KubernetesDefaultPolicyDriver(self.network_name)
+        self.driver = KubernetesNoPolicyDriver(self.network_name)
         assert_equal(self.driver.profile_name, self.network_name)
 
         # Mock the DatastoreClient
@@ -343,27 +343,35 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Should be None
         assert_equal(annotations, None)
 
-class DefaultDenyInboundPolicyDriverTest(unittest.TestCase):
+class KubernetesPolicyDriverTest(unittest.TestCase):
     """
     Test class for DefaultDenyInboundDriver class.
     """
     def setUp(self):
-        self.network_name = "deny-inbound"
-        self.driver = DefaultDenyInboundDriver(self.network_name) 
+        self.network_name = "net-name"
+        self.namespace = "default"
+        self.driver = KubernetesPolicyDriver(self.network_name, self.namespace,
+                                             None, None)
 
         # Mock the DatastoreClient
         self.client = MagicMock(spec=DatastoreClient)
         self.driver._client = self.client
 
-    def test_generate_rules(self):
-        # Generate rules
-        rules = self.driver.generate_rules()
+    def test_apply_profile(self):
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.endpoint_id = "12345"
 
-        # Assert correct.
-        expected = Rules(id=self.network_name,
-                         inbound_rules=[Rule(action="deny")],
-                         outbound_rules=[Rule(action="allow")])
-        assert_equal(rules, expected)
+        # Mock out the k8s API call.
+        self.driver._get_api_pod = Mock(spec=self.driver._get_api_pod)
+        self.driver._get_api_pod.return_value = \
+            {"metadata": {"labels": {"label1": "labelval"}}}
+
+        # Call
+        self.driver.apply_profile(endpoint)
+
+        # Assert
+        self.client.update_endpoint.assert_called_once_with(endpoint)
+
 
     def test_remove_profile(self):
         """
@@ -379,7 +387,7 @@ class GetPolicyDriverTest(unittest.TestCase):
         k8s_namespace = "namespace"
         config = {"name": "testnetwork"}
         driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
-        assert_true(isinstance(driver, KubernetesDefaultPolicyDriver))
+        assert_true(isinstance(driver, KubernetesNoPolicyDriver))
 
     def test_get_policy_driver_k8s_annotations(self):
         k8s_pod_name = "podname"
@@ -389,13 +397,20 @@ class GetPolicyDriverTest(unittest.TestCase):
         driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
         assert_true(isinstance(driver, KubernetesAnnotationDriver))
 
-    def test_get_policy_driver_deny_inbound(self):
+    def test_get_policy_driver_k8s(self):
         k8s_pod_name = "podname"
         k8s_namespace = "namespace"
         config = {"name": "testnetwork"}
-        config["policy"] = {"type": "default-deny-inbound"}
+        config["policy"] = {"type": "k8s"}
         driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
-        assert_true(isinstance(driver, DefaultDenyInboundDriver))
+        assert_true(isinstance(driver, KubernetesPolicyDriver))
+
+    def test_get_unknown_policy_driver(self):
+        config = {"name": "n", "policy": {"type": "madeup"}}
+        with assert_raises(SystemExit) as err:
+            get_policy_driver(None, None, config)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
     @patch("calico_cni.policy_drivers.DefaultPolicyDriver", autospec=True)
     def test_get_policy_driver_value_error(self, m_driver):
