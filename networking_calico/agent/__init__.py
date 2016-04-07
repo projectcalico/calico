@@ -25,13 +25,55 @@
 #
 # Here we correct that bug.
 
-# Force clobber to happen now so it doesn't happen after this.
-import requests   # noqa
+import sys
 
-import urllib3
-import urllib3.exceptions as u3e
+# Import all the relevant packages so that any clobbering happens now.
+import requests                 # noqa
+import urllib3                  # noqa
+import urllib3.exceptions       # noqa
 
-# This is what python-etcd actually cares about.
-if urllib3.exceptions is not u3e:
+# Check for clobbering using sys.modules[] because it's definitive.  This
+# condition checks whether python-etcd has the same version of the exceptions
+# classes that urllib3 will use.
+#
+# More specifically, when urllib3 raises an exception, the relevant code is:
+#
+#   from .exceptions import (
+#       ProtocolError, DecodeError, ReadTimeoutError, ResponseNotChunked
+#   )
+#
+#   [...]
+#
+#                   raise ReadTimeoutError(self._pool, None, 'Read timed out.')
+#
+# That means that ReadTimeoutError comes from the 'urllib3.exceptions' module.
+#
+# Whereas when python-etcd tries to catch and handle that exception, the
+# relevant code is:
+#
+#   import urllib3
+#
+#   [...]
+#
+#                           isinstance(e,
+#                                      urllib3.exceptions.ReadTimeoutError)):
+#
+# This means that the exception it is checking for is the
+# 'exceptions.ReadTimeoutError' attribute of the 'urllib3' module.
+#
+# Normally the latter should be the same as the 'ReadTimeoutError' attribute of
+# the 'urllib3.exceptions' module, and hence match the exception that urllib3
+# raises.  But the monkey-patching performed by distributions' modification of
+# the requests code can mess that up.
+#
+# So, here we check for that mistake, and correct it.  Note that that equally
+# means that we are breaking requests somehow - but that doesn't matter because
+# the Calico DHCP agent doesn't actually execute any requests code.  (To be
+# clear: the Calico DHCP agent imports a slew of Neutron utility modules, which
+# in turn import other Neutron and Oslo and even Keystone modules, and so on,
+# and some of those import requests.  But the Calico DHCP agent actually
+# executes only a small subset of all that code.)
+
+if sys.modules["urllib3"].exceptions is not sys.modules["urllib3.exceptions"]:
     # So just fix it.
-    urllib3.exceptions = u3e
+    sys.modules["urllib3"].exceptions = sys.modules["urllib3.exceptions"]
