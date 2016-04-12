@@ -1,23 +1,19 @@
 #!/usr/bin/python
-import os
-import time
-import sys
-import json
-import Queue
 import logging
+import os
+import Queue
+import requests
+import sys
+import simplejson as json
+import time
 from threading import Thread
 
-import requests
-
-import pycalico
-from pycalico.datastore_datatypes import Rules, Rule
-from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.datastore import DatastoreClient
 
 from handlers.network_policy import (add_update_network_policy,
                                      delete_network_policy)
 from handlers.namespace import add_update_namespace, delete_namespace
-from handlers.pod import add_update_pod, delete_pod
+from handlers.pod import add_pod, update_pod, delete_pod
 
 from constants import *
 
@@ -57,28 +53,34 @@ class PolicyAgent(object):
         Client for accessing the Calico datastore.
         """
 
-        self.cache = {}
+        self._handlers = {}
         """
-        Cache of data stored to etcd, keyed off of Kubernetes API obj keys.
-        Used to track whether we need to update etcd or not.
+        Keeps track of which handlers to execute for various events.
         """
 
-        self._handlers = {}
+        # Handlers for NetworkPolicy events.
         self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_ADDED,
+                         add_update_network_policy)
+        self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_MODIFIED,
                          add_update_network_policy)
         self.add_handler(RESOURCE_TYPE_NETWORK_POLICY, TYPE_DELETED,
                          delete_network_policy)
+
+        # Handlers for Namespace events.
         self.add_handler(RESOURCE_TYPE_NAMESPACE, TYPE_ADDED,
+                         add_update_namespace)
+        self.add_handler(RESOURCE_TYPE_NAMESPACE, TYPE_MODIFIED,
                          add_update_namespace)
         self.add_handler(RESOURCE_TYPE_NAMESPACE, TYPE_DELETED,
                          delete_namespace)
+
+        # Handlers for Pod events.
         self.add_handler(RESOURCE_TYPE_POD, TYPE_ADDED,
-                         add_update_pod)
+                         add_pod)
+        self.add_handler(RESOURCE_TYPE_POD, TYPE_MODIFIED,
+                         update_pod)
         self.add_handler(RESOURCE_TYPE_POD, TYPE_DELETED,
                          delete_pod)
-        """
-        Handlers for watch events.
-        """
 
     def add_handler(self, resource_type, event_type, handler):
         """
@@ -90,8 +92,8 @@ class PolicyAgent(object):
         :param handler: The callable to execute when events are received.
         :return None
         """
-        _log.info("Setting %s %s handler: %s",
-                  resource_type, event_type, handler)
+        _log.debug("Setting %s %s handler: %s",
+                    resource_type, event_type, handler)
         key = (resource_type, event_type)
         self._handlers[key] = handler
 
@@ -103,23 +105,9 @@ class PolicyAgent(object):
         :param event_type: The type of event that needs handling.
         :return None
         """
-        # Treat "modified" as "added".
-        if event_type == TYPE_MODIFIED:
-            _log.debug("Treating 'MODIFIED' as 'ADDED'")
-            event_type = TYPE_ADDED
-
         key = (resource_type, event_type)
         _log.debug("Looking up handler for event: %s", key)
         return self._handlers[key]
-
-    def load_cache(self):
-        """
-        Loads cache from etcd.
-        """
-        endpoints = self._client.get_endpoints(orchestrator_id="k8s")
-        for ep in endpoints:
-            self.cache[str(ep.workload_id)] = ep.labels
-        _log.info("Loaded cache")
 
     def run(self):
         """
@@ -129,9 +117,6 @@ class PolicyAgent(object):
         # Ensure the tier exists.
         metadata = {"order": 50}
         self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
-
-        # Load pod cache.
-        self.load_cache()
 
         # Read initial state from Kubernetes API.
         self.start_workers()
@@ -164,7 +149,7 @@ class PolicyAgent(object):
           (event_type, resource_type, resource)
 
         Where:
-          - event_type: Either "ADDED", "MODIFIED", "DELETED"
+          - event_type: Either "ADDED", "MODIFIED", "DELETED", "ERROR"
           - resource_type: e.g "Namespace", "Pod", "NetworkPolicy"
           - resource: The parsed json resource from the API matching
                       the given resource_type.
@@ -214,8 +199,8 @@ class PolicyAgent(object):
                          event_type, resource_type)
         else:
             try:
-                handler(key, resource, self.cache)
-                _log.debug("Handled %s for %s: %s",
+                handler(resource)
+                _log.info("Handled %s for %s: %s",
                            event_type, resource_type, key)
             except KeyError:
                 _log.exception("Invalid %s: %s", resource_type,
@@ -239,8 +224,7 @@ class PolicyAgent(object):
             except requests.HTTPError:
                 _log.exception("HTTP error querying: %s", resource_type)
             except KubernetesApiError:
-                _log.exception("Kubernetes API error managing %s",
-                               resource_type)
+                _log.debug("Kubernetes API error managing %s", resource_type)
             except Queue.Full:
                 _log.exception("Event queue full")
             finally:
@@ -281,16 +265,26 @@ class PolicyAgent(object):
                                    json.dumps(parsed, indent=2))
                         raise KubernetesApiError()
 
+                    # Get the important information from the event.
+                    event_type = parsed["type"]
+                    resource_type = parsed["object"]["kind"]
+                    resource = parsed["object"]
+
                     # Successful update - send to the queue.
-                    update = (parsed["type"],
-                              parsed["object"]["kind"],
-                              parsed["object"])
+                    _log.info("%s %s: %s to queue (%s) (%s)",
+                              event_type,
+                              resource_type,
+                              resource["metadata"]["name"],
+                              self._event_queue.qsize(),
+                              time.time())
+
+                    update = (event_type, resource_type, resource)
                     self._event_queue.put(update,
                                           block=True,
                                           timeout=QUEUE_PUT_TIMEOUT)
 
                     # Extract the latest resource version.
-                    new_ver = parsed["object"]["metadata"]["resourceVersion"]
+                    new_ver = resource["metadata"]["resourceVersion"]
                     _log.debug("Update resourceVersion, was: %s, now: %s",
                                resource_version, new_ver)
                     resource_version = new_ver
@@ -321,11 +315,13 @@ class PolicyAgent(object):
         _log.debug("%s metadata: %s", resource_type, metadata)
 
         # Add the existing resources to the queue to be processed.
+        # Treat as a MODIFIED event to trigger updates which may not always
+        # occur on ADDED.
         _log.info("%s existing %s(s) - add to queue",
                   len(resources), resource_type)
         for resource in resources:
             _log.debug("Queueing update: %s", resource)
-            update = (TYPE_ADDED, resource_type, resource)
+            update = (TYPE_MODIFIED, resource_type, resource)
             self._event_queue.put(update,
                                   block=True,
                                   timeout=QUEUE_PUT_TIMEOUT)
