@@ -204,9 +204,6 @@ semaphore: docker
 	# Clean up unwanted files to free disk space.
 	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
 
-	# Make sure semaphore has the modules loaded that we need.
-	modprobe -a ip6_tables xt_set
-
 	# Actually run the tests (refreshing the images as required)
 	make st
 
