@@ -127,20 +127,7 @@ class DefaultPolicyDriver(object):
         return []
 
 
-class DefaultDenyInboundDriver(DefaultPolicyDriver):
-    """
-    This driver rejects all incoming traffic, but allows all outgoing traffic.
-    """
-    def generate_rules(self):
-        return Rules(id=self.profile_name,
-                     inbound_rules=[Rule(action="deny")],
-                     outbound_rules=[Rule(action="allow")])
-
-    def remove_profile(self):
-        _log.info("default-deny-inbound driver, do not remove profile")
-
-
-class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
+class KubernetesNoPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
 
@@ -320,6 +307,37 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
         return re.sub('[^a-zA-Z0-9\.\_\-]', swap_char, unescaped_string)
 
 
+class KubernetesPolicyDriver(KubernetesAnnotationDriver):
+    """
+    This driver sets the labels and correct profiles on the endpoint.
+
+    The labels are fetched from the k8s API, and a special additional label is
+    added.
+
+    The profile ID is constructed from the namespace.
+    """
+    def apply_profile(self, endpoint):
+        # Set profile
+        profile_id = "k8s_ns.%s" % self.namespace
+        _log.debug("Constructed profile ID - %s" % profile_id)
+        endpoint.profile_ids = [profile_id]
+
+        # Fetch and set the labels
+        pod = self._get_api_pod()
+        labels = pod["metadata"].get("labels", {})
+        labels["calico/k8s_ns"] = self.namespace
+        _log.debug("Got labels - %s" % labels)
+        endpoint.labels = labels
+
+        # Finally, update the endpoint.
+        self._client.update_endpoint(endpoint)
+
+    def remove_profile(self):
+        # This policy driver didn't create any profiles so there are none to
+        # delete.
+        _log.debug("No profile to remove for pod %s", self.pod_name)
+
+
 class ApplyProfileError(Exception):
     """
     Attempting to apply a profile to an endpoint that does not exist.
@@ -338,28 +356,40 @@ def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
     policy_config = net_config.get(POLICY_KEY, {})
     network_name = net_config["name"]
     policy_type = policy_config.get("type")
+    supported_policy_types = [None,
+                              POLICY_MODE_KUBERNETES,
+                              POLICY_MODE_KUBERNETES_ANNOTATIONS]
+    if policy_type not in supported_policy_types:
+        print_cni_error(ERR_CODE_GENERIC,
+                        "policy type set to unsupported value (%s). "
+                        "Supported values = %s" %
+                        (policy_type, [x for x in supported_policy_types if x]))
+        sys.exit(ERR_CODE_GENERIC)
 
     # Determine which policy driver to use.
-    if policy_type == POLICY_MODE_DENY_INBOUND:
-        # Use the deny-inbound driver. 
-        driver_cls = DefaultDenyInboundDriver 
-        driver_args = [network_name]
-    elif k8s_pod_name:
-        # Runing under Kubernetes - decide which Kubernetes driver to use.
-        if policy_type == POLICY_MODE_ANNOTATIONS: 
-            _log.debug("Using Kubernetes Annotation Policy Driver")
+    if k8s_pod_name:
+        # Running under Kubernetes - decide which Kubernetes driver to use.
+        if policy_type == POLICY_MODE_KUBERNETES_ANNOTATIONS or \
+           policy_type == POLICY_MODE_KUBERNETES:
             assert k8s_namespace, "Missing Kubernetes namespace"
             k8s_auth_token = policy_config.get(AUTH_TOKEN_KEY)
-            k8s_api_root = policy_config.get(API_ROOT_KEY, 
+            k8s_api_root = policy_config.get(API_ROOT_KEY,
                                              "https://10.100.0.1:443/api/v1/")
-            driver_cls = KubernetesAnnotationDriver
-            driver_args = [k8s_pod_name, 
-                           k8s_namespace, 
+
+            if policy_type == POLICY_MODE_KUBERNETES:
+                _log.debug("Using Kubernetes Policy Driver")
+                driver_cls = KubernetesPolicyDriver
+            elif policy_type == POLICY_MODE_KUBERNETES_ANNOTATIONS:
+                _log.debug("Using Kubernetes Annotation Policy Driver")
+                driver_cls = KubernetesAnnotationDriver
+
+            driver_args = [k8s_pod_name,
+                           k8s_namespace,
                            k8s_auth_token,
                            k8s_api_root]
         else:
-            _log.debug("Using Default Kubernetes Policy Driver")
-            driver_cls = KubernetesDefaultPolicyDriver
+            _log.debug("Using Kubernetes Driver - no policy")
+            driver_cls = KubernetesNoPolicyDriver
             driver_args = [network_name]
     else:
         _log.debug("Using default policy driver")
