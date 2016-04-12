@@ -42,6 +42,7 @@ class DockerHost(object):
         self._cleaned = False
 
         docker_args = "--privileged -tid -v %s/docker:/usr/local/bin/docker " \
+                      "-v /lib/modules:/lib/modules " \
                       "-v %s/certs:%s/certs -v %s:/code --name %s" % \
                       (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
                        self.name)

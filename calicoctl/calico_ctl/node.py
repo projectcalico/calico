@@ -364,6 +364,11 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
             {
                 "bind": "/var/run/calico",
                 "ro": False
+            },
+        "/lib/modules":
+            {
+                "bind": "/lib/modules",
+                "ro": False
             }
     }
     binds.update(etcd_binds)
@@ -374,7 +379,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         network_mode="host",
         binds=binds)
 
-    volumes = ["/var/log/calico", "/var/run/calico"] + etcd_volumes
+    volumes = ["/var/log/calico", "/var/run/calico", "/lib/modules"] + etcd_volumes
     container = docker_client.create_container(
         node_image,
         name="calico-node",
@@ -465,7 +470,10 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
                    "--stage1-path=%s" % stage1_path,
                    "--insecure-options=image",
                    "--volume=birdctl,kind=host,source=/var/run/calico,readOnly=false",
-                   "--mount", "volume=birdctl,target=/var/run/calico"] + \
+                   "--mount", "volume=birdctl,target=/var/run/calico",
+                   "--volume=modules,kind=host,source=/lib/modules,readOnly=false",
+                   "--mount", "volume=modules,target=/lib/modules"
+                   ] + \
                   env_commands + \
                   [node_image]
 
