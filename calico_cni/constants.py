@@ -40,6 +40,9 @@ CNI_ARGS_IP = "IP"
 K8S_POD_NAME = "K8S_POD_NAME"
 K8S_POD_NAMESPACE = "K8S_POD_NAMESPACE"
 K8S_POD_INFRA_CONTAINER_ID = "K8S_POD_INFRA_CONTAINER_ID"
+K8S_CLIENT_CERTIFICATE_VAR = "k8s_client_certificate"
+K8S_CLIENT_KEY_VAR = "k8s_client_key"
+K8S_CERTIFICATE_AUTHORITY_VAR = "k8s_certificate_authority"
 
 # Constants for getting Calico configuration from the network
 # configuration file.

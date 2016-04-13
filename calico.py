@@ -96,13 +96,6 @@ class CniPlugin(object):
         The hostname to register endpoints under.
         """
 
-        self.policy_driver = get_policy_driver(self.k8s_pod_name,
-                                               self.k8s_namespace,
-                                               self.network_config)
-        """
-        Chooses the correct policy driver based on the given configuration
-        """
-
         self.container_engine = get_container_engine(self.k8s_pod_name)
         """
         Chooses the correct container engine based on the given configuration.
@@ -164,6 +157,11 @@ class CniPlugin(object):
         if env.get(CNI_ARGS_ENV):
             # Append any existing args - if they are set.
             self.ipam_env[CNI_ARGS_ENV] += ";%s" % env.get(CNI_ARGS_ENV)
+
+        self.policy_driver = get_policy_driver(self)
+        """
+        Chooses the correct policy driver based on the given configuration
+        """
 
     def execute(self):
         """
