@@ -65,7 +65,7 @@ write_files:
 
       # Insert the master's IP address into the manifest.
       echo "DEFAULT_IPV4: $DEFAULT_IPV4"
-      sudo sed -i -e "s/<PRIVATE_IPV4>/$DEFAULT_IPV4/g" /etc/kubernetes/manifests/calico-etcd.manifest
+      sudo sed -i -e "s/<MASTER_IPV4>/$DEFAULT_IPV4/g" /etc/kubernetes/manifests/calico-etcd.manifest
 
 coreos:
   update:
