@@ -149,9 +149,18 @@ class PolicyAgent(object):
         """
         _log.info("Waiting for this agent to be elected leader")
         while True:
-            if self._is_leader():
-                _log.info("We have been elected leader")
-                break
+            try:
+                is_leader = self._is_leader():
+            except requests.exceptions.ConnectionError:
+                # During startup, the leader election container
+                # might not be up yet.  Handle this case gracefully.
+                _log.info("Waiting for leader election container")
+            else:
+                # Successful response from the leader election container.
+                # Check if we are the elected leader.
+                if is_leader:
+                    _log.info("We have been elected leader")
+                    break
             time.sleep(1)
 
     def _start_leader_thread(self):
