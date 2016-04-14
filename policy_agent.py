@@ -53,6 +53,19 @@ class PolicyAgent(object):
         Client for accessing the Calico datastore.
         """
 
+        self._leader_election_url = os.environ.get("ELECTION_URL",
+                                                   "http://127.0.0.1:4040/")
+        """
+        Use this URL to get leader election status from the sidecar container.
+        """
+
+        elect = os.environ.get("LEADER_ELECTION", "false")
+        self._leader_elect = elect.lower() ==  "true"
+        """
+        Whether or not leader election is enabled.  If set to False, this
+        policy agent will assume it is the only instance.
+        """
+
         self._handlers = {}
         """
         Keeps track of which handlers to execute for various events.
@@ -114,6 +127,12 @@ class PolicyAgent(object):
         PolicyAgent.run() is called at program init to spawn watch threads,
         Loops to read responses from the Queue as they come in.
         """
+        _log.info("Leader election enabled? %s", self._leader_elect)
+        if self._leader_elect:
+            # Wait until we've been elected leader to start.
+            self._wait_for_leadership()
+            self._start_leader_thread()
+
         # Ensure the tier exists.
         metadata = {"order": 50}
         self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
@@ -123,6 +142,43 @@ class PolicyAgent(object):
 
         # Loop and read updates from the queue.
         self.read_updates()
+
+    def _wait_for_leadership(self):
+        """
+        Loops until this agent has been elected leader.
+        """
+        _log.info("Waiting for this agent to be elected leader")
+        while True:
+            if self._is_leader():
+                _log.info("We have been elected leader")
+                break
+            time.sleep(1)
+
+    def _start_leader_thread(self):
+        """
+        Starts a thread which periodically checks if this agent is the leader.
+        If determined that we are no longer the leader, exit.
+        """
+        t = Thread(target=self._watch_leadership)
+        t.daemon = True
+        t.start()
+        _log.info("Started leader election watcher")
+
+    def _watch_leadership(self):
+        """
+        Watches to see if this policy agent is still the elected leader.
+        If no longer the elected leader, exits.
+        """
+        _log.info("Watching for leader election changes")
+        while True:
+            try:
+                if not self._is_leader():
+                    _log.warning("No longer the elected leader - exiting")
+                    os._exit(1)
+                time.sleep(1)
+            except Exception:
+                _log.exception("Exception verifying leadership - exiting")
+                os._exit(1)
 
     def start_workers(self):
         """
@@ -352,6 +408,21 @@ class PolicyAgent(object):
             session.headers.update({'Authorization': 'Bearer ' + self.auth_token})
         verify = CA_CERT_PATH if self.ca_crt_exists else False
         return session.get(path, verify=verify, stream=stream)
+
+    def _is_leader(self):
+        """
+        Returns True if this policy agent instance has been elected leader,
+        False otherwise.
+        """
+        _log.debug("Checking if we are the elected leader.")
+        response = requests.get(self._leader_election_url)
+        response = response.json()
+
+        # Determine if we're the leader.
+        our_name = os.environ.get("HOSTNAME")
+        leader_name = response["name"]
+        _log.debug("Elected leader is: %s. We are: %s", leader_name, our_name)
+        return our_name == leader_name
 
 
 def read_token_file():
