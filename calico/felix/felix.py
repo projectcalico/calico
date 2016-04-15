@@ -24,6 +24,7 @@ The main logic for Felix.
 from gevent import monkey
 monkey.patch_all()
 
+from BaseHTTPServer import HTTPServer
 import functools
 import logging
 import optparse
@@ -31,6 +32,7 @@ import os
 import signal
 
 import gevent
+from prometheus_client import MetricsHandler
 
 from calico import common
 from calico.felix import devices
@@ -74,6 +76,15 @@ def _main_greenlet(config):
 
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
+
+        monitored_items = []
+        if config.PROM_METRICS_ENABLED:
+            httpd = HTTPServer(("0.0.0.0", config.PROM_METRICS_PORT),
+                               MetricsHandler)
+            stats_server = gevent.Greenlet(httpd.serve_forever)
+            stats_server.start()
+            monitored_items.append(stats_server)
+
         v4_filter_updater = IptablesUpdater("filter", ip_version=4,
                                             config=config)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4, config=config)
@@ -188,7 +199,7 @@ def _main_greenlet(config):
                 v6_fip_manager,
             ]
 
-        monitored_items = [actor.greenlet for actor in top_level_actors]
+        monitored_items += [actor.greenlet for actor in top_level_actors]
 
         # Try to ensure that the nf_conntrack_netlink kernel module is present.
         # This works around an issue[1] where the first call to the "conntrack"

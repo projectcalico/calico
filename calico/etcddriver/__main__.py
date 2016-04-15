@@ -28,6 +28,8 @@ import os
 import socket
 import sys
 
+from prometheus_client import start_http_server
+
 from calico.etcddriver import driver
 from calico import common
 

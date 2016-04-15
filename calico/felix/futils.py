@@ -27,7 +27,7 @@ import hashlib
 import inspect
 import logging
 import os
-from types import StringTypes
+import re
 import types
 import gc
 from datetime import datetime
@@ -37,6 +37,7 @@ from gevent.subprocess import Popen
 import tempfile
 import pkg_resources
 from posix_spawn import posix_spawnp, FileActions
+from prometheus_client import Gauge
 
 try:
     import resource
@@ -400,14 +401,28 @@ def register_diags(name, fn):
     _registered_diags.append((name, fn))
 
 
+def sanitize_name(name):
+    return re.sub(r'[^a-zA-Z0-9]', '_', name)
+
+
 class StatCounter(object):
     def __init__(self, name):
         self.name = name
         self.stats = collections.defaultdict(lambda: 0)
+        # We duplicate the stats to Prometheus gauges.
+        self.prom_gauges = {}
         register_diags(name, self._dump)
 
     def increment(self, stat, by=1):
         self.stats[stat] += by
+        # Update the associated Prometheus gauge.
+        if stat not in self.prom_gauges:
+            gauge = Gauge(sanitize_name("felix_" + self.name + " " + stat),
+                          "%s: %s" % (self.name, stat))
+            self.prom_gauges[stat] = gauge
+        else:
+            gauge = self.prom_gauges[stat]
+        gauge.inc(by)
 
     def _dump(self, log):
         stats_copy = self.stats.items()

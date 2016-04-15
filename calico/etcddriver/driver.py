@@ -53,6 +53,7 @@ from ijson.backends import yajl2 as ijson
 from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
 import urllib3.exceptions
 import httplib
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
 
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
@@ -62,7 +63,7 @@ from calico.etcddriver.protocol import (
     MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG, MSG_TYPE_UPDATE, MSG_KEY_KEY,
     MSG_KEY_VALUE, MessageWriter, MSG_TYPE_STATUS, MSG_KEY_STATUS,
     MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE, MSG_KEY_CA_FILE, WriteFailed,
-    SocketClosed)
+    SocketClosed, MSG_KEY_PROM_PORT)
 from calico.etcdutils import ACTION_MAPPING
 from calico.common import complete_logging
 from calico.monotonic import monotonic_time
@@ -83,6 +84,28 @@ WATCHER_QUEUE_SIZE = 20000
 REQ_TIGHT_LOOP_THRESH = 0.2
 # How often to log stats.
 STATS_LOG_INTERVAL = 30
+
+RESYNCS_STARTED = Counter("felix_resyncs_started",
+                          "Number of resync attempts.")
+RESYNCS_COMPLETED = Counter("felix_resyncs_completed",
+                            "Number of resyncs completed.")
+RESYNC_TIME = Histogram("felix_time_in_resync",
+                        "duration of successful resyncs.")
+ETCD_INDEX_CLEARED = Counter("felix_etcd_index_cleared",
+                             "Number of etcd index cleared errors, "
+                             "triggering resyncs.")
+ETCD_OTHER_ERROR = Counter("felix_etcd_other_error",
+                           "Number of unexpected etcd errors, triggering "
+                           "resync.")
+RESYNC_STATE = Gauge("felix_resync_state",
+                     "1=wait-for-ready; 2=in-resync; 3=in-sync; "
+                     "4=in-resync-watcher-dead")
+STATUS_TO_GUAGE_VALUE = {
+    STATUS_WAIT_FOR_READY: 1,
+    STATUS_RESYNC: 2,
+    STATUS_IN_SYNC: 3
+}
+RESYNC_STATE_WATCHER_DIED_DURING_RESYNC = 4
 
 
 class EtcdDriver(object):
@@ -241,6 +264,11 @@ class EtcdDriver(object):
                          syslog_level=msg[MSG_KEY_SEV_SYSLOG],
                          stream_level=msg[MSG_KEY_SEV_SCREEN],
                          gevent_in_use=False)
+        if msg[MSG_KEY_PROM_PORT]:
+            _log.info("Prometheus metrics enabled, starting driver metrics"
+                      "server on port %s", msg[MSG_KEY_PROM_PORT])
+            start_http_server(msg[MSG_KEY_PROM_PORT])
+
         self._config_received.set()
         _log.info("Received config from Felix: %s", msg)
 
@@ -265,6 +293,7 @@ class EtcdDriver(object):
             try:
                 # Start with a fresh HTTP pool just in case it got into a bad
                 # state.
+                RESYNCS_STARTED.inc()
                 self._resync_http_pool = self.get_etcd_connection()
                 # Before we get to the snapshot, Felix needs the configuration.
                 self._send_status(STATUS_WAIT_FOR_READY)
@@ -283,6 +312,9 @@ class EtcdDriver(object):
                 # We're now in-sync.  Tell Felix.
                 self._send_status(STATUS_IN_SYNC)
                 # Then switch to processing events only.
+                RESYNCS_COMPLETED.inc()
+                time_to_resync = monotonic_time() - loop_start
+                RESYNC_TIME.observe(time_to_resync)
                 self._process_events_only()
             except WriteFailed:
                 _log.exception("Write to Felix failed; shutting down.")
@@ -551,6 +583,7 @@ class EtcdDriver(object):
                 # progress.
                 _log.warning("Watcher thread died, continuing "
                              "with snapshot")
+                RESYNC_STATE.set(RESYNC_STATE_WATCHER_DIED_DURING_RESYNC)
                 break
         self._check_stop_event()
         self._maybe_log_resync_thread_stats()
@@ -726,6 +759,7 @@ class EtcdDriver(object):
         Queues the given status to felix as a status message.
         """
         _log.info("Sending status to Felix: %s", status)
+        RESYNC_STATE.set(STATUS_TO_GUAGE_VALUE.get(status, 0))
         self._msg_writer.send_message(
             MSG_TYPE_STATUS,
             {
@@ -850,6 +884,11 @@ class EtcdDriver(object):
                         _log.error("Error from etcd for index %s: %s; "
                                    "triggering a resync.",
                                    next_index, etcd_resp)
+                        if etcd_resp["errorCode"] == 401:
+                            # Index cleared
+                            ETCD_INDEX_CLEARED.inc()
+                        else:
+                            ETCD_OTHER_ERROR.inc()
                         break
                     node = etcd_resp["node"]
                     key = node["key"]
