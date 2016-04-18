@@ -27,9 +27,9 @@ top of the official Mesos release for your Mesos agents.
       libcurl-devel \
       python-setuptools \
       python-pip \
-      python-wheel 
+      python-wheel
     ```
-        
+
 3. Get 3rd party dependency source files. Since Mesos doesn't ship with them, we'll grab them from github.
 
    ```
@@ -69,3 +69,4 @@ top of the official Mesos release for your Mesos agents.
    sudo make install
    ```
 
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/net-modules/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
