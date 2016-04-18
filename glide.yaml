@@ -1,0 +1,27 @@
+package: github.com/projectcalico/calico-cni
+import:
+- package: github.com/containernetworking/cni
+  subpackages:
+  - pkg/ip
+  - pkg/ipam
+  - pkg/ns
+  - pkg/skel
+  - pkg/types
+- package: github.com/coreos/etcd
+  subpackages:
+  - client
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega
+  subpackages:
+  - gexec
+- package: github.com/tigera/libcalico-go
+  #  version: list-not-return-no-such-object
+  #repo: git@github.com:robbrockbank/libcalico-go.git
+  #vcs: git
+- package: github.com/vishvananda/netlink
+- package: k8s.io/kubernetes
+  version: ~1.3.0
+  subpackages:
+  - pkg/api
+  - pkg/client/restclient
+  - pkg/client/unversioned

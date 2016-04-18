@@ -4,9 +4,12 @@ general:
 machine:
   services:
     - docker
+dependencies:
+  override:
+    - echo "Nothing please"
 test:
   override:
-    - make test-circle
+    - make update-tools build-containerized
 experimental:
   notify:
     branches:
