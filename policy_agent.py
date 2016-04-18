@@ -477,9 +477,12 @@ if __name__ == '__main__':
     _log.addHandler(stdout_hdlr)
     _log.setLevel(log_level)
 
-    # Configure /etc/hosts with Kubernetes API.
-    _log.info("Configuring /etc/hosts")
-    configure_etc_hosts()
+    if os.environ.get("CONFIGURE_ETC_HOSTS", "false").lower() == "true":
+        # Configure /etc/hosts with Kubernetes API.
+        # Don't do this by default, since it is recommended to run
+        # this pod using host networking on the master.
+        _log.info("Configuring /etc/hosts")
+        configure_etc_hosts()
 
     _log.info("Beginning execution")
     PolicyAgent().run()
