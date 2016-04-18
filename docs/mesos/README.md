@@ -11,9 +11,9 @@ Calico can be used as a network plugin for Mesos both for the Docker
 Containerizer and the Unified Containerizer.
 
 ### Docker Containerizer
-Calico with the Docker Containerizer uses a Calico network and IPAM 
+Calico with the Docker Containerizer uses a Calico network and IPAM
 driver that hooks directly into the Docker networking infrastructure.
-Docker networks using the Calico plugin are created up-front, and Mesos 
+Docker networks using the Calico plugin are created up-front, and Mesos
 can then be used to launch Docker containers using these networks.  Each
 network is associated with a single Calico profile.  Fine grained policy
 can be modified using the `calicoctl profile` commands.
@@ -31,13 +31,13 @@ the `calicoctl profile` commands.
 
 ## Cluster Configuration Requirements
 The installation requirements to use Calico networking are different
-depending on whether you are using the Docker Containerizer or the 
+depending on whether you are using the Docker Containerizer or the
 Unified Containerizer.  When setting up your cluster, follow the
 appropriate guide based on your requirements.
 
-Calico is particularly suitable for large Mesos deployments on bare 
-metal or private clouds, where the performance and complexity costs of 
-overlay networks can become significant. It can also be used in public 
+Calico is particularly suitable for large Mesos deployments on bare
+metal or private clouds, where the performance and complexity costs of
+overlay networks can become significant. It can also be used in public
 clouds.
 
 If you have an existing Mesos cluster, follow the appropriate
@@ -55,9 +55,11 @@ following guides:
   one Mesos Master and two Mesos Agents.
   - This is the easiest way to set up a cluster with all of the required
   services running to launch tasks with either the Unified Containerizer or
-  Docker Containerizer.	
+  Docker Containerizer.
 
 #### Installation guides:
+- [DC/OS Calico Install Guide] (./DCOS.md) -
+  install Calico using Mesos' DC/OS web interface.
 - [Manual Install Calico Unified Containerizer Guide](ManualInstallCalicoUnifiedContainerizer.md) -
   install Calico for use with the Unified Containerizer.
 - [Manual Install Calico Docker Containerizer Guide](ManualInstallCalicoDockerContainerizer.md) -
