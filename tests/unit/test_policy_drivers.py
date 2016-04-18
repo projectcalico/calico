@@ -20,6 +20,7 @@ from nose_parameterized import parameterized
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Endpoint, Rule, Rules
 
+from calico import CniPlugin
 from calico_cni.constants import ERR_CODE_GENERIC
 from calico_cni.policy_drivers import (ApplyProfileError,
                                        get_policy_driver,
@@ -134,7 +135,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
                 "policy": {}
         }
         self.driver = KubernetesAnnotationDriver(self.pod_name, self.namespace,
-                self.auth_token, self.api_root)
+                self.auth_token, self.api_root, None, None, None)
         assert_equal(self.driver.profile_name, self.profile_name)
 
         # Mock the DatastoreClient
@@ -258,6 +259,42 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
 
     @patch('calico_cni.policy_drivers.requests.Session', autospec=True)
     @patch('json.loads', autospec=True)
+    def test_get_api_pod_with_client_certs(self, m_json_load, m_session):
+        # Set up driver.
+        self.driver.pod_name = 'pod-1'
+        self.driver.namespace = 'a'
+        pod1 = '{"metadata": {"namespace": "a", "name": "pod-1"}}'
+
+        api_root = "http://kubernetesapi:8080/api/v1/"
+        self.driver.api_root = api_root
+        self.driver.client_certificate = "cert.pem"
+        self.driver.client_key = "key.pem"
+        self.driver.certificate_authority = "ca.pem"
+
+
+        get_obj = Mock()
+        get_obj.status_code = 200
+        get_obj.text = pod1
+
+        m_session_obj = Mock()
+        m_session_obj.headers = Mock()
+        m_session_obj.get.return_value = get_obj
+
+        m_session.return_value = m_session_obj
+        m_session_obj.__enter__ = Mock(return_value=m_session_obj)
+        m_session_obj.__exit__ = Mock(return_value=False)
+
+        # Call method under test
+        self.driver._get_api_pod()
+
+        # Assert correct data in calls.
+        m_session_obj.get.assert_called_once_with(
+            api_root + 'namespaces/a/pods/pod-1',
+            verify="ca.pem", cert=("cert.pem", "key.pem"))
+        m_json_load.assert_called_once_with(pod1)
+
+    @patch('calico_cni.policy_drivers.requests.Session', autospec=True)
+    @patch('json.loads', autospec=True)
     def test_get_pod_config_error(self, m_json_load, m_session):
         """Test _get_api_path with API Access Error
         """
@@ -351,7 +388,7 @@ class KubernetesPolicyDriverTest(unittest.TestCase):
         self.network_name = "net-name"
         self.namespace = "default"
         self.driver = KubernetesPolicyDriver(self.network_name, self.namespace,
-                                             None, None)
+                                             None, None, None, None, None)
 
         # Mock the DatastoreClient
         self.client = MagicMock(spec=DatastoreClient)
@@ -383,32 +420,51 @@ class KubernetesPolicyDriverTest(unittest.TestCase):
 class GetPolicyDriverTest(unittest.TestCase): 
 
     def test_get_policy_driver_default_k8s(self):
-        k8s_pod_name = "podname"
-        k8s_namespace = "namespace"
-        config = {"name": "testnetwork"}
-        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = {"name": "testnetwork"}
+        cni_plugin.k8s_pod_name = "podname"
+        cni_plugin.k8s_namespace = "namespace"
+        cni_plugin.running_under_k8s = True
+        driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesNoPolicyDriver))
 
     def test_get_policy_driver_k8s_annotations(self):
-        k8s_pod_name = "podname"
-        k8s_namespace = "namespace"
-        config = {"name": "testnetwork"}
-        config["policy"] = {"type": "k8s-annotations"}
-        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = {"name": "testnetwork",
+                                     "policy": {"type": "k8s-annotations"}}
+        cni_plugin.k8s_pod_name = "podname"
+        cni_plugin.k8s_namespace = "namespace"
+        cni_plugin.running_under_k8s = True
+        driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesAnnotationDriver))
 
     def test_get_policy_driver_k8s(self):
-        k8s_pod_name = "podname"
-        k8s_namespace = "namespace"
-        config = {"name": "testnetwork"}
-        config["policy"] = {"type": "k8s"}
-        driver = get_policy_driver(k8s_pod_name, k8s_namespace, config)
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = {"name": "testnetwork", "policy":{"type": "k8s"}}
+        cni_plugin.k8s_pod_name = "podname"
+        cni_plugin.k8s_namespace = "namespace"
+        cni_plugin.running_under_k8s = True
+        driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesPolicyDriver))
 
     def test_get_unknown_policy_driver(self):
         config = {"name": "n", "policy": {"type": "madeup"}}
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = config
         with assert_raises(SystemExit) as err:
-            get_policy_driver(None, None, config)
+            get_policy_driver(cni_plugin)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_missing_cert(self):
+        config = {"name": "n", "policy": {"type": "k8s", "k8s_client_certificate":"surely this can't exist?"}}
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = config
+        cni_plugin.running_under_k8s = True
+        cni_plugin.k8s_pod_name = "podname"
+        cni_plugin.k8s_namespace = "namespace"
+        with assert_raises(SystemExit) as err:
+            get_policy_driver(cni_plugin)
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 
@@ -416,13 +472,13 @@ class GetPolicyDriverTest(unittest.TestCase):
     def test_get_policy_driver_value_error(self, m_driver):
         # Mock
         m_driver.side_effect = ValueError
-        k8s_pod_name = None
-        k8s_namespace = None 
-        config = {"name": "testnetwork"}
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = {"name": "testnetwork"}
+        cni_plugin.running_under_k8s = False
 
         # Call
         with assert_raises(SystemExit) as err:
-            get_policy_driver(k8s_pod_name, k8s_namespace, config)
+            get_policy_driver(cni_plugin)
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
 

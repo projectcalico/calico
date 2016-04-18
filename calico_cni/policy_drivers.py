@@ -154,12 +154,17 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
     """
     Implements network policy for Kubernetes using annotations.
     """
-    def __init__(self, pod_name, namespace, auth_token, api_root): 
+
+    def __init__(self, pod_name, namespace, auth_token, api_root,
+                 client_certificate, client_key, certificate_authority):
         self.pod_name = pod_name
         self.namespace = namespace 
         self.policy_parser = calico_cni.policy_parser.PolicyParser(namespace)
-        self.auth_token = auth_token 
-        self.api_root = api_root 
+        self.auth_token = auth_token
+        self.client_certificate = client_certificate
+        self.client_key = client_key
+        self.certificate_authority = certificate_authority or False
+        self.api_root = api_root
         self.profile_name = "%s_%s" % (namespace, pod_name)
         self._annotation_key = "projectcalico.org/policy"
         self.ns_tag = self._escape_chars("namespace=%s" % self.namespace)
@@ -256,7 +261,20 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
             # Perform the API query and handle the result.
             try:
                 _log.debug('Querying Kubernetes API for Pod: %s', path)
-                response = session.get(path, verify=False)
+
+                if self.client_certificate and self.client_key:
+                    _log.debug("Using client certificate for Query API. "
+                               "cert: %s, key: %s",
+                               self.client_certificate,
+                               self.client_key)
+                    cert = (self.client_certificate,
+                            self.client_key)
+                    response = session.get(path, cert=cert,
+                                           verify=self.certificate_authority)
+                else:
+                    _log.debug('Using direct connection for query API')
+                    response = session.get(path,
+                                           verify=self.certificate_authority)
             except BaseException, e:
                 _log.exception("Exception hitting Kubernetes API")
                 raise ApplyProfileError("Error querying Kubernetes API", 
@@ -347,14 +365,14 @@ class ApplyProfileError(Exception):
         self.details = details
 
 
-def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
+def get_policy_driver(cni_plugin):
     """Returns a policy driver based on CNI configuration arguments.
 
     :return: a policy driver 
     """
     # Extract policy config and network name.
-    policy_config = net_config.get(POLICY_KEY, {})
-    network_name = net_config["name"]
+    policy_config = cni_plugin.network_config.get(POLICY_KEY, {})
+    network_name = cni_plugin.network_config["name"]
     policy_type = policy_config.get("type")
     supported_policy_types = [None,
                               POLICY_MODE_KUBERNETES,
@@ -367,14 +385,25 @@ def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
         sys.exit(ERR_CODE_GENERIC)
 
     # Determine which policy driver to use.
-    if k8s_pod_name:
+    if cni_plugin.running_under_k8s:
         # Running under Kubernetes - decide which Kubernetes driver to use.
         if policy_type == POLICY_MODE_KUBERNETES_ANNOTATIONS or \
            policy_type == POLICY_MODE_KUBERNETES:
-            assert k8s_namespace, "Missing Kubernetes namespace"
-            k8s_auth_token = policy_config.get(AUTH_TOKEN_KEY)
-            k8s_api_root = policy_config.get(API_ROOT_KEY,
-                                             "https://10.100.0.1:443/api/v1/")
+            assert cni_plugin.k8s_namespace, "Missing Kubernetes namespace"
+            auth_token = policy_config.get(AUTH_TOKEN_KEY)
+            api_root = policy_config.get(API_ROOT_KEY,
+                                         "https://10.100.0.1:443/api/v1/")
+            client_certificate = policy_config.get(K8S_CLIENT_CERTIFICATE_VAR)
+            client_key = policy_config.get(K8S_CLIENT_KEY_VAR)
+            certificate_authority = policy_config.get(
+                K8S_CERTIFICATE_AUTHORITY_VAR)
+
+            if (client_key and not os.path.isfile(client_key)) or \
+               (client_certificate and not os.path.isfile(client_certificate)) or \
+               (certificate_authority and not os.path.isfile(certificate_authority)):
+                print_cni_error(ERR_CODE_GENERIC,
+                                "certificates provided but files don't exist")
+                sys.exit(ERR_CODE_GENERIC)
 
             if policy_type == POLICY_MODE_KUBERNETES:
                 _log.debug("Using Kubernetes Policy Driver")
@@ -383,10 +412,13 @@ def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
                 _log.debug("Using Kubernetes Annotation Policy Driver")
                 driver_cls = KubernetesAnnotationDriver
 
-            driver_args = [k8s_pod_name,
-                           k8s_namespace,
-                           k8s_auth_token,
-                           k8s_api_root]
+            driver_args = [cni_plugin.k8s_pod_name,
+                           cni_plugin.k8s_namespace,
+                           auth_token,
+                           api_root,
+                           client_certificate,
+                           client_key,
+                           certificate_authority]
         else:
             _log.debug("Using Kubernetes Driver - no policy")
             driver_cls = KubernetesNoPolicyDriver
