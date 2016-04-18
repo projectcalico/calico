@@ -66,7 +66,7 @@ a number of cloud services.
 - [Calico without Docker networking](docs/calico-with-docker/without-docker-networking/README.md)
 - [Calico with rkt](docs/cni/rkt/README.md)
 - [Calico with Kubernetes](docs/cni/kubernetes/README.md)
-- [Calico with Mesos](https://github.com/projectcalico/calico-mesos-deployments)
+- [Calico with Mesos](docs/mesos/README.md)
 - [Calico with Docker Swarm](docs/calico-with-docker/docker-network-plugin/CalicoSwarm.md)
 
 ## Further reading
