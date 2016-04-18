@@ -51,8 +51,11 @@ def add_update_network_policy(policy):
                       outbound_rules=[Rule(action="allow")])
 
         # Create the network policy using the calculated selector and rules.
-        client.create_policy(NET_POL_TIER_NAME, name,
-                             selector, order=10, rules=rules)
+        client.create_policy(NET_POL_TIER_NAME,
+                             name,
+                             selector,
+                             order=NET_POL_ORDER,
+                             rules=rules)
         _log.debug("Updated policy '%s' for NetworkPolicy", name)
 
 
