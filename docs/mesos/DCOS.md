@@ -6,9 +6,9 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Installing Calico in DCOS
+# Installing Calico in DC/OS
 This guide provides instructions for installing Calico and its
-prerequisites on a [Mesos DCOS](https://dcos.io/) cluster.
+prerequisites on a [Mesos DC/OS](https://dcos.io/) cluster.
 
 ##Prerequisites
 
@@ -18,12 +18,12 @@ You will need to be running a cluster with at least one Mesos master
 and and at least one Mesos agent (though we recommend having two or
 more agents).
 
-You can set up a cluster fairly easily by following the [DCOS Vagrant Install guide]
+You can set up a cluster fairly easily by following the [DC/OS Vagrant Install guide]
 (https://github.com/dcos/dcos-vagrant). It is important to note that
 if you install from this vagrant script, the Docker version on the machines
 will be insufficient, so you will need to upgrade to Docker 1.9 or above ***before*** launching the Calico service.
 
-We currently support Mesos version `v0.28.0` or later for use with DCOS.
+We currently support DC/OS `1.7` (with Mesos `0.28.1`).
 We support Centos7 and CoreOS as operating systems for use with
 the Unified Containerizer and Docker Containerizer.
 
@@ -34,7 +34,7 @@ Advanced Install options.
 
 You can quickly spin up an etcd cluster using ths DCOS Universe
 package as follows (Calico is configured to use the default service discovery URL in this install, so you won't need to edit this URL in the Calico config):
- - Go to the **Universe** tab in your DCOS UI.
+ - Go to the **Universe** tab in your DC/OS UI.
  - Find the **etcd** package
  - Click the **Install** button
  - (Optional) choose **Advanced Installation** from

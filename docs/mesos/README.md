@@ -58,7 +58,7 @@ following guides:
   Docker Containerizer.
 
 #### Installation guides:
-- [DC/OS Calico Install Guide] (./DCOS.md) -
+- [DC/OS Calico Install Guide](./DCOS.md) -
   install Calico using Mesos' DC/OS web interface.
 - [Manual Install Calico Unified Containerizer Guide](ManualInstallCalicoUnifiedContainerizer.md) -
   install Calico for use with the Unified Containerizer.
