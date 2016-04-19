@@ -20,8 +20,8 @@ Description:
   and the BIRD routing daemon.
 
 Options:
-  --runtime=<RUNTIME>       Specify the runtime used to run the calico/node 
-                            container, either "docker" or "rkt". 
+  --runtime=<RUNTIME>       Specify the runtime used to run the calico/node
+                            container, either "docker" or "rkt".
                             [default: docker]
 """
 import re
@@ -34,7 +34,7 @@ from requests import ConnectionError
 from subprocess32 import Popen, PIPE
 
 from connectors import docker_client, client
-from utils import hostname, RKT_CONTAINER_RE, enforce_root 
+from utils import hostname, RKT_CONTAINER_RE, enforce_root
 
 
 def status(arguments):
@@ -69,7 +69,7 @@ def status(arguments):
             bgp_as = client.get_default_node_as()
             bgp_as += " (inherited)"
     except DataStoreError:
-        print "Error connecting to etcd."
+        print "Error connecting to etcd.  Ensure ETCD_ENDPOINTS or ETCD_AUTHORITY is set properly."
         bgp_ipv4 = bgp_ipv6 = "unknown"
         bgp_as = "unknown"
 
@@ -95,7 +95,7 @@ def status(arguments):
 
 def check_container_status_docker():
     """
-    Checks and prints the calico/node container status when running in Docker. 
+    Checks and prints the calico/node container status when running in Docker.
     """
     try:
         calico_node_info = filter(lambda container: "/calico-node" in
@@ -124,12 +124,12 @@ def check_container_status_docker():
 
 def check_container_status_rkt():
     """
-    Checks and prints the calico/node container status when running in rkt. 
+    Checks and prints the calico/node container status when running in rkt.
     """
     list_cmd = ["sudo", "rkt", "list"]
     p = Popen(list_cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     stdout, stderr = p.communicate()
-    containers = RKT_CONTAINER_RE.findall(stdout) 
+    containers = RKT_CONTAINER_RE.findall(stdout)
 
     if p.returncode:
         print "Unable to list rkt containers: '%s'" % stderr.strip()
