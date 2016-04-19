@@ -150,7 +150,7 @@ class PolicyAgent(object):
         _log.info("Waiting for this agent to be elected leader")
         while True:
             try:
-                is_leader = self._is_leader():
+                is_leader = self._is_leader()
             except requests.exceptions.ConnectionError:
                 # During startup, the leader election container
                 # might not be up yet.  Handle this case gracefully.
