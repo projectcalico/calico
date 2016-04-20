@@ -63,10 +63,10 @@ a bad thing):
    diagnostics using `calicoctl diags` - this provides instructions for 
    uploading the diags bundle to transfer.sh - or alternatively if the 
    diagnostics contains sensitive information we can set up an alternative
-   method for transfer
+   method for transfer).
 -  If using `calicoctl` the output from `calicoctl status` run on each node
    might also be useful.
--  Details of your OS
+-  Details of your OS.
 -  Environment details such as GCE, bare metal, VirtualBox.
    
 
