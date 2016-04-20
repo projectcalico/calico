@@ -115,6 +115,10 @@ by visiting Calico's status web interface:
 
 ![alt tag](../images/mesos/dcos-calico-open-status.png)
 
+You should see a page that looks like the following:
+
+![alt tag](../images/mesos/dcos-calico-status.png)
+
 The webpage may fail to load initially since the Calico
 service restarts the Docker and Mesos agent services, which
 will cause a restart of the Calico framework when it happens
