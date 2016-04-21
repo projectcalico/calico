@@ -6,7 +6,7 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Calico with the Unified Contaienrizer - Manual Install Guide
+# Calico with the Unified Containerizer - Manual Install Guide
 > This guide explains how to add Calico networking to a Mesos Agent.
 Specifically, we will add the Calico plugin to perform networking
 for the Unified Containerizer.
