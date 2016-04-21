@@ -21,14 +21,22 @@ the etcd cluster store, as seen in our [Manual Setup guide]
 It is very easy to install Calico to use with the
 Docker Containerizer.
 
-On each of your agents, download the `calicoctl` command-line tool:
+On each of your agents, you will need to download the `calicoctl` command-line tool:
 
 ```
 curl -o /usr/bin/calicoctl -L https://github.com/projectcalico/calico-containers/releases/download/v0.18.0/calicoctl
 chmod a+x calicoctl 
 ```
 
-Then run the `node` command to run Calico in Docker:
+Now, you will need run the `calico/node` and
+`calico/node-libnetwork` containers.
+
+For production deployments, we recommend running the two
+containers as services. Visit our guide on [running Calico
+as a Service](../CalicoAsService.md) to learn how to do this.
+
+For test environments that you would like to get up and running
+quickly, you can run the `calicoctl node --libnetwork`:
 
 ```
 sudo ETCD_AUTHORITY=<HOST:PORT> ./calicoctl node --libnetwork
@@ -36,7 +44,8 @@ sudo ETCD_AUTHORITY=<HOST:PORT> ./calicoctl node --libnetwork
 
 > Be sure to set the ETCD_AUTHORITY to the correct `IP/Hostname:Port` for your etcd cluster.
 
-You should now see two Calico containers running in Docker:
+Once you've started the Calico services or you've run the `node` command,
+you should see two Calico containers running in Docker:
 
 ```
 $ docker ps
