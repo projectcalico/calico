@@ -128,11 +128,11 @@ The rules leaf at
 contains a JSON blob in this format
 
     {
-      "inbound": [{<rule>}, ...],
-      "outbound": [{<rule>}, ...]
+      "inbound_rules": [{<rule>}, ...],
+      "outbound_rules": [{<rule>}, ...]
     }
 
-where each entry in the inbound/outbound list is a rule object:
+where each entry in the inbound_rules/outbound_rules list is a rule object:
 
     {
       # Optional match criteria.  These are and-ed together.
