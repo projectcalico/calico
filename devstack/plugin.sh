@@ -157,7 +157,7 @@ EOF
 		    run_process calico-bird "HOST_IP=$HOST_IP /opt/stack/networking-calico/devstack/auto-bird-conf.sh"
 
 		    # Run the Calico DHCP agent.
-		    run_process calico-dhcp "sudo /usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
+		    run_process calico-dhcp "/usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
 
 		    ;;
 
