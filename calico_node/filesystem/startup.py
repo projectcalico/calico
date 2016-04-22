@@ -1,3 +1,17 @@
+# Copyright 2016 Metaswitch Networks
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 
@@ -171,13 +185,14 @@ def warn_if_unknown_ip(ip, ip6):
     :param ip6: IPv6 address which should be present on the host.
     :return: None
     """
-    if ip and ip not in get_host_ips(version=4, exclude=["docker0"]):
-        print "WARNING: Could not confirm that the provided IPv4 address is assigned" \
-              " to this host."
+    if ip and IPAddress(ip) not in get_host_ips(version=4, exclude=["docker0"]):
+        print "WARNING: Could not confirm that the provided IPv4 address is" \
+              " assigned to this host."
 
-    if ip6 and ip6 not in get_host_ips(version=6, exclude=["docker0"]):
-        print "WARNING: Could not confirm that the provided IPv6 address is assigned" \
-              " to this host."
+    if ip6 and IPAddress(ip6) not in get_host_ips(version=6,
+                                                  exclude=["docker0"]):
+        print "WARNING: Could not confirm that the provided IPv6 address is" \
+              " assigned to this host."
 
 
 def warn_if_hostname_conflict(ip):
