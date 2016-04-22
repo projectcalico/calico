@@ -87,7 +87,7 @@ Now you have a basic two node Ubuntu cluster setup and you are ready to try Cali
 
 There are two worked examples you can follow: Calico as a Docker network
 plugin, or Calico without Docker networking.  Select the instructions based on 
-the networking option that you chose in step (3).
+the networking option that you chose in step (1.3).
 
 - [Calico as a Docker network plugin walkthrough](docker-network-plugin/README.md) 
 - [Calico without Docker networking walkthrough](without-docker-networking/README.md)  
