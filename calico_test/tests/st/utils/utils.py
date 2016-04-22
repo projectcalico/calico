@@ -56,7 +56,7 @@ def get_ip(v6=False):
             version = 6 if v6 else 4
             ips = get_host_ips(version)
             if ips:
-                ip = ips[0]
+                ip = str(ips[0])
 
     return ip
 
