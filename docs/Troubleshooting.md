@@ -8,13 +8,17 @@
 
 # Troubleshooting
 
-## `sudo docker run` and environment variables.
+## Running `sudo calicoctl ...` with Environment Variables
 
-If you use `sudo` for commands like `docker run`, remember that your environment 
-variables will not be transferred to the `sudo` environment.  You can set environment 
-variables for `sudo` commands like this.
+If you use `sudo` for commands like `calicoctl node`, remember that your environment
+variables will not be transferred to the `sudo` environment.  You can run `sudo` with
+the `-E` flag to include your environment variables:
 
-    sudo DOCKER_HOST=localhost:2377 docker run -td -e CALICO_IP=192.168.100.1 busybox
+    sudo -E calicoctl node
+
+or you can set environment variables for `sudo` commands like this:
+
+    sudo ETCD_AUTHORITY=172.25.0.1:2379 calicoctl node
 
 ## Ubuntu (or GNOME) NetworkManager
 
