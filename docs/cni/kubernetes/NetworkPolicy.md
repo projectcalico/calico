@@ -11,8 +11,8 @@ Calico supports the v1alpha1 network policy API for Kubernetes.
 > *Note*: The Kubernetes network policy API is currently in alpha and is subject to change. Calico support for this API is in beta and so is also subject to change.
 
 ## Prerequisites
-* A Kubernetes v1.1+ deployment using the [Calico CNI plugin v1.1](https://github.com/projectcalico/calico-cni/releases/latest) or greater.
-* You must be running the `calico/node:v0.17.0-k8s-policy` image on each Kubernetes node.  This is a beta pre-release image which supports this policy.
+* A Kubernetes v1.1+ deployment using the [Calico CNI plugin v1.3.0](https://github.com/projectcalico/calico-cni/releases/latest) or greater.
+* You must running `calico/node:v0.18.0` or greater on each Kubernetes node.
 * You must be using the iptables kube-proxy in your deployment. All of the Calico getting started guides configure the kube-proxy in this way.
 * You must have enabled `ThirdPartyResource` objects in your Kubernetes apiserver, as described [here](https://github.com/caseydavenport/kubernetes/blob/network-policy/docs/admin/network-policy.md#enabling-network-policy).
 
@@ -33,12 +33,14 @@ $ cat /etc/cni/net.d/10-calico.conf
         "type": "calico-ipam"
     },
     "policy": {
-        "type": "default-deny-inbound",
+        "type": "k8s",
+        "k8s_api_root": "http://<k8s-master>:<api-port>/api/v1/"
     }
 }
 ```
+> More configuration options can be found [here](https://github.com/projectcalico/calico-cni/blob/master/configuration.md).
 
-This will disable inbound traffic to pods by default, delegating policy configuration to the [Calico policy agent](https://github.com/projectcalico/k8s-policy).
+This will configure label-based policy on Kuberetes pods. 
 
 Once you have modified the network configuration file as shown above, you will need to restart the `kubelet` to pick up the changes.
 
@@ -49,29 +51,30 @@ sudo systemctl restart kubelet
 
 ## Running the Calico policy agent
 In order to use the Kubernetes v1alpha1 network policy API, you must run the
-Calico Kubernetes policy agent.  The policy agent runs as a pod on your
+Calico Kubernetes policy agent.  The policy agent runs on each Master node in your 
 Kubernetes cluster.  It reads policy information from the Kubernetes API and
 configures Calico appropriately.
 
 To run the Calico Kubernetes policy agent:
 
-1. Download the policy services manifest file.
+1. Download the policy services manifest file on your master. 
 ```
-wget https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/calico-policy-services.yaml
+wget https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/calico-policy-agent.yaml
 ```
 
-2. Replace `<ETCD_HOST>` and `<ETCD_PORT>` with the correct configuration to access your etcd cluster.
+2. Replace the ETCD_ENDPOINTS variable in that file with the correct configuration to access your etcd cluster.
 
-3. Create the manifest file using `kubectl`.
+3. Move the file to the kubelet config directory on your master. 
 ```
-kubectl create -f calico-policy-services.yaml
+mv calico-policy-agent.yaml /etc/kubernetes/manifests/
 ```
+> Make sure your kubelet is started with the `--config=/etc/kubernetes/manifests` option.
 
 After a few moments, you should see the calico-policy-agent pod running in the `calico-system` namespace.
 ```
-$ ./kubectl get pods --namespace=calico-system
-NAME                        READY     STATUS    RESTARTS   AGE
-calico-policy-agent-axg63   1/1       Running   0          1m
+$ kubectl get pods --namespace=calico-system
+NAME                             READY     STATUS    RESTARTS   AGE
+calico-policy-agent-k8s-master   1/1       Running   0          1m
 ```
 
 ## Next Steps
