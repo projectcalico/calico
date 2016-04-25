@@ -247,7 +247,7 @@ def main():
                                     "virbr.*", "lxcbr.*", "veth.*",
                                     "cali.*", "tunl.*", "flannel.*"])
         try:
-            ip = ips.pop()
+            ip = str(ips.pop())
         except IndexError:
             print "Couldn't autodetect a management IP address. Please " \
                   "provide an IP address by rerunning the container with the" \
