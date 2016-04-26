@@ -116,9 +116,9 @@ Note - VM hostnames
 ~~~~~~~~~~~~~~~~~~~
 
 Neutron is currently implementing changes to allow a VM's hostname to be the
-same as the name chosen for it by the user. This involves two new port
-fields, dns_name and dns_assignment, being passed from the Neutron server to
-the DHCP agent.
+same as the name chosen for it by the user. This involves two new port fields,
+dns_name and dns_assignment, being passed from the Neutron server to the DHCP
+agent.
 
 - ‎dns_name is a simple name, like 'calico-vm17'. It is a writable port field,
   and gets combined with a dns_domain that is specified elsewhere.
