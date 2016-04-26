@@ -195,10 +195,10 @@ add-ssl-hostname:
 	fi
 
 semaphore: docker
-	# Use the downloaded docker locally, not just with Docker in Docker STs
-	service docker stop
-	cp ./docker $(shell which docker)
-	service docker start
+	# Our traditional method of overwriting the docker binary doesn't seem to work
+	# for docker 1.11.0+. Semaphore has updated to 1.11.0, so, for now, we can
+	# just use the installed docker. In the future, when we must update docker,
+	# we should investigate how to do it properly.
 	docker version
 
 	# Clean up unwanted files to free disk space.
