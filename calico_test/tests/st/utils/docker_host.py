@@ -56,10 +56,10 @@ class DockerHost(object):
         # cleaned up.  If not used as a context manager, users of this object
         self._cleaned = False
 
-        docker_args = "--privileged -tid -v %s/docker:/usr/local/bin/docker " \
+        docker_args = "--privileged -tid " \
                       "-v /lib/modules:/lib/modules " \
                       "-v %s/certs:%s/certs -v %s:/code --name %s" % \
-                      (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
+                      (CHECKOUT_DIR, CHECKOUT_DIR, CHECKOUT_DIR,
                        self.name)
         if ETCD_SCHEME == "https":
             docker_args += " --add-host %s:%s" % (ETCD_HOSTNAME_SSL, get_ip())
@@ -68,9 +68,12 @@ class DockerHost(object):
             log_and_run("docker rm -f %s || true" % self.name)
             # Pass the certs directory as a volume since the etcd SSL/TLS
             # environment variables use the full path on the host.
+            # Set iptables=false to prevent iptables error when using dind libnetwork
             log_and_run("docker run %s "
                         "calico/dind:latest "
-                        "docker daemon --storage-driver=aufs %s" %
+                        " --storage-driver=aufs "
+                        "--iptables=false "
+                        "%s" %
                     (docker_args, additional_docker_options))
 
             self.ip = log_and_run("docker inspect --format "

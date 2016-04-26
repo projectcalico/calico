@@ -1,4 +1,4 @@
-.PHONEY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl docker create-dind help
+.PHONY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
 
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -85,11 +85,6 @@ routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output routereflector.tar calico/routereflector:latest
 
-docker:
-	# Download the docker 1.10.1 binary
-	curl https://get.docker.com/builds/Linux/x86_64/docker-1.10.1 -o docker
-	chmod +x docker
-
 birdcl:
 	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
 	chmod +x birdcl
@@ -141,7 +136,7 @@ run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	--listen-client-urls "https://0.0.0.0:2379"
 
 ## Run the STs in a container
-st: run-etcd dist/calicoctl docker calico_test/.calico_test.created busybox.tar routereflector.tar calico-node.tar
+st: run-etcd dist/calicoctl calico_test/.calico_test.created busybox.tar routereflector.tar calico-node.tar
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -161,7 +156,7 @@ st: run-etcd dist/calicoctl docker calico_test/.calico_test.created busybox.tar 
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
-st-ssl: run-etcd-ssl dist/calicoctl docker calico_test/.calico_test.created busybox.tar calico-node.tar routereflector.tar
+st-ssl: run-etcd-ssl dist/calicoctl calico_test/.calico_test.created busybox.tar calico-node.tar routereflector.tar
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -194,13 +189,7 @@ add-ssl-hostname:
 	  echo "\n# Host used by Calico's ETCD with SSL\n$(LOCAL_IP_ENV) etcd-authority-ssl" >> /etc/hosts; \
 	fi
 
-semaphore: docker
-	# Our traditional method of overwriting the docker binary doesn't seem to work
-	# for docker 1.11.0+. Semaphore has updated to 1.11.0, so, for now, we can
-	# just use the installed docker. In the future, when we must update docker,
-	# we should investigate how to do it properly.
-	docker version
-
+semaphore:
 	# Clean up unwanted files to free disk space.
 	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
 
