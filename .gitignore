@@ -16,3 +16,4 @@ cover
 docker
 **/*.sw[pon]
 birdcl
+.vagrant

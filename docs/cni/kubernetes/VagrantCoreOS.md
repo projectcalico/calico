@@ -50,18 +50,25 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have two CoreOS servers - one Kubernetes master and one Kubernetes node. The servers are named calico-01 and calico-02
-and have IP addresses 172.18.18.101 and 172.18.18.102.
+You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02 
+and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
 
 At this point, it's worth checking that your servers can ping each other.
 
-From calico-01
+From k8s-master 
 
     ping 172.18.18.102
+    ping 172.18.18.103
 
-From calico-02
+From k8s-node-01
 
     ping 172.18.18.101
+    ping 172.18.18.103
+
+From k8s-node-02
+
+    ping 172.18.18.101
+    ping 172.18.18.102
 
 If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should
 check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also
@@ -76,19 +83,19 @@ And finally check that Docker is running on both hosts by running
     docker ps
 
 ## 2. Using your cluster
-### 2.1 Deploy Calico Policy Agent
-The Calico Policy Agent enables network policy on Kubenrnetes.
+### 2.1 Enable NetworkPolicy API on the Cluster 
+The Calico Policy Agent uses this API to enables network policy on Kubenrnetes.
 
 To install it:
 
 Log on to the master.
 ```
-vagrant ssh calico-01
+vagrant ssh k8s-master 
 ```
 
-Create the agent.
+Install the manifest:
 ```
-kubectl create -f calico-policy-services.yaml
+kubectl create -f policy.yaml
 ```
 
 ### 2.2 Deploying SkyDNS
@@ -96,7 +103,7 @@ You now have a basic Kubernetes cluster deployed using Calico networking.  Most 
 
 Log on to the master node.
 ```
-vagrant ssh calico-01
+vagrant ssh k8s-master 
 ```
 
 Deploy the SkyDNS application using the provided Kubernetes manifest.
