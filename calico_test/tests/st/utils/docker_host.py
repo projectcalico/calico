@@ -28,14 +28,29 @@ class DockerHost(object):
     """
     A host container which will hold workload containers to be networked by
     Calico.
+
+    :param calico_node_autodetect_ip: When set to True, the test framework
+    will not perform IP detection, and will run `calicoctl node` without explicitly
+    passing in a value for --ip. This means calico-node will be forced to do its IP detection.
     """
     def __init__(self, name, start_calico=True, dind=True,
                  additional_docker_options="",
                  post_docker_commands=["docker load -i /code/calico-node.tar",
-                                       "docker load -i /code/busybox.tar"]):
+                                       "docker load -i /code/busybox.tar"],
+                 calico_node_autodetect_ip=False):
         self.name = name
         self.dind = dind
         self.workloads = set()
+        self.ip = None
+        """
+        An IP address value to pass to calicoctl as `--ip`. If left as None, no value will be passed,
+        forcing calicoctl to do auto-detection.
+        """
+
+        self.ip6 = None
+        """
+        An IPv6 address value to pass to calicoctl as `--ipv6`. If left as None, no value will be passed.
+        """
 
         # This variable is used to assert on destruction that this object was
         # cleaned up.  If not used as a context manager, users of this object
@@ -67,7 +82,8 @@ class DockerHost(object):
                                 retries=10)
             for command in post_docker_commands:
                 self.execute(command)
-        else:
+        elif not calico_node_autodetect_ip:
+            # Find the IP so it can be specified as `--ip` when launching node later.
             self.ip = get_ip(v6=False)
             self.ip6 = get_ip(v6=True)
 
@@ -132,14 +148,11 @@ class DockerHost(object):
         :param as_num: The AS Number for this node.  A value of None uses the
         inherited default value.
         """
-        args = ['node', '--ip=%s' % self.ip]
-        try:
-            if self.ip6:
-                args.append('--ip6=%s' % self.ip6)
-        except AttributeError:
-            # No ip6 configured
-            pass
-
+        args = ['node']
+        if self.ip:
+            args.append('--ip=%s' % self.ip)
+        if self.ip6:
+            args.append('--ip6=%s' % self.ip6)
         args.append(options)
 
         cmd = ' '.join(args)
