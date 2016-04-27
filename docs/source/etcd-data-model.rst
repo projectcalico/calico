@@ -339,7 +339,7 @@ Each rule sub-object has the following JSON-encoded structure:
 .. code-block:: json
 
     {
-      "protocol": "tcp|udp|icmp|icmpv6",
+      "protocol": "tcp|udp|icmp|icmpv6|<number>",
       "src_tag": "<tag_name>",
       "src_net": "<CIDR>",
       "src_ports": [1234, "2048:4000"],
@@ -354,7 +354,7 @@ The properties in the rules object have the following meaning. All of these
 properties are optional:
 
 ``protocol``
-  if present, restricts the rule to only apply to traffic of a specific
+  if present, restricts the rule to only apply to traffic of a specific IP
   protocol.
 
 ``src_tag``
