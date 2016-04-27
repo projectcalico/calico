@@ -506,6 +506,17 @@ class TestIptablesStub(BaseTestCase):
         )
 
 
+IPT_INPUT = """*filter
+:felix-from-09d7e2980bc -
+:felix-to-09d7e2980bc -
+--flush felix-from-09d7e2980bc
+--append felix-from-09d7e2980bc --jump DROP -m comment --comment "WARNING Missing chain"
+--flush felix-to-09d7e2980bc
+--append felix-to-09d7e2980bc --jump DROP -m comment --comment "WARNING Missing chain"
+COMMIT
+""".splitlines()
+
+
 class TestUtilityFunctions(BaseTestCase):
 
     def test_extract_unreffed_chains(self):
@@ -513,6 +524,25 @@ class TestUtilityFunctions(BaseTestCase):
             output = fiptables._extract_our_unreffed_chains(inp)
             self.assertEqual(exp, output, "Expected\n\n%s\n\nTo parse as: %s\n"
                                           "but got: %s" % (inp, exp, output))
+
+    def test_parse_commit_failure(self):
+        error = "iptables-restore: line 8 failed\n"
+        retryable, msg = fiptables._parse_ipt_restore_error(IPT_INPUT, error)
+        self.assertTrue(retryable)
+        self.assertEqual(msg, "COMMIT failed; likely concurrent access.")
+
+    def test_parse_non_commit_failure_parse(self):
+        error = "iptables-restore: line 6 failed\n"
+        retryable, msg = fiptables._parse_ipt_restore_error(IPT_INPUT, error)
+        self.assertFalse(retryable)
+        self.assertEqual(msg, "Line 6 failed: --flush felix-to-09d7e2980bc")
+
+    def test_parse_other_failure_parse(self):
+        error = "iptables-restore: unknown\n"
+        retryable, msg = fiptables._parse_ipt_restore_error(IPT_INPUT, error)
+        self.assertFalse(retryable)
+        self.assertEqual(msg, "ip(6)tables-restore failed with output: "
+                              "iptables-restore: unknown\n")
 
 
 class IptablesStub(object):

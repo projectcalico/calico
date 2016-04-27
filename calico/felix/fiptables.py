@@ -1014,7 +1014,7 @@ def _parse_ipt_restore_error(input_lines, err):
         _log.debug("ip(6)tables-restore failure on line %s", line_number)
         line_index = line_number - 1
         offending_line = input_lines[line_index]
-        if offending_line.strip == "COMMIT":
+        if offending_line.strip() == "COMMIT":
             return True, "COMMIT failed; likely concurrent access."
         else:
             return False, "Line %s failed: %s" % (line_number, offending_line)
