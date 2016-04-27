@@ -125,6 +125,7 @@ For example:
     "cmd": "ip addr && sleep 30",
     "cpus": 0.1,
     "mem": 64.0,
+    "ipAddress": {},
     "container": {
         "type": "DOCKER",
         "docker": {
