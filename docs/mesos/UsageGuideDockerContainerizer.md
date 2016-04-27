@@ -122,12 +122,12 @@ For example:
 ```
 {
     "id": "docker-task",
-        "cmd": "ip addr && sleep 30",
-            "cpus": 0.1,
-            "mem": 64.0,
-            "container": {
-                "type": "DOCKER",
-                "docker": {
+    "cmd": "ip addr && sleep 30",
+    "cpus": 0.1,
+    "mem": 64.0,
+    "container": {
+        "type": "DOCKER",
+        "docker": {
             "image": "busybox",
             "parameters": [
                 {"key": "net", "value": "databases"}
