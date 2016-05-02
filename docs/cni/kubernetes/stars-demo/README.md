@@ -14,7 +14,7 @@ vagrant ssh k8s-master
 2) Download and configure the [policy tool](https://github.com/projectcalico/k8s-policy/blob/master/policy_tool/README.md) for NetworkPolicy management.
 ```
 # Install the tool.
-wget https://github.com/projectcalico/k8s-policy/releases/download/v0.1.0/policy
+wget https://github.com/projectcalico/k8s-policy/releases/download/v0.1.3/policy
 chmod +x ./policy
 sudo mv ./policy /opt/bin
 
