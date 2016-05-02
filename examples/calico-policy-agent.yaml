@@ -30,6 +30,7 @@ spec:
       imagePullPolicy: IfNotPresent
       args:
         - "--election=calico-policy-election"
+        - "--election-namespace=calico-system"
         - "--http=127.0.0.1:4040"
       ports:
         - containerPort: 4040
