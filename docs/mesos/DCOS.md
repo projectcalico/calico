@@ -51,6 +51,14 @@ You can check the status of etcd by visiting the **Services**
 tab. You can install Calico once etcd appears with a status
 of **`Healthy`** (note that this could take a few minutes).
 
+### Mesos-DNS
+Calico is compatible with Mesos-DNS, but requires a minor configuration change to preferentially resolve to a container's IP address instead of resolving to its host's. Follow these steps on each master in your cluster to allow containers to be resolvable via their containerized IP: 
+
+1. Open `/opt/mesosphere/etc/mesos-dns.json` with any text editor.
+2. Find the line that reads: `"IPSources": ["host", "netinfo"]`
+3. Reverse the order of those two fields: `"IPSources": ["netinfo", "host"]`
+4. Restart mesos-dns with: `sudo systemctl restart dcos-mesos-dns`
+
 ## Install Calico
 You can easily install Calico from within the DCOS UI.
 
