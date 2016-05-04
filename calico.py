@@ -669,7 +669,7 @@ def main():
     # problems when loading values into os.environ.
     # Rather than try to encode them as strings, just use the yaml library.
     # For more details see http://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-of-unicode-ones-from-json-in-python
-    config_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
+    config_raw = ''.join(sys.stdin.readlines()).replace('\n', '').replace('\t','')
     network_config = yaml.safe_load(config_raw)
 
     # Get the log level from the config file, default to INFO.

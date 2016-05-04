@@ -94,7 +94,7 @@ def print_cni_error(code, message, details=None):
         "msg": message,
         "details": details
     }
-    _log.error("CNI Error:\n%s", json.dumps(error_response, indent=2))
+    _log.exception("CNI Error:\n%s", json.dumps(error_response, indent=2))
     print(json.dumps(error_response))
 
 
