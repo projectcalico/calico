@@ -94,6 +94,7 @@ class TestAttachAndStream(unittest.TestCase):
                                          call("from the container.")])
         self.assertEqual(m_stdout.write.call_count, 2)
         m_docker_client.stop.assert_called_once_with(m_container)
+        m_sys.exit.assertcalled_once_with(130)
 
     @patch("calico_ctl.node.docker_client", spec=DockerClient)
     @patch("calico_ctl.node.sys", spec=sys)
@@ -121,7 +122,6 @@ class TestAttachAndStream(unittest.TestCase):
         m_docker_client.attach.assert_called_once_with(m_container,
                                                        stream=True)
         self.assertFalse(m_container.called)
-        m_sys.exit.assert_called_once_with(0)
         m_stdout.write.assert_has_calls([call("Some output\n"),
                                          call("from the container."),
                                          call("\nThis output is printed, but "
@@ -134,6 +134,9 @@ class TestAttachAndStream(unittest.TestCase):
         m_docker_client.stop.assert_has_calls([call(m_container),
                                                call(m_container)])
         self.assertEqual(m_docker_client.stop.call_count, 2)
+        # sys.exit gets called twice: once when handling the SIGTERM and once
+        # when stopping the container for an unknown reason
+        m_sys.exit.assert_has_calls([call(0), call(1)])
 
 
 class TestNode(unittest.TestCase):

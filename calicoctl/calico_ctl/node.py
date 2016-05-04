@@ -836,6 +836,7 @@ def _attach_and_stream(container, startup_only):
         sys.exit(0)
     signal.signal(signal.SIGTERM, handle_sigterm)
     stop_container_on_exit = True
+    exit_code = 1
 
     output = docker_client.attach(container, stream=True)
     try:
@@ -847,8 +848,12 @@ def _attach_and_stream(container, startup_only):
     except KeyboardInterrupt:
         # Mainline. Someone pressed Ctrl-C.
         print "Stopping Calico node..."
+        stop_container_on_exit = True
+        exit_code = 130
     finally:
         # Could either be this process is being killed, or output generator
         # raises an exception.
         if stop_container_on_exit:
             docker_client.stop(container)
+            # If the container is stopped, some sort of error occurred.
+            sys.exit(exit_code)
