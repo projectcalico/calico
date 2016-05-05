@@ -463,6 +463,51 @@ def simplify_or_node(parse_str=None, location=None, tokens=None):
         return OrNode(tokens.asList())
 
 
+def simplify_negation_node(parse_str=None, location=None, tokens=None):
+    """Parse action for an optional series of '!' followed by a <value>"""
+    negated = False
+    value = None
+    # Collapse a sequence of negations into zero or one.
+    for t in tokens:
+        if t == "!":
+            negated = not negated
+        else:
+            # Grab the value from the end of the list of tokens, we should
+            # only hit this once, for the final item in the list.
+            assert value is None, "Unexpected additional value"
+            value = t
+    if negated:
+        # Expression simplified to a negation.
+        return NegationNode(value)
+    else:
+        # Expression simplified to no negation, return the value directly.
+        return value
+
+
+class NegationNode(ExprNode):
+    """
+    AST node for negation, '! <some expression>'
+    """
+    __slots__ = ["value"]
+
+    def __init__(self, value):
+        self.value = value
+
+    def evaluate(self, labels):
+        return not self.value.evaluate(labels)
+
+    def __hash__(self):
+        return hash(self.value) * 37 + 0xa37b8d8c
+
+    def __eq__(self, other):
+        return (type(other) == type(self) and
+                self.value == other.value)
+
+    def collect_str_fragments(self, fragment_list):
+        fragment_list.append("! ")
+        self.value.collect_str_fragments(fragment_list)
+
+
 class AllNode(ExprNode):
     """AST node for 'all()' expression."""
     __slots__ = []
@@ -589,15 +634,23 @@ def _define_grammar():
                  Suppress(")"))
     has_check.setParseAction(HasNode)
 
+    # For completeness, we allow an all() to occur in an expression like
+    # "! all()".  Note: we special-case the trivial selectors "" and
+    # "all()" below for efficiency.
+    all_op = (Suppress("all()"))
+    all_op.setParseAction(AllNode)
+
     comparison = (eq_comparison |
                   not_eq_comparison |
                   in_comparison |
                   not_in_comparison |
-                  has_check)
+                  has_check |
+                  all_op)
 
     paren_expr = (Suppress("(") + expr + Suppress(")"))
 
-    value = comparison | paren_expr
+    value = ZeroOrMore("!") + (comparison | paren_expr)
+    value.setParseAction(simplify_negation_node)
 
     and_expr = value + ZeroOrMore(Suppress("&&") + value)
     and_expr.setParseAction(simplify_and_node)
