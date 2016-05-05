@@ -134,7 +134,7 @@ class PolicyAgent(object):
             self._start_leader_thread()
 
         # Ensure the tier exists.
-        metadata = {"order": 50}
+        metadata = {"order": NET_POL_TIER_ORDER}
         self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
 
         # Read initial state from Kubernetes API.

@@ -28,8 +28,17 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
 # Annotation to look for network-isolation on namespaces.
 NS_POLICY_ANNOTATION = "net.alpha.kubernetes.io/network-isolation"
 
-# Tier name to use for policies.
+# Tier name /order to use for policies.
 NET_POL_TIER_NAME = "k8s-network-policy"
+NET_POL_TIER_ORDER = 100
+
+# The priority assigned to network policies created by the agent.
+# Lower order -> higher priority.
+NET_POL_ORDER = 1000
+
+# The priority assigned to namespace policies.
+# This policy is hit when no NetworkPolicy objects match.
+NET_POL_NS_ORDER = 2000
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
