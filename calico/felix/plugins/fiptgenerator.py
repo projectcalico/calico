@@ -425,12 +425,10 @@ class FelixIptablesGenerator(FelixPlugin):
 
         # Generates an inbound and an outbound chain for each profile.
         # Within each chain, the logic is as follows:
-        # * Start by marking all packets.
-        # * If we hit an allow rule, we'll return with the Accept mark still
-        #   set, to indicate that we matched.
+        # * If we hit an allow rule, we'll return with the Accept mark bit set
+        #   to indicate that we matched.
         # * If we hit a deny rule, we'll drop the packet immediately.
-        # * If we reach the end of the chain, we'll un-mark the packet again to
-        #   indicate no match.
+        # * If we reach the end of the chain, we'll return with no mark set.
 
         updates = {}
         deps = {}
@@ -441,13 +439,7 @@ class FelixIptablesGenerator(FelixPlugin):
             rules_key = "%s_rules" % direction
             rules = profile.get(rules_key, [])
 
-            fragments = [
-                '--append %(chain)s '
-                '--jump MARK --set-mark %(mark)s/%(mark)s' % {
-                    'chain': chain_name,
-                    'mark': self.IPTABLES_MARK_ACCEPT
-                }
-            ]
+            fragments = []
             for r in rules:
                 rule_version = r.get('ip_version')
                 if rule_version is None or rule_version == ip_version:
@@ -459,18 +451,6 @@ class FelixIptablesGenerator(FelixPlugin):
                         selector_to_ipset,
                         on_allow=on_allow,
                         on_deny=on_deny))
-
-            # If we get to the end of the chain without a match, we remove the
-            # mark again to indicate that the packet wasn't matched.
-            fragments.append(
-                '--append %(chain)s '
-                '--match comment --comment '
-                '"No match, fall through to next profile" '
-                '--jump MARK --set-mark 0/%(mark)s' % {
-                    'chain': chain_name,
-                    'mark': self.IPTABLES_MARK_ACCEPT
-                }
-            )
             updates[chain_name] = fragments
 
         return updates, deps
@@ -851,7 +831,19 @@ class FelixIptablesGenerator(FelixPlugin):
         action = rule.get("action", "allow")
         extra_rule = None
         if action == "allow":
-            ipt_target = on_allow
+            # allow requires two rules, one to mark the packet and another
+            # to return the packet to the calling chain.
+            ipt_target = "MARK --set-mark %(mark)s/%(mark)s" % {
+                "mark": self.IPTABLES_MARK_ACCEPT
+            }
+            extra_rule = (
+                "--append %(chain)s --match mark --mark %(mark)s/%(mark)s "
+                "--jump RETURN" %
+                {
+                    "chain": chain_name,
+                    "mark": self.IPTABLES_MARK_ACCEPT,
+                }
+            )
         elif action == "deny":
             ipt_target = on_deny
         elif action == "next-tier":

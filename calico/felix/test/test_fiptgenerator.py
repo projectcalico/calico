@@ -32,14 +32,6 @@ from calico.felix.test.base import BaseTestCase, load_config
 
 _log = logging.getLogger(__name__)
 
-DEFAULT_MARK = '--append %s --jump MARK --set-mark 0x1000000/0x1000000'
-
-DEFAULT_UNMARK = (
-    '--append %s '
-    '--match comment --comment "No match, fall through to next profile" '
-    '--jump MARK --set-mark 0/0x1000000'
-)
-
 INPUT_CHAINS = {
     "Default": [
         '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
@@ -98,23 +90,19 @@ RULES_TESTS = [
         "updates": {
             'felix-p-prof1-i':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-i",
                     '--append felix-p-prof1-i '
                     '--match set --match-set a-eq-b src '
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-i --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
-                    DEFAULT_UNMARK % "felix-p-prof1-i",
                 ],
             'felix-p-prof1-o':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-o",
                     '--append felix-p-prof1-o '
                     '--match set --match-set a-eq-b dst '
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-o --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
-                    DEFAULT_UNMARK % "felix-p-prof1-o",
                 ]
         },
     },
@@ -139,16 +127,18 @@ RULES_TESTS = [
         "updates": {
             'felix-p-prof1-i':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-i",
-                    '--append felix-p-prof1-i --source 10.0.0.0/8 --jump RETURN',
-                    DEFAULT_UNMARK % "felix-p-prof1-i",
+                    '--append felix-p-prof1-i --source 10.0.0.0/8 '
+                    '--jump MARK --set-mark 0x1000000/0x1000000',
+                    '--append felix-p-prof1-i --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                 ],
             'felix-p-prof1-o':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-o",
-                    "--append felix-p-prof1-o --protocol icmp --source "
-                    "10.0.0.0/8 --match icmp --icmp-type 7/123 --jump RETURN",
-                    DEFAULT_UNMARK % "felix-p-prof1-o",
+                    '--append felix-p-prof1-o --protocol icmp --source '
+                    '10.0.0.0/8 --match icmp --icmp-type 7/123 --jump MARK '
+                    '--set-mark 0x1000000/0x1000000',
+                    '--append felix-p-prof1-o --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                 ]
         },
     },
@@ -176,21 +166,24 @@ RULES_TESTS = [
         "updates": {
             'felix-p-prof1-i':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-i",
                     "--append felix-p-prof1-i --protocol icmp --source 10.0.0.0/8 "
-                    "--match icmp --icmp-type 7 --jump RETURN",
-                    DEFAULT_UNMARK % "felix-p-prof1-i",
+                    "--match icmp --icmp-type 7 --jump MARK "
+                    "--set-mark 0x1000000/0x1000000",
+                    '--append felix-p-prof1-i --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                 ],
             'felix-p-prof1-o':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-o",
                     "--append felix-p-prof1-o --protocol tcp "
                     "--match multiport --source-ports 0,2:3,4,5,6,7,8,9,10,11,12,13,14,15 "
-                    "--jump RETURN",
+                    "--jump MARK --set-mark 0x1000000/0x1000000",
+                    '--append felix-p-prof1-o --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                     "--append felix-p-prof1-o --protocol tcp "
                     "--match multiport --source-ports 16,17 "
-                    "--jump RETURN",
-                    DEFAULT_UNMARK % "felix-p-prof1-o",
+                    "--jump MARK --set-mark 0x1000000/0x1000000",
+                    '--append felix-p-prof1-o --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                 ]
         },
     },
@@ -219,17 +212,17 @@ RULES_TESTS = [
         "updates": {
             'felix-p-prof1-i':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-i",
                     "--append felix-p-prof1-i --protocol icmpv6 --source "
-                    "1234::beef --match icmp6 --icmpv6-type 7 --jump RETURN",
-                    DEFAULT_UNMARK % "felix-p-prof1-i",
+                    "1234::beef --match icmp6 --icmpv6-type 7 "
+                    "--jump MARK --set-mark 0x1000000/0x1000000",
+                    '--append felix-p-prof1-i --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
                 ],
             'felix-p-prof1-o':
                 [
-                    DEFAULT_MARK % "felix-p-prof1-o",
                     "--append felix-p-prof1-o --protocol icmpv6 --source "
-                    "1234::beef --match icmp6 --icmpv6-type 7 --jump DROP",
-                    DEFAULT_UNMARK % "felix-p-prof1-o",
+                    "1234::beef --match icmp6 --icmpv6-type 7 "
+                    "--jump DROP",
                 ]
         },
     },
@@ -476,20 +469,8 @@ class TestRules(BaseTestCase):
         self.assertEqual(
             updates,
             {
-                'felix-p-prof1-i':
-                    ['--append felix-p-prof1-i --jump MARK '
-                     '--set-mark 0x1000000/0x1000000'] +
-                    drop_rules_i +
-                    ['--append felix-p-prof1-i --match comment '
-                     '--comment "No match, fall through to next profile" '
-                     '--jump MARK --set-mark 0/0x1000000'],
-                'felix-p-prof1-o':
-                    ['--append felix-p-prof1-o --jump MARK '
-                     '--set-mark 0x1000000/0x1000000'] +
-                    drop_rules_o +
-                    ['--append felix-p-prof1-o --match comment '
-                     '--comment "No match, fall through to next profile" '
-                     '--jump MARK --set-mark 0/0x1000000']
+                'felix-p-prof1-i': drop_rules_i,
+                'felix-p-prof1-o': drop_rules_o
             }
         )
 
