@@ -77,7 +77,7 @@ from pycalico.datastore import Rules
 from connectors import client, DOCKER_URL
 from utils import print_paragraph, DOCKER_LIBNETWORK_VERSION
 from pycalico.datastore_datatypes import Profile
-from pycalico.util import (validate_characters, validate_ports,
+from pycalico.util import (validate_characters, validate_port_str,
                            validate_icmp_type, validate_cidr, validate_cidr_versions)
 
 
@@ -131,7 +131,7 @@ def validate_arguments(arguments):
     ports_ok = True
     for arg in ["<SRCPORTS>", "<DSTPORTS>"]:
         if arguments.get(arg) is not None:
-            ports_ok = validate_ports(arguments[arg])
+            ports_ok = validate_port_str(arguments[arg])
             if not ports_ok:
                 break
 
