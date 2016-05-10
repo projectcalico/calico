@@ -13,3 +13,4 @@ gunicorn
 monotime
 ConcurrentLogHandler
 pyyaml
+simplejson
