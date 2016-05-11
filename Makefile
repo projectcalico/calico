@@ -1,4 +1,4 @@
-.PHONY: all binary node_image test_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
+.PHONY: all binary node_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
 
 # These variables can be overridden by setting an environment variable.
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -11,9 +11,6 @@ HOST_CHECKOUT_DIR?=$(shell pwd)
 CALICOCTL_DIR=calicoctl
 CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py) calicoctl.spec
 
-TEST_CONTAINER_DIR=calico_test
-TEST_CONTAINER_FILES=$(shell find calico_test/ -type f ! -name '*.created')
-
 NODE_CONTAINER_DIR=calico_node
 NODE_CONTAINER_FILES=$(shell find calico_node/ -type f ! -name '*.created')
 
@@ -23,7 +20,6 @@ default: help
 all: test                ## Run all the tests
 binary: dist/calicoctl   ## Create the calicoctl binary
 node_image: calico_node/.calico_node.created ## Create the calico/node image
-test_image: calico_test/.calico_test.created ## Create the calico/test image
 test: st ut              ## Run all the tests
 ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
@@ -39,10 +35,6 @@ simple-binary:
 	pip install git+https://github.com/projectcalico/libcalico.git@master
 	pip install -r https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements.txt
 	pyinstaller calicoctl/calicoctl.py -ayF --clean
-
-calico_test/.calico_test.created: $(TEST_CONTAINER_FILES)
-	cd calico_test && docker build -t calico/test:latest .
-	touch calico_test/.calico_test.created
 
 calico_node/.calico_node.created: $(NODE_CONTAINER_FILES)
 	cd calico_node && docker build -t calico/node:latest .
@@ -90,13 +82,13 @@ birdcl:
 	chmod +x birdcl
 
 ## Run the UTs in a container.
-ut: calico_test/.calico_test.created
+ut:
 	docker run --rm -v `pwd`/calicoctl:/code calico/test \
 		nosetests $(UT_TO_RUN) -c nose.cfg
 	docker run --rm -v `pwd`/calico_node:/code calico/test \
 		nosetests filesystem/tests --with-coverage --cover-package=filesystem
 
-ut-circle: calico_test/.calico_test.created dist/calicoctl
+ut-circle: dist/calicoctl
 	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
 	# Can't use --rm on circle
 	# Circle also requires extra options for reporting.
@@ -136,7 +128,7 @@ run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	--listen-client-urls "https://0.0.0.0:2379"
 
 ## Run the STs in a container
-st: run-etcd dist/calicoctl calico_test/.calico_test.created busybox.tar routereflector.tar calico-node.tar
+st: run-etcd dist/calicoctl busybox.tar routereflector.tar calico-node.tar
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -156,7 +148,7 @@ st: run-etcd dist/calicoctl calico_test/.calico_test.created busybox.tar routere
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
-st-ssl: run-etcd-ssl dist/calicoctl calico_test/.calico_test.created busybox.tar calico-node.tar routereflector.tar
+st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.tar
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -221,7 +213,6 @@ clean:
 	-rm -f *.tar
 	-docker rm -f calico-node
 	-docker rmi calico/node
-	-docker rmi calico/test
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 
 ## Display this help text
