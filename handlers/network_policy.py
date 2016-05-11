@@ -21,28 +21,13 @@ def add_update_network_policy(policy):
                       policy["metadata"]["name"])
     _log.debug("Adding new network policy: %s", name)
 
-
-    # Parse this network policy so we can convert it to the appropriate
-    # Calico policy.  First, get the selector from the API object.
-    k8s_selector = policy["spec"]["podSelector"]
-    k8s_selector = k8s_selector or {}
-
-    # Build the appropriate Calico label selector.  This is done using
-    # the labels provided in the NetworkPolicy, as well as the
-    # NetworkPolicy's namespace.
-    namespace = policy["metadata"]["namespace"]
-    selectors = ["%s == '%s'" % (k, v) for k, v in
-                 k8s_selector.iteritems()]
-    selectors += ["%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace)]
-    selector = " && ".join(selectors)
-
-    # Build the Calico rules.
     try:
-        inbound_rules = PolicyParser(policy).calculate_inbound_rules()
+        parser = PolicyParser(policy)
+        selector = parser.calculate_pod_selector()
+        inbound_rules = parser.calculate_inbound_rules()
     except Exception:
-        # It is possible bad rules will be passed - we don't want to
-        # crash the agent, but we do want to indicate a problem in the
-        # logs, so that the policy can be fixed.
+        # If the Policy is malformed, log the error but leave the agent
+        # running.
         _log.exception("Error parsing policy: %s",
                        json.dumps(policy, indent=2))
     else:
