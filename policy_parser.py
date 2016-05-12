@@ -25,25 +25,24 @@ class PolicyParser(object):
         Create a Parser for a Kubernetes NetworkPolicy API object.
 
         Returns the parser.
-        Throws PolicyError if the Policy is invalid.
         """
         self.policy = policy
         self.namespace = self.policy["metadata"]["namespace"]
 
     def calculate_pod_selector(self):
         """
-        Generate the Calico pod selector for this Policy.
+        Generate the Calico representation of the policy.spec.podSelector for
+        this Policy.
 
-        Returns the pod selector in the Calico datamodel format.
-        Throws PolicyError if the Policy is invalid or unsupported.
+        Returns the endpoint selector in the Calico datamodel format.
         """
         _log.debug("Calculating pod selector")
-        k8s_selector = self.policy["spec"]["podSelector"]
 
         # PodSelectors only select pods from the Policy's namespace.
         calico_selectors = ["%s == '%s'" % (K8S_NAMESPACE_LABEL, self.namespace)]
 
-        calico_selectors += self._calculate_selectors(k8s_selector)
+        calico_selectors += \
+            self._calculate_selectors(self.policy["spec"]["podSelector"])
       
         _log.debug("Selector with %d filters" % len(calico_selectors))
         return " && ".join(calico_selectors)
@@ -53,7 +52,6 @@ class PolicyParser(object):
         Generate Calico Rule objects for this Policy's ingress rules.
 
         Returns a list of Calico datamodel Rules.
-        Throws PolicyError if the Policy is invalid or unsupported.
         """
         _log.debug("Calculating inbound rules")
         rules = []
@@ -82,7 +80,6 @@ class PolicyParser(object):
         Generate Calico datamodel selectors for a Kubernetes LabelSelector.
 
         Returns a list of selectors in the Calico datamodel format.
-        Throws PolicyError if the LabelSelector is invalid or unsupported.
         """
         # A null LabelSelector matches no objects.
         calico_selectors = []

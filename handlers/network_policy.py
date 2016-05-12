@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rules, Rule
@@ -26,10 +27,11 @@ def add_update_network_policy(policy):
         selector = parser.calculate_pod_selector()
         inbound_rules = parser.calculate_inbound_rules()
     except Exception:
-        # If the Policy is malformed, log the error but leave the agent
-        # running.
+        # If the Policy is malformed, log the error and kill the agent.
+        # Kubernetes will restart us.
         _log.exception("Error parsing policy: %s",
                        json.dumps(policy, indent=2))
+        os.exit(1)
     else:
         rules = Rules(id=name,
                       inbound_rules=inbound_rules,
