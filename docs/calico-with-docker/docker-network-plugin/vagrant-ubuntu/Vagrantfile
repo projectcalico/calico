@@ -51,10 +51,6 @@ Vagrant.configure(2) do |config|
           "calico/node:#{calico_node_ver}"
       ]
 
-      # Replace docker with the docker 1.10.1 build
-      host.vm.provision :shell, inline: "stop docker", :privileged => true
-      host.vm.provision :shell, inline: "wget -qO /usr/bin/docker https://get.docker.com/builds/Linux/x86_64/docker-1.10.1", :privileged => true
-
       # Calico uses etcd for calico and docker clustering. Install it on the first host only.
       if i == 1
         # Download etcd and start.
@@ -66,11 +62,9 @@ Vagrant.configure(2) do |config|
         SHELL
       end
 
-      # Set Docker to use etcd for multihost.
+      # Set Docker to use etcd for multihost, then send SIGHUP to Docker process to restart.
       host.vm.provision :shell, inline: %Q|sudo sh -c 'echo "DOCKER_OPTS=\"--cluster-store=etcd://#{primary_ip}:2379\"" > /etc/default/docker'|
-
-      # Restart docker.
-      host.vm.provision :shell, inline: "sudo start docker"
+      host.vm.provision :shell, inline: "restart docker"
 
       # download calicoctl.
       host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl #{calicoctl_url}", :privileged => true
