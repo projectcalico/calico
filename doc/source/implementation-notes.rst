@@ -1,3 +1,5 @@
+.. _implementation-notes:
+
 ====================
 Implementation notes
 ====================
