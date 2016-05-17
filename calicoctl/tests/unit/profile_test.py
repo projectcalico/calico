@@ -37,9 +37,9 @@ class TestProfile(unittest.TestCase):
         ({'<ICMPTYPE>':'16'}, False),
         ({'<ICMPCODE>':100, '<ICMPTYPE>':100}, False),
         ({'<ICMPCODE>':4, '<ICMPTYPE>':255}, True),
-        ({'<SRCPORTS>':[6,9,10], '<DSTPORTS>':[66,88,95]}, False),
-        ({'<SRCPORTS>':[6,9,-10], '<DSTPORTS>':[66,88,95]}, True),
-        ({'<SRCPORTS>':['53:99'], '<DSTPORTS>':[66,88,95]}, False),
+        ({'<SRCPORTS>':'6,9,10', '<DSTPORTS>':'66,88,95'}, False),
+        ({'<SRCPORTS>':'6,9,-10', '<DSTPORTS>':'66,88,95'}, True),
+        ({'<SRCPORTS>':'53:99', '<DSTPORTS>':'66,88,95'}, False),
         ({}, False)
     ])
     def test_validate_arguments(self, case, sys_exit_called):
@@ -448,4 +448,3 @@ class TestProfile(unittest.TestCase):
         # Call method under test
         self.assertRaises(SystemExit, profile_rule_add_remove,
                           operation, name, position, action, direction)
-
