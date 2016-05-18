@@ -48,6 +48,7 @@ class TestBasic(BaseTestCase):
         else:
             sys.modules['etcd'] = self._real_etcd
 
+    @mock.patch("calico.felix.felix.HTTPServer", autospec=True)
     @mock.patch("calico.felix.felix.load_nf_conntrack", autospec=True)
     @mock.patch("os.path.exists", autospec=True, return_value=True)
     @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
@@ -70,7 +71,8 @@ class TestBasic(BaseTestCase):
                            m_start, m_load,
                            m_ipset_4, m_check_call, m_iface_exists,
                            m_iface_up, m_configure_global_kernel_config,
-                           m_list_interface_ips, m_path_exists, m_conntrack):
+                           m_list_interface_ips, m_path_exists, m_conntrack,
+                           m_http_server):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
@@ -87,7 +89,8 @@ class TestBasic(BaseTestCase):
             "FELIX_METADATAPORT": "1234",
             "FELIX_IPINIPENABLED": "True",
             "FELIX_IPINIPMTU": "1480",
-            "FELIX_DEFAULTINPUTCHAINACTION": "RETURN"
+            "FELIX_DEFAULTINPUTCHAINACTION": "RETURN",
+            "FELIX_PROMETHEUSMETRICSENABLED": "True",
         }
         config = load_config("felix_missing.cfg", env_dict=env_dict)
 
@@ -99,6 +102,8 @@ class TestBasic(BaseTestCase):
         m_iface_up.assert_called_once_with("tunl0")
         m_configure_global_kernel_config.assert_called_once_with()
         m_conntrack.assert_called_once_with()
+        m_http_server.assert_called_once_with(("0.0.0.0", 9091),
+                                              felix.MetricsHandler)
 
     @mock.patch("calico.felix.felix.load_nf_conntrack", autospec=True)
     @mock.patch("calico.felix.felix.install_global_rules", autospec=True)

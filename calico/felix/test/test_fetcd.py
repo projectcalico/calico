@@ -31,7 +31,7 @@ from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
     MSG_KEY_HOST_CONFIG, MSG_KEY_GLOBAL_CONFIG, MSG_TYPE_CONFIG, \
     MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE, MSG_KEY_SEV_SCREEN, MSG_KEY_SEV_SYSLOG, \
-    STATUS_IN_SYNC, SocketClosed
+    STATUS_IN_SYNC, SocketClosed, MSG_KEY_PROM_PORT
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
 from calico.felix.ipsets import IpsetActor
@@ -282,6 +282,8 @@ class TestEtcdWatcher(BaseTestCase):
     @patch("calico.felix.fetcd.die_and_restart", autospec=True)
     def test_on_config_loaded(self, m_die):
         self.m_config.DRIVERLOGFILE = "/tmp/driver.log"
+        self.m_config.PROM_METRICS_DRIVER_PORT = 9092
+        self.m_config.PROM_METRICS_ENABLED = True
         global_config = {"InterfacePrefix": "tap"}
         local_config = {"LogSeverityFile": "DEBUG"}
         self.watcher._on_config_loaded_from_driver({
@@ -301,6 +303,7 @@ class TestEtcdWatcher(BaseTestCase):
                       MSG_KEY_SEV_FILE: self.m_config.LOGLEVFILE,
                       MSG_KEY_SEV_SCREEN: self.m_config.LOGLEVSCR,
                       MSG_KEY_SEV_SYSLOG: self.m_config.LOGLEVSYS,
+                      MSG_KEY_PROM_PORT: 9092,
                   })]
         )
         self.assertEqual(m_die.mock_calls, [])

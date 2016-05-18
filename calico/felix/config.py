@@ -255,6 +255,16 @@ class Config(object):
                            "at least 8 bits set, none of which clash with any "
                            "other mark bits in use on the system.",
                            0xff000000, value_is_int=True)
+        self.add_parameter("PrometheusMetricsEnabled",
+                           "Whether to enable prometheus metrics.",
+                           False, value_is_bool=True)
+        self.add_parameter("PrometheusMetricsPort",
+                           "Port on which to export Prometheus metrics.",
+                           9091, value_is_int=True)
+        self.add_parameter("EtcdDriverPrometheusMetricsPort",
+                           "Port on which to export Prometheus metrics from "
+                           "the etcd driver process.",
+                           9092, value_is_int=True)
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -349,6 +359,12 @@ class Config(object):
             self.parameters["IptablesGeneratorPlugin"].value
         self.IPTABLES_MARK_MASK =\
             self.parameters["IptablesMarkMask"].value
+        self.PROM_METRICS_ENABLED = \
+            self.parameters["PrometheusMetricsEnabled"].value
+        self.PROM_METRICS_PORT = \
+            self.parameters["PrometheusMetricsPort"].value
+        self.PROM_METRICS_DRIVER_PORT = \
+            self.parameters["EtcdDriverPrometheusMetricsPort"].value
 
         self._validate_cfg(final=final)
 
@@ -639,6 +655,15 @@ class Config(object):
             log.warning("Iptables mark mask out of range, "
                         "defaulting to 0xff000000")
             self.IPTABLES_MARK_MASK = 0xff000000
+
+        if not 0 < self.PROM_METRICS_PORT < 65536:
+            log.warning("Prometheus port out-of-range, defaulting to 9091")
+            self.PROM_METRICS_PORT = 9091
+
+        if not 0 < self.PROM_METRICS_DRIVER_PORT < 65536:
+            log.warning("Etcd driver Prometheus port out-of-range, "
+                        "defaulting to 9092")
+            self.PROM_METRICS_DRIVER_PORT = 9092
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

@@ -46,7 +46,7 @@ from calico.etcddriver.protocol import (
     MSG_TYPE_CONFIG_LOADED, MSG_KEY_GLOBAL_CONFIG, MSG_KEY_HOST_CONFIG,
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MessageWriter,
     MSG_TYPE_STATUS, MSG_KEY_STATUS, MSG_KEY_KEY_FILE, MSG_KEY_CERT_FILE,
-    MSG_KEY_CA_FILE, SocketClosed)
+    MSG_KEY_CA_FILE, SocketClosed, MSG_KEY_PROM_PORT)
 from calico.etcdutils import (
     EtcdClientOwner, delete_empty_parents, PathDispatcher, EtcdEvent,
     safe_decode_json, intern_list
@@ -505,6 +505,9 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                     MSG_KEY_SEV_FILE: self._config.LOGLEVFILE,
                     MSG_KEY_SEV_SCREEN: self._config.LOGLEVSCR,
                     MSG_KEY_SEV_SYSLOG: self._config.LOGLEVSYS,
+                    MSG_KEY_PROM_PORT:
+                        self._config.PROM_METRICS_DRIVER_PORT if
+                        self._config.PROM_METRICS_ENABLED else None
                 }
             )
             self.configured.set()
@@ -588,7 +591,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                 MSG_KEY_HOSTNAME: self._config.HOSTNAME,
                 MSG_KEY_KEY_FILE: self._config.ETCD_KEY_FILE,
                 MSG_KEY_CERT_FILE: self._config.ETCD_CERT_FILE,
-                MSG_KEY_CA_FILE: self._config.ETCD_CA_FILE
+                MSG_KEY_CA_FILE: self._config.ETCD_CA_FILE,
             }
         )
         return reader, writer

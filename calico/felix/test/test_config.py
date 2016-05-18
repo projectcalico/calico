@@ -536,3 +536,34 @@ class TestConfig(unittest.TestCase):
             config.report_etcd_config({}, cfg_dict)
 
         self.assertEqual(config.MAX_IPSET_SIZE, 2**20)
+
+    def test_prometheus_port_valid(self):
+        cfg_dict = {"InterfacePrefix": "blah",
+                    "PrometheusMetricsEnabled": True,
+                    "PrometheusMetricsPort": 9123,
+                    "EtcdDriverPrometheusMetricsPort": 9124}
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.PROM_METRICS_PORT, 9123)
+        self.assertEqual(config.PROM_METRICS_DRIVER_PORT, 9124)
+        self.assertEqual(config.PROM_METRICS_ENABLED, True)
+
+    def test_prometheus_port_invalid(self):
+        cfg_dict = {"InterfacePrefix": "blah",
+                    "PrometheusMetricsEnabled": False,
+                    "PrometheusMetricsPort": -1,
+                    "EtcdDriverPrometheusMetricsPort": 65536}
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.PROM_METRICS_PORT, 9091)
+        self.assertEqual(config.PROM_METRICS_DRIVER_PORT, 9092)
+        self.assertEqual(config.PROM_METRICS_ENABLED, False)
+
+    def test_prometheus_port_defaults(self):
+        cfg_dict = {"InterfacePrefix": "blah"}
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.PROM_METRICS_PORT, 9091)
+        self.assertEqual(config.PROM_METRICS_DRIVER_PORT, 9092)
+        self.assertEqual(config.PROM_METRICS_ENABLED, False)
+

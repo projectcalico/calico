@@ -20,10 +20,20 @@ Stats collection functions.
 """
 
 import logging
+import re
+
+from prometheus_client import Gauge, Summary
 
 from calico.monotonic import monotonic_time
 
 _log = logging.getLogger(__name__)
+
+
+def sanitize_name(name):
+    return re.sub(r'[^a-zA-Z0-9]', '_', name)
+
+
+_gauge_cache = {}
 
 
 class RateStat(object):
@@ -34,7 +44,12 @@ class RateStat(object):
         self.name = name
         self.start_time = None
         self.count = None
+        gauge_name = "felix_" + sanitize_name(name) + "_rate"
+        if gauge_name not in _gauge_cache:
+            _gauge_cache[gauge_name] = Gauge(gauge_name, "Rate of %s" % name)
+        self.gauge = _gauge_cache[gauge_name]
         self.reset()
+        self.gauge.set_function(lambda: self.rate)
 
     def reset(self):
         self.start_time = monotonic_time()
@@ -59,6 +74,9 @@ class RateStat(object):
                                              self.time_since_start, self.rate)
 
 
+_summary_cache = {}
+
+
 class AggregateStat(RateStat):
     """
     Records a sequence of numeric stats and calculates aggregate stats.
@@ -69,6 +87,11 @@ class AggregateStat(RateStat):
         self.max = None
         self.min = None
         self.sum = None
+        summary_name = "felix_" + sanitize_name(name)
+        if summary_name not in _summary_cache:
+            summary = Summary(summary_name, "%s in %s" % (name, unit))
+            _summary_cache[summary_name] = summary
+        self.summary = _summary_cache[summary_name]
         self.reset()
 
     def reset(self):
@@ -84,6 +107,7 @@ class AggregateStat(RateStat):
             self.max = value
         if self.min is None or value < self.min:
             self.min = value
+        self.summary.observe(value)
 
     @property
     def mean(self):

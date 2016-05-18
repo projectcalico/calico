@@ -625,6 +625,7 @@ class TestEtcdDriverFV(TestCase):
                 MSG_KEY_SEV_FILE: "DEBUG",
                 MSG_KEY_SEV_SCREEN: "DEBUG",
                 MSG_KEY_SEV_SYSLOG: "DEBUG",
+                MSG_KEY_PROM_PORT: None,
             }
         )
         self.assert_status_message(STATUS_RESYNC)
@@ -925,13 +926,32 @@ class TestDriver(TestCase):
         with patch.object(self.driver, "get_etcd_connection") as m_get_conn:
             with patch.object(self.driver, "_etcd_request") as m_req:
                 with patch.object(self.driver, "_check_cluster_id") as m_check:
-                    m_resp = Mock()
-                    m_resp.data = json.dumps({"errorCode": 100})
-                    m_req.side_effect = iter([
-                        m_resp,
-                        AssertionError()
-                    ])
-                    self.driver.watch_etcd(10, m_queue, m_stop_ev)
+                    with patch.object(driver.ETCD_OTHER_ERROR, "inc") as inc:
+                        m_resp = Mock()
+                        m_resp.data = json.dumps({"errorCode": 100})
+                        m_req.side_effect = iter([
+                            m_resp,
+                            AssertionError()
+                        ])
+                        self.driver.watch_etcd(10, m_queue, m_stop_ev)
+                        inc.assert_called_once_with()
+
+    def test_watch_etcd_error_from_etcd_index_cleared(self):
+        m_queue = Mock()
+        m_stop_ev = Mock()
+        m_stop_ev.is_set.return_value = False
+        with patch.object(self.driver, "get_etcd_connection") as m_get_conn:
+            with patch.object(self.driver, "_etcd_request") as m_req:
+                with patch.object(self.driver, "_check_cluster_id") as m_check:
+                    with patch.object(driver.ETCD_INDEX_CLEARED, "inc") as inc:
+                        m_resp = Mock()
+                        m_resp.data = json.dumps({"errorCode": 401})
+                        m_req.side_effect = iter([
+                            m_resp,
+                            AssertionError()
+                        ])
+                        self.driver.watch_etcd(10, m_queue, m_stop_ev)
+                        inc.assert_called_once_with()
 
     def test_parse_snapshot_bad_status(self):
         m_resp = Mock()
@@ -1011,6 +1031,23 @@ class TestDriver(TestCase):
         self.driver.watch_etcd(10, m_queue, stop_event)
         # And send it's normal shutdown signal.
         self.assertEqual(m_queue.put.mock_calls, [call(None)])
+
+    @patch("calico.etcddriver.driver.complete_logging", autospec=True)
+    @patch("calico.etcddriver.driver.start_http_server", autospec=True)
+    def test_handle_config_starts_metrics(self, start_http, compl_log):
+        self.driver._handle_config({
+            MSG_KEY_LOG_FILE: "/tmp/driver.log",
+            MSG_KEY_SEV_FILE: "DEBUG",
+            MSG_KEY_SEV_SCREEN: "INFO",
+            MSG_KEY_SEV_SYSLOG: "WARNING",
+            MSG_KEY_PROM_PORT: 9092,
+        })
+        start_http.assert_called_once_with(9092)
+        compl_log.assert_called_once_with("/tmp/driver.log",
+                                          file_level="DEBUG",
+                                          syslog_level="WARNING",
+                                          stream_level="INFO",
+                                          gevent_in_use=False)
 
 
 def dump_all_thread_stacks():

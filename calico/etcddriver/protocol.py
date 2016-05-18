@@ -36,6 +36,7 @@ MSG_KEY_HOSTNAME = "hostname"
 MSG_KEY_KEY_FILE = "etcd_key_file"
 MSG_KEY_CERT_FILE = "etcd_cert_file"
 MSG_KEY_CA_FILE = "etcd_ca_file"
+MSG_KEY_PROM_PORT = "prom_port"
 
 # Config loaded message Driver -> Felix.
 MSG_TYPE_CONFIG_LOADED = "config_loaded"
