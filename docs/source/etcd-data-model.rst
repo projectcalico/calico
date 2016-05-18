@@ -370,10 +370,8 @@ match criteria within a rule must be satisfied for a packet to match.
 A single rule can contain the positive and negative version of a match and
 both must be satisfied for the rule to match.
 
-The properties in the rules object have the following meaning. Each can be
-prefixed with ``"!"`` to invert the match.  All of these properties are
-optional but some have dependencies (such as requiring the
-protocol to be specified):
+All of these properties are optional but some have dependencies (such as
+requiring the protocol to be specified):
 
 ``protocol``
   if present, restricts the rule to only apply to traffic of a specific IP
@@ -396,6 +394,24 @@ protocol to be specified):
   :ref:`security-policy-data`.  Only traffic that originates from endpoints
   matching the selector will be matched.
 
+  .. warning:: In addition to the negative version of "src_selector" (which
+               is "!src_selector") the selector expression syntax itself
+               supports negation.  The two types of negation are subtly
+               different.  One negates the set of matched endpoints, the other
+               negates the whole match:
+
+               ``"src_selector": !has(my_label)`` matches packets that are
+               from other Calico-controlled endpoints that **do not** have the
+               label "my_label".
+
+               ``"!src_selector": has(my_label)`` matches packets that are
+               not from Calico-controlled endpoints that **do** have the
+               label "my_label".
+
+               The effect is that the latter will accept packets from
+               non-Calico sources whereas the former is limited to packets
+               from Calico-controlled endpoints.
+
 ``src_ports``
   if present, restricts the rule to only apply to traffic that has a source
   port that matches one of these ranges/values. This value is a list of
@@ -412,6 +428,9 @@ protocol to be specified):
   if present, contains a selector expression as described in
   :ref:`security-policy-data`.  Only traffic that is destined for endpoints
   matching the selector will be matched.
+
+  .. warning:: The subtlety described above around negating ``"src_selector"``
+               also applies to ``"dst_selector"``.
 
 ``dst_net``
   if present, restricts the rule to only apply to traffic that is destined for
