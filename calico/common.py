@@ -69,9 +69,7 @@ KERNEL_PORT_PROTOCOLS = set([
     "dccp", 33, "33",
 ])
 
-# Valid keys for a rule JSON dict.
-KNOWN_RULE_KEYS = set([
-    "action",
+NEGATABLE_MATCH_KEYS = [
     "protocol",
     "src_net",
     "src_tag",
@@ -83,8 +81,17 @@ KNOWN_RULE_KEYS = set([
     "dst_ports",
     "icmp_type",
     "icmp_code",
-    "ip_version",
-])
+]
+
+# Valid keys for a rule JSON dict.
+KNOWN_RULE_KEYS = set(
+    [
+        "action",
+        "ip_version",
+    ] +
+    NEGATABLE_MATCH_KEYS +
+    ["!%s" % k for k in NEGATABLE_MATCH_KEYS]
+)
 
 # Valid actions to see in a rule.
 KNOWN_ACTIONS = set(["allow", "deny", "next-tier"])
@@ -601,103 +608,130 @@ def _validate_rules(rules_dict, issues):
                 if value is None:
                     del rule[key]
 
-            # Absolutely all fields are optional, but some have valid and
-            # invalid values.
-            protocol = rule.get('protocol')
-            if protocol is not None and protocol not in KERNEL_PROTOCOLS:
-                issues.append("Invalid protocol %s in rule %s" %
-                              (protocol, rule))
-            elif protocol is not None:
-                protocol = intern(str(protocol))
-                rule['protocol'] = str(protocol)
-
             ip_version = rule.get('ip_version')
             if ip_version is not None and ip_version not in (4, 6):
                 # Bad IP version prevents further validation
                 issues.append("Invalid ip_version in rule %s." % rule)
                 continue
 
-            if ip_version == 4 and protocol == "icmpv6":
-                issues.append("Using icmpv6 with IPv4 in rule %s." % rule)
-            if ip_version == 6 and protocol == "icmp":
-                issues.append("Using icmp with IPv6 in rule %s." % rule)
-
-            for tag_type in ('src_tag', 'dst_tag'):
-                tag = rule.get(tag_type)
-                if tag is None:
-                    continue
-                if not VALID_ID_RE.match(tag):
-                    issues.append("Invalid %s: %r." % (tag_type, tag))
-
-            # For selectors, we replace the value with the parsed selector.
-            # This avoids having to re-parse it later and it ensures that
-            # equivalent selectors compare equal.
-            for sel_type in ('src_selector', 'dst_selector'):
-                sel_str = rule.get(sel_type)
-                if sel_str is None:
-                    # sel_type wasn't present.
-                    continue
-                try:
-                    sel = parse_selector(sel_str)
-                except BadSelector:
-                    issues.append("Invalid %s: %r" % (sel_type, sel_str))
-                else:
-                    rule[sel_type] = sel
-
-            for key in ("src_net", "dst_net"):
-                network = rule.get(key)
-                if (network is not None and
-                    not validate_cidr(rule[key], ip_version)):
-                    issues.append("Invalid CIDR (version %s) in rule %s." %
-                                  (ip_version, rule))
-                elif network is not None:
-                    rule[key] = canonicalise_cidr(network, ip_version)
-            for key in ("src_ports", "dst_ports"):
-                ports = rule.get(key)
-                if (ports is not None and
-                    not isinstance(ports, list)):
-                    issues.append("Expected ports to be a list in rule %s."
-                                  % rule)
-                    continue
-
-                if ports is not None:
-                    if protocol not in KERNEL_PORT_PROTOCOLS:
-                        issues.append("%s is not allowed for protocol %s in "
-                                      "rule %s" % (key, protocol, rule))
-                    for port in ports:
-                        error = validate_rule_port(port)
-                        if error:
-                            issues.append("Invalid port %s (%s) in rule %s." %
-                                          (port, error, rule))
-
-            action = rule.get('action')
-            if (action is not None and
-                    action not in KNOWN_ACTIONS):
-                issues.append("Invalid action in rule %s." % rule)
-
-            icmp_type = rule.get('icmp_type')
-            if icmp_type is not None:
-                if not isinstance(icmp_type, int):
-                    issues.append("ICMP type is not an integer in rule %s." %
-                                  rule)
-                elif not 0 <= icmp_type <= 255:
-                    issues.append("ICMP type is out of range in rule %s." %
-                                  rule)
-            icmp_code = rule.get("icmp_code")
-            if icmp_code is not None:
-                if not isinstance(icmp_code, int):
-                    issues.append("ICMP code is not an integer in rule %s." %
-                                  rule)
-                elif not 0 <= icmp_code <= 255:
-                    issues.append("ICMP code is out of range.")
-                if icmp_type is None:
-                    # ICMP code without ICMP type not supported by iptables;
-                    # firewall against that.
-                    issues.append("ICMP code specified without ICMP type.")
+            for neg_pfx in ("", "!"):
+                _validate_rule_match_criteria(rule, issues, neg_pfx)
 
             unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
             if unknown_keys:
                 issues.append("Rule contains unknown keys: %s." % unknown_keys)
+
+
+def _validate_rule_match_criteria(rule, issues, neg_pfx):
+    """Validates and canonicalises a rule's match criteria.
+
+    Each call validates either the negated or non-negated match criteria.
+    I.e. the ones with "!" prefixed or not.
+
+    :param rule: The dict for the individual rule.  If this contains selectors,
+           they are replaced with parsed versions.  Protocols and IPs are
+           also normalised.
+    :param list[str] issues: List of issues found.  This method appends any
+           issues it finds to the list.
+    :param str neg_pfx: The negation prefix, "" for positive matches or "!"
+           for negative.
+    """
+    # Absolutely all fields are optional, but some have valid and
+    # invalid values.
+    assert neg_pfx in ("", "!")
+
+    # Explicitly get the non-negated protocol; even negated matches on port
+    # or ICMP values require the protocol to be specified.
+    protocol = rule.get("protocol")
+
+    # Check the (possibly negated) profile.
+    protocol_key = neg_pfx + 'protocol'
+    maybe_neg_proto = rule.get(protocol_key)
+    if maybe_neg_proto is not None and maybe_neg_proto not in KERNEL_PROTOCOLS:
+        issues.append("Invalid %s %s in rule %s" %
+                      (protocol_key, maybe_neg_proto, rule))
+    elif maybe_neg_proto is not None:
+        maybe_neg_proto = intern(str(maybe_neg_proto))
+        rule[protocol_key] = str(maybe_neg_proto)
+
+    ip_version = rule.get('ip_version')
+    if ip_version == 4 and protocol == "icmpv6":
+        issues.append("Using icmpv6 with IPv4 in rule %s." % rule)
+    if ip_version == 6 and protocol == "icmp":
+        issues.append("Using icmp with IPv6 in rule %s." % rule)
+
+    for tag_type in (neg_pfx + 'src_tag', neg_pfx + 'dst_tag'):
+        tag = rule.get(tag_type)
+        if tag is None:
+            continue
+        if not VALID_ID_RE.match(tag):
+            issues.append("Invalid %s: %r." % (tag_type, tag))
+
+    # For selectors, we replace the value with the parsed selector.
+    # This avoids having to re-parse it later and it ensures that
+    # equivalent selectors compare equal.
+    for sel_type in (neg_pfx + 'src_selector', neg_pfx + 'dst_selector'):
+        sel_str = rule.get(sel_type)
+        if sel_str is None:
+            # sel_type wasn't present.
+            continue
+        try:
+            sel = parse_selector(sel_str)
+        except BadSelector:
+            issues.append("Invalid %s: %r" % (sel_type, sel_str))
+        else:
+            rule[sel_type] = sel
+
+    for key in (neg_pfx + "src_net", neg_pfx + "dst_net"):
+        network = rule.get(key)
+        if (network is not None and
+            not validate_cidr(rule[key], ip_version)):
+            issues.append("Invalid CIDR (version %s) in rule %s." %
+                          (ip_version, rule))
+        elif network is not None:
+            rule[key] = canonicalise_cidr(network, ip_version)
+    for key in (neg_pfx + "src_ports", neg_pfx + "dst_ports"):
+        ports = rule.get(key)
+        if (ports is not None and
+            not isinstance(ports, list)):
+            issues.append("Expected ports to be a list in rule %s."
+                          % rule)
+            continue
+
+        if ports is not None:
+            if protocol not in KERNEL_PORT_PROTOCOLS:
+                issues.append("%s is not allowed for protocol %s in "
+                              "rule %s" % (key, protocol, rule))
+            for port in ports:
+                error = validate_rule_port(port)
+                if error:
+                    issues.append("Invalid port %s (%s) in rule %s." %
+                                  (port, error, rule))
+
+    action = rule.get(neg_pfx + 'action')
+    if (action is not None and
+            action not in KNOWN_ACTIONS):
+        issues.append("Invalid action in rule %s." % rule)
+
+    icmp_type = rule.get(neg_pfx + 'icmp_type')
+    if icmp_type is not None:
+        if not isinstance(icmp_type, int):
+            issues.append("ICMP type is not an integer in rule %s." %
+                          rule)
+        elif not 0 <= icmp_type <= 255:
+            issues.append("ICMP type is out of range in rule %s." %
+                          rule)
+    icmp_code = rule.get(neg_pfx + "icmp_code")
+    if icmp_code is not None:
+        if not isinstance(icmp_code, int):
+            issues.append("ICMP code is not an integer in rule %s." %
+                          rule)
+        elif not 0 <= icmp_code <= 255:
+            issues.append("ICMP code is out of range.")
+        if icmp_type is None:
+            # ICMP code without ICMP type not supported by iptables;
+            # firewall against that.
+            issues.append("ICMP code specified without ICMP type.")
 
 
 def validate_rule_port(port):

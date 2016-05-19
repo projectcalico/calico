@@ -755,6 +755,7 @@ class FelixIptablesGenerator(FelixPlugin):
         """
 
         # Check we've not got any unknown fields.
+        _log.debug("converting rule %s to iptables fragments", rule)
         unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
         assert not unknown_keys, "Unknown keys: %s" % ", ".join(unknown_keys)
 
@@ -763,70 +764,96 @@ class FelixIptablesGenerator(FelixPlugin):
         append = lambda *args: rule_spec.extend(args)
 
         proto = rule.get("protocol")
-        if proto:
-            proto = rule["protocol"]
-            append("--protocol", str(proto))
 
-        for dirn in ["src", "dst"]:
-            # Some params use the long-form of the name.
-            direction = "source" if dirn == "src" else "destination"
+        for neg_pfx in ["", "!"]:
+            maybe_neg_proto = rule.get(neg_pfx + "protocol")
+            if maybe_neg_proto:
+                append(neg_pfx, "--protocol", str(maybe_neg_proto))
 
-            # Network (CIDR).
-            net_key = dirn + "_net"
-            if net_key in rule and rule[net_key] is not None:
-                ip_or_cidr = rule[net_key]
-                if (":" in ip_or_cidr) == (ip_version == 6):
-                    append("--%s" % direction, ip_or_cidr)
+            for dirn in ["src", "dst"]:
+                # Some params use the long-form of the name.
+                direction = "source" if dirn == "src" else "destination"
 
-            # Tag, which maps to an ipset.
-            tag_key = dirn + "_tag"
-            if tag_key in rule and rule[tag_key] is not None:
-                ipset_name = tag_to_ipset[rule[tag_key]]
-                append("--match set", "--match-set", ipset_name, dirn)
+                # Network (CIDR).
+                net_key = neg_pfx + dirn + "_net"
+                if net_key in rule and rule[net_key] is not None:
+                    ip_or_cidr = rule[net_key]
+                    if (":" in ip_or_cidr) == (ip_version == 6):
+                        append(neg_pfx, "--%s" % direction, ip_or_cidr)
 
-            sel_key = dirn + "_selector"
-            if sel_key in rule and rule[sel_key] is not None:
-                ipset_name = selector_to_ipset[rule[sel_key]]
-                append("--match set", "--match-set", ipset_name, dirn)
+                # Tag, which maps to an ipset.
+                tag_key = neg_pfx + dirn + "_tag"
+                if tag_key in rule and rule[tag_key] is not None:
+                    ipset_name = tag_to_ipset[rule[tag_key]]
+                    append("--match set",
+                           neg_pfx, "--match-set", ipset_name, dirn)
 
-            # Port lists/ranges, which we map to multiport. Ignore not just
-            # "None" but also an empty list.
-            ports_key = dirn + "_ports"
-            if ports_key in rule and rule[ports_key]:
-                assert proto in ["tcp", "udp"], \
-                    "Protocol %s not supported with %s (%s)" % \
-                    (proto, ports_key, rule)
-                ports = ','.join([str(p) for p in rule[ports_key]])
-                # multiport only supports 15 ports.  The calling function
-                # should have taken care of that.
-                num_ports = ports.count(",") + ports.count(":") + 1
-                assert num_ports <= 15, "Too many ports (%s)" % ports
-                append("--match multiport", "--%s-ports" % direction, ports)
+                # Selector, likewise.
+                sel_key = neg_pfx + dirn + "_selector"
+                if sel_key in rule and rule[sel_key] is not None:
+                    ipset_name = selector_to_ipset[rule[sel_key]]
+                    append("--match set",
+                           neg_pfx, "--match-set", ipset_name, dirn)
 
-        if rule.get("icmp_type") is not None:
-            icmp_type = rule["icmp_type"]
-            if icmp_type == 255:
-                # Temporary work-around for this issue:
-                # https://github.com/projectcalico/calico/issues/451
-                # This exception will be caught by the caller, which will
-                # replace this rule with a DROP rule.  That's arguably better
-                # than forbidding this case in the validation routine, which
-                # would replace the whole chain with a DROP.
-                _log.error("Kernel doesn't support matching on ICMP type 255.")
-                raise UnsupportedICMPType()
-            assert isinstance(icmp_type, int), "ICMP type should be an int"
-            if "icmp_code" in rule:
-                icmp_code = rule["icmp_code"]
-                assert isinstance(icmp_code, int), "ICMP code should be an int"
-                icmp_filter = "%s/%s" % (icmp_type, icmp_code)
-            else:
-                icmp_filter = icmp_type
-            if proto == "icmp" and ip_version == 4:
-                append("--match icmp", "--icmp-type", icmp_filter)
-            elif ip_version == 6:
-                assert proto == "icmpv6"
-                # Note variant spelling of icmp[v]6
-                append("--match icmp6", "--icmpv6-type", icmp_filter)
+                # Port lists/ranges, which we map to multiport.
+                ports_key = neg_pfx + dirn + "_ports"
+                ports = rule.get(ports_key)
+                if ports:  # Ignore empty list.
+                    # Can only match if the (non-negated) is set to a supported
+                    # value.
+                    assert proto in ["tcp", "udp"], \
+                        "Protocol %s not supported with %s (%s)" % \
+                        (proto, ports_key, rule)
+                    if neg_pfx == '':
+                        # Positive match; caller has already chunked the
+                        # ports list up into blocks of suitable length for
+                        # _ports_to_multiport.  We only see one chunk.
+                        ports_str = self._ports_to_multiport(ports)
+                        append("--match multiport", "--%s-ports" % direction,
+                               ports_str)
+                    else:
+                        # This is a negative match.  While an individual
+                        # multi-port match can only match 15 ports we can
+                        # supply multiple multi-port matches, which will be
+                        # and-ed together.  (This doesn't work for positive
+                        # matches because we need those to be or-ed together.)
+                        port_chunks = self._split_port_lists(ports)
+                        for chunk in port_chunks:
+                            ports_str = self._ports_to_multiport(chunk)
+                            append("--match multiport",
+                                   "!", "--%s-ports" % direction,
+                                   ports_str)
+
+            icmp_type = rule.get(neg_pfx + "icmp_type")
+            icmp_code = rule.get(neg_pfx + "icmp_code")
+            if icmp_type is not None:
+                _log.debug("ICMP type set to %s, checking for a more "
+                           "detailed code", icmp_type)
+                if icmp_type == 255:
+                    # Temporary work-around for this issue:
+                    # https://github.com/projectcalico/calico/issues/451
+                    # This exception will be caught by the caller, which will
+                    # replace this rule with a DROP rule.  That's arguably
+                    # better than forbidding this case in the validation
+                    # routine, which would replace the whole chain with a DROP.
+                    _log.error("Kernel doesn't support matching on ICMP type "
+                               "255.")
+                    raise UnsupportedICMPType()
+                assert isinstance(icmp_type, int), "ICMP type should be an int"
+                if icmp_code is not None:
+                    _log.debug("ICMP code set to %s", icmp_code)
+                    assert isinstance(icmp_code, int), "ICMP code should be " \
+                                                       "an int"
+                    icmp_filter = "%s/%s" % (icmp_type, icmp_code)
+                else:
+                    icmp_filter = icmp_type
+                if proto == "icmp" and ip_version == 4:
+                    append("--match icmp", neg_pfx, "--icmp-type", icmp_filter)
+                elif ip_version == 6:
+                    assert proto == "icmpv6"
+                    # Note variant spelling of icmp[v]6
+                    append("--match icmp6",
+                           neg_pfx, "--icmpv6-type", icmp_filter)
 
         action = rule.get("action", "allow")
         extra_rule = None
@@ -865,7 +892,7 @@ class FelixIptablesGenerator(FelixPlugin):
             # far.
             raise ValueError("Unknown rule action %s" % action)
 
-        rule_spec_str = " ".join(str(x) for x in rule_spec)
+        rule_spec_str = " ".join(str(x) for x in rule_spec if x != "")
 
         if ipt_target == "DROP":
             rules = self.drop_rules(ip_version, chain_name, rule_spec_str, None)
@@ -875,3 +902,16 @@ class FelixIptablesGenerator(FelixPlugin):
             if extra_rule:
                 rules.append(extra_rule)
         return rules
+
+    def _ports_to_multiport(self, ports):
+        """
+        Convert a list of ports and ranges into a multiport match string.
+        :param list[int|str] ports: List of ports as per the datamodel.
+        """
+        ports_str = ','.join([str(p) for p in ports])
+        # Check that the output has at most 15 port numbers in i, which is a
+        # limit imposed by iptables.  Ranges, such as "1234:5678" count as 2
+        # numbers.
+        assert (ports_str.count(",") + ports_str.count(":") + 1) <= 15, \
+            "Too many ports (%s)" % ports_str
+        return ports_str

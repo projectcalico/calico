@@ -66,8 +66,10 @@ SELECTOR_1 = parse_selector("a == 'a1'")
 RULES_2 = {
     "id": "prof1",
     "inbound_rules": [
-        {"src_tag": "src-tag-added",
-         "src_selector": SELECTOR_1}
+        # Use negated matches to ensure we extract dependencies for negated
+        # matches.
+        {"!src_tag": "src-tag-added",
+         "!src_selector": SELECTOR_1}
     ],
     "outbound_rules": [
         {"dst_tag": "dst-tag"}
@@ -77,9 +79,9 @@ RULES_2 = {
 RULES_2_CHAINS = {
     'felix-p-prof1-i': [
         '--append felix-p-prof1-i --match set '
-            '--match-set src-tag-added-name src '
+            '! --match-set src-tag-added-name src '
             '--match set '
-            '--match-set selector-1-name src '
+            '! --match-set selector-1-name src '
             '--jump MARK --set-mark 0x1000000/0x1000000',
         '--append felix-p-prof1-i --match mark '
             '--mark 0x1000000/0x1000000 --jump RETURN',

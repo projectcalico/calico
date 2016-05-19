@@ -21,6 +21,7 @@ Tests of iptables rules generation function.
 
 import logging
 from collections import OrderedDict
+from pprint import pformat
 
 from calico.felix.selectors import parse_selector
 from mock import Mock
@@ -71,6 +72,7 @@ INPUT_CHAINS = {
 }
 
 SELECTOR_A_EQ_B = parse_selector("a == 'b'")
+
 RULES_TESTS = [
     {
         "ip_version": 4,
@@ -105,6 +107,105 @@ RULES_TESTS = [
                     '--mark 0x2000000/0x2000000 --jump RETURN',
                 ]
         },
+    },
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {"tag1": "t1", "tag2": "t2"},
+        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {"protocol": "tcp",
+                 "src_net": "10.0.0.0/8",
+                 "src_tag": "tag1",
+                 "src_selector": SELECTOR_A_EQ_B,
+                 "src_ports": [1, "2:3"],
+                 "!src_net": "11.0.0.0/8",
+                 "!src_tag": "tag2",
+                 "!src_selector": SELECTOR_A_EQ_B,
+                 "!src_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                                14, 15, 16, 17],
+                 "action": "next-tier",}
+            ],
+            "outbound_rules": [
+                {"protocol": "udp",
+                 "dst_net": "10.0.0.0/8",
+                 "dst_tag": "tag1",
+                 "dst_selector": SELECTOR_A_EQ_B,
+                 "dst_ports": [1, "2:3"],
+                 "!dst_net": "11.0.0.0/8",
+                 "!dst_tag": "tag2",
+                 "!dst_selector": SELECTOR_A_EQ_B,
+                 "!dst_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                                14, 15, 16, 17],
+                 "action": "next-tier",}
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [
+                '--append felix-p-prof1-i'
+                ' --protocol tcp'
+                ' --source 10.0.0.0/8'
+                ' --match set --match-set t1 src'
+                ' --match set --match-set a-eq-b src'
+                ' --match multiport --source-ports 1,2:3'
+                ' ! --source 11.0.0.0/8'
+                ' --match set ! --match-set t2 src'
+                ' --match set ! --match-set a-eq-b src'
+                ' --match multiport ! --source-ports'
+                ' 1,2:3,4,5,6,7,8,9,10,11,12,13,14,15'
+                ' --match multiport ! --source-ports 16,17'
+                ' --jump MARK --set-mark 0x2000000/0x2000000',
+
+                '--append felix-p-prof1-i'
+                ' --match mark --mark 0x2000000/0x2000000 --jump RETURN',
+            ],
+            'felix-p-prof1-o': [
+                '--append felix-p-prof1-o'
+                ' --protocol udp'
+                ' --destination 10.0.0.0/8'
+                ' --match set --match-set t1 dst'
+                ' --match set --match-set a-eq-b dst'
+                ' --match multiport --destination-ports 1,2:3'
+                ' ! --destination 11.0.0.0/8'
+                ' --match set ! --match-set t2 dst'
+                ' --match set ! --match-set a-eq-b dst'
+                ' --match multiport ! --destination-ports'
+                ' 1,2:3,4,5,6,7,8,9,10,11,12,13,14,15'
+                ' --match multiport ! --destination-ports 16,17'
+                ' --jump MARK --set-mark 0x2000000/0x2000000',
+
+                '--append felix-p-prof1-o'
+                ' --match mark --mark 0x2000000/0x2000000 --jump RETURN',
+            ]
+        }
+    },
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {"tag1": "t1", "tag2": "t2"},
+        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {"protocol": "icmp",
+                 "!icmp_type": 7,
+                 "!icmp_code": 123}
+            ],
+            "outbound_rules": [
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [
+                '--append felix-p-prof1-i'
+                ' --protocol icmp'
+                ' --match icmp ! --icmp-type 7/123'
+                ' --jump MARK --set-mark 0x1000000/0x1000000',
+                '--append felix-p-prof1-i'
+                ' --match mark --mark 0x1000000/0x1000000 --jump RETURN',
+            ],
+            'felix-p-prof1-o': [
+            ]
+        }
     },
     {
         "ip_version": 4,
@@ -227,7 +328,6 @@ RULES_TESTS = [
         },
     },
 ]
-
 FROM_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
     '--append felix-from-abcd --jump MARK --set-mark 0/0x1000000',
@@ -430,6 +530,7 @@ class TestRules(BaseTestCase):
 
     def test_rules_generation(self):
         for test in RULES_TESTS:
+            _log.info("Running rules test\n%s", pformat(test))
             updates, deps = self.iptables_generator.profile_updates(
                 test["profile"]["id"],
                 test["profile"],
@@ -439,6 +540,8 @@ class TestRules(BaseTestCase):
                 on_allow=test.get("on_allow", "RETURN"),
                 on_deny=test.get("on_deny", "DROP")
             )
+            _log.info("Updates:\n%s", pformat(updates))
+            _log.info("Deps:\n%s", pformat(deps))
             self.assertEqual((updates, deps), (test["updates"], {}))
 
     def test_unknown_action(self):

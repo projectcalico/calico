@@ -924,3 +924,177 @@ class TestCommon(unittest.TestCase):
         else:
             # Validation passed, should be allowed in expression too.
             parse_selector("%s == 'a'" % label)
+
+
+class _BaseRuleTests(unittest.TestCase):
+    """Base class for testing rule validation.
+
+    Has subclasses for negated and non-negated matches.
+
+    The negated match subclass pre-processes the rules before passing them
+    to the validation function to negate the keys.
+    """
+    neg_pfx = None
+
+    def add_neg_pfx(self, rule, exclude_keys=None):
+        """Prepends the negation prefix to the relevant rule keys."""
+        exclude_keys = exclude_keys or set()
+        rule2 = dict([(self.neg_pfx + k if
+                       (k in common.NEGATABLE_MATCH_KEYS and
+                        k not in exclude_keys)
+                      else k, v) for (k, v) in rule.iteritems()])
+        assert len(rule) == len(rule2)
+        return rule2
+
+    def assert_rule_valid(self, rule, exp_updated_rule=None,
+                          exclude_keys=None):
+        """Asserts that a rule passes validation.
+
+        :param rule: Rule to validate.
+        :param exp_updated_rule: Expected canonical version of the rule, after
+               validation.
+        :param exclude_keys: Set of keys to exclude from negation.
+        """
+        if exp_updated_rule is None:
+            exp_updated_rule = copy.deepcopy(rule)
+        rule = self.add_neg_pfx(rule, exclude_keys=exclude_keys)
+        exp_updated_rule = self.add_neg_pfx(exp_updated_rule,
+                                            exclude_keys=exclude_keys)
+
+        rule_copy = copy.deepcopy(rule)
+        issues = []
+        common._validate_rules({"inbound_rules": [rule_copy],
+                                "outbound_rules": []}, issues)
+        self.assertFalse(issues, "Rule should have no issues, got %s" % issues)
+        self.assertEqual(rule_copy, exp_updated_rule)
+
+        rule_copy = copy.deepcopy(rule)
+        common._validate_rules({"inbound_rules": [],
+                                "outbound_rules": [rule_copy]}, issues)
+        self.assertFalse(issues, "Rule should have no issues (outbound), "
+                                 "got %s" % issues)
+        self.assertEqual(rule_copy, exp_updated_rule)
+
+    def assert_rule_issue(self, rule, exp_issue_re, exclude_keys=None):
+        """Asserts that a rule fails validation with an issue matching
+        the regex.
+        :param rule: The rule to validate.
+        :param str exp_issue_re: Regex to match the issues against.
+        :param exclude_keys: set of keys to exclude from negation.
+        """
+        rule = self.add_neg_pfx(rule, exclude_keys=exclude_keys)
+        issues = []
+        common._validate_rules({"inbound_rules": [rule],
+                                "outbound_rules": []}, issues)
+        self.assertTrue(issues, "Rule should have had issues")
+        for issue in issues:
+            if re.match(exp_issue_re, issue):
+                break
+        else:
+            self.fail("No issue in %s matched regex %s" %
+                      (issues, exp_issue_re))
+
+    def test_protocol(self):
+        self.assert_rule_valid({"protocol": "tcp"})
+        self.assert_rule_valid({"protocol": "udp"})
+        self.assert_rule_valid({"protocol": "udplite"})
+        self.assert_rule_valid({"protocol": "sctp"})
+        self.assert_rule_valid({"protocol": "icmp"})
+        self.assert_rule_valid({"protocol": "icmpv6"})
+        self.assert_rule_valid({"protocol": "42"},)
+        # numbers get normalised to str.
+        self.assert_rule_valid({"protocol": 33}, {"protocol": "33"})
+
+        self.assert_rule_issue({"protocol": "abcd"},
+                               "Invalid !?protocol abcd in rule")
+
+    def test_tag(self):
+        self.assert_rule_valid({"src_tag": "foo"})
+        self.assert_rule_valid({"dst_tag": "foo"})
+
+        self.assert_rule_issue({"src_tag": "+"}, "Invalid !?src_tag")
+        self.assert_rule_issue({"dst_tag": "+"}, "Invalid !?dst_tag")
+
+    def test_selector(self):
+        self.assert_rule_valid(
+            {"src_selector": "foo == 'bar'"},
+            {"src_selector": parse_selector("foo == 'bar'")}
+        )
+        self.assert_rule_valid(
+            {"dst_selector": "foo == 'bar'"},
+            {"dst_selector": parse_selector("foo == 'bar'")}
+        )
+
+        self.assert_rule_issue({"src_selector": "+"},
+                               "Invalid !?src_selector")
+        self.assert_rule_issue({"dst_selector": "+"},
+                               "Invalid !?dst_selector")
+
+    def test_nets(self):
+        self.assert_rule_valid(
+            {"src_net": "10/8",
+             "dst_net": "11/8"},
+            {"src_net": "10.0.0.0/8",
+             "dst_net": "11.0.0.0/8"}
+        )
+
+        self.assert_rule_issue({"src_net": "fhaedfh"}, "Invalid CIDR")
+        self.assert_rule_issue({"dst_net": "fhaedfh"}, "Invalid CIDR")
+
+    def test_ports(self):
+        for key in ["src_ports", "dst_ports"]:
+            for proto in ["tcp", "udp", "udplite", "sctp"]:
+                self.assert_rule_valid({"protocol": proto,
+                                        key: [1, "2:3"]},
+                                       exclude_keys=set(["protocol"]))
+                self.assert_rule_issue({"protocol": proto,
+                                        key: {}},
+                                       "Expected ports to be a list",
+                                       exclude_keys=set(["protocol"]))
+                self.assert_rule_issue({"protocol": "icmp",
+                                        key: [1]},
+                                       "!?%s is not allowed for "
+                                       "protocol icmp" % key,
+                                       exclude_keys=set(["protocol"]))
+                self.assert_rule_issue({"protocol": proto,
+                                        key: ["foo"]},
+                                       "Invalid port",
+                                       exclude_keys=set(["protocol"]))
+
+    def test_icmp_type(self):
+        self.assert_rule_valid({"icmp_type": 123})
+        self.assert_rule_valid({"icmp_type": 123, "icmp_code": 10})
+        self.assert_rule_issue({"icmp_type": "123"},
+                               "ICMP type is not an integer")
+        self.assert_rule_issue({"icmp_type": -1},
+                               "ICMP type is out of range")
+        self.assert_rule_issue({"icmp_type": 256},
+                               "ICMP type is out of range")
+        self.assert_rule_issue({"icmp_type": 100, "icmp_code": -1},
+                               "ICMP code is out of range")
+        self.assert_rule_issue({"icmp_type": 100, "icmp_code": 256},
+                               "ICMP code is out of range")
+        self.assert_rule_issue({"icmp_type": 100, "icmp_code": "256"},
+                               "ICMP code is not an integer")
+        self.assert_rule_issue({"icmp_code": 123},
+                               "ICMP code specified without ICMP type")
+
+    def test_action(self):
+        self.assert_rule_valid({"action": "allow"})
+        self.assert_rule_valid({"action": "deny"})
+        self.assert_rule_valid({"action": "next-tier"})
+        self.assert_rule_issue({"action": "foobar"}, "Invalid action")
+
+
+class TestPositiveMatchCriteria(_BaseRuleTests):
+    neg_pfx = ""
+
+
+class TestNegativeMatchCriteria(_BaseRuleTests):
+    neg_pfx = "!"
+
+    def test_add_prefix(self):
+        self.assertEqual(self.add_neg_pfx({"src_tag": "abcd",
+                                           "protocol": "foo"},
+                                          exclude_keys=set(["protocol"])),
+                         {"!src_tag": "abcd", "protocol": "foo"})

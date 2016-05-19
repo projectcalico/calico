@@ -341,23 +341,47 @@ Each rule sub-object has the following JSON-encoded structure:
 .. code-block:: json
 
     {
+      # Positive matches:
       "protocol": "tcp|udp|icmp|icmpv6|<number>",
       "src_tag": "<tag_name>",
+      "src_selector": "<selector expression>",
       "src_net": "<CIDR>",
       "src_ports": [1234, "2048:4000"],
       "dst_tag": "<tag_name>",
       "dst_net": "<CIDR>",
       "dst_ports": [1234, "2048:4000"],
-      "icmp_type": <int>,
-      "action": "deny|allow",
+      "icmp_type": <int>, "icmp_code": <int>,  # Treated together, see below.
+
+      # Negated matches:
+      "!protocol": ...,
+      "!src_tag": ...,
+      "!src_selector": ...,
+      "!src_net": ...,
+      "!src_ports": ...,
+      "!dst_tag": ...,
+      "!dst_net": ...,
+      "!dst_ports": ...,
+      "!icmp_type": ..., "!icmp_code": ...,  # Treated together, see below.
+
+      "action": "deny | allow | next-tier",
     }
 
-The properties in the rules object have the following meaning. All of these
-properties are optional:
+
+Each positive match criteria has a negated version, prefixed with "!". All the
+match criteria within a rule must be satisfied for a packet to match.
+A single rule can contain the positive and negative version of a match and
+both must be satisfied for the rule to match.
+
+All of these properties are optional but some have dependencies (such as
+requiring the protocol to be specified):
 
 ``protocol``
   if present, restricts the rule to only apply to traffic of a specific IP
-  protocol.
+  protocol.  Required if ``*_ports`` is used (becuase ports only apply to
+  certain protocols).
+
+  Must be one of these string values: ``"tcp"``, ``"udp"``, ``"icmp"``,
+  ``"icmpv6"``, ``"sctp"``, ``"udplite"`` or an integer in the range 1-255.
 
 ``src_tag``
   if present, restricts the rule to only apply to traffic that originates from
@@ -372,10 +396,31 @@ properties are optional:
   :ref:`security-policy-data`.  Only traffic that originates from endpoints
   matching the selector will be matched.
 
+  .. warning:: In addition to the negative version of "src_selector" (which
+               is "!src_selector") the selector expression syntax itself
+               supports negation.  The two types of negation are subtly
+               different.  One negates the set of matched endpoints, the other
+               negates the whole match:
+
+               ``"src_selector": !has(my_label)`` matches packets that are
+               from other Calico-controlled endpoints that **do not** have the
+               label "my_label".
+
+               ``"!src_selector": has(my_label)`` matches packets that are
+               not from Calico-controlled endpoints that **do** have the
+               label "my_label".
+
+               The effect is that the latter will accept packets from
+               non-Calico sources whereas the former is limited to packets
+               from Calico-controlled endpoints.
+
 ``src_ports``
   if present, restricts the rule to only apply to traffic that has a source
   port that matches one of these ranges/values. This value is a list of
   integers or strings that represent ranges of ports.
+
+  Since only some protocols have ports, requires the (positive) ``protocol``
+  match to be set to ``"tcp"`` or ``"udp"`` (even for a negative match).
 
 ``dst_tag``
   if present, restricts the rule to only apply to traffic that is destined for
@@ -386,6 +431,9 @@ properties are optional:
   :ref:`security-policy-data`.  Only traffic that is destined for endpoints
   matching the selector will be matched.
 
+  .. warning:: The subtlety described above around negating ``"src_selector"``
+               also applies to ``"dst_selector"``.
+
 ``dst_net``
   if present, restricts the rule to only apply to traffic that is destined for
   IP addresses in the given subnet.
@@ -395,10 +443,24 @@ properties are optional:
   a port that matches one of these ranges/values. This value is a list of
   integers or strings that represent ranges of ports.
 
-``icmp_type``
-  if present, restricts the rule to apply to a specific type of ICMP traffic
-  (e.g. 8 would correspond to ICMP Echo Request, better known as ping traffic).
-  May only be present if ``protocol`` is set to ``"icmp"`` or ``"icmpv6"``.
+  Since only some protocols have ports, requires the (positive) ``protocol``
+  match to be set to ``"tcp"`` or ``"udp"`` (even for a negative match).
+
+``icmp_type`` and ``icmp_code``
+  if present, restricts the rule to apply to a specific type and code of ICMP
+  traffic (e.g. ``"icmp_type8": 8`` would correspond to ICMP Echo Request,
+  better known as ping traffic).  May only be present if the (positive)
+  ``protocol`` match is set to ``"icmp"`` or ``"icmpv6"``.
+
+  If ``icmp_code`` is specified then ``icmp_type`` is required.  This is a
+  technical limitation imposed by the kernel's iptables firewall, which Calico
+  uses to enforce the rule.
+
+  .. warning:: Due to the same kernel limiation, the negated versions of the
+               ICMP matches are treated together as a single match.  A rule
+               that uses ``!icmp_type`` and ``!icmp_code`` together will match
+               all ICMP traffic apart from traffic that matches **both** type
+               and code.
 
 ``action``
   what action to take when traffic matches this rule. One of ``deny``, which
