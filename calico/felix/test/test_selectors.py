@@ -43,10 +43,12 @@ def test_matches():
     yield check_match, 'a != "b"', {"a": "a"}
     yield check_match, 'a != "a"', {}
     yield check_match, 'a in {"a"}', {"a": "a"}
+    yield check_match, '!a in {"a"}', {"a": "b"}
     yield check_match, 'a in {"a", "b"}', {"a": "a"}
     yield check_match, 'a in {"a", "b"}', {"a": "b"}
     yield check_match, 'a not in {"d", "e"}', {"a": "a"}
     yield check_match, 'has(a)', {"a": "b"}
+    yield check_match, '!has(a)', {"b": "b"}
     yield check_match, '', {}
     yield check_match, ' ', {}
     yield check_match, '', {"a": "b"}
@@ -61,23 +63,38 @@ def test_matches():
     yield check_no_match, 'a not in {"a"}', {"a": "a"}
     yield check_no_match, 'a in {"a", "b"}', {"a": "c"}
     yield check_no_match, 'has(b)', {"a": "b"}
+    yield check_no_match, '!!has(b)', {"a": "b"}
+    yield check_no_match, '! has(a)', {"a": "b"}
+    yield check_no_match, '!has(a)', {"a": "b"}
+    yield check_no_match, '!!! has(a)', {"a": "b"}
+    yield check_no_match, '!!!has(a)', {"a": "b"}
+    yield check_no_match, '!! ! has(a)', {"a": "b"}
+    yield check_no_match, '! !!has(a)', {"a": "b"}
 
     # Boolean expressions...
     yield check_match, "a == 'a1' && b == 'b1'", {"a": "a1", "b": "b1"}
     yield check_no_match, "a == 'a1' && b != 'b1'", {"a": "a1", "b": "b1"}
     yield check_no_match, "a != 'a1' && b == 'b1'", {"a": "a1", "b": "b1"}
     yield check_no_match, "a != 'a1' && b != 'b1'", {"a": "a1", "b": "b1"}
+    yield check_no_match, "a != 'a1' && !b == 'b1'", {"a": "a1", "b": "b1"}
+    yield check_no_match, "!a == 'a1' && b == 'b1'", {"a": "a1", "b": "b1"}
+    yield check_match, 'has(a) && !has(b)', {"a": "a"}
+    yield check_match, '!has(b) && has(a)', {"a": "a"}
+    yield check_match, '!(!has(a) || has(b))', {"a": "a"}
+    yield check_match, '!(has(b) || !has(a))', {"a": "a"}
 
     yield check_match, "a == 'a1' || b == 'b1'", {"a": "a1", "b": "b1"}
     yield check_match, "a == 'a1' || b != 'b1'", {"a": "a1", "b": "b1"}
     yield check_match, "a != 'a1' || b == 'b1'", {"a": "a1", "b": "b1"}
     yield check_no_match, "a != 'a1' || b != 'b1'", {"a": "a1", "b": "b1"}
+    yield check_no_match, "! a == 'a1' || ! b == 'b1'", {"a": "a1", "b": "b1"}
 
     # Bad selectors
     yield check_bad_selector, "b == b"  # label == label
     yield check_bad_selector, "'b1' == b"  # literal on lhs
     yield check_bad_selector, "b"  # bare label
     yield check_bad_selector, "a b"  # Garbage
+    yield check_bad_selector, "!"  # Garbage
 
 
 def test_prereq_values():
@@ -119,6 +136,8 @@ def test_unique_id():
     check_ids_equal("a != 'b' && c == 'd'", "a != 'b'&&c == 'd'")
     check_ids_equal("a != 'b' || c == 'd'", "a != 'b'||c == 'd'")
     check_ids_equal("a != 'b' || c == ''", "(a != 'b'||c == '')")
+    check_ids_equal("!a == 'b' || c == ''", "(!a == 'b'||c == '')")
+    check_ids_equal("!all()", "!( all())")
     for x in xrange(100):
         sel = "a == '%s' && c != 'd' || e in {'f'} || d not in {'g'}" % x
         sel2 = re.sub(r' ', "  ", sel)
@@ -159,7 +178,7 @@ def test_parse_gives_correct_exc_or_value(s):
 
 @given(lists(sampled_from(["a", '"a"', "b", "||", "|", "&&", "(", ")", "has(",
                            "has", "==", "!=", "in", "not", "{", "}",
-                           '{"a","b"}', ",", " ", "&"])))
+                           '{"a","b"}', ",", " ", "&", "!"])))
 @fail_if_time_exceeds(1)
 def test_plausible_garbage(l):
     try:
@@ -176,6 +195,12 @@ def check_match(selector, labels):
     expr = parse_selector(selector)
     assert_true(expr.evaluate(labels),
                 "%r did not match %s" % (selector, labels))
+    if selector.strip():
+        # Check that wrapping the selector in a negation reverses its effect.
+        negated_expr = parse_selector("!(%s)" % selector)
+        assert_false(negated_expr.evaluate(labels),
+                     "Negated version of %r unexpectedly matched %s" %
+                     (selector, labels))
     assert_general_expression_properties(expr)
 
 
@@ -199,6 +224,12 @@ def check_no_match(selector, labels):
     expr = parse_selector(selector)
     assert_false(expr.evaluate(labels),
                  "%r unexpectedly matched %s" % (selector, labels))
+    if selector.strip():
+        # Check that wrapping the selector in a negation reverses its effect.
+        negated_expr = parse_selector("!(%s)" % selector)
+        assert_true(negated_expr.evaluate(labels),
+                    "Negated version of %r unexpectedly matched %s" %
+                    (selector, labels))
     assert_general_expression_properties(expr)
 
 

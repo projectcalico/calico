@@ -302,6 +302,7 @@ Selector expressions follow this syntax::
     label in { "a", "b", "c", ... }  ->  true if the value of label X is one of "a", "b", "c"
     label not in { "a", "b", "c", ... }  ->  true if the value of label X is not one of "a", "b", "c"
     has(label_name)  -> True if that label is present
+    ! expr -> negation of expr
     expr && expr  -> Short-circuit and
     expr || expr  -> Short-circuit or
     ( expr ) -> parens for grouping
@@ -316,6 +317,7 @@ Examples (with made-up labels)::
     type == "webserver" && deployment == "prod"
     type in {"frontend", "backend"}
     deployment != "dev"
+    ! has(label_name)
 
 
 Rules
