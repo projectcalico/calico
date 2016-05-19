@@ -1,0 +1,9 @@
+general:
+  artifacts:
+    - "dist"
+machine:
+  services:
+    - docker
+test:
+  override:
+    - make test-circle

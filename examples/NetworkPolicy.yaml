@@ -1,7 +1,0 @@
-kind: ThirdPartyResource
-apiVersion: extensions/v1beta1
-metadata:
-  name: network-policy.net.alpha.kubernetes.io
-description: "Specification for a network isolation policy"
-versions:
-  - name: v1alpha1

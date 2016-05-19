@@ -284,7 +284,7 @@ class PolicyAgent(object):
 
                 # Start a watch from the latest resource_version.
                 self._watch_resource(resource_type, resource_version)
-            except requests.ConnectionError:
+            except requests.ConnectionError, requests.ChunkedEncodingError:
                 _log.exception("Connection error querying: %s", resource_type)
             except requests.HTTPError:
                 _log.exception("HTTP error querying: %s", resource_type)
@@ -292,6 +292,8 @@ class PolicyAgent(object):
                 _log.debug("Kubernetes API error managing %s", resource_type)
             except Queue.Full:
                 _log.exception("Event queue full")
+            except Exception:
+                _log.exception("Unahandled exception killed %s manager", resource_type)
             finally:
                 # Sleep for a second so that we don't tight-loop.
                 _log.warning("Re-starting watch on resource: %s",
