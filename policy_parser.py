@@ -14,35 +14,104 @@ class PolicyError(Exception):
 
 
 class PolicyParser(object):
+    """
+    Parser for Kubernetes NetworkPolicy API objects.
+
+    They are defined by the NetworkPolicySpec in the /apis/networking API
+    group.
+    """
     def __init__(self, policy):
-        self.namespace = policy["metadata"]["namespace"]
+        """
+        Create a Parser for a Kubernetes NetworkPolicy API object.
+
+        Returns the parser.
+        """
         self.policy = policy
+        self.namespace = self.policy["metadata"]["namespace"]
+
+    def calculate_pod_selector(self):
+        """
+        Generate the Calico representation of the policy.spec.podSelector for
+        this Policy.
+
+        Returns the endpoint selector in the Calico datamodel format.
+        """
+        _log.debug("Calculating pod selector")
+
+        # PodSelectors only select pods from the Policy's namespace.
+        calico_selectors = ["%s == '%s'" % (K8S_NAMESPACE_LABEL, self.namespace)]
+
+        calico_selectors += \
+            self._calculate_selectors(self.policy["spec"]["podSelector"])
+      
+        _log.debug("Selector with %d filters" % len(calico_selectors))
+        return " && ".join(calico_selectors)
 
     def calculate_inbound_rules(self):
         """
-        Takes a NetworkPolicy object from the API and returns a list of
-        Calico Rule objects which should be applied on ingress.
+        Generate Calico Rule objects for this Policy's ingress rules.
+
+        Returns a list of Calico datamodel Rules.
         """
         _log.debug("Calculating inbound rules")
         rules = []
 
-        # Iterate through and create the appropriate Calico Rule objects.
-        allow_incomings = self.policy["spec"].get("ingress") or []
-        _log.debug("Found %s ingress rules", len(allow_incomings))
-        for allow_incoming_clause in allow_incomings:
-            # Convert each allow_incoming_clause into one or more
-            # Calico Rule objects.
-            if allow_incoming_clause:
-                # Rule exists - parse it.
-                r = self._allow_incoming_to_rules(allow_incoming_clause)
-            else:
-                # An empty rule means allow all traffic.
-                r = [Rule(action="allow")]
-            rules.extend(r)
+        ingress_rules = self.policy["spec"].get("ingress")
+        if ingress_rules:
+            _log.debug("Got %d ingress rules: translating to Calico format",
+                       len(ingress_rules))
+            for ingress_rule in ingress_rules:
+                _log.debug("Processing ingress rule %s", ingress_rule)
+                if ingress_rule:
+                    # Convert ingress rule into Calico Rules.
+                    _log.debug("Adding rule %s", ingress_rule)
+                    rules.extend(self._allow_incoming_to_rules(ingress_rule))
+                else:
+                    # An empty rule means allow all traffic.
+                    _log.debug("Empty rule => allow all; skipping rest")
+                    rules.append(Rule(action="allow"))
+                    break
 
         _log.debug("Calculated total set of rules: %s", rules)
         return rules
 
+    def _calculate_selectors(self, label_selector, key_format="%s"):
+        """
+        Generate Calico datamodel selectors for a Kubernetes LabelSelector.
+
+        Returns a list of selectors in the Calico datamodel format.
+        """
+        # A null LabelSelector matches no objects.
+        calico_selectors = []
+
+        # matchLabels is a map key => value, it means match if (label[key] ==
+        # value) for all keys.
+        if "matchLabels" in label_selector:
+            labels = label_selector["matchLabels"]
+            calico_selectors += [
+                "%s == '%s'" % (key_format % k, v) for k, v in labels.iteritems()
+            ]
+        
+        # matchExpressions is a list of in/notin/exists/doesnotexist tests.
+        if "matchExpressions" in label_selector:
+            for expression in label_selector["matchExpressions"]:
+                key = key_format % expression["key"]
+                operator = expression["operator"]
+                values = expression.get("values", [])
+                value_list = ", ".join(["\"%s\"" % v for v in values])
+                if operator == "In":
+                    calico_selectors.append("%s in { %s }" % (key, value_list))
+                elif operator == "NotIn":
+                    calico_selectors.append("%s not in { %s }" % (key, value_list))
+                elif operator == "Exists":
+                    calico_selectors.append("has(%s)" % key)
+                elif operator == "DoesNotExist":
+                    calico_selectors.append("! has(%s)" % key)
+                else:
+                    raise PolicyError("Unknown operator: %s" % operator)
+
+        return calico_selectors
+       
     def _allow_incoming_to_rules(self, allow_incoming_clause):
         """
         Takes a single "allowIncoming" rule from a NetworkPolicy object
@@ -106,8 +175,7 @@ class PolicyParser(object):
                 # There is a pod selector in this "from" clause.
                 pod_selector = from_clause["pods"] or {}
                 _log.debug("Allow from pods: %s", pod_selector)
-                selectors = ["%s == '%s'" % (k, v) for k, v
-                             in pod_selector.iteritems()]
+                selectors = self._calculate_selectors(pod_selector)
 
                 # We can only select on pods in this namespace.
                 selectors.append("%s == '%s'" % (K8S_NAMESPACE_LABEL,
@@ -124,8 +192,8 @@ class PolicyParser(object):
                 # labels using the NS_LABEL_KEY_FMT modifier.
                 namespaces = from_clause["namespaces"] or {}
                 _log.debug("Allow from namespaces: %s", namespaces)
-                selectors = ["%s == '%s'" % (NS_LABEL_KEY_FMT % k, v)
-                             for k, v in namespaces.iteritems()]
+                selectors = self._calculate_selectors(namespaces,
+                                                      NS_LABEL_KEY_FMT)
                 selector = " && ".join(selectors)
                 if selector:
                     # Allow from the selected namespaces.
@@ -149,7 +217,7 @@ class PolicyParser(object):
         ports_by_protocol = {}
         for to_port in ports:
             # Keep a dict of ports exposed, keyed by protocol.
-            protocol = to_port.get("protocol")
+            protocol = to_port.get("protocol", "tcp").lower()
             port = to_port.get("port")
             ports = ports_by_protocol.setdefault(protocol, [])
             if port:
@@ -160,7 +228,7 @@ class PolicyParser(object):
         # the ports specified for that protocol.
         to_args = []
         for protocol, ports in ports_by_protocol.iteritems():
-            arg = {"protocol": protocol.lower()}
+            arg = {"protocol": protocol}
             if ports:
                 arg["dst_ports"] = ports
             to_args.append(arg)
