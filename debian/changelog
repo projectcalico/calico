@@ -1,3 +1,15 @@
+calico (1.4.0~pre.2) trusty; urgency=medium
+
+  * Pre-release of 1.4.0.
+  * Add negation to selector expressions (#1016).
+  * Add negated match criteria (#1003).
+  * Fix next-tier action, which incorrectly accepted packets (#1014).
+  * Update bird config generation scripts.
+  * Fix conntrack entry deletion (#987).
+  * Fix iptables retry on commit (#1010).
+
+ -- Shaun Crampton <shaun@projectcalico.org>  Fri, 20 May 2016 17:03:00 +0000
+
 calico (1.4.0~pre.1) trusty; urgency=medium
 
   * Development release of 1.4.0.

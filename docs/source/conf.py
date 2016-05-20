@@ -55,7 +55,7 @@ copyright = u'2015, Metaswitch Networks'
 # The short X.Y version.
 version = '1.4.0'
 # The full version, including alpha/beta/rc tags.
-release = '1.4.0-pre.1'
+release = '1.4.0-pre.2'
 
 if release != version:
     # Pre-release, add banner to all files:
