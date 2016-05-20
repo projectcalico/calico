@@ -26,7 +26,7 @@ We recommend configuring the hosts with the hostname `calico-01` and
 
 They must have the following software installed:
 - Docker 1.9 or greater (details below)
-- `ipset`, `iptables`, and `ip6tables` kernel modules.
+- `ip_set`, `iptables`, and `ip6_tables` kernel modules.
 -  The `calicoctl` binary in your path (see below)
 
 You will also need an etcd cluster which Calico uses for coordinating state
