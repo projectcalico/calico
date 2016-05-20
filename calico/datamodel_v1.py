@@ -227,6 +227,43 @@ class EndpointId(object):
         return hash(self.endpoint) + hash(self.workload)
 
 
+class HostIfaceId(object):
+    __slots__ = ["host", "iface_id"]
+
+    def __init__(self, host, iface_id):
+        # We intern these strings since they can occur in many IDs.  The
+        # host and orchestrator are trivially repeated for all endpoints
+        # on a host.  The others get repeated over time.
+        self.host = intern(host.encode("utf8"))
+        self.iface_id = intern(iface_id.encode("utf8"))
+
+    @property
+    def path_for_status(self):
+        return "/".join([FELIX_STATUS_DIR, self.host,
+                         "interface", self.iface_id])
+
+    def __str__(self):
+        return self.__class__.__name__ + ("<%s>" % self.iface_id)
+
+    def __repr__(self):
+        return self.__class__.__name__ + ("(%r,%r)" % (self.host,
+                                                       self.iface_id))
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, HostIfaceId):
+            return False
+        return (other.iface_id == self.iface_id and
+                other.host == self.host)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash(self.host) * 37 + hash(self.iface_id)
+
+
 class TieredPolicyId(object):
     __slots__ = ["tier", "policy_id"]
 

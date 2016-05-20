@@ -38,7 +38,7 @@ from calico.datamodel_v1 import (
     EndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
     ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP,
-    POLICY_DIR, TieredPolicyId)
+    POLICY_DIR, TieredPolicyId, HostIfaceId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
     MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
@@ -73,7 +73,7 @@ PER_HOST_DIR = HOST_DIR + "/<hostname>"
 HOST_IP_KEY = PER_HOST_DIR + "/bird_ip"
 WORKLOAD_DIR = PER_HOST_DIR + "/workload"
 HOST_IFACE_DIR = PER_HOST_DIR + "/interface"
-HOST_IFACE = PER_HOST_DIR + "/interface/<iface_id>"
+HOST_IFACE_KEY = PER_HOST_DIR + "/interface/<iface_id>"
 PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
@@ -355,6 +355,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             on_del=self.on_host_ip_delete)
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
+        reg(HOST_IFACE_KEY,
+            on_set=self.on_host_iface_set, on_del=self.on_host_iface_delete)
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
@@ -616,6 +618,21 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.debug("Endpoint %s deleted", combined_id)
         _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None)
+
+    def on_host_iface_set(self, response, hostname, iface_id):
+        """Handler for create/update of host interface."""
+        combined_id = HostIfaceId(hostname, iface_id)
+        _log.debug("Host iface %s updated", combined_id)
+        _stats.increment("Host iface created/updated")
+        iface_data = parse_host_iface(self._config, combined_id, response.value)
+        self.splitter.on_host_iface_update(combined_id, iface_data)
+
+    def on_host_iface_delete(self, response, hostname, iface_id):
+        """Handler for delete of host interface."""
+        combined_id = HostIfaceId(hostname, iface_id)
+        _log.debug("Host iface %s deleted", combined_id)
+        _stats.increment("Host iface deleted")
+        self.splitter.on_host_iface_update(combined_id, None)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
@@ -982,6 +999,22 @@ def parse_endpoint(config, combined_id, raw_json):
     else:
         _log.debug("Validated endpoint : %s", endpoint)
     return endpoint
+
+
+def parse_host_iface(config, combined_id, raw_json):
+    iface_data = safe_decode_json(raw_json,
+                                  log_tag="iface %s" % combined_id.iface_id)
+    try:
+        # FIXME TODO Validation
+        pass
+        #common.validate_endpoint(config, combined_id, endpoint)
+    except ValidationFailed as e:
+        _log.warning("Validation failed for endpoint %s, treating as "
+                     "missing: %s; %r", combined_id, e.message, raw_json)
+        iface_data = None
+    else:
+        _log.debug("Validated endpoint : %s", iface_data)
+    return iface_data
 
 
 def parse_tier_data(tier, data):

@@ -24,7 +24,8 @@ import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX, interface_to_chain_suffix,
-    ENDPOINT_DISPATCH_CHAINS)
+    ENDPOINT_DISPATCH_CHAINS
+)
 
 _log = logging.getLogger(__name__)
 
