@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.4.0
-Release:        0.1pre1%{?dist}
+Release:        0.2pre2%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz

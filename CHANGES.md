@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0-pre2
+
+- Add negation to selector expressions (#1016).
+- Add negated match criteria (#1003).
+- Fix next-tier action, which incorrectly accepted packets (#1014).
+- Update bird config generation scripts.
+- Fix conntrack entry deletion (#987).
+- Fix iptables retry on commit (#1010).
+
 ## 1.4.0-pre1
 
 - Add floating IP support (via 1:1 NAT) in Felix.
