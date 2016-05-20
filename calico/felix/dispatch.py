@@ -35,7 +35,7 @@ class DispatchChains(Actor):
     Actor that owns the felix-TO/FROM-ENDPOINT chains, which we use to
     dispatch to endpoint-specific chains.
 
-    LocalEndpoint Actors give us kicks as they come and go so we can
+    WorkloadEndpoint Actors give us kicks as they come and go so we can
     add/remove them from the chains.
     """
 
@@ -77,7 +77,7 @@ class DispatchChains(Actor):
     @actor_message()
     def on_endpoint_added(self, iface_name):
         """
-        Message sent to us by the LocalEndpoint to tell us we should
+        Message sent to us by the WorkloadEndpoint to tell us we should
         add it to the dispatch chain.
 
         Idempotent: does nothing if the mapping is already in the

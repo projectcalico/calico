@@ -26,7 +26,7 @@ import logging
 from calico.felix.plugins.fiptgenerator import FelixIptablesGenerator
 from calico.felix.selectors import parse_selector
 
-from calico.felix.endpoint import EndpointManager, LocalEndpoint
+from calico.felix.endpoint import EndpointManager, WorkloadEndpoint
 from calico.felix.fetcd import EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
 from calico.felix.dispatch import DispatchChains
@@ -69,7 +69,7 @@ class TestEndpointManager(BaseTestCase):
 
     def test_create(self):
         obj = self.mgr._create(ENDPOINT_ID)
-        self.assertTrue(isinstance(obj, LocalEndpoint))
+        self.assertTrue(isinstance(obj, WorkloadEndpoint))
 
     def test_on_started(self):
         ep = {"name": "tap1234"}
@@ -77,7 +77,7 @@ class TestEndpointManager(BaseTestCase):
                                     ep,
                                     async=True)
         self.step_actor(self.mgr)
-        m_endpoint = Mock(spec=LocalEndpoint)
+        m_endpoint = Mock(spec=WorkloadEndpoint)
         self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         self.mgr._on_object_started(ENDPOINT_ID, m_endpoint)
         self.assertEqual(
@@ -117,7 +117,7 @@ class TestEndpointManager(BaseTestCase):
         self.step_actor(self.mgr)
 
         # Pretend that the endpoint is alive so that we'll send updates to id.
-        m_endpoint = Mock(spec=LocalEndpoint)
+        m_endpoint = Mock(spec=WorkloadEndpoint)
         self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         self.mgr._is_starting_or_live = Mock(return_value=True)
 
@@ -260,10 +260,10 @@ class TestEndpointManager(BaseTestCase):
         self.step_actor(self.mgr)
         self.assertEqual(self.mgr.get_and_incref.mock_calls,
                          [mock.call(ENDPOINT_ID)])
-        m_endpoint = Mock(spec=LocalEndpoint)
+        m_endpoint = Mock(spec=WorkloadEndpoint)
         self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         # Then send a second update to check that it gets passed on to the
-        # LocalEndpoint.
+        # WorkloadEndpoint.
         with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
             m_sol.return_value = True
             self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
@@ -293,7 +293,7 @@ class TestEndpointManager(BaseTestCase):
 
     def test_on_interface_update_known(self):
         ep = {"name": "tap1234"}
-        m_endpoint = Mock(spec=LocalEndpoint)
+        m_endpoint = Mock(spec=WorkloadEndpoint)
         self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
             m_sol.return_value = True
@@ -307,7 +307,7 @@ class TestEndpointManager(BaseTestCase):
 
     def test_on_interface_update_known_but_not_live(self):
         ep = {"name": "tap1234"}
-        m_endpoint = Mock(spec=LocalEndpoint)
+        m_endpoint = Mock(spec=WorkloadEndpoint)
         self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
         with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
             m_sol.return_value = False
@@ -332,14 +332,14 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_status_rep = Mock(spec=EtcdStatusReporter)
 
     def get_local_endpoint(self, combined_id, ip_type):
-        local_endpoint = endpoint.LocalEndpoint(self.config,
-                                                combined_id,
-                                                ip_type,
-                                                self.m_iptables_updater,
-                                                self.m_dispatch_chains,
-                                                self.m_rules_mgr,
-                                                self.m_fip_manager,
-                                                self.m_status_rep)
+        local_endpoint = endpoint.WorkloadEndpoint(self.config,
+                                                   combined_id,
+                                                   ip_type,
+                                                   self.m_iptables_updater,
+                                                   self.m_dispatch_chains,
+                                                   self.m_rules_mgr,
+                                                   self.m_fip_manager,
+                                                   self.m_status_rep)
         local_endpoint._manager = self.m_manager
         return local_endpoint
 
@@ -417,7 +417,7 @@ class TestLocalEndpoint(BaseTestCase):
         data["ipv4_nets"] = ["1.2.3.5"]
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
                 mock.patch('calico.felix.devices.configure_interface_ipv4') as _m_conf,\
-                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c,\
+                mock.patch('calico.felix.endpoint.WorkloadEndpoint._update_chains') as _m_up_c,\
                 mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
@@ -439,7 +439,7 @@ class TestLocalEndpoint(BaseTestCase):
         ]
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
                 mock.patch('calico.felix.devices.configure_interface_ipv4') as _m_conf,\
-                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c,\
+                mock.patch('calico.felix.endpoint.WorkloadEndpoint._update_chains') as _m_up_c,\
                 mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
@@ -598,7 +598,7 @@ class TestLocalEndpoint(BaseTestCase):
         ]
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
                 mock.patch('calico.felix.devices.configure_interface_ipv6') as m_conf,\
-                mock.patch('calico.felix.endpoint.LocalEndpoint._update_chains') as _m_up_c:
+                mock.patch('calico.felix.endpoint.WorkloadEndpoint._update_chains') as _m_up_c:
             local_ep.on_endpoint_update(data, async=True)
             self.step_actor(local_ep)
             m_set_routes.assert_called_once_with(

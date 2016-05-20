@@ -152,7 +152,7 @@ class UpdateSplitter(object):
         """
         _log.info("Host interface %s updated", combined_id)
         for mgr in self.host_iface_upd_mgrs:
-            mgr.on_host_iface_updated(combined_id, iface_data, async=True)
+            mgr.on_host_iface_update(combined_id, iface_data, async=True)
 
     def on_ipam_pool_updated(self, pool_id, pool):
         """

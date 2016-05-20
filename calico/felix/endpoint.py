@@ -92,14 +92,14 @@ class EndpointManager(ReferenceManager):
         """
         Overrides ReferenceManager._create()
         """
-        return LocalEndpoint(self.config,
-                             combined_id,
-                             self.ip_type,
-                             self.iptables_updater,
-                             self.dispatch_chains,
-                             self.rules_mgr,
-                             self.fip_manager,
-                             self.status_reporter)
+        return WorkloadEndpoint(self.config,
+                                combined_id,
+                                self.ip_type,
+                                self.iptables_updater,
+                                self.dispatch_chains,
+                                self.rules_mgr,
+                                self.fip_manager,
+                                self.status_reporter)
 
     @actor_message()
     def on_tier_data_update(self, tier, data):
@@ -224,6 +224,15 @@ class EndpointManager(ReferenceManager):
                     if nat_map:
                         nat_maps[ep_id] = nat_map
             self.fip_manager.apply_snapshot(nat_maps, async=True)
+
+    @actor_message()
+    def on_host_iface_update(self, combined_id, data):
+        if data is not None:
+            # Update.
+            pass
+        else:
+            # Deletion.
+            pass
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
@@ -357,7 +366,7 @@ class LocalEndpoint(RefCountedActor):
         :param fip_manager: FloatingIPManager to use
         """
         super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
-                                            (combined_id.endpoint, ip_type))
+                                             (combined_id.endpoint, ip_type))
         assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
@@ -763,6 +772,50 @@ class LocalEndpoint(RefCountedActor):
 
     def _configure_interface(self):
         """
+        Called to apply IP/sysctl config to the interface.
+
+        This base implementation does nothing apart from setting the
+        _device_in_sync flag.
+        """
+        _log.info("Interface %s configured", self._iface_name)
+        self._device_in_sync = True
+
+    def _deconfigure_interface(self):
+        """
+        Called to remove IP/sysctl config from the interface.
+
+        This base implementation does nothing apart from setting the
+        _device_in_sync flag.
+        """
+        _log.info("Interface %s deconfigured", self._iface_name)
+        self._device_in_sync = True
+
+    def _clean_up_conntrack_entries(self):
+        """Removes conntrack entries for all the IPs in self._removed_ips."""
+        _log.debug("Cleaning up conntrack for old IPs: %s", self._removed_ips)
+        devices.remove_conntrack_flows(
+            self._removed_ips,
+            4 if self.ip_type == futils.IPV4 else 6
+        )
+        # We could use self._removed_ips.clear() but it's hard to UT because
+        # the UT sees the update.
+        self._removed_ips = set()
+
+    def _on_profiles_ready(self):
+        # We don't actually need to talk to the profiles, just log.
+        _log.info("Endpoint %s acquired all required profile references",
+                  self.combined_id)
+
+    def __str__(self):
+        return ("LocalEndpoint<%s,id=%s,iface=%s>" %
+                (self.ip_type, self.combined_id,
+                 self._iface_name or "unknown"))
+
+
+class WorkloadEndpoint(LocalEndpoint):
+
+    def _configure_interface(self):
+        """
         Applies sysctls and routes to the interface.
         """
         if not self._device_is_up:
@@ -808,7 +861,7 @@ class LocalEndpoint(RefCountedActor):
                              self.combined_id, e)
         else:
             _log.info("Interface %s configured", self._iface_name)
-            self._device_in_sync = True
+            super(WorkloadEndpoint, self)._configure_interface()
 
     def _deconfigure_interface(self):
         """
@@ -827,25 +880,4 @@ class LocalEndpoint(RefCountedActor):
                                self._iface_name, self.combined_id)
         else:
             _log.info("Interface %s deconfigured", self._iface_name)
-            self._device_in_sync = True
-
-    def _clean_up_conntrack_entries(self):
-        """Removes conntrack entries for all the IPs in self._removed_ips."""
-        _log.debug("Cleaning up conntrack for old IPs: %s", self._removed_ips)
-        devices.remove_conntrack_flows(
-            self._removed_ips,
-            4 if self.ip_type == futils.IPV4 else 6
-        )
-        # We could use self._removed_ips.clear() but it's hard to UT because
-        # the UT sees the update.
-        self._removed_ips = set()
-
-    def _on_profiles_ready(self):
-        # We don't actually need to talk to the profiles, just log.
-        _log.info("Endpoint %s acquired all required profile references",
-                  self.combined_id)
-
-    def __str__(self):
-        return ("LocalEndpoint<%s,id=%s,iface=%s>" %
-                (self.ip_type, self.combined_id,
-                 self._iface_name or "unknown"))
+            super(WorkloadEndpoint, self)._deconfigure_interface()

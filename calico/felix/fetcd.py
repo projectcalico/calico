@@ -1003,7 +1003,7 @@ def parse_endpoint(config, combined_id, raw_json):
 
 def parse_host_iface(config, combined_id, raw_json):
     iface_data = safe_decode_json(raw_json,
-                                  log_tag="iface %s" % combined_id.iface_id)
+                                  log_tag="iface %s" % combined_id.endpoint)
     try:
         # FIXME TODO Validation
         pass
