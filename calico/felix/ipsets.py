@@ -259,34 +259,61 @@ class IpsetManager(ReferenceManager):
         self._process_started_label_matches()
 
     @actor_message()
+    def on_host_iface_update(self, combined_id, iface_data):
+        """
+        Update tag/selector memberships and indices with the new interface
+        data dict.
+
+        :param HostIfaceId combined_id: ID of the host interface.
+        :param dict|NoneType iface_data: Either a dict containing interface
+            information or None to indicate deletion.
+        """
+        # For our purposes, host interfaces are indexed as endpoints.
+        self._on_endpoint_or_host_iface_update(combined_id, iface_data)
+
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
-        Update tag memberships and indices with the new endpoint dict.
+        Update tag/selector memberships and indices with the new endpoint dict.
 
         :param EndpointId endpoint_id: ID of the endpoint.
         :param dict|NoneType endpoint: Either a dict containing endpoint
             information or None to indicate deletion.
-
         """
-        endpoint_data = self._endpoint_data_from_dict(endpoint_id, endpoint)
-        if endpoint and endpoint_data != EMPTY_ENDPOINT_DATA:
+        self._on_endpoint_or_host_iface_update(endpoint_id, endpoint)
+
+    def _on_endpoint_or_host_iface_update(self, combined_id, data):
+        """
+        Update tag/selector memberships and indices with the new
+        host iface/endpoint dict.
+
+        Since we only care about extracting the IPs, profiles and labels,
+        we don't care about the differences between host interfaces and
+        endpoints.
+
+        :param HostIfaceId|EndpointId combined_id: ID of the endpoint.
+        :param dict|NoneType data: Either a dict containing endpoint
+            information or None to indicate deletion.
+        """
+        endpoint_data = self._endpoint_data_from_dict(combined_id, data)
+        if data and endpoint_data != EMPTY_ENDPOINT_DATA:
             # This endpoint makes a contribution to the IP addresses, we need
             # to index its labels.
-            labels = endpoint.get("labels", {})
-            prof_ids = endpoint.get("profile_ids", [])
+            labels = data.get("labels", {})
+            prof_ids = data.get("profile_ids", [])
         else:
             labels = None
             prof_ids = None
         # Remove the endpoint from the label index so that we clean up its
         # old IP addresses.
-        self._label_inherit_idx.on_item_update(endpoint_id, None, None)
+        self._label_inherit_idx.on_item_update(combined_id, None, None)
         self._process_stopped_label_matches()
         # Now update the main cache of endpoint data.
-        self._on_endpoint_data_update(endpoint_id, endpoint_data)
+        self._on_endpoint_data_update(combined_id, endpoint_data)
         # And then, if not doing a deletion, add the endpoint back into the
         # label index.
         if labels is not None:
-            self._label_inherit_idx.on_item_update(endpoint_id, labels,
+            self._label_inherit_idx.on_item_update(combined_id, labels,
                                                    prof_ids)
             self._process_started_label_matches()
 
