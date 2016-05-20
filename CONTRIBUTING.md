@@ -101,7 +101,7 @@ If your code change requires some documentation updates, please include these
 in the pull request.
 
 In particular changes to the `calicoctl` UX will also require changes to the
-`calcoctl` documentation and possibly some of the sample guides.
+`calicoctl` documentation and possibly some of the sample guides.
 
 ### Review and merge
 
