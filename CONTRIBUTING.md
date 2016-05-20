@@ -43,7 +43,7 @@ around is to join one of the channels listed below:
 
 ## Reporting issues
 
-Before raising an issue with *Calico for containers*, please check for 
+Before raising an issue with *Calico for containers*, please check for
 duplicate issues, and read our [Troubleshooting](Troubleshooting.md)
 and our [Frequently Asked Questions](FAQ.md) documents.
 
@@ -60,27 +60,27 @@ a bad thing):
 -  Versions of appropriate binaries and libraries.  For example, the output from
    `calicoctl version`, your version of Docker, rkt, Kubernetes etc.
 -  A link to any diagnostics (e.g. if using `calicoctl`, you can gathered
-   diagnostics using `calicoctl diags` - this provides instructions for 
-   uploading the diags bundle to transfer.sh - or alternatively if the 
+   diagnostics using `calicoctl diags` - this provides instructions for
+   uploading the diags bundle to transfer.sh - or alternatively if the
    diagnostics contains sensitive information we can set up an alternative
    method for transfer).
 -  If using `calicoctl` the output from `calicoctl status` run on each node
    might also be useful.
 -  Details of your OS.
 -  Environment details such as GCE, bare metal, VirtualBox.
-   
+
 
 ## Contributing code and documentation
 
 For contributing code and documentation we follow the GitHub pull request
-model. 
+model.
 
 -  Fork the repository on GitHub
 -  Make changes to your local repository in a separate branch
 -  Test the change
 -  Create a pull request which will then go through a review process by one or
    more of the core team.
-   
+
 ### Testing your changes
 
 If you create a pull request, our automated UT and STs will be run over your
@@ -126,7 +126,7 @@ detailing why the change was necessary, and any key points about the
 implementation.
 
 Try to keep the subject line no longer than 70 characters, and the lines of the
-body no longer than 80 characters.  This improves readability in both GitHub 
+body no longer than 80 characters.  This improves readability in both GitHub
 and when using git tools.
 
 If the pull request fixes an issue, include a separate line in the description
