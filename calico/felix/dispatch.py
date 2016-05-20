@@ -25,7 +25,7 @@ from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_LEAF, CHAIN_TO_LEAF,
     CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
-    interface_to_suffix
+    interface_to_chain_suffix
 )
 
 _log = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class DispatchChains(Actor):
         # and decide whether to program a leaf chain or not.
         interfaces_by_prefix = defaultdict(set)
         for iface in ifaces:
-            ep_suffix = interface_to_suffix(self.config, iface)
+            ep_suffix = iface[len(self.config.IFACE_PREFIX):]
             prefix = ep_suffix[:1]
             interfaces_by_prefix[prefix].add(iface)
 
@@ -222,7 +222,7 @@ class DispatchChains(Actor):
                 # endpoint-specific one.  Note that we use --goto, which means
                 # that the endpoint-specific chain will return to our parent
                 # rather than to this chain.
-                ep_suffix = interface_to_suffix(self.config, iface)
+                ep_suffix = interface_to_chain_suffix(self.config, iface)
 
                 to_chain_name = CHAIN_TO_PREFIX + ep_suffix
                 from_chain_name = CHAIN_FROM_PREFIX + ep_suffix

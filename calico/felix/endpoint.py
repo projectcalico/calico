@@ -35,7 +35,7 @@ from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
 from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
-from calico.felix.frules import interface_to_suffix
+from calico.felix.frules import interface_to_chain_suffix
 
 _log = logging.getLogger(__name__)
 
@@ -638,8 +638,8 @@ class LocalEndpoint(RefCountedActor):
                 # This is the first time we have seen the endpoint, so extract
                 # the interface name and endpoint ID.
                 self._iface_name = pending_endpoint["name"]
-                self._suffix = interface_to_suffix(self.config,
-                                                   self._iface_name)
+                self._suffix = interface_to_chain_suffix(self.config,
+                                                         self._iface_name)
                 _log.debug("Learned interface name/suffix: %s/%s",
                            self._iface_name, self._suffix)
                 # First time through, need to program everything.
