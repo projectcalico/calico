@@ -23,10 +23,8 @@ from collections import defaultdict
 import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
-    CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, CHAIN_FROM_LEAF, CHAIN_TO_LEAF,
-    CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
-    interface_to_chain_suffix
-)
+    CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX, interface_to_chain_suffix,
+    ENDPOINT_DISPATCH_CHAINS)
 
 _log = logging.getLogger(__name__)
 
@@ -40,12 +38,17 @@ class DispatchChains(Actor):
     add/remove them from the chains.
     """
 
-    def __init__(self, config, ip_version, iptables_updater):
+    def __init__(self, config, ip_version, iptables_updater,
+                 chain_names=ENDPOINT_DISPATCH_CHAINS):
         super(DispatchChains, self).__init__(qualifier="v%d" % ip_version)
         self.config = config
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
         self.iptables_generator = self.config.plugins["iptables_generator"]
+        self.chain_to_root = chain_names["to_root"]
+        self.chain_from_root = chain_names["from_root"]
+        self.chain_to_leaf = chain_names["to_leaf"]
+        self.chain_from_leaf = chain_names["from_leaf"]
         self.ifaces = set()
         self.programmed_leaf_chains = set()
         self._dirty = False
@@ -161,12 +164,12 @@ class DispatchChains(Actor):
 
         # iptables update fragments/dependencies for the root chains.
         updates = defaultdict(list)
-        root_to_upds = updates[CHAIN_TO_ENDPOINT]
-        root_from_upds = updates[CHAIN_FROM_ENDPOINT]
+        root_to_upds = updates[self.chain_to_root]
+        root_from_upds = updates[self.chain_from_root]
 
         dependencies = defaultdict(set)
-        root_to_deps = dependencies[CHAIN_TO_ENDPOINT]
-        root_from_deps = dependencies[CHAIN_FROM_ENDPOINT]
+        root_to_deps = dependencies[self.chain_to_root]
+        root_from_deps = dependencies[self.chain_from_root]
 
         # Separate the interface names by their prefixes so we can count them
         # and decide whether to program a leaf chain or not.
@@ -184,8 +187,8 @@ class DispatchChains(Actor):
             if use_root_chain:
                 # Optimization: there's only one interface with this prefix,
                 # don't program a leaf chain.
-                disp_to_chain = CHAIN_TO_ENDPOINT
-                disp_from_chain = CHAIN_FROM_ENDPOINT
+                disp_to_chain = self.chain_to_root
+                disp_from_chain = self.chain_from_root
                 to_deps = root_to_deps
                 from_deps = root_from_deps
                 to_upds = root_to_upds
@@ -193,8 +196,8 @@ class DispatchChains(Actor):
             else:
                 # There's more than one interface with this prefix, program
                 # a leaf chain.
-                disp_to_chain = CHAIN_TO_LEAF + "-" + prefix
-                disp_from_chain = CHAIN_FROM_LEAF + "-" + prefix
+                disp_to_chain = self.chain_to_leaf + "-" + prefix
+                disp_from_chain = self.chain_from_leaf + "-" + prefix
                 to_upds = updates[disp_to_chain]
                 from_upds = updates[disp_from_chain]
                 to_deps = dependencies[disp_to_chain]
@@ -208,11 +211,11 @@ class DispatchChains(Actor):
                 iface_match = self.config.IFACE_PREFIX + prefix + "+"
                 root_from_upds.append(
                     "--append %s --in-interface %s --goto %s" %
-                    (CHAIN_FROM_ENDPOINT, iface_match, disp_from_chain)
+                    (self.chain_from_root, iface_match, disp_from_chain)
                 )
                 root_to_upds.append(
                     "--append %s --out-interface %s --goto %s" %
-                    (CHAIN_TO_ENDPOINT, iface_match, disp_to_chain)
+                    (self.chain_to_root, iface_match, disp_to_chain)
                 )
 
             # Common processing, add the per-endpoint rules to whichever
@@ -255,13 +258,13 @@ class DispatchChains(Actor):
         root_from_upds.extend(
             self.iptables_generator.drop_rules(
                 self.ip_version,
-                CHAIN_FROM_ENDPOINT,
+                self.chain_from_root,
                 None,
                 "From unknown endpoint"))
         root_to_upds.extend(
             self.iptables_generator.drop_rules(
                 self.ip_version,
-                CHAIN_TO_ENDPOINT,
+                self.chain_to_root,
                 None,
                 "To unknown endpoint"))
 
