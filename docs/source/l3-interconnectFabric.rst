@@ -103,7 +103,7 @@ technical note.
 #. The routing infrastructure is based on some form of IGP. Due to the
    limitations in scale of IGP networks (see the `why
    BGP post <http://www.projectcalico.org/why-bgp/>`__ for discussion of
-   this topic).  The project Calico team does not believe that using an
+   this topic), the project Calico team does not believe that using an
    IGP to distribute endpoint reachability information will
    adequately scale in a Calico environment.  However, it is possible
    to use a combination of IGP and BGP in the interconnect fabric,
@@ -115,7 +115,7 @@ technical note.
    design of these networks is somewhat complex though, and will not
    be addressed further in this technical note. [#igp_punt]_
 
-#. The other model, and the one that this note concerns it self with,
+#. The other model, and the one that this note concerns itself with,
    is one where the routing infrastructure is based entirely on BGP.
    In this model, the IP network is "tight enough" or has a small
    enough diameter that BGP can be used to distribute endpoint
@@ -255,7 +255,7 @@ route-reflection possible (using standard BGP route reflectors)
 
 If the L2 spine option is used, the result of this is that each ToR must
 either peer with every other ToR switch in the cluster (which could be
-hundreds of peers.
+hundreds of peers).
 
 If the AS per spine option is used, then each ToR only has to peer
 with each spine (there are usually somewhere between two and sixteen spine
@@ -367,7 +367,7 @@ The *Downward Default* model
 
 The final model is a bit different.  Whereas, in the previous models,
 all of the routers in the infrastructure carry full routing tables,
-and leave their AS paths in-tact, this model [#defaultGenesis]_
+and leave their AS paths intact, this model [#defaultGenesis]_
 removes the AS numbers at each stage of the routing path.  This is to
 prevent routes from other nodes in the network from not being
 installed due to it coming from the *local* AS (since they share the
