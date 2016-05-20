@@ -23,6 +23,11 @@ from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
+from pykube.config import KubeConfig
+from pykube.http import HTTPClient
+from pykube.objects import Pod
+from pykube.query import Query
+
 from calico_cni.constants import *
 import calico_cni.policy_parser
 
@@ -78,7 +83,7 @@ class DefaultPolicyDriver(object):
 
         # Check if the profile has already been applied.
         if self.profile_name in endpoint.profile_ids:
-            _log.warning("Endpoint already in profile %s", 
+            _log.warning("Endpoint already in profile %s",
                          self.profile_name)
             return
 
@@ -131,7 +136,7 @@ class KubernetesNoPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
 
-    The different between this an the DefaultPolicyDriver is that this 
+    The different between this an the DefaultPolicyDriver is that this
     engine creates profiles which allow all incoming traffic.
     """
     def generate_rules(self):
@@ -156,14 +161,15 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
     """
 
     def __init__(self, pod_name, namespace, auth_token, api_root,
-                 client_certificate, client_key, certificate_authority):
+                 client_certificate, client_key, certificate_authority, kubeconfig):
         self.pod_name = pod_name
-        self.namespace = namespace 
+        self.namespace = namespace
         self.policy_parser = calico_cni.policy_parser.PolicyParser(namespace)
         self.auth_token = auth_token
         self.client_certificate = client_certificate
         self.client_key = client_key
         self.certificate_authority = certificate_authority or False
+        self.kubeconfig_path = kubeconfig
         self.api_root = api_root
         self.profile_name = "%s_%s" % (namespace, pod_name)
         self._annotation_key = "projectcalico.org/policy"
@@ -180,11 +186,11 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
             _log.info("Deleting Calico profile: %s", self.profile_name)
             self._client.remove_profile(self.profile_name)
         except KeyError:
-            _log.warning("Profile %s does not exist, cannot delete", 
+            _log.warning("Profile %s does not exist, cannot delete",
                     self.profile_name)
 
     def generate_rules(self):
-        """Generates rules based on Kubernetes annotations. 
+        """Generates rules based on Kubernetes annotations.
         """
         # Get the pod from the API.
         if self.namespace != "kube-system":
@@ -213,8 +219,8 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
                 except ValueError:
                     # Invalid rule specified.
                     _log.error("Invalid policy defined: %s", rule)
-                    raise ApplyProfileError("Invalid policy defined", 
-                                            details=rule) 
+                    raise ApplyProfileError("Invalid policy defined",
+                                            details=rule)
                 else:
                     # Rule was valid - append.
                     inbound_rules.append(parsed_rule)
@@ -222,7 +228,7 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
             # Isolate on namespace boundaries by default.
             _log.info("No policy annotations - apply namespace isolation")
             inbound_rules = [Rule(action="allow", src_tag=self.ns_tag)]
-        
+
         return Rules(id=self.profile_name,
                      inbound_rules=inbound_rules,
                      outbound_rules=outbound_rules)
@@ -248,6 +254,20 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
 
         :return: JSON object containing the pod spec
         """
+        # If kubeconfig was specified, use the pykube library.
+        if self.kubeconfig_path:
+            _log.info("Using kubeconfig at %s", self.kubeconfig_path)
+            try:
+                api = HTTPClient(KubeConfig.from_file(self.kubeconfig_path))
+                pod = Query(api, Pod, self.namespace).get_by_name(self.pod_name)
+                _log.info("Found pod: %s: ", pod.obj)
+            except Exception as e:
+                raise PolicyException("Error querying Kubernetes API",
+                                      details=str(e.message))
+            else:
+                return pod.obj
+
+        # Otherwise, use direct HTTP query to get pod.
         with requests.Session() as session:
             if self.auth_token:
                 _log.debug('Updating header with Token %s', self.auth_token)
@@ -277,7 +297,7 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
                                            verify=self.certificate_authority)
             except BaseException, e:
                 _log.exception("Exception hitting Kubernetes API")
-                raise ApplyProfileError("Error querying Kubernetes API", 
+                raise ApplyProfileError("Error querying Kubernetes API",
                         details=str(e.message))
             else:
                 # Check the HTTP response code for errors.
@@ -356,19 +376,25 @@ class KubernetesPolicyDriver(KubernetesAnnotationDriver):
         _log.debug("No profile to remove for pod %s", self.pod_name)
 
 
-class ApplyProfileError(Exception):
+class PolicyException(Exception):
     """
-    Attempting to apply a profile to an endpoint that does not exist.
+    Generic base class for policy errors.
     """
     def __init__(self, msg=None, details=None):
         Exception.__init__(self, msg)
         self.details = details
 
+class ApplyProfileError(PolicyException):
+    """
+    Attempting to apply a profile to an endpoint that does not exist.
+    """
+    pass
+
 
 def get_policy_driver(cni_plugin):
     """Returns a policy driver based on CNI configuration arguments.
 
-    :return: a policy driver 
+    :return: a policy driver
     """
     # Extract policy config and network name.
     policy_config = cni_plugin.network_config.get(POLICY_KEY, {})
@@ -397,6 +423,7 @@ def get_policy_driver(cni_plugin):
             client_key = policy_config.get(K8S_CLIENT_KEY_VAR)
             certificate_authority = policy_config.get(
                 K8S_CERTIFICATE_AUTHORITY_VAR)
+            kubeconfig_path = policy_config.get("kubeconfig")
 
             if (client_key and not os.path.isfile(client_key)) or \
                (client_certificate and not os.path.isfile(client_certificate)) or \
@@ -418,7 +445,8 @@ def get_policy_driver(cni_plugin):
                            api_root,
                            client_certificate,
                            client_key,
-                           certificate_authority]
+                           certificate_authority,
+                           kubeconfig_path]
         else:
             _log.debug("Using Kubernetes Driver - no policy")
             driver_cls = KubernetesNoPolicyDriver
@@ -430,7 +458,7 @@ def get_policy_driver(cni_plugin):
 
     # Create an instance of the driver class.
     try:
-        _log.debug("Creating instance of %s with args %s", 
+        _log.debug("Creating instance of %s with args %s",
                    driver_cls, driver_args)
         driver = driver_cls(*driver_args)
     except ValueError as e:

@@ -35,7 +35,7 @@ from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
 
 from calico_cni.container_engines import get_container_engine
 from calico_cni.constants import *
-from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
+from calico_cni.policy_drivers import PolicyException, get_policy_driver
 from ipam import IpamPlugin
 
 # Logging configuration.
@@ -259,7 +259,7 @@ class CniPlugin(object):
         # Provision / apply profile on the created endpoint.
         try:
             self.policy_driver.apply_profile(endpoint)
-        except ApplyProfileError as e:
+        except PolicyException as e:
             _log.error("Failed to apply profile to endpoint %s",
                        endpoint.name)
             self._remove_veth(endpoint)
@@ -297,7 +297,7 @@ class CniPlugin(object):
         # Apply a new profile to this endpoint.
         try:
             self.policy_driver.apply_profile(endpoint)
-        except ApplyProfileError as e:
+        except PolicyException as e:
             # Hit an exception applying the profile.  We haven't configured
             # anything, so we don't need to clean anything up.  Just exit.
             _log.error("Failed to apply profile to endpoint %s",

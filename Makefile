@@ -21,7 +21,7 @@ dist/calico: $(SRCFILES)
 	docker run  --rm \
 	-v `pwd`:/code \
 	calico/build:$(BUILD_VERSION) \
-	pyinstaller calico.py -ayF
+	/bin/sh -c "pip install pykube && pyinstaller calico.py -ayF"
 
 # Makes the IPAM plugin.
 dist/calico-ipam: $(SRCFILES) 
