@@ -252,7 +252,7 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
     def _get_api_pod(self):
         """Get the pod resource from the API.
 
-        :return: JSON object containing the pod spec
+        :return: Dictionary representation of Pod from k8s API.
         """
         # If kubeconfig was specified, use the pykube library.
         if self.kubeconfig_path:
@@ -260,7 +260,7 @@ class KubernetesAnnotationDriver(DefaultPolicyDriver):
             try:
                 api = HTTPClient(KubeConfig.from_file(self.kubeconfig_path))
                 pod = Query(api, Pod, self.namespace).get_by_name(self.pod_name)
-                _log.info("Found pod: %s: ", pod.obj)
+                _log.debug("Found pod: %s: ", pod.obj)
             except Exception as e:
                 raise PolicyException("Error querying Kubernetes API",
                                       details=str(e.message))
@@ -400,6 +400,7 @@ def get_policy_driver(cni_plugin):
     policy_config = cni_plugin.network_config.get(POLICY_KEY, {})
     network_name = cni_plugin.network_config["name"]
     policy_type = policy_config.get("type")
+    k8s_config = cni_plugin.network_config.get("kubernetes", {})
     supported_policy_types = [None,
                               POLICY_MODE_KUBERNETES,
                               POLICY_MODE_KUBERNETES_ANNOTATIONS]
@@ -423,7 +424,7 @@ def get_policy_driver(cni_plugin):
             client_key = policy_config.get(K8S_CLIENT_KEY_VAR)
             certificate_authority = policy_config.get(
                 K8S_CERTIFICATE_AUTHORITY_VAR)
-            kubeconfig_path = policy_config.get("kubeconfig")
+            kubeconfig_path = k8s_config.get("kubeconfig")
 
             if (client_key and not os.path.isfile(client_key)) or \
                (client_certificate and not os.path.isfile(client_certificate)) or \

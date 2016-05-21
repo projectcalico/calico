@@ -29,6 +29,11 @@ from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV,
                                 ETCD_ENDPOINTS_ENV)
 from pycalico.datastore_errors import MultipleEndpointsMatch
 
+from pykube.config import KubeConfig
+from pykube.http import HTTPClient
+from pykube.objects import Node
+from pykube.query import Query
+
 from calico_cni import __version__, __commit__, __branch__
 from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
                   handle_datastore_error, CniError)
@@ -143,6 +148,9 @@ class CniPlugin(object):
         else:
             self.workload_id = self.container_id
             self.orchestrator_id = "cni"
+        kubernetes_config = network_config.get("kubernetes", {})
+        self.kubeconfig_path = kubernetes_config.get("kubeconfig")
+        self.k8s_node_name = kubernetes_config.get("node_name", socket.gethostname())
         """
         Configure orchestrator specific settings.
         workload_id: In Kubernetes, this is the pod's namespace and name.
@@ -441,13 +449,70 @@ class CniPlugin(object):
                                        "msg": e.msg,
                                        "details": e.details})
                 code = e.code
+        elif self.ipam_type == "host-local":
+            # We've been told to use the "host-local" IPAM plugin.
+            # Check if we need to use the Kubernetes podCidr for this node, and
+            # if so replace the subnet field with the correct value.
+            if self.network_config["ipam"].get("subnet") == "usePodCidr":
+                if not self.running_under_k8s:
+                    print_cni_error(ERR_CODE_GENERIC, "Invalid network config",
+                            "Must be running under Kubernetes to use \
+                                    'subnet: usePodCidr'")
+                _log.info("Using Kubernetes podCIDR for node: %s", self.k8s_node_name)
+                pod_cidr = self._get_kubernetes_pod_cidr()
+                self.network_config["ipam"]["subnet"] = str(pod_cidr)
+
+            # Call the IPAM plugin.
+            _log.debug("Calling host-local IPAM plugin")
+            code, response = self._call_binary_ipam_plugin(env)
         else:
+            # Using some other IPAM plugin - call it.
             _log.debug("Using binary plugin")
             code, response = self._call_binary_ipam_plugin(env)
 
         # Return the IPAM return code and output.
         _log.debug("IPAM response (rc=%s): %s", code, response)
         return code, response
+
+    def _get_kubernetes_pod_cidr(self):
+        """
+        Attempt to get the Kubernetes pod CIDR for this node.
+        First check if we've written it to disk.  If so, use that value.  If
+        not, then query the Kubernetes API for it.
+        """
+        _log.info("Getting node.spec.podCidr from API, kubeconfig: %s",
+                  self.kubeconfig_path)
+        if not self.kubeconfig_path:
+            # For now, kubeconfig is the only supported auth method.
+            print_cni_error(ERR_CODE_GENERIC, "Missing kubeconfig",
+                    "usePodCidr requires specification of kubeconfig file")
+            sys.exit(ERR_CODE_GENERIC)
+
+        # Query the API for this node.  Default node name to the hostname.
+        try:
+            api = HTTPClient(KubeConfig.from_file(self.kubeconfig_path))
+            node = None
+            for n in Node.objects(api):
+                if n.obj["metadata"]["name"] == self.k8s_node_name:
+                    _log.debug("Checking node: %s", n.obj["metadata"]["name"])
+                    node = n
+                    break
+            if not node:
+                raise KeyError("Unable to find node in API: %s", self.k8s_node_name)
+            _log.debug("Found node %s: %s: ", node.obj["metadata"]["name"],
+                       node.obj["spec"])
+        except Exception:
+            print_cni_error(ERR_CODE_GENERIC, "Error querying Kubernetes API",
+                    "Failed to get podCidr from Kubernetes API")
+            sys.exit(ERR_CODE_GENERIC)
+        else:
+            pod_cidr = node.obj["spec"].get("podCIDR")
+            if not pod_cidr:
+                print_cni_error(ERR_CODE_GENERIC, "Missing podCidr",
+                        "No podCidr for node %s" % self.k8s_node_name)
+                sys.exit(ERR_CODE_GENERIC)
+        _log.debug("Using podCidr: %s", pod_cidr)
+        return pod_cidr
 
     def _call_binary_ipam_plugin(self, env):
         """Calls through to the specified IPAM plugin binary.

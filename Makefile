@@ -46,13 +46,13 @@ deploy-rkt: dist/calicoctl
 ut: update-version
 	docker run --rm -v `pwd`:/code \
 	calico/test \
-	nosetests tests/unit -c nose.cfg
+	sh -c "pip install pykube && nosetests tests/unit -c nose.cfg"
 
 # Run the fv tests.
 fv: update-version
 	docker run --rm -v `pwd`:/code \
 	calico/test \
-	nosetests tests/fv -c nose.cfg
+	sh -c "pip install pykube && nosetests tests/fv -c nose.cfg"
 
 # Makes tests on Circle CI.
 test-circle: update-version dist/calico dist/calico-ipam
@@ -63,7 +63,8 @@ test-circle: update-version dist/calico dist/calico-ipam
 	-v $(CIRCLE_TEST_REPORTS):/circle_output \
 	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
 	calico/test sh -c \
-	'nosetests tests -c nose.cfg \
+	'pip install pykube && \
+	nosetests tests -c nose.cfg \
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 

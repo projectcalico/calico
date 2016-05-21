@@ -15,8 +15,11 @@
 import re
 import socket
 
+# The hostname of the current node.
+HOSTNAME = socket.gethostname()
+
 # Regex to parse CNI_ARGS.  Looks for key value pairs separated by an equals
-# sign and followed either the end of the string, or a colon (indicating 
+# sign and followed either the end of the string, or a colon (indicating
 # that there is another CNI_ARG key/value pair.
 CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
@@ -54,7 +57,7 @@ POLICY_KEY = "policy"
 ASSIGN_IPV4_KEY = "assign_ipv4"
 ASSIGN_IPV6_KEY = "assign_ipv6"
 
-# Constants for getting policy specific information 
+# Constants for getting policy specific information
 # from the policy dictionary in the network config file.
 API_ROOT_KEY = "k8s_api_root"
 AUTH_TOKEN_KEY = "k8s_auth_token"

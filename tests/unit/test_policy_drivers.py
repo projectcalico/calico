@@ -135,7 +135,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
                 "policy": {}
         }
         self.driver = KubernetesAnnotationDriver(self.pod_name, self.namespace,
-                self.auth_token, self.api_root, None, None, None)
+                self.auth_token, self.api_root, None, None, None, None)
         assert_equal(self.driver.profile_name, self.profile_name)
 
         # Mock the DatastoreClient
@@ -161,7 +161,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Generate rules
         rules = self.driver.generate_rules()
 
-        # Assert correct. Should allow all. 
+        # Assert correct. Should allow all.
         expected = Rules(id=self.profile_name,
                          inbound_rules=[Rule(action="allow")],
                          outbound_rules=[Rule(action="allow")])
@@ -187,7 +187,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Generate rules
         rules = self.driver.generate_rules()
 
-        # Assert correct. Should allow all. 
+        # Assert correct. Should allow all.
         expected = Rules(id=self.profile_name,
                          inbound_rules=[Rule(action="allow", protocol="tcp")],
                          outbound_rules=[Rule(action="allow")])
@@ -202,7 +202,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
 
         # Mock to raise error
         self.driver.policy_parser = MagicMock(spec=self.driver.policy_parser)
-        self.driver.policy_parser.parse_line.side_effect = ValueError 
+        self.driver.policy_parser.parse_line.side_effect = ValueError
 
         # Generate rules
         assert_raises(ApplyProfileError, self.driver.generate_rules)
@@ -211,7 +211,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Mock get_metadata to return labels.
         labels = {"key": "value"}
         self.driver._get_metadata = MagicMock(spec=self.driver._get_metadata)
-        self.driver._get_metadata.return_value = labels 
+        self.driver._get_metadata.return_value = labels
 
         # Call
         tags = self.driver.generate_tags()
@@ -257,6 +257,28 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
             verify=False)
         m_json_load.assert_called_once_with(pod1)
 
+    @patch("calico_cni.policy_drivers.HTTPClient", autospec=True)
+    @patch("calico_cni.policy_drivers.Query", autospec=True)
+    @patch("calico_cni.policy_drivers.KubeConfig", autospec=True)
+    def test_get_api_pod_kubeconfig(self, m_kcfg, m_query, m_http):
+        # Set up driver.
+        self.driver.pod_name = 'pod-1'
+        self.driver.namespace = 'a'
+
+        pod = Mock()
+        pod.obj = '{"metadata": {"namespace": "a", "name": "pod-1"}}'
+        m_query(1, 2, 3).get_by_name.return_value = pod
+
+        api_root = "http://kubernetesapi:8080/api/v1/"
+        self.driver.api_root = api_root
+        self.driver.kubeconfig_path = "/path/to/kubeconfig"
+
+        # Call method under test
+        p = self.driver._get_api_pod()
+
+        # Assert
+        assert_equal(p, pod.obj)
+
     @patch('calico_cni.policy_drivers.requests.Session', autospec=True)
     @patch('json.loads', autospec=True)
     def test_get_api_pod_with_client_certs(self, m_json_load, m_session):
@@ -270,7 +292,6 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         self.driver.client_certificate = "cert.pem"
         self.driver.client_key = "key.pem"
         self.driver.certificate_authority = "ca.pem"
-
 
         get_obj = Mock()
         get_obj.status_code = 200
@@ -353,7 +374,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Set up mock objects
         self.driver.auth_token = 'TOKEN'
 
-        m_json_load.side_effect = TypeError 
+        m_json_load.side_effect = TypeError
 
         get_obj = Mock()
         get_obj.status_code = 200
@@ -388,7 +409,7 @@ class KubernetesPolicyDriverTest(unittest.TestCase):
         self.network_name = "net-name"
         self.namespace = "default"
         self.driver = KubernetesPolicyDriver(self.network_name, self.namespace,
-                                             None, None, None, None, None)
+                                             None, None, None, None, None, None)
 
         # Mock the DatastoreClient
         self.client = MagicMock(spec=DatastoreClient)
@@ -417,7 +438,7 @@ class KubernetesPolicyDriverTest(unittest.TestCase):
         self.driver.remove_profile()
 
 
-class GetPolicyDriverTest(unittest.TestCase): 
+class GetPolicyDriverTest(unittest.TestCase):
 
     def test_get_policy_driver_default_k8s(self):
         cni_plugin = Mock(spec=CniPlugin)
