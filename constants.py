@@ -13,9 +13,9 @@ RESOURCE_TYPE_POD = "Pod"
 RESOURCE_TYPE_NAMESPACE = "Namespace"
 
 # API paths to NetworkPolicy objects.
-ALPHA_API = "%s/apis/net.alpha.kubernetes.io/v1alpha1"
-NET_POLICY_PATH = ALPHA_API + "/networkpolicys"
-NET_POLICY_WATCH_PATH = ALPHA_API + "/watch/networkpolicys"
+BETA_API = "%s/apis/extensions/v1beta1"
+NET_POLICY_PATH = BETA_API + "/networkpolicies"
+NET_POLICY_WATCH_PATH = BETA_API + "/watch/networkpolicies"
 
 # Mapping of resource to api URL.
 GET_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/pods",
@@ -26,7 +26,7 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
               RESOURCE_TYPE_NETWORK_POLICY: NET_POLICY_WATCH_PATH}
 
 # Annotation to look for network-isolation on namespaces.
-NS_POLICY_ANNOTATION = "net.alpha.kubernetes.io/network-isolation"
+NS_POLICY_ANNOTATION = "net.beta.kubernetes.io/network-policy"
 
 # Tier name /order to use for policies.
 NET_POL_TIER_NAME = "k8s-network-policy"

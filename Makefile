@@ -1,28 +1,31 @@
-.PHONY: all policy-agent policy-tool docker-image clean
+.PHONY: all policy-agent docker-image clean
 
 SRCDIR=.
 
 default: all
-all: policy-agent policy-tool 
-
-# Build the policy command line tool.
-policy-tool: dist/policy
+all: policy-agent 
 
 # Build the calico/k8s-policy-agent Docker container.
 docker-image: image.created
-
-dist/policy: $(shell find policy_tool)
-	# Build NetworkPolicy install tool. 
-	docker run --rm \
-	-v `pwd`:/code \
-	calico/build \
-	pyinstaller policy_tool/policy.py -ayF 
 
 # Run the unit tests.
 ut:
 	docker run --rm -v `pwd`:/code \
 	calico/test \
 	nosetests tests/unit -c nose.cfg
+
+# Makes tests on Circle CI.
+test-circle: 
+	# Can't use --rm on circle
+	# Circle also requires extra options for reporting.
+	docker run \
+	-v `pwd`:/code \
+	-v $(CIRCLE_TEST_REPORTS):/circle_output \
+	-e COVERALLS_REPO_TOKEN=$(COVERALLS_REPO_TOKEN) \
+	calico/test sh -c \
+	'nosetests tests/unit -c nose.cfg \
+	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
+	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
 image.created:
 	# Build the docker image for the policy agent.

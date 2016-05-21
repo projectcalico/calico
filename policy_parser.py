@@ -43,7 +43,7 @@ class PolicyParser(object):
 
         calico_selectors += \
             self._calculate_selectors(self.policy["spec"]["podSelector"])
-      
+
         _log.debug("Selector with %d filters" % len(calico_selectors))
         return " && ".join(calico_selectors)
 
@@ -91,7 +91,7 @@ class PolicyParser(object):
             calico_selectors += [
                 "%s == '%s'" % (key_format % k, v) for k, v in labels.iteritems()
             ]
-        
+
         # matchExpressions is a list of in/notin/exists/doesnotexist tests.
         if "matchExpressions" in label_selector:
             for expression in label_selector["matchExpressions"]:
@@ -111,7 +111,7 @@ class PolicyParser(object):
                     raise PolicyError("Unknown operator: %s" % operator)
 
         return calico_selectors
-       
+
     def _allow_incoming_to_rules(self, allow_incoming_clause):
         """
         Takes a single "allowIncoming" rule from a NetworkPolicy object
@@ -161,10 +161,10 @@ class PolicyParser(object):
             # a non-null value.  The presence of the key with a null
             # value means "select all".
             _log.debug("Parsing 'from' clause: %s", from_clause)
-            pods_present = "pods" in from_clause
-            namespaces_present = "namespaces" in from_clause
-            _log.debug("Is 'pods:' present? %s", pods_present)
-            _log.debug("Is 'namespaces:' present? %s", namespaces_present)
+            pods_present = "podSelector" in from_clause
+            namespaces_present = "namespaceSelector" in from_clause
+            _log.debug("Is 'podSelector:' present? %s", pods_present)
+            _log.debug("Is 'namespaceSelector:' present? %s", namespaces_present)
 
             if pods_present and namespaces_present:
                 # This is an error case according to the API.
@@ -173,8 +173,8 @@ class PolicyParser(object):
                 raise PolicyError(msg, self.policy)
             elif pods_present:
                 # There is a pod selector in this "from" clause.
-                pod_selector = from_clause["pods"] or {}
-                _log.debug("Allow from pods: %s", pod_selector)
+                pod_selector = from_clause["podSelector"] or {}
+                _log.debug("Allow from podSelector: %s", pod_selector)
                 selectors = self._calculate_selectors(pod_selector)
 
                 # We can only select on pods in this namespace.
@@ -190,8 +190,8 @@ class PolicyParser(object):
                 # applied to each pod in the namespace using
                 # the per-namespace profile.  We can select on namespace
                 # labels using the NS_LABEL_KEY_FMT modifier.
-                namespaces = from_clause["namespaces"] or {}
-                _log.debug("Allow from namespaces: %s", namespaces)
+                namespaces = from_clause["namespaceSelector"] or {}
+                _log.debug("Allow from namespaceSelector: %s", namespaces)
                 selectors = self._calculate_selectors(namespaces,
                                                       NS_LABEL_KEY_FMT)
                 selector = " && ".join(selectors)

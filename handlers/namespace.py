@@ -1,4 +1,5 @@
 import logging
+import simplejson as json
 from constants import *
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rules, Rule
@@ -20,16 +21,31 @@ def add_update_namespace(namespace):
     # This defaults to no isolation.
     annotations = namespace["metadata"].get("annotations", {})
     _log.debug("Namespace %s has annotations: %s", namespace_name, annotations)
-    net_isolation = annotations.get(NS_POLICY_ANNOTATION, "no") == "yes"
-    _log.debug("Namespace %s has network-isolation? %s",
-               namespace_name, net_isolation)
+    policy_annotation = annotations.get(NS_POLICY_ANNOTATION, "{}")
+    try:
+        policy_annotation = json.loads(policy_annotation)
+    except ValueError, TypeError:
+        _log.exception("Failed to parse namespace annotations: %s", annotations)
+        return
+
+    # Parsed the annotation - get data.  Might not be a dict, so be careful
+    # to catch an AttributeError if it has no get() method.
+    try:
+        ingress_isolation = policy_annotation.get("ingress", {}).get("isolation", "")
+    except AttributeError:
+        _log.exception("Invalid namespace annotation: %s", policy_annotation)
+        return
+
+    isolate_ns = ingress_isolation == "DefaultDeny"
+    _log.debug("Namespace %s has %s.  Isolate=%s",
+            namespace_name, ingress_isolation, isolate_ns)
 
     # Determine the profile name to create.
     profile_name = NS_PROFILE_FMT % namespace_name
 
     # Determine the rules to use.
     outbound_rules = [Rule(action="allow")]
-    if net_isolation:
+    if isolate_ns:
         inbound_rules = [Rule(action="deny")]
     else:
         inbound_rules = [Rule(action="allow")]

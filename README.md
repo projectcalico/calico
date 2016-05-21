@@ -7,5 +7,3 @@ See our documentation on [enabling network policy in Kubernetes](https://github.
 ## Managing NetworkPolicy objects 
 Since `kubectl` does not yet support the creation and deletion of `NetworkPolicy` objects,
 this repository comes with a tool named `policy` which can be used to manage policies.  
-
-[See here](policy_tool/README.md)
