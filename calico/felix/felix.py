@@ -38,7 +38,8 @@ from calico import common
 from calico.felix import devices
 from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.dispatch import DispatchChains
+from calico.felix.dispatch import (HostIfaceDispatchChains,
+                                   WorkloadDispatchChains)
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (install_global_rules, load_nf_conntrack,
     IFACE_DISPATCH_CHAINS)
@@ -96,13 +97,10 @@ def _main_greenlet(config):
                                         4,
                                         v4_filter_updater,
                                         v4_ipset_mgr)
-        v4_ep_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
-        v4_if_dispatch_chains = DispatchChains(
-            config,
-            4,
-            v4_filter_updater,
-            chain_names=IFACE_DISPATCH_CHAINS
-        )
+        v4_ep_dispatch_chains = WorkloadDispatchChains(
+            config, 4, v4_filter_updater)
+        v4_if_dispatch_chains = HostIfaceDispatchChains(
+            config, 4, v4_filter_updater)
         v4_fip_manager = FloatingIPManager(config, 4, v4_nat_updater)
         v4_ep_manager = EndpointManager(config,
                                         IPV4,
@@ -145,15 +143,10 @@ def _main_greenlet(config):
                                             6,
                                             v6_filter_updater,
                                             v6_ipset_mgr)
-            v6_ep_dispatch_chains = DispatchChains(config,
-                                                   6,
-                                                   v6_filter_updater)
-            v6_if_dispatch_chains = DispatchChains(
-                config,
-                6,
-                v6_filter_updater,
-                chain_names=IFACE_DISPATCH_CHAINS
-            )
+            v6_ep_dispatch_chains = WorkloadDispatchChains(
+                config, 6, v6_filter_updater)
+            v6_if_dispatch_chains = HostIfaceDispatchChains(
+                config, 6, v6_filter_updater)
             v6_fip_manager = FloatingIPManager(config, 6, v6_nat_updater)
             v6_ep_manager = EndpointManager(config,
                                             IPV6,
@@ -181,11 +174,11 @@ def _main_greenlet(config):
                 v6_fip_manager,
             ]
         else:
-            # Keep the linter happy about the install_global_rules()
-            # conditional below.
+            # Keep the linter happy.
             v6_filter_updater = None
             v6_nat_updater = None
             v6_raw_updater = None
+            v6_if_dispatch_chains = None
 
         cleanup_mgr = CleanupManager(config, cleanup_updaters, cleanup_ip_mgrs)
         managers.append(cleanup_mgr)
@@ -210,9 +203,15 @@ def _main_greenlet(config):
 
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
+        # Dispatch chain needs to make its configuration before we insert the
+        # top-level chains.
+        v4_if_dispatch_chains.configure_iptables(async=False)
         install_global_rules(config, v4_filter_updater, v4_nat_updater,
                              ip_version=4)
         if v6_enabled:
+            # Dispatch chain needs to make its configuration before we insert
+            # the top-level chains.
+            v6_if_dispatch_chains.configure_iptables(async=False)
             install_global_rules(config, v6_filter_updater, v6_nat_updater,
                                  ip_version=6, raw_updater=v6_raw_updater)
 

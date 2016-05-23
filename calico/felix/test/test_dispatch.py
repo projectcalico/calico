@@ -19,10 +19,12 @@ felix.test.test_dispatch
 Tests of the actor that controls the top-level dispatch chain.
 """
 from pprint import pformat
+
+import itertools
 import mock
 
 from calico.felix.test.base import BaseTestCase, load_config
-from calico.felix.dispatch import DispatchChains
+from calico.felix.dispatch import DispatchChains, _find_longest_prefix
 from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
 
 class TestDispatchChains(BaseTestCase):
@@ -393,3 +395,19 @@ class TestDispatchChains(BaseTestCase):
 
         # Confirm that we only got called twice.
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
+
+    def test_longest_prefix(self):
+        self.assertEqual(_find_longest_prefix([]), None)
+        self.assertEqual(_find_longest_prefix(["a"]), "a")
+        self.assertEqual(_find_longest_prefix(["a", ""]), "")
+        self.assertEqual(_find_longest_prefix(["a", "ab"]), "a")
+        self.assertEqual(_find_longest_prefix(["ab", "ab"]), "ab")
+        self.assertEqual(_find_longest_prefix(["ab", "ab", "abc"]), "ab")
+        self.assertEqual(_find_longest_prefix(["abc", "ab", "ab"]), "ab")
+        self.assertEqual(_find_longest_prefix(["ab", "cd"]), "")
+        self.assertEqual(_find_longest_prefix(["tapabcd", "tapacdef"]), "tapa")
+
+    def assert_longest_prefix(self, strings, exp_prefix):
+        for x in itertools.permutations(strings):
+            self.assertEqual(_find_longest_prefix(strings), exp_prefix)
+

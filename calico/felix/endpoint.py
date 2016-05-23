@@ -33,7 +33,6 @@ from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
 from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
-from calico.felix.dispatch import DispatchChains
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import interface_to_chain_suffix
 
@@ -367,7 +366,6 @@ class LocalEndpoint(RefCountedActor):
         """
         super(LocalEndpoint, self).__init__(qualifier="%s(%s)" %
                                              (combined_id.endpoint, ip_type))
-        assert isinstance(dispatch_chains, DispatchChains)
         assert isinstance(rules_manager, RulesManager)
 
         self.config = config

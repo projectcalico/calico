@@ -24,32 +24,33 @@ import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX, interface_to_chain_suffix,
-    ENDPOINT_DISPATCH_CHAINS
-)
+    ENDPOINT_DISPATCH_CHAINS,
+    IFACE_DISPATCH_CHAINS)
 
 _log = logging.getLogger(__name__)
 
 
-class DispatchChains(Actor):
+class _DispatchChains(Actor):
     """
-    Actor that owns the felix-TO/FROM-ENDPOINT chains, which we use to
-    dispatch to endpoint-specific chains.
+    Actor that owns the felix-TO/FROM-xxx chains, which we use to
+    dispatch to endpoint/iface-specific chains.
 
-    WorkloadEndpoint Actors give us kicks as they come and go so we can
+    Iface/Endpoint Actors give us kicks as they come and go so we can
     add/remove them from the chains.
     """
 
-    def __init__(self, config, ip_version, iptables_updater,
-                 chain_names=ENDPOINT_DISPATCH_CHAINS):
-        super(DispatchChains, self).__init__(qualifier="v%d" % ip_version)
+    chain_names = None
+
+    def __init__(self, config, ip_version, iptables_updater):
+        super(_DispatchChains, self).__init__(qualifier="v%d" % ip_version)
         self.config = config
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
         self.iptables_generator = self.config.plugins["iptables_generator"]
-        self.chain_to_root = chain_names["to_root"]
-        self.chain_from_root = chain_names["from_root"]
-        self.chain_to_leaf = chain_names["to_leaf"]
-        self.chain_from_leaf = chain_names["from_leaf"]
+        self.chain_to_root = self.chain_names["to_root"]
+        self.chain_from_root = self.chain_names["from_root"]
+        self.chain_to_leaf = self.chain_names["to_leaf"]
+        self.chain_from_leaf = self.chain_names["from_leaf"]
         self.ifaces = set()
         self.programmed_leaf_chains = set()
         self._dirty = False
@@ -175,8 +176,9 @@ class DispatchChains(Actor):
         # Separate the interface names by their prefixes so we can count them
         # and decide whether to program a leaf chain or not.
         interfaces_by_prefix = defaultdict(set)
+        iface_prefix = _find_longest_prefix(ifaces)
         for iface in ifaces:
-            ep_suffix = iface[len(self.config.IFACE_PREFIX):]
+            ep_suffix = iface[len(iface_prefix):]
             prefix = ep_suffix[:1]
             interfaces_by_prefix[prefix].add(iface)
 
@@ -209,7 +211,7 @@ class DispatchChains(Actor):
                 root_from_deps.add(disp_to_chain)
                 root_to_deps.add(disp_from_chain)
                 # Point root chain at prefix chain.
-                iface_match = self.config.IFACE_PREFIX + prefix + "+"
+                iface_match = iface_prefix + prefix + "+"
                 root_from_upds.append(
                     "--append %s --in-interface %s --goto %s" %
                     (self.chain_from_root, iface_match, disp_from_chain)
@@ -242,36 +244,22 @@ class DispatchChains(Actor):
                 # Add a default drop to the end of the leaf chain.
                 # Add a default drop to the end of the leaf chain.
                 from_upds.extend(
-                    self.iptables_generator.drop_rules(
-                        self.ip_version,
-                        disp_from_chain,
-                        None,
-                        "From unknown endpoint"))
-                to_upds.extend(
-                    self.iptables_generator.drop_rules(
-                        self.ip_version,
-                        disp_to_chain,
-                        None,
-                        "To unknown endpoint"))
+                    self.end_of_chain_rules(disp_from_chain, "From"))
+                to_upds.extend(self.end_of_chain_rules(disp_to_chain, "To"))
 
         # Both TO and FROM chains end with a DROP so that interfaces that
         # we don't know about yet can't bypass our rules.
         root_from_upds.extend(
-            self.iptables_generator.drop_rules(
-                self.ip_version,
-                self.chain_from_root,
-                None,
-                "From unknown endpoint"))
+            self.end_of_chain_rules(self.chain_from_root, "From"))
         root_to_upds.extend(
-            self.iptables_generator.drop_rules(
-                self.ip_version,
-                self.chain_to_root,
-                None,
-                "To unknown endpoint"))
+            self.end_of_chain_rules(self.chain_from_root, "To"))
 
         chains_to_delete = self.programmed_leaf_chains - new_leaf_chains
 
         return chains_to_delete, dependencies, updates, new_leaf_chains
+
+    def end_of_chain_rules(self, chain_name, direction):
+        raise NotImplementedError()
 
     def _reprogram_chains(self):
         """
@@ -299,3 +287,71 @@ class DispatchChains(Actor):
             self.__class__.__name__ + "<ipv%s,entries=%s>" %
             (self.ip_version, len(self.ifaces))
         )
+
+
+class WorkloadDispatchChains(_DispatchChains):
+    chain_names = ENDPOINT_DISPATCH_CHAINS
+
+    def end_of_chain_rules(self, chain_name, direction):
+        # For workload chains, we want to drop traffic if it is from/to an
+        # unknown workload so we put a default drop at the end of the chain.
+        return self.iptables_generator.drop_rules(
+            self.ip_version,
+            chain_name,
+            None,
+            "%s unknown endpoint" % direction)
+
+
+class HostIfaceDispatchChains(_DispatchChains):
+    chain_names = IFACE_DISPATCH_CHAINS
+
+    @actor_message()
+    def configure_iptables(self):
+        missing_from_chain_rules = [
+            '-A %s --jump RETURN --match comment '
+            '--comment "Not ready yet, allowing host traffic"' %
+            self.chain_from_root
+        ]
+        self.iptables_updater.set_missing_chain_override(
+            self.chain_from_root,
+            missing_from_chain_rules,
+            async=True
+        )
+        missing_to_chain_rules = [
+            '-A %s --jump RETURN --match comment '
+            '--comment "Not ready yet, allowing host traffic"' %
+            self.chain_to_root
+        ]
+        self.iptables_updater.set_missing_chain_override(
+            self.chain_to_root,
+            missing_to_chain_rules,
+            async=True
+        )
+
+    def end_of_chain_rules(self, chain_name, direction):
+        # For host interfaces, we only configure the interfaces we've been
+        # asked to and then we defer to the host's remaining iptables rules
+        # for unknown interfaces.
+        # TODO Bare-metal: make RETURN configurable
+        return ['-A %s --jump RETURN --match comment '
+                '--comment "Unknown interface, return"' %
+                chain_name]
+
+
+def _find_longest_prefix(strs):
+    longest_prefix = None
+    for iface in strs:
+        if longest_prefix is None:
+            longest_prefix = iface
+        elif not iface.startswith(longest_prefix):
+            shared_len = min(len(longest_prefix), len(iface))
+            i = 0
+            for i in xrange(shared_len):
+                p_char = longest_prefix[i]
+                i_char = iface[i]
+                if p_char != i_char:
+                    longest_prefix = iface[:i]
+                    break
+            else:
+                longest_prefix = longest_prefix[:shared_len]
+    return longest_prefix

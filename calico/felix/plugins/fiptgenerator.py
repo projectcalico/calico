@@ -48,7 +48,8 @@ from calico.felix.frules import (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT,
                                  CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
                                  CHAIN_PREROUTING, CHAIN_POSTROUTING,
                                  CHAIN_INPUT, CHAIN_FORWARD,
-                                 FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT)
+                                 FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT,
+                                 CHAIN_TO_IFACE, CHAIN_FROM_IFACE)
 
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
@@ -208,11 +209,6 @@ class FelixIptablesGenerator(FelixPlugin):
                 None)
             )
 
-        # Optimisation: return immediately if the traffic is not from one of
-        # the interfaces we're managing.
-        chain.append("--append %s ! --in-interface %s --jump RETURN" %
-                     (CHAIN_INPUT, self.IFACE_MATCH,))
-
         # Allow established connections via the conntrack table.
         chain.extend(self.drop_rules(ip_version,
                                      CHAIN_INPUT,
@@ -221,6 +217,13 @@ class FelixIptablesGenerator(FelixPlugin):
         chain.append("--append %s --match conntrack "
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_INPUT)
+
+        # Incoming traffic on host interfaces.
+        chain.append(
+            "--append %s --goto %s ! --in-interface %s" %
+            (CHAIN_INPUT, CHAIN_FROM_IFACE, self.IFACE_MATCH)
+        )
+        deps.add(CHAIN_FROM_IFACE)
 
         # To act as a router for IPv6, we have to accept various types of
         # ICMPv6 messages, as follows:
