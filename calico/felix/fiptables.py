@@ -133,6 +133,9 @@ class IptablesUpdater(Actor):
         """Special-case rule fragments that we've explicitly removed.
         We need to cache this to defend against other processes accidentally
         reverting our removal."""
+        self._missing_chain_overrides = {}
+        """Overrides for chain contents when we need to program a chain but
+        it's missing."""
 
         self._required_chains = defaultdict(set)
         """Map from chain name to the set of names of chains that it
@@ -233,6 +236,27 @@ class IptablesUpdater(Actor):
             self._txn.store_rewrite_chain(chain, updates, deps)
         if callback:
             self._completion_callbacks.append(callback)
+
+    @actor_message()
+    def set_missing_chain_override(self, chain_name, fragments):
+        """Sets the contents to program if the given chain is required but
+        it hasn't yet been written.
+
+        This is useful for graceful restart at start of day, where we want
+        to leave a chain in place for as long as possible, but if it's
+        missing, we need it to be default-RETURN.
+
+        Must be called before the chain is used as a dependency.
+
+        :param chain_name: name of the chain.
+        :param fragments: list of iptables fragments, as used by
+               rewrite_chains().
+        """
+        _log.info("Storing missing chain override for %s", chain_name)
+        assert fragments is not None, "Removal of overrides not implemented"
+        assert chain_name not in self._requiring_chains, \
+            "Missing chain override set after chain in use"
+        self._missing_chain_overrides[chain_name] = fragments
 
     # Does direct table manipulation, forbid batching with other messages.
     @actor_message(needs_own_batch=True)
@@ -634,14 +658,14 @@ class IptablesUpdater(Actor):
                 #   that we now know the state of that chain and we should not
                 #   wait for the end of graceful restart to clean it up.
                 modified_chains.add(chain)
-                input_lines.extend(self._stub_drop_rules(chain))
+                input_lines.extend(self._missing_chain_stub_rules(chain))
 
         # Generate rules to stub out chains that we're about to delete, just
         # in case the delete fails later on.  Stubbing it out also stops it
         # from referencing other chains, accidentally keeping them alive.
         for chain in self._txn.chains_to_delete:
             modified_chains.add(chain)
-            input_lines.extend(self._stub_drop_rules(chain))
+            input_lines.extend(self._missing_chain_stub_rules(chain))
 
         # Now add the actual chain updates.
         for chain, chain_updates in self._txn.updates.iteritems():
@@ -688,7 +712,7 @@ class IptablesUpdater(Actor):
         for chain_name in chains:
             # Stub the chain
             input_lines.append(":%s -" % chain_name)
-            input_lines.extend(self._stub_drop_rules(chain_name))
+            input_lines.extend(self._missing_chain_stub_rules(chain_name))
             found_chain_to_stub = True
         input_lines.append("COMMIT")
         if found_chain_to_stub:
@@ -758,17 +782,22 @@ class IptablesUpdater(Actor):
                 self._stats.increment("iptables success")
                 success = True
 
-    def _stub_drop_rules(self, chain):
+    def _missing_chain_stub_rules(self, chain_name):
         """
         :return: List of rule fragments to replace the given chain with a
             single drop rule.
         """
-        fragment = ["--flush %s" % chain]
-        fragment.extend(self.iptables_generator.drop_rules(
-            self.ip_version,
-            chain,
-            None,
-            'WARNING Missing chain'))
+        if chain_name in self._missing_chain_overrides:
+            _log.debug("Generating missing chain %s; override in place",
+                       chain_name)
+            fragment = self._missing_chain_overrides[chain_name]
+        else:
+            fragment = ["--flush %s" % chain_name]
+            fragment.extend(self.iptables_generator.drop_rules(
+                self.ip_version,
+                chain_name,
+                None,
+                'WARNING Missing chain'))
         return fragment
 
 
