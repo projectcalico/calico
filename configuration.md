@@ -66,6 +66,7 @@ The CNI plugin may need to authenticate with the Kubernetes API server. The foll
 * `k8s_certificate_authority`
 	* Verifying the API certificate against a CA only works if connecting to the API server using a hostname.
 * `kubeconfig`
+	* Path to a Kubernetes `kubeconfig` file.
 
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/configuration.md?pixel)](https://github.com/igrigorik/ga-beacon)

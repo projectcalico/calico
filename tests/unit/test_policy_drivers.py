@@ -24,6 +24,7 @@ from calico import CniPlugin
 from calico_cni.constants import ERR_CODE_GENERIC
 from calico_cni.policy_drivers import (ApplyProfileError,
                                        get_policy_driver,
+                                       PolicyException,
                                        DefaultPolicyDriver,
                                        KubernetesNoPolicyDriver,
                                        KubernetesAnnotationDriver,
@@ -278,6 +279,26 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
 
         # Assert
         assert_equal(p, pod.obj)
+
+    @patch("calico_cni.policy_drivers.HTTPClient", autospec=True)
+    @patch("calico_cni.policy_drivers.Query", autospec=True)
+    @patch("calico_cni.policy_drivers.KubeConfig", autospec=True)
+    def test_get_api_pod_kubeconfig_error(self, m_kcfg, m_query, m_http):
+        # Set up driver.
+        self.driver.pod_name = 'pod-1'
+        self.driver.namespace = 'a'
+
+        pod = Mock()
+        pod.obj = '{"metadata": {"namespace": "a", "name": "pod-1"}}'
+        m_query(1, 2, 3).get_by_name.side_effect = KeyError
+
+        api_root = "http://kubernetesapi:8080/api/v1/"
+        self.driver.api_root = api_root
+        self.driver.kubeconfig_path = "/path/to/kubeconfig"
+
+        # Call method under test
+        with assert_raises(PolicyException) as err:
+            self.driver._get_api_pod()
 
     @patch('calico_cni.policy_drivers.requests.Session', autospec=True)
     @patch('json.loads', autospec=True)

@@ -32,7 +32,6 @@ from pycalico.datastore_errors import MultipleEndpointsMatch
 from pykube.config import KubeConfig
 from pykube.http import HTTPClient
 from pykube.objects import Node
-from pykube.query import Query
 
 from calico_cni import __version__, __commit__, __branch__
 from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
@@ -456,8 +455,8 @@ class CniPlugin(object):
             if self.network_config["ipam"].get("subnet") == "usePodCidr":
                 if not self.running_under_k8s:
                     print_cni_error(ERR_CODE_GENERIC, "Invalid network config",
-                            "Must be running under Kubernetes to use \
-                                    'subnet: usePodCidr'")
+                            "Must be running under Kubernetes to use 'subnet: usePodCidr'")
+                    sys.exit(ERR_CODE_GENERIC)
                 _log.info("Using Kubernetes podCIDR for node: %s", self.k8s_node_name)
                 pod_cidr = self._get_kubernetes_pod_cidr()
                 self.network_config["ipam"]["subnet"] = str(pod_cidr)
@@ -493,8 +492,8 @@ class CniPlugin(object):
             api = HTTPClient(KubeConfig.from_file(self.kubeconfig_path))
             node = None
             for n in Node.objects(api):
+                _log.debug("Checking node: %s", n.obj["metadata"]["name"])
                 if n.obj["metadata"]["name"] == self.k8s_node_name:
-                    _log.debug("Checking node: %s", n.obj["metadata"]["name"])
                     node = n
                     break
             if not node:

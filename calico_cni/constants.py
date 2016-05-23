@@ -15,9 +15,6 @@
 import re
 import socket
 
-# The hostname of the current node.
-HOSTNAME = socket.gethostname()
-
 # Regex to parse CNI_ARGS.  Looks for key value pairs separated by an equals
 # sign and followed either the end of the string, or a colon (indicating
 # that there is another CNI_ARG key/value pair.
