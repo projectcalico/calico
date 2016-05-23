@@ -11,8 +11,8 @@ pip install -r https://raw.githubusercontent.com/projectcalico/libcalico/master/
 pip install git+https://github.com/projectcalico/libcalico.git
 pip install simplejson 
 
-# Produce a binary - outputs to /dist/policy_agent
-pyinstaller /code/policy_agent.py -ayF
+# Produce a binary - outputs to /dist/controller
+pyinstaller /code/controller.py -ayF
 
 # Cleanup everything that was installed now that we have a self contained binary
 apk del temp && rm -rf /var/cache/apk/*

@@ -4,17 +4,17 @@
 apiVersion: v1
 kind: Pod 
 metadata:
-  name: calico-policy-agent
+  name: policy-controller
   namespace: calico-system 
   labels:
     version: "latest"
-    projectcalico.org/app: "policy-agent"
+    projectcalico.org/app: "policy-controller"
 spec:
   hostNetwork: true
   containers:
-    # The Calico policy agent.
-    - name: k8s-policy-agent
-      image: calico/k8s-policy-agent:latest
+    # The Calico policy controller.
+    - name: policy-controller 
+      image: calico/k8s-policy-controller
       imagePullPolicy: IfNotPresent 
       env:
         # Modify ETCD_ENDPOINTS to match your etcd cluster.
@@ -24,7 +24,7 @@ spec:
           value: "http://127.0.0.1:8080"
         - name: LEADER_ELECTION 
           value: "true"
-    # Leader election container used by the policy agent.
+    # Leader election container used by the policy controller.
     - name: leader-elector
       image: quay.io/calico/leader-elector:v0.1.0
       imagePullPolicy: IfNotPresent
@@ -32,6 +32,3 @@ spec:
         - "--election=calico-policy-election"
         - "--election-namespace=calico-system"
         - "--http=127.0.0.1:4040"
-      ports:
-        - containerPort: 4040
-          protocol: TCP

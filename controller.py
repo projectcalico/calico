@@ -25,7 +25,7 @@ class KubernetesApiError(Exception):
     pass
 
 
-class PolicyAgent(object):
+class Controller(object):
     def __init__(self):
         self._event_queue = Queue.Queue(maxsize=MAX_QUEUE_SIZE)
         """
@@ -63,7 +63,7 @@ class PolicyAgent(object):
         self._leader_elect = elect.lower() ==  "true"
         """
         Whether or not leader election is enabled.  If set to False, this
-        policy agent will assume it is the only instance.
+        policy controller will assume it is the only instance.
         """
 
         self._handlers = {}
@@ -124,7 +124,7 @@ class PolicyAgent(object):
 
     def run(self):
         """
-        PolicyAgent.run() is called at program init to spawn watch threads,
+        Controller.run() is called at program init to spawn watch threads,
         Loops to read responses from the Queue as they come in.
         """
         _log.info("Leader election enabled? %s", self._leader_elect)
@@ -145,9 +145,9 @@ class PolicyAgent(object):
 
     def _wait_for_leadership(self):
         """
-        Loops until this agent has been elected leader.
+        Loops until this controller has been elected leader.
         """
-        _log.info("Waiting for this agent to be elected leader")
+        _log.info("Waiting for this controller to be elected leader")
         while True:
             try:
                 is_leader = self._is_leader()
@@ -165,7 +165,7 @@ class PolicyAgent(object):
 
     def _start_leader_thread(self):
         """
-        Starts a thread which periodically checks if this agent is the leader.
+        Starts a thread which periodically checks if this controller is the leader.
         If determined that we are no longer the leader, exit.
         """
         t = Thread(target=self._watch_leadership)
@@ -175,7 +175,7 @@ class PolicyAgent(object):
 
     def _watch_leadership(self):
         """
-        Watches to see if this policy agent is still the elected leader.
+        Watches to see if this policy controller is still the elected leader.
         If no longer the elected leader, exits.
         """
         _log.info("Watching for leader election changes")
@@ -422,7 +422,7 @@ class PolicyAgent(object):
 
     def _is_leader(self):
         """
-        Returns True if this policy agent instance has been elected leader,
+        Returns True if this policy controller instance has been elected leader,
         False otherwise.
         """
         _log.debug("Checking if we are the elected leader.")
@@ -460,7 +460,7 @@ def configure_etc_hosts():
     We need to do this for a combination of two reasons:
       1) When TLS is enabled, SSL verification requires that a hostname
          is used when initiating a connection.
-      2) DNS lookups may fail at start of day, because this agent is
+      2) DNS lookups may fail at start of day, because this controller is
          responsible for allowing access to the DNS pod, but it must access
          the k8s API to do so, causing a dependency loop.
     """
@@ -487,4 +487,4 @@ if __name__ == '__main__':
         configure_etc_hosts()
 
     _log.info("Beginning execution")
-    PolicyAgent().run()
+    Controller().run()

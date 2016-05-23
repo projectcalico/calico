@@ -21,30 +21,30 @@ from nose_parameterized import parameterized
 from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore import DatastoreClient
 
-from policy_agent import *
+from controller import *
 
 
-class PolicyAgentTest(unittest.TestCase):
+class ControllerTest(unittest.TestCase):
     """
-    Test class for the policy agent.
+    Test class for the policy controller.
     """
     def setUp(self):
-        self.agent = PolicyAgent()
-        self.agent._client = MagicMock(spec=DatastoreClient)
+        self.controller = Controller()
+        self.controller._client = MagicMock(spec=DatastoreClient)
 
     def test_read_updates(self):
         # Mock out processing of the update to fail.
-        self.agent._process_update = MagicMock(spec=self.agent._process_update)
+        self.controller._process_update = MagicMock(spec=self.controller._process_update)
         err = Exception()
-        self.agent._process_update.side_effect = err 
+        self.controller._process_update.side_effect = err
 
         # Add to the event queue.
         event = ("event_type", "resource_type", {})
-        self.agent._event_queue.put(event)
+        self.controller._event_queue.put(event)
 
         try:
             # Will throw exception - needed to escape infinite loop.
-            self.agent.read_updates()
+            self.controller.read_updates()
         except Exception, e:
             if err is e:
                 pass

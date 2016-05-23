@@ -32,7 +32,7 @@ NS_POLICY_ANNOTATION = "net.beta.kubernetes.io/network-policy"
 NET_POL_TIER_NAME = "k8s-network-policy"
 NET_POL_TIER_ORDER = 100
 
-# The priority assigned to network policies created by the agent.
+# The priority assigned to network policies created by the controller.
 # Lower order -> higher priority.
 NET_POL_ORDER = 1000
 

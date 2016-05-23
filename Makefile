@@ -1,11 +1,11 @@
-.PHONY: all policy-agent docker-image clean
+.PHONY: all policy-controller docker-image clean
 
 SRCDIR=.
 
 default: all
-all: policy-agent 
+all: policy-controller
 
-# Build the calico/k8s-policy-agent Docker container.
+# Build the calico/kube-policy-controller Docker container.
 docker-image: image.created
 
 # Run the unit tests.
@@ -28,12 +28,12 @@ test-circle:
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
 image.created:
-	# Build the docker image for the policy agent.
-	docker build -t calico/k8s-policy-agent . 
+	# Build the docker image for the policy controller.
+	docker build -t calico/kube-policy-controller . 
 	touch image.created
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
 	-sudo rm -rf dist
-	-docker rmi calico/k8s-policy-agent
+	-docker rmi calico/kube-policy-controller
 	rm -f image.created
