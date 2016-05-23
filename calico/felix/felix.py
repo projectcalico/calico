@@ -106,6 +106,7 @@ def _main_greenlet(config):
                                         IPV4,
                                         v4_filter_updater,
                                         v4_ep_dispatch_chains,
+                                        v4_if_dispatch_chains,
                                         v4_rules_manager,
                                         v4_fip_manager,
                                         etcd_api.status_reporter)
@@ -152,6 +153,7 @@ def _main_greenlet(config):
                                             IPV6,
                                             v6_filter_updater,
                                             v6_ep_dispatch_chains,
+                                            v6_if_dispatch_chains,
                                             v6_rules_manager,
                                             v6_fip_manager,
                                             etcd_api.status_reporter)

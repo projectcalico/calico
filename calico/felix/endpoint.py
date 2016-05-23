@@ -25,8 +25,8 @@ import logging
 from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
-    ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR
-)
+    ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR,
+    EndpointId)
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
@@ -42,7 +42,8 @@ _log = logging.getLogger(__name__)
 class EndpointManager(ReferenceManager):
     def __init__(self, config, ip_type,
                  iptables_updater,
-                 dispatch_chains,
+                 workload_disp_chains,
+                 host_disp_chains,
                  rules_manager,
                  fip_manager,
                  status_reporter):
@@ -55,7 +56,8 @@ class EndpointManager(ReferenceManager):
 
         # Peers/utility classes.
         self.iptables_updater = iptables_updater
-        self.dispatch_chains = dispatch_chains
+        self.workload_disp_chains = workload_disp_chains
+        self.host_disp_chains = host_disp_chains
         self.rules_mgr = rules_manager
         self.status_reporter = status_reporter
         self.fip_manager = fip_manager
@@ -91,14 +93,25 @@ class EndpointManager(ReferenceManager):
         """
         Overrides ReferenceManager._create()
         """
-        return WorkloadEndpoint(self.config,
-                                combined_id,
-                                self.ip_type,
-                                self.iptables_updater,
-                                self.dispatch_chains,
-                                self.rules_mgr,
-                                self.fip_manager,
-                                self.status_reporter)
+        if isinstance(combined_id, EndpointId):
+            return WorkloadEndpoint(self.config,
+                                    combined_id,
+                                    self.ip_type,
+                                    self.iptables_updater,
+                                    self.workload_disp_chains,
+                                    self.rules_mgr,
+                                    self.fip_manager,
+                                    self.status_reporter)
+        else:
+            return HostInterface(self.config,
+                                 combined_id,
+                                 self.ip_type,
+                                 self.iptables_updater,
+                                 self.host_disp_chains,
+                                 self.rules_mgr,
+                                 self.fip_manager,
+                                 self.status_reporter)
+
 
     @actor_message()
     def on_tier_data_update(self, tier, data):
@@ -212,8 +225,19 @@ class EndpointManager(ReferenceManager):
             # DispatchChains actor.  That is OK!  The worst that can happen is
             # that a LocalEndpoint undoes part of our update and then goes on
             # to re-apply the update when it catches up to the snapshot.
-            local_ifaces = frozenset(self.endpoint_id_by_iface_name.keys())
-            self.dispatch_chains.apply_snapshot(local_ifaces, async=True)
+            workload_ifaces = set()
+            host_ifaces = set()
+            for if_name, ep_id in self.endpoint_id_by_iface_name.iteritems():
+                if isinstance(ep_id, EndpointId):
+                    workload_ifaces.add(if_name)
+                else:
+                    host_ifaces.add(if_name)
+            self.workload_disp_chains.apply_snapshot(
+                frozenset(workload_ifaces), async=True
+            )
+            self.host_disp_chains.apply_snapshot(
+                frozenset(host_ifaces), async=True
+            )
             self._update_dirty_policy()
 
             nat_maps = {}
@@ -226,12 +250,9 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_host_iface_update(self, combined_id, data):
-        if data is not None:
-            # Update.
-            pass
-        else:
-            # Deletion.
-            pass
+        # FIXME need to handle host interfaces separately.
+        self.on_endpoint_update(combined_id, data)
+        return
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
@@ -726,13 +747,7 @@ class LocalEndpoint(RefCountedActor):
         self._profile_ids_dirty = False
 
     def _update_chains(self):
-        updates, deps = self.iptables_generator.endpoint_updates(
-            IP_TYPE_TO_VERSION[self.ip_type],
-            self.combined_id.endpoint,
-            self._suffix,
-            self._mac,
-            self.endpoint["profile_ids"],
-            self._pol_ids_by_tier)
+        deps, updates = self._endpoint_updates()
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
             self.fip_manager.update_endpoint(
@@ -754,6 +769,9 @@ class LocalEndpoint(RefCountedActor):
         else:
             self._iptables_in_sync = True
             self._chains_programmed = True
+
+    def _endpoint_updates(self):
+        raise NotImplementedError()
 
     def _remove_chains(self):
         try:
@@ -879,3 +897,34 @@ class WorkloadEndpoint(LocalEndpoint):
         else:
             _log.info("Interface %s deconfigured", self._iface_name)
             super(WorkloadEndpoint, self)._deconfigure_interface()
+
+    def _endpoint_updates(self):
+        updates, deps = self.iptables_generator.endpoint_updates(
+            IP_TYPE_TO_VERSION[self.ip_type],
+            self.combined_id.endpoint,
+            self._suffix,
+            self._mac,
+            self.endpoint["profile_ids"],
+            self._pol_ids_by_tier)
+        return deps, updates
+
+
+class HostInterface(LocalEndpoint):
+    def _configure_interface(self):
+        pass
+
+    def _deconfigure_interface(self):
+        pass
+
+    def _endpoint_updates(self):
+        updates, deps = self.iptables_generator.endpoint_updates(
+            IP_TYPE_TO_VERSION[self.ip_type],
+            self.combined_id.endpoint,
+            self._suffix,
+            self._mac,
+            self.endpoint["profile_ids"],
+            self._pol_ids_by_tier,
+            to_direction="outbound",
+            from_direction="inbound"
+        )
+        return deps, updates

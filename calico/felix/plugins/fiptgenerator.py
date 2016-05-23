@@ -356,7 +356,8 @@ class FelixIptablesGenerator(FelixPlugin):
         return set([to_chain_name, from_chain_name])
 
     def endpoint_updates(self, ip_version, endpoint_id, suffix, mac,
-                         profile_ids, prof_ids_by_tier):
+                         profile_ids, prof_ids_by_tier, to_direction="inbound",
+                         from_direction="outbound"):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given endpoint.
@@ -388,7 +389,7 @@ class FelixIptablesGenerator(FelixPlugin):
             profile_ids,
             prof_ids_by_tier,
             to_chain_name,
-            "inbound"
+            to_direction
         )
         from_chain, from_deps = self._build_to_or_from_chain(
             ip_version,
@@ -396,7 +397,7 @@ class FelixIptablesGenerator(FelixPlugin):
             profile_ids,
             prof_ids_by_tier,
             from_chain_name,
-            "outbound",
+            from_direction,
             expected_mac=mac,
         )
 
