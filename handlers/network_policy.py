@@ -27,7 +27,7 @@ def add_update_network_policy(policy):
         selector = parser.calculate_pod_selector()
         inbound_rules = parser.calculate_inbound_rules()
     except Exception:
-        # If the Policy is malformed, log the error and kill the agent.
+        # If the Policy is malformed, log the error and kill the controller.
         # Kubernetes will restart us.
         _log.exception("Error parsing policy: %s",
                        json.dumps(policy, indent=2))
