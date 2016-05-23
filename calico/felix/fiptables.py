@@ -1034,7 +1034,8 @@ def _parse_ipt_restore_error(input_lines, err):
     :return tuple[bool,str]: tuple, the first (bool) element indicates
         whether the error is retryable; the second is a detail message.
     """
-    match = re.search(r"line (\d+) failed", err)
+    match = (re.search(r"line (\d+) failed", err) or
+             re.search(r"Error occurred at line: (\d+)", err))
     if match:
         # Have a line number, work out if this was a commit
         # failure, which is caused by concurrent access and is
@@ -1046,7 +1047,7 @@ def _parse_ipt_restore_error(input_lines, err):
         if offending_line.strip() == "COMMIT":
             return True, "COMMIT failed; likely concurrent access."
         else:
-            return False, "Line %s failed: %s" % (line_number, offending_line)
+            return False, "Line %s failed: %r" % (line_number, offending_line)
     else:
         return False, "ip(6)tables-restore failed with output: %s" % err
 

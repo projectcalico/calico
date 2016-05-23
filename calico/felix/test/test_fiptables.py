@@ -535,7 +535,7 @@ class TestUtilityFunctions(BaseTestCase):
         error = "iptables-restore: line 6 failed\n"
         retryable, msg = fiptables._parse_ipt_restore_error(IPT_INPUT, error)
         self.assertFalse(retryable)
-        self.assertEqual(msg, "Line 6 failed: --flush felix-to-09d7e2980bc")
+        self.assertEqual(msg, "Line 6 failed: '--flush felix-to-09d7e2980bc'")
 
     def test_parse_other_failure_parse(self):
         error = "iptables-restore: unknown\n"
