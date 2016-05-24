@@ -26,7 +26,7 @@ from subprocess32 import CalledProcessError, Popen, PIPE
 
 from calico_cni.constants import *
 from calico_cni.policy_drivers import (DefaultPolicyDriver, ApplyProfileError)
-from calico_cni.container_engines import DockerEngine 
+from calico_cni.container_engines import DockerEngine
 from calico_cni.util import CniError
 from calico import main, CniPlugin
 
@@ -58,7 +58,7 @@ class CniPluginTest(unittest.TestCase):
                 CNI_CONTAINERID_ENV: self.container_id,
                 CNI_IFNAME_ENV: "eth0",
                 CNI_ARGS_ENV: "IP=1.2.3.4",
-                CNI_COMMAND_ENV: CNI_CMD_ADD, 
+                CNI_COMMAND_ENV: CNI_CMD_ADD,
                 CNI_PATH_ENV: "/usr/bin/rkt/",
                 CNI_NETNS_ENV: "netns",
         }
@@ -66,7 +66,7 @@ class CniPluginTest(unittest.TestCase):
         # Create the CniPlugin to test.
         self.plugin = CniPlugin(self.network_config, self.env)
 
-        # Mock out policy driver. 
+        # Mock out policy driver.
         self.plugin.policy_driver = MagicMock(spec=DefaultPolicyDriver)
 
         # Mock out the datastore client.
@@ -98,7 +98,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.delete.assert_called_once_with()
 
     @patch("calico.json", autospec=True)
-    def test_add_mainline(self, m_json): 
+    def test_add_mainline(self, m_json):
         # Mock out _assign_ips.
         ip4 = IPNetwork("10.0.0.1/32")
         ip6 = IPNetwork("0:0:0:0:0:ffff:a00:1/128")
@@ -112,7 +112,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._create_endpoint = MagicMock(spec=self.plugin._create_endpoint)
         self.plugin._create_endpoint.return_value = endpoint
 
-        # Mock out _provision_veth. 
+        # Mock out _provision_veth.
         self.plugin._provision_veth = MagicMock(spec=self.plugin._provision_veth)
         self.plugin._provision_veth.return_value = endpoint
 
@@ -131,7 +131,7 @@ class CniPluginTest(unittest.TestCase):
         m_json.dumps.assert_called_once_with(ipam_response)
 
     @patch("calico.json", autospec=True)
-    def test_add_host_networking(self, m_json): 
+    def test_add_host_networking(self, m_json):
         # Mock out.
         self.plugin.container_engine.uses_host_networking = MagicMock(return_value=True)
 
@@ -139,9 +139,9 @@ class CniPluginTest(unittest.TestCase):
         assert_raises(SystemExit, self.plugin.add)
 
     @patch("calico.json", autospec=True)
-    def test_add_exists_new_network(self, m_json): 
+    def test_add_exists_new_network(self, m_json):
         """
-        Test add when the endpoint already exists, adding to a new 
+        Test add when the endpoint already exists, adding to a new
         network.
         """
         # Mock out methods that should not be called.
@@ -172,7 +172,7 @@ class CniPluginTest(unittest.TestCase):
         m_json.dumps.assert_called_once_with(expected)
 
     @patch("calico.json", autospec=True)
-    def test_add_profile_error(self, m_json): 
+    def test_add_profile_error(self, m_json):
         """
         Test add when the endpoint does not exist, error applying profile.
         """
@@ -197,26 +197,26 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._create_endpoint = MagicMock(spec=self.plugin._create_endpoint)
         self.plugin._create_endpoint.return_value = endpoint
 
-        # Mock out _provision_veth. 
+        # Mock out _provision_veth.
         self.plugin._provision_veth = MagicMock(spec=self.plugin._provision_veth)
         self.plugin._provision_veth.return_value = endpoint
 
         # Mock out apply_profile to throw error.
         msg = "Apply Profile Error Message"
         error = ApplyProfileError(msg)
-        self.plugin.policy_driver.apply_profile.side_effect = error  
+        self.plugin.policy_driver.apply_profile.side_effect = error
 
         # Mock out _get_endpoint - endpoint exists.
         self.plugin._get_endpoint = MagicMock(spec=self.plugin._get_endpoint)
-        self.plugin._get_endpoint.return_value = None 
+        self.plugin._get_endpoint.return_value = None
 
         # Call method.
         assert_raises(SystemExit, self.plugin.add)
 
     @patch("calico.json", autospec=True)
-    def test_add_exists_new_network_profile_error(self, m_json): 
+    def test_add_exists_new_network_profile_error(self, m_json):
         """
-        Test add when the endpoint already exists, adding to a new 
+        Test add when the endpoint already exists, adding to a new
         network, error applying profile.
         """
         # Mock out apply_profile to throw error.
@@ -236,10 +236,10 @@ class CniPluginTest(unittest.TestCase):
         assert_raises(SystemExit, self.plugin.add)
 
     @patch("calico.json", autospec=True)
-    def test_add_exists_no_ips(self, m_json): 
+    def test_add_exists_no_ips(self, m_json):
         """
         Tests add to new network when endpoint exists,
-        no IP addresses are assigned. 
+        no IP addresses are assigned.
         """
         # Mock out _get_endpoint - endpoint exists.
         endpoint = MagicMock(spec=Endpoint)
@@ -289,7 +289,7 @@ class CniPluginTest(unittest.TestCase):
 
         # Mock out _get_endpoint.
         self.plugin._get_endpoint = MagicMock(spec=self.plugin._get_endpoint)
-        self.plugin._get_endpoint.return_value = None  
+        self.plugin._get_endpoint.return_value = None
 
         # Call delete()
         assert_raises(SystemExit, self.plugin.delete)
@@ -321,7 +321,7 @@ class CniPluginTest(unittest.TestCase):
     def test_assign_ip_invalid_response(self):
         # Mock _call_ipam_plugin.
         rc = 1
-        ipam_result = "Invalid json" 
+        ipam_result = "Invalid json"
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
         env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
@@ -337,8 +337,8 @@ class CniPluginTest(unittest.TestCase):
         rc = ERR_CODE_GENERIC
         msg = "Message"
         details = "Details"
-        ipam_result = json.dumps({"code": rc, 
-                                  "msg": msg, 
+        ipam_result = json.dumps({"code": rc,
+                                  "msg": msg,
                                   "details": details})
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
@@ -403,6 +403,7 @@ class CniPluginTest(unittest.TestCase):
         # Call _release_ip.
         self.plugin._release_ip(env)
 
+
     @patch("calico.IpamPlugin", autospec=True)
     def test_call_ipam_plugin_calico_mainline(self, m_ipam_plugin):
         # Mock _find_ipam_plugin.
@@ -437,7 +438,7 @@ class CniPluginTest(unittest.TestCase):
         # Mock out return values.
         env = {}
         err = CniError(150, "message", "details")
-        m_ipam_plugin(env, self.network_config).execute.side_effect = err 
+        m_ipam_plugin(env, self.network_config).execute.side_effect = err
 
         # Set IPAM type.
         self.plugin.ipam_type = "calico-ipam"
@@ -449,6 +450,31 @@ class CniPluginTest(unittest.TestCase):
         expected = '{"msg": "message", "code": 150, "details": "details"}'
         assert_equal(rc, 150)
         assert_equal(result, expected)
+
+    @patch("calico.CniPlugin._call_binary_ipam_plugin", autospec=True)
+    def test_call_ipam_plugin_host_local_podcidr(self, m_call_bin):
+        # Mock _find_ipam_plugin.
+        plugin_path = "/opt/bin/cni/host-local"
+        self.plugin._find_ipam_plugin = MagicMock(spec=self.plugin._find_ipam_plugin)
+        self.plugin._find_ipam_plugin.return_value = plugin_path
+
+        # Mock out return values.
+        ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
+        env = {}
+        out = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ip6}})
+        m_call_bin.return_value = 0, out
+
+        # Set IPAM type.
+        self.plugin.ipam_type = "host-local"
+        self.plugin.network_config["ipam"]["subnet"] = "usePodCidr"
+        self.plugin.network_config["kubernetes"] = {"kubeconfig": "/path/to/kubeconfig"}
+
+        # This is not a valid configuration when not running under Kubernetes.
+        with assert_raises(SystemExit) as err:
+            self.plugin._call_ipam_plugin(env)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
 
     @patch("calico.Popen", autospec=True)
     def test_call_ipam_plugin_binary_mainline(self, m_popen):
@@ -476,9 +502,9 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert.
         assert_equal(rc, 0)
-        m_popen.assert_called_once_with(plugin_path, 
-                                        stdin=PIPE, 
-                                        stdout=PIPE, 
+        m_popen.assert_called_once_with(plugin_path,
+                                        stdin=PIPE,
+                                        stdout=PIPE,
                                         stderr=PIPE,
                                         env=env)
         m_proc.communicate.assert_called_once_with(json.dumps(self.plugin.network_config))
@@ -491,10 +517,10 @@ class CniPluginTest(unittest.TestCase):
         """
         # Mock _find_ipam_plugin.
         self.plugin._find_ipam_plugin = MagicMock(spec=self.plugin._find_ipam_plugin)
-        self.plugin._find_ipam_plugin.return_value = None 
+        self.plugin._find_ipam_plugin.return_value = None
         env = {}
 
-        # Set IPAM type. 
+        # Set IPAM type.
         self.plugin.ipam_type = "not-calico"
 
         # Call method.
@@ -514,7 +540,7 @@ class CniPluginTest(unittest.TestCase):
         ep = self.plugin._create_endpoint(ip_list)
 
         # Assert.
-        self.plugin._client.create_endpoint.assert_called_once_with(ANY, 
+        self.plugin._client.create_endpoint.assert_called_once_with(ANY,
                 self.expected_orch_id, self.expected_workload_id, ip_list)
         assert_equal(ep, endpoint)
 
@@ -541,14 +567,14 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         self.plugin._client.remove_workload.assert_called_once_with(hostname=ANY,
-                workload_id=self.expected_workload_id, 
+                workload_id=self.expected_workload_id,
                 orchestrator_id=self.expected_orch_id)
 
     def test_remove_workload_does_not_exist(self):
         """
         Make sure we handle this case gracefully - no exception raised.
         """
-        self.plugin._client.remove_workload.side_effect = KeyError 
+        self.plugin._client.remove_workload.side_effect = KeyError
         self.plugin._remove_workload()
 
     @patch("calico.os", autospec=True)
@@ -631,8 +657,8 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         assert_equal(ep, endpoint)
-        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
-                orchestrator_id=self.expected_orch_id, 
+        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY,
+                orchestrator_id=self.expected_orch_id,
                 workload_id=self.expected_workload_id)
 
     def test_get_endpoint_no_endpoint(self):
@@ -644,15 +670,15 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert
         assert_equal(ep, None)
-        calls = [call(hostname=ANY, orchestrator_id=self.expected_orch_id, 
+        calls = [call(hostname=ANY, orchestrator_id=self.expected_orch_id,
                       workload_id=self.expected_workload_id),
-                 call(hostname=ANY, orchestrator_id="cni", 
+                 call(hostname=ANY, orchestrator_id="cni",
                       workload_id=self.container_id)]
         self.plugin._client.get_endpoint.assert_has_calls(calls)
 
     def test_get_endpoint_multiple_endpoints(self):
         # Mock
-        self.plugin._client.get_endpoint.side_effect = MultipleEndpointsMatch 
+        self.plugin._client.get_endpoint.side_effect = MultipleEndpointsMatch
 
         # Call
         with assert_raises(SystemExit) as err:
@@ -661,8 +687,8 @@ class CniPluginTest(unittest.TestCase):
         assert_equal(e.code, ERR_CODE_GENERIC)
 
         # Assert
-        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY, 
-                orchestrator_id=self.expected_orch_id, 
+        self.plugin._client.get_endpoint.assert_called_once_with(hostname=ANY,
+                orchestrator_id=self.expected_orch_id,
                 workload_id=self.expected_workload_id)
 
     def test_remove_stale_endpoint(self):
@@ -757,7 +783,7 @@ class CniPluginTest(unittest.TestCase):
 
 class CniPluginKubernetesTest(CniPluginTest):
     """
-    Test class for CniPlugin class when running under Kubernetes. Runs all 
+    Test class for CniPlugin class when running under Kubernetes. Runs all
     of the CniPluginTest cases with Kubernetes specific parameters specified.
     """
     def setUp(self):
@@ -772,7 +798,7 @@ class CniPluginKubernetesTest(CniPluginTest):
                 CNI_CONTAINERID_ENV: self.container_id,
                 CNI_IFNAME_ENV: "eth0",
                 CNI_ARGS_ENV: "K8S_POD_NAME=testpod;K8S_POD_NAMESPACE=k8sns",
-                CNI_COMMAND_ENV: CNI_CMD_ADD, 
+                CNI_COMMAND_ENV: CNI_CMD_ADD,
                 CNI_PATH_ENV: "/opt/cni/bin",
                 CNI_NETNS_ENV: "netns",
         }
@@ -781,10 +807,10 @@ class CniPluginKubernetesTest(CniPluginTest):
         # config.
         self.plugin = CniPlugin(self.network_config, self.env)
 
-        # Mock out policy driver. 
+        # Mock out policy driver.
         self.plugin.policy_driver = MagicMock(spec=DefaultPolicyDriver)
 
-        # Mock out container engine 
+        # Mock out container engine
         self.plugin.container_engine = MagicMock(spec=DockerEngine)
         self.plugin.container_engine.uses_host_networking.return_value = False
 
@@ -794,11 +820,11 @@ class CniPluginKubernetesTest(CniPluginTest):
 
         # Set the expected values.
         self.expected_orch_id = "k8s"
-        self.expected_workload_id = "k8sns.testpod" 
+        self.expected_workload_id = "k8sns.testpod"
 
     @patch("calico.json", autospec=True)
     @patch("calico.IpamPlugin", autospec=True)
-    def test_add_exists_no_ips(self, m_ipam, m_json): 
+    def test_add_exists_no_ips(self, m_ipam, m_json):
         """
         In k8s, if an endpoint exists already, we must clean it up.
         """
@@ -830,17 +856,110 @@ class CniPluginKubernetesTest(CniPluginTest):
 
         # Assert we clean up policy.
         self.plugin.policy_driver.remove_profile.assert_called_once_with()
-        
+
         # Assert we add a new endpoint.
         self.plugin._add_new_endpoint.assert_called_once_with()
 
     @patch("calico.json", autospec=True)
-    def test_add_exists_new_network(self, m_json): 
+    def test_add_exists_new_network(self, m_json):
         """
         In k8s, we never add a new network to an existing endpoint.
         """
         pass
 
     @patch("calico.json", autospec=True)
-    def test_add_exists_new_network_profile_error(self, m_json): 
+    def test_add_exists_new_network_profile_error(self, m_json):
         pass
+
+    @patch("calico.CniPlugin._call_binary_ipam_plugin", autospec=True)
+    @patch("calico.HTTPClient", autospec=True)
+    @patch("calico.Node", autospec=True)
+    @patch("calico.KubeConfig", autospec=True)
+    def test_call_ipam_plugin_host_local_podcidr(self, m_kcfg, m_node, m_http, m_call_bin):
+        # Mock _find_ipam_plugin.
+        plugin_path = "/opt/bin/cni/host-local"
+        self.plugin._find_ipam_plugin = MagicMock(spec=self.plugin._find_ipam_plugin)
+        self.plugin._find_ipam_plugin.return_value = plugin_path
+
+        # Mock out return values.
+        ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
+        env = {}
+        out = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ip6}})
+        m_call_bin.return_value = 0, out
+
+        # Set IPAM type.
+        self.plugin.ipam_type = "host-local"
+        self.plugin.network_config["ipam"]["subnet"] = "usePodCidr"
+        self.plugin.kubeconfig_path = "/path/to/kubeconfig"
+        self.plugin.k8s_node_name = "nodename"
+
+        # Setup response.
+        node = MagicMock(obj={"metadata": {"name": "nodename"}, "spec":{"podCIDR": "1.2.3.4"}})
+        nodes = [node]
+        m_node.objects.return_value = nodes
+
+        # Call _call_ipam_plugin.
+        rc, result = self.plugin._call_ipam_plugin(env)
+
+        # Assert.
+        assert_equal(rc, 0)
+        assert_equal(result, out)
+
+
+    @patch("calico.CniPlugin._call_binary_ipam_plugin", autospec=True)
+    @patch("calico.HTTPClient", autospec=True)
+    @patch("calico.Node", autospec=True)
+    @patch("calico.KubeConfig", autospec=True)
+    def test_call_ipam_plugin_host_local_podcidr_no_podcidr(self, m_kcfg, m_node, m_http, m_call_bin):
+        # Mock _find_ipam_plugin.
+        plugin_path = "/opt/bin/cni/host-local"
+        self.plugin._find_ipam_plugin = MagicMock(spec=self.plugin._find_ipam_plugin)
+        self.plugin._find_ipam_plugin.return_value = plugin_path
+
+        # Mock out return values.
+        ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
+        env = {}
+        out = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ip6}})
+        m_call_bin.return_value = 0, out
+
+        # Set IPAM type.
+        self.plugin.ipam_type = "host-local"
+        self.plugin.network_config["ipam"]["subnet"] = "usePodCidr"
+        self.plugin.kubeconfig_path = "/path/to/kubeconfig"
+        self.plugin.k8s_node_name = "nodename"
+
+        # Setup response.
+        node = MagicMock(obj={"metadata": {"name": "nodename"}, "spec":{"podCIDR": ""}})
+        nodes = [node]
+        m_node.objects.return_value = nodes
+
+        with assert_raises(SystemExit) as err:
+            self.plugin._call_ipam_plugin(env)
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_get_pod_cidr_no_kcfg(self):
+        with assert_raises(SystemExit) as err:
+            self.plugin._get_kubernetes_pod_cidr()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)
+
+    @patch("calico.HTTPClient", autospec=True)
+    @patch("calico.Node", autospec=True)
+    @patch("calico.KubeConfig", autospec=True)
+    def test_get_pod_cidr_no_node_in_api(self, m_kcfg, m_node, m_http):
+        # Set IPAM type.
+        self.plugin.ipam_type = "host-local"
+        self.plugin.network_config["ipam"]["subnet"] = "usePodCidr"
+        self.plugin.kubeconfig_path = "/path/to/kubeconfig"
+        self.plugin.k8s_node_name = "nodename"
+
+        # Setup response.
+        m_node.objects.return_value = []
+
+        with assert_raises(SystemExit) as err:
+            self.plugin._get_kubernetes_pod_cidr()
+        e = err.exception
+        assert_equal(e.code, ERR_CODE_GENERIC)

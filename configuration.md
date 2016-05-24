@@ -44,6 +44,8 @@ When using Calico IPAM, the following flags determine what IP addresses should b
 
 A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
 
+When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  This is currently only supported when using `kubeconfig` for accessing the API. 
+
 ## Kubernetes specific
 
 When using the Calico CNI plugin with Kubernetes, an additional config block can be specified to control how network policy is configured. The required config block is `policy`. See the [Calico Kubernetes documentation](https://github.com/projectcalico/calico-containers/tree/master/docs/cni/kubernetes) for more information.
@@ -63,6 +65,8 @@ The CNI plugin may need to authenticate with the Kubernetes API server. The foll
 * `k8s_client_key`
 * `k8s_certificate_authority`
 	* Verifying the API certificate against a CA only works if connecting to the API server using a hostname.
+* `kubeconfig`
+	* Path to a Kubernetes `kubeconfig` file.
 
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/configuration.md?pixel)](https://github.com/igrigorik/ga-beacon)
