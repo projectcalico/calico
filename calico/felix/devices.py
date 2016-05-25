@@ -23,6 +23,7 @@ import re
 import os
 import socket
 import struct
+from collections import defaultdict
 
 from netaddr import IPAddress
 
@@ -117,6 +118,39 @@ def list_interface_ips(ip_type, interface):
     ips = re.findall(regex, data, re.MULTILINE)
     _log.debug("Interface %s has %s IPs %s", interface, ip_type, ips)
     return set(IPAddress(ip) for ip in ips)
+
+
+def list_ips_by_iface(ip_type):
+    """
+    List the local IPs assigned to all interfaces.
+    :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
+    :returns: a set of all addresses directly assigned to the device.
+    """
+    assert ip_type in (futils.IPV4, futils.IPV6), (
+        "Expected an IP type, got %s" % ip_type
+    )
+    if ip_type == futils.IPV4:
+        data = futils.check_call(
+            ["ip", "addr", "list"]).stdout
+        regex = r'^    inet ([0-9.]+)'
+    else:
+        data = futils.check_call(
+            ["ip", "-6", "addr", "list"]).stdout
+        regex = r'^    inet6 ([0-9a-fA-F:.]+)'
+
+    ips_by_iface = defaultdict(set)
+    iface_name = None
+    for line in data.splitlines():
+        m = re.match(r"^\d+: ([^:]+):", line)
+        if m:
+            iface_name = m.group(1)
+        else:
+            assert iface_name
+            m = re.match(regex, line)
+            if m:
+                ip = IPAddress(m.group(1))
+                ips_by_iface[iface_name].add(IPAddress(ip))
+    return ips_by_iface
 
 
 def set_interface_ips(ip_type, interface, ips):
