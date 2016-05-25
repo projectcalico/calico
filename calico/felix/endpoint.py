@@ -652,11 +652,11 @@ class LocalEndpoint(RefCountedActor):
 
         if pending_endpoint:
             # Update/create.
-            if pending_endpoint['mac'] != self._mac:
+            if pending_endpoint.get('mac') != self._mac:
                 # Either we have not seen this MAC before, or it has changed.
                 _log.debug("Endpoint MAC changed to %s",
-                           pending_endpoint["mac"])
-                self._mac = pending_endpoint['mac']
+                           pending_endpoint.get("mac"))
+                self._mac = pending_endpoint.get('mac')
                 self._mac_changed = True
                 # MAC change requires refresh of iptables rules and ARP table.
                 self._iptables_in_sync = False
@@ -854,7 +854,7 @@ class WorkloadEndpoint(LocalEndpoint):
                 ips.add(nat_map['ext_ip'])
             devices.set_routes(self.ip_type, ips,
                                self._iface_name,
-                               self.endpoint["mac"],
+                               self.endpoint.get("mac"),
                                reset_arp=reset_arp)
 
         except (IOError, FailedSystemCall) as e:

@@ -142,7 +142,6 @@ class TestCommon(unittest.TestCase):
             'name': 'tap1234',
             'mac': 'aa:bb:cc:dd:ee:ff',
             'ipv4_nets': ['10.0.1.0/32'],
-            "ipv6_nets": [],
             "profile_ids": ["prof1", "prof2"],
         })
 
@@ -161,8 +160,6 @@ class TestCommon(unittest.TestCase):
         self.assert_tweak_invalidates_endpoint(name=[])
         self.assert_tweak_invalidates_endpoint(name="incorrect_prefix")
 
-        self.assert_tweak_invalidates_endpoint(mac=MISSING)
-        self.assert_tweak_invalidates_endpoint(mac=None)
         self.assert_tweak_invalidates_endpoint(mac=object())
         self.assert_tweak_invalidates_endpoint(mac="bad MAC")
 
@@ -374,22 +371,23 @@ class TestCommon(unittest.TestCase):
                                      "Expected 'state' to be"):
             common.validate_endpoint(config, combined_id, bad_dict)
 
-        # Missing mac and name; both must be reported as two errors
+        # Missing name.
         bad_dict = endpoint_dict.copy()
         del bad_dict['name']
-        del bad_dict['mac']
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Missing 'name' field"):
             common.validate_endpoint(config, combined_id, bad_dict)
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'mac' field"):
-            common.validate_endpoint(config, combined_id, bad_dict)
+
+        # It's OK to be missing a MAC.
+        ok_dict = endpoint_dict.copy()
+        del ok_dict['mac']
+        common.validate_endpoint(config, combined_id, ok_dict)
 
         bad_dict['name'] = [1, 2, 3]
         bad_dict['mac'] = 73
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Expected 'name' to be a string.*" +
-                                     "Expected 'mac' to be a string"):
+                                     "Invalid MAC"):
             common.validate_endpoint(config, combined_id, bad_dict)
 
         # Bad profile ID

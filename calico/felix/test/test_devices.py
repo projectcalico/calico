@@ -113,8 +113,7 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_any_call(['arp', '-s', ip, mac, '-i', tap])
             futils.check_call.assert_called_with(["ip", "route", "replace", ip, "dev", tap])
 
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ip is provided"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.add_route(type, ip, tap, None)
 
         type = futils.IPV6
@@ -123,8 +122,7 @@ class TestDevices(unittest.TestCase):
             devices.add_route(type, ip, tap, mac)
             futils.check_call.assert_called_with(["ip", "-6", "route", "replace", ip, "dev", tap])
 
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ip is provided"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.add_route(type, ip, tap, None)
 
     def test_del_route(self):
@@ -144,14 +142,11 @@ class TestDevices(unittest.TestCase):
             devices.del_route(type, ip, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "del", ip, "dev", tap])
 
-    def test_set_routes_mac_required(self):
+    def test_set_routes_mac_not_set(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
-        mac = stub_utils.get_mac()
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ips is not "
-                                     "empty"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.set_routes(type, ips, interface)
 
     def test_set_routes_arp_ipv4_only(self):

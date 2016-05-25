@@ -246,11 +246,9 @@ def add_route(ip_type, ip, interface, mac):
     :param str mac: MAC address. May not be None unless ip is None.
     :raises FailedSystemCall
     """
-    if mac is None and ip:
-        raise ValueError("mac must be supplied if ip is provided")
-
     if ip_type == futils.IPV4:
-        futils.check_call(['arp', '-s', ip, mac, '-i', interface])
+        if mac:
+            futils.check_call(['arp', '-s', ip, mac, '-i', interface])
         futils.check_call(["ip", "route", "replace", ip, "dev", interface])
     else:
         futils.check_call(["ip", "-6", "route", "replace", ip, "dev",
@@ -280,11 +278,9 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param set ips: IPs to set up (any not in the set are removed)
     :param str interface: Interface name
-    :param str mac|NoneType: MAC address. May not be none unless ips is empty.
+    :param str mac|NoneType: MAC address.
     :param bool reset_arp: Reset arp. Only valid if IPv4.
     """
-    if mac is None and ips:
-        raise ValueError("mac must be supplied if ips is not empty")
     if reset_arp and ip_type != futils.IPV4:
         raise ValueError("reset_arp may only be supplied for IPv4")
 
@@ -295,7 +291,7 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
         del_route(ip_type, ip, interface)
     for ip in (ips - current_ips):
         add_route(ip_type, ip, interface, mac)
-    if reset_arp:
+    if mac and reset_arp:
         for ip in (ips & current_ips):
             futils.check_call(['arp', '-s', ip, mac, '-i', interface])
 
