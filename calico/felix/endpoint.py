@@ -19,14 +19,20 @@ felix.endpoint
 
 Endpoint management.
 """
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import logging
+
+import time
+
+import gevent
+import sys
+from netaddr import IPNetwork
 
 from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
     ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR,
-    EndpointId)
+    EndpointId, ResolvedHostIfaceId)
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
@@ -67,6 +73,15 @@ class EndpointManager(ReferenceManager):
         # Dict that maps from interface name ("tap1234") to endpoint ID.
         self.endpoint_id_by_iface_name = {}
 
+        # Cache of IPs applied to host interfaces.  (I.e. any interfaces that
+        # aren't workload interfaces.)
+        self.host_iface_ips_by_iface = {}
+        # Host interface dicts by ID.  We'll resolve these with the IPs above
+        # and inject the (resolved) ones as endpoints.
+        self.host_ifaces_by_id = {}
+        # Cache of interfaces that we've resolved and injected as endpoints.
+        self.resolved_host_ifaces = {}
+
         # Set of endpoints that are live on this host.  I.e. ones that we've
         # increffed.
         self.local_endpoint_ids = set()
@@ -89,6 +104,9 @@ class EndpointManager(ReferenceManager):
 
         self._data_model_in_sync = False
 
+        self._iface_poll_greenlet = gevent.spawn(self._poll_interface_ips)
+        self._iface_poll_greenlet.link_exception(self._on_worker_died)
+
     def _create(self, combined_id):
         """
         Overrides ReferenceManager._create()
@@ -102,7 +120,7 @@ class EndpointManager(ReferenceManager):
                                     self.rules_mgr,
                                     self.fip_manager,
                                     self.status_reporter)
-        else:
+        elif isinstance(combined_id, ResolvedHostIfaceId):
             return HostInterface(self.config,
                                  combined_id,
                                  self.ip_type,
@@ -111,7 +129,8 @@ class EndpointManager(ReferenceManager):
                                  self.rules_mgr,
                                  self.fip_manager,
                                  self.status_reporter)
-
+        else:
+            raise RuntimeError("Unknown ID type: %s" % combined_id)
 
     @actor_message()
     def on_tier_data_update(self, tier, data):
@@ -250,9 +269,11 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_host_iface_update(self, combined_id, data):
-        # FIXME need to handle host interfaces separately.
-        self.on_endpoint_update(combined_id, data)
-        return
+        if data is not None:
+            self.host_ifaces_by_id[combined_id] = data
+        else:
+            self.host_ifaces_by_id.pop(combined_id, None)
+        self._resolve_host_ifaces()
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
@@ -327,6 +348,94 @@ class EndpointManager(ReferenceManager):
                 ep = self.objects_by_id[endpoint_id]
                 ep.on_interface_update(iface_up, async=True)
 
+    def _poll_interface_ips(self):
+        """Greenlet: Polls host interfaces for changes to their IP addresses.
+
+        Sends updates to the EndpointManager via the _on_iface_ips_update()
+        message.
+
+        If polling is disabled, then it reads the interfaces once and then
+        stops.
+        """
+        known_interfaces = {}
+        exclude_prefix = self.config.IFACE_PREFIX
+        while True:
+            ips_by_iface = devices.list_ips_by_iface(self.ip_type)
+            for iface, ips in ips_by_iface.items():
+                if iface.startswith(exclude_prefix):
+                    ips_by_iface.pop(iface)
+                else:
+                    old_ips = known_interfaces.pop(iface, None)
+                    if old_ips != ips:
+                        self._on_iface_ips_update(iface, ips, async=True)
+            for iface, ips in known_interfaces.iteritems():
+                self._on_iface_ips_update(iface, None, async=True)
+            known_interfaces = ips_by_iface
+            if self.config.HOST_IF_POLL_INTERVAL_SECS <= 0:
+                _log.info("Host interface polling disabled, stopping after "
+                          "initial read. Further changes to host interface "
+                          "IPs will be ignored.")
+                break
+            time.sleep(self.config.HOST_IF_POLL_INTERVAL_SECS)
+
+    @actor_message()
+    def _on_iface_ips_update(self, iface_name, ip_addrs):
+        _log.info("Interface %s now has IPs %s", iface_name, ip_addrs)
+        if ip_addrs is not None:
+            self.host_iface_ips_by_iface[iface_name] = ip_addrs
+        else:
+            self.host_iface_ips_by_iface.pop(iface_name, None)
+        self._resolve_host_ifaces()
+
+    def _resolve_host_ifaces(self):
+        """Resolves the host interface data we've learned from etcd with
+        IP addresses and interface names learned from the kernel.
+
+        Host interfaces that have matching IPs get combined with interface
+        name learned from the kernel and updated via on_endpoint_update().
+
+        In the case where multiple interfaces have the same IP address,
+        a copy of the host interface will be resolved with each interface.
+        """
+        # Invert the interface name to IP mapping to allow us to do an IP to
+        # interface name lookup.
+        iface_names_by_ip = defaultdict(set)
+        for iface, ips in self.host_iface_ips_by_iface.iteritems():
+            for ip in ips:
+                iface_names_by_ip[ip].add(iface)
+        # Iterate over the host interfaces, looking for corresponding IPs.
+        resolved_ifaces = {}
+        for combined_id, host_iface in self.host_ifaces_by_id.iteritems():
+            net_key = "expected_ipv%s_net" % self.ip_version
+            if "name" in host_iface:
+                # This interface has an explicit name in the data so it's
+                # already resolved.
+                resolved_id = combined_id.resolve(host_iface["name"])
+                resolved_ifaces[resolved_id] = host_iface
+            elif net_key in host_iface:
+                # No explicit name, look for an interface with a matching IP.
+                expected_subnet = IPNetwork(host_iface[net_key])
+                for ip, iface_names in iface_names_by_ip.iteritems():
+                    if ip in expected_subnet:
+                        for iface_name in iface_names:
+                            # Got a match.  Since it's possible to match
+                            # multiple interfaces by IP, we add the interface
+                            # name into the ID.
+                            resolved_id = combined_id.resolve(iface_name)
+                            resolved_data = host_iface.copy()
+                            resolved_data["name"] = iface_name
+                            resolved_ifaces[resolved_id] = resolved_data
+        # Fire in the updates for the new data.
+        for resolved_id, data in resolved_ifaces.iteritems():
+            if self.resolved_host_ifaces.get(resolved_id) != data:
+                self.on_endpoint_update(resolved_id, data)
+        # And the deletions for any now-missing interfaces.
+        for resolved_id in self.resolved_host_ifaces.keys():
+            if resolved_id not in resolved_ifaces:
+                self.on_endpoint_update(resolved_id, None)
+        # Update the cache so we can calculate deltas next time.
+        self.resolved_host_ifaces = resolved_ifaces
+
     def _update_dirty_policy(self):
         if not self._data_model_in_sync:
             _log.debug("Datamodel not in sync, postponing update to policy")
@@ -369,6 +478,13 @@ class EndpointManager(ReferenceManager):
 
         endpoint = self.objects_by_id[ep_id]
         endpoint.on_tiered_policy_update(pols_by_tier, async=True)
+
+    def _on_worker_died(self, watch_greenlet):
+        """
+        Greenlet: spawned by the gevent Hub if our worker thread dies.
+        """
+        _log.critical("Worker greenlet died: %s; exiting.", watch_greenlet)
+        sys.exit(1)
 
 
 class LocalEndpoint(RefCountedActor):

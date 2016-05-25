@@ -260,8 +260,32 @@ class HostIfaceId(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def resolve(self, iface_name):
+        return ResolvedHostIfaceId(self.host, self.endpoint, iface_name)
+
     def __hash__(self):
         return hash(self.host) * 37 + hash(self.endpoint)
+
+
+class ResolvedHostIfaceId(HostIfaceId):
+    __slots__ = ["iface_name"]
+
+    def __init__(self, host, endpoint, iface_name):
+        super(ResolvedHostIfaceId, self).__init__(host, endpoint)
+        self.iface_name = iface_name
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        if not isinstance(other, ResolvedHostIfaceId):
+            return False
+        return (other.endpoint == self.endpoint and
+                other.host == self.host and
+                other.iface_name == self.iface_name)
+
+    def __hash__(self):
+        return (super(ResolvedHostIfaceId, self).__hash__() * 37 +
+                hash(self.iface_name))
 
 
 class TieredPolicyId(object):

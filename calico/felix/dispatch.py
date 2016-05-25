@@ -245,14 +245,15 @@ class _DispatchChains(Actor):
                 # Add a default drop to the end of the leaf chain.
                 from_upds.extend(
                     self.end_of_chain_rules(disp_from_chain, "From"))
-                to_upds.extend(self.end_of_chain_rules(disp_to_chain, "To"))
+                to_upds.extend(
+                    self.end_of_chain_rules(disp_to_chain, "To"))
 
         # Both TO and FROM chains end with a DROP so that interfaces that
         # we don't know about yet can't bypass our rules.
         root_from_upds.extend(
             self.end_of_chain_rules(self.chain_from_root, "From"))
         root_to_upds.extend(
-            self.end_of_chain_rules(self.chain_from_root, "To"))
+            self.end_of_chain_rules(self.chain_to_root, "To"))
 
         chains_to_delete = self.programmed_leaf_chains - new_leaf_chains
 
@@ -332,7 +333,6 @@ class HostIfaceDispatchChains(_DispatchChains):
         # For host interfaces, we only configure the interfaces we've been
         # asked to and then we defer to the host's remaining iptables rules
         # for unknown interfaces.
-        # TODO Bare-metal: make RETURN configurable
         return ['-A %s --jump RETURN --match comment '
                 '--comment "Unknown interface, return"' %
                 chain_name]

@@ -199,6 +199,10 @@ class Config(object):
         self.add_parameter("PeriodicResyncInterval",
                            "How often to do cleanups, seconds",
                            60 * 60, value_is_int=True)
+        self.add_parameter("HostInterfacePollInterval",
+                           "How often to poll for updates to host interface "
+                           "IP addresses or 0 to disable.", 10,
+                           value_is_int=True)
         self.add_parameter("IptablesRefreshInterval",
                            "How often to refresh iptables state, in seconds",
                            60, value_is_int=True)
@@ -334,6 +338,8 @@ class Config(object):
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
         self.REFRESH_INTERVAL = \
             self.parameters["IptablesRefreshInterval"].value
+        self.HOST_IF_POLL_INTERVAL_SECS = \
+            self.parameters["HostInterfacePollInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
@@ -641,6 +647,11 @@ class Config(object):
         if self.ENDPOINT_REPORT_DELAY < 0:
             log.warning("Endpoint status delay is negative, defaulting to 1.")
             self.ENDPOINT_REPORT_DELAY = 1
+
+        if self.HOST_IF_POLL_INTERVAL_SECS < 0:
+            log.warning("Host interface poll interval is negative, "
+                        "defaulting to 10s.")
+            self.HOST_IF_POLL_INTERVAL_SECS = 10
 
         if self.MAX_IPSET_SIZE <= 0:
             log.warning("Max ipset size is non-positive, defaulting to 2^20.")
