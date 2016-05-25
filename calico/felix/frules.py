@@ -206,6 +206,7 @@ CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
 CHAIN_PREROUTING = FELIX_PREFIX + "PREROUTING"
 CHAIN_POSTROUTING = FELIX_PREFIX + "POSTROUTING"
 CHAIN_INPUT = FELIX_PREFIX + "INPUT"
+CHAIN_OUTPUT = FELIX_PREFIX + "OUTPUT"
 CHAIN_FORWARD = FELIX_PREFIX + "FORWARD"
 CHAIN_FIP_DNAT = FELIX_PREFIX + 'FIP-DNAT'
 CHAIN_FIP_SNAT = FELIX_PREFIX + 'FIP-SNAT'
@@ -327,6 +328,9 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
     input_chain, input_deps = (
         iptables_generator.filter_input_chain(ip_version, hosts_set_name)
     )
+    output_chain, output_deps = (
+        iptables_generator.filter_output_chain(ip_version)
+    )
     forward_chain, forward_deps = (
         iptables_generator.filter_forward_chain(ip_version)
     )
@@ -335,15 +339,20 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
         {
             CHAIN_FORWARD: forward_chain,
             CHAIN_INPUT: input_chain,
+            CHAIN_OUTPUT: output_chain,
         },
         {
             CHAIN_FORWARD: forward_deps,
             CHAIN_INPUT: input_deps,
+            CHAIN_OUTPUT: output_deps,
         },
         async=False)
 
     filter_updater.ensure_rule_inserted(
         "INPUT --jump %s" % CHAIN_INPUT,
+        async=False)
+    filter_updater.ensure_rule_inserted(
+        "OUTPUT --jump %s" % CHAIN_OUTPUT,
         async=False)
     filter_updater.ensure_rule_inserted(
         "FORWARD --jump %s" % CHAIN_FORWARD,

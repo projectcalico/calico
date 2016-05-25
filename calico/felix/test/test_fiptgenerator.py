@@ -35,30 +35,28 @@ _log = logging.getLogger(__name__)
 
 INPUT_CHAINS = {
     "Default": [
-        '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+        '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
         '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
-        '--append felix-INPUT --protocol udp --sport 68 --dport 67 '
-        '--jump ACCEPT',
+        '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
         '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
         '--append felix-INPUT --jump DROP -m comment --comment "Drop all packets from endpoints to the host"',
     ],
     "IPIP": [
         '--append felix-INPUT --protocol 4 --match set ! --match-set felix-hosts src --jump DROP',
-        '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+        '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
         '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
-        '--append felix-INPUT --protocol udp --sport 68 --dport 67 '
-        '--jump ACCEPT',
+        '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
         '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
         '--append felix-INPUT --jump DROP -m comment --comment "Drop all packets from endpoints to the host"',
     ],
     "Return": [
-        '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+        '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
         '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 130',
         '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 131',
         '--append felix-INPUT --jump ACCEPT --protocol ipv6-icmp --icmpv6-type 132',
@@ -455,17 +453,16 @@ class TestGlobalChains(BaseTestCase):
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
 
     def test_build_input_chain(self):
-
         chain, deps = self.iptables_generator.filter_input_chain(ip_version=4)
         self.assertEqual(chain, INPUT_CHAINS["Default"])
-        self.assertEqual(deps, set())
+        self.assertEqual(deps, set(["felix-FROM-HOST-IF"]))
 
     def test_build_input_chain_ipip(self):
         chain, deps = self.iptables_generator.filter_input_chain(
             ip_version=4,
             hosts_set_name="felix-hosts")
         self.assertEqual(chain, INPUT_CHAINS["IPIP"])
-        self.assertEqual(deps, set())
+        self.assertEqual(deps, set(["felix-FROM-HOST-IF"]))
 
     def test_build_input_chain_return(self):
         host_dict = {
@@ -478,7 +475,8 @@ class TestGlobalChains(BaseTestCase):
             ip_version=6)
 
         self.assertEqual(chain, INPUT_CHAINS["Return"])
-        self.assertEqual(deps, set(["felix-FROM-ENDPOINT"]))
+        self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
+                                    "felix-FROM-HOST-IF"]))
 
 
 class TestRules(BaseTestCase):

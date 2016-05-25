@@ -49,7 +49,8 @@ from calico.felix.frules import (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT,
                                  CHAIN_PREROUTING, CHAIN_POSTROUTING,
                                  CHAIN_INPUT, CHAIN_FORWARD,
                                  FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT,
-                                 CHAIN_TO_IFACE, CHAIN_FROM_IFACE)
+                                 CHAIN_TO_IFACE, CHAIN_FROM_IFACE,
+                                 CHAIN_OUTPUT)
 
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
@@ -294,6 +295,42 @@ class FelixIptablesGenerator(FelixPlugin):
                     "--append %s --jump %s" %
                     (CHAIN_INPUT, self.DEFAULT_INPUT_CHAIN_ACTION)
                 )
+
+        return chain, deps
+
+    def filter_output_chain(self, ip_version, hosts_set_name=None):
+        """
+        Generate the IPv4/IPv6 FILTER felix-OUTPUT chains.
+
+        Returns a list of iptables fragments with which to program the
+        felix-OUTPUT chain that is unconditionally invoked from both the IPv4
+        and IPv6 FILTER OUTPUT kernel chains.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.  Whether this is the IPv4 or IPv6 FILTER table.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = []
+        deps = set()
+
+        # Allow established connections via the conntrack table.
+        chain.extend(self.drop_rules(ip_version,
+                                     CHAIN_OUTPUT,
+                                     "--match conntrack --ctstate INVALID",
+                                     None))
+        chain.append("--append %s --match conntrack "
+                     "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+                     CHAIN_OUTPUT)
+
+        # Outgoing traffic on host interfaces.
+        chain.append(
+            "--append %s --goto %s ! --out-interface %s" %
+            (CHAIN_OUTPUT, CHAIN_TO_IFACE, self.IFACE_MATCH)
+        )
+        deps.add(CHAIN_TO_IFACE)
 
         return chain, deps
 

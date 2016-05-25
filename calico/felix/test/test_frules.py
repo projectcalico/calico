@@ -80,6 +80,7 @@ class TestRules(BaseTestCase):
 
         m_v4_upd.ensure_rule_inserted.assert_has_calls([
                 call("INPUT --jump felix-INPUT", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False),
                 call("FORWARD --jump felix-FORWARD", async=False)
             ]
         )
@@ -105,13 +106,18 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
-                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -126,7 +132,9 @@ class TestRules(BaseTestCase):
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
+                                 'felix-FROM-HOST-IF']),
+             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
              'felix-FORWARD': set(['felix-FROM-ENDPOINT',
                                    'felix-TO-ENDPOINT'])},
             async=False
@@ -142,6 +150,7 @@ class TestRules(BaseTestCase):
 
         m_v6_upd.ensure_rule_inserted.assert_has_calls([
                 call("INPUT --jump felix-INPUT", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False),
                 call("FORWARD --jump felix-FORWARD", async=False)
             ]
         )
@@ -227,6 +236,7 @@ class TestRules(BaseTestCase):
 
         m_v4_upd.ensure_rule_inserted.assert_has_calls([
                 call("INPUT --jump felix-INPUT", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False),
                 call("FORWARD --jump felix-FORWARD", async=False)
             ]
         )
@@ -281,13 +291,18 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
-                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -302,7 +317,9 @@ class TestRules(BaseTestCase):
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
+                                 'felix-FROM-HOST-IF']),
+             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
              'felix-FORWARD': set(['felix-FROM-ENDPOINT',
                                    'felix-TO-ENDPOINT'])},
             async=False
@@ -342,6 +359,7 @@ class TestRules(BaseTestCase):
 
         m_v4_upd.ensure_rule_inserted.assert_has_calls([
                 call("INPUT --jump felix-INPUT", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False),
                 call("FORWARD --jump felix-FORWARD", async=False)
             ]
         )
@@ -358,53 +376,6 @@ class TestRules(BaseTestCase):
         self.assertFalse(m_ipset.ensure_exists.called)
         self.assertFalse(m_check_call.called)
         self.assertFalse(m_set_ips.called)
-
-        """
-        expected_chains = {
-            'felix-FIP-DNAT': [],
-            'felix-FIP-SNAT': [],
-            'felix-PREROUTING': [
-                '--append felix-PREROUTING --jump felix-FIP-DNAT',
-                '--append felix-PREROUTING --protocol tcp --dport 80 --destination '
-                    '169.254.169.254/32 --jump DNAT --to-destination 123.0.0.1:1234'
-            ],
-            'felix-POSTROUTING': [
-                '--append felix-POSTROUTING --jump felix-FIP-SNAT'
-            ]
-        }
-        expected_chains_2 = {
-            'felix-INPUT': [
-                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
-                '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
-                '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
-                '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
-                '--append felix-INPUT --jump felix-FROM-ENDPOINT'
-            ],
-            'felix-FORWARD': [
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
-                '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
-                '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
-            ]
-        }
-        m_v4_upd.rewrite_chains.has_calls(
-            [call(expected_chains,
-                  {'felix-PREROUTING': set(['felix-FIP-DNAT']),
-                   'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
-                  async=False),
-             call(expected_chains_2,
-                  {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
-                   'felix-FORWARD': set(['felix-FROM-ENDPOINT',
-                                         'felix-TO-ENDPOINT'])},
-                  async=False)]
-        )
-        """
 
         expected_chains = {
             'felix-FIP-DNAT': [],
@@ -427,13 +398,18 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
-                '--append felix-INPUT ! --in-interface tap+ --jump RETURN',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -448,7 +424,9 @@ class TestRules(BaseTestCase):
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT']),
+            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
+                                 'felix-FROM-HOST-IF']),
+             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
              'felix-FORWARD': set(['felix-FROM-ENDPOINT',
                                    'felix-TO-ENDPOINT'])},
             async=False
