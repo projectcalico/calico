@@ -23,13 +23,14 @@ from collections import OrderedDict
 from contextlib import nested
 import logging
 
+from calico.felix.dispatch import HostEndpointDispatchChains
+from calico.felix.dispatch import WorkloadDispatchChains
 from calico.felix.plugins.fiptgenerator import FelixIptablesGenerator
 from calico.felix.selectors import parse_selector
 
 from calico.felix.endpoint import EndpointManager, WorkloadEndpoint
 from calico.felix.fetcd import EtcdStatusReporter
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.dispatch import DispatchChains
 from calico.felix.futils import FailedSystemCall
 from calico.felix.profilerules import RulesManager
 from calico.felix.fipmanager import FloatingIPManager
@@ -57,13 +58,15 @@ class TestEndpointManager(BaseTestCase):
         self.config = load_config("felix_default.cfg", env_dict={
             "FELIX_FELIXHOSTNAME": "hostname"})
         self.m_updater = Mock(spec=IptablesUpdater)
-        self.m_dispatch = Mock(spec=DispatchChains)
+        self.m_wl_dispatch = Mock(spec=WorkloadDispatchChains)
+        self.m_host_dispatch = Mock(spec=HostEndpointDispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_fip_manager = Mock(spec=FloatingIPManager)
         self.m_status_reporter = Mock(spec=EtcdStatusReporter)
         self.mgr = EndpointManager(self.config, "IPv4", self.m_updater,
-                                   self.m_dispatch, self.m_rules_mgr,
-                                   self.m_fip_manager, self.m_status_reporter)
+                                   self.m_wl_dispatch, self.m_host_dispatch,
+                                   self.m_rules_mgr, self.m_fip_manager,
+                                   self.m_status_reporter)
         self.mgr.get_and_incref = Mock()
         self.mgr.decref = Mock()
 
@@ -94,14 +97,14 @@ class TestEndpointManager(BaseTestCase):
         self.mgr.on_datamodel_in_sync(async=True)
         self.step_actor(self.mgr)
         self.assertEqual(
-            self.m_dispatch.apply_snapshot.mock_calls,
+            self.m_wl_dispatch.apply_snapshot.mock_calls,
             [mock.call(frozenset(["tap1234"]), async=True)]
         )
         # Second call should have no effect.
-        self.m_dispatch.apply_snapshot.reset_mock()
+        self.m_wl_dispatch.apply_snapshot.reset_mock()
         self.mgr.on_datamodel_in_sync(async=True)
         self.step_actor(self.mgr)
-        self.assertEqual(self.m_dispatch.apply_snapshot.mock_calls, [])
+        self.assertEqual(self.m_wl_dispatch.apply_snapshot.mock_calls, [])
 
     def test_tiered_policy_ordering_and_updates(self):
         """
@@ -326,7 +329,8 @@ class TestLocalEndpoint(BaseTestCase):
         self.m_ipt_gen = Mock(spec=FelixIptablesGenerator)
         self.m_ipt_gen.endpoint_updates.return_value = {}, {}
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
-        self.m_dispatch_chains = Mock(spec=DispatchChains)
+        self.m_dispatch_chains = Mock(spec=WorkloadDispatchChains)
+        self.m_host_dispatch_chains = Mock(spec=HostEndpointDispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_manager = Mock(spec=EndpointManager)
         self.m_fip_manager = Mock(spec=FloatingIPManager)

@@ -24,21 +24,22 @@ import itertools
 import mock
 
 from calico.felix.test.base import BaseTestCase, load_config
-from calico.felix.dispatch import DispatchChains, _find_longest_prefix
+from calico.felix.dispatch import WorkloadDispatchChains, _find_longest_prefix
 from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
 
-class TestDispatchChains(BaseTestCase):
+
+class TestWorkloadDispatchChains(BaseTestCase):
     """
-    Tests for the DispatchChains actor.
+    Tests for the WorkloadDispatchChains actor.
     """
     def setUp(self):
-        super(TestDispatchChains, self).setUp()
+        super(TestWorkloadDispatchChains, self).setUp()
         self.iptables_updater = mock.MagicMock()
         self.config = load_config("felix_default.cfg", global_dict={
             "MetadataPort": "8775"})
 
     def getDispatchChain(self):
-        return DispatchChains(
+        return WorkloadDispatchChains(
             config=self.config,
             ip_version=4,
             iptables_updater=self.iptables_updater
@@ -53,7 +54,7 @@ class TestDispatchChains(BaseTestCase):
         # We only care about positional arguments
         args = args[0]
 
-        # The DispatchChains object stores the endpoints in a set, which means
+        # The WorkloadDispatchChains object stores the endpoints in a set, which means
         # that when it builds the list of goto rules they can be emitted in any
         # order. However, the DROP rule must always appear at the end. To do
         # that, first check that the updates contain the same rules in any
