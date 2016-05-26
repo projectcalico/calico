@@ -186,7 +186,7 @@ ENDPOINT_DISPATCH_CHAINS = {
     "from_leaf": CHAIN_FROM_LEAF,
 }
 
-# Ditto for host interfaces.
+# Ditto for host endpoints.
 CHAIN_TO_IFACE = FELIX_PREFIX + "TO-HOST-IF"
 CHAIN_FROM_IFACE = FELIX_PREFIX + "FROM-HOST-IF"
 CHAIN_TO_IFACE_LEAF = FELIX_PREFIX + "TO-IF-PFX"

@@ -161,7 +161,7 @@ def get_endpoint_id_from_key(key):
         orch = m.group("orchestrator")
         workload_id = m.group("workload_id")
         endpoint_id = m.group("endpoint_id")
-        combined_id = EndpointId(host, orch, workload_id, endpoint_id)
+        combined_id = WloadEndpointId(host, orch, workload_id, endpoint_id)
         return combined_id
     else:
         return None
@@ -184,25 +184,46 @@ def hostname_from_status_key(key):
 
 
 class EndpointId(object):
-    __slots__ = ["host", "orchestrator", "workload", "endpoint"]
+    __slots__ = ["host", "endpoint"]
+
+    def __init__(self, host, endpoint):
+        # We intern these strings since they can occur in many IDs.  The
+        # host and orchestrator are trivially repeated for all endpoints
+        # on a host.  The others get repeated over time.
+        self.host = intern(host.encode("utf8"))
+        self.endpoint = intern(endpoint.encode("utf8"))
+
+    @property
+    def path_for_status(self):
+        return NotImplemented
+
+    def __str__(self):
+        return self.__class__.__name__ + ("<%s>" % self.endpoint)
+
+    def __repr__(self):
+        return self.__class__.__name__ + ("(%r,%r)" % (self.host,
+                                                       self.endpoint))
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class WloadEndpointId(EndpointId):
+    __slots__ = ["orchestrator", "workload"]
 
     def __init__(self, host, orchestrator, workload, endpoint):
         # We intern these strings since they can occur in many IDs.  The
         # host and orchestrator are trivially repeated for all endpoints
         # on a host.  The others get repeated over time.
-        self.host = intern(host.encode("utf8"))
+        super(WloadEndpointId, self).__init__(host, endpoint)
         self.orchestrator = intern(orchestrator.encode("utf8"))
         self.workload = intern(workload.encode("utf8"))
-        self.endpoint = intern(endpoint.encode("utf8"))
 
     @property
     def path_for_status(self):
         return "/".join([FELIX_STATUS_DIR, self.host,
                          "workload", self.orchestrator, self.workload,
                          "endpoint", self.endpoint])
-
-    def __str__(self):
-        return self.__class__.__name__ + ("<%s>" % self.endpoint)
 
     def __repr__(self):
         return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,
@@ -213,78 +234,60 @@ class EndpointId(object):
     def __eq__(self, other):
         if other is self:
             return True
-        if not isinstance(other, EndpointId):
+        if not isinstance(other, WloadEndpointId):
             return False
         return (other.endpoint == self.endpoint and
                 other.workload == self.workload and
                 other.host == self.host and
                 other.orchestrator == self.orchestrator)
 
-    def __ne__(self, other):
-        return not (self == other)
-
     def __hash__(self):
         return hash(self.endpoint) + hash(self.workload)
 
 
-class HostIfaceId(object):
+class HostEndpointId(EndpointId):
     __slots__ = ["host", "endpoint"]
-
-    def __init__(self, host, iface_id):
-        # We intern these strings since they can occur in many IDs.  The
-        # host and orchestrator are trivially repeated for all endpoints
-        # on a host.  The others get repeated over time.
-        self.host = intern(host.encode("utf8"))
-        self.endpoint = intern(iface_id.encode("utf8"))
 
     @property
     def path_for_status(self):
         return "/".join([FELIX_STATUS_DIR, self.host,
                          "interface", self.endpoint])
 
-    def __str__(self):
-        return self.__class__.__name__ + ("<%s>" % self.endpoint)
-
-    def __repr__(self):
-        return self.__class__.__name__ + ("(%r,%r)" % (self.host,
-                                                       self.endpoint))
-
     def __eq__(self, other):
         if other is self:
             return True
-        if not isinstance(other, HostIfaceId):
+        if not isinstance(other, HostEndpointId):
             return False
         return (other.endpoint == self.endpoint and
                 other.host == self.host)
 
-    def __ne__(self, other):
-        return not (self == other)
-
     def resolve(self, iface_name):
-        return ResolvedHostIfaceId(self.host, self.endpoint, iface_name)
+        """Returns a ResolvedHostEndpoint with the same values as this,
+        adding the interface name."""
+        return ResolvedHostEndpointId(self.host, self.endpoint, iface_name)
 
     def __hash__(self):
         return hash(self.host) * 37 + hash(self.endpoint)
 
 
-class ResolvedHostIfaceId(HostIfaceId):
+class ResolvedHostEndpointId(HostEndpointId):
     __slots__ = ["iface_name"]
 
     def __init__(self, host, endpoint, iface_name):
-        super(ResolvedHostIfaceId, self).__init__(host, endpoint)
+        super(ResolvedHostEndpointId, self).__init__(host, endpoint)
         self.iface_name = iface_name
 
     def __eq__(self, other):
         if other is self:
             return True
-        if not isinstance(other, ResolvedHostIfaceId):
+        if not isinstance(other, ResolvedHostEndpointId):
             return False
         return (other.endpoint == self.endpoint and
                 other.host == self.host and
                 other.iface_name == self.iface_name)
 
     def __hash__(self):
-        return (super(ResolvedHostIfaceId, self).__hash__() * 37 +
+        return (super(ResolvedHostEndpointId, self).__hash__() * 37 +
                 hash(self.iface_name))
 
 

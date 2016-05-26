@@ -303,7 +303,7 @@ class WorkloadDispatchChains(_DispatchChains):
             "%s unknown endpoint" % direction)
 
 
-class HostIfaceDispatchChains(_DispatchChains):
+class HostEndpointDispatchChains(_DispatchChains):
     chain_names = IFACE_DISPATCH_CHAINS
 
     @actor_message()
@@ -330,7 +330,7 @@ class HostIfaceDispatchChains(_DispatchChains):
         )
 
     def end_of_chain_rules(self, chain_name, direction):
-        # For host interfaces, we only configure the interfaces we've been
+        # For host endpoints, we only configure the interfaces we've been
         # asked to and then we defer to the host's remaining iptables rules
         # for unknown interfaces.
         return ['-A %s --jump RETURN --match comment '

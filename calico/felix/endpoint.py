@@ -32,7 +32,7 @@ from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
     ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR,
-    EndpointId, ResolvedHostIfaceId)
+    WloadEndpointId, ResolvedHostEndpointId)
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
@@ -73,14 +73,14 @@ class EndpointManager(ReferenceManager):
         # Dict that maps from interface name ("tap1234") to endpoint ID.
         self.endpoint_id_by_iface_name = {}
 
-        # Cache of IPs applied to host interfaces.  (I.e. any interfaces that
+        # Cache of IPs applied to host endpoints.  (I.e. any interfaces that
         # aren't workload interfaces.)
-        self.host_iface_ips_by_iface = {}
+        self.host_ep_ips_by_iface = {}
         # Host interface dicts by ID.  We'll resolve these with the IPs above
         # and inject the (resolved) ones as endpoints.
-        self.host_ifaces_by_id = {}
+        self.host_eps_by_id = {}
         # Cache of interfaces that we've resolved and injected as endpoints.
-        self.resolved_host_ifaces = {}
+        self.resolved_host_eps = {}
 
         # Set of endpoints that are live on this host.  I.e. ones that we've
         # increffed.
@@ -111,7 +111,7 @@ class EndpointManager(ReferenceManager):
         """
         Overrides ReferenceManager._create()
         """
-        if isinstance(combined_id, EndpointId):
+        if isinstance(combined_id, WloadEndpointId):
             return WorkloadEndpoint(self.config,
                                     combined_id,
                                     self.ip_type,
@@ -120,7 +120,7 @@ class EndpointManager(ReferenceManager):
                                     self.rules_mgr,
                                     self.fip_manager,
                                     self.status_reporter)
-        elif isinstance(combined_id, ResolvedHostIfaceId):
+        elif isinstance(combined_id, ResolvedHostEndpointId):
             return HostInterface(self.config,
                                  combined_id,
                                  self.ip_type,
@@ -245,17 +245,17 @@ class EndpointManager(ReferenceManager):
             # that a LocalEndpoint undoes part of our update and then goes on
             # to re-apply the update when it catches up to the snapshot.
             workload_ifaces = set()
-            host_ifaces = set()
+            host_eps = set()
             for if_name, ep_id in self.endpoint_id_by_iface_name.iteritems():
-                if isinstance(ep_id, EndpointId):
+                if isinstance(ep_id, WloadEndpointId):
                     workload_ifaces.add(if_name)
                 else:
-                    host_ifaces.add(if_name)
+                    host_eps.add(if_name)
             self.workload_disp_chains.apply_snapshot(
                 frozenset(workload_ifaces), async=True
             )
             self.host_disp_chains.apply_snapshot(
-                frozenset(host_ifaces), async=True
+                frozenset(host_eps), async=True
             )
             self._update_dirty_policy()
 
@@ -268,12 +268,12 @@ class EndpointManager(ReferenceManager):
             self.fip_manager.apply_snapshot(nat_maps, async=True)
 
     @actor_message()
-    def on_host_iface_update(self, combined_id, data):
+    def on_host_ep_update(self, combined_id, data):
         if data is not None:
-            self.host_ifaces_by_id[combined_id] = data
+            self.host_eps_by_id[combined_id] = data
         else:
-            self.host_ifaces_by_id.pop(combined_id, None)
-        self._resolve_host_ifaces()
+            self.host_eps_by_id.pop(combined_id, None)
+        self._resolve_host_eps()
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint, force_reprogram=False):
@@ -349,7 +349,7 @@ class EndpointManager(ReferenceManager):
                 ep.on_interface_update(iface_up, async=True)
 
     def _poll_interface_ips(self):
-        """Greenlet: Polls host interfaces for changes to their IP addresses.
+        """Greenlet: Polls host endpoints for changes to their IP addresses.
 
         Sends updates to the EndpointManager via the _on_iface_ips_update()
         message.
@@ -373,7 +373,7 @@ class EndpointManager(ReferenceManager):
             known_interfaces = ips_by_iface
             if self.config.HOST_IF_POLL_INTERVAL_SECS <= 0:
                 _log.info("Host interface polling disabled, stopping after "
-                          "initial read. Further changes to host interface "
+                          "initial read. Further changes to host endpoint "
                           "IPs will be ignored.")
                 break
             time.sleep(self.config.HOST_IF_POLL_INTERVAL_SECS)
@@ -382,39 +382,39 @@ class EndpointManager(ReferenceManager):
     def _on_iface_ips_update(self, iface_name, ip_addrs):
         _log.info("Interface %s now has IPs %s", iface_name, ip_addrs)
         if ip_addrs is not None:
-            self.host_iface_ips_by_iface[iface_name] = ip_addrs
+            self.host_ep_ips_by_iface[iface_name] = ip_addrs
         else:
-            self.host_iface_ips_by_iface.pop(iface_name, None)
-        self._resolve_host_ifaces()
+            self.host_ep_ips_by_iface.pop(iface_name, None)
+        self._resolve_host_eps()
 
-    def _resolve_host_ifaces(self):
-        """Resolves the host interface data we've learned from etcd with
+    def _resolve_host_eps(self):
+        """Resolves the host endpoint data we've learned from etcd with
         IP addresses and interface names learned from the kernel.
 
         Host interfaces that have matching IPs get combined with interface
         name learned from the kernel and updated via on_endpoint_update().
 
         In the case where multiple interfaces have the same IP address,
-        a copy of the host interface will be resolved with each interface.
+        a copy of the host endpoint will be resolved with each interface.
         """
         # Invert the interface name to IP mapping to allow us to do an IP to
         # interface name lookup.
         iface_names_by_ip = defaultdict(set)
-        for iface, ips in self.host_iface_ips_by_iface.iteritems():
+        for iface, ips in self.host_ep_ips_by_iface.iteritems():
             for ip in ips:
                 iface_names_by_ip[ip].add(iface)
-        # Iterate over the host interfaces, looking for corresponding IPs.
+        # Iterate over the host endpoints, looking for corresponding IPs.
         resolved_ifaces = {}
-        for combined_id, host_iface in self.host_ifaces_by_id.iteritems():
+        for combined_id, host_ep in self.host_eps_by_id.iteritems():
             net_key = "expected_ipv%s_net" % self.ip_version
-            if "name" in host_iface:
+            if "name" in host_ep:
                 # This interface has an explicit name in the data so it's
                 # already resolved.
-                resolved_id = combined_id.resolve(host_iface["name"])
-                resolved_ifaces[resolved_id] = host_iface
-            elif net_key in host_iface:
+                resolved_id = combined_id.resolve(host_ep["name"])
+                resolved_ifaces[resolved_id] = host_ep
+            elif net_key in host_ep:
                 # No explicit name, look for an interface with a matching IP.
-                expected_subnet = IPNetwork(host_iface[net_key])
+                expected_subnet = IPNetwork(host_ep[net_key])
                 for ip, iface_names in iface_names_by_ip.iteritems():
                     if ip in expected_subnet:
                         for iface_name in iface_names:
@@ -422,19 +422,19 @@ class EndpointManager(ReferenceManager):
                             # multiple interfaces by IP, we add the interface
                             # name into the ID.
                             resolved_id = combined_id.resolve(iface_name)
-                            resolved_data = host_iface.copy()
+                            resolved_data = host_ep.copy()
                             resolved_data["name"] = iface_name
                             resolved_ifaces[resolved_id] = resolved_data
         # Fire in the updates for the new data.
         for resolved_id, data in resolved_ifaces.iteritems():
-            if self.resolved_host_ifaces.get(resolved_id) != data:
+            if self.resolved_host_eps.get(resolved_id) != data:
                 self.on_endpoint_update(resolved_id, data)
         # And the deletions for any now-missing interfaces.
-        for resolved_id in self.resolved_host_ifaces.keys():
+        for resolved_id in self.resolved_host_eps.keys():
             if resolved_id not in resolved_ifaces:
                 self.on_endpoint_update(resolved_id, None)
         # Update the cache so we can calculate deltas next time.
-        self.resolved_host_ifaces = resolved_ifaces
+        self.resolved_host_eps = resolved_ifaces
 
     def _update_dirty_policy(self):
         if not self._data_model_in_sync:

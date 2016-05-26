@@ -219,7 +219,7 @@ class FelixIptablesGenerator(FelixPlugin):
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_INPUT)
 
-        # Incoming traffic on host interfaces.
+        # Incoming traffic on host endpoints.
         chain.append(
             "--append %s --goto %s ! --in-interface %s" %
             (CHAIN_INPUT, CHAIN_FROM_IFACE, self.IFACE_MATCH)
@@ -325,7 +325,7 @@ class FelixIptablesGenerator(FelixPlugin):
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_OUTPUT)
 
-        # Outgoing traffic on host interfaces.
+        # Outgoing traffic on host endpoints.
         chain.append(
             "--append %s --goto %s ! --out-interface %s" %
             (CHAIN_OUTPUT, CHAIN_TO_IFACE, self.IFACE_MATCH)

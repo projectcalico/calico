@@ -41,14 +41,14 @@ from calico.felix.test.base import BaseTestCase, load_config
 from calico.felix.test import stub_utils
 from calico.felix import endpoint
 from calico.felix import futils
-from calico.datamodel_v1 import EndpointId, TieredPolicyId
+from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId
 
 _log = logging.getLogger(__name__)
 
 mock.patch.object = getattr(mock.patch, "object")  # Keep PyCharm linter happy.
 
-ENDPOINT_ID = EndpointId("hostname", "b", "c", "d")
-ENDPOINT_ID_2 = EndpointId("hostname", "b", "c1", "d1")
+ENDPOINT_ID = WloadEndpointId("hostname", "b", "c", "d")
+ENDPOINT_ID_2 = WloadEndpointId("hostname", "b", "c1", "d1")
 
 
 class TestEndpointManager(BaseTestCase):
@@ -247,9 +247,10 @@ class TestEndpointManager(BaseTestCase):
     def test_endpoint_update_not_our_host(self):
         ep = {"name": "tap1234"}
         with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
-            self.mgr.on_endpoint_update(EndpointId("notus", "b", "c", "d"),
-                                        ep,
-                                        async=True)
+            self.mgr.on_endpoint_update(
+                WloadEndpointId("notus", "b", "c", "d"),
+                ep,
+                async=True)
             self.step_actor(self.mgr)
         self.assertFalse(m_sol.called)
 
@@ -344,8 +345,8 @@ class TestLocalEndpoint(BaseTestCase):
         return local_endpoint
 
     def test_on_endpoint_update_v4(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -464,8 +465,8 @@ class TestLocalEndpoint(BaseTestCase):
             )
 
     def test_on_endpoint_update_delete_fail(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -517,8 +518,8 @@ class TestLocalEndpoint(BaseTestCase):
             )
 
     def test_on_endpoint_update_v6(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV6
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -628,8 +629,8 @@ class TestLocalEndpoint(BaseTestCase):
                                                          '2001::abce']), 6)
 
     def test_on_interface_update_v4(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -717,8 +718,8 @@ class TestLocalEndpoint(BaseTestCase):
             ])
 
     def test_on_interface_update_v6(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV6
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -782,8 +783,8 @@ class TestLocalEndpoint(BaseTestCase):
                     self.assertFalse(local_ep._device_in_sync)
 
     def test_profile_id_update_triggers_iptables(self):
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
 
@@ -859,8 +860,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_missing_deps(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep._maybe_update_status()
@@ -870,8 +871,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_missing_endpoint(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep._device_is_up = True
@@ -882,8 +883,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_iptables_failure(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
@@ -897,8 +898,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_device_failure(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
@@ -912,8 +913,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_iptables_up(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
@@ -927,8 +928,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_admin_down(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "inactive"}
@@ -942,8 +943,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_oper_down(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.endpoint = {"state": "active"}
@@ -957,8 +958,8 @@ class TestLocalEndpoint(BaseTestCase):
 
     def test_maybe_update_status_iptables_unreferenced(self):
         self.config.REPORT_ENDPOINT_STATUS = True
-        combined_id = EndpointId("host_id", "orchestrator_id",
-                                 "workload_id", "endpoint_id")
+        combined_id = WloadEndpointId("host_id", "orchestrator_id",
+                                      "workload_id", "endpoint_id")
         ip_type = futils.IPV4
         local_ep = self.get_local_endpoint(combined_id, ip_type)
         local_ep.on_unreferenced(async=True)

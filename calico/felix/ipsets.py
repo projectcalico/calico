@@ -64,7 +64,7 @@ class IpsetManager(ReferenceManager):
         # State.
         # Tag IDs indexed by profile IDs
         self.tags_by_prof_id = {}
-        # EndpointData "structs" indexed by EndpointId.
+        # EndpointData "structs" indexed by WloadEndpointId.
         self.endpoint_data_by_ep_id = {}
 
         # Main index.  Tracks which IPs are currently in each tag.
@@ -73,7 +73,7 @@ class IpsetManager(ReferenceManager):
         self._add_mapping = self.tag_membership_index.add_mapping
         self._remove_mapping = self.tag_membership_index.remove_mapping
 
-        # Set of EndpointId objects referenced by profile IDs.
+        # Set of WloadEndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
         # LabelNode index, used to cross-reference endpoint labels against
@@ -259,39 +259,39 @@ class IpsetManager(ReferenceManager):
         self._process_started_label_matches()
 
     @actor_message()
-    def on_host_iface_update(self, combined_id, iface_data):
+    def on_host_ep_update(self, combined_id, iface_data):
         """
         Update tag/selector memberships and indices with the new interface
         data dict.
 
-        :param HostIfaceId combined_id: ID of the host interface.
+        :param HostEndpointId combined_id: ID of the host endpoint.
         :param dict|NoneType iface_data: Either a dict containing interface
             information or None to indicate deletion.
         """
-        # For our purposes, host interfaces are indexed as endpoints.
-        self._on_endpoint_or_host_iface_update(combined_id, iface_data)
+        # For our purposes, host endpoints are indexed as endpoints.
+        self._on_endpoint_or_host_ep_update(combined_id, iface_data)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
         Update tag/selector memberships and indices with the new endpoint dict.
 
-        :param EndpointId endpoint_id: ID of the endpoint.
+        :param WloadEndpointId endpoint_id: ID of the endpoint.
         :param dict|NoneType endpoint: Either a dict containing endpoint
             information or None to indicate deletion.
         """
-        self._on_endpoint_or_host_iface_update(endpoint_id, endpoint)
+        self._on_endpoint_or_host_ep_update(endpoint_id, endpoint)
 
-    def _on_endpoint_or_host_iface_update(self, combined_id, data):
+    def _on_endpoint_or_host_ep_update(self, combined_id, data):
         """
         Update tag/selector memberships and indices with the new
-        host iface/endpoint dict.
+        host ep/endpoint dict.
 
         Since we only care about extracting the IPs, profiles and labels,
-        we don't care about the differences between host interfaces and
+        we don't care about the differences between host endpoints and
         endpoints.
 
-        :param HostIfaceId|EndpointId combined_id: ID of the endpoint.
+        :param HostEndpointId|WloadEndpointId combined_id: ID of the endpoint.
         :param dict|NoneType data: Either a dict containing endpoint
             information or None to indicate deletion.
         """
@@ -374,7 +374,7 @@ class IpsetManager(ReferenceManager):
         Update tag memberships and indices with the new EndpointData
         object.
 
-        :param EndpointId endpoint_id: ID of the endpoint.
+        :param EndpointID endpoint_id: ID of the endpoint.
         :param EndpointData endpoint_data: An EndpointData object
             EMPTY_ENDPOINT_DATA to indicate deletion (or endpoint being
             optimized out).
@@ -497,7 +497,7 @@ class TagMembershipIndex(object):
         # ip_owners_by_tag[tag][ip] = set([(profile_id, combined_id),
         #                                  (profile_id, combined_id2), ...]) |
         #                             (profile_id, combined_id)
-        # Here "combined_id" is an EndpointId object.
+        # Here "combined_id" is an WloadEndpointId object.
         self.ip_owners_by_tag = defaultdict(lambda: defaultdict(lambda: None))
         # IPs added and removed since the last reset.
         self.ips_added_by_tag = defaultdict(set)

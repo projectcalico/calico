@@ -27,7 +27,7 @@ from calico.felix.selectors import parse_selector, SelectorExpression
 from mock import *
 from netaddr import IPAddress
 
-from calico.datamodel_v1 import EndpointId
+from calico.datamodel_v1 import WloadEndpointId
 from calico.felix.futils import IPV4, FailedSystemCall, CommandOutput
 from calico.felix.ipsets import (EndpointData, IpsetManager, IpsetActor,
                                  RefCountedIpsetActor, EMPTY_ENDPOINT_DATA, Ipset,
@@ -41,7 +41,7 @@ _log = logging.getLogger(__name__)
 
 patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
-EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
+EP_ID_1_1 = WloadEndpointId("host1", "orch", "wl1_1", "ep1_1")
 EP_1_1 = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.1/32"],
@@ -69,8 +69,8 @@ EP_1_1_NEW_PROF_IP = {
     "profile_ids": ["prof3"],
     "ipv4_nets": ["10.0.0.3/32"],
 }
-EP_ID_1_2 = EndpointId("host1", "orch", "wl1_2", "ep1_2")
-EP_ID_2_1 = EndpointId("host2", "orch", "wl2_1", "ep2_1")
+EP_ID_1_2 = WloadEndpointId("host1", "orch", "wl1_2", "ep1_2")
+EP_ID_2_1 = WloadEndpointId("host2", "orch", "wl2_1", "ep2_1")
 EP_2_1 = {
     "profile_ids": ["prof1"],
     "ipv4_nets": ["10.0.0.1/32"],

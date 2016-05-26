@@ -25,7 +25,7 @@ from gevent.event import Event
 import gevent
 from mock import Mock, call, patch, ANY
 
-from calico.datamodel_v1 import EndpointId, TieredPolicyId
+from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId
 from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
@@ -397,7 +397,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
                       "set", value=ENDPOINT_STR)
         self.m_splitter.on_endpoint_update.assert_called_once_with(
-            EndpointId("h1", "o1", "w1", "e1"),
+            WloadEndpointId("h1", "o1", "w1", "e1"),
             VALID_ENDPOINT,
         )
 
@@ -405,7 +405,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
                       "set", value="{")
         self.m_splitter.on_endpoint_update.assert_called_once_with(
-            EndpointId("h1", "o1", "w1", "e1"),
+            WloadEndpointId("h1", "o1", "w1", "e1"),
             None,
         )
 
@@ -413,7 +413,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
                       "set", value="{}")
         self.m_splitter.on_endpoint_update.assert_called_once_with(
-            EndpointId("h1", "o1", "w1", "e1"),
+            WloadEndpointId("h1", "o1", "w1", "e1"),
             None,
         )
 
@@ -549,7 +549,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.dispatch("/calico/v1/host/h1/workload/o1/w1/endpoint/e1",
                       action="delete")
         self.m_splitter.on_endpoint_update.assert_called_once_with(
-            EndpointId("h1", "o1", "w1", "e1"),
+            WloadEndpointId("h1", "o1", "w1", "e1"),
             None,
         )
 
@@ -731,7 +731,7 @@ class TestEtcdStatusReporter(BaseTestCase):
 
     def test_on_endpoint_status_mainline(self):
         # Send in an endpoint status update.
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id = WloadEndpointId("foo", "bar", "baz", "biff")
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
                                                 {"status": "up"},
@@ -808,14 +808,14 @@ class TestEtcdStatusReporter(BaseTestCase):
         self.assertEqual(self.rep._older_dirty_endpoints, set())
 
     def test_mark_endpoint_dirty_already_dirty(self):
-        endpoint_id = EndpointId("a", "b", "c", "d")
+        endpoint_id = WloadEndpointId("a", "b", "c", "d")
         self.rep._older_dirty_endpoints.add(endpoint_id)
         self.rep._mark_endpoint_dirty(endpoint_id)
         self.assertFalse(endpoint_id in self.rep._newer_dirty_endpoints)
 
     def test_on_endpoint_status_failure(self):
         # Send in an endpoint status update.
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id = WloadEndpointId("foo", "bar", "baz", "biff")
         self.m_client.set.side_effect = EtcdException()
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.rep.on_endpoint_status_changed(endpoint_id,
@@ -835,7 +835,7 @@ class TestEtcdStatusReporter(BaseTestCase):
 
     def test_on_endpoint_status_changed_disabled(self):
         self.m_config.REPORT_ENDPOINT_STATUS = False
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id = WloadEndpointId("foo", "bar", "baz", "biff")
 
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.rep.on_endpoint_status_changed(endpoint_id,
@@ -851,7 +851,7 @@ class TestEtcdStatusReporter(BaseTestCase):
 
     def test_on_endpoint_status_v4_v6(self):
         # Send in endpoint status updates for v4 and v6.
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id = WloadEndpointId("foo", "bar", "baz", "biff")
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.rep.on_endpoint_status_changed(endpoint_id, IPV4,
                                                 {"status": "up"},
@@ -876,9 +876,9 @@ class TestEtcdStatusReporter(BaseTestCase):
         )
 
     def test_resync(self):
-        endpoint_id = EndpointId("foo", "bar", "baz", "biff")
+        endpoint_id = WloadEndpointId("foo", "bar", "baz", "biff")
         self.rep.on_endpoint_status_changed(endpoint_id, IPV4, {"status": "up"}, async=True)
-        endpoint_id_2 = EndpointId("foo", "bar", "baz", "boff")
+        endpoint_id_2 = WloadEndpointId("foo", "bar", "baz", "boff")
         self.rep.on_endpoint_status_changed(endpoint_id_2, IPV6, {"status": "up"}, async=True)
         with patch("gevent.spawn_later", autospec=True) as m_spawn:
             self.step_actor(self.rep)
@@ -916,10 +916,10 @@ class TestEtcdStatusReporter(BaseTestCase):
 
     def test_clean_up_endpoint_status(self):
         self.m_config.REPORT_ENDPOINT_STATUS = True
-        ep_id = EndpointId("foo",
-                           "openstack",
-                           "workloadid",
-                           "endpointid")
+        ep_id = WloadEndpointId("foo",
+                                "openstack",
+                                "workloadid",
+                                "endpointid")
 
         empty_dir = Mock()
         empty_dir.key = ("/calico/felix/v1/host/foo/workload/"
@@ -940,10 +940,10 @@ class TestEtcdStatusReporter(BaseTestCase):
 
             # Missing endpoint should have been marked for cleanup.
             m_mark.assert_called_once_with(
-                EndpointId("foo",
-                           "openstack",
-                           "aworkload",
-                           "anendpoint")
+                WloadEndpointId("foo",
+                                "openstack",
+                                "aworkload",
+                                "anendpoint")
             )
 
     def test_clean_up_endpoint_status_etcd_error(self):

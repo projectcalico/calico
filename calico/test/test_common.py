@@ -40,7 +40,7 @@ else:
 
 import calico.common as common
 from calico.common import ValidationFailed
-from calico.datamodel_v1 import EndpointId, TieredPolicyId
+from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId
 
 Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
 
@@ -56,8 +56,8 @@ class TestCommon(unittest.TestCase):
         self.m_config = mock.Mock()
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.HOSTNAME = "localhost"
-        self.m_id = EndpointId("localhost", "orchestrator",
-                               "workload", "endpoint")
+        self.m_id = WloadEndpointId("localhost", "orchestrator",
+                                    "workload", "endpoint")
 
     def tearDown(self):
         pass
@@ -333,8 +333,8 @@ class TestCommon(unittest.TestCase):
         self.assertIsNone(common.canonicalise_ip(None, 6))
 
     def test_validate_endpoint(self):
-        combined_id = EndpointId("host", "orchestrator",
-                                 "workload", "valid_name-ok.")
+        combined_id = WloadEndpointId("host", "orchestrator",
+                                      "workload", "valid_name-ok.")
         endpoint_dict = {'profile_id': "valid.prof-name",
                          'state': "active",
                          'name': "tapabcdef",
@@ -350,7 +350,8 @@ class TestCommon(unittest.TestCase):
         # Now break it various ways.
         # Bad endpoint ID.
         for bad_str in ("with spaces", "$stuff", "^%@"):
-            bad_id = EndpointId("host", "orchestrator", "workload", bad_str)
+            bad_id = WloadEndpointId("host", "orchestrator", "workload",
+                                     bad_str)
             with self.assertRaisesRegexp(ValidationFailed,
                                          "Invalid endpoint ID"):
                 common.validate_endpoint(config, bad_id, endpoint_dict.copy())
@@ -415,8 +416,8 @@ class TestCommon(unittest.TestCase):
         bad_dict['name'] = "vethabcdef"
         common.validate_endpoint(config, combined_id, bad_dict)
 
-        local_id = EndpointId("localhost", "orchestrator",
-                              "workload", "valid_name-ok.")
+        local_id = WloadEndpointId("localhost", "orchestrator",
+                                   "workload", "valid_name-ok.")
         with self.assertRaisesRegexp(ValidationFailed,
                                      "does not start with"):
             common.validate_endpoint(config, local_id, bad_dict)

@@ -323,7 +323,7 @@ def validate_endpoint(config, combined_id, endpoint):
     """Validate a workload endpoint.
 
     :param config: configuration structure
-    :param combined_id: EndpointId object
+    :param combined_id: WloadEndpointId object
     :param endpoint: endpoint dictionary as read from etcd
     :raises ValidationFailed
     """
@@ -348,11 +348,11 @@ def validate_endpoint(config, combined_id, endpoint):
         raise ValidationFailed(" ".join(issues))
 
 
-def validate_host_interface(config, combined_id, endpoint):
+def validate_host_endpoint(config, combined_id, endpoint):
     """Validate a host endpoint.
 
     :param config: configuration structure
-    :param combined_id: HostIfaceId object
+    :param combined_id: HostEndpointId object
     :param endpoint: endpoint dictionary as read from etcd
     :raises ValidationFailed
     """

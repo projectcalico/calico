@@ -38,7 +38,7 @@ from calico import common
 from calico.felix import devices
 from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.dispatch import (HostIfaceDispatchChains,
+from calico.felix.dispatch import (HostEndpointDispatchChains,
                                    WorkloadDispatchChains)
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (install_global_rules, load_nf_conntrack,
@@ -99,7 +99,7 @@ def _main_greenlet(config):
                                         v4_ipset_mgr)
         v4_ep_dispatch_chains = WorkloadDispatchChains(
             config, 4, v4_filter_updater)
-        v4_if_dispatch_chains = HostIfaceDispatchChains(
+        v4_if_dispatch_chains = HostEndpointDispatchChains(
             config, 4, v4_filter_updater)
         v4_fip_manager = FloatingIPManager(config, 4, v4_nat_updater)
         v4_ep_manager = EndpointManager(config,
@@ -146,7 +146,7 @@ def _main_greenlet(config):
                                             v6_ipset_mgr)
             v6_ep_dispatch_chains = WorkloadDispatchChains(
                 config, 6, v6_filter_updater)
-            v6_if_dispatch_chains = HostIfaceDispatchChains(
+            v6_if_dispatch_chains = HostEndpointDispatchChains(
                 config, 6, v6_filter_updater)
             v6_fip_manager = FloatingIPManager(config, 6, v6_nat_updater)
             v6_ep_manager = EndpointManager(config,

@@ -35,10 +35,10 @@ from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
 from calico.datamodel_v1 import (
     VERSION_DIR, CONFIG_DIR, dir_for_per_host_config, PROFILE_DIR, HOST_DIR,
-    EndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
+    WloadEndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
     ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP,
-    POLICY_DIR, TieredPolicyId, HostIfaceId)
+    POLICY_DIR, TieredPolicyId, HostEndpointId, EndpointId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
     MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
@@ -356,7 +356,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
         reg(HOST_IFACE_KEY,
-            on_set=self.on_host_iface_set, on_del=self.on_host_iface_delete)
+            on_set=self.on_host_ep_set, on_del=self.on_host_ep_delete)
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
@@ -603,8 +603,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_endpoint_set(self, response, hostname, orchestrator,
                         workload_id, endpoint_id):
         """Handler for endpoint updates, passes the update to the splitter."""
-        combined_id = EndpointId(hostname, orchestrator, workload_id,
-                                 endpoint_id)
+        combined_id = WloadEndpointId(hostname, orchestrator, workload_id,
+                                      endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
         _stats.increment("Endpoint created/updated")
         endpoint = parse_endpoint(self._config, combined_id, response.value)
@@ -613,26 +613,26 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_endpoint_delete(self, response, hostname, orchestrator,
                            workload_id, endpoint_id):
         """Handler for endpoint deleted, passes the update to the splitter."""
-        combined_id = EndpointId(hostname, orchestrator, workload_id,
-                                 endpoint_id)
+        combined_id = WloadEndpointId(hostname, orchestrator, workload_id,
+                                      endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
         _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None)
 
-    def on_host_iface_set(self, response, hostname, iface_id):
-        """Handler for create/update of host interface."""
-        combined_id = HostIfaceId(hostname, iface_id)
+    def on_host_ep_set(self, response, hostname, iface_id):
+        """Handler for create/update of host endpoint."""
+        combined_id = HostEndpointId(hostname, iface_id)
         _log.debug("Host iface %s updated", combined_id)
         _stats.increment("Host iface created/updated")
-        iface_data = parse_host_iface(self._config, combined_id, response.value)
-        self.splitter.on_host_iface_update(combined_id, iface_data)
+        iface_data = parse_host_ep(self._config, combined_id, response.value)
+        self.splitter.on_host_ep_update(combined_id, iface_data)
 
-    def on_host_iface_delete(self, response, hostname, iface_id):
-        """Handler for delete of host interface."""
-        combined_id = HostIfaceId(hostname, iface_id)
+    def on_host_ep_delete(self, response, hostname, iface_id):
+        """Handler for delete of host endpoint."""
+        combined_id = HostEndpointId(hostname, iface_id)
         _log.debug("Host iface %s deleted", combined_id)
         _stats.increment("Host iface deleted")
-        self.splitter.on_host_iface_update(combined_id, None)
+        self.splitter.on_host_ep_update(combined_id, None)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
@@ -1001,13 +1001,13 @@ def parse_endpoint(config, combined_id, raw_json):
     return endpoint
 
 
-def parse_host_iface(config, combined_id, raw_json):
+def parse_host_ep(config, combined_id, raw_json):
     iface_data = safe_decode_json(raw_json,
                                   log_tag="iface %s" % combined_id.endpoint)
     try:
-        common.validate_host_interface(config, combined_id, iface_data)
+        common.validate_host_endpoint(config, combined_id, iface_data)
     except ValidationFailed as e:
-        _log.warning("Validation failed for host interface %s, treating as "
+        _log.warning("Validation failed for host endpoint %s, treating as "
                      "missing: %s; %r", combined_id, e.message, raw_json)
         iface_data = None
     else:

@@ -200,7 +200,7 @@ class Config(object):
                            "How often to do cleanups, seconds",
                            60 * 60, value_is_int=True)
         self.add_parameter("HostInterfacePollInterval",
-                           "How often to poll for updates to host interface "
+                           "How often to poll for updates to host endpoint "
                            "IP addresses or 0 to disable.", 10,
                            value_is_int=True)
         self.add_parameter("IptablesRefreshInterval",
