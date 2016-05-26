@@ -320,6 +320,89 @@ def nat_key(ip_type):
 
 
 def validate_endpoint(config, combined_id, endpoint):
+    """Validate a workload endpoint.
+
+    :param config: configuration structure
+    :param combined_id: EndpointId object
+    :param endpoint: endpoint dictionary as read from etcd
+    :raises ValidationFailed
+    """
+    issues = _validate_endpoint_common(config, combined_id, endpoint)
+
+    # Workload endpoint-specific validation.
+    if "name" not in endpoint:
+        issues.append("Missing 'name' field.")
+    elif (isinstance(endpoint['name'], StringTypes)
+            and combined_id.host == config.HOSTNAME
+            and not endpoint["name"].startswith(config.IFACE_PREFIX)):
+        # Only test the interface for local endpoints - remote hosts may have
+        # a different interface prefix.
+        issues.append("Interface %r does not start with %r." %
+                      (endpoint["name"], config.IFACE_PREFIX))
+    if "state" not in endpoint:
+        issues.append("Missing 'state' field.")
+    elif endpoint["state"] not in ("active", "inactive"):
+        issues.append("Expected 'state' to be one of active/inactive.")
+
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def validate_host_interface(config, combined_id, endpoint):
+    """Validate a host endpoint.
+
+    :param config: configuration structure
+    :param combined_id: HostIfaceId object
+    :param endpoint: endpoint dictionary as read from etcd
+    :raises ValidationFailed
+    """
+    issues = _validate_endpoint_common(config, combined_id, endpoint)
+
+    # Forbid workload endpoint fields that we don't support.
+    for version in (4, 6):
+        nets = "ipv%d_nets" % version
+        if nets in endpoint:
+            issues.append("Field '%s' not supported for host endpoints" %
+                          nets)
+        gw_key = "ipv%d_gateway" % version
+        if gw_key in endpoint:
+            issues.append("Field '%s' not supported for host endpoints" %
+                          gw_key)
+    if "state" in endpoint:
+        issues.append("'state' field not supported for host endpoints")
+    if "mac" in endpoint:
+        issues.append("'mac' field not supported for host endpoints")
+
+    # Host endpoint-specific validation.
+    # We need either a name for the interface or an expected IP address to
+    # look it up.
+    expected_ip_present = ("expected_ipv4_net" in endpoint or
+                           "expected_ipv6_net" in endpoint)
+    name_present = "name" in endpoint
+    if not name_present and not expected_ip_present:
+        issues.append("'name' or 'expected_ipvx_net' must be present.")
+
+    # Check the expected net fields are valid CIDRs, if present.
+    for key, version in [("expected_ipv4_net", 4), ("expected_ipv6_net", 6)]:
+        if key in endpoint:
+            net = endpoint[key]
+            if not validate_cidr(net, version):
+                issues.append("'%s' should be a valid CIDR, not %r." %
+                              (key, net))
+            else:
+                cidr = netaddr.IPNetwork(net, version)
+                if cidr.prefixlen != 32 if version == 4 else 128:
+                    # For now, limit to a fully-specified /32 or /128.  Later,
+                    # for default interface templates, we plan to relax this
+                    # restriction.
+                    issues.append("'%s' must be a /32 or /128 address." % key)
+                endpoint[key] = canonicalise_cidr(net, version)
+
+    if issues:
+        raise ValidationFailed(" ".join(issues))
+
+
+def _validate_endpoint_common(config, combined_id, endpoint):
     """
     Ensures that the supplied endpoint is valid. Once this routine has returned
     successfully, we know that all required fields are present and have valid
@@ -341,22 +424,18 @@ def validate_endpoint(config, combined_id, endpoint):
     if not VALID_ID_RE.match(combined_id.endpoint):
         issues.append("Invalid endpoint ID '%r'." % combined_id.endpoint)
 
-    if "state" not in endpoint:
-        issues.append("Missing 'state' field.")
-    elif endpoint["state"] not in ("active", "inactive"):
-        issues.append("Expected 'state' to be one of active/inactive.")
+    if "name" in endpoint:
+        if not isinstance(endpoint["name"], StringTypes):
+            issues.append("Expected 'name' to be a string; got %r." %
+                          endpoint["name"])
+        elif not VALID_LINUX_IFACE_NAME_RE.match(endpoint["name"]):
+            issues.append("'name' must be a valid interface name.")
 
-    for field in ["name", "mac"]:
-        if field not in endpoint:
-            issues.append("Missing '%s' field." % field)
-        elif not isinstance(endpoint[field], StringTypes):
-            issues.append("Expected '%s' to be a string; got %r." %
-                          (field, endpoint[field]))
-        elif field == "mac":
-            if not netaddr.valid_mac(endpoint.get("mac")):
-                issues.append("Invalid MAC address")
-            else:
-                endpoint["mac"] = canonicalise_mac(endpoint.get("mac"))
+    if "mac" in endpoint:
+        if not netaddr.valid_mac(endpoint["mac"]):
+            issues.append("Invalid MAC address.")
+        else:
+            endpoint["mac"] = canonicalise_mac(endpoint.get("mac"))
 
     if "profile_id" in endpoint:
         if "profile_ids" not in endpoint:
@@ -374,22 +453,12 @@ def validate_endpoint(config, combined_id, endpoint):
             if not VALID_ID_RE.match(value):
                 issues.append("Invalid profile ID '%r'." % value)
 
-    if ("name" in endpoint and isinstance(endpoint['name'], StringTypes)
-        and combined_id.host == config.HOSTNAME
-        and not endpoint["name"].startswith(config.IFACE_PREFIX)):
-        # Only test the interface for local endpoints - remote hosts may have
-        # a different interface prefix.
-        issues.append("Interface %r does not start with %r." %
-                      (endpoint["name"], config.IFACE_PREFIX))
-
     if "labels" in endpoint:
         _validate_label_dict(issues, endpoint["labels"])
 
     for version in (4, 6):
         nets = "ipv%d_nets" % version
-        if nets not in endpoint:
-            endpoint[nets] = []
-        else:
+        if nets in endpoint:
             canonical_nws = []
             nets_list = endpoint.get(nets, [])
             if not isinstance(nets_list, list):
@@ -453,9 +522,7 @@ def validate_endpoint(config, combined_id, endpoint):
                 endpoint[gw_key] = canonicalise_ip(gw_str, version)
         except KeyError:
             pass
-
-    if issues:
-        raise ValidationFailed(" ".join(issues))
+    return issues
 
 
 def validate_tier_data(tier, data):

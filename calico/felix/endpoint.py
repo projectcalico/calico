@@ -576,7 +576,7 @@ class LocalEndpoint(RefCountedActor):
     def _admin_up(self):
         return (not self._unreferenced and
                 self.endpoint and
-                self.endpoint.get("state") == "active")
+                self.endpoint.get("state", "active") == "active")
 
     @actor_message()
     def on_endpoint_update(self, endpoint, force_reprogram=False):
@@ -1040,7 +1040,7 @@ class HostInterface(LocalEndpoint):
             self._mac,
             self.endpoint["profile_ids"],
             self._pol_ids_by_tier,
-            to_direction="outbound",
+            to_direction="outbound",  # Direction flipped for host endpoints!
             from_direction="inbound"
         )
         return deps, updates

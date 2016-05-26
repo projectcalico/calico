@@ -1005,11 +1005,9 @@ def parse_host_iface(config, combined_id, raw_json):
     iface_data = safe_decode_json(raw_json,
                                   log_tag="iface %s" % combined_id.endpoint)
     try:
-        # FIXME TODO Validation
-        pass
-        #common.validate_endpoint(config, combined_id, endpoint)
+        common.validate_host_interface(config, combined_id, iface_data)
     except ValidationFailed as e:
-        _log.warning("Validation failed for endpoint %s, treating as "
+        _log.warning("Validation failed for host interface %s, treating as "
                      "missing: %s; %r", combined_id, e.message, raw_json)
         iface_data = None
     else:
