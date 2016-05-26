@@ -115,7 +115,7 @@ Verify that you can access the Kubernetes API.  The following command should ret
 >If successful, the above command shoud output something like this:
 ```
 NAME       LABELS                            STATUS AGE
-10.240.0.3 kubernetes.io/hostname=10.240.0.3 Ready  14m
+10.128.0.3 kubernetes.io/hostname=10.128.0.3 Ready  14m
 ```
 
 ### 3.2 Deploying SkyDNS
