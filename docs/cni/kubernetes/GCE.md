@@ -40,9 +40,10 @@ gcloud config set compute/zone us-central1-a
 
 ### 1.2 Setting up GCE networking
 GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between
-containers on different hosts:
+containers on different hosts (where the source-ranges parameter assumes you have created your project with the
+default GCE network parameters - modify the address range if yours is different):
 ```
-gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.240.0.0/16"
+gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.128.0.0/9"
 ```
 You can verify the rule with this command:
 ```
@@ -114,7 +115,7 @@ Verify that you can access the Kubernetes API.  The following command should ret
 >If successful, the above command shoud output something like this:
 ```
 NAME       LABELS                            STATUS AGE
-10.240.0.3 kubernetes.io/hostname=10.240.0.3 Ready  14m
+10.128.0.3 kubernetes.io/hostname=10.128.0.3 Ready  14m
 ```
 
 ### 3.2 Deploying SkyDNS
