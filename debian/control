@@ -10,8 +10,8 @@ Package: calico-compute
 Architecture: all
 Depends:
  bird,
- calico-felix,
- networking-calico,
+ calico-felix (>= 1.4), calico-felix (<< 1.5),
+ networking-calico (= ${binary:Version}),
  neutron-dhcp-agent,
  iptables-persistent,
  ${misc:Depends},
@@ -30,7 +30,7 @@ Description: Project Calico networking for OpenStack/Neutron.
 Package: calico-dhcp-agent
 Architecture: all
 Depends:
- networking-calico,
+ networking-calico (= ${binary:Version}),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
@@ -46,7 +46,7 @@ Description: Project Calico networking for OpenStack/Neutron.
 Package: calico-control
 Architecture: all
 Depends:
- networking-calico,
+ networking-calico (= ${binary:Version}),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
@@ -62,7 +62,7 @@ Description: Project Calico networking for OpenStack/Neutron.
 Package: networking-calico
 Architecture: all
 Depends:
- calico-common,
+ calico-common (>= 1.4), calico-common (<< 1.5),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
