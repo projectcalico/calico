@@ -557,25 +557,31 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         :return: the connected socket to the driver.
         """
         _log.info("Creating server socket.")
+        if os.path.exists("/run"):
+            # Linux FHS version 3.0+ location for runtime sockets etc.
+            sck_filename = "/run/felix-driver.sck"
+        else:
+            # Older Linux versions use /var/run.
+            sck_filename = "/var/run/felix-driver.sck"
         try:
-            os.unlink("/run/felix-driver.sck")
+            os.unlink(sck_filename)
         except OSError:
             _log.debug("Failed to delete driver socket, assuming it "
                        "didn't exist.")
         update_socket = socket.socket(socket.AF_UNIX,
                                       socket.SOCK_STREAM)
-        update_socket.bind("/run/felix-driver.sck")
+        update_socket.bind(sck_filename)
         update_socket.listen(1)
         self._driver_process = subprocess.Popen([sys.executable,
                                                  "-m",
                                                  "calico.etcddriver",
-                                                 "/run/felix-driver.sck"])
+                                                 sck_filename])
         _log.info("Started etcd driver with PID %s", self._driver_process.pid)
         update_conn, _ = update_socket.accept()
         _log.info("Accepted connection on socket")
         # No longer need the server socket, remove it.
         try:
-            os.unlink("/run/felix-driver.sck")
+            os.unlink(sck_filename)
         except OSError:
             # Unexpected but carry on...
             _log.exception("Failed to unlink socket")

@@ -133,7 +133,7 @@ def _main_greenlet(config):
             v4_fip_manager,
         ]
 
-        v6_enabled = os.path.exists("/proc/sys/net/ipv6")
+        v6_enabled, ipv6_reason = futils.ipv6_supported()
         if v6_enabled:
             v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
             v6_filter_updater = IptablesUpdater("filter", ip_version=6,
@@ -177,6 +177,7 @@ def _main_greenlet(config):
             ]
         else:
             # Keep the linter happy.
+            _log.warn("IPv6 support disabled: %s.", ipv6_reason)
             v6_filter_updater = None
             v6_nat_updater = None
             v6_raw_updater = None

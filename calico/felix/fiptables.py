@@ -187,6 +187,8 @@ class IptablesUpdater(Actor):
 
         Populates self._chains_in_dataplane.
         """
+        _log.debug("Loading chain names for iptables table %s, using"
+                   "command %s", self.table, self._save_cmd)
         self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
                                                   self.table])
@@ -202,7 +204,6 @@ class IptablesUpdater(Actor):
         """
         raw_ipt_output = subprocess.check_output(
             [self._iptables_cmd,
-             "--wait",  # Wait for the xtables lock.
              "--list",  # Action to perform.
              "--numeric",  # Avoid DNS lookups.
              "--table", self.table])

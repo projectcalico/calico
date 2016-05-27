@@ -49,7 +49,7 @@ from collections import namedtuple
 CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 stat_log = logging.getLogger("calico.stats")
 
 # Flag to indicate "IP v4" or "IP v6"; format that can be printed in logs.
@@ -198,10 +198,10 @@ class SpawnedProcess(Popen):
             raise NotImplementedError()
         assert startupinfo is None and creationflags == 0
 
-        log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
-                  p2cread, p2cwrite,
-                  c2pread, c2pwrite,
-                  errread, errwrite)
+        _log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
+                   p2cread, p2cwrite,
+                   c2pread, c2pwrite,
+                   errread, errwrite)
 
         if isinstance(args, types.StringTypes):
             args = [args]
@@ -248,7 +248,7 @@ class SpawnedProcess(Popen):
                 dup_from = dup_to
             # Need to take a dup so we can remove the non-blocking flag
             a_dup = os.dup(dup_from)
-            log.debug("Duped %s as %s", dup_from, a_dup)
+            _log.debug("Duped %s as %s", dup_from, a_dup)
             fds_to_close_in_parent.append(a_dup)
             self._remove_nonblock_flag(a_dup)
             file_actions.add_dup2(a_dup, dup_to)
@@ -320,10 +320,10 @@ def check_call(args, input_str=None):
     :raises FailedSystemCall: if the return code of the subprocess is non-zero.
     :raises OSError: if, for example, there is a read error on stdout/err.
     """
-    log.debug("Calling out to system: %s.  %s/%s concurrent calls",
-              args,
-              MAX_CONCURRENT_CALLS - _call_semaphore.counter,
-              MAX_CONCURRENT_CALLS)
+    _log.debug("Calling out to system: %s.  %s/%s concurrent calls",
+               args,
+               MAX_CONCURRENT_CALLS - _call_semaphore.counter,
+               MAX_CONCURRENT_CALLS)
 
     stdin = subprocess.PIPE if input_str is not None else None
 
@@ -335,7 +335,7 @@ def check_call(args, input_str=None):
         stdout, stderr = proc.communicate(input=input_str)
 
     retcode = proc.returncode
-    log.debug("Process finished with RC=%s: %s.", retcode, args)
+    _log.debug("Process finished with RC=%s: %s.", retcode, args)
     if retcode:
         raise FailedSystemCall("Failed system call",
                                args, retcode, stdout, stderr, input=input_str)
@@ -347,7 +347,7 @@ def multi_call(ops):
     """
     Issue multiple ops, all of which must succeed.
     """
-    log.debug("Calling out to system : %s", ops)
+    _log.debug("Calling out to system : %s", ops)
 
     fd, name = tempfile.mkstemp(text=True)
     f = os.fdopen(fd, "w")
@@ -435,7 +435,7 @@ def register_process_statistics():
     Called once to register a stats handler for process-specific information.
     """
     if resource is None:
-        log.warning(
+        _log.warning(
             'Unable to import resource module, memory diags not available'
         )
         return
@@ -485,7 +485,7 @@ def logging_exceptions(fn):
         try:
             return fn(*args, **kwargs)
         except:
-            log.exception("Exception in wrapped function %s", fn)
+            _log.exception("Exception in wrapped function %s", fn)
             raise
     return wrapped
 
@@ -512,3 +512,25 @@ def find_set_bits(mask):
         next_mask = mask & (mask - 1)
         yield mask - next_mask
         mask = next_mask
+
+
+def ipv6_supported():
+    """Checks whether we can support IPv6 on this host.
+
+    :returns tuple[bool,str]: supported, reason for lack of support or None.
+    """
+    if not os.path.exists("/proc/sys/net/ipv6"):
+        return False, "/proc/sys/net/ipv6 is missing (IPv6 compiled out?)"
+    try:
+        check_call(["which", "ip6tables"])
+    except FailedSystemCall:
+        return False, ("ip6tables not installed; Calico IPv6 support requires "
+                       "Linux kernel v3.3 or above and ip6tables v1.4.14 or "
+                       "above.")
+    try:
+        check_call(["ip6tables", "-m", "rpfilter"])
+    except (OSError, FailedSystemCall):
+        return False, ("ip6tables is missing required rpfilter match module; "
+                       "Calico IPv6 support requires Linux kernel v3.3 or "
+                       "above and ip6tables v1.4.14 or above.")
+    return True, None

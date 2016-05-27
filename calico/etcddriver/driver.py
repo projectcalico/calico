@@ -49,7 +49,12 @@ from threading import Thread, Event, Lock
 import time
 from urlparse import urlparse
 
-from ijson.backends import yajl2 as ijson
+try:
+    from ijson.backends import yajl2 as ijson
+except (ImportError, AttributeError):
+    # Fall back on Python-native implementation.
+    # Added for RH6.5 compatibility where yajl is not available.
+    from ijson.backends import python as ijson
 from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
 import urllib3.exceptions
 import httplib
