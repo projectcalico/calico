@@ -360,19 +360,31 @@ class EndpointManager(ReferenceManager):
         stops.
         """
         known_interfaces = {}
+        # We only care about host interfaces, not workload ones.
         exclude_prefix = self.config.IFACE_PREFIX
         while True:
+            # Get the IPs for each interface.
             ips_by_iface = devices.list_ips_by_iface(self.ip_type)
             for iface, ips in ips_by_iface.items():
                 if iface.startswith(exclude_prefix):
+                    # Ignore non-host interfaces.
                     ips_by_iface.pop(iface)
                 else:
+                    # Compare with the set of IPs that were there before.
+                    # We pop interfaces that we see so that we can clean up
+                    # deletions below.
                     old_ips = known_interfaces.pop(iface, None)
                     if old_ips != ips:
+                        _log.debug("IPs of interface %s changed to %s",
+                                   iface, ips)
                         self._on_iface_ips_update(iface, ips, async=True)
+            # Clean up deletions.  Anything left in known_interfaces has
+            # been deleted.
             for iface, ips in known_interfaces.iteritems():
                 self._on_iface_ips_update(iface, None, async=True)
+            # Update our cache of known interfaces for the next loop.
             known_interfaces = ips_by_iface
+
             if self.config.HOST_IF_POLL_INTERVAL_SECS <= 0:
                 _log.info("Host interface polling disabled, stopping after "
                           "initial read. Further changes to host endpoint "
@@ -382,11 +394,19 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def _on_iface_ips_update(self, iface_name, ip_addrs):
+        """Message sent by _poll_interface_ips when it detects a change.
+
+        :param iface_name: Name of the interface that has been updated.
+        :param ip_addrs: set of IP addresses, or None if the interface no
+               longer exists (or has no IPs).
+        """
         _log.info("Interface %s now has IPs %s", iface_name, ip_addrs)
         if ip_addrs is not None:
             self.host_ep_ips_by_iface[iface_name] = ip_addrs
         else:
             self.host_ep_ips_by_iface.pop(iface_name, None)
+        # Since changes to IPs can change which host endpoint objects apply to
+        # which interfaces, we need to resolve IPs and host endpoints.
         self._resolve_host_eps()
 
     def _resolve_host_eps(self):
@@ -424,6 +444,8 @@ class EndpointManager(ReferenceManager):
                         # one) interface with that IP.  Sort the names to avoid
                         # non-deterministic behaviour if there are multiple
                         # conflicting matches.
+                        _log.debug("Host endpoint %s matches interfaces: %s",
+                                   combined_id, iface_names)
                         for iface_name in sorted(iface_names):
                             # Check for conflicting matches.
                             prev_match = iface_name_to_id.get(iface_name)
@@ -450,10 +472,12 @@ class EndpointManager(ReferenceManager):
         # Fire in the updates for the new data.
         for resolved_id, data in resolved_ifaces.iteritems():
             if self.resolved_host_eps.get(resolved_id) != data:
+                _log.debug("Updating data for %s", resolved_id)
                 self.on_endpoint_update(resolved_id, data)
         # And the deletions for any now-missing interfaces.
         for resolved_id in self.resolved_host_eps.keys():
             if resolved_id not in resolved_ifaces:
+                _log.debug("%s no longer matches", resolved_id)
                 self.on_endpoint_update(resolved_id, None)
         # Update the cache so we can calculate deltas next time.
         self.resolved_host_eps = resolved_ifaces

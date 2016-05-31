@@ -291,6 +291,10 @@ class _DispatchChains(Actor):
 
 
 class WorkloadDispatchChains(_DispatchChains):
+    """Chains for dispatching to workload endpoint chains.
+
+    Packets that do not match a known endpoint are dropped.
+    """
     chain_names = ENDPOINT_DISPATCH_CHAINS
 
     def end_of_chain_rules(self, chain_name, direction):
@@ -304,6 +308,13 @@ class WorkloadDispatchChains(_DispatchChains):
 
 
 class HostEndpointDispatchChains(_DispatchChains):
+    """Chains for dispatching to host endpoint chains.
+
+    Packets that do not match a known endpoint are returned.
+
+    Users must call configure_iptables() at start-of-day or graceful restart
+    will fail.
+    """
     chain_names = IFACE_DISPATCH_CHAINS
 
     @actor_message()
@@ -339,6 +350,9 @@ class HostEndpointDispatchChains(_DispatchChains):
 
 
 def _find_longest_prefix(strs):
+    """Finds the longest common prefix of the given input strings.
+    :param list[str]|set[str] strs: Input strings.
+    :returns the longest common prefix, or None if the input list is empty."""
     longest_prefix = None
     for iface in strs:
         if longest_prefix is None:
