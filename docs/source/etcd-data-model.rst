@@ -36,7 +36,8 @@ Calico focuses on the following major object types, stored in etcd:
 
 endpoints
   An endpoint object represents a single source+sink of data in a Calico
-  network. A single virtual machine or container may own multiple endpoints
+  network; for example, the virtual NIC of a VM or a host's Linux interface.
+  A single virtual machine, container or host may own multiple endpoints
   (e.g. if it has multiple vNICs). See :ref:`endpoint-data` for more.
 
 security profiles
@@ -65,28 +66,109 @@ The structure of all of this information can be found below.
 Endpoints
 ~~~~~~~~~
 
-Each endpoint object is stored in an etcd key that matches the following
-pattern::
+The Calico datamodel supports two types of endpoints:
 
-    /calico/v1/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
+- Host endpoints refer to the interfaces attached to the host that is running
+  Calico's agent, Felix.  By default, Calico doesn't apply any policy to such
+  interfaces.
 
-where the properties have the following meanings:
+  Each host endpoint is stored in an etcd key that matches the following
+  pattern::
+
+      /calico/v1/host/<hostname>/endpoint/<endpoint_id>
+
+
+- Workload endpoints refer to interfaces attached to workloads such as VMs or
+  containers, which are running on the host.  Calico identifies such
+  interfaces by a name prefix; for example OpenStack VM interfaces always
+  start with "tap...".  By default, Calico blocks all traffic to and from
+  workload interfaces.
+
+  Each workload endpoint is stored in an etcd key that matches the following
+  pattern::
+
+      /calico/v1/host/<hostname>/workload/<orchestrator_id>/<workload_id>/endpoint/<endpoint_id>
+
+the parameters in the paths have the following meanings:
 
 ``hostname``
   the hostname of the compute server
 
 ``orchestrator_id``
-  the name of the orchestrator that owns the endpoint, e.g. ``"docker"`` or
-  ``"openstack"``.
+  for workload endpoints only, the name of the orchestrator that owns the
+  endpoint, e.g. ``"docker"`` or ``"openstack"``.
 
 ``workload_id``
-  an identifier provided by the orchestrator to relate multiple endpoints that
-  belong to the same workload (e.g. a single VM).
+  for workload endpoints only, an identifier provided by the orchestrator to
+  relate multiple endpoints that belong to the same workload (e.g. a single
+  VM).
 
 ``endpoint_id``
-  an identifier for a specific endpoint
+  an (opaque) identifier for a specific endpoint
 
-The object stored is a JSON blob with the following structure:
+Host endpoints
+^^^^^^^^^^^^^^
+
+For host enpdoints, the object stored is a JSON blob of the following form;
+the fields are described below:
+
+.. code-block:: json
+
+    {
+      "name": "<name of linux interface>",
+
+      "expected_ipv4_addrs": ["10.0.0.0", ...],
+      "expected_ipv6_addrs": ["2201:db8::19", ...],
+
+      "profile_ids": ["<profile_id>", …],
+
+      "labels": {
+        "<key>": "<value>",
+        "<key>": "<value>",
+        ...
+      }
+    }
+
+
+The various properties in this object have the following meanings:
+
+``name``
+  Required if none of the ``expected_ipvX_addr`` fiedls are present: the
+  name of the interface to apply policy to; for example "eth0".  If "name" is
+  not present then at least one expected IP must be specified.
+
+``expected_ipv4_addr`` and ``expected_ipv6_addr``
+  At least one required if ``name`` is not present: the expected local IP
+  address of the endpoint.  If ``name`` is not present, Calico will look for
+  an interface with the matching IP and apply policy to that.
+
+``profile_ids``
+  a list of identifiers of :ref:`security-profile-data` objects that apply to
+  this endpoint. Each profile is applied to packets in the order that they
+  appear in this list.
+
+``labels``
+  An optional dict of string key-value pairs. Labels are used to attach useful
+  identifying information to endpoints. It is expected that many endpoints
+  share the same labels.  For example, they could be used to label all
+  "production" workloads with "deployment=prod" so that security policy
+  can be applied to production workloads.
+
+  If ``labels`` is missing, it is treated as if there was an empty dict.
+
+  .. note:: When using the ``src_selector|tag`` or ``dst_selector|tag`` match
+            criteria in a firewall rule, Calico converts the selector into a
+            set of IP addresses.  For host endpoints, the
+            ``expected_ipvX_addr`` fields are used for that purpose.  (If
+            only the interface name is specified, Calico does not learn the
+            IP of the interface for use in match criteria.)
+
+
+Workload endpoints
+^^^^^^^^^^^^^^^^^^
+
+For workload endpoints, the object stored is a JSON blob with the following
+structure:
 
 .. code-block:: json
 

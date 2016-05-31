@@ -27,6 +27,8 @@ import time
 import gevent
 import sys
 from netaddr import IPNetwork
+from netaddr.ip import IPAddress
+from netaddr.ip.sets import IPSet
 
 from calico.calcollections import MultiDict
 from calico.common import nat_key
@@ -405,22 +407,42 @@ class EndpointManager(ReferenceManager):
                 iface_names_by_ip[ip].add(iface)
         # Iterate over the host endpoints, looking for corresponding IPs.
         resolved_ifaces = {}
+        iface_name_to_id = {}
         for combined_id, host_ep in self.host_eps_by_id.iteritems():
-            net_key = "expected_ipv%s_net" % self.ip_version
+            addrs_key = "expected_ipv%s_addrs" % self.ip_version
             if "name" in host_ep:
                 # This interface has an explicit name in the data so it's
                 # already resolved.
                 resolved_id = combined_id.resolve(host_ep["name"])
                 resolved_ifaces[resolved_id] = host_ep
-            elif net_key in host_ep:
+            elif addrs_key in host_ep:
                 # No explicit name, look for an interface with a matching IP.
-                expected_subnet = IPNetwork(host_ep[net_key])
+                expected_ips = IPSet(host_ep[addrs_key])
                 for ip, iface_names in iface_names_by_ip.iteritems():
-                    if ip in expected_subnet:
-                        for iface_name in iface_names:
+                    if ip in expected_ips:
+                        # This endpoint matches the IP, loop over the (usually
+                        # one) interface with that IP.  Sort the names to avoid
+                        # non-deterministic behaviour if there are multiple
+                        # conflicting matches.
+                        for iface_name in sorted(iface_names):
+                            # Check for conflicting matches.
+                            prev_match = iface_name_to_id.get(iface_name)
+                            if prev_match == combined_id:
+                                # Already matched this interface
+                                continue
+                            elif prev_match is not None:
+                                # Already matched a different interface.
+                                # First match wins.
+                                _log.warn("Interface %s matched with multiple "
+                                          "entries in datamodel; using %s",
+                                          iface_name, prev_match)
+                                continue
+                            else:
+                                # Else, this is the first match, record it.
+                                iface_name_to_id[iface_name] = combined_id
                             # Got a match.  Since it's possible to match
                             # multiple interfaces by IP, we add the interface
-                            # name into the ID.
+                            # name into the ID to disambiguate.
                             resolved_id = combined_id.resolve(iface_name)
                             resolved_data = host_ep.copy()
                             resolved_data["name"] = iface_name

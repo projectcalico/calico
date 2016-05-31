@@ -163,6 +163,12 @@ class IpsetManager(ReferenceManager):
         nets = "ipv4_nets" if self.ip_type == IPV4 else "ipv6_nets"
         return nets
 
+    @property
+    def expected_ips_key(self):
+        key = ("expected_ipv4_addrs" if self.ip_type == IPV4
+                else "expected_ipv6_addrs")
+        return key
+
     @actor_message()
     def on_datamodel_in_sync(self):
         if not self._datamodel_in_sync:
@@ -358,12 +364,14 @@ class IpsetManager(ReferenceManager):
         """
         if endpoint_dict is not None:
             profile_ids = endpoint_dict.get("profile_ids", [])
-            nets_list = endpoint_dict.get(self.nets_key, [])
-            if nets_list:
+            nets = endpoint_dict.get(self.nets_key, [])
+            ips = map(futils.net_to_ip, nets)
+            exp_ips = endpoint_dict.get(self.expected_ips_key, [])
+
+            if ips or exp_ips:
                 # Optimization: only return an object if this endpoint makes
                 # some contribution to the IP addresses.
-                ips = map(futils.net_to_ip, nets_list)
-                return EndpointData(profile_ids, ips)
+                return EndpointData(profile_ids, ips + exp_ips)
             else:
                 _log.debug("Endpoint makes no contribution, "
                            "treating as missing: %s", endpoint_id)

@@ -72,8 +72,8 @@ PROFILE_LABELS_KEY = PER_PROFILE_DIR + "/labels"
 PER_HOST_DIR = HOST_DIR + "/<hostname>"
 HOST_IP_KEY = PER_HOST_DIR + "/bird_ip"
 WORKLOAD_DIR = PER_HOST_DIR + "/workload"
-HOST_IFACE_DIR = PER_HOST_DIR + "/interface"
-HOST_IFACE_KEY = PER_HOST_DIR + "/interface/<iface_id>"
+HOST_IFACE_DIR = PER_HOST_DIR + "/endpoint"
+HOST_IFACE_KEY = PER_HOST_DIR + "/endpoint/<endpoint_id>"
 PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
@@ -625,17 +625,17 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None)
 
-    def on_host_ep_set(self, response, hostname, iface_id):
+    def on_host_ep_set(self, response, hostname, endpoint_id):
         """Handler for create/update of host endpoint."""
-        combined_id = HostEndpointId(hostname, iface_id)
+        combined_id = HostEndpointId(hostname, endpoint_id)
         _log.debug("Host iface %s updated", combined_id)
         _stats.increment("Host iface created/updated")
         iface_data = parse_host_ep(self._config, combined_id, response.value)
         self.splitter.on_host_ep_update(combined_id, iface_data)
 
-    def on_host_ep_delete(self, response, hostname, iface_id):
+    def on_host_ep_delete(self, response, hostname, endpoint_id):
         """Handler for delete of host endpoint."""
-        combined_id = HostEndpointId(hostname, iface_id)
+        combined_id = HostEndpointId(hostname, endpoint_id)
         _log.debug("Host iface %s deleted", combined_id)
         _stats.increment("Host iface deleted")
         self.splitter.on_host_ep_update(combined_id, None)

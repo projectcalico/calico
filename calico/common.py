@@ -373,30 +373,28 @@ def validate_host_endpoint(config, combined_id, endpoint):
     if "mac" in endpoint:
         issues.append("'mac' field not supported for host endpoints")
 
-    # Host endpoint-specific validation.
-    # We need either a name for the interface or an expected IP address to
-    # look it up.
-    expected_ip_present = ("expected_ipv4_net" in endpoint or
-                           "expected_ipv6_net" in endpoint)
+    # Host endpoint-specific validation. We need either a name for the
+    # interface or at least one expected IP address.
+    expected_ip_present = (endpoint.get("expected_ipv4_addrs") or
+                           endpoint.get("expected_ipv6_addrs"))
     name_present = "name" in endpoint
     if not name_present and not expected_ip_present:
-        issues.append("'name' or 'expected_ipvx_net' must be present.")
+        issues.append("'name' or 'expected_ipvx_addr' must be present.")
 
-    # Check the expected net fields are valid CIDRs, if present.
-    for key, version in [("expected_ipv4_net", 4), ("expected_ipv6_net", 6)]:
+    # Check the expected addr fields are valid IPs, if present.
+    for key, version in [("expected_ipv4_addrs", 4),
+                         ("expected_ipv6_addrs", 6)]:
         if key in endpoint:
-            net = endpoint[key]
-            if not validate_cidr(net, version):
-                issues.append("'%s' should be a valid CIDR, not %r." %
-                              (key, net))
+            if not isinstance(endpoint[key], list):
+                issues.append("%r should be a list" % key)
             else:
-                cidr = netaddr.IPNetwork(net, version)
-                if cidr.prefixlen != 32 if version == 4 else 128:
-                    # For now, limit to a fully-specified /32 or /128.  Later,
-                    # for default interface templates, we plan to relax this
-                    # restriction.
-                    issues.append("'%s' must be a /32 or /128 address." % key)
-                endpoint[key] = canonicalise_cidr(net, version)
+                for ip in endpoint[key]:
+                    if not validate_ip_addr(ip, version):
+                        issues.append("'%s' should be a valid IP, not %r." %
+                                      (key, ip))
+                    else:
+                        endpoint[key] = [canonicalise_ip(ip, version)
+                                         for ip in endpoint[key]]
 
     if issues:
         raise ValidationFailed(" ".join(issues))
