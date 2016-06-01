@@ -34,7 +34,7 @@ import gc
 from datetime import datetime
 import gevent.lock
 from gevent import subprocess
-from gevent.subprocess import Popen
+from gevent.subprocess import Popen, check_output, CalledProcessError
 import tempfile
 import pkg_resources
 from posix_spawn import posix_spawnp, FileActions
@@ -541,3 +541,55 @@ def ipv6_supported():
                        "Calico IPv6 support requires Linux kernel v3.3 or "
                        "above and ip6tables v1.4.14 or above.")
     return True, None
+
+
+def check_command_deps():
+    """Checks for the presence of our prerequisite commands such as iptables
+    and conntrack.
+
+    :raises SystemExit if commands are missing."""
+    _log.info("Checking for iptables")
+    try:
+        ipt_version = check_output(["iptables", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute iptables; Calico requires iptables "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("iptables version: %s", ipt_version)
+
+    _log.info("Checking for iptables-save")
+    try:
+        check_call(["which", "iptables-save"])
+    except (FailedSystemCall, OSError):
+        _log.critical("Failed to find iptables-save; Calico requires "
+                      "iptables-save to be installed.")
+        sys.exit(1)
+
+    _log.info("Checking for iptables-restore")
+    try:
+        check_call(["which", "iptables-restore"])
+    except (FailedSystemCall, OSError):
+        _log.critical("Failed to find iptables-restore; Calico requires "
+                      "iptables-restore to be installed.")
+        sys.exit(1)
+
+    _log.info("Checking for ipset")
+    try:
+        ipset_version = check_output(["ipset", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute ipset; Calico requires ipset "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("ipset version: %s", ipset_version)
+
+    _log.info("Checking for conntrack")
+    try:
+        conntrack_version = check_output(["conntrack", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute conntrack; Calico requires iptables "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("conntrack version: %s", conntrack_version)

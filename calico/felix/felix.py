@@ -78,6 +78,9 @@ def _main_greenlet(config):
         # Calico.
         devices.configure_global_kernel_config()
 
+        # Check the commands we require are present.
+        futils.check_command_deps()
+
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
 
