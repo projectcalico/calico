@@ -106,23 +106,28 @@ class TestDispatchChains(BaseTestCase):
         d.programmed_leaf_chains.add("felix-FROM-EP-PFX-a")
         d.programmed_leaf_chains.add("felix-FROM-EP-PFX-z")
         ifaces = ['tapa1', 'tapa2', 'tapa3',
-                  'tapb1', 'tapb2',
+                  'tapb1', 'tapb20123456789012345',
                   'tapc']
         to_delete, deps, updates, new_leaf_chains = d._calculate_update(ifaces)
         self.assertEqual(to_delete, set(["felix-FROM-EP-PFX-z"]))
+        print "Deps", pformat(deps)
         self.assertEqual(deps, {
             'felix-TO-ENDPOINT': set(
                 ['felix-FROM-EP-PFX-a', 'felix-FROM-EP-PFX-b', 'felix-to-c']),
             'felix-FROM-ENDPOINT': set(
                 ['felix-TO-EP-PFX-a', 'felix-TO-EP-PFX-b', 'felix-from-c']),
 
-            'felix-TO-EP-PFX-a': set(['felix-to-a1', 'felix-to-a2', 'felix-to-a3']),
-            'felix-TO-EP-PFX-b': set(['felix-to-b1', 'felix-to-b2']),
+            'felix-TO-EP-PFX-a': set(['felix-to-a1',
+                                      'felix-to-a2',
+                                      'felix-to-a3']),
+            'felix-TO-EP-PFX-b': set(['felix-to-b1',
+                                      'felix-to-_62629f0db434d57']),
 
             'felix-FROM-EP-PFX-a': set(['felix-from-a1',
-                                      'felix-from-a2',
-                                      'felix-from-a3']),
-            'felix-FROM-EP-PFX-b': set(['felix-from-b2', 'felix-from-b1']),
+                                        'felix-from-a2',
+                                        'felix-from-a3']),
+            'felix-FROM-EP-PFX-b': set(['felix-from-b1',
+                                        'felix-from-_62629f0db434d57']),
         })
         for chain_name, chain_updates in updates.items():
             chain_updates[:] = sorted(chain_updates[:-1]) + chain_updates[-1:]
@@ -150,7 +155,7 @@ class TestDispatchChains(BaseTestCase):
                 '--append felix-FROM-EP-PFX-a --jump DROP -m comment --comment "From unknown endpoint"'],
             'felix-FROM-EP-PFX-b': [
                 '--append felix-FROM-EP-PFX-b --in-interface tapb1 --goto felix-from-b1',
-                '--append felix-FROM-EP-PFX-b --in-interface tapb2 --goto felix-from-b2',
+                '--append felix-FROM-EP-PFX-b --in-interface tapb20123456789012345 --goto felix-from-_62629f0db434d57',
                 '--append felix-FROM-EP-PFX-b --jump DROP -m comment --comment "From unknown endpoint"'],
             'felix-TO-EP-PFX-a': [
                 '--append felix-TO-EP-PFX-a --out-interface tapa1 --goto felix-to-a1',
@@ -159,7 +164,7 @@ class TestDispatchChains(BaseTestCase):
                 '--append felix-TO-EP-PFX-a --jump DROP -m comment --comment "To unknown endpoint"'],
             'felix-TO-EP-PFX-b': [
                 '--append felix-TO-EP-PFX-b --out-interface tapb1 --goto felix-to-b1',
-                '--append felix-TO-EP-PFX-b --out-interface tapb2 --goto felix-to-b2',
+                '--append felix-TO-EP-PFX-b --out-interface tapb20123456789012345 --goto felix-to-_62629f0db434d57',
                 '--append felix-TO-EP-PFX-b --jump DROP -m comment --comment "To unknown endpoint"']
         })
 

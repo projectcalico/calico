@@ -353,7 +353,7 @@ def _configure_ipip_device(config):
     _log.info("Configured IPIP device.")
 
 
-def interface_to_suffix(config, iface_name):
+def interface_to_chain_suffix(config, iface_name):
     """
     Extracts the suffix from a given interface name, uniquely shortening it
     to 16 characters if necessary.
