@@ -572,10 +572,18 @@ class _FelixEtcdWatcher(gevent.Greenlet):
                                       socket.SOCK_STREAM)
         update_socket.bind(sck_filename)
         update_socket.listen(1)
-        self._driver_process = subprocess.Popen([sys.executable,
-                                                 "-m",
-                                                 "calico.etcddriver",
-                                                 sck_filename])
+        if getattr(sys, "frozen", False):
+            # We're running under pyinstaller, where we share our executable
+            # with the etcd driver.  Re-run this executable with the "driver"
+            # argument to invoke the etcd driver.
+            cmd = [sys.argv[0], "driver"]
+        else:
+            # Not running under pyinstaller, execute the etcd driver directly.
+            cmd = [sys.executable, "-m", "calico.etcddriver"]
+        # etcd driver takes the felix socket name as argument.
+        cmd += [sck_filename]
+        _log.info("etcd-driver command line: %s", cmd)
+        self._driver_process = subprocess.Popen(cmd)
         _log.info("Started etcd driver with PID %s", self._driver_process.pid)
         update_conn, _ = update_socket.accept()
         _log.info("Accepted connection on socket")

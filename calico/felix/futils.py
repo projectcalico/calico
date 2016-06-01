@@ -28,6 +28,7 @@ import inspect
 import logging
 import os
 import re
+import sys
 import types
 import gc
 from datetime import datetime
@@ -116,8 +117,13 @@ def call_silent(args):
     except FailedSystemCall as e:
         return e.retcode
 
-
-gevent_version = pkg_resources.get_distribution("gevent").parsed_version
+if getattr(sys, "frozen", False):
+    # Running as a pyinstaller frozen executable.  The gevent version check
+    # will fail, but we know we're running with a new version so it's OK to
+    # skip it.
+    gevent_version = None
+else:
+    gevent_version = pkg_resources.get_distribution("gevent").parsed_version
 
 
 class SpawnedProcess(Popen):
@@ -130,7 +136,8 @@ class SpawnedProcess(Popen):
     blocks the entire process.
     """
 
-    if gevent_version < pkg_resources.parse_version("1.1a1"):
+    if (gevent_version is not None and
+            gevent_version < pkg_resources.parse_version("1.1a1")):
         # gevent 1.0.
         def _execute_child(self, args, executable, preexec_fn, close_fds,
                            cwd, env, universal_newlines,

@@ -28,34 +28,43 @@ import os
 import socket
 import sys
 
-from prometheus_client import start_http_server
-
 from calico.etcddriver import driver
 from calico import common
 
 _log = logging.getLogger(__name__)
 
-last_ppid = os.getppid()
-common.default_logging(gevent_in_use=False,
-                       syslog_executable_name="calico-felix-etcd")
 
-felix_sck = socket.socket(socket.AF_UNIX,
-                          socket.SOCK_STREAM)
-try:
-    felix_sck.connect(sys.argv[1])
-except:
-    _log.exception("Failed to connect to Felix")
-    raise
+def main():
+    """etcd driver main entry point.
 
-etcd_driver = driver.EtcdDriver(felix_sck)
-etcd_driver.start()
+    Implementation note: this is implemented as a function to allow
+    it to be imported and executed from the pyinstaller launcher.
 
-while not etcd_driver.join(timeout=1):
-    parent_pid = os.getppid()
-    # Defensive, just in case we don't get a socket error, check if the
-    # parent PID has changed, indicating that Felix has died.
-    if parent_pid == 1 or parent_pid != last_ppid:
-        _log.critical("Process adopted, assuming felix has died")
-        etcd_driver.stop()
-        break
-_log.critical("Driver shutting down.")
+    Without the extra indirection, pyilauncher would deadlock when
+    it tried to import this module.
+    """
+    last_ppid = os.getppid()
+    common.default_logging(gevent_in_use=False,
+                           syslog_executable_name="calico-felix-etcd")
+    felix_sck = socket.socket(socket.AF_UNIX,
+                              socket.SOCK_STREAM)
+    try:
+        felix_sck.connect(sys.argv[1])
+    except:
+        _log.exception("Failed to connect to Felix")
+        raise
+    etcd_driver = driver.EtcdDriver(felix_sck)
+    etcd_driver.start()
+    while not etcd_driver.join(timeout=1):
+        parent_pid = os.getppid()
+        # Defensive, just in case we don't get a socket error, check if the
+        # parent PID has changed, indicating that Felix has died.
+        if parent_pid == 1 or parent_pid != last_ppid:
+            _log.critical("Process adopted, assuming felix has died")
+            etcd_driver.stop()
+            break
+    _log.critical("Driver shutting down.")
+
+
+if __name__ == "__main__":
+    main()

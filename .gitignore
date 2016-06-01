@@ -12,4 +12,8 @@ tmp/
 /.eggs
 /.hypothesis
 /coverage.xml
+build
+dist
+site-packages
+.noseids
 
