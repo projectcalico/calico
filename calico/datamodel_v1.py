@@ -246,12 +246,12 @@ class WloadEndpointId(EndpointId):
 
 
 class HostEndpointId(EndpointId):
-    __slots__ = ["host", "endpoint"]
+    __slots__ = []
 
     @property
     def path_for_status(self):
         return "/".join([FELIX_STATUS_DIR, self.host,
-                         "interface", self.endpoint])
+                         "endpoint", self.endpoint])
 
     def __eq__(self, other):
         if other is self:

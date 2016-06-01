@@ -35,7 +35,7 @@ class _DispatchChains(Actor):
     Actor that owns the felix-TO/FROM-xxx chains, which we use to
     dispatch to endpoint/iface-specific chains.
 
-    Iface/Endpoint Actors give us kicks as they come and go so we can
+    Endpoint Actors give us kicks as they come and go so we can
     add/remove them from the chains.
     """
 

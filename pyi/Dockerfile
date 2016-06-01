@@ -20,5 +20,11 @@ RUN pip install -U -r felix_requirements.txt
 
 # And pyinstaller...
 RUN pip install pyinstaller
+
+# Install Calico into site-packages.  It's easier to package up the egg-info
+# etc if we use the installed version.  Doing the install here rather than
+# in the run-pyinstaller script means we don't have to run the latter as root
+# (but it does mean that the build script needs to rebuild the container
+# image each time).
 COPY . /code
 RUN cd /code && pip install .

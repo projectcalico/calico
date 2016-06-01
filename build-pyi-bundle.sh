@@ -11,4 +11,4 @@ docker run --user $UID --rm -v `pwd`:/code calico-pyi-build /code/pyi/run-pyinst
 
 # Package it up.
 mkdir -p dist
-tar -czf dist/calico-felix.tgz -C pyi/dist calico-felix
+tar -czf dist/calico-felix.tgz -C dist calico-felix

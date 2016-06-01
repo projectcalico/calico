@@ -166,7 +166,7 @@ class IpsetManager(ReferenceManager):
     @property
     def expected_ips_key(self):
         key = ("expected_ipv4_addrs" if self.ip_type == IPV4
-                else "expected_ipv6_addrs")
+               else "expected_ipv6_addrs")
         return key
 
     @actor_message()
@@ -293,9 +293,8 @@ class IpsetManager(ReferenceManager):
         Update tag/selector memberships and indices with the new
         host ep/endpoint dict.
 
-        Since we only care about extracting the IPs, profiles and labels,
-        we don't care about the differences between host endpoints and
-        endpoints.
+        We care about the labels, profiles and IP addresses.  For host
+        endpoints, we include the expected_ipvX_addrs in the IP addresses.
 
         :param HostEndpointId|WloadEndpointId combined_id: ID of the endpoint.
         :param dict|NoneType data: Either a dict containing endpoint
@@ -382,7 +381,7 @@ class IpsetManager(ReferenceManager):
         Update tag memberships and indices with the new EndpointData
         object.
 
-        :param EndpointID endpoint_id: ID of the endpoint.
+        :param EndpointId endpoint_id: ID of the endpoint.
         :param EndpointData endpoint_data: An EndpointData object
             EMPTY_ENDPOINT_DATA to indicate deletion (or endpoint being
             optimized out).

@@ -149,7 +149,7 @@ def list_ips_by_iface(ip_type):
             m = re.match(regex, line)
             if m:
                 ip = IPAddress(m.group(1))
-                ips_by_iface[iface_name].add(IPAddress(ip))
+                ips_by_iface[iface_name].add(ip)
     return ips_by_iface
 
 
@@ -277,7 +277,7 @@ def add_route(ip_type, ip, interface, mac):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param str ip: IP address
     :param str interface: Interface name
-    :param str mac: MAC address. May not be None unless ip is None.
+    :param str mac: MAC address or None to skip programming the ARP cache.
     :raises FailedSystemCall
     """
     if ip_type == futils.IPV4:

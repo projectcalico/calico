@@ -344,6 +344,10 @@ def validate_endpoint(config, combined_id, endpoint):
     elif endpoint["state"] not in ("active", "inactive"):
         issues.append("Expected 'state' to be one of active/inactive.")
 
+    if "expected_ipv4_addrs" in endpoint or "expected_ipv6_addrs" in endpoint:
+        issues.append("Expected IP addresses not supported for workload "
+                      "endpoints.")
+
     if issues:
         raise ValidationFailed(" ".join(issues))
 

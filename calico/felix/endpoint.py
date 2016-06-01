@@ -390,7 +390,7 @@ class EndpointManager(ReferenceManager):
                           "initial read. Further changes to host endpoint "
                           "IPs will be ignored.")
                 break
-            time.sleep(self.config.HOST_IF_POLL_INTERVAL_SECS)
+            gevent.sleep(self.config.HOST_IF_POLL_INTERVAL_SECS)
 
     @actor_message()
     def _on_iface_ips_update(self, iface_name, ip_addrs):
@@ -428,7 +428,7 @@ class EndpointManager(ReferenceManager):
         # Iterate over the host endpoints, looking for corresponding IPs.
         resolved_ifaces = {}
         iface_name_to_id = {}
-        for combined_id, host_ep in self.host_eps_by_id.iteritems():
+        for combined_id, host_ep in sorted(self.host_eps_by_id.iteritems()):
             addrs_key = "expected_ipv%s_addrs" % self.ip_version
             if "name" in host_ep:
                 # This interface has an explicit name in the data so it's
@@ -450,7 +450,8 @@ class EndpointManager(ReferenceManager):
                             # Check for conflicting matches.
                             prev_match = iface_name_to_id.get(iface_name)
                             if prev_match == combined_id:
-                                # Already matched this interface
+                                # Already matched this interface by a different
+                                # IP address.
                                 continue
                             elif prev_match is not None:
                                 # Already matched a different interface.
@@ -973,7 +974,7 @@ class LocalEndpoint(RefCountedActor):
         _log.debug("Cleaning up conntrack for old IPs: %s", self._removed_ips)
         devices.remove_conntrack_flows(
             self._removed_ips,
-            4 if self.ip_type == futils.IPV4 else 6
+            IP_TYPE_TO_VERSION[self.ip_type]
         )
         # We could use self._removed_ips.clear() but it's hard to UT because
         # the UT sees the update.
@@ -1072,12 +1073,6 @@ class WorkloadEndpoint(LocalEndpoint):
 
 
 class HostInterface(LocalEndpoint):
-    def _configure_interface(self):
-        pass
-
-    def _deconfigure_interface(self):
-        pass
-
     def _endpoint_updates(self):
         updates, deps = self.iptables_generator.endpoint_updates(
             IP_TYPE_TO_VERSION[self.ip_type],
