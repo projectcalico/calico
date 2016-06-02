@@ -100,4 +100,7 @@ aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-chec
 ...
 ./calicoctl pool add <CIDR> --nat-outgoing
 ```
+
+### Why IP of container/host is unreachable from host/container with Calico IPAM?
+Reason may be complex. A simple one is that ARP packets are ignored by host. Try checking sysctl net.ipv4.conf.all.arp_ignore, which should be 0 for calico.
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/FAQ.md?pixel)](https://github.com/igrigorik/ga-beacon)
