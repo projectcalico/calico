@@ -6,7 +6,7 @@ export CALICODEPS = none
 #export DH_VERBOSE=1
 
 %:
-	dh $@  --with python2
+	dh $@  --with python2,systemd
 
 override_dh_install:
 	install -d debian/tmp/usr/etc/calico
