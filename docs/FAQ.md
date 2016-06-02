@@ -94,7 +94,7 @@ Yes.  If you are running in a public cloud that doesn't allow either L3 peering 
 ```
 Calico will then route traffic between Calico hosts using IP in IP.
 
-In AWS, you can instead disable `Source/Dest. Check` as long as all your instances are in the same subnet of your VPC.  This will provide the best performance.  You can disable this with the CLI, or right click the instance in the EC2 console, and `Change Source/Dest. Check` from the `Networking` submenu.
+In AWS, you disable `Source/Dest. Check` instead of using IP in IP as long as all your instances are in the same subnet of your VPC.  This will provide the best performance.  You can disable this with the CLI, or right click the instance in the EC2 console, and `Change Source/Dest. Check` from the `Networking` submenu.
 ```
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
 ...

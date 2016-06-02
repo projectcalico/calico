@@ -138,7 +138,7 @@ specific environment, you may need to choose different CIDRs.
 So, once you have decided which type of network to create, following the
 appropriate instructions for one of *a)*, *b)*, *c)* or *d)*.
 
-For AWS, chose a) or c), and `Change Source/Dest. Check` on your instances with
+For AWS, omit the `--ipip` or `--opt ipip=true` in the below, and `Change Source/Dest. Check` on your instances with
 the following EC2 CLI command or by right clicking the instance in the EC2
 console, and selecting it from the Networking submenu.
 
