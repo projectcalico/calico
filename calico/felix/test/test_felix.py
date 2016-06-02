@@ -25,6 +25,7 @@ import sys
 
 import calico.felix.test.stub_etcd as stub_etcd
 import calico.felix.felix as felix
+from calico.felix import futils
 from calico.felix.test.base import BaseTestCase, load_config
 
 # Logger
@@ -168,3 +169,5 @@ class TestBasic(BaseTestCase):
                                                   ip_version=4)
         m_conntrack.assert_called_once_with()
 
+        # Cover the diags dump function.
+        futils.dump_diags()

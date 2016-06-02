@@ -87,7 +87,7 @@ class TestDatamodel(unittest.TestCase):
             get_profile_id_for_profile_dir("/calico/v1/policy/profile/prof1/rules"), None)
 
 
-class TestEndpointId(unittest.TestCase):
+class TestWorkloadEndpointId(unittest.TestCase):
 
     def test_equality(self):
         ep_id = WloadEndpointId("localhost", "orchestrator", "workload",
@@ -116,6 +116,69 @@ class TestEndpointId(unittest.TestCase):
                                              "workload", "notanendpoint")
         self.assertFalse(ep_id == bad_endpoint_ep_id)
         self.assertTrue(ep_id != bad_endpoint_ep_id)
+
+
+class TestHostEndpointId(unittest.TestCase):
+
+    def test_equality(self):
+        ep_id = HostEndpointId("localhost", "endpoint")
+        self.assertTrue(ep_id == ep_id)
+        self.assertFalse(ep_id != ep_id)
+        ep_id2 = HostEndpointId("localhost", "endpoint")
+        self.assertTrue(ep_id == ep_id2)
+        self.assertEqual(hash(ep_id), hash(ep_id2))
+        self.assertFalse(ep_id != ep_id2)
+
+        self.assertFalse(ep_id == "not an endpoint id")
+        self.assertFalse(ep_id == 42)
+
+        bad_host_ep_id = HostEndpointId("notlocalhost", "endpoint")
+        self.assertFalse(ep_id == bad_host_ep_id)
+
+        bad_endpoint_ep_id = HostEndpointId("localhost", "notendpoint")
+        self.assertFalse(ep_id == bad_endpoint_ep_id)
+        self.assertTrue(ep_id != bad_endpoint_ep_id)
+
+    def test_repr(self):
+        self.assertEqual(repr(HostEndpointId("localhost", "endpoint")),
+                         "HostEndpointId('localhost','endpoint')")
+
+    def test_path_for_status(self):
+        self.assertEqual(
+            HostEndpointId("localhost", "endpoint").path_for_status,
+            '/calico/felix/v1/host/localhost/endpoint/endpoint'
+        )
+
+    def test_resolve(self):
+        # Check resolving gives expected fields in the resolved endpoint.
+        ep = HostEndpointId("localhost", "endpoint")
+        res = ep.resolve("eth0")
+        self.assertEqual(res.host, "localhost")
+        self.assertEqual(res.endpoint, "endpoint")
+        self.assertEqual(res.iface_name, "eth0")
+
+        # Shouldn't be equal ot the non-resolved version.
+        self.assertNotEqual(ep, res)
+
+        # Should equal self.
+        self.assertEqual(res, res)
+
+        # And a second value created with same params.
+        res2 = ep.resolve("eth0")
+        self.assertEqual(res, res2)
+        self.assertEqual(hash(res), hash(res2))
+
+        # Different interface should break equality.
+        res3 = ep.resolve("eth1")
+        self.assertNotEqual(res, res3)
+        # As should different host endpoints.
+        ep2 = HostEndpointId("notlocalhost", "endpoint")
+        self.assertNotEqual(ep2.resolve("eth0"), res)
+        ep3 = HostEndpointId("localhost", "endpoint2")
+        self.assertNotEqual(ep3.resolve("eth0"), res)
+
+        self.assertNotEqual(repr(ep3.resolve("eth0")),
+                            repr(ep3.resolve("eth2")))
 
 
 class TestTieredPolicyId(unittest.TestCase):

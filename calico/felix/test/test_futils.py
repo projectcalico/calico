@@ -19,6 +19,8 @@ felix.test.test_futils
 Test Felix utils.
 """
 import logging
+from subprocess import CalledProcessError
+
 import mock
 
 import unittest2
@@ -135,6 +137,92 @@ class TestFutils(unittest2.TestCase):
         self.assertEqual(result, expected,
                          "Expected %r to be truncated as %r but got %r" %
                          (s, expected, result))
+        
+    def test_longest_prefix(self):
+        self.assertEqual(futils.find_longest_prefix([]), None)
+        self.assertEqual(futils.find_longest_prefix(["a"]), "a")
+        self.assertEqual(futils.find_longest_prefix(["a", ""]), "")
+        self.assertEqual(futils.find_longest_prefix(["a", "ab"]), "a")
+        self.assertEqual(futils.find_longest_prefix(["ab", "ab"]), "ab")
+        self.assertEqual(futils.find_longest_prefix(["ab", "ab", "abc"]), "ab")
+        self.assertEqual(futils.find_longest_prefix(["abc", "ab", "ab"]), "ab")
+        self.assertEqual(futils.find_longest_prefix(["ab", "cd"]), "")
+        self.assertEqual(futils.find_longest_prefix(["tapabcd", "tapacdef"]), "tapa")
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_supported(self, m_check_call, m_exists):
+        m_exists.return_value = True
+        self.assertEqual(futils.ipv6_supported(), (True, None))
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_compiled_out(self, m_check_call, m_exists):
+        m_exists.return_value = False
+        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_missing_ip6tables(self, m_check_call, m_exists):
+        m_exists.return_value = True
+        m_check_call.side_effect = futils.FailedSystemCall()
+        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_missing_rpfilter(self, m_check_call, m_exists):
+        m_exists.return_value = True
+        m_check_call.side_effect = iter([None, futils.FailedSystemCall()])
+        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+
+    @mock.patch("sys.exit")
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
+    def test_command_deps_mainline(self, m_check_output, m_check_call,
+                                    m_exists, m_exit):
+        m_check_output.return_value = "v1.2.3"
+        futils.check_command_deps()
+        self.assertFalse(m_exit.called)
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
+    def test_command_deps_fail(self, m_check_output, m_check_call,
+                                m_exists):
+        futils.check_command_deps()
+        num_check_calls = m_check_call.call_count
+        self.assertEqual(num_check_calls, 2,
+                         msg="Calls to check_call: %s" %
+                             m_check_call.mock_calls)
+        num_check_outputs = m_check_output.call_count
+        self.assertEqual(num_check_outputs, 3,
+                         msg="Calls to check_output: %s" %
+                             m_check_output.mock_calls)
+        m_check_output.return_value = "v1.2.3"
+
+        # Run through all the check_call invocations raising an error from
+        # each.
+        for exc in [futils.FailedSystemCall(), OSError()]:
+            for ii in xrange(num_check_calls):
+                # Raise from the ii'th check_call.
+                log.info("Raising %s from the %s check_call",
+                         exc, ii)
+                m_check_call.reset_mock()
+                m_check_call.side_effect = iter(([None] * ii) + [exc])
+                self.assertRaises(SystemExit, futils.check_command_deps)
+                self.assertEqual(ii+1, m_check_call.call_count)
+
+        # Run through all the check_output invocations raising an error from
+        # each.
+        m_check_call.side_effect = None
+        for exc in [CalledProcessError(1, "foo"), OSError()]:
+            for ii in xrange(num_check_outputs):
+                # Raise from the ii'th check_output.
+                m_check_output.reset_mock()
+                m_check_output.side_effect = iter(([None] * ii) + [exc])
+                self.assertRaises(SystemExit, futils.check_command_deps)
+                self.assertEqual(ii+1, m_check_output.call_count)
 
 
 class TestStats(unittest2.TestCase):

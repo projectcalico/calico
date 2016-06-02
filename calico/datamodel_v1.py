@@ -195,7 +195,7 @@ class EndpointId(object):
 
     @property
     def path_for_status(self):
-        return NotImplemented
+        raise NotImplementedError()  # pragma: no cover
 
     def __str__(self):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)
@@ -290,6 +290,10 @@ class ResolvedHostEndpointId(HostEndpointId):
         return (super(ResolvedHostEndpointId, self).__hash__() * 37 +
                 hash(self.iface_name))
 
+    def __repr__(self):
+        return self.__class__.__name__ + ("(%r,%r,%r)" % (self.host,
+                                                          self.endpoint,
+                                                          self.iface_name))
 
 class TieredPolicyId(object):
     __slots__ = ["tier", "policy_id"]

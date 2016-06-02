@@ -61,6 +61,21 @@ class IptablesUpdater(Actor):
     However, this class tries to be robust against concurrent access
     from outside the process by detecting and retrying such errors.
 
+    iptables manipulation guidelines
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Since any update to iptables is implemented by the iptables commands
+    as a read-modify-write of the entire table, we try to batch (see below)
+    as many updates into one call to iptables as possible.
+
+    Rather than using individual iptables commands, we make use of
+    iptables-restore to rewrite entire chains (or multiple chains) as a
+    single atomic operation.
+
+    This also allows us to avoid reading individual rules from iptables,
+    which is a very tricky thing to get right (because iptables internally
+    normalises rules, they don't always read back as-written).
+
     Batching support
     ~~~~~~~~~~~~~~~~
 
@@ -69,7 +84,9 @@ class IptablesUpdater(Actor):
     issuing single iptables requests.
 
     If a request fails, it does a binary chop using the SplitBatchAndRetry
-    mechanism to report the error to the correct request.
+    mechanism to report the error to the correct request.  To allow a batch
+    to be retried, the per-batch state is tracked using a dedicated
+    _Transaction object, which can simply be thrown away if the batch fails.
 
     Dependency tracking
     ~~~~~~~~~~~~~~~~~~~
@@ -83,8 +100,10 @@ class IptablesUpdater(Actor):
       that appear in its --jump and --goto targets).
 
     * Any chains that are required but not present are created as "stub"
-      chains, which drop all traffic. They are marked as such in the
-      iptables rules with an iptables comment.
+      chains, which (by default) drop all traffic. They are marked as such
+      in the iptables rules with an iptables comment.  To facilitate graceful
+      restart after a failure, the default behaviour for a missing chain can
+      be pre-configured via set_missing_chain_override().
 
     * When a required chain is later explicitly created, the stub chain is
       replaced with the required contents of the chain.
@@ -187,7 +206,7 @@ class IptablesUpdater(Actor):
 
         Populates self._chains_in_dataplane.
         """
-        _log.debug("Loading chain names for iptables table %s, using"
+        _log.debug("Loading chain names for iptables table %s, using "
                    "command %s", self.table, self._save_cmd)
         self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",

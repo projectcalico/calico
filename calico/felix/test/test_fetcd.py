@@ -25,7 +25,7 @@ from gevent.event import Event
 import gevent
 from mock import Mock, call, patch, ANY
 
-from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId
+from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId, HostEndpointId
 from calico.etcddriver.protocol import MessageReader, MessageWriter, \
     MSG_TYPE_CONFIG_LOADED, MSG_TYPE_STATUS, STATUS_RESYNC, MSG_KEY_STATUS, \
     MSG_TYPE_UPDATE, MSG_KEY_KEY, MSG_KEY_VALUE, MSG_KEY_TYPE, \
@@ -57,6 +57,18 @@ VALID_ENDPOINT = {
     ]
 }
 ENDPOINT_STR = json.dumps(VALID_ENDPOINT)
+
+VALID_HOST_ENDPOINT = {
+    "name": "tap1234",
+    "profile_ids": ["prof1"],
+    "expected_ipv4_addrs": [
+        "10.0.0.1",
+    ],
+    "expected_ipv6_addrs": [
+        "dead::beef",
+    ]
+}
+HOST_ENDPOINT_STR = json.dumps(VALID_HOST_ENDPOINT)
 
 RULES = {
     "inbound_rules": [],
@@ -343,10 +355,12 @@ class TestEtcdWatcher(BaseTestCase):
         self.assertEqual(self.m_hosts_ipset.replace_members.mock_calls,
                          [call(frozenset([]), async=True)])
 
+    @patch("os.path.exists", autospec=True)
     @patch("subprocess.Popen")
     @patch("socket.socket")
     @patch("os.unlink")
-    def test_start_driver(self, m_unlink, m_socket, m_popen):
+    def test_start_driver(self, m_unlink, m_socket, m_popen, m_exists):
+        m_exists.return_value = True
         m_sck = Mock()
         m_socket.return_value = m_sck
         m_conn = Mock()
@@ -364,6 +378,40 @@ class TestEtcdWatcher(BaseTestCase):
                          [call("/run/felix-driver.sck")] * 2)
         self.assertTrue(isinstance(reader, MessageReader))
         self.assertTrue(isinstance(writer, MessageWriter))
+        m_exists.assert_called_once_with("/run")
+
+    @patch("calico.felix.fetcd.sys")
+    @patch("os.path.exists", autospec=True)
+    @patch("subprocess.Popen")
+    @patch("socket.socket")
+    @patch("os.unlink")
+    def test_start_driver_run_missing(self, m_unlink, m_socket, m_popen,
+                                      m_exists, m_sys):
+        """Check that we fall back to /var/run if /run is missing."""
+        # Simulate being in a pyinstaller.  Should trigger alternative
+        # executable path.
+        m_sys.frozen = True
+        m_sys.argv = ["calico-felix"]
+
+        m_exists.return_value = False
+        m_sck = Mock()
+        m_socket.return_value = m_sck
+        m_conn = Mock()
+        m_sck.accept.return_value = m_conn, None
+        reader, writer = self.watcher._start_driver()
+        self.assertEqual(m_socket.mock_calls[0], call(socket.AF_UNIX,
+                                                      socket.SOCK_STREAM))
+        self.assertEqual(m_sck.bind.mock_calls,
+                         [call("/var/run/felix-driver.sck")])
+        self.assertEqual(m_sck.listen.mock_calls, [call(1)])
+        self.assertEqual(m_popen.mock_calls[0],
+                         call(["calico-felix", "driver",
+                               "/var/run/felix-driver.sck"]))
+        self.assertEqual(m_unlink.mock_calls,
+                         [call("/var/run/felix-driver.sck")] * 2)
+        self.assertTrue(isinstance(reader, MessageReader))
+        self.assertTrue(isinstance(writer, MessageWriter))
+        m_exists.assert_called_once_with("/run")
 
     @patch("subprocess.Popen")
     @patch("socket.socket")
@@ -419,6 +467,37 @@ class TestEtcdWatcher(BaseTestCase):
                       "set", value="{}")
         self.m_splitter.on_endpoint_update.assert_called_once_with(
             WloadEndpointId("h1", "o1", "w1", "e1"),
+            None,
+        )
+
+    def test_host_endpoint_set(self):
+        self.dispatch("/calico/v1/host/h1/endpoint/e1",
+                      "set", value=HOST_ENDPOINT_STR)
+        self.m_splitter.on_host_ep_update.assert_called_once_with(
+            HostEndpointId("h1", "e1"),
+            VALID_HOST_ENDPOINT,
+        )
+
+    def test_host_endpoint_set_bad_json(self):
+        self.dispatch("/calico/v1/host/h1/endpoint/e1",
+                      "set", value="{")
+        self.m_splitter.on_host_ep_update.assert_called_once_with(
+            HostEndpointId("h1", "e1"),
+            None,
+        )
+
+    def test_host_endpoint_del_bad_json(self):
+        self.dispatch("/calico/v1/host/h1/endpoint/e1", "delete")
+        self.m_splitter.on_host_ep_update.assert_called_once_with(
+            HostEndpointId("h1", "e1"),
+            None,
+        )
+
+    def test_host_endpoint_set_invalid(self):
+        self.dispatch("/calico/v1/host/h1/endpoint/e1",
+                      "set", value="{}")
+        self.m_splitter.on_host_ep_update.assert_called_once_with(
+            HostEndpointId("h1", "e1"),
             None,
         )
 

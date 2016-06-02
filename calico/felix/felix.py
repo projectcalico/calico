@@ -42,7 +42,7 @@ from calico.felix.dispatch import (HostEndpointDispatchChains,
                                    WorkloadDispatchChains)
 from calico.felix.profilerules import RulesManager
 from calico.felix.frules import (install_global_rules, load_nf_conntrack,
-    IFACE_DISPATCH_CHAINS)
+                                 HOST_DISPATCH_CHAINS)
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6

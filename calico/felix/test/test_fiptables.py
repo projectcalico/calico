@@ -115,6 +115,22 @@ class TestIptablesUpdater(BaseTestCase):
             {"foo": ["--append foo --jump bar"],
              'bar': drop_rules("bar")})
 
+    def test_rewrite_chains_stub_override(self):
+        """
+        Tests that we can override the contents of a stub chain.
+        """
+        self.ipt.set_missing_chain_override("bar", ["--append bar --jump RETURN"],
+                                            async=True)
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"]},
+            {"foo": set(["bar"])},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        self.assertEqual(self.stub.chains_contents,
+            {"foo": ["--append foo --jump bar"],
+             'bar': ["--append bar --jump RETURN"]})
+
     def test_rewrite_chains_cover(self):
         """
         Hits remaining code paths in rewrite chains.
@@ -675,7 +691,8 @@ class IptablesStub(object):
                 raise FailedSystemCall("Delete for non-existent rule", [], 1,
                                        "", "line 2 failed")
         else:
-            raise AssertionError("Unknown operation %s" % ipt_op)
+            raise AssertionError("Unknown operation %s; was expecting "
+                                 "'--append|flush|delete|...' " % ipt_op)
 
     def assert_chain_declared(self, chain, ipt_op):
         kernel_chains = set(["INPUT", "FORWARD", "OUTPUT"])

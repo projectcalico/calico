@@ -51,10 +51,10 @@ from urlparse import urlparse
 
 try:
     from ijson.backends import yajl2 as ijson
-except (ImportError, AttributeError):
+except (ImportError, AttributeError): # pragma: no cover
     # Fall back on Python-native implementation.
     # Added for RH6.5 compatibility where yajl is not available.
-    from ijson.backends import python as ijson
+    from ijson.backends import python as ijson  # pragma: no cover
 from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
 import urllib3.exceptions
 import httplib

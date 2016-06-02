@@ -24,8 +24,10 @@ import itertools
 import mock
 
 from calico.felix.test.base import BaseTestCase, load_config
-from calico.felix.dispatch import WorkloadDispatchChains, _find_longest_prefix
-from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT
+from calico.felix.dispatch import WorkloadDispatchChains, \
+    HostEndpointDispatchChains
+from calico.felix.frules import CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT, \
+    CHAIN_TO_IFACE, CHAIN_FROM_IFACE
 
 
 class TestWorkloadDispatchChains(BaseTestCase):
@@ -38,7 +40,7 @@ class TestWorkloadDispatchChains(BaseTestCase):
         self.config = load_config("felix_default.cfg", global_dict={
             "MetadataPort": "8775"})
 
-    def getDispatchChain(self):
+    def dispatch_chain(self):
         return WorkloadDispatchChains(
             config=self.config,
             ip_version=4,
@@ -77,9 +79,9 @@ class TestWorkloadDispatchChains(BaseTestCase):
             "MetadataPort": "8775",
             "MetadataAddr": "127.0.0.1"})
 
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
+        ifaces = {'tapabcdef', 'tap123456', 'tapb7d849'}
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
@@ -105,12 +107,12 @@ class TestWorkloadDispatchChains(BaseTestCase):
         )
 
     def test_tree_building(self):
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
         d.programmed_leaf_chains.add("felix-FROM-EP-PFX-a")
         d.programmed_leaf_chains.add("felix-FROM-EP-PFX-z")
-        ifaces = ['tapa1', 'tapa2', 'tapa3',
+        ifaces = {'tapa1', 'tapa2', 'tapa3',
                   'tapb1', 'tapb20123456789012345',
-                  'tapc']
+                  'tapc'}
         to_delete, deps, updates, new_leaf_chains = d._calculate_update(ifaces)
         self.assertEqual(to_delete, set(["felix-FROM-EP-PFX-z"]))
         print "Deps", pformat(deps)
@@ -175,9 +177,9 @@ class TestWorkloadDispatchChains(BaseTestCase):
         """
         Tests that a snapshot can be applied to a previously unused actor.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
+        ifaces = {'tapabcdef', 'tap123456', 'tapb7d849'}
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
@@ -209,13 +211,13 @@ class TestWorkloadDispatchChains(BaseTestCase):
         Tests that a snapshot can be applied to an actor that used to have
         state.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some chains I don't want to see.
-        d.apply_snapshot(['tapxyz', 'tap889900', 'tapundefined'], async=True)
+        d.apply_snapshot({'tapxyz', 'tap889900', 'tapundefined'}, async=True)
         self.step_actor(d)
 
-        ifaces = ['tapabcdef', 'tap123456', 'tapb7d849']
+        ifaces = {'tapabcdef', 'tap123456', 'tapb7d849'}
         d.apply_snapshot(ifaces, async=True)
         self.step_actor(d)
 
@@ -249,14 +251,14 @@ class TestWorkloadDispatchChains(BaseTestCase):
         Tests that an empty snapshot can be applied to an actor that used to
         have state.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some chains I don't want to see.
-        d.apply_snapshot(['tapxyz', 'tap889900', 'tapundefined'], async=True)
+        d.apply_snapshot({'tapxyz', 'tap889900', 'tapundefined'}, async=True)
         self.step_actor(d)
 
         # Clear it out
-        d.apply_snapshot([], async=True)
+        d.apply_snapshot(set(), async=True)
         self.step_actor(d)
 
         from_updates = [
@@ -282,10 +284,10 @@ class TestWorkloadDispatchChains(BaseTestCase):
         """
         Tests that adding an endpoint, adds it to the state.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456'], async=True)
+        d.apply_snapshot({'tapabcdef', 'tap123456'}, async=True)
         self.step_actor(d)
 
         # Add one endpoint.
@@ -321,10 +323,10 @@ class TestWorkloadDispatchChains(BaseTestCase):
         """
         Tests that adding an endpoint that's already present does nothing.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
+        d.apply_snapshot({'tapabcdef', 'tap123456', 'tapb7d849'}, async=True)
         self.step_actor(d)
 
         # Add an endpoint we already have.
@@ -338,10 +340,10 @@ class TestWorkloadDispatchChains(BaseTestCase):
         """
         Tests that we can remove an endpoint.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
+        d.apply_snapshot({'tapabcdef', 'tap123456', 'tapb7d849'}, async=True)
         self.step_actor(d)
 
         # Remove an endpoint.
@@ -376,10 +378,10 @@ class TestWorkloadDispatchChains(BaseTestCase):
         """
         Tests that removing an endpoint multiple times does nothing.
         """
-        d = self.getDispatchChain()
+        d = self.dispatch_chain()
 
         # Insert some basic chains.
-        d.apply_snapshot(['tapabcdef', 'tap123456', 'tapb7d849'], async=True)
+        d.apply_snapshot({'tapabcdef', 'tap123456', 'tapb7d849'}, async=True)
         self.step_actor(d)
 
         # Remove an endpoint.
@@ -397,18 +399,160 @@ class TestWorkloadDispatchChains(BaseTestCase):
         # Confirm that we only got called twice.
         self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
 
-    def test_longest_prefix(self):
-        self.assertEqual(_find_longest_prefix([]), None)
-        self.assertEqual(_find_longest_prefix(["a"]), "a")
-        self.assertEqual(_find_longest_prefix(["a", ""]), "")
-        self.assertEqual(_find_longest_prefix(["a", "ab"]), "a")
-        self.assertEqual(_find_longest_prefix(["ab", "ab"]), "ab")
-        self.assertEqual(_find_longest_prefix(["ab", "ab", "abc"]), "ab")
-        self.assertEqual(_find_longest_prefix(["abc", "ab", "ab"]), "ab")
-        self.assertEqual(_find_longest_prefix(["ab", "cd"]), "")
-        self.assertEqual(_find_longest_prefix(["tapabcd", "tapacdef"]), "tapa")
 
-    def assert_longest_prefix(self, strings, exp_prefix):
-        for x in itertools.permutations(strings):
-            self.assertEqual(_find_longest_prefix(strings), exp_prefix)
+class TestHostDispatchChains(BaseTestCase):
+    """
+    Tests for the HostEndpointDispatchChains actor.
 
+    We get most of our coverage of the base class from the workload version
+    of this test.
+    """
+    def setUp(self):
+        super(TestHostDispatchChains, self).setUp()
+        self.iptables_updater = mock.MagicMock()
+        self.config = load_config("felix_default.cfg", global_dict={
+            "MetadataPort": "8775"})
+
+    def dispatch_chain(self):
+        return HostEndpointDispatchChains(
+            config=self.config,
+            ip_version=4,
+            iptables_updater=self.iptables_updater
+        )
+
+    def assert_iptables_update(self,
+                               args,
+                               to_updates,
+                               from_updates,
+                               to_chain_names,
+                               from_chain_names):
+        # We only care about positional arguments
+        args = args[0]
+
+        # Since the ordering is non-deterministic, use assertItemsEqual to
+        # check the contents.
+        self.assertItemsEqual(args[0][CHAIN_TO_IFACE], to_updates)
+        self.assertItemsEqual(args[0][CHAIN_FROM_IFACE], from_updates)
+
+        # Confirm that the dependency sets match.
+        self.assertEqual(args[1][CHAIN_TO_ENDPOINT], to_chain_names)
+        self.assertEqual(args[1][CHAIN_FROM_ENDPOINT], from_chain_names)
+
+    def test_mainline_tree_building(self):
+        d = self.dispatch_chain()
+        d.programmed_leaf_chains.add("felix-FROM-IF-PFX-a")
+        d.programmed_leaf_chains.add("felix-FROM-IF-PFX-z")
+        ifaces = {'tapa1', 'tapa2', 'tapa3',
+                  'tapb1', 'tapb20123456789012345',
+                  'tapc'}
+        to_delete, deps, updates, new_leaf_chains = d._calculate_update(ifaces)
+        self.assertEqual(to_delete, set(["felix-FROM-IF-PFX-z"]))
+        print "Deps", pformat(deps)
+        self.assertEqual(deps, {
+            'felix-TO-HOST-IF': set(
+                ['felix-FROM-IF-PFX-a', 'felix-FROM-IF-PFX-b', 'felix-to-c']),
+            'felix-FROM-HOST-IF': set(
+                ['felix-TO-IF-PFX-a', 'felix-TO-IF-PFX-b', 'felix-from-c']),
+
+            'felix-TO-IF-PFX-a': set(['felix-to-a1',
+                                      'felix-to-a2',
+                                      'felix-to-a3']),
+            'felix-TO-IF-PFX-b': set(['felix-to-b1',
+                                      'felix-to-_62629f0db434d57']),
+
+            'felix-FROM-IF-PFX-a': set(['felix-from-a1',
+                                        'felix-from-a2',
+                                        'felix-from-a3']),
+            'felix-FROM-IF-PFX-b': set(['felix-from-b1',
+                                        'felix-from-_62629f0db434d57']),
+        })
+        for chain_name, chain_updates in updates.items():
+            chain_updates[:] = sorted(chain_updates[:-1]) + chain_updates[-1:]
+        print "Updates:", pformat(dict(updates))
+        self.assertEqual(updates, {
+            'felix-TO-HOST-IF': [
+                # If there are multiple endpoints with a prefix, we get a
+                # prefix match.
+                '--append felix-TO-HOST-IF --out-interface tapa+ --goto felix-TO-IF-PFX-a',
+                '--append felix-TO-HOST-IF --out-interface tapb+ --goto felix-TO-IF-PFX-b',
+                # If there's only one, we don't.
+                '--append felix-TO-HOST-IF --out-interface tapc --goto felix-to-c',
+                '--append felix-TO-HOST-IF --jump RETURN --match comment --comment "Unknown interface, return"'],
+            'felix-FROM-HOST-IF': [
+                '--append felix-FROM-HOST-IF --in-interface tapa+ --goto felix-FROM-IF-PFX-a',
+                '--append felix-FROM-HOST-IF --in-interface tapb+ --goto felix-FROM-IF-PFX-b',
+                '--append felix-FROM-HOST-IF --in-interface tapc --goto felix-from-c',
+                '--append felix-FROM-HOST-IF --jump RETURN --match comment --comment "Unknown interface, return"'],
+            'felix-FROM-IF-PFX-a': [
+                # Per-prefix chain has one entry per endpoint.
+                '--append felix-FROM-IF-PFX-a --in-interface tapa1 --goto felix-from-a1',
+                '--append felix-FROM-IF-PFX-a --in-interface tapa2 --goto felix-from-a2',
+                '--append felix-FROM-IF-PFX-a --in-interface tapa3 --goto felix-from-a3',
+                '--append felix-FROM-IF-PFX-a --jump RETURN --match comment --comment "Unknown interface, return"'],
+            'felix-FROM-IF-PFX-b': [
+                '--append felix-FROM-IF-PFX-b --in-interface tapb1 --goto felix-from-b1',
+                '--append felix-FROM-IF-PFX-b --in-interface tapb20123456789012345 --goto felix-from-_62629f0db434d57',
+                '--append felix-FROM-IF-PFX-b --jump RETURN --match comment --comment "Unknown interface, return"'],
+            'felix-TO-IF-PFX-a': [
+                '--append felix-TO-IF-PFX-a --out-interface tapa1 --goto felix-to-a1',
+                '--append felix-TO-IF-PFX-a --out-interface tapa2 --goto felix-to-a2',
+                '--append felix-TO-IF-PFX-a --out-interface tapa3 --goto felix-to-a3',
+                '--append felix-TO-IF-PFX-a --jump RETURN --match comment --comment "Unknown interface, return"'],
+            'felix-TO-IF-PFX-b': [
+                '--append felix-TO-IF-PFX-b --out-interface tapb1 --goto felix-to-b1',
+                '--append felix-TO-IF-PFX-b --out-interface tapb20123456789012345 --goto felix-to-_62629f0db434d57',
+                '--append felix-TO-IF-PFX-b --jump RETURN --match comment --comment "Unknown interface, return"']
+        })
+
+    def test_applying_empty_snapshot(self):
+        """
+        Tests that an empty snapshot can be applied to an actor that used to
+        have state.
+        """
+        d = self.dispatch_chain()
+
+        # Insert some chains I don't want to see.
+        d.apply_snapshot({'tapxyz', 'tap889900', 'tapundefined'}, async=True)
+        self.step_actor(d)
+
+        # Clear it out
+        d.apply_snapshot(set(), async=True)
+        self.step_actor(d)
+
+        from_updates = [
+            '--append felix-FROM-HOST-IF --jump RETURN --match comment --comment "Unknown interface, return"'
+        ]
+        to_updates = [
+            '--append felix-TO-HOST-IF --jump RETURN --match comment --comment "Unknown interface, return"'
+        ]
+        from_chain_names = set()
+        to_chain_names = set()
+
+        self.assertEqual(self.iptables_updater.rewrite_chains.call_count, 2)
+        args = self.iptables_updater.rewrite_chains.call_args
+        self.assert_iptables_update(
+            args,
+            to_updates,
+            from_updates,
+            to_chain_names,
+            from_chain_names
+        )
+
+    def test_config_iptables(self):
+        d = self.dispatch_chain()
+        d.configure_iptables(async=True)
+        self.step_actor(d)
+        print self.iptables_updater.set_missing_chain_override.mock_calls
+        self.assertEqual(
+            self.iptables_updater.set_missing_chain_override.mock_calls,
+            [
+                mock.call('felix-FROM-HOST-IF',
+                          ['--append felix-FROM-HOST-IF --jump RETURN --match comment '
+                           '--comment "Not ready yet, allowing host traffic"'],
+                          async=True),
+                mock.call('felix-TO-HOST-IF',
+                          ['--append felix-TO-HOST-IF --jump RETURN --match comment '
+                           '--comment "Not ready yet, allowing host traffic"'],
+                          async=True)
+            ]
+        )

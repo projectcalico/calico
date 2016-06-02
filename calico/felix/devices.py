@@ -130,12 +130,10 @@ def list_ips_by_iface(ip_type):
         "Expected an IP type, got %s" % ip_type
     )
     if ip_type == futils.IPV4:
-        data = futils.check_call(
-            ["ip", "addr", "list"]).stdout
+        data = futils.check_call(["ip", "-4", "addr", "list"]).stdout
         regex = r'^    inet ([0-9.]+)'
     else:
-        data = futils.check_call(
-            ["ip", "-6", "addr", "list"]).stdout
+        data = futils.check_call(["ip", "-6", "addr", "list"]).stdout
         regex = r'^    inet6 ([0-9a-fA-F:.]+)'
 
     ips_by_iface = defaultdict(set)

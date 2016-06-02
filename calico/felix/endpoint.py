@@ -22,12 +22,8 @@ Endpoint management.
 from collections import OrderedDict, defaultdict
 import logging
 
-import time
-
 import gevent
 import sys
-from netaddr import IPNetwork
-from netaddr.ip import IPAddress
 from netaddr.ip.sets import IPSet
 
 from calico.calcollections import MultiDict
@@ -105,7 +101,7 @@ class EndpointManager(ReferenceManager):
         self.endpoints_with_dirty_policy = set()
 
         self._data_model_in_sync = False
-        self._iface_poll_greenlet = gevent.Greenlet(self._poll_interface_ips)
+        self._iface_poll_greenlet = gevent.Greenlet(self._interface_poll_loop)
         self._iface_poll_greenlet.link_exception(self._on_worker_died)
 
     def _on_actor_started(self):
@@ -126,14 +122,14 @@ class EndpointManager(ReferenceManager):
                                     self.fip_manager,
                                     self.status_reporter)
         elif isinstance(combined_id, ResolvedHostEndpointId):
-            return HostInterface(self.config,
-                                 combined_id,
-                                 self.ip_type,
-                                 self.iptables_updater,
-                                 self.host_disp_chains,
-                                 self.rules_mgr,
-                                 self.fip_manager,
-                                 self.status_reporter)
+            return HostEndpoint(self.config,
+                                combined_id,
+                                self.ip_type,
+                                self.iptables_updater,
+                                self.host_disp_chains,
+                                self.rules_mgr,
+                                self.fip_manager,
+                                self.status_reporter)
         else:
             raise RuntimeError("Unknown ID type: %s" % combined_id)
 
@@ -353,7 +349,7 @@ class EndpointManager(ReferenceManager):
                 ep = self.objects_by_id[endpoint_id]
                 ep.on_interface_update(iface_up, async=True)
 
-    def _poll_interface_ips(self):
+    def _interface_poll_loop(self):
         """Greenlet: Polls host endpoints for changes to their IP addresses.
 
         Sends updates to the EndpointManager via the _on_iface_ips_update()
@@ -363,37 +359,49 @@ class EndpointManager(ReferenceManager):
         stops.
         """
         known_interfaces = {}
-        # We only care about host interfaces, not workload ones.
-        exclude_prefix = self.config.IFACE_PREFIX
         while True:
-            # Get the IPs for each interface.
-            ips_by_iface = devices.list_ips_by_iface(self.ip_type)
-            for iface, ips in ips_by_iface.items():
-                if iface.startswith(exclude_prefix):
-                    # Ignore non-host interfaces.
-                    ips_by_iface.pop(iface)
-                else:
-                    # Compare with the set of IPs that were there before.
-                    # We pop interfaces that we see so that we can clean up
-                    # deletions below.
-                    old_ips = known_interfaces.pop(iface, None)
-                    if old_ips != ips:
-                        _log.debug("IPs of interface %s changed to %s",
-                                   iface, ips)
-                        self._on_iface_ips_update(iface, ips, async=True)
-            # Clean up deletions.  Anything left in known_interfaces has
-            # been deleted.
-            for iface, ips in known_interfaces.iteritems():
-                self._on_iface_ips_update(iface, None, async=True)
-            # Update our cache of known interfaces for the next loop.
-            known_interfaces = ips_by_iface
-
+            known_interfaces = self._poll_interfaces(known_interfaces)
             if self.config.HOST_IF_POLL_INTERVAL_SECS <= 0:
                 _log.info("Host interface polling disabled, stopping after "
                           "initial read. Further changes to host endpoint "
                           "IPs will be ignored.")
                 break
             gevent.sleep(self.config.HOST_IF_POLL_INTERVAL_SECS)
+
+    def _poll_interfaces(self, known_interfaces):
+        """Does a single poll of the host interfaces, looking for IP changes.
+
+        Sends updates to the EndpointManager via the _on_iface_ips_update()
+        message.
+
+        This is broken out form the loop above to make it easier to test.
+
+        :param known_interfaces:
+        :return:
+        """
+        # We only care about host interfaces, not workload ones.
+        exclude_prefix = self.config.IFACE_PREFIX
+        # Get the IPs for each interface.
+        ips_by_iface = devices.list_ips_by_iface(self.ip_type)
+        for iface, ips in ips_by_iface.items():
+            if iface.startswith(exclude_prefix):
+                # Ignore non-host interfaces.
+                ips_by_iface.pop(iface)
+            else:
+                # Compare with the set of IPs that were there before.
+                # We pop interfaces that we see so that we can clean up
+                # deletions below.
+                old_ips = known_interfaces.pop(iface, None)
+                if old_ips != ips:
+                    _log.debug("IPs of interface %s changed to %s",
+                               iface, ips)
+                    self._on_iface_ips_update(iface, ips, async=True)
+        # Clean up deletions.  Anything left in known_interfaces has
+        # been deleted.
+        for iface, ips in known_interfaces.iteritems():
+            self._on_iface_ips_update(iface, None, async=True)
+        # Update our cache of known interfaces for the next loop.
+        return ips_by_iface
 
     @actor_message()
     def _on_iface_ips_update(self, iface_name, ip_addrs):
@@ -431,7 +439,11 @@ class EndpointManager(ReferenceManager):
         # Iterate over the host endpoints, looking for corresponding IPs.
         resolved_ifaces = {}
         iface_name_to_id = {}
-        for combined_id, host_ep in sorted(self.host_eps_by_id.iteritems()):
+        # For repeatability, we sort the endpoint data.  We don't care what
+        # the sort order is, only that it's stable so we just use the repr()
+        # of the ID.
+        for combined_id, host_ep in sorted(self.host_eps_by_id.iteritems(),
+                                           key=lambda h: repr(h[0])):
             addrs_key = "expected_ipv%s_addrs" % self.ip_version
             if "name" in host_ep:
                 # This interface has an explicit name in the data so it's
@@ -441,7 +453,7 @@ class EndpointManager(ReferenceManager):
             elif addrs_key in host_ep:
                 # No explicit name, look for an interface with a matching IP.
                 expected_ips = IPSet(host_ep[addrs_key])
-                for ip, iface_names in iface_names_by_ip.iteritems():
+                for ip, iface_names in sorted(iface_names_by_ip.iteritems()):
                     if ip in expected_ips:
                         # This endpoint matches the IP, loop over the (usually
                         # one) interface with that IP.  Sort the names to avoid
@@ -473,16 +485,16 @@ class EndpointManager(ReferenceManager):
                             resolved_data = host_ep.copy()
                             resolved_data["name"] = iface_name
                             resolved_ifaces[resolved_id] = resolved_data
+        # Fire in deletions for interfaces that no longer resolve.
+        for resolved_id in self.resolved_host_eps.keys():
+            if resolved_id not in resolved_ifaces:
+                _log.debug("%s no longer matches", resolved_id)
+                self.on_endpoint_update(resolved_id, None)
         # Fire in the updates for the new data.
         for resolved_id, data in resolved_ifaces.iteritems():
             if self.resolved_host_eps.get(resolved_id) != data:
                 _log.debug("Updating data for %s", resolved_id)
                 self.on_endpoint_update(resolved_id, data)
-        # And the deletions for any now-missing interfaces.
-        for resolved_id in self.resolved_host_eps.keys():
-            if resolved_id not in resolved_ifaces:
-                _log.debug("%s no longer matches", resolved_id)
-                self.on_endpoint_update(resolved_id, None)
         # Update the cache so we can calculate deltas next time.
         self.resolved_host_eps = resolved_ifaces
 
@@ -758,6 +770,28 @@ class LocalEndpoint(RefCountedActor):
             _log.debug("Status reporting disabled. Not reporting status.")
             return
 
+        status, reason = self.oper_status()
+
+        if self._unreferenced or status != self._last_status:
+            _log.info("%s: updating status to %s", reason, status)
+            if self._unreferenced:
+                _log.debug("Unreferenced, reporting status = None")
+                status_dict = None
+            else:
+                _log.debug("Endpoint oper state changed to %s", status)
+                status_dict = {"status": status}
+            self.status_reporter.on_endpoint_status_changed(
+                self.combined_id,
+                self.ip_type,
+                status_dict,
+                async=True,
+            )
+            self._last_status = status
+
+    def oper_status(self):
+        """Calculate the oper status of the endpoint.
+
+        :returns a tuple containing the status and a human-readable reason."""
         if not self._device_is_up:
             # Check this first because we won't try to sync the device if it's
             # oper down.
@@ -782,22 +816,7 @@ class LocalEndpoint(RefCountedActor):
             # All checks passed.  We're up!
             reason = "In sync and device is up"
             status = ENDPOINT_STATUS_UP
-
-        if self._unreferenced or status != self._last_status:
-            _log.info("%s: updating status to %s", reason, status)
-            if self._unreferenced:
-                _log.debug("Unreferenced, reporting status = None")
-                status_dict = None
-            else:
-                _log.debug("Endpoint oper state changed to %s", status)
-                status_dict = {"status": status}
-            self.status_reporter.on_endpoint_status_changed(
-                self.combined_id,
-                self.ip_type,
-                status_dict,
-                async=True,
-            )
-            self._last_status = status
+        return status, reason
 
     def _apply_endpoint_update(self):
         pending_endpoint = self._pending_endpoint
@@ -937,7 +956,7 @@ class LocalEndpoint(RefCountedActor):
             self._chains_programmed = True
 
     def _endpoint_updates(self):
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def _remove_chains(self):
         try:
@@ -1075,7 +1094,7 @@ class WorkloadEndpoint(LocalEndpoint):
         return deps, updates
 
 
-class HostInterface(LocalEndpoint):
+class HostEndpoint(LocalEndpoint):
     def _endpoint_updates(self):
         updates, deps = self.iptables_generator.endpoint_updates(
             IP_TYPE_TO_VERSION[self.ip_type],

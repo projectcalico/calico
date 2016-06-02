@@ -537,6 +537,16 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.MAX_IPSET_SIZE, 2**20)
 
+    def test_host_if_poll_defaulted(self):
+        """
+        Test that the poll interval is defaulted if out-of-range
+        """
+        cfg_dict = {"InterfacePrefix": "blah",
+                    "HostInterfacePollInterval": "-1"}
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.HOST_IF_POLL_INTERVAL_SECS, 10)
+
     def test_prometheus_port_valid(self):
         cfg_dict = {"InterfacePrefix": "blah",
                     "PrometheusMetricsEnabled": True,

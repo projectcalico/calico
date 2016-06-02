@@ -372,6 +372,10 @@ def validate_host_endpoint(config, combined_id, endpoint):
         if gw_key in endpoint:
             issues.append("Field '%s' not supported for host endpoints" %
                           gw_key)
+        nat_maps = nat_key(version)
+        if nat_maps in endpoint:
+            issues.append("Field '%s' not supported for host endpoints" %
+                          nat_maps)
     if "state" in endpoint:
         issues.append("'state' field not supported for host endpoints")
     if "mac" in endpoint:
@@ -507,7 +511,7 @@ def _validate_endpoint_common(config, combined_id, endpoint):
                     int_ip_nm = nat_map["int_ip"] + nm
                     # At this point these have all been canonicalized, so we
                     # should be able to do a strict string comparison.
-                    if int_ip_nm not in endpoint[nets]:
+                    if int_ip_nm not in endpoint.get(nets, []):
                         issues.append("int_ip %s is not listed in %s." %
                                       (int_ip_nm, nets))
             else:

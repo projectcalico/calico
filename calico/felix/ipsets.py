@@ -24,6 +24,7 @@ from collections import defaultdict
 from itertools import chain
 import logging
 
+from calico.datamodel_v1 import HostEndpointId, WloadEndpointId
 from calico.felix import futils
 from calico.calcollections import SetDelta
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -265,17 +266,18 @@ class IpsetManager(ReferenceManager):
         self._process_started_label_matches()
 
     @actor_message()
-    def on_host_ep_update(self, combined_id, iface_data):
+    def on_host_ep_update(self, combined_id, endpoint):
         """
         Update tag/selector memberships and indices with the new interface
         data dict.
 
         :param HostEndpointId combined_id: ID of the host endpoint.
-        :param dict|NoneType iface_data: Either a dict containing interface
+        :param dict|NoneType endpoint: Either a dict containing interface
             information or None to indicate deletion.
         """
         # For our purposes, host endpoints are indexed as endpoints.
-        self._on_endpoint_or_host_ep_update(combined_id, iface_data)
+        assert isinstance(combined_id, HostEndpointId)
+        self._on_endpoint_or_host_ep_update(combined_id, endpoint)
 
     @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
@@ -286,6 +288,7 @@ class IpsetManager(ReferenceManager):
         :param dict|NoneType endpoint: Either a dict containing endpoint
             information or None to indicate deletion.
         """
+        assert isinstance(endpoint_id, WloadEndpointId)
         self._on_endpoint_or_host_ep_update(endpoint_id, endpoint)
 
     def _on_endpoint_or_host_ep_update(self, combined_id, data):

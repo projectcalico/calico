@@ -24,8 +24,9 @@ import logging
 from calico.felix.actor import Actor, actor_message, wait_and_check
 from calico.felix.frules import (
     CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX, interface_to_chain_suffix,
-    ENDPOINT_DISPATCH_CHAINS,
-    IFACE_DISPATCH_CHAINS)
+    WORKLOAD_DISPATCH_CHAINS,
+    HOST_DISPATCH_CHAINS)
+from calico.felix.futils import find_longest_prefix
 
 _log = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ class _DispatchChains(Actor):
         # Separate the interface names by their prefixes so we can count them
         # and decide whether to program a leaf chain or not.
         interfaces_by_prefix = defaultdict(set)
-        iface_prefix = _find_longest_prefix(ifaces)
+        iface_prefix = find_longest_prefix(ifaces)
         for iface in ifaces:
             ep_suffix = iface[len(iface_prefix):]
             prefix = ep_suffix[:1]
@@ -256,11 +257,13 @@ class _DispatchChains(Actor):
             self.end_of_chain_rules(self.chain_to_root, "To"))
 
         chains_to_delete = self.programmed_leaf_chains - new_leaf_chains
+        _log.debug("New chains: %s; to delete: %s",
+                   new_leaf_chains, chains_to_delete)
 
         return chains_to_delete, dependencies, updates, new_leaf_chains
 
     def end_of_chain_rules(self, chain_name, direction):
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     def _reprogram_chains(self):
         """
@@ -295,7 +298,7 @@ class WorkloadDispatchChains(_DispatchChains):
 
     Packets that do not match a known endpoint are dropped.
     """
-    chain_names = ENDPOINT_DISPATCH_CHAINS
+    chain_names = WORKLOAD_DISPATCH_CHAINS
 
     def end_of_chain_rules(self, chain_name, direction):
         # For workload chains, we want to drop traffic if it is from/to an
@@ -315,12 +318,12 @@ class HostEndpointDispatchChains(_DispatchChains):
     Users must call configure_iptables() at start-of-day or graceful restart
     will fail.
     """
-    chain_names = IFACE_DISPATCH_CHAINS
+    chain_names = HOST_DISPATCH_CHAINS
 
     @actor_message()
     def configure_iptables(self):
         missing_from_chain_rules = [
-            '-A %s --jump RETURN --match comment '
+            '--append %s --jump RETURN --match comment '
             '--comment "Not ready yet, allowing host traffic"' %
             self.chain_from_root
         ]
@@ -330,7 +333,7 @@ class HostEndpointDispatchChains(_DispatchChains):
             async=True
         )
         missing_to_chain_rules = [
-            '-A %s --jump RETURN --match comment '
+            '--append %s --jump RETURN --match comment '
             '--comment "Not ready yet, allowing host traffic"' %
             self.chain_to_root
         ]
@@ -344,28 +347,7 @@ class HostEndpointDispatchChains(_DispatchChains):
         # For host endpoints, we only configure the interfaces we've been
         # asked to and then we defer to the host's remaining iptables rules
         # for unknown interfaces.
-        return ['-A %s --jump RETURN --match comment '
+        return ['--append %s --jump RETURN --match comment '
                 '--comment "Unknown interface, return"' %
                 chain_name]
 
-
-def _find_longest_prefix(strs):
-    """Finds the longest common prefix of the given input strings.
-    :param list[str]|set[str] strs: Input strings.
-    :returns the longest common prefix, or None if the input list is empty."""
-    longest_prefix = None
-    for iface in strs:
-        if longest_prefix is None:
-            longest_prefix = iface
-        elif not iface.startswith(longest_prefix):
-            shared_len = min(len(longest_prefix), len(iface))
-            i = 0
-            for i in xrange(shared_len):
-                p_char = longest_prefix[i]
-                i_char = iface[i]
-                if p_char != i_char:
-                    longest_prefix = iface[:i]
-                    break
-            else:
-                longest_prefix = longest_prefix[:shared_len]
-    return longest_prefix

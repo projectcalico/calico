@@ -73,7 +73,13 @@ DEFAULT_TRUNC_LENGTH = 1000
 
 
 class FailedSystemCall(Exception):
-    def __init__(self, message, args, retcode, stdout, stderr, input=None):
+    def __init__(self,
+                 message="Failed system call",
+                 args="<unknown>",
+                 retcode="<unknown>",
+                 stdout="<unknown>",
+                 stderr="<unknown>",
+                 input=None):
         super(FailedSystemCall, self).__init__(message)
         self.message = message
         self.args = args
@@ -121,7 +127,7 @@ if getattr(sys, "frozen", False):
     # Running as a pyinstaller frozen executable.  The gevent version check
     # will fail, but we know we're running with a new version so it's OK to
     # skip it.
-    gevent_version = None
+    gevent_version = None  # pragma: no cover
 else:
     gevent_version = pkg_resources.get_distribution("gevent").parsed_version
 
@@ -200,9 +206,9 @@ class SpawnedProcess(Popen):
         if close_fds:
             raise NotImplementedError("close_fds not implemented")
         if cwd:
-            raise NotImplementedError("cwd not implemented")
+            raise NotImplementedError("cwd not implemented")  # pragma: no cover
         if universal_newlines:
-            raise NotImplementedError()
+            raise NotImplementedError()  # pragma: no cover
         assert startupinfo is None and creationflags == 0
 
         _log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
@@ -593,3 +599,25 @@ def check_command_deps():
         sys.exit(1)
     else:
         _log.info("conntrack version: %s", conntrack_version)
+
+
+def find_longest_prefix(strs):
+    """Finds the longest common prefix of the given input strings.
+    :param list[str]|set[str] strs: Input strings.
+    :returns the longest common prefix, or None if the input list is empty."""
+    longest_prefix = None
+    for iface in strs:
+        if longest_prefix is None:
+            longest_prefix = iface
+        elif not iface.startswith(longest_prefix):
+            shared_len = min(len(longest_prefix), len(iface))
+            i = 0
+            for i in xrange(shared_len):
+                p_char = longest_prefix[i]
+                i_char = iface[i]
+                if p_char != i_char:
+                    longest_prefix = iface[:i]
+                    break
+            else:
+                longest_prefix = longest_prefix[:shared_len]
+    return longest_prefix
