@@ -115,7 +115,33 @@ For example, if you want to work on Felix, you will want to set it to `felix`.
 With that set, you can then run `pip install -e .`, which will install the
 subset of the dependencies needed for those components.
 
+## How do I build/run Felix
+
 ### Docker
 
 Felix can be run inside Docker. See the `docker_build_and_run.sh` script for details on building and running it.
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+
+### Stand-alone bundle
+
+The `build-pyi-bundle.sh` script uses [PyInstaller](http://www.pyinstaller.org/) to package Felix as a stand-alone bundle containing a Python distribution along with Felix's Python dependencies.  
+
+To create a bundle
+
+* [install Docker](`build-pyi-bundle.sh`) on a Linux system (we haven't tested the build on Mac)
+* run `./build-pyi-bundle.sh`
+
+The bundle will be output to `dist/calico-felix.tgz`.
+
+Running the bundle requires
+
+* libc version 2.12 or newer
+* Linux kernel 2.6.32 or higher (note: to support containers running on the host, kernel 3.10+ is required)
+* `iptables`, `ipset` and `conntrack` (typically from the `conntrack-tools` package) to be available.
+
+**Note:** the bundle itself doesn't require Docker.
+
+To use the bundle, 
+
+* install the pre-requisites above
+* unpack `calico-felix.tgz` on your target host (`/opt/calico-felix` would be a good place) and create a start-up script (for example, a systemd unit file or an upstart script) that runs the `calico-felix` binary found in the unpacked directory.  Your start-up script should be set to restart Felix on exit because Felix simetimes needs to restart to pick up configuration changes. 
