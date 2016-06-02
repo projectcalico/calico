@@ -121,32 +121,36 @@ class EtcdAPI(EtcdClientOwner, Actor):
         # in order to report uptime to etcd.
         self._start_time = monotonic_time()
 
-        # Create an Actor to report per-endpoint status into etcd.
+        # Create an Actor to report per-endpoint status into etcd.  We defer
+        # startup of this and our other workers until we get started.
         self.status_reporter = EtcdStatusReporter(config)
 
-        # Start up the main etcd-watching greenlet.  It will wait for an
-        # event from us before doing anything.
+        # Create the main etcd-watching greenlet.
         self._watcher = _FelixEtcdWatcher(config,
                                           self,
                                           self.status_reporter,
                                           hosts_ipset)
         self._watcher.link(self._on_worker_died)
-        self._watcher.start()
 
-        # Start up a greenlet to trigger periodic resyncs.
-        self._resync_greenlet = gevent.spawn(self._periodically_resync)
+        # Create a greenlet to trigger periodic resyncs.
+        self._resync_greenlet = gevent.Greenlet(self._periodically_resync)
         self._resync_greenlet.link_exception(self._on_worker_died)
 
-        # Start up greenlet to report felix's liveness into etcd.
+        # Create a greenlet to report felix's liveness into etcd.
         self.done_first_status_report = False
-        self._status_reporting_greenlet = gevent.spawn(
+        self._status_reporting_greenlet = gevent.Greenlet(
             self._periodically_report_status
         )
         self._status_reporting_greenlet.link_exception(self._on_worker_died)
 
-        # Start the status reporter.
-        self.status_reporter.start()
         self.status_reporter.greenlet.link(self._on_worker_died)
+
+    def _on_actor_started(self):
+        _log.info("%s starting worker threads", self)
+        self._watcher.start()
+        self._resync_greenlet.start()
+        self.status_reporter.start()
+        self._status_reporting_greenlet.start()
 
     @logging_exceptions
     def _periodically_resync(self):

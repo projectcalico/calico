@@ -106,13 +106,18 @@ class TestEtcdAPI(BaseTestCase):
     def test_create(self):
         self.m_etcd_watcher.assert_has_calls([
             call.link(self.api._on_worker_died),
-            call.start(),
         ])
-        self.m_spawn.assert_has_calls([
-            call(self.api._periodically_resync),
-            call(self.api._periodically_resync).link_exception(
-                self.api._on_worker_died)
-        ])
+        self.assertFalse(self.m_spawn.called)
+
+    def test_on_start(self):
+        with patch.object(self.api._resync_greenlet, "start") as m_resync_st, \
+                patch.object(self.api._status_reporting_greenlet, "start") as m_stat_start, \
+                patch.object(self.api.status_reporter, "start") as m_sr_start:
+            self.api._on_actor_started()
+        m_resync_st.assert_called_once_with()
+        m_stat_start.assert_called_once_with()
+        m_sr_start.assert_called_once_with()
+        self.m_etcd_watcher.start.assert_called_once_with()
 
     @patch("gevent.sleep", autospec=True)
     def test_periodic_resync_mainline(self, m_sleep):

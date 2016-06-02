@@ -59,6 +59,7 @@ class TestBasic(BaseTestCase):
     @mock.patch("calico.felix.devices.interface_exists",
                 return_value=False, autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
     @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
@@ -72,8 +73,9 @@ class TestBasic(BaseTestCase):
                            m_IptablesUpdater, m_UpdateSplitter,
                            m_host_chains, m_wl_chains,
                            m_start, m_load,
-                           m_ipset_4, m_check_call, m_iface_exists,
-                           m_iface_up, m_configure_global_kernel_config,
+                           m_ipset_4, m_check_call, m_check_output,
+                           m_iface_exists, m_iface_up,
+                           m_configure_global_kernel_config,
                            m_list_interface_ips, m_path_exists, m_conntrack,
                            m_http_server):
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
@@ -117,6 +119,7 @@ class TestBasic(BaseTestCase):
     @mock.patch("calico.felix.devices.configure_global_kernel_config",
                 autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
     @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
@@ -130,7 +133,7 @@ class TestBasic(BaseTestCase):
                                    m_IptablesUpdater, m_UpdateSplitter,
                                    m_host_chains, m_wl_chains,
                                    m_start, m_load,
-                                   m_ipset_4, m_check_call,
+                                   m_ipset_4, m_check_call, m_check_output,
                                    m_configure_global_kernel_config,
                                    m_list_interface_ips, m_path_exists,
                                    m_install_globals, m_conntrack):

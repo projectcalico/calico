@@ -105,9 +105,12 @@ class EndpointManager(ReferenceManager):
         self.endpoints_with_dirty_policy = set()
 
         self._data_model_in_sync = False
-
-        self._iface_poll_greenlet = gevent.spawn(self._poll_interface_ips)
+        self._iface_poll_greenlet = gevent.Greenlet(self._poll_interface_ips)
         self._iface_poll_greenlet.link_exception(self._on_worker_died)
+
+    def _on_actor_started(self):
+        _log.info("Endpoint manager started, spawning interface poll worker.")
+        self._iface_poll_greenlet.start()
 
     def _create(self, combined_id):
         """
