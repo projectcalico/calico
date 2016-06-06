@@ -18,37 +18,35 @@ the example.
 
 ## Requirements
 
-You will need 2 servers (bare metal or VMs) with a  modern 64-bit Linux OS 
+You will need 2 servers (bare metal or VMs) with a  modern 64-bit Linux OS
 and IP connectivity between them.
 
-We recommend configuring the hosts with the hostname `calico-01` and 
+We recommend configuring the hosts with the hostname `calico-01` and
 `calico-02`.  The tutorial will refer to these hostnames.
 
-They must have the following software installed:
+Each node must have the following software installed:
 
 - Docker v1.6 or greater: [Docker][docker]
-- etcd installed and available on each node: [etcd documentation][etcd]
+- etcd: [etcd documentation][etcd]
 - `ipset`, `iptables`, and `ip6tables` kernel modules.
 - The `calicoctl` binary in your path (see below)
 
-You will also need an etcd cluster which Calico uses for coordinating state
-between the nodes.  This may installed on one or both of the two servers for
-the worked example.  See the [etcd documentation][etcd] for details on setting
-up a cluster.
+Calico uses an etcd cluster for coordinating state between the nodes.  See the
+[etcd documentation][etcd] for details on setting up an etcd cluster.
 
 > NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster](../../EtcdSecureCluster.md)
 > page.
 
 ### Docker permissions
 
-Running Docker is much easier if your user has permissions to run Docker 
-commands. If your distro didn't set this permissions as part of the install, 
-you can usually enable this by adding your user to the `docker` group and 
+Running Docker is much easier if your user has permissions to run Docker
+commands. If your distro didn't set this permissions as part of the install,
+you can usually enable this by adding your user to the `docker` group and
 restarting your terminal.
 
     sudo usermod -aG docker <your_username>
 
-If you prefer not to do this you can still run the demo but remember to run 
+If you prefer not to do this you can still run the demo but remember to run
 `docker` using `sudo`.
 
 ### Getting calicoctl Binary
@@ -57,14 +55,14 @@ Get the calicoctl binary onto each host.
 
 	wget http://www.projectcalico.org/builds/calicoctl
 	chmod +x calicoctl
-	
+
 This binary should be placed in your `$PATH` so it can be run from any
 directory.
 
 ### Preload the Calico docker image (optional)
 
-You can optionally preload the Calico Docker image to avoid the delay when you 
-run `calicoctl node` the first time.  Select the appropriate versions of the 
+You can optionally preload the Calico Docker image to avoid the delay when you
+run `calicoctl node` the first time.  Select the appropriate versions of the
 `calico/node` as required by the version of calicoctl:
 
     docker pull calico/node:latest
@@ -77,11 +75,11 @@ you'll need to adjust the tutorial instructions accordingly.
 Check that the hosts have IP addresses assigned, and that your hosts can ping
 one another.
 
-You should also verify each host can access etcd.  The following will return 
+You should also verify each host can access etcd.  The following will return
 the current etcd version if etcd is available.
 
     curl -L http://127.0.0.1:2379/version
-    
+
 ## Continue with the worked example
 
 With the environment set up, you can run through the remainder of the worked
