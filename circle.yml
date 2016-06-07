@@ -7,3 +7,8 @@ machine:
 test:
   override:
     - make test-circle
+experimental:
+  notify:
+    branches:
+      only:
+        - master
