@@ -52,7 +52,7 @@ tab. You can install Calico once etcd appears with a status
 of **`Healthy`** (note that this could take a few minutes).
 
 ### Mesos-DNS
-Calico is compatible with Mesos-DNS, but requires a minor configuration change to preferentially resolve to a container's IP address instead of resolving to its host's. Follow these steps on each master in your cluster to allow containers to be resolvable via their containerized IP: 
+Calico is compatible with Mesos-DNS, but requires a minor configuration change to preferentially resolve to a container's IP address instead of resolving to its host's. Follow these steps on each master in your cluster to allow containers to be resolvable via their containerized IP:
 
 1. Open `/opt/mesosphere/etc/mesos-dns.json` with any text editor.
 2. Find the line that reads: `"IPSources": ["host", "netinfo"]`
@@ -144,6 +144,6 @@ Get started by checking out our user guides for
 the [Docker Containerizer](./UsageGuideDockerContainerizer.md)
 or the [Unified Containerizer](./UsageGuideUnifiedContainerizer.md),
 or to learn more about the differences between the
-two containerizers, check out our [Mesos README](./README).
+two containerizers, check out our [Mesos README](./README.md).
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/DCOS.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -30,7 +30,7 @@ Run the following steps on each agent.
     chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
     ```
 
-2. Run `calico/node`, a Docker container with calico's core routing processes. 
+2. Run `calico/node`, a Docker container with calico's core routing processes.
 The `calico/node` container can easily be launched using
 `calicoctl`, Calico's command line tool. When doing so,
 we must provide the location of the running etcd instance
@@ -59,7 +59,7 @@ cat <<EOF > $NETWORK_CNI_CONFIG_DIR/my-net-1.conf
 Mesos will actively scan that directory when launching containers, so without needing to restart the Agent process, you are now ready to launch calico-CNI Mesos tasks.
 
 ## Launching Tasks
-With our network configured, we can use `mesos-execute` to launch a task on the CNI network you just configured by setting `--networks` to the name of the network you just configured: 
+With our network configured, we can use `mesos-execute` to launch a task on the CNI network you just configured by setting `--networks` to the name of the network you just configured:
 ```
 mesos-execute --containerizer=mesos \
               --name=cni \
@@ -68,3 +68,5 @@ mesos-execute --containerizer=mesos \
               --command=ifconfig
 ```
 This will launch a simple task that prints its Calico-assigned IP address and then exit.
+
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/ManualInstallCalicoCNI.md?pixel)](https://github.com/igrigorik/ga-beacon)
