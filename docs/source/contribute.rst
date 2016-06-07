@@ -64,14 +64,6 @@ Features or any changes to the codebase should be done as follows:
 
 Contributor Agreements
 ----------------------
-
-Unless you are a U.S. Government Employee (see below), you will need to `agree to
-our Individual Contributor Agreement <http://www.projectcalico.org/community/individual-contributor-agreement/>`__
-before we can accept your contribution.
-
-In addition, if you are contributing on behalf of a company or
-organization someone at your organization needs to sign the `Corporate Contributor Agreement <http://www.projectcalico.org/community/corporate-contributor-agreement/>`__.
-
-US Government employees should not sign the Individual Contributor
-Agreement.  Instead, someone with authority to sign on behalf of your
-agency should sign the `U.S. Government Contributor Agreement <http://www.projectcalico.org/community/us-government-contributor-agreement/>`__.
+If you plan to contribute in the form of documentation or code, we need you to 
+sign our Contributor License Agreement before we can accept your contribution. 
+You will be prompted to do this as part of the PR process on Github.
