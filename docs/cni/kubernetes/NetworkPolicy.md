@@ -40,7 +40,7 @@ $ cat /etc/cni/net.d/10-calico.conf
 ```
 > More configuration options can be found [here](https://github.com/projectcalico/calico-cni/blob/master/configuration.md).
 
-This will configure label-based policy on Kuberetes pods. 
+This will configure label-based policy on Kuberetes pods.
 
 Once you have modified the network configuration file as shown above, you will need to restart the `kubelet` to pick up the changes.
 
@@ -51,20 +51,20 @@ sudo systemctl restart kubelet
 
 ## Running the Calico policy agent
 In order to use the Kubernetes v1alpha1 network policy API, you must run the
-Calico Kubernetes policy agent.  The policy agent runs on each Master node in your 
+Calico Kubernetes policy agent.  The policy agent runs on each Master node in your
 Kubernetes cluster.  It reads policy information from the Kubernetes API and
 configures Calico appropriately.
 
 To run the Calico Kubernetes policy agent:
 
-1. Download the policy services manifest file on your master. 
+1. Download the policy services manifest file on your master.
 ```
 wget https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/calico-policy-agent.yaml
 ```
 
 2. Replace the ETCD_ENDPOINTS variable in that file with the correct configuration to access your etcd cluster.
 
-3. Move the file to the kubelet config directory on your master. 
+3. Move the file to the kubelet config directory on your master.
 ```
 mv calico-policy-agent.yaml /etc/kubernetes/manifests/
 ```
@@ -78,7 +78,7 @@ calico-policy-agent-k8s-master   1/1       Running   0          1m
 ```
 
 ## Next Steps
-- Install the [policy tool](https://github.com/projectcalico/k8s-policy/blob/master/policy_tool/README.md) for easy management of NetworkPolicy objects.
+- Install the [policy tool](https://github.com/projectcalico/k8s-policy/blob/v0.1.3/policy_tool/README.md) for easy management of NetworkPolicy objects.
 
 - Once you have enabled network policy on your cluster and configured Calico to use the Kubernetes network
 policy API, you can deploy our [Kubernetes policy example application](stars-demo/README.md).
