@@ -123,7 +123,13 @@ PORT_UPDATE_RETRY_DELAY_SECS = 5
 # problems with Neutron forking.
 STARTUP_DELAY_SECS = 10
 
-# A single security profile.
+# A single security profile.  Although we call this a profile it is still a
+# representation of security data that is closer to Neutron than to the Calico
+# data model: it simply collects the Neutron-format inbound and outbound rules
+# for a security group, together with that group's ID, and it has no
+# representation for Calico profile tags.  Specifically, its 'id' is just the
+# Neutron security group ID, _without_ the prefix for OpenStack that we add
+# when writing into etcd.
 SecurityProfile = namedtuple(
     'SecurityProfile', ['id', 'inbound_rules', 'outbound_rules']
 )
@@ -642,10 +648,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
 
             # Next, we need to work out what security profiles apply to this
-            # port and grab information about it.
+            # port and grab information about them.
             profiles = self.get_security_profiles(
                 plugin_context, port
             )
+
+            # Write data for those profiles into etcd.
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
 
             # Pass this to the transport layer.
             # Implementation note: we could arguably avoid holding the
@@ -654,9 +664,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # repeatedly respin and regain the transaction. Let's not do that
             # for now, and performance test to see if it's a problem later.
             self.transport.endpoint_created(port)
-
-            for profile in profiles:
-                self.transport.write_profile_to_etcd(profile)
 
     @retry_on_cluster_id_change
     @requires_state
@@ -830,11 +837,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         plugin_context = context._plugin_context
         port = self.db.get_port(plugin_context, port['id'])
         port = self.add_extra_port_information(plugin_context, port)
-        profiles = self.get_security_profiles(plugin_context, port)
-        self.transport.endpoint_created(port)
 
+        # Get the security profiles for this port.
+        profiles = self.get_security_profiles(plugin_context, port)
+
+        # Write data for those profiles into etcd.
         for profile in profiles:
             self.transport.write_profile_to_etcd(profile)
+
+        # Now write the new endpoint data for the port.
+        self.transport.endpoint_created(port)
 
     def _icehouse_migration_step(self, context, port, original):
         """_icehouse_migration_step
@@ -874,16 +886,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Port enabled, attempting to update.")
 
             port = self.db.get_port(plugin_context, port['id'])
-            port = self.add_extra_port_information(
-                plugin_context, port
-            )
-            profiles = self.get_security_profiles(
-                plugin_context, port
-            )
-            self.transport.endpoint_created(port)
+            port = self.add_extra_port_information(plugin_context, port)
 
+            # Get the security profiles for this port.
+            profiles = self.get_security_profiles(plugin_context, port)
+
+            # Write data for those profiles into etcd.
             for profile in profiles:
                 self.transport.write_profile_to_etcd(profile)
+
+            # Now write the new endpoint data for the port.
+            self.transport.endpoint_created(port)
         else:
             # Port unbound, attempt to delete.
             LOG.info("Port disabled, attempting delete if needed.")
@@ -954,11 +967,29 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         # First, resync subnets.
                         self.resync_subnets(admin_context)
 
+                        # Next, resync profiles as far as to create any that
+                        # are missing from etcd, and to update any that are in
+                        # etcd but whose Neutron data differs from etcd.  After
+                        # this step, etcd will have correct data for all
+                        # profiles that an endpoint can be using; that's why we
+                        # do this part of the resync before resyncing the
+                        # endpoints.
+                        #
+                        # The call also returns a set of profiles that are in
+                        # etcd but no longer wanted (because there is now no
+                        # corresponding Neutron data for them).  We will delete
+                        # these after resyncing the endpoints, because right
+                        # now there could still be endpoints referencing some
+                        # of those profiles.
+                        profiles_to_delete = self.resync_profiles(
+                            admin_context
+                        )
+
                         # Next, resync endpoints.
                         self.resync_endpoints(admin_context)
 
-                        # Next, profiles.
-                        self.resync_profiles(admin_context)
+                        # Now delete the profiles that are no longer wanted.
+                        self._resync_deleted_profiles(profiles_to_delete)
 
                         # Now, set the config flags.
                         self.transport.provide_felix_config()
@@ -1216,8 +1247,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def _resync_changed_ports(self, context, common_endpoints):
         """_resync_changed_ports
 
-        Reconcile all changed profiles by checking whether Neutron and etcd
-        agree.
+        Reconcile all changed ports by checking whether Neutron and etcd agree.
 
         :param context: A Neutron DB context.
         :param common_endpoints: An iterable of Endpoint objects that should
@@ -1270,6 +1300,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def resync_profiles(self, context):
         """Resynchronize security profiles."""
         LOG.info("Resyncing profiles")
+
         # Work out all the security groups in etcd. Do this outside a database
         # transaction to try to ensure that anything that gets created is in
         # our Neutron snapshot.
@@ -1294,21 +1325,20 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Missing groups: %s", missing_groups)
             LOG.warning("Extra groups: %s", extra_groups)
 
-        # First, resync the missing security profiles.
+        # First, create the missing security profiles.
         self._resync_missing_profiles(context, missing_groups)
 
-        # Next, handle the extra profiles. Each of them needs to be atomically
-        # deleted.
-        profiles_to_delete = (p for p in profiles if p.id in extra_groups)
-        self._resync_additional_profiles(profiles_to_delete)
-
-        # Finally, reconcile the security profiles. This involves looping over
-        # them, grabbing their data, and then comparing that to what Neutron
-        # has.
+        # Next, reconcile existing security profiles. This involves looping
+        # over them, grabbing their data, and then comparing that to what
+        # Neutron has.
         profiles_to_reconcile = (
             p for p in profiles if p.id in reconcile_groups
         )
         self._resync_changed_profiles(context, profiles_to_reconcile)
+
+        # Finally, return the set of extra profiles, i.e. those that need to be
+        # atomically deleted.
+        return (p for p in profiles if p.id in extra_groups)
 
     def _resync_missing_profiles(self, context, missing_group_ids):
         """_resync_missing_profiles
@@ -1334,7 +1364,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             for profile in profiles_to_write:
                 self.transport.write_profile_to_etcd(profile)
 
-    def _resync_additional_profiles(self, profiles_to_delete):
+    def _resync_deleted_profiles(self, profiles_to_delete):
         """Atomically delete profiles that are in etcd, but shouldn't be.
 
         :param profiles_to_delete: An iterable of profile objects to be

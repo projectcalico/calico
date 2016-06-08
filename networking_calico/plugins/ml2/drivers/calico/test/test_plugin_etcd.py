@@ -204,7 +204,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/SGID-default/rules': {
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
                                     "dst_net": "0.0.0.0/0",
                                     "ip_version": 4},
@@ -217,7 +217,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                   {"dst_ports": ["1:65535"],
                                    "src_tag": "SGID-default",
                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
             ["SGID-default"]
         })
 
@@ -243,7 +243,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
             'endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["SGID-default"],
+                 "profile_ids": ["openstack-sg-SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nat": [{'in_ip': '10.65.0.2',
@@ -256,7 +256,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-2/'
             'endpoint/FACEBEEF-1234-5678':
                 {"name": "tapFACEBEEF-12",
-                 "profile_ids": ["SGID-default"],
+                 "profile_ids": ["openstack-sg-SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nets": ["10.65.0.3/32"],
@@ -264,7 +264,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "state": "active",
                  "ipv6_subnet_ids": [],
                  "ipv6_nets": []},
-            '/calico/v1/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -277,7 +277,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -314,7 +314,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
             'endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["SGID-default"],
+                 "profile_ids": ["openstack-sg-SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nat": [{'in_ip': '10.65.0.2',
@@ -324,7 +324,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "state": "active",
                  "ipv6_subnet_ids": [],
                  "ipv6_nets": []},
-            '/calico/v1/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -337,7 +337,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -354,7 +354,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         expected_writes['/calico/v1/host/new-host/workload/openstack/'
                         'instance-1/endpoint/DEADBEEF-1234-5678'] = {
             "name": "tapDEADBEEF-12",
-            "profile_ids": ["SGID-default"],
+            "profile_ids": ["openstack-sg-SGID-default"],
             "mac": "00:11:22:33:44:55",
             "ipv4_gateway": "10.65.0.1",
             "ipv4_nat": [{'in_ip': '10.65.0.2', 'out_ip': u'192.168.0.1'}],
@@ -380,7 +380,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
             'endpoint/DEADBEEF-1234-5678':
                 {"name": "tapDEADBEEF-12",
-                 "profile_ids": ["SGID-default"],
+                 "profile_ids": ["openstack-sg-SGID-default"],
                  "mac": "00:11:22:33:44:55",
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_nat": [{'in_ip': '10.65.0.2',
@@ -405,7 +405,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
             'endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_ids": ["SGID-default"],
+                 "profile_ids": ["openstack-sg-SGID-default"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
                  "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
@@ -413,7 +413,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "state": "active",
                  "ipv4_nets": [],
                  "ipv4_subnet_ids": []},
-            '/calico/v1/policy/profile/SGID-default/rules':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules':
                 {"outbound_rules": [{"dst_ports": ["1:65535"],
                                      "dst_net": "0.0.0.0/0",
                                      "ip_version": 4},
@@ -426,7 +426,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {"dst_ports": ["1:65535"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
                 ["SGID-default"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -529,12 +529,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             'rule'
         )
         self.assertEtcdWrites({
-            '/calico/v1/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": ["5060:5061"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/v1/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
                 ["SG-1"]
         })
 
@@ -551,7 +551,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
             'endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_ids": ["SG-1"],
+                 "profile_ids": ["openstack-sg-SG-1"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_gateway": "2001:db8:a41:2::1",
                  "ipv6_subnet_ids": ["subnet-id-2001:db8:a41:2--64"],
@@ -559,12 +559,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "state": "active",
                  "ipv4_nets": [],
                  "ipv4_subnet_ids": []},
-            '/calico/v1/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": ["5060:5061"],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/v1/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -614,12 +614,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Expect an etcd write
         expected_writes = {
-            '/calico/v1/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": [5060],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/v1/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -671,7 +671,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/host/felix-host-2/workload/openstack/instance-3/'
             'endpoint/HELLO-1234-5678':
                 {"name": "tapHELLO-1234-",
-                 "profile_ids": ["SG-1"],
+                 "profile_ids": ["openstack-sg-SG-1"],
                  "mac": "00:11:22:33:44:66",
                  "ipv6_subnet_ids": [],
                  "ipv6_nets": [],
@@ -679,12 +679,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                  "ipv4_gateway": "10.65.0.1",
                  "ipv4_subnet_ids": ["subnet-id-10.65.0--24"],
                  "ipv4_nets": ["10.65.0.188/32"]},
-            '/calico/v1/policy/profile/SG-1/rules':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/rules':
                 {"outbound_rules": [],
                  "inbound_rules": [{"dst_ports": [5070],
                                     "src_tag": "SGID-default",
                                     "ip_version": 4}]},
-            '/calico/v1/policy/profile/SG-1/tags':
+            '/calico/v1/policy/profile/openstack-sg-SG-1/tags':
                 ["SG-1"]
         }
         self.assertEtcdWrites(expected_writes)
@@ -738,7 +738,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/Ready': True,
-            '/calico/v1/policy/profile/SGID-default/rules': {
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
                                     "dst_net": "0.0.0.0/0",
                                     "ip_version": 4},
@@ -751,7 +751,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                   {"dst_ports": ["1:65535"],
                                    "src_tag": "SGID-default",
                                    "ip_version": 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags':
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
             ["SGID-default"]
         })
 
@@ -824,7 +824,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/Ready': True,
             '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/config/InterfacePrefix': 'tap',
-            '/calico/v1/policy/profile/SGID-default/rules': {
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 'inbound_rules': [{'dst_ports': ['1:65535'],
                                    'ip_version': 4,
                                    'src_tag': 'SGID-default'},
@@ -837,7 +837,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    {'dst_net': '::/0',
                                     'dst_ports': ['1:65535'],
                                     'ip_version': 6}]},
-            '/calico/v1/policy/profile/SGID-default/tags': ['SGID-default']
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags': [
+                'SGID-default'
+            ]
         })
         self.assertEtcdDeletes(set())
 
@@ -1015,6 +1017,96 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             rules = {"outbound_rules": [etcd_rule],
                      "inbound_rules": []}
         common.validate_profile("profile_id", rules)
+
+    def test_profile_prefixing(self):
+        """Startup with existing profile data from another orchestrator."""
+        # Check that we don't delete the other orchestrator's profile data.
+        self.etcd_data = {
+            '/calico/v1/policy/profile/SGID-default/rules': {
+                "outbound_rules": [{"dst_ports": ["1:65535"],
+                                    "dst_net": "0.0.0.0/0",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "dst_net": "::/0",
+                                    "ip_version": 6}],
+                "inbound_rules": [{"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 4},
+                                  {"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 6}]},
+            '/calico/v1/policy/profile/SGID-default/tags':
+            ["SGID-default"]
+        }
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({
+            '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/Ready': True,
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
+                "outbound_rules": [{"dst_ports": ["1:65535"],
+                                    "dst_net": "0.0.0.0/0",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "dst_net": "::/0",
+                                    "ip_version": 6}],
+                "inbound_rules": [{"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 4},
+                                  {"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 6}]},
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
+            ["SGID-default"]
+        })
+        self.assertEtcdDeletes(set())
+
+    def test_old_openstack_data(self):
+        """Startup with existing but old OpenStack profile data."""
+        # Check that we clean it up.
+        self.etcd_data = {
+            '/calico/v1/policy/profile/openstack-sg-OLD/rules': {
+                "outbound_rules": [{"dst_ports": ["1:65535"],
+                                    "dst_net": "0.0.0.0/0",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "dst_net": "::/0",
+                                    "ip_version": 6}],
+                "inbound_rules": [{"dst_ports": ["1:65535"],
+                                   "src_tag": "OLD",
+                                   "ip_version": 4},
+                                  {"dst_ports": ["1:65535"],
+                                   "src_tag": "OLD",
+                                   "ip_version": 6}]},
+            '/calico/v1/policy/profile/openstack-sg-OLD/tags': ["OLD"]
+        }
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({
+            '/calico/v1/config/InterfacePrefix': 'tap',
+            '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/Ready': True,
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
+                "outbound_rules": [{"dst_ports": ["1:65535"],
+                                    "dst_net": "0.0.0.0/0",
+                                    "ip_version": 4},
+                                   {"dst_ports": ["1:65535"],
+                                    "dst_net": "::/0",
+                                    "ip_version": 6}],
+                "inbound_rules": [{"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 4},
+                                  {"dst_ports": ["1:65535"],
+                                   "src_tag": "SGID-default",
+                                   "ip_version": 6}]},
+            '/calico/v1/policy/profile/openstack-sg-SGID-default/tags':
+            ["SGID-default"]
+        })
+        self.assertEtcdDeletes(set([
+            '/calico/v1/policy/profile/openstack-sg-OLD/tags',
+            '/calico/v1/policy/profile/openstack-sg-OLD/rules'
+        ]))
 
 
 class TestDriverStatusReporting(lib.Lib, unittest.TestCase):

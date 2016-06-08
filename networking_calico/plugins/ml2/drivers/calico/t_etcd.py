@@ -98,7 +98,7 @@ Endpoint = collections.namedtuple(
 Profile = collections.namedtuple(
     'Profile',
     [
-        'id',
+        'id',                   # Note: _without_ any OPENSTACK_SG_PREFIX.
         'tags_modified_index',
         'rules_modified_index',
         'tags_data',
@@ -108,6 +108,26 @@ Profile = collections.namedtuple(
 Subnet = collections.namedtuple(
     'Subnet', ['id', 'modified_index', 'data']
 )
+
+
+# The ID of every profile that this driver writes into etcd will be prefixed
+# with the following, and this driver only regards itself as the owner of
+# profiles that begin with this prefix.  Specifically this means that, when
+# resyncing the content of the Neutron DB against etcd, it will not clean up
+# (or even touch) profiles whose ID does not begin with this prefix.  This
+# means that profiles established by this driver can happily coexist with those
+# established by other Calico orchestrators.
+OPENSTACK_SG_PREFIX = 'openstack-sg-'
+
+
+def with_openstack_sg_prefix(openstack_sg_id):
+    assert not openstack_sg_id.startswith(OPENSTACK_SG_PREFIX)
+    return OPENSTACK_SG_PREFIX + openstack_sg_id
+
+
+def without_openstack_sg_prefix(etcd_sg_id):
+    assert etcd_sg_id.startswith(OPENSTACK_SG_PREFIX)
+    return etcd_sg_id[len(OPENSTACK_SG_PREFIX):]
 
 
 def _handling_etcd_exceptions(fn):
@@ -224,6 +244,7 @@ class CalicoTransportEtcd(object):
                               prev_tags_index=None):
         """Write a single security profile into etcd."""
         LOG.debug("Writing profile %s", profile)
+        etcd_profile_id = with_openstack_sg_prefix(profile.id)
 
         # python-etcd is stupid about the prevIndex keyword argument, so we
         # need to explicitly filter out None-y values ourselves.
@@ -236,13 +257,13 @@ class CalicoTransportEtcd(object):
             tags_kwargs['prevIndex'] = prev_tags_index
 
         self.client.write(
-            datamodel_v1.key_for_profile_rules(profile.id),
+            datamodel_v1.key_for_profile_rules(etcd_profile_id),
             json.dumps(profile_rules(profile)),
             **rules_kwargs
         )
 
         self.client.write(
-            datamodel_v1.key_for_profile_tags(profile.id),
+            datamodel_v1.key_for_profile_tags(etcd_profile_id),
             json.dumps(profile_tags(profile)),
             **tags_kwargs
         )
@@ -523,12 +544,14 @@ class CalicoTransportEtcd(object):
         :return: A ``Profile`` class with tags and rules data present.
         """
         LOG.debug("Getting profile %s", profile.id)
+        etcd_profile_id = with_openstack_sg_prefix(profile.id)
 
         tags_result = self.client.read(
-            datamodel_v1.key_for_profile_tags(profile.id), timeout=ETCD_TIMEOUT
+            datamodel_v1.key_for_profile_tags(etcd_profile_id),
+            timeout=ETCD_TIMEOUT
         )
         rules_result = self.client.read(
-            datamodel_v1.key_for_profile_rules(profile.id),
+            datamodel_v1.key_for_profile_rules(etcd_profile_id),
             timeout=ETCD_TIMEOUT
         )
 
@@ -544,8 +567,8 @@ class CalicoTransportEtcd(object):
     def get_profiles(self):
         """get_profiles
 
-        Gets information about every profile in etcd. Returns a generator of
-        ``Profile`` objects.
+        Gets information about every OpenStack profile in etcd. Returns a
+        generator of ``Profile`` objects.
         """
         LOG.info("Scanning etcd for all profiles")
 
@@ -565,15 +588,22 @@ class CalicoTransportEtcd(object):
 
         for node in nodes:
             # All groups have both tags and rules, and we need the
-            # modifiedIndex for both.
+            # modifiedIndex for both.  Note we're not interested in any profile
+            # IDs that don't begin with the OpenStack prefix.
             tags_match = datamodel_v1.TAGS_KEY_RE.match(node.key)
             rules_match = datamodel_v1.RULES_KEY_RE.match(node.key)
             if tags_match:
                 profile_id = tags_match.group('profile_id')
-                tag_indices[profile_id] = node.modifiedIndex
+                if profile_id.startswith(OPENSTACK_SG_PREFIX):
+                    tag_indices[profile_id] = node.modifiedIndex
+                else:
+                    continue
             elif rules_match:
                 profile_id = rules_match.group('profile_id')
-                rules_indices[profile_id] = node.modifiedIndex
+                if profile_id.startswith(OPENSTACK_SG_PREFIX):
+                    rules_indices[profile_id] = node.modifiedIndex
+                else:
+                    continue
             else:
                 continue
 
@@ -585,7 +615,7 @@ class CalicoTransportEtcd(object):
 
                 LOG.debug("Found profile id %s", profile_id)
                 yield Profile(
-                    id=profile_id,
+                    id=without_openstack_sg_prefix(profile_id),
                     tags_modified_index=tag_modified,
                     rules_modified_index=rules_modified,
                     tags_data=None,
@@ -619,12 +649,13 @@ class CalicoTransportEtcd(object):
             profile.tags_modified_index,
             profile.rules_modified_index
         )
+        etcd_profile_id = with_openstack_sg_prefix(profile.id)
 
         # Try to delete tags and rules. We don't care if we can't, but we
         # should log in case it's symptomatic of a wider problem.
         try:
             self.client.delete(
-                datamodel_v1.key_for_profile_tags(profile.id),
+                datamodel_v1.key_for_profile_tags(etcd_profile_id),
                 prevIndex=profile.tags_modified_index,
                 timeout=ETCD_TIMEOUT
             )
@@ -635,7 +666,7 @@ class CalicoTransportEtcd(object):
 
         try:
             self.client.delete(
-                datamodel_v1.key_for_profile_rules(profile.id),
+                datamodel_v1.key_for_profile_rules(etcd_profile_id),
                 prevIndex=profile.rules_modified_index,
                 timeout=ETCD_TIMEOUT
             )
@@ -644,8 +675,8 @@ class CalicoTransportEtcd(object):
                 "Profile %s rules already deleted, nothing to do.", profile.id
             )
 
-        # Strip the endpoint specific part of the key.
-        profile_key = datamodel_v1.key_for_profile(profile.id)
+        # Strip the rules/tags specific part of the key.
+        profile_key = datamodel_v1.key_for_profile(etcd_profile_id)
 
         try:
             self.client.delete(profile_key, dir=True, timeout=ETCD_TIMEOUT)
@@ -1016,7 +1047,8 @@ def port_etcd_data(port):
     data = {'state': 'active' if port['admin_state_up'] else 'inactive',
             'name': port['interface_name'],
             'mac': port['mac_address'],
-            'profile_ids': port['security_groups']}
+            'profile_ids': [with_openstack_sg_prefix(sg_id)
+                            for sg_id in port['security_groups']]}
     # TODO(MD4) Check the old version writes 'profile_id' in a form
     # that translation code in common.validate_endpoint() will work.
 
