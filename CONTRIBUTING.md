@@ -13,25 +13,7 @@ to merge it.
 
 If you plan to contribute in the form of documentation or code, before we can
 accept your contribution we need you to sign our Contributor License Agreement.
-This covers the legalities, confirming that you retain ownership of your
-contributions and that you are licensing them to us.
-
-For some fairly complicated legal reasons we actually have three CLAs, and
-which you sign depends on on whose behalf you are contributing:
-
-- All individuals (except employees of the U.S. government – see below) should
-  sign the [Individual Contributor License Agreement](http://www.projectcalico.org/community/Individual-Contributor-Agreement).
-- If you are contributing on behalf of a company or organization, *you still
-  need to sign the Individual Contributor License Agreement* as above, but
-  someone at your company or organization also needs to sign the
-  [Corporate Contributor License Agreement](http://www.projectcalico.org/community/corporate-contributor-agreement/)
-  providing a list of people authorized to commit code to Project Calico.
-- Employees of the U.S. government do not sign the Individual Contributor
-  License Agreement.  Instead, someone with authority to sign on behalf of your
-  agency should sign the [U.S Government Contributor License Agreement](http://www.projectcalico.org/community/us-government-contributor-agreement).
-
-It is important to re-iterate: until you sign the required agreements we cannot
-accept your contribution!
+You will be prompted to do this as part of the PR process on Github.
 
 ## Contributing: code and documentation
 
