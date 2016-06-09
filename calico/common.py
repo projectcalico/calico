@@ -104,7 +104,7 @@ VALID_ID_RE = re.compile(r'^[a-zA-Z0-9_\.\-]+$')
 # allow for Kubernetes implementation, for example.
 VALID_LABEL_NAME_RE = re.compile(r'^[%s]+$' % re.escape(LABEL_CHARS))
 
-VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_]{1,15}$')
+VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]{1,15}$')
 
 # Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
 # have anything malicious in it.
