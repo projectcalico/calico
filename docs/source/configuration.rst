@@ -105,8 +105,9 @@ The full list of parameters which can be set is as follows.
 |                                  |                                | is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In    |
 |                                  |                                | most cases this should not need to be changed.                                            |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| InterfacePrefix                  | None                           | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
-|                                  |                                | by the plugin, but must be set to "veth" on most Docker deployments.                      |
+| InterfacePrefix                  | cali                           | The expected prefix for interface names for workload interfaces.  For example, in         |
+|                                  |                                | OpenStack deployments, this should be set to "tap".  Calico polices all traffic to/from   |
+|                                  |                                | interfaces with this prefix.  Calico blocks traffic to/from such interfaces by default.   |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | LogFilePath                      | /var/log/calico/felix.log      | The full path to the felix log. Set to "none" to disable file logging.                    |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+

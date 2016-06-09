@@ -291,10 +291,8 @@ class TestConfig(unittest.TestCase):
             load_config("felix_missing.cfg", host_dict=cfg_dict)
 
     def test_no_iface_prefix(self):
-        cfg_dict = {}
-        with self.assertRaisesRegexp(ConfigException,
-                        "Missing undefaulted value.*InterfacePrefix"):
-            load_config("felix_missing.cfg", host_dict=cfg_dict)
+        config = load_config("felix_missing.cfg", host_dict={})
+        self.assertEqual(config.IFACE_PREFIX, "cali")
 
     def test_file_sections(self):
         """

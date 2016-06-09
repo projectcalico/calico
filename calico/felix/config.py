@@ -210,7 +210,7 @@ class Config(object):
                            "127.0.0.1")
         self.add_parameter("MetadataPort", "Metadata Port",
                            8775, value_is_int=True)
-        self.add_parameter("InterfacePrefix", "Interface name prefix", None)
+        self.add_parameter("InterfacePrefix", "Interface name prefix", "cali")
         self.add_parameter("DefaultEndpointToHostAction",
                            "Action to take for packets that arrive from"
                            "an endpoint to the host.", "DROP")
