@@ -176,7 +176,7 @@ To remove a BGP peer that was configured with IP address aa:bb::ff (the AS
 number is not required), peering with Calico node "Node1", run the following
 command from the "Node1" command line:
 
-	Node1$ calicoctl bgp peer remove aa:bb::ff
+	Node1$ calicoctl node bgp peer remove aa:bb::ff
 
 To view the current list of node specific peers that are configured to peer
 with Calico node "Node1", run the following command from the "Node1" command
