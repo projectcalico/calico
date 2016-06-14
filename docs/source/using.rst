@@ -25,5 +25,6 @@ several options for how you can easily do that, with different systems.
 
    openstack
    docker
+   bare-metal
    next-steps
    support
