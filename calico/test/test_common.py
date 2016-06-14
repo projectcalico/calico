@@ -634,6 +634,9 @@ class _BaseTestValidateEndpoint(unittest.TestCase):
     def test_validate_endpoint_mainline_profile_ids(self):
         self.do_canonicalisation_test(use_prof_ids=True)
 
+    def test_validate_endpoint_mainline_profile_ids_missing(self):
+        self.do_canonicalisation_test(use_prof_ids=MISSING)
+
     def test_validate_endpoint_failures_common(self):
         self.assert_invalid_endpoint([])
         self.assert_invalid_endpoint("foo")
@@ -691,7 +694,9 @@ class TestValidateWloadEndpoint(_BaseTestValidateEndpoint):
             "ipv6_nets": ["2001:0::1/128"],
             "ipv6_gateway": "fe80:0::1",
         }
-        if use_prof_ids:
+        if use_prof_ids == MISSING:
+            pass
+        elif use_prof_ids:
             ep["profile_ids"] = ["prof1", "prof2"]
         else:
             ep["profile_id"] = "prof1"
@@ -712,7 +717,9 @@ class TestValidateWloadEndpoint(_BaseTestValidateEndpoint):
             'ipv6_nets': ['2001::1/128'],
             'ipv6_gateway': 'fe80::1',
         }
-        if use_prof_ids:
+        if use_prof_ids == MISSING:
+            ep["profile_ids"] = []
+        elif use_prof_ids:
             ep["profile_ids"] = ["prof1", "prof2"]
         else:
             ep["profile_ids"] = ["prof1"]  # Normalised to a list.
@@ -741,7 +748,6 @@ class TestValidateWloadEndpoint(_BaseTestValidateEndpoint):
         self.assert_tweak_invalidates_endpoint(mac=object())
         self.assert_tweak_invalidates_endpoint(mac="bad MAC")
 
-        self.assert_tweak_invalidates_endpoint(profile_id=MISSING)
         self.assert_tweak_invalidates_endpoint(profile_id=None)
         self.assert_tweak_invalidates_endpoint(profile_id=[])
 
@@ -841,12 +847,6 @@ class TestValidateWloadEndpoint(_BaseTestValidateEndpoint):
         bad_dict['profile_id'] = "str£ing"
         with self.assertRaisesRegexp(ValidationFailed,
                                      "Invalid profile ID"):
-            self.validate_endpoint(config, combined_id, bad_dict)
-
-        bad_dict = endpoint_dict.copy()
-        del bad_dict['profile_id']
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'profile_id\(s\)' field"):
             self.validate_endpoint(config, combined_id, bad_dict)
 
         bad_dict = endpoint_dict.copy()
@@ -973,7 +973,9 @@ class TestValidateHostEndpoint(_BaseTestValidateEndpoint):
         else:
             # Note: name doesn't start with tap, which is OK.
             ep["name"] = "eth0"
-        if use_prof_ids:
+        if use_prof_ids == MISSING:
+            pass
+        elif use_prof_ids:
             ep["profile_ids"] = ["prof1", "prof2"]
         else:
             ep["profile_id"] = "prof1"
@@ -994,7 +996,9 @@ class TestValidateHostEndpoint(_BaseTestValidateEndpoint):
             ep["expected_ipv6_addrs"] = ["2001::1"]
         else:
             ep["name"] = "eth0"
-        if use_prof_ids:
+        if use_prof_ids == MISSING:
+            ep["profile_ids"] = []
+        elif use_prof_ids:
             ep["profile_ids"] = ["prof1", "prof2"]
         else:
             ep["profile_ids"] = ["prof1"]  # Normalised to a list.

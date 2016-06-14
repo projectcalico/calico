@@ -198,6 +198,10 @@ HOST_DISPATCH_CHAINS = {
     "from_leaf": CHAIN_FROM_IFACE_LEAF,
 }
 
+# Failsafe whitelist chains.
+CHAIN_FAILSAFE_IN = FELIX_PREFIX + "FAILSAFE-IN"
+CHAIN_FAILSAFE_OUT = FELIX_PREFIX + "FAILSAFE-OUT"
+
 # Per-endpoint/interface chain prefixes.
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
@@ -334,17 +338,27 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
     forward_chain, forward_deps = (
         iptables_generator.filter_forward_chain(ip_version)
     )
+    failsafe_in_chain, failsafe_in_deps = (
+        iptables_generator.failsafe_in_chain()
+    )
+    failsafe_out_chain, failsafe_out_deps = (
+        iptables_generator.failsafe_out_chain()
+    )
 
     filter_updater.rewrite_chains(
         {
             CHAIN_FORWARD: forward_chain,
             CHAIN_INPUT: input_chain,
             CHAIN_OUTPUT: output_chain,
+            CHAIN_FAILSAFE_IN: failsafe_in_chain,
+            CHAIN_FAILSAFE_OUT: failsafe_out_chain,
         },
         {
             CHAIN_FORWARD: forward_deps,
             CHAIN_INPUT: input_deps,
             CHAIN_OUTPUT: output_deps,
+            CHAIN_FAILSAFE_IN: failsafe_in_deps,
+            CHAIN_FAILSAFE_OUT: failsafe_out_deps,
         },
         async=False)
 

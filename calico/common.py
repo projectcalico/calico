@@ -449,7 +449,7 @@ def _validate_endpoint_common(config, combined_id, endpoint):
         del endpoint["profile_id"]
 
     if "profile_ids" not in endpoint:
-        issues.append("Missing 'profile_id(s)' field.")
+        endpoint["profile_ids"] = []
     else:
         for value in endpoint["profile_ids"]:
             if not isinstance(value, StringTypes):

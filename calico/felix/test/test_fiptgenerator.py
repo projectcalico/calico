@@ -438,6 +438,120 @@ TO_ENDPOINT_CHAIN = [
              '"Packet did not match any profile (endpoint e1)"'
 ]
 
+FROM_HOST_ENDPOINT_CHAIN = [
+    # First the failsafe rules...
+    '--append felix-from-abcd --jump felix-FAILSAFE-IN',
+
+    # Always start with a 0 MARK.
+    '--append felix-from-abcd --jump MARK --set-mark 0/0x1000000',
+
+    # Now the tiered policies.  For each tier we reset the "next tier" mark.
+    '--append felix-from-abcd --jump MARK --set-mark 0/0x2000000 '
+              '--match comment --comment "Start of tier tier_1"',
+    # Then, for each policies, we jump to the policies, and check if it set the
+    # accept mark, which immediately accepts.
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t1p1-i',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 '
+              '--match comment --comment "Return if policy accepted" '
+              '--jump RETURN',
+
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t1p2-i',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 '
+              '--match comment --comment "Return if policy accepted" '
+              '--jump RETURN',
+    # Then, at the end of the tier, drop if nothing in the tier did a
+    # "next-tier"
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 '
+              '--match comment --comment "Drop if no policy in tier passed" '
+              '--jump DROP',
+
+    # Now the second tier...
+    '--append felix-from-abcd '
+              '--jump MARK --set-mark 0/0x2000000 --match comment '
+              '--comment "Start of tier tier_2"',
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --jump felix-p-t2p1-i',
+    '--append felix-from-abcd '
+              '--match mark --mark 0x1000000/0x1000000 --match comment '
+              '--comment "Return if policy accepted" --jump RETURN',
+    '--append felix-from-abcd '
+              '--match mark --mark 0/0x2000000 --match comment '
+              '--comment "Drop if no policy in tier passed" --jump DROP',
+
+    # Jump to the first profile.
+    '--append felix-from-abcd --jump felix-p-prof-1-i',
+    # Short-circuit: return if the first profile matched.
+    '--append felix-from-abcd --match mark --mark 0x1000000/0x1000000 '
+               '--match comment --comment "Profile accepted packet" '
+               '--jump RETURN',
+
+    # Jump to second profile.
+    '--append felix-from-abcd --jump felix-p-prof-2-i',
+    # Return if the second profile matched.
+    '--append felix-from-abcd --match mark --mark 0x1000000/0x1000000 '
+               '--match comment --comment "Profile accepted packet" '
+               '--jump RETURN',
+
+    # Drop the packet if nothing matched.
+    '--append felix-from-abcd --jump DROP -m comment --comment '
+    '"Packet did not match any profile (endpoint e1)"'
+]
+
+TO_HOST_ENDPOINT_CHAIN = [
+    # First the failsafe rules...
+    '--append felix-to-abcd --jump felix-FAILSAFE-OUT',
+
+    # Always start with a 0 MARK.
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x1000000',
+
+    # Then do the tiered policies in order.  Tier 1:
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
+            '--match comment --comment "Start of tier tier_1"',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t1p1-o',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if policy accepted" --jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t1p2-o',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if policy accepted" --jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--match comment --comment "Drop if no policy in tier passed" '
+            '--jump DROP',
+    # Tier 2:
+    '--append felix-to-abcd --jump MARK --set-mark 0/0x2000000 '
+            '--match comment --comment "Start of tier tier_2"',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--jump felix-p-t2p1-o',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+            '--match comment --comment "Return if policy accepted" '
+            '--jump RETURN',
+    '--append felix-to-abcd --match mark --mark 0/0x2000000 '
+            '--match comment --comment "Drop if no policy in tier passed" '
+            '--jump DROP',
+
+    # Jump to first profile and return iff it matched.
+    '--append felix-to-abcd --jump felix-p-prof-1-o',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+             '--match comment --comment "Profile accepted packet" '
+             '--jump RETURN',
+
+    # Jump to second profile and return iff it matched.
+    '--append felix-to-abcd --jump felix-p-prof-2-o',
+    '--append felix-to-abcd --match mark --mark 0x1000000/0x1000000 '
+             '--match comment --comment "Profile accepted packet" '
+             '--jump RETURN',
+
+    # Drop anything that doesn't match.
+    '--append felix-to-abcd --jump DROP -m comment --comment '
+    '"Packet did not match any profile (endpoint e1)"'
+]
+
 
 class TestGlobalChains(BaseTestCase):
     def setUp(self):
@@ -600,7 +714,7 @@ class TestEndpoint(BaseTestCase):
             self.iptables_generator.endpoint_chain_names("abcd"),
             set(["felix-to-abcd", "felix-from-abcd"]))
 
-    def test_get_endpoint_rules(self):
+    def test_endpoint_rules(self):
         expected_result = (
             {
                 'felix-from-abcd': FROM_ENDPOINT_CHAIN,
@@ -628,6 +742,40 @@ class TestEndpoint(BaseTestCase):
                                                           "aa:22:33:44:55:66",
                                                           ["prof-1", "prof-2"],
                                                           tiered_policies)
+
+        # Log the whole diff if the comparison fails.
+        self.maxDiff = None
+        self.assertEqual(result, expected_result)
+
+    def test_host_endpoint_rules(self):
+        expected_result = (
+            {
+                'felix-from-abcd': FROM_HOST_ENDPOINT_CHAIN,
+                'felix-to-abcd': TO_HOST_ENDPOINT_CHAIN
+            },
+            {
+                # From chain depends on the outbound profiles.
+                'felix-to-abcd': set(['felix-FAILSAFE-OUT',
+                                      'felix-p-prof-1-o',
+                                      'felix-p-prof-2-o',
+                                      'felix-p-t1p1-o',
+                                      'felix-p-t1p2-o',
+                                      'felix-p-t2p1-o', ]),
+                # To chain depends on the inbound profiles.
+                'felix-from-abcd': set(['felix-FAILSAFE-IN',
+                                        'felix-p-prof-1-i',
+                                        'felix-p-prof-2-i',
+                                        'felix-p-t1p1-i',
+                                        'felix-p-t1p2-i',
+                                        'felix-p-t2p1-i', ])
+            }
+        )
+        tiered_policies = OrderedDict()
+        tiered_policies["tier_1"] = ["t1p1", "t1p2"]
+        tiered_policies["tier_2"] = ["t2p1"]
+        result = self.iptables_generator.host_endpoint_updates(
+            4, "e1", "abcd", ["prof-1", "prof-2"], tiered_policies
+        )
 
         # Log the whole diff if the comparison fails.
         self.maxDiff = None

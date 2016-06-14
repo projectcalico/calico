@@ -932,7 +932,7 @@ class LocalEndpoint(RefCountedActor):
         self._profile_ids_dirty = False
 
     def _update_chains(self):
-        deps, updates = self._endpoint_updates()
+        updates, deps = self._endpoint_updates()
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
             self.fip_manager.update_endpoint(
@@ -1091,19 +1091,15 @@ class WorkloadEndpoint(LocalEndpoint):
             self._mac,
             self.endpoint["profile_ids"],
             self._pol_ids_by_tier)
-        return deps, updates
+        return updates, deps
 
 
 class HostEndpoint(LocalEndpoint):
     def _endpoint_updates(self):
-        updates, deps = self.iptables_generator.endpoint_updates(
-            IP_TYPE_TO_VERSION[self.ip_type],
-            self.combined_id.endpoint,
-            self._suffix,
-            self._mac,
-            self.endpoint["profile_ids"],
-            self._pol_ids_by_tier,
-            to_direction="outbound",  # Direction flipped for host endpoints!
-            from_direction="inbound"
+        return self.iptables_generator.host_endpoint_updates(
+            ip_version=IP_TYPE_TO_VERSION[self.ip_type],
+            endpoint_id=self.combined_id.endpoint,
+            suffix=self._suffix,
+            profile_ids=self.endpoint["profile_ids"],
+            pol_ids_by_tier=self._pol_ids_by_tier,
         )
-        return deps, updates

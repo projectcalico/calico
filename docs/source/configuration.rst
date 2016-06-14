@@ -149,6 +149,14 @@ The full list of parameters which can be set is as follows.
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdDriverPrometheusMetricsPort  | 9092                           | TCP port that the Prometheus metrics server in the etcd driver process should bind to.    |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| FailsafeInboundHostPorts         | 22                             | Comma-delimited list of white-listed ports that Felix will allow incoming traffic on      |
+|                                  |                                | irrespective of the security policy.  This is useful to avoid accidently cutting off a    |
+|                                  |                                | host with incorrect configuration.                                                        |
++----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| FailsafeOutboundHostPorts        | 2379,2380,4001,7001            | Comma-delimited list of white-listed ports that Felix will allow outgoing traffic to      |
+|                                  |                                | irrespective of the security policy.  This is useful to avoid accidently cutting off a    |
+|                                  |                                | host with incorrect configuration.  The default value opens etcd's standard ports.        |
++----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables

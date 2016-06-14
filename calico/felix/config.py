@@ -32,6 +32,7 @@ import logging
 import socket
 
 import pkg_resources
+import re
 
 from calico import common
 
@@ -87,7 +88,7 @@ class ConfigParameter(object):
     """
     def __init__(self, name, description, default,
                  sources=DEFAULT_SOURCES, value_is_int=False,
-                 value_is_bool=False):
+                 value_is_bool=False, value_is_int_list=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -102,6 +103,7 @@ class ConfigParameter(object):
         self.active_source = None
         self.value_is_int = value_is_int
         self.value_is_bool = value_is_bool
+        self.value_is_int_list = value_is_int_list
 
     def set(self, value, source):
         """
@@ -142,6 +144,18 @@ class ConfigParameter(object):
                 else:
                     raise ConfigException("Field was not a valid Boolean",
                                           self)
+            elif self.value_is_int_list:
+                splits = str(value).split(",")
+                ints = []
+                for s in splits:
+                    s = s.strip()
+                    if not s:
+                        continue
+                    if re.match("^\d+$", s):
+                        ints.append(int(s))
+                    else:
+                        raise ConfigException("Invalid list of ints", self)
+                self.value = ints
             else:
                 # Calling str in principle can throw an exception, but it's
                 # hard to see how in practice, so don't catch and wrap.
@@ -270,6 +284,22 @@ class Config(object):
                            "the etcd driver process.",
                            9092, value_is_int=True)
 
+        self.add_parameter("FailsafeInboundHostPorts",
+                           "Comma-separated list of numeric TCP ports to open "
+                           "for all configured host endpoints.  Useful to "
+                           "avoid accidentally cutting off (for example ssh) "
+                           "connectivity via incorrect policy rules.  The "
+                           "default value opens the ssh port, 22.",
+                           [22], value_is_int_list=True)
+        self.add_parameter("FailsafeOutboundHostPorts",
+                           "Comma-separated list of numeric TCP ports to allow"
+                           "traffic to from all host endpoints.  Useful to "
+                           "avoid accidentally cutting off, for example, "
+                           "access to etcd.  The default value allows "
+                           "connectivity to etcd's default ports "
+                           "2379,2380,4001 and 7001.",
+                           [2379,2380,4001,7001], value_is_int_list=True)
+
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
         # experimental and may change significantly, or be removed completed,
@@ -371,6 +401,10 @@ class Config(object):
             self.parameters["PrometheusMetricsPort"].value
         self.PROM_METRICS_DRIVER_PORT = \
             self.parameters["EtcdDriverPrometheusMetricsPort"].value
+        self.FAILSAFE_INBOUND_PORTS = \
+            self.parameters["FailsafeInboundHostPorts"].value
+        self.FAILSAFE_OUTBOUND_PORTS = \
+            self.parameters["FailsafeOutboundHostPorts"].value
 
         self._validate_cfg(final=final)
 
@@ -675,6 +709,14 @@ class Config(object):
             log.warning("Etcd driver Prometheus port out-of-range, "
                         "defaulting to 9092")
             self.PROM_METRICS_DRIVER_PORT = 9092
+
+        for name, ports in [
+                ("FailsafeInboundHostPorts", self.FAILSAFE_INBOUND_PORTS),
+                ("FailsafeOutboundHostPorts", self.FAILSAFE_OUTBOUND_PORTS)]:
+            for p in ports:
+                if not 0 < p < 65536:
+                    raise ConfigException("Out-of-range port %s" % p,
+                                          self.parameters[name])
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

@@ -31,6 +31,14 @@ from calico.felix.test.base import BaseTestCase, load_config
 _log = logging.getLogger(__name__)
 
 
+EXPECTED_TOP_LEVEL_DEPS = {
+    'felix-INPUT': set(['felix-FROM-ENDPOINT', 'felix-FROM-HOST-IF']),
+    'felix-OUTPUT': set(['felix-TO-HOST-IF']),
+    'felix-FORWARD': set(['felix-FROM-ENDPOINT', 'felix-TO-ENDPOINT']),
+    'felix-FAILSAFE-IN': set(), 'felix-FAILSAFE-OUT': set()
+}
+
+
 class TestRules(BaseTestCase):
 
     @patch("calico.felix.futils.check_call", autospec=True)
@@ -128,15 +136,20 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+            ],
+            'felix-FAILSAFE-IN': [
+                '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
+            ],
+            'felix-FAILSAFE-OUT': [
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2379 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2380 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 4001 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 7001 --jump ACCEPT'
             ]
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
-                                 'felix-FROM-HOST-IF']),
-             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
-             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
-                                   'felix-TO-ENDPOINT'])},
+            EXPECTED_TOP_LEVEL_DEPS,
             async=False
         )
 
@@ -313,15 +326,20 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+            ],
+            'felix-FAILSAFE-IN': [
+                '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
+            ],
+            'felix-FAILSAFE-OUT': [
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2379 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2380 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 4001 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 7001 --jump ACCEPT'
             ]
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
-                                 'felix-FROM-HOST-IF']),
-             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
-             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
-                                   'felix-TO-ENDPOINT'])},
+            EXPECTED_TOP_LEVEL_DEPS,
             async=False
         )
 
@@ -420,15 +438,20 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+            ],
+            'felix-FAILSAFE-IN': [
+                '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
+            ],
+            'felix-FAILSAFE-OUT': [
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2379 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 2380 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 4001 --jump ACCEPT',
+                '--append felix-FAILSAFE-OUT --protocol tcp --dport 7001 --jump ACCEPT'
             ]
         }
         m_v4_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
-            {'felix-INPUT': set(['felix-FROM-ENDPOINT',
-                                 'felix-FROM-HOST-IF']),
-             'felix-OUTPUT': set(['felix-TO-HOST-IF']),
-             'felix-FORWARD': set(['felix-FROM-ENDPOINT',
-                                   'felix-TO-ENDPOINT'])},
+            EXPECTED_TOP_LEVEL_DEPS,
             async=False
         )
 

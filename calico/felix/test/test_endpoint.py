@@ -544,6 +544,7 @@ class TestWorkloadEndpoint(BaseTestCase):
             "EndpointReportingEnabled": "False"})
         self.m_ipt_gen = Mock(spec=FelixIptablesGenerator)
         self.m_ipt_gen.endpoint_updates.return_value = {}, {}
+        self.m_ipt_gen.host_endpoint_updates.side_effect = AssertionError()
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch_chains = Mock(spec=WorkloadDispatchChains)
         self.m_host_dispatch_chains = Mock(spec=HostEndpointDispatchChains)
@@ -1325,7 +1326,8 @@ class TestHostEndpoint(BaseTestCase):
         self.m_ipt_gen = Mock(spec=FelixIptablesGenerator)
         self.config.plugins = {"iptables_generator": self.m_ipt_gen}
         self.updates = ({"chain": ["rule"]}, {"chain": set(["deps"])})
-        self.m_ipt_gen.endpoint_updates.return_value = self.updates
+        self.m_ipt_gen.host_endpoint_updates.return_value = self.updates
+        self.m_ipt_gen.endpoint_updates.side_effect = AssertionError()
         self.chain_names = {"foo", "bar"}
         self.m_ipt_gen.endpoint_chain_names.return_value = self.chain_names
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
@@ -1393,15 +1395,12 @@ class TestHostEndpoint(BaseTestCase):
 
             # Check that the iptables generator is called with the direction
             # arguments.  (Host endpoint chain directions are flipped.)
-            self.m_ipt_gen.endpoint_updates.assert_called_once_with(
-                4,  # IP version
-                "endpoint_id",
-                "eth0",
-                None,
-                ["prof1"],
-                {},
-                to_direction="outbound",
-                from_direction="inbound",
+            self.m_ipt_gen.host_endpoint_updates.assert_called_once_with(
+                ip_version=4,  # IP version
+                endpoint_id="endpoint_id",
+                suffix="eth0",
+                profile_ids=["prof1"],
+                pol_ids_by_tier={},
             )
             # Check that the updates are actually committed.
             self.m_iptables_updater.rewrite_chains.assert_called_once_with(
@@ -1480,15 +1479,12 @@ class TestHostEndpoint(BaseTestCase):
 
             # Check that the iptables generator is called with the direction
             # arguments.  (Host endpoint chain directions are flipped.)
-            self.m_ipt_gen.endpoint_updates.assert_called_once_with(
-                6,  # IP version
-                "endpoint_id",
-                "eth0",
-                None,
-                ["prof1"],
-                {},
-                to_direction="outbound",
-                from_direction="inbound",
+            self.m_ipt_gen.host_endpoint_updates.assert_called_once_with(
+                ip_version=6,  # IP version
+                endpoint_id="endpoint_id",
+                suffix="eth0",
+                profile_ids=["prof1"],
+                pol_ids_by_tier={},
             )
             # Check that the updates are actually committed.
             self.m_iptables_updater.rewrite_chains.assert_called_once_with(
