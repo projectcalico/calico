@@ -86,12 +86,11 @@ If your distribution uses systemd, then you could use the following unit file::
     [Unit]
     Description=Calico Felix agent
     After=syslog.target network.target
-    ConditionFileNotEmpty=/etc/calico/felix.cfg
 
     [Service]
     User=root
     ExecStartPre=/usr/bin/mkdir -p /var/run/calico
-    ExecStart=/opt/calico-felix/calico-felix --config-file=/etc/calico/felix.cfg
+    ExecStart=/opt/calico-felix/calico-felix
     KillMode=process
     Restart=on-failure
     LimitNOFILE=32000
@@ -127,7 +126,8 @@ Configure Felix
 ---------------
 
 Optionally, you can create a file at ``/etc/calico/felix.cfg`` to configure
-Felix.  The configuration is described in :doc:`configuration`.
+Felix.  The configuration file as well as other options for configuring felix
+(including environment variables) are described in :doc:`configuration`.
 
 If etcd is not running on the local machine, it's essential to configure the
 ``EtcdAddr`` or ``EtcdEndpoints`` setting to tell Felix how to reach etcd.

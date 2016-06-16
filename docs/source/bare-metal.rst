@@ -55,10 +55,10 @@ Overview
 To make use of Calico's host endpoint support, you will need to follow these
 steps, described in more detail below:
 
-- create an etcd cluster
+- create an etcd cluster, if you haven't already
 - install Calico's Felix daemon on each host
 - initialise the etcd database
-- create host endpoint objects in etcd for each interface you want to
+- create host endpoint objects in etcd for each interface you want
   Calico to police (in a later release, we plan to support interface templates
   to remove the need to explicitly configure every interface)
 - insert policy into etcd for Calico to apply
@@ -66,6 +66,9 @@ steps, described in more detail below:
 
 Creating an etcd cluster
 ------------------------
+
+If you haven't already created an etcd cluster for your Calico deployment,
+you'll need to create one.
 
 To create a single-node etcd cluster for testing, download an etcd v2.x release
 from `the etcd releases archive <https://github.com/coreos/etcd/releases>`_;
@@ -140,7 +143,7 @@ a host endpoint object in etcd.  At present, this must be done manually using
 
 There are two ways to specify the interface that a host endpoint should refer
 to.  You can either specify the name of the interface or its expected IP
-address.  In either case, you''ll also need to know the hostname of the
+address.  In either case, you'll also need to know the hostname of the
 host that owns the interface.
 
 For example, to secure the interface named ``eth0`` with IP 10.0.0.1 on host
@@ -214,7 +217,10 @@ wrong with the endpoint data, Felix will log a validation error at ``WARNING``
 level and it will ignore the endpoint::
 
     $ grep "Validation failed" /var/log/calico/felix.log
-    2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017: Validation failed for host endpoint HostEndpointId<eth0>, treating as missing: 'name' or 'expected_ipvx_addr' must be present.; '{ "labels": {"foo": "bar"}, "expected_ipv4_addrs": ["192.168.171.128"], "profile_ids": ["prof1"]}'
+    2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017:
+        Validation failed for host endpoint HostEndpointId<eth0>, treating as
+        missing: 'name' or 'expected_ipvX_addrs' must be present.;
+        '{ "labels": {"foo": "bar"}, "profile_ids": ["prof1"]}'
 
 The error can be quite long but it should log the precise cause of the
 rejection; in this case "'name' or 'expected_ipvx_addr' must be present" tells
@@ -224,19 +230,19 @@ specified.
 Creating security policy
 ------------------------
 
-We recommend using tiered policy with bare-metal workloads.  This allows
-ordered policy to be applied to endpoints that match particular label
-selectors.
+The Calico team recommend using tiered policy with bare-metal workloads.
+This allows ordered policy to be applied to endpoints that match particular
+label selectors.
 
 At a minimum, you'll need to create a policy tier.  Since tiers are ordered,
-we need to specify an order key (lower numbers are applied to traffic first)::
+you need to specify an order key (lower numbers are applied to traffic first)::
 
     etcdctl set /calico/v1/policy/tier/my-tier/metadata '{"order": 100}'
 
 
-Then add at least one policy to the tier.  In this case, we'll allow inbound
-traffic to endpoints labeled with role "webserver" on port 80 and all outbound
-traffic::
+Then add at least one policy to the tier.  The example below allows inbound
+traffic from the netwrok to endpoints labeled with role "webserver" on port 80
+and all outbound traffic::
 
     etcdctl set /calico/v1/policy/tier/my-tier/policy/webserver \
         '{
@@ -262,7 +268,7 @@ Calico has a failsafe mechanism that keeps various pinholes open in the
 firewall.
 
 By default, Calico keeps port 22 inbound open on *all* host endpoints, which
-allows access to ssh as well as outbound communication to ports 2379, 2380,
+allows access to ssh; as well as outbound communication to ports 2379, 2380,
 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration parameters

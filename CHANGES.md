@@ -5,8 +5,8 @@
 - Add support for securing bare-metal host endpoints.  This is a significant
   change that extends Calico's security model to hosts as well as the 
   workloads running on them.
-- InterfacePrefix not defaults to "cali", which is a safe default that happens
-  to be the corect value for container systems.
+- InterfacePrefix now defaults to "cali", which is a safe default that happens
+  to be the correct value for container systems.
 - MAC address field in endpoint objects is now optional.  If omitted, the MAC
   address is not policed in iptables.
 - Add support for running Felix on RedHat 6.5+ and other distributions with 

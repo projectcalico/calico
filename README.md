@@ -124,24 +124,34 @@ Felix can be run inside Docker. See the `docker_build_and_run.sh` script for det
 
 ### Stand-alone bundle
 
-The `build-pyi-bundle.sh` script uses [PyInstaller](http://www.pyinstaller.org/) to package Felix as a stand-alone bundle containing a Python distribution along with Felix's Python dependencies.  
+The `build-pyi-bundle.sh` script uses [PyInstaller](http://www.pyinstaller.org/) 
+to package Felix as a stand-alone bundle containing a Python distribution along
+with Felix's Python dependencies.  
 
 To create a bundle
 
-* [install Docker](`build-pyi-bundle.sh`) on a Linux system (we haven't tested the build on Mac)
-* run `./build-pyi-bundle.sh`
+- [install Docker](`build-pyi-bundle.sh`) on a Linux system (we haven't tested 
+  the build on Mac)
+- run `./build-pyi-bundle.sh`
 
 The bundle will be output to `dist/calico-felix.tgz`.
 
 Running the bundle requires
 
-* libc version 2.12 or newer
-* Linux kernel 2.6.32 or higher (note: to support containers running on the host, kernel 3.10+ is required)
-* `iptables`, `ipset` and `conntrack` (typically from the `conntrack-tools` package) to be available.
+- libc version 2.12 or newer
+- Linux kernel 2.6.32 or higher (note: to support containers running on the 
+  host, kernel 3.10+ is required)
+- `iptables`, `ipset` and `conntrack` (typically from the `conntrack-tools` 
+  package) to be available.
 
 **Note:** the bundle itself doesn't require Docker.
 
 To use the bundle, 
 
-* install the pre-requisites above
-* unpack `calico-felix.tgz` on your target host (`/opt/calico-felix` would be a good place) and create a start-up script (for example, a systemd unit file or an upstart script) that runs the `calico-felix` binary found in the unpacked directory.  Your start-up script should be set to restart Felix on exit because Felix simetimes needs to restart to pick up configuration changes. 
+- install the pre-requisites above
+- unpack `calico-felix.tgz` on your target host (`/opt/calico-felix` would be 
+  a good place) and create a start-up script (for example, a systemd unit file 
+  or an upstart script) that runs the `calico-felix` binary found in the 
+  unpacked directory.  Your start-up script should be set to restart Felix on 
+  exit because Felix simetimes needs to restart to pick up configuration 
+  changes. 

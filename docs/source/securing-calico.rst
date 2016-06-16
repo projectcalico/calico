@@ -50,14 +50,14 @@ top-level chains, Calico inserts a single rule at the start of each of the
 kernel chains, which jumps to Calico's own chain.
 
 The INPUT chain is traversed by packets which are destined for the host itself.
-Calico applies workload's outbound policy in the input chain as well as the
-policy for host endpoints
+Calico applies workloads' outbound policy in the input chain as well as the
+policy for host endpoints.
 
 For workload traffic hitting the INPUT chain, Calico whitelists some essential
 bootstrapping traffic, such as DHCP, DNS and the OpenStack metadata traffic.
-Other traffic from local endpoints passes through the outbound rules for the
-endpoint.  Then, it hits a configurable rule that either drops the traffic or
-allows it to continue to the remainder of the INPUT chain.
+Other traffic from local workload endpoints passes through the outbound rules
+for the endpoint.  Then, it hits a configurable rule that either drops the
+traffic or allows it to continue to the remainder of the INPUT chain.
 
 Presently, the Calico FORWARD chain is not similarly configurable.  All traffic
 that is heading to or from a local endpoint is processed through the relevant
