@@ -103,7 +103,11 @@ There are several ways to install Felix.
 
 
 - if you are running another distribution, follow the instructions in
-  :doc:`pyi-bare-metal-install`_ to use our installer bundle.
+  :doc:`pyi-bare-metal-install` to use our installer bundle.
+
+Until you initialise the database, Felix will make a regular log that it is in
+state "wait-for-ready".  The default location for the log file is
+``/var/log/calico/felix.log``.
 
 Initialising the etcd database
 ------------------------------
@@ -115,6 +119,10 @@ etcd hosts::
 
     etcdctl set /calico/v1/Ready true
 
+
+If you check the felix logfile after this step, the logs should transition from
+periodic notifications that felix is in state "wait-for-ready" to a stream
+of initialisation messages.
 
 Creating host endpoint objects
 ------------------------------
@@ -130,8 +138,10 @@ host that owns the interface.
 
 For example, to secure the interface named ``eth0`` with IP 10.0.0.1 on host
 ``my-host``, you could create a host endpoint object at
-``/calico/v1/host/my-host/endpoint/endpoint1`` (the name "endpoint1" is
-arbitrary) with the following data::
+``/calico/v1/host/<hostname>/endpoint/<endpoint-id>`` (where ``<hostname>`` is
+the hostname of the host with the endpoint and ``<endpoint-id>`` is an
+arbitrary name for the interface, such as "data-1" or "management") with the
+following data::
 
     {
       "name": "eth0",
@@ -139,10 +149,27 @@ arbitrary) with the following data::
       "profile_ids": [<list of profile IDs>],
       "labels": {
         "role": "webserver",
-        "label-2": "value-2"
+        "environment": "production",
       }
     }
 
+
+.. note:: Felix tries to detect the correct hostname for a system.  It logs
+          out the value it has determined at start-of-day in the following
+          format::
+
+              2015-10-20 17:42:09,813 [INFO][30149/5] calico.felix.config 285: Parameter FelixHostname (Felix compute host hostname) has value 'my-hostname' read from None
+
+          The value (in this case "my-hostname") needs to match the hostname
+          used in etcd.  Ideally, the host's system hostname should be set
+          correctly but if that's not possible, the Felix value can be
+          overridden with the FelixHostname configuration setting.  See
+          :doc:`configuration` for more details.
+
+Where ``<list of profile IDs>`` is an optional list of security profiles to
+apply to the endpoint and labels contains a set of arbitrary key/value pairs
+that can be used in selector expressions. For more information on profile IDs,
+labels, and selector expressions please see :doc:`etcd-data-model`.
 
 .. warning:: When rendering security rules on other hosts, Calico uses the
              ``expected_ipvX_addrs`` fields to resolve tags and label selectors
@@ -157,14 +184,35 @@ interface::
       "expected_ipv4_addrs": ["10.0.0.1"],
       "profile_ids": [<list of profile IDs>],
       "labels": {
-        "label-1": "value-1",
-        "label-2": "value-2"
+        "role": "webserver",
+        "environment": "production",
       }
     }
 
 
 The format of a host endpoint object is described in detail in
 :doc:`etcd-data-model`.
+
+After you create host endpoint objects, Felix will start policing traffic
+to/from that interface.  If you have no policy or profiles in place, then you
+should see traffic being dropped on the interface.
+
+.. note:: By default, Calico has a failsafe in place that whitelists certain
+          traffic such as ssh.  See below for more details on
+          disabling/configuring the failsafe rules.
+
+If you don't see traffic being dropped, check the hostname, IP address and
+(if used) the interface name in the configuration.  If there was something
+wrong with the endpoint data, Felix will log a validation error at ``WARNING``
+level and it will ignore the endpoint::
+
+    $ grep "Validation failed" /var/log/calico/felix.log
+    2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017: Validation failed for host endpoint HostEndpointId<eth0>, treating as missing: 'name' or 'expected_ipvx_addr' must be present.; '{ "labels": {"foo": "bar"}, "expected_ipv4_addrs": ["192.168.171.128"], "profile_ids": ["prof1"]}'
+
+The error can be quite long but it should log the precise cause of the
+rejection; in this case "'name' or 'expected_ipvx_addr' must be present" tells
+us that either the interface's name or its expected IP address must be
+specified.
 
 Creating security policy
 ------------------------
@@ -211,5 +259,5 @@ allows access to ssh as well as outbound communication to ports 2379, 2380,
 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration parameters
-described in :doc:`configuration`_.  They can be disabled by setting each
+described in :doc:`configuration`.  They can be disabled by setting each
 configuration value to an empty string.

@@ -52,7 +52,7 @@ The bundle has the following pre-requisites:
 - The conntrack, iptables and ipsets kernel modules must be available (or
   compiled-in).
 - An `etcd <https://github.com/coreos/etcd/releases/>`_; v2+ cluster.  We
-  recommend running the latest stable release of etcd v2.x.  The check the
+  recommend running the latest stable release of etcd v2.x.  To check the
   version, run ``etcd --version``
 
 .. note:: If any of the commands above fail when run with the ``--version``
