@@ -17,10 +17,4 @@ pre-start script
   chown root:root /var/run/calico
 end script
 
-script
-  if [ -f /etc/calico/felix.cfg ]; then
-    exec start-stop-daemon --start --chuid root --exec /usr/bin/calico-felix -- --config-file=/etc/calico/felix.cfg
-  else
-    echo "Calico Felix: not starting because /etc/calico/felix.cfg does not exist"
-  fi
-end script
+exec /usr/bin/calico-felix
