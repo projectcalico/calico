@@ -12,8 +12,8 @@
    #    implied. See the License for the specific language governing
    #    permissions and limitations under the License.
 
-PyInstaller Bundle Install Instructions
-=======================================
+Alternative Felix Install with PyInstaller Bundle
+=================================================
 
 These instructions will take you through a first-time install of Calico's
 per-host daemon, Felix, using the packaged PyInstaller bundle.  In contrast
@@ -135,9 +135,17 @@ If etcd is not running on the local machine, it's essential to configure the
 Start Felix
 -----------
 
-Once you've configured Felix, start it up via your init system.  For systemd,
-with the above unit file installed, you could run
-``systemctl start calico-felix``.
+Once you've configured Felix, start it up via your init system.
+
+For systemd, with the above unit file installed, you could run::
+
+    systemctl start calico-felix
+
+
+For upstart::
+
+    start calico-felix
+
 
 Running Felix manually
 ----------------------

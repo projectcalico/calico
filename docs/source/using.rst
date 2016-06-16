@@ -25,6 +25,7 @@ several options for how you can easily do that, with different systems.
 
    openstack
    docker
+   pyi-bare-metal-install
    bare-metal
    next-steps
    support

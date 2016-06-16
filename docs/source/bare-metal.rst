@@ -42,6 +42,13 @@ However, for host endpoints, Calico is more lenient; it only polices traffic
 to/from interfaces that it's been explicitly told about.  Traffic to/from
 other interfaces is left alone.
 
+.. note:: If you have a host with workloads on it then traffic that is
+          forwarded to workloads bypasses the policy applied to host endpoints.
+          If that weren't the case, the host endpoint policy would need to be
+          very broad to allow all traffic destined for any possible workload.
+
+          .. image:: bare-metal-packet-flows.png
+
 Overview
 --------
 
