@@ -91,7 +91,7 @@ def load_config(filename, path="calico/felix/test/data/", env_dict=None,
 
     with mock.patch.dict("os.environ", env_dict):
         with mock.patch('calico.common.complete_logging'):
-            config = Config(path+filename)
+            config = Config(path + filename)
 
     with mock.patch('calico.common.complete_logging'):
         config.report_etcd_config(host_dict, global_dict)

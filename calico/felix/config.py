@@ -277,6 +277,7 @@ class Config(object):
 
         # Read the environment variables, then the configuration file.
         self._read_env_vars()
+        self._finish_update(final=False)
         self._read_cfg_file(config_path)
         self._finish_update(final=False)
 
@@ -429,12 +430,23 @@ class Config(object):
                               "Environment variable %s" % env_var)
 
     def _read_cfg_file(self, config_file):
+        log.info("Reading config from %s", config_file)
+
+        if not os.path.exists(config_file):
+            log.info("Config file %s not present", config_file)
+            return
+
         parser = ConfigParser.ConfigParser()
         parser.read(config_file)
-        cfg_dict = {}
 
+        # The parser has an odd behaviour where a section called [DEFAULT] is
+        # treated as a special case. If the user happens to use that name and
+        # they happen not to put any other sections in the file then no config
+        # is applied.  Explicitly grab the defaults now.
+        cfg_dict = parser.defaults()
         # Build up the cfg dictionary from the file.
         for section in parser.sections():
+            log.debug("Examining section %s", section)
             cfg_dict.update(dict(parser.items(section)))
 
         source = "Configuration file %s" % config_file
@@ -444,6 +456,7 @@ class Config(object):
             name = name.lower()
             if FILE in parameter.sources and name in cfg_dict:
                 # This can validly be read from file.
+                log.debug("Read %s = %s from file", name, cfg_dict[name])
                 parameter.set(cfg_dict.pop(name), source)
         self._warn_unused_cfg(cfg_dict, source)
 

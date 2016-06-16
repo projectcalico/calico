@@ -44,6 +44,9 @@ class TestConfig(unittest.TestCase):
         self.ghbn_patch = mock.patch("socket.gethostbyname", autospec=True)
         self.m_gethostbyname = self.ghbn_patch.start()
         self.m_gethostbyname.side_effect = self.dummy_gethostbyname
+        self.compl_log_patch = mock.patch("calico.common.complete_logging",
+                                          autospec=True)
+        self.compl_log_patch.start()
 
     def dummy_gethostbyname(self, host):
         if host in ("localhost", "127.0.0.1"):
@@ -54,6 +57,7 @@ class TestConfig(unittest.TestCase):
             raise socket.gaierror("Dummy test error")
 
     def tearDown(self):
+        self.compl_log_patch.stop()
         self.ghbn_patch.stop()
         super(TestConfig, self).tearDown()
 
@@ -300,8 +304,9 @@ class TestConfig(unittest.TestCase):
         """
         Test various ways of defaulting config.
         """
-        files = [ "felix_section.cfg", # lots of sections
-                  ]
+        files = [
+            "felix_section.cfg",  # lots of sections
+        ]
 
         for filename in files:
             config = load_config(filename)
@@ -315,6 +320,10 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.METADATA_IP, "1.2.3.4")
             self.assertEqual(config.REPORTING_INTERVAL_SECS, 5)
             self.assertEqual(config.REPORTING_TTL_SECS, 11)
+
+    def test_upper_case_section(self):
+        config = load_config("felix_default_section.cfg")
+        self.assertEqual(config.ETCD_ADDRS, ["192.168.15.7:2379"])
 
     def test_env_var_override(self):
         """
