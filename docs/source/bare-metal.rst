@@ -268,3 +268,47 @@ allows access to ssh as well as outbound communication to ports 2379, 2380,
 The lists of failsafe ports can be configured via the configuration parameters
 described in :doc:`configuration`.  They can be disabled by setting each
 configuration value to an empty string.
+
+.. warning:: Removing the inbound failsafe rules can leave a host inaccessible.
+
+             Removing the outbound failsafe rules can leave Felix unable to
+             connect to etcd.
+
+             Before disabling the failsafe rules, we recommend creating a
+             policy to replace it with more-specific rules for your
+             environment.  For example, the commands below create a tier
+             called "failsafe" and a policy inside it that allows SSH from
+             a specifc CIDR as well as allowing outbound etcd traffic to a
+             particular IP::
+
+                 etcdctl set /calico/v1/policy/tier/failsafe/metadata '{"order": 0}'
+                 etcdctl set /calico/v1/policy/tier/failsafe/policy/failsafe \
+                    '{
+                       "selector": "all()",
+                       "order": 100,
+                       "inbound_rules": [
+                         {"protocol": "tcp",
+                          "dst_ports": [22],
+                          "src_net": "<management subnet>"
+                          "action": "allow"},
+                         {"action": "next-tier"}
+                       ],
+                       "outbound_rules": [
+                         {"protocol": "tcp",
+                          "dst_ports": [<your etcd ports>],
+                          "dst_net": "<your etcd IP>/32"
+                          "action": "allow"},
+                         {"action": "next-tier"}
+                       ]
+                     }'
+
+             **Note:** the policy ends with a "next-tier" action so that
+             traffic that is not explicitly matched gets passed to the next
+             tier of policy rather than being dropped at the end of the tier.
+
+             **Note:** the selector in the policy, ``all()``, will match *all*
+             endpoints, including any workload endpoints.  If you have workload
+             endpoints as well as host endpoints then you may wish to use a
+             more restrictive selector.  For example, you could label
+             management interfaces with label ``endpoint_type = management``
+             and then use selector ``endpoint_type == "management"``
