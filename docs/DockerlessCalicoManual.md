@@ -10,7 +10,7 @@ Some `calicoctl` commands rely on a running `calico-node` container, and expect 
 2. `calicoctl checksystem`
 3. All `calicoctl container ...` commands. 
 
-Please raise any encountered issues, or message us on [calico-slack](https://calicousers-slackin.herokuapp.com/).
+Please raise any encountered issues, or message us on [calico-slack](https://slack.projectcalico.org/).
 
 ## Installation
 1. Make changes to SELinux and QEMU config to allow VM interfaces with type='ethernet'. [this libvirt Wiki page][libvirt-wiki] explains why these changes are required):

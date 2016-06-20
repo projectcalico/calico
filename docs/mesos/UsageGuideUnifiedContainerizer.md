@@ -110,6 +110,6 @@ You should now see a `hello-world-1.#####...` task in the application's
 task list, along with a Calico-assigned IP address just below the Task
 ID!
 
-[calico-slack]: https://calicousers-slackin.herokuapp.com/
+[calico-slack]: https://slack.projectcalico.org/
 [marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/docs/ip-per-task.md
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/UsageGuideUnifiedContainerizer.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -20,7 +20,7 @@ A great way to talk to us, ask questions, discuss features and bounce ideas
 around is to join one of the channels listed below:
 
 * [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
-* [Slack Calico Users Channel](https://calicousers.slack.com) ([Sign up](https://calicousers-slackin.herokuapp.com))
+* [Slack Calico Users Channel](https://slack.projectcalico.org)
 * IRC - [#calico](https://kiwiirc.com/client/irc.freenode.net/#calico)
 
 ## Reporting issues
