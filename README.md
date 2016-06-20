@@ -1,6 +1,6 @@
 [![CircleCI branch](https://img.shields.io/circleci/project/projectcalico/calico-cni/master.svg)](https://circleci.com/gh/projectcalico/calico-cni/tree/master)
 [![Coverage Status](https://coveralls.io/repos/projectcalico/calico-cni/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/calico-cni?branch=master)
-[![Slack Status](https://calicousers-slackin.herokuapp.com/badge.svg)](https://calicousers-slackin.herokuapp.com)
+[![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 
 # Calico Networking for CNI 
