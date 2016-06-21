@@ -17,7 +17,6 @@ import netaddr
 
 from neutron.agent.linux import interface
 from neutron.agent.linux import ip_lib
-from neutron.i18n import _LE
 from oslo_log import log as logging
 
 
@@ -81,8 +80,7 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
             device.link.delete()
             LOG.debug("Unplugged interface '%s'", device_name)
         except RuntimeError:
-            LOG.error(_LE("Failed unplugging interface '%s'"),
-                      device_name)
+            LOG.error("Failed unplugging interface '%s'", device_name)
 
     @property
     def bridged(self):
