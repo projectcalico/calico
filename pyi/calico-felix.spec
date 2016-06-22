@@ -30,6 +30,7 @@ block_cipher = None
 extra_files = [
     ('/usr/local/lib/python2.7/site-packages/posix_spawn/c/*',
      'posix_spawn/c'),
+    ('../version.txt', ''),
 ]
 
 # Add egg metadata for our package and dependencies.  Required to allow us to
