@@ -7,6 +7,17 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 ADD . /code
 WORKDIR /code
 
+# Metadata
+ARG VCS_URL 
+ARG VCS_REF
+ARG BUILD_DATE
+LABEL org.label-schema.vcs-url=$VCS_URL \
+	  org.label-schema.vcs-ref=$VCS_REF \
+	  org.label-schema.build-date=$BUILD_DATE \
+	  org.label-schema.url="http://projectcalico.org" \
+	  org.label-schema.name="Project Calico" \
+	  org.label-schema.license="Apache-2.0"
+
 RUN apk -U add python py-setuptools libffi ip6tables ipset iputils yajl && \
     apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk && \
     pip install -e . && \
