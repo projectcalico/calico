@@ -541,11 +541,20 @@ def ipv6_supported():
                        "Linux kernel v3.3 or above and ip6tables v1.4.14 or "
                        "above.")
     try:
-        check_call(["ip6tables", "-m", "rpfilter"])
-    except (OSError, FailedSystemCall):
-        return False, ("ip6tables is missing required rpfilter match module; "
-                       "Calico IPv6 support requires Linux kernel v3.3 or "
-                       "above and ip6tables v1.4.14 or above.")
+        # Use -C, which checks for a particular rule.  We don't expect the rule
+        # to exist but iptables will give us a distinctive error if the
+        # rpfilter module is missing.
+        proc = Popen(["ip6tables", "-C", "FORWARD", "-m", "rpfilter"],
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = proc.communicate()
+        if "Couldn't load match" in err:
+            return False, (
+                "ip6tables is missing required rpfilter match module; "
+                "Calico IPv6 support requires Linux kernel v3.3 or "
+                "above and ip6tables v1.4.14 or above."
+            )
+    except OSError:
+        return False, "Failed to execute ip6tables"
     return True, None
 
 
