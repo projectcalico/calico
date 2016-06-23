@@ -144,12 +144,18 @@ When a host endpoint is added, if there is no security policy for that
 endpoint, Calico will default to denying traffic to/from that endpoint, except
 for traffic that is allowed by the `failsafe rules`_.
 
-While the `failsafe rules`_ provide some protection against removing all
-connectivity to a host, they are also quite broad and do not include all the
-connectivity that a typical host requires.  Therefore, we recommend
-creating a failsafe Calico security policy that is tailored to your
-environment.  The example commands below show one example of how you might do
-that; the commands:
+While the `failsafe rules`_ provide protection against removing all
+connectivity to a host,
+
+- they are overly broad in allowing inbound SSH on any interface and allowing
+  traffic out to etcd's ports on any interface
+
+- depending on your network, they may not cover all the ports that are
+  required; for example, your network may reply on allowing ICMP, or DHCP.
+
+Therefore, we recommend creating a failsafe Calico security policy that is
+tailored to your environment.  The example commands below show one example of
+how you might do that; the commands:
 
 - Create a new policy tier called "failsafe" with ``order`` 0.  When creating
   other tiers, you should give them a higher ``order`` value so the failsafe
@@ -161,6 +167,7 @@ that; the commands:
     - allows inbound ssh access from a defined "management" subnet
     - allows outbound connectivity to etcd on a particular IP; if you have
       multiple etcd servers you should duplicate the rule for each destination
+    - allows inbound ICMP
     - allows outbound UDP on port 67, for DHCP
     - uses a "next-tier" action to pass any non-matching packets to the
       next tier of policy.
@@ -178,6 +185,7 @@ that; the commands:
               "dst_ports": [22],
               "src_net": "<your management CIDR>"
               "action": "allow"},
+             {"protocol": "icmp", "action": "allow"},
              {"action": "next-tier"}
            ],
 
@@ -192,6 +200,9 @@ that; the commands:
          }'
 
 
+Once you have such a policy in place, you may want to disable the
+`failsafe rules`_.
+
 .. note:: The policy ends with a "next-tier" action so that traffic that is
           not explicitly matched gets passed to the next tier of policy
           rather than being dropped at the end of the tier.
@@ -203,7 +214,7 @@ that; the commands:
           management interfaces with label ``endpoint_type = management``
           and then use selector ``endpoint_type == "management"``
 
-.. note:: If you are using Calico for networking wokrloads, you should add
+.. note:: If you are using Calico for networking workloads, you should add
           inbound and outbound rules to allow BGP, for example::
 
              {"protocol": "tcp", "dst_ports": [179], "action": "allow"}
