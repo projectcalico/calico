@@ -506,9 +506,31 @@ class CalicoDhcpAgent(DhcpAgent):
         self.etcd.loop()
 
 
+def setup_logging():
+    config.setup_logging()
+
+    # logging is set up as it is done for neutron agent, so
+    # in order to log additionally to file we simply need to add
+    # file handler to root logger
+    root_logger = logging.getLogger()
+
+    # FIXME(aroma-x) - move logging settings to configuration
+    # file in future
+    log_file = '/var/log/calico/dhcp-agent.log'
+    log_format = ('%(asctime)s [%(thread)d] (%(levelname)s) '
+                  '%(module)s: %(message)s')
+    log_level = logging.DEBUG
+
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(log_level)
+    fh.setFormatter(logging.Formatter(log_format))
+
+    root_logger.addHandler(fh)
+
+
 def main():
     register_options(cfg.CONF)
     common_config.init(sys.argv[1:])
-    config.setup_logging()
+    setup_logging()
     agent = CalicoDhcpAgent()
     agent.run()
