@@ -28,12 +28,13 @@ import inspect
 import logging
 import os
 import re
+import sys
 import types
 import gc
 from datetime import datetime
 import gevent.lock
 from gevent import subprocess
-from gevent.subprocess import Popen
+from gevent.subprocess import Popen, check_output, CalledProcessError
 import tempfile
 import pkg_resources
 from posix_spawn import posix_spawnp, FileActions
@@ -49,7 +50,7 @@ from collections import namedtuple
 CommandOutput = namedtuple('CommandOutput', ['stdout', 'stderr'])
 
 # Logger
-log = logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 stat_log = logging.getLogger("calico.stats")
 
 # Flag to indicate "IP v4" or "IP v6"; format that can be printed in logs.
@@ -72,7 +73,13 @@ DEFAULT_TRUNC_LENGTH = 1000
 
 
 class FailedSystemCall(Exception):
-    def __init__(self, message, args, retcode, stdout, stderr, input=None):
+    def __init__(self,
+                 message="Failed system call",
+                 args="<unknown>",
+                 retcode="<unknown>",
+                 stdout="<unknown>",
+                 stderr="<unknown>",
+                 input=None):
         super(FailedSystemCall, self).__init__(message)
         self.message = message
         self.args = args
@@ -116,8 +123,13 @@ def call_silent(args):
     except FailedSystemCall as e:
         return e.retcode
 
-
-gevent_version = pkg_resources.get_distribution("gevent").parsed_version
+if getattr(sys, "frozen", False):
+    # Running as a pyinstaller frozen executable.  The gevent version check
+    # will fail, but we know we're running with a new version so it's OK to
+    # skip it.
+    gevent_version = None  # pragma: no cover
+else:
+    gevent_version = pkg_resources.get_distribution("gevent").parsed_version
 
 
 class SpawnedProcess(Popen):
@@ -130,7 +142,8 @@ class SpawnedProcess(Popen):
     blocks the entire process.
     """
 
-    if gevent_version < pkg_resources.parse_version("1.1a1"):
+    if (gevent_version is not None and
+            gevent_version < pkg_resources.parse_version("1.1a1")):
         # gevent 1.0.
         def _execute_child(self, args, executable, preexec_fn, close_fds,
                            cwd, env, universal_newlines,
@@ -193,15 +206,15 @@ class SpawnedProcess(Popen):
         if close_fds:
             raise NotImplementedError("close_fds not implemented")
         if cwd:
-            raise NotImplementedError("cwd not implemented")
+            raise NotImplementedError("cwd not implemented")  # pragma: no cover
         if universal_newlines:
-            raise NotImplementedError()
+            raise NotImplementedError()  # pragma: no cover
         assert startupinfo is None and creationflags == 0
 
-        log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
-                  p2cread, p2cwrite,
-                  c2pread, c2pwrite,
-                  errread, errwrite)
+        _log.debug("Pipes: p2c %s, %s; c2p %s, %s; err %s, %s",
+                   p2cread, p2cwrite,
+                   c2pread, c2pwrite,
+                   errread, errwrite)
 
         if isinstance(args, types.StringTypes):
             args = [args]
@@ -248,7 +261,7 @@ class SpawnedProcess(Popen):
                 dup_from = dup_to
             # Need to take a dup so we can remove the non-blocking flag
             a_dup = os.dup(dup_from)
-            log.debug("Duped %s as %s", dup_from, a_dup)
+            _log.debug("Duped %s as %s", dup_from, a_dup)
             fds_to_close_in_parent.append(a_dup)
             self._remove_nonblock_flag(a_dup)
             file_actions.add_dup2(a_dup, dup_to)
@@ -320,10 +333,10 @@ def check_call(args, input_str=None):
     :raises FailedSystemCall: if the return code of the subprocess is non-zero.
     :raises OSError: if, for example, there is a read error on stdout/err.
     """
-    log.debug("Calling out to system: %s.  %s/%s concurrent calls",
-              args,
-              MAX_CONCURRENT_CALLS - _call_semaphore.counter,
-              MAX_CONCURRENT_CALLS)
+    _log.debug("Calling out to system: %s.  %s/%s concurrent calls",
+               args,
+               MAX_CONCURRENT_CALLS - _call_semaphore.counter,
+               MAX_CONCURRENT_CALLS)
 
     stdin = subprocess.PIPE if input_str is not None else None
 
@@ -335,7 +348,7 @@ def check_call(args, input_str=None):
         stdout, stderr = proc.communicate(input=input_str)
 
     retcode = proc.returncode
-    log.debug("Process finished with RC=%s: %s.", retcode, args)
+    _log.debug("Process finished with RC=%s: %s.", retcode, args)
     if retcode:
         raise FailedSystemCall("Failed system call",
                                args, retcode, stdout, stderr, input=input_str)
@@ -347,7 +360,7 @@ def multi_call(ops):
     """
     Issue multiple ops, all of which must succeed.
     """
-    log.debug("Calling out to system : %s", ops)
+    _log.debug("Calling out to system : %s", ops)
 
     fd, name = tempfile.mkstemp(text=True)
     f = os.fdopen(fd, "w")
@@ -435,7 +448,7 @@ def register_process_statistics():
     Called once to register a stats handler for process-specific information.
     """
     if resource is None:
-        log.warning(
+        _log.warning(
             'Unable to import resource module, memory diags not available'
         )
         return
@@ -485,7 +498,7 @@ def logging_exceptions(fn):
         try:
             return fn(*args, **kwargs)
         except:
-            log.exception("Exception in wrapped function %s", fn)
+            _log.exception("Exception in wrapped function %s", fn)
             raise
     return wrapped
 
@@ -512,3 +525,108 @@ def find_set_bits(mask):
         next_mask = mask & (mask - 1)
         yield mask - next_mask
         mask = next_mask
+
+
+def ipv6_supported():
+    """Checks whether we can support IPv6 on this host.
+
+    :returns tuple[bool,str]: supported, reason for lack of support or None.
+    """
+    if not os.path.exists("/proc/sys/net/ipv6"):
+        return False, "/proc/sys/net/ipv6 is missing (IPv6 compiled out?)"
+    try:
+        check_call(["which", "ip6tables"])
+    except FailedSystemCall:
+        return False, ("ip6tables not installed; Calico IPv6 support requires "
+                       "Linux kernel v3.3 or above and ip6tables v1.4.14 or "
+                       "above.")
+    try:
+        # Use -C, which checks for a particular rule.  We don't expect the rule
+        # to exist but iptables will give us a distinctive error if the
+        # rpfilter module is missing.
+        proc = Popen(["ip6tables", "-C", "FORWARD", "-m", "rpfilter"],
+                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = proc.communicate()
+        if "Couldn't load match" in err:
+            return False, (
+                "ip6tables is missing required rpfilter match module; "
+                "Calico IPv6 support requires Linux kernel v3.3 or "
+                "above and ip6tables v1.4.14 or above."
+            )
+    except OSError:
+        return False, "Failed to execute ip6tables"
+    return True, None
+
+
+def check_command_deps():
+    """Checks for the presence of our prerequisite commands such as iptables
+    and conntrack.
+
+    :raises SystemExit if commands are missing."""
+    _log.info("Checking for iptables")
+    try:
+        ipt_version = check_output(["iptables", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute iptables; Calico requires iptables "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("iptables version: %s", ipt_version)
+
+    _log.info("Checking for iptables-save")
+    try:
+        check_call(["which", "iptables-save"])
+    except (FailedSystemCall, OSError):
+        _log.critical("Failed to find iptables-save; Calico requires "
+                      "iptables-save to be installed.")
+        sys.exit(1)
+
+    _log.info("Checking for iptables-restore")
+    try:
+        check_call(["which", "iptables-restore"])
+    except (FailedSystemCall, OSError):
+        _log.critical("Failed to find iptables-restore; Calico requires "
+                      "iptables-restore to be installed.")
+        sys.exit(1)
+
+    _log.info("Checking for ipset")
+    try:
+        ipset_version = check_output(["ipset", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute ipset; Calico requires ipset "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("ipset version: %s", ipset_version)
+
+    _log.info("Checking for conntrack")
+    try:
+        conntrack_version = check_output(["conntrack", "--version"])
+    except (CalledProcessError, OSError):
+        _log.critical("Failed to execute conntrack; Calico requires iptables "
+                      "to be installed.")
+        sys.exit(1)
+    else:
+        _log.info("conntrack version: %s", conntrack_version)
+
+
+def find_longest_prefix(strs):
+    """Finds the longest common prefix of the given input strings.
+    :param list[str]|set[str] strs: Input strings.
+    :returns the longest common prefix, or None if the input list is empty."""
+    longest_prefix = None
+    for iface in strs:
+        if longest_prefix is None:
+            longest_prefix = iface
+        elif not iface.startswith(longest_prefix):
+            shared_len = min(len(longest_prefix), len(iface))
+            i = 0
+            for i in xrange(shared_len):
+                p_char = longest_prefix[i]
+                i_char = iface[i]
+                if p_char != i_char:
+                    longest_prefix = iface[:i]
+                    break
+            else:
+                longest_prefix = longest_prefix[:shared_len]
+    return longest_prefix

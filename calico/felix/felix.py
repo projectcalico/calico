@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright (c) Metaswitch Networks 2015. All rights reserved.
 # Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
@@ -38,9 +39,11 @@ from calico import common
 from calico.felix import devices
 from calico.felix import futils
 from calico.felix.fiptables import IptablesUpdater
-from calico.felix.dispatch import DispatchChains
+from calico.felix.dispatch import (HostEndpointDispatchChains,
+                                   WorkloadDispatchChains)
 from calico.felix.profilerules import RulesManager
-from calico.felix.frules import install_global_rules, load_nf_conntrack
+from calico.felix.frules import (install_global_rules, load_nf_conntrack,
+                                 HOST_DISPATCH_CHAINS)
 from calico.felix.splitter import UpdateSplitter, CleanupManager
 from calico.felix.config import Config
 from calico.felix.futils import IPV4, IPV6
@@ -63,8 +66,10 @@ def _main_greenlet(config):
         _log.info("Connecting to etcd to get our configuration.")
         hosts_ipset_v4 = IpsetActor(HOSTS_IPSET_V4)
 
+        monitored_items = []
         etcd_api = EtcdAPI(config, hosts_ipset_v4)
         etcd_api.start()
+        monitored_items.append(etcd_api.greenlet)
         # Ask the EtcdAPI to fill in the global config object before we
         # proceed.  We don't yet support config updates.
         config_loaded = etcd_api.load_config(async=False)
@@ -74,10 +79,12 @@ def _main_greenlet(config):
         # Calico.
         devices.configure_global_kernel_config()
 
+        # Check the commands we require are present.
+        futils.check_command_deps()
+
         _log.info("Main greenlet: Configuration loaded, starting remaining "
                   "actors...")
 
-        monitored_items = []
         if config.PROM_METRICS_ENABLED:
             httpd = HTTPServer(("0.0.0.0", config.PROM_METRICS_PORT),
                                MetricsHandler)
@@ -94,25 +101,43 @@ def _main_greenlet(config):
                                         4,
                                         v4_filter_updater,
                                         v4_ipset_mgr)
-        v4_dispatch_chains = DispatchChains(config, 4, v4_filter_updater)
+        v4_ep_dispatch_chains = WorkloadDispatchChains(
+            config, 4, v4_filter_updater)
+        v4_if_dispatch_chains = HostEndpointDispatchChains(
+            config, 4, v4_filter_updater)
         v4_fip_manager = FloatingIPManager(config, 4, v4_nat_updater)
         v4_ep_manager = EndpointManager(config,
                                         IPV4,
                                         v4_filter_updater,
-                                        v4_dispatch_chains,
+                                        v4_ep_dispatch_chains,
+                                        v4_if_dispatch_chains,
                                         v4_rules_manager,
                                         v4_fip_manager,
                                         etcd_api.status_reporter)
 
         cleanup_updaters = [v4_filter_updater, v4_nat_updater]
         cleanup_ip_mgrs = [v4_ipset_mgr]
-        update_splitter_args = [v4_ipset_mgr,
-                                v4_rules_manager,
-                                v4_ep_manager,
-                                v4_masq_manager,
-                                v4_nat_updater]
+        managers = [v4_ipset_mgr,
+                    v4_rules_manager,
+                    v4_ep_manager,
+                    v4_masq_manager,
+                    v4_nat_updater]
 
-        v6_enabled = os.path.exists("/proc/sys/net/ipv6")
+        actors_to_start = [
+            hosts_ipset_v4,
+
+            v4_filter_updater,
+            v4_nat_updater,
+            v4_ipset_mgr,
+            v4_masq_manager,
+            v4_rules_manager,
+            v4_ep_dispatch_chains,
+            v4_if_dispatch_chains,
+            v4_ep_manager,
+            v4_fip_manager,
+        ]
+
+        v6_enabled, ipv6_reason = futils.ipv6_supported()
         if v6_enabled:
             v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
             v6_filter_updater = IptablesUpdater("filter", ip_version=6,
@@ -123,83 +148,59 @@ def _main_greenlet(config):
                                             6,
                                             v6_filter_updater,
                                             v6_ipset_mgr)
-            v6_dispatch_chains = DispatchChains(config, 6, v6_filter_updater)
+            v6_ep_dispatch_chains = WorkloadDispatchChains(
+                config, 6, v6_filter_updater)
+            v6_if_dispatch_chains = HostEndpointDispatchChains(
+                config, 6, v6_filter_updater)
             v6_fip_manager = FloatingIPManager(config, 6, v6_nat_updater)
             v6_ep_manager = EndpointManager(config,
                                             IPV6,
                                             v6_filter_updater,
-                                            v6_dispatch_chains,
+                                            v6_ep_dispatch_chains,
+                                            v6_if_dispatch_chains,
                                             v6_rules_manager,
                                             v6_fip_manager,
                                             etcd_api.status_reporter)
             cleanup_updaters.append(v6_filter_updater)
             cleanup_ip_mgrs.append(v6_ipset_mgr)
-            update_splitter_args += [v6_ipset_mgr,
-                                     v6_rules_manager,
-                                     v6_ep_manager,
-                                     v6_raw_updater,
-                                     v6_nat_updater]
-
-        cleanup_mgr = CleanupManager(config, cleanup_updaters, cleanup_ip_mgrs)
-        update_splitter_args.append(cleanup_mgr)
-        update_splitter = UpdateSplitter(update_splitter_args)
-        iface_watcher = InterfaceWatcher(update_splitter)
-
-        _log.info("Starting actors.")
-        hosts_ipset_v4.start()
-        cleanup_mgr.start()
-
-        v4_filter_updater.start()
-        v4_nat_updater.start()
-        v4_ipset_mgr.start()
-        v4_masq_manager.start()
-        v4_rules_manager.start()
-        v4_dispatch_chains.start()
-        v4_ep_manager.start()
-        v4_fip_manager.start()
-
-        if v6_enabled:
-            v6_raw_updater.start()
-            v6_filter_updater.start()
-            v6_ipset_mgr.start()
-            v6_nat_updater.start()
-            v6_rules_manager.start()
-            v6_dispatch_chains.start()
-            v6_ep_manager.start()
-            v6_fip_manager.start()
-
-        iface_watcher.start()
-
-        top_level_actors = [
-            hosts_ipset_v4,
-            cleanup_mgr,
-
-            v4_filter_updater,
-            v4_nat_updater,
-            v4_ipset_mgr,
-            v4_masq_manager,
-            v4_rules_manager,
-            v4_dispatch_chains,
-            v4_ep_manager,
-            v4_fip_manager,
-
-            iface_watcher,
-            etcd_api,
-        ]
-
-        if v6_enabled:
-            top_level_actors += [
+            managers += [v6_ipset_mgr,
+                         v6_rules_manager,
+                         v6_ep_manager,
+                         v6_raw_updater,
+                         v6_nat_updater]
+            actors_to_start += [
                 v6_raw_updater,
                 v6_filter_updater,
                 v6_nat_updater,
                 v6_ipset_mgr,
                 v6_rules_manager,
-                v6_dispatch_chains,
+                v6_ep_dispatch_chains,
+                v6_if_dispatch_chains,
                 v6_ep_manager,
                 v6_fip_manager,
             ]
+        else:
+            # Keep the linter happy.
+            _log.warn("IPv6 support disabled: %s.", ipv6_reason)
+            v6_filter_updater = None
+            v6_nat_updater = None
+            v6_raw_updater = None
+            v6_if_dispatch_chains = None
 
-        monitored_items += [actor.greenlet for actor in top_level_actors]
+        cleanup_mgr = CleanupManager(config, cleanup_updaters, cleanup_ip_mgrs)
+        managers.append(cleanup_mgr)
+        update_splitter = UpdateSplitter(managers)
+        iface_watcher = InterfaceWatcher(update_splitter)
+        actors_to_start += [
+            cleanup_mgr,
+            iface_watcher,
+        ]
+
+        _log.info("Starting actors.")
+        for actor in actors_to_start:
+            actor.start()
+
+        monitored_items += [actor.greenlet for actor in actors_to_start]
 
         # Try to ensure that the nf_conntrack_netlink kernel module is present.
         # This works around an issue[1] where the first call to the "conntrack"
@@ -209,9 +210,15 @@ def _main_greenlet(config):
 
         # Install the global rules before we start polling for updates.
         _log.info("Installing global rules.")
+        # Dispatch chain needs to make its configuration before we insert the
+        # top-level chains.
+        v4_if_dispatch_chains.configure_iptables(async=False)
         install_global_rules(config, v4_filter_updater, v4_nat_updater,
                              ip_version=4)
         if v6_enabled:
+            # Dispatch chain needs to make its configuration before we insert
+            # the top-level chains.
+            v6_if_dispatch_chains.configure_iptables(async=False)
             install_global_rules(config, v6_filter_updater, v6_nat_updater,
                                  ip_version=6, raw_updater=v6_raw_updater)
 
@@ -224,7 +231,7 @@ def _main_greenlet(config):
 
         # Register a SIG_USR handler to trigger a diags dump.
         def dump_top_level_actors(log):
-            for a in top_level_actors:
+            for a in actors_to_start:
                 # The output will include queue length and the like.
                 log.info("%s", a)
         futils.register_diags("Top-level actors", dump_top_level_actors)

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +26,7 @@ import sys
 
 import calico.felix.test.stub_etcd as stub_etcd
 import calico.felix.felix as felix
+from calico.felix import futils
 from calico.felix.test.base import BaseTestCase, load_config
 
 # Logger
@@ -58,24 +60,34 @@ class TestBasic(BaseTestCase):
                 return_value=False, autospec=True)
     @mock.patch("calico.felix.devices.interface_exists",
                 return_value=False, autospec=True)
+    @mock.patch("calico.felix.futils.Popen", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
     @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
+    @mock.patch("calico.felix.felix.WorkloadDispatchChains", autospec=True)
+    @mock.patch("calico.felix.felix.HostEndpointDispatchChains", autospec=True)
     @mock.patch("calico.felix.felix.UpdateSplitter", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
     def test_main_greenlet(self, m_iwait, m_MasqueradeManager,
                            m_IptablesUpdater, m_UpdateSplitter,
+                           m_host_chains, m_wl_chains,
                            m_start, m_load,
-                           m_ipset_4, m_check_call, m_iface_exists,
-                           m_iface_up, m_configure_global_kernel_config,
+                           m_ipset_4,
+                           m_check_output, m_check_call, m_popen,
+                           m_iface_exists, m_iface_up,
+                           m_configure_global_kernel_config,
                            m_list_interface_ips, m_path_exists, m_conntrack,
                            m_http_server):
+        m_popen.return_value.communicate.return_value = "", ""
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
+        m_host_chains.return_value.greenlet = mock.Mock()
+        m_wl_chains.return_value.greenlet = mock.Mock()
         m_list_interface_ips.return_value = set()
         env_dict = {
             "FELIX_ETCDADDR": "localhost:4001",
@@ -111,24 +123,33 @@ class TestBasic(BaseTestCase):
     @mock.patch("calico.felix.devices.list_interface_ips", autospec=True)
     @mock.patch("calico.felix.devices.configure_global_kernel_config",
                 autospec=True)
+    @mock.patch("calico.felix.futils.Popen", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
+    @mock.patch("calico.felix.futils.check_output", autospec=True)
     @mock.patch("calico.felix.frules.HOSTS_IPSET_V4", autospec=True)
     @mock.patch("calico.felix.fetcd.EtcdAPI.load_config")
     @mock.patch("gevent.Greenlet.start", autospec=True)
+    @mock.patch("calico.felix.felix.WorkloadDispatchChains", autospec=True)
+    @mock.patch("calico.felix.felix.HostEndpointDispatchChains", autospec=True)
     @mock.patch("calico.felix.felix.UpdateSplitter", autospec=True)
     @mock.patch("calico.felix.felix.IptablesUpdater", autospec=True)
     @mock.patch("calico.felix.felix.MasqueradeManager", autospec=True)
     @mock.patch("gevent.iwait", autospec=True, side_effect=TestException())
     def test_main_greenlet_no_ipv6(self, m_iwait, m_MasqueradeManager,
                                    m_IptablesUpdater, m_UpdateSplitter,
+                                   m_host_chains, m_wl_chains,
                                    m_start, m_load,
-                                   m_ipset_4, m_check_call,
+                                   m_ipset_4,
+                                   m_check_output, m_check_call, m_popen,
                                    m_configure_global_kernel_config,
                                    m_list_interface_ips, m_path_exists,
                                    m_install_globals, m_conntrack):
+        m_popen.return_value.communicate.return_value = "", ""
         m_IptablesUpdater.return_value.greenlet = mock.Mock()
         m_MasqueradeManager.return_value.greenlet = mock.Mock()
         m_UpdateSplitter.return_value.greenlet = mock.Mock()
+        m_host_chains.return_value.greenlet = mock.Mock()
+        m_wl_chains.return_value.greenlet = mock.Mock()
         m_list_interface_ips.return_value = set()
         env_dict = {
             "FELIX_ETCDADDR": "localhost:4001",
@@ -155,3 +176,5 @@ class TestBasic(BaseTestCase):
                                                   ip_version=4)
         m_conntrack.assert_called_once_with()
 
+        # Cover the diags dump function.
+        futils.dump_diags()

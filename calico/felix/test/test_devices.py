@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -113,8 +114,7 @@ class TestDevices(unittest.TestCase):
             futils.check_call.assert_any_call(['arp', '-s', ip, mac, '-i', tap])
             futils.check_call.assert_called_with(["ip", "route", "replace", ip, "dev", tap])
 
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ip is provided"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.add_route(type, ip, tap, None)
 
         type = futils.IPV6
@@ -123,8 +123,7 @@ class TestDevices(unittest.TestCase):
             devices.add_route(type, ip, tap, mac)
             futils.check_call.assert_called_with(["ip", "-6", "route", "replace", ip, "dev", tap])
 
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ip is provided"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.add_route(type, ip, tap, None)
 
     def test_del_route(self):
@@ -144,14 +143,11 @@ class TestDevices(unittest.TestCase):
             devices.del_route(type, ip, tap)
             futils.check_call.assert_called_once_with(["ip", "-6", "route", "del", ip, "dev", tap])
 
-    def test_set_routes_mac_required(self):
+    def test_set_routes_mac_not_set(self):
         type = futils.IPV4
         ips = set(["1.2.3.4", "2.3.4.5"])
         interface = "tapabcdef"
-        mac = stub_utils.get_mac()
-        with self.assertRaisesRegexp(ValueError,
-                                     "mac must be supplied if ips is not "
-                                     "empty"):
+        with mock.patch("calico.felix.futils.check_call") as m_check_call:
             devices.set_routes(type, ips, interface)
 
     def test_set_routes_arp_ipv4_only(self):
@@ -313,6 +309,71 @@ class TestDevices(unittest.TestCase):
             self.assertEqual(ips, set([IPAddress("5678::"),
                                        IPAddress("abcd::"),
                                        IPAddress("::ffff:c000:0280")]))
+
+    def test_list_ips_by_iface_v4_mainline(self):
+        retval = futils.CommandOutput(
+            "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default \n"
+            "    inet 127.0.0.1/8 scope host lo\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000\n"
+            "    inet 192.168.171.128/24 brd 192.168.171.255 scope global eth0\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000\n"
+            "    inet 172.16.171.5/24 brd 172.16.171.255 scope global eth1\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "5: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default \n"
+            "    inet 172.17.0.1/16 scope global docker0\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "6: lxcbr0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default \n"
+            "    inet 10.0.3.1/24 brd 10.0.3.255 scope global lxcbr0\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "    inet 10.0.3.2/24 brd 10.0.3.255 scope global lxcbr0\n"
+            "       valid_lft forever preferred_lft forever\n",
+            ""
+        )
+
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retval) as m_check_call:
+            ips = devices.list_ips_by_iface(futils.IPV4)
+        self.assertEqual(
+            ips,
+            {
+                "lo": {IPAddress("127.0.0.1")},
+                "eth0": {IPAddress("192.168.171.128")},
+                "eth1": {IPAddress("172.16.171.5")},
+                "docker0": {IPAddress("172.17.0.1")},
+                "lxcbr0": {IPAddress("10.0.3.1"), IPAddress("10.0.3.2")},
+            }
+        )
+        
+    def test_list_ips_by_iface_v6_mainline(self):
+        retval = futils.CommandOutput(
+            "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 \n"
+            "    inet6 ::1/128 scope host \n"
+            "       valid_lft forever preferred_lft forever\n"
+            "2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qlen 1000\n"
+            "    inet6 fe80::20c:29ff:fecb:c819/64 scope link \n"
+            "       valid_lft forever preferred_lft forever\n"
+            "4: mgmt0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 \n"
+            "    inet6 fe80::1/64 scope link \n"
+            "       valid_lft forever preferred_lft forever\n"
+            "    inet6 fe80::8872:90ff:fec4:f79e/64 scope link \n"
+            "       valid_lft forever preferred_lft forever\n",
+            ""
+        )
+
+        with mock.patch('calico.felix.futils.check_call',
+                        return_value=retval) as m_check_call:
+            ips = devices.list_ips_by_iface(futils.IPV6)
+        self.assertEqual(
+            ips,
+            {
+                "lo": {IPAddress("::1")},
+                "eth0": {IPAddress("fe80::20c:29ff:fecb:c819")},
+                "mgmt0": {IPAddress("fe80::1"),
+                          IPAddress("fe80::8872:90ff:fec4:f79e")},
+            }
+        )
 
     def test_set_interface_ips(self):
         with mock.patch('calico.felix.futils.check_call',

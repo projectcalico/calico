@@ -1,4 +1,5 @@
-.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+.. # Copyright (c) 2016 Tigera, Inc. All rights reserved.
+   # Copyright (c) Metaswitch Networks 2015. All rights reserved.
    #
    #    Licensed under the Apache License, Version 2.0 (the "License"); you may
    #    not use this file except in compliance with the License. You may obtain
@@ -25,5 +26,7 @@ several options for how you can easily do that, with different systems.
 
    openstack
    docker
+   pyi-bare-metal-install
+   bare-metal
    next-steps
    support

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright (c) 2015 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -244,8 +245,9 @@ class Actor(object):
         actor_storage.class_name = self.__class__.__name__
         actor_storage.name = self.name
         actor_storage.msg_id = None
-
+        _log.info("Main loop for actor %s started.", self)
         try:
+            self._on_actor_started()
             while True:
                 self._step()
         except:
@@ -366,6 +368,15 @@ class Actor(object):
         if num_splits > 0:
             _log.warn("Split batches complete. Number of splits: %s",
                       num_splits)
+
+    def _on_actor_started(self):
+        """Called on the actor's thread after the actor is started.
+
+        Called before any messages are processed.
+
+        Intended to be overridden, this implementation does nothing.
+        """
+        pass
 
     @staticmethod
     def __split_batch(current_batch, remaining_batches):

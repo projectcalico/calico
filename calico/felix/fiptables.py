@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,6 +62,21 @@ class IptablesUpdater(Actor):
     However, this class tries to be robust against concurrent access
     from outside the process by detecting and retrying such errors.
 
+    iptables manipulation guidelines
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Since any update to iptables is implemented by the iptables commands
+    as a read-modify-write of the entire table, we try to batch (see below)
+    as many updates into one call to iptables as possible.
+
+    Rather than using individual iptables commands, we make use of
+    iptables-restore to rewrite entire chains (or multiple chains) as a
+    single atomic operation.
+
+    This also allows us to avoid reading individual rules from iptables,
+    which is a very tricky thing to get right (because iptables internally
+    normalises rules, they don't always read back as-written).
+
     Batching support
     ~~~~~~~~~~~~~~~~
 
@@ -69,7 +85,9 @@ class IptablesUpdater(Actor):
     issuing single iptables requests.
 
     If a request fails, it does a binary chop using the SplitBatchAndRetry
-    mechanism to report the error to the correct request.
+    mechanism to report the error to the correct request.  To allow a batch
+    to be retried, the per-batch state is tracked using a dedicated
+    _Transaction object, which can simply be thrown away if the batch fails.
 
     Dependency tracking
     ~~~~~~~~~~~~~~~~~~~
@@ -83,8 +101,10 @@ class IptablesUpdater(Actor):
       that appear in its --jump and --goto targets).
 
     * Any chains that are required but not present are created as "stub"
-      chains, which drop all traffic. They are marked as such in the
-      iptables rules with an iptables comment.
+      chains, which (by default) drop all traffic. They are marked as such
+      in the iptables rules with an iptables comment.  To facilitate graceful
+      restart after a failure, the default behaviour for a missing chain can
+      be pre-configured via set_missing_chain_override().
 
     * When a required chain is later explicitly created, the stub chain is
       replaced with the required contents of the chain.
@@ -133,6 +153,9 @@ class IptablesUpdater(Actor):
         """Special-case rule fragments that we've explicitly removed.
         We need to cache this to defend against other processes accidentally
         reverting our removal."""
+        self._missing_chain_overrides = {}
+        """Overrides for chain contents when we need to program a chain but
+        it's missing."""
 
         self._required_chains = defaultdict(set)
         """Map from chain name to the set of names of chains that it
@@ -184,6 +207,8 @@ class IptablesUpdater(Actor):
 
         Populates self._chains_in_dataplane.
         """
+        _log.debug("Loading chain names for iptables table %s, using "
+                   "command %s", self.table, self._save_cmd)
         self._stats.increment("Refreshed chain list")
         raw_ipt_output = subprocess.check_output([self._save_cmd, "--table",
                                                   self.table])
@@ -199,7 +224,6 @@ class IptablesUpdater(Actor):
         """
         raw_ipt_output = subprocess.check_output(
             [self._iptables_cmd,
-             "--wait",  # Wait for the xtables lock.
              "--list",  # Action to perform.
              "--numeric",  # Avoid DNS lookups.
              "--table", self.table])
@@ -233,6 +257,27 @@ class IptablesUpdater(Actor):
             self._txn.store_rewrite_chain(chain, updates, deps)
         if callback:
             self._completion_callbacks.append(callback)
+
+    @actor_message()
+    def set_missing_chain_override(self, chain_name, fragments):
+        """Sets the contents to program if the given chain is required but
+        it hasn't yet been written.
+
+        This is useful for graceful restart at start of day, where we want
+        to leave a chain in place for as long as possible, but if it's
+        missing, we need it to be default-RETURN.
+
+        Must be called before the chain is used as a dependency.
+
+        :param chain_name: name of the chain.
+        :param fragments: list of iptables fragments, as used by
+               rewrite_chains().
+        """
+        _log.info("Storing missing chain override for %s", chain_name)
+        assert fragments is not None, "Removal of overrides not implemented"
+        assert chain_name not in self._requiring_chains, \
+            "Missing chain override set after chain in use"
+        self._missing_chain_overrides[chain_name] = fragments
 
     # Does direct table manipulation, forbid batching with other messages.
     @actor_message(needs_own_batch=True)
@@ -634,14 +679,14 @@ class IptablesUpdater(Actor):
                 #   that we now know the state of that chain and we should not
                 #   wait for the end of graceful restart to clean it up.
                 modified_chains.add(chain)
-                input_lines.extend(self._stub_drop_rules(chain))
+                input_lines.extend(self._missing_chain_stub_rules(chain))
 
         # Generate rules to stub out chains that we're about to delete, just
         # in case the delete fails later on.  Stubbing it out also stops it
         # from referencing other chains, accidentally keeping them alive.
         for chain in self._txn.chains_to_delete:
             modified_chains.add(chain)
-            input_lines.extend(self._stub_drop_rules(chain))
+            input_lines.extend(self._missing_chain_stub_rules(chain))
 
         # Now add the actual chain updates.
         for chain, chain_updates in self._txn.updates.iteritems():
@@ -688,7 +733,7 @@ class IptablesUpdater(Actor):
         for chain_name in chains:
             # Stub the chain
             input_lines.append(":%s -" % chain_name)
-            input_lines.extend(self._stub_drop_rules(chain_name))
+            input_lines.extend(self._missing_chain_stub_rules(chain_name))
             found_chain_to_stub = True
         input_lines.append("COMMIT")
         if found_chain_to_stub:
@@ -758,17 +803,22 @@ class IptablesUpdater(Actor):
                 self._stats.increment("iptables success")
                 success = True
 
-    def _stub_drop_rules(self, chain):
+    def _missing_chain_stub_rules(self, chain_name):
         """
         :return: List of rule fragments to replace the given chain with a
             single drop rule.
         """
-        fragment = ["--flush %s" % chain]
-        fragment.extend(self.iptables_generator.drop_rules(
-            self.ip_version,
-            chain,
-            None,
-            'WARNING Missing chain'))
+        if chain_name in self._missing_chain_overrides:
+            _log.debug("Generating missing chain %s; override in place",
+                       chain_name)
+            fragment = self._missing_chain_overrides[chain_name]
+        else:
+            fragment = ["--flush %s" % chain_name]
+            fragment.extend(self.iptables_generator.drop_rules(
+                self.ip_version,
+                chain_name,
+                None,
+                'WARNING Missing chain'))
         return fragment
 
 
@@ -1005,7 +1055,8 @@ def _parse_ipt_restore_error(input_lines, err):
     :return tuple[bool,str]: tuple, the first (bool) element indicates
         whether the error is retryable; the second is a detail message.
     """
-    match = re.search(r"line (\d+) failed", err)
+    match = (re.search(r"line (\d+) failed", err) or
+             re.search(r"Error occurred at line: (\d+)", err))
     if match:
         # Have a line number, work out if this was a commit
         # failure, which is caused by concurrent access and is
@@ -1017,7 +1068,7 @@ def _parse_ipt_restore_error(input_lines, err):
         if offending_line.strip() == "COMMIT":
             return True, "COMMIT failed; likely concurrent access."
         else:
-            return False, "Line %s failed: %s" % (line_number, offending_line)
+            return False, "Line %s failed: %r" % (line_number, offending_line)
     else:
         return False, "ip(6)tables-restore failed with output: %s" % err
 

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,16 +24,14 @@ import logging
 import socket
 from unittest import TestCase
 
-import sys
 from mock import Mock, call, patch
+
+from calico.etcddriver.__main__ import main
 
 _log = logging.getLogger(__name__)
 
 
 class TestMain(TestCase):
-    def setUp(self):
-        assert "calico.etcddriver.__main__" not in sys.modules
-
     @patch("os.getppid", autospec=True)
     @patch("socket.socket", spec=socket.socket)  # mock bug prevents autospec
     @patch("calico.common.default_logging", autospec=True)
@@ -44,7 +43,7 @@ class TestMain(TestCase):
             False,
             True
         ])
-        self._import_main()
+        main()
         self.assertEqual(m_driver.mock_calls,
                          [call.start(),
                           call.join(timeout=1),
@@ -61,7 +60,7 @@ class TestMain(TestCase):
         m_ppid.side_effect = iter([123, 123, 1])
         m_driver = m_driver_cls.return_value
         m_driver.join.return_value = False
-        self._import_main()
+        main()
         self.assertEqual(m_driver.mock_calls,
                          [call.start(),
                           call.join(timeout=1),
@@ -77,14 +76,5 @@ class TestMain(TestCase):
         m_ppid.side_effect = iter([123, 123, 1])
         m_sck = m_socket.return_value
         m_sck.connect.side_effect = RuntimeError()
-        self.assertRaises(RuntimeError, self._import_main)
+        self.assertRaises(RuntimeError, main)
 
-    def _import_main(self):
-        import calico.etcddriver.__main__ as main
-        _ = main  # Keep linter happy
-
-    def tearDown(self):
-        try:
-            del sys.modules["calico.etcddriver.__main__"]
-        except KeyError:
-            pass

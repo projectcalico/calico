@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -295,10 +296,8 @@ class TestConfig(unittest.TestCase):
             load_config("felix_missing.cfg", host_dict=cfg_dict)
 
     def test_no_iface_prefix(self):
-        cfg_dict = {}
-        with self.assertRaisesRegexp(ConfigException,
-                        "Missing undefaulted value.*InterfacePrefix"):
-            load_config("felix_missing.cfg", host_dict=cfg_dict)
+        config = load_config("felix_missing.cfg", host_dict={})
+        self.assertEqual(config.IFACE_PREFIX, "cali")
 
     def test_file_sections(self):
         """
@@ -546,6 +545,16 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(config.MAX_IPSET_SIZE, 2**20)
 
+    def test_host_if_poll_defaulted(self):
+        """
+        Test that the poll interval is defaulted if out-of-range
+        """
+        cfg_dict = {"InterfacePrefix": "blah",
+                    "HostInterfacePollInterval": "-1"}
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+
+        self.assertEqual(config.HOST_IF_POLL_INTERVAL_SECS, 10)
+
     def test_prometheus_port_valid(self):
         cfg_dict = {"InterfacePrefix": "blah",
                     "PrometheusMetricsEnabled": True,
@@ -575,4 +584,53 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.PROM_METRICS_PORT, 9091)
         self.assertEqual(config.PROM_METRICS_DRIVER_PORT, 9092)
         self.assertEqual(config.PROM_METRICS_ENABLED, False)
+
+    def test_failsafe_ports_defaults(self):
+        config = load_config("felix_missing.cfg", host_dict=None)
+        self.assertEqual(config.FAILSAFE_INBOUND_PORTS, [22])
+        self.assertEqual(config.FAILSAFE_OUTBOUND_PORTS,
+                         [2379, 2380, 4001, 7001])
+
+    def test_failsafe_ports(self):
+        cfg_dict = {
+            "FailsafeInboundHostPorts": "100 , 200",
+            "FailsafeOutboundHostPorts": "300",
+        }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.assertEqual(config.FAILSAFE_INBOUND_PORTS, [100, 200])
+        self.assertEqual(config.FAILSAFE_OUTBOUND_PORTS, [300])
+
+    def test_failsafe_ports_empty(self):
+        cfg_dict = {
+            "FailsafeInboundHostPorts": "",
+            "FailsafeOutboundHostPorts": "400,500",
+        }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.assertEqual(config.FAILSAFE_INBOUND_PORTS, [])
+        self.assertEqual(config.FAILSAFE_OUTBOUND_PORTS, [400, 500])
+
+    def test_failsafe_ports_bad(self):
+        cfg_dict = {
+            "FailsafeInboundHostPorts": "foo",
+        }
+        self.assertRaises(ConfigException, load_config,
+                          "felix_missing.cfg", host_dict=cfg_dict)
+        cfg_dict = {
+            "FailsafeOutboundHostPorts": "foo",
+        }
+        self.assertRaises(ConfigException, load_config,
+                          "felix_missing.cfg", host_dict=cfg_dict)
+
+    def test_failsafe_ports_out_of_range(self):
+        cfg_dict = {
+            "FailsafeInboundHostPorts": "0",
+        }
+        self.assertRaises(ConfigException, load_config,
+                          "felix_missing.cfg", host_dict=cfg_dict)
+        cfg_dict = {
+            "FailsafeOutboundHostPorts": "65536",
+        }
+        self.assertRaises(ConfigException, load_config,
+                          "felix_missing.cfg", host_dict=cfg_dict)
+
 

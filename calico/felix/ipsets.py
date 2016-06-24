@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright (c) 2015 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -24,6 +25,7 @@ from collections import defaultdict
 from itertools import chain
 import logging
 
+from calico.datamodel_v1 import HostEndpointId, WloadEndpointId
 from calico.felix import futils
 from calico.calcollections import SetDelta
 from calico.felix.futils import IPV4, IPV6, FailedSystemCall
@@ -64,7 +66,7 @@ class IpsetManager(ReferenceManager):
         # State.
         # Tag IDs indexed by profile IDs
         self.tags_by_prof_id = {}
-        # EndpointData "structs" indexed by EndpointId.
+        # EndpointData "structs" indexed by WloadEndpointId.
         self.endpoint_data_by_ep_id = {}
 
         # Main index.  Tracks which IPs are currently in each tag.
@@ -73,7 +75,7 @@ class IpsetManager(ReferenceManager):
         self._add_mapping = self.tag_membership_index.add_mapping
         self._remove_mapping = self.tag_membership_index.remove_mapping
 
-        # Set of EndpointId objects referenced by profile IDs.
+        # Set of WloadEndpointId objects referenced by profile IDs.
         self.endpoint_ids_by_profile_id = defaultdict(set)
 
         # LabelNode index, used to cross-reference endpoint labels against
@@ -162,6 +164,12 @@ class IpsetManager(ReferenceManager):
     def nets_key(self):
         nets = "ipv4_nets" if self.ip_type == IPV4 else "ipv6_nets"
         return nets
+
+    @property
+    def expected_ips_key(self):
+        key = ("expected_ipv4_addrs" if self.ip_type == IPV4
+               else "expected_ipv6_addrs")
+        return key
 
     @actor_message()
     def on_datamodel_in_sync(self):
@@ -259,34 +267,62 @@ class IpsetManager(ReferenceManager):
         self._process_started_label_matches()
 
     @actor_message()
+    def on_host_ep_update(self, combined_id, endpoint):
+        """
+        Update tag/selector memberships and indices with the new interface
+        data dict.
+
+        :param HostEndpointId combined_id: ID of the host endpoint.
+        :param dict|NoneType endpoint: Either a dict containing interface
+            information or None to indicate deletion.
+        """
+        # For our purposes, host endpoints are indexed as endpoints.
+        assert isinstance(combined_id, HostEndpointId)
+        self._on_endpoint_or_host_ep_update(combined_id, endpoint)
+
+    @actor_message()
     def on_endpoint_update(self, endpoint_id, endpoint):
         """
-        Update tag memberships and indices with the new endpoint dict.
+        Update tag/selector memberships and indices with the new endpoint dict.
 
-        :param EndpointId endpoint_id: ID of the endpoint.
+        :param WloadEndpointId endpoint_id: ID of the endpoint.
         :param dict|NoneType endpoint: Either a dict containing endpoint
             information or None to indicate deletion.
-
         """
-        endpoint_data = self._endpoint_data_from_dict(endpoint_id, endpoint)
-        if endpoint and endpoint_data != EMPTY_ENDPOINT_DATA:
+        assert isinstance(endpoint_id, WloadEndpointId)
+        self._on_endpoint_or_host_ep_update(endpoint_id, endpoint)
+
+    def _on_endpoint_or_host_ep_update(self, combined_id, data):
+        """
+        Update tag/selector memberships and indices with the new
+        host ep/endpoint dict.
+
+        We care about the labels, profiles and IP addresses.  For host
+        endpoints, we include the expected_ipvX_addrs in the IP addresses.
+
+        :param HostEndpointId|WloadEndpointId combined_id: ID of the endpoint.
+        :param dict|NoneType data: Either a dict containing endpoint
+            information or None to indicate deletion.
+        """
+        endpoint_data = self._endpoint_data_from_dict(combined_id, data)
+        if data and endpoint_data != EMPTY_ENDPOINT_DATA:
             # This endpoint makes a contribution to the IP addresses, we need
             # to index its labels.
-            labels = endpoint.get("labels", {})
-            prof_ids = endpoint.get("profile_ids", [])
+            labels = data.get("labels", {})
+            prof_ids = data.get("profile_ids", [])
         else:
             labels = None
             prof_ids = None
         # Remove the endpoint from the label index so that we clean up its
         # old IP addresses.
-        self._label_inherit_idx.on_item_update(endpoint_id, None, None)
+        self._label_inherit_idx.on_item_update(combined_id, None, None)
         self._process_stopped_label_matches()
         # Now update the main cache of endpoint data.
-        self._on_endpoint_data_update(endpoint_id, endpoint_data)
+        self._on_endpoint_data_update(combined_id, endpoint_data)
         # And then, if not doing a deletion, add the endpoint back into the
         # label index.
         if labels is not None:
-            self._label_inherit_idx.on_item_update(endpoint_id, labels,
+            self._label_inherit_idx.on_item_update(combined_id, labels,
                                                    prof_ids)
             self._process_started_label_matches()
 
@@ -331,12 +367,14 @@ class IpsetManager(ReferenceManager):
         """
         if endpoint_dict is not None:
             profile_ids = endpoint_dict.get("profile_ids", [])
-            nets_list = endpoint_dict.get(self.nets_key, [])
-            if nets_list:
+            nets = endpoint_dict.get(self.nets_key, [])
+            ips = map(futils.net_to_ip, nets)
+            exp_ips = endpoint_dict.get(self.expected_ips_key, [])
+
+            if ips or exp_ips:
                 # Optimization: only return an object if this endpoint makes
                 # some contribution to the IP addresses.
-                ips = map(futils.net_to_ip, nets_list)
-                return EndpointData(profile_ids, ips)
+                return EndpointData(profile_ids, ips + exp_ips)
             else:
                 _log.debug("Endpoint makes no contribution, "
                            "treating as missing: %s", endpoint_id)
@@ -470,7 +508,7 @@ class TagMembershipIndex(object):
         # ip_owners_by_tag[tag][ip] = set([(profile_id, combined_id),
         #                                  (profile_id, combined_id2), ...]) |
         #                             (profile_id, combined_id)
-        # Here "combined_id" is an EndpointId object.
+        # Here "combined_id" is an WloadEndpointId object.
         self.ip_owners_by_tag = defaultdict(lambda: defaultdict(lambda: None))
         # IPs added and removed since the last reset.
         self.ips_added_by_tag = defaultdict(set)

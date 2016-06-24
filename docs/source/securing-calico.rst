@@ -1,4 +1,5 @@
-.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+.. # Copyright (c) 2016 Tigera, Inc. All rights reserved.
+   # Copyright (c) Metaswitch Networks 2015. All rights reserved.
    #
    #    Licensed under the Apache License, Version 2.0 (the "License"); you may
    #    not use this file except in compliance with the License. You may obtain
@@ -20,7 +21,7 @@ What Calico does and does not provide
 
 Currently, Calico implements security policy that ensures that:
 
-- an endpoint cannot spoof its source address
+- a workload endpoint cannot spoof its source address
 - all traffic going to an endpoint must be accepted by the inbound policy
   attached to that endpoint
 - all traffic leaving an endpoint must be accepted by the outbound policy
@@ -43,26 +44,27 @@ management challenge to use that to enforce *network* policy.
 How Calico uses iptables
 ------------------------
 
-Calico needs to add its security policy rules to the "INPUT" and "FORWARD"
-chains of the iptables "filter" table.  To minimise the impact on the
+Calico needs to add its security policy rules to the "INPUT", "OUTPUT" and
+"FORWARD" chains of the iptables "filter" table.  To minimise the impact on the
 top-level chains, Calico inserts a single rule at the start of each of the
 kernel chains, which jumps to Calico's own chain.
 
 The INPUT chain is traversed by packets which are destined for the host itself.
-Calico's INPUT rules only apply to packets arriving from Calico-managed
-endpoints; other packets are passed through to the remainder of the INPUT
-chain.
+Calico applies workloads' outbound policy in the input chain as well as the
+policy for host endpoints.
 
-In the INPUT chain, Calico whitelists some essential bootstrapping traffic,
-such as DHCP, DNS and the OpenStack metadata traffic.  Other traffic from
-local endpoints passes through the outbound rules for the endpoint.  Then,
-it hits a configurable rule that either drops the traffic or allows it to
-continue to the remainder of the INPUT chain.
+For workload traffic hitting the INPUT chain, Calico whitelists some essential
+bootstrapping traffic, such as DHCP, DNS and the OpenStack metadata traffic.
+Other traffic from local workload endpoints passes through the outbound rules
+for the endpoint.  Then, it hits a configurable rule that either drops the
+traffic or allows it to continue to the remainder of the INPUT chain.
 
 Presently, the Calico FORWARD chain is not similarly configurable.  All traffic
 that is heading to or from a local endpoint is processed through the relevant
 security policy.  Then, if the policy accepts the traffic, it is accepted.
 If the policy rejects the traffic it is immediately dropped.
+
+Calico installs host endpoint outbound rules in the OUTPUT chain.
 
 To prevent IPv6-enabled endpoints from spoofing their IP addresses, Felix
 inserts a reverse path filtering rule in the iptables "raw" PREROUTING chain.
@@ -87,6 +89,9 @@ access to its REST interface.  We plan to use the RBAC feature of an upcoming
 etcd release to improve this dramatically.  However, until that work is done,
 we recommend blocking access to etcd from all but the IP range(s) used by the
 compute nodes and plugin.
+
+Calico's host endpoint support (see: :doc:`bare-metal`_) can be used to
+enforce such policy.
 
 .. _usingtlswithetcd:
 
@@ -200,3 +205,13 @@ To enable TLS support:
   * Restart Felix.
 
 .. _`etcd security guide`: https://coreos.com/etcd/docs/latest/security.html
+
+Host endpoint failsafe rules
+----------------------------
+
+By default for host endpoints (in order to avoid breaking all connectivity to
+a host) Calico whitelists ssh to and etcd traffic from the host running Felix.
+The filter rules are based entirely on ports so they are fairly broad.
+
+This behaviour can be configured or disabled via configuration parameters; see
+:doc:`configuration`.

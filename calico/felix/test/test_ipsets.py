@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,8 +28,8 @@ from calico.felix.selectors import parse_selector, SelectorExpression
 from mock import *
 from netaddr import IPAddress
 
-from calico.datamodel_v1 import EndpointId
-from calico.felix.futils import IPV4, FailedSystemCall, CommandOutput
+from calico.datamodel_v1 import WloadEndpointId, HostEndpointId
+from calico.felix.futils import IPV4, FailedSystemCall, CommandOutput, IPV6
 from calico.felix.ipsets import (EndpointData, IpsetManager, IpsetActor,
                                  RefCountedIpsetActor, EMPTY_ENDPOINT_DATA, Ipset,
                                  list_ipset_names)
@@ -41,7 +42,7 @@ _log = logging.getLogger(__name__)
 
 patch.object = getattr(patch, "object")  # Keep PyCharm linter happy.
 
-EP_ID_1_1 = EndpointId("host1", "orch", "wl1_1", "ep1_1")
+EP_ID_1_1 = WloadEndpointId("host1", "orch", "wl1_1", "ep1_1")
 EP_1_1 = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.1/32"],
@@ -61,6 +62,25 @@ EP_1_1_LABELS_NEW_IP = {
     }
 }
 EP_DATA_1_1 = EndpointData(["prof1", "prof2"], ["10.0.0.1"])
+
+HOST_EP_ID_1_1 = HostEndpointId("host1", "ep1_1")
+HOST_EP_1_1 = {
+    "profile_ids": ["prof1", "prof2"],
+    "expected_ipv4_addrs": ["10.0.0.1"],
+}
+HOST_EP_1_1_NO_IPS = {
+    "profile_ids": ["prof1", "prof2"],
+    "name": "eth0"
+}
+HOST_EP_1_1_LABELS = {
+    "profile_ids": ["prof1", "prof2"],
+    "expected_ipv4_addrs": ["10.0.0.1"],
+    "labels": {
+        "a": "a1",
+    }
+}
+HOST_EP_DATA_1_1 = EndpointData(["prof1", "prof2"], ["10.0.0.1"])
+
 EP_1_1_NEW_IP = {
     "profile_ids": ["prof1", "prof2"],
     "ipv4_nets": ["10.0.0.2/32", "10.0.0.3/32"],
@@ -69,8 +89,8 @@ EP_1_1_NEW_PROF_IP = {
     "profile_ids": ["prof3"],
     "ipv4_nets": ["10.0.0.3/32"],
 }
-EP_ID_1_2 = EndpointId("host1", "orch", "wl1_2", "ep1_2")
-EP_ID_2_1 = EndpointId("host2", "orch", "wl2_1", "ep2_1")
+EP_ID_1_2 = WloadEndpointId("host1", "orch", "wl1_2", "ep1_2")
+EP_ID_2_1 = WloadEndpointId("host2", "orch", "wl2_1", "ep2_1")
 EP_2_1 = {
     "profile_ids": ["prof1"],
     "ipv4_nets": ["10.0.0.1/32"],
@@ -226,6 +246,50 @@ class TestIpsetManager(BaseTestCase):
         self.step_mgr()
         self.assert_index_empty()
 
+    def test_host_endpoint_expected_ips_indexed(self):
+        """Check host endpoint expected IPs are added to index."""
+        # Send in the messages.  this selector should match even though there
+        # are no labels in the endpoint.
+        selector = parse_selector("all()")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.on_host_ep_update(HOST_EP_ID_1_1, HOST_EP_1_1, async=True)
+        # Let the actor process them.
+        self.step_mgr()
+
+        # Check the indexes now contain the IP.
+        self.assertEqual(self.mgr.endpoint_data_by_ep_id, {
+            HOST_EP_ID_1_1: HOST_EP_DATA_1_1,
+        })
+        self.assertEqual(self.mgr.tag_membership_index.ip_owners_by_tag, {
+            selector: {
+                "10.0.0.1": ("dummy", HOST_EP_ID_1_1),
+            }
+        })
+
+        # Undo our messages to check that the index is correctly updated.
+        self.mgr.decref(selector, async=True)
+        self.mgr.on_host_ep_update(HOST_EP_ID_1_1, None, async=True)
+        self.step_mgr()
+        self.assert_index_empty()
+
+    def test_host_endpoint_no_ips(self):
+        """Check host endpoint expected IPs are added to index."""
+        # Send in the messages.  this selector should match even though there
+        # are no labels in the endpoint.
+        selector = parse_selector("all()")
+        self.mgr.get_and_incref(selector,
+                                callback=self.on_ref_acquired,
+                                async=True)
+        self.mgr.on_host_ep_update(HOST_EP_ID_1_1, HOST_EP_1_1_NO_IPS,
+                                    async=True)
+        # Let the actor process them.
+        self.step_mgr()
+
+        # Index should be empty because there's no contribution.
+        self.assert_index_empty()
+
     def test_endpoint_then_selector(self):
         # Send in the messages.
         self.mgr.on_endpoint_update(EP_ID_1_1, EP_1_1, async=True)
@@ -243,6 +307,12 @@ class TestIpsetManager(BaseTestCase):
         self.mgr.decref(selector, async=True)
         self.step_mgr()
         self.assert_index_empty()
+
+    def test_expected_ips_key(self):
+        self.mgr.ip_type = IPV4
+        self.assertEqual(self.mgr.expected_ips_key, "expected_ipv4_addrs")
+        self.mgr.ip_type = IPV6
+        self.assertEqual(self.mgr.expected_ips_key, "expected_ipv6_addrs")
 
     def test_non_trivial_selector_parent_match(self):
         """

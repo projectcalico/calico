@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -32,6 +33,7 @@ import logging
 import socket
 
 import pkg_resources
+import re
 
 from calico import common
 
@@ -87,7 +89,7 @@ class ConfigParameter(object):
     """
     def __init__(self, name, description, default,
                  sources=DEFAULT_SOURCES, value_is_int=False,
-                 value_is_bool=False):
+                 value_is_bool=False, value_is_int_list=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -102,6 +104,7 @@ class ConfigParameter(object):
         self.active_source = None
         self.value_is_int = value_is_int
         self.value_is_bool = value_is_bool
+        self.value_is_int_list = value_is_int_list
 
     def set(self, value, source):
         """
@@ -142,6 +145,18 @@ class ConfigParameter(object):
                 else:
                     raise ConfigException("Field was not a valid Boolean",
                                           self)
+            elif self.value_is_int_list:
+                splits = str(value).split(",")
+                ints = []
+                for s in splits:
+                    s = s.strip()
+                    if not s:
+                        continue
+                    if re.match("^\d+$", s):
+                        ints.append(int(s))
+                    else:
+                        raise ConfigException("Invalid list of ints", self)
+                self.value = ints
             else:
                 # Calling str in principle can throw an exception, but it's
                 # hard to see how in practice, so don't catch and wrap.
@@ -199,6 +214,10 @@ class Config(object):
         self.add_parameter("PeriodicResyncInterval",
                            "How often to do cleanups, seconds",
                            60 * 60, value_is_int=True)
+        self.add_parameter("HostInterfacePollInterval",
+                           "How often (in seconds) to poll for updates to "
+                           "host endpoint IP addresses, or 0 to disable.", 10,
+                           value_is_int=True)
         self.add_parameter("IptablesRefreshInterval",
                            "How often to refresh iptables state, in seconds",
                            60, value_is_int=True)
@@ -206,7 +225,7 @@ class Config(object):
                            "127.0.0.1")
         self.add_parameter("MetadataPort", "Metadata Port",
                            8775, value_is_int=True)
-        self.add_parameter("InterfacePrefix", "Interface name prefix", None)
+        self.add_parameter("InterfacePrefix", "Interface name prefix", "cali")
         self.add_parameter("DefaultEndpointToHostAction",
                            "Action to take for packets that arrive from"
                            "an endpoint to the host.", "DROP")
@@ -265,6 +284,22 @@ class Config(object):
                            "Port on which to export Prometheus metrics from "
                            "the etcd driver process.",
                            9092, value_is_int=True)
+
+        self.add_parameter("FailsafeInboundHostPorts",
+                           "Comma-separated list of numeric TCP ports to open "
+                           "for all configured host endpoints.  Useful to "
+                           "avoid accidentally cutting off (for example ssh) "
+                           "connectivity via incorrect policy rules.  The "
+                           "default value opens the ssh port, 22.",
+                           [22], value_is_int_list=True)
+        self.add_parameter("FailsafeOutboundHostPorts",
+                           "Comma-separated list of numeric TCP ports to allow"
+                           "traffic to from all host endpoints.  Useful to "
+                           "avoid accidentally cutting off, for example, "
+                           "access to etcd.  The default value allows "
+                           "connectivity to etcd's default ports "
+                           "2379,2380,4001 and 7001.",
+                           [2379,2380,4001,7001], value_is_int_list=True)
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -335,6 +370,8 @@ class Config(object):
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
         self.REFRESH_INTERVAL = \
             self.parameters["IptablesRefreshInterval"].value
+        self.HOST_IF_POLL_INTERVAL_SECS = \
+            self.parameters["HostInterfacePollInterval"].value
         self.METADATA_IP = self.parameters["MetadataAddr"].value
         self.METADATA_PORT = self.parameters["MetadataPort"].value
         self.IFACE_PREFIX = self.parameters["InterfacePrefix"].value
@@ -366,6 +403,10 @@ class Config(object):
             self.parameters["PrometheusMetricsPort"].value
         self.PROM_METRICS_DRIVER_PORT = \
             self.parameters["EtcdDriverPrometheusMetricsPort"].value
+        self.FAILSAFE_INBOUND_PORTS = \
+            self.parameters["FailsafeInboundHostPorts"].value
+        self.FAILSAFE_OUTBOUND_PORTS = \
+            self.parameters["FailsafeOutboundHostPorts"].value
 
         self._validate_cfg(final=final)
 
@@ -655,6 +696,11 @@ class Config(object):
             log.warning("Endpoint status delay is negative, defaulting to 1.")
             self.ENDPOINT_REPORT_DELAY = 1
 
+        if self.HOST_IF_POLL_INTERVAL_SECS < 0:
+            log.warning("Host interface poll interval is negative, "
+                        "defaulting to 10s.")
+            self.HOST_IF_POLL_INTERVAL_SECS = 10
+
         if self.MAX_IPSET_SIZE <= 0:
             log.warning("Max ipset size is non-positive, defaulting to 2^20.")
             self.MAX_IPSET_SIZE = 2**20
@@ -677,6 +723,14 @@ class Config(object):
             log.warning("Etcd driver Prometheus port out-of-range, "
                         "defaulting to 9092")
             self.PROM_METRICS_DRIVER_PORT = 9092
+
+        for name, ports in [
+                ("FailsafeInboundHostPorts", self.FAILSAFE_INBOUND_PORTS),
+                ("FailsafeOutboundHostPorts", self.FAILSAFE_OUTBOUND_PORTS)]:
+            for p in ports:
+                if not 0 < p < 65536:
+                    raise ConfigException("Out-of-range port %s" % p,
+                                          self.parameters[name])
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

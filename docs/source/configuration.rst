@@ -1,4 +1,5 @@
-.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+.. # Copyright (c) 2016 Tigera, Inc. All rights reserved.
+   # Copyright (c) Metaswitch Networks 2015. All rights reserved.
    #
    #    Licensed under the Apache License, Version 2.0 (the "License"); you may
    #    not use this file except in compliance with the License. You may obtain
@@ -105,8 +106,9 @@ The full list of parameters which can be set is as follows.
 |                                  |                                | is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In    |
 |                                  |                                | most cases this should not need to be changed.                                            |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| InterfacePrefix                  | None                           | The start of the interface name for all interfaces. This is set to "tap" on OpenStack     |
-|                                  |                                | by the plugin, but must be set to "veth" on most Docker deployments.                      |
+| InterfacePrefix                  | cali                           | The expected prefix for interface names for workload interfaces.  For example, in         |
+|                                  |                                | OpenStack deployments, this should be set to "tap".  Calico polices all traffic to/from   |
+|                                  |                                | interfaces with this prefix.  Calico blocks traffic to/from such interfaces by default.   |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | LogFilePath                      | /var/log/calico/felix.log      | The full path to the felix log. Set to "none" to disable file logging.                    |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
@@ -142,11 +144,20 @@ The full list of parameters which can be set is as follows.
 |                                  |                                | number with at least 8 bits set, none of which clash with any other mark bits in use on   |
 |                                  |                                | the system.                                                                               |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
-| PrometheusMetricsEnabled         | "false"                        | Set to "true" to enable the experimental Prometheus metrics  server in Felix.             |
+| PrometheusMetricsEnabled         | "false"                        | Set to "true" to enable the experimental Prometheus metrics server in Felix.              |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | PrometheusMetricsPort            | 9091                           | TCP port that the Prometheus metrics server should bind to.                               |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdDriverPrometheusMetricsPort  | 9092                           | TCP port that the Prometheus metrics server in the etcd driver process should bind to.    |
++----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| FailsafeInboundHostPorts         | 22                             | Comma-delimited list of TCP ports that Felix will allow incoming traffic to host          |
+|                                  |                                | endpoints on irrespective of the security policy.  This is useful to avoid accidently     |
+|                                  |                                | cutting off a host with incorrect configuration.  The default value allows ssh access.    |
++----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
+| FailsafeOutboundHostPorts        | 2379,2380,4001,7001            | Comma-delimited list of TCP ports that Felix will allow outgoing from traffic from host   |
+|                                  |                                | endpoints to irrespective of the security policy.  This is useful to avoid accidently     |
+|                                  |                                | cutting off a host with incorrect configuration.  The default value opens etcd's standard |
+|                                  |                                | ports to ensure that Felix does not get cut off from etcd.                                |
 +----------------------------------+--------------------------------+-------------------------------------------------------------------------------------------+
 
 

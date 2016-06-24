@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -91,7 +92,7 @@ class TestIptablesUpdater(BaseTestCase):
         _log.info("Stubbing out call to %s", cmd)
         if cmd == ["iptables-save", "--table", "filter"]:
             return self.stub.generate_iptables_save()
-        elif cmd == ['iptables', '--wait', '--list', '--numeric',
+        elif cmd == ['iptables', '--list', '--numeric',
                      '--table', 'filter']:
             return self.stub.generate_iptables_list()
         else:
@@ -114,6 +115,22 @@ class TestIptablesUpdater(BaseTestCase):
         self.assertEqual(self.stub.chains_contents,
             {"foo": ["--append foo --jump bar"],
              'bar': drop_rules("bar")})
+
+    def test_rewrite_chains_stub_override(self):
+        """
+        Tests that we can override the contents of a stub chain.
+        """
+        self.ipt.set_missing_chain_override("bar", ["--append bar --jump RETURN"],
+                                            async=True)
+        self.ipt.rewrite_chains(
+            {"foo": ["--append foo --jump bar"]},
+            {"foo": set(["bar"])},
+            async=True,
+        )
+        self.step_actor(self.ipt)
+        self.assertEqual(self.stub.chains_contents,
+            {"foo": ["--append foo --jump bar"],
+             'bar': ["--append bar --jump RETURN"]})
 
     def test_rewrite_chains_cover(self):
         """
@@ -535,7 +552,7 @@ class TestUtilityFunctions(BaseTestCase):
         error = "iptables-restore: line 6 failed\n"
         retryable, msg = fiptables._parse_ipt_restore_error(IPT_INPUT, error)
         self.assertFalse(retryable)
-        self.assertEqual(msg, "Line 6 failed: --flush felix-to-09d7e2980bc")
+        self.assertEqual(msg, "Line 6 failed: '--flush felix-to-09d7e2980bc'")
 
     def test_parse_other_failure_parse(self):
         error = "iptables-restore: unknown\n"
@@ -675,7 +692,8 @@ class IptablesStub(object):
                 raise FailedSystemCall("Delete for non-existent rule", [], 1,
                                        "", "line 2 failed")
         else:
-            raise AssertionError("Unknown operation %s" % ipt_op)
+            raise AssertionError("Unknown operation %s; was expecting "
+                                 "'--append|flush|delete|...' " % ipt_op)
 
     def assert_chain_declared(self, chain, ipt_op):
         kernel_chains = set(["INPUT", "FORWARD", "OUTPUT"])

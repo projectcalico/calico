@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,7 +50,12 @@ from threading import Thread, Event, Lock
 import time
 from urlparse import urlparse
 
-from ijson.backends import yajl2 as ijson
+try:
+    from ijson.backends import yajl2 as ijson
+except (ImportError, AttributeError): # pragma: no cover
+    # Fall back on Python-native implementation.
+    # Added for RH6.5 compatibility where yajl is not available.
+    from ijson.backends import python as ijson  # pragma: no cover
 from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
 import urllib3.exceptions
 import httplib

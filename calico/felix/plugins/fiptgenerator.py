@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +49,10 @@ from calico.felix.frules import (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT,
                                  CHAIN_TO_PREFIX, CHAIN_FROM_PREFIX,
                                  CHAIN_PREROUTING, CHAIN_POSTROUTING,
                                  CHAIN_INPUT, CHAIN_FORWARD,
-                                 FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT)
+                                 FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT,
+                                 CHAIN_TO_IFACE, CHAIN_FROM_IFACE,
+                                 CHAIN_OUTPUT, CHAIN_FAILSAFE_IN,
+                                 CHAIN_FAILSAFE_OUT)
 
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
@@ -72,6 +76,8 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_PORT = None
         self.IPTABLES_MARK_ACCEPT = None
         self.IPTABLES_MARK_NEXT_TIER = None
+        self.FAILSAFE_INBOUND_PORTS = None
+        self.FAILSAFE_OUTBOUND_PORTS = None
 
     def store_and_validate_config(self, config):
         # We don't have any plugin specific parameters, but we need to save
@@ -86,6 +92,8 @@ class FelixIptablesGenerator(FelixPlugin):
         self.DEFAULT_INPUT_CHAIN_ACTION = config.DEFAULT_INPUT_CHAIN_ACTION
         self.IPTABLES_MARK_ACCEPT = config.IPTABLES_MARK_ACCEPT
         self.IPTABLES_MARK_NEXT_TIER = config.IPTABLES_MARK_NEXT_TIER
+        self.FAILSAFE_INBOUND_PORTS = config.FAILSAFE_INBOUND_PORTS
+        self.FAILSAFE_OUTBOUND_PORTS = config.FAILSAFE_OUTBOUND_PORTS
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -208,11 +216,6 @@ class FelixIptablesGenerator(FelixPlugin):
                 None)
             )
 
-        # Optimisation: return immediately if the traffic is not from one of
-        # the interfaces we're managing.
-        chain.append("--append %s ! --in-interface %s --jump RETURN" %
-                     (CHAIN_INPUT, self.IFACE_MATCH,))
-
         # Allow established connections via the conntrack table.
         chain.extend(self.drop_rules(ip_version,
                                      CHAIN_INPUT,
@@ -221,6 +224,13 @@ class FelixIptablesGenerator(FelixPlugin):
         chain.append("--append %s --match conntrack "
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_INPUT)
+
+        # Incoming traffic on host endpoints.
+        chain.append(
+            "--append %s --goto %s ! --in-interface %s" %
+            (CHAIN_INPUT, CHAIN_FROM_IFACE, self.IFACE_MATCH)
+        )
+        deps.add(CHAIN_FROM_IFACE)
 
         # To act as a router for IPv6, we have to accept various types of
         # ICMPv6 messages, as follows:
@@ -294,6 +304,42 @@ class FelixIptablesGenerator(FelixPlugin):
 
         return chain, deps
 
+    def filter_output_chain(self, ip_version, hosts_set_name=None):
+        """
+        Generate the IPv4/IPv6 FILTER felix-OUTPUT chains.
+
+        Returns a list of iptables fragments with which to program the
+        felix-OUTPUT chain that is unconditionally invoked from both the IPv4
+        and IPv6 FILTER OUTPUT kernel chains.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.  Whether this is the IPv4 or IPv6 FILTER table.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = []
+        deps = set()
+
+        # Allow established connections via the conntrack table.
+        chain.extend(self.drop_rules(ip_version,
+                                     CHAIN_OUTPUT,
+                                     "--match conntrack --ctstate INVALID",
+                                     None))
+        chain.append("--append %s --match conntrack "
+                     "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+                     CHAIN_OUTPUT)
+
+        # Outgoing traffic on host endpoints.
+        chain.append(
+            "--append %s --goto %s ! --out-interface %s" %
+            (CHAIN_OUTPUT, CHAIN_TO_IFACE, self.IFACE_MATCH)
+        )
+        deps.add(CHAIN_TO_IFACE)
+
+        return chain, deps
+
     def filter_forward_chain(self, ip_version):
         """
         Generate the IPv4/IPv6 FILTER felix-FORWARD chains.
@@ -352,8 +398,23 @@ class FelixIptablesGenerator(FelixPlugin):
         from_chain_name = (CHAIN_FROM_PREFIX + endpoint_suffix)
         return set([to_chain_name, from_chain_name])
 
+    def host_endpoint_updates(self, ip_version, endpoint_id, suffix,
+                              profile_ids, pol_ids_by_tier):
+        return self.endpoint_updates(
+            ip_version=ip_version,
+            endpoint_id=endpoint_id,
+            suffix=suffix,
+            mac=None,
+            profile_ids=profile_ids,
+            pol_ids_by_tier=pol_ids_by_tier,
+            to_direction="outbound",
+            from_direction="inbound",
+            with_failsafe=True,
+        )
+
     def endpoint_updates(self, ip_version, endpoint_id, suffix, mac,
-                         profile_ids, prof_ids_by_tier):
+                         profile_ids, pol_ids_by_tier, to_direction="inbound",
+                         from_direction="outbound", with_failsafe=False):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given endpoint.
@@ -370,7 +431,7 @@ class FelixIptablesGenerator(FelixPlugin):
         :param mac: The endpoint's MAC address
         :param profile_ids: the set of profile_ids associated with this
         endpoint
-        :param OrderedDict prof_ids_by_tier: ordered dict mapping tier name
+        :param OrderedDict pol_ids_by_tier: ordered dict mapping tier name
                to list of profiles.
 
         :returns Tuple: updates, deps
@@ -383,22 +444,42 @@ class FelixIptablesGenerator(FelixPlugin):
             ip_version,
             endpoint_id,
             profile_ids,
-            prof_ids_by_tier,
+            pol_ids_by_tier,
             to_chain_name,
-            "inbound"
+            to_direction,
+            with_failsafe=with_failsafe,
         )
         from_chain, from_deps = self._build_to_or_from_chain(
             ip_version,
             endpoint_id,
             profile_ids,
-            prof_ids_by_tier,
+            pol_ids_by_tier,
             from_chain_name,
-            "outbound",
+            from_direction,
             expected_mac=mac,
+            with_failsafe=with_failsafe,
         )
 
         updates = {to_chain_name: to_chain, from_chain_name: from_chain}
         deps = {to_chain_name: to_deps, from_chain_name: from_deps}
+        return updates, deps
+
+    def failsafe_in_chain(self):
+        updates = []
+        for port in self.FAILSAFE_INBOUND_PORTS:
+            updates.append("--append %s --protocol tcp --dport %s "
+                           "--jump ACCEPT" %
+                           (CHAIN_FAILSAFE_IN, port))
+        deps = set()
+        return updates, deps
+
+    def failsafe_out_chain(self):
+        updates = []
+        for port in self.FAILSAFE_OUTBOUND_PORTS:
+            updates.append("--append %s --protocol tcp --dport %s "
+                           "--jump ACCEPT" %
+                           (CHAIN_FAILSAFE_OUT, port))
+        deps = set()
         return updates, deps
 
     def profile_chain_names(self, profile_id):
@@ -490,7 +571,7 @@ class FelixIptablesGenerator(FelixPlugin):
 
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
                                 prof_ids_by_tier, chain_name, direction,
-                                expected_mac=None):
+                                expected_mac=None, with_failsafe=False):
         """
         Generate the necessary set of iptables fragments for a to or from
         chain for a given endpoint.
@@ -510,14 +591,30 @@ class FelixIptablesGenerator(FelixPlugin):
         set containing names of chains that this endpoint chain depends on.
         """
 
+        if with_failsafe:
+            if direction == "inbound":
+                failsafe_chain = CHAIN_FAILSAFE_IN
+            else:
+                failsafe_chain = CHAIN_FAILSAFE_OUT
+            chain = [
+                "--append %(chain)s --jump %(failsafe_chain)s" % {
+                    "chain": chain_name,
+                    "failsafe_chain": failsafe_chain
+                }
+            ]
+            deps = {failsafe_chain}
+        else:
+            chain = []
+            deps = set()
+
         # Ensure the Accept MARK is set to 0 when we start so that unmatched
         # packets will be dropped.
-        chain = [
+        chain.append(
             "--append %(chain)s --jump MARK --set-mark 0/%(mark)s" % {
                 'chain': chain_name,
                 'mark': self.IPTABLES_MARK_ACCEPT
             }
-        ]
+        )
         if expected_mac:
             _log.debug("Policing source MAC: %s", expected_mac)
             chain.extend(self.drop_rules(
@@ -527,7 +624,6 @@ class FelixIptablesGenerator(FelixPlugin):
                 "Incorrect source MAC"))
 
         # Tiered policies come first.
-        deps = set()
         # Each tier must either accept the packet outright or pass it to the
         # next tier for further processing.
         for tier, pol_ids in prof_ids_by_tier.iteritems():

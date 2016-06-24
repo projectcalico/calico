@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015-2016 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,10 +36,10 @@ from calico import common
 from calico.common import ValidationFailed, validate_ip_addr, canonicalise_ip
 from calico.datamodel_v1 import (
     VERSION_DIR, CONFIG_DIR, dir_for_per_host_config, PROFILE_DIR, HOST_DIR,
-    EndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
+    WloadEndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
     ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP,
-    POLICY_DIR, TieredPolicyId)
+    POLICY_DIR, TieredPolicyId, HostEndpointId, EndpointId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
     MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
@@ -72,6 +73,8 @@ PROFILE_LABELS_KEY = PER_PROFILE_DIR + "/labels"
 PER_HOST_DIR = HOST_DIR + "/<hostname>"
 HOST_IP_KEY = PER_HOST_DIR + "/bird_ip"
 WORKLOAD_DIR = PER_HOST_DIR + "/workload"
+HOST_IFACE_DIR = PER_HOST_DIR + "/endpoint"
+HOST_IFACE_KEY = PER_HOST_DIR + "/endpoint/<endpoint_id>"
 PER_ORCH_DIR = WORKLOAD_DIR + "/<orchestrator>"
 PER_WORKLOAD_DIR = PER_ORCH_DIR + "/<workload_id>"
 ENDPOINT_DIR = PER_WORKLOAD_DIR + "/endpoint"
@@ -119,32 +122,36 @@ class EtcdAPI(EtcdClientOwner, Actor):
         # in order to report uptime to etcd.
         self._start_time = monotonic_time()
 
-        # Create an Actor to report per-endpoint status into etcd.
+        # Create an Actor to report per-endpoint status into etcd.  We defer
+        # startup of this and our other workers until we get started.
         self.status_reporter = EtcdStatusReporter(config)
 
-        # Start up the main etcd-watching greenlet.  It will wait for an
-        # event from us before doing anything.
+        # Create the main etcd-watching greenlet.
         self._watcher = _FelixEtcdWatcher(config,
                                           self,
                                           self.status_reporter,
                                           hosts_ipset)
         self._watcher.link(self._on_worker_died)
-        self._watcher.start()
 
-        # Start up a greenlet to trigger periodic resyncs.
-        self._resync_greenlet = gevent.spawn(self._periodically_resync)
+        # Create a greenlet to trigger periodic resyncs.
+        self._resync_greenlet = gevent.Greenlet(self._periodically_resync)
         self._resync_greenlet.link_exception(self._on_worker_died)
 
-        # Start up greenlet to report felix's liveness into etcd.
+        # Create a greenlet to report felix's liveness into etcd.
         self.done_first_status_report = False
-        self._status_reporting_greenlet = gevent.spawn(
+        self._status_reporting_greenlet = gevent.Greenlet(
             self._periodically_report_status
         )
         self._status_reporting_greenlet.link_exception(self._on_worker_died)
 
-        # Start the status reporter.
-        self.status_reporter.start()
         self.status_reporter.greenlet.link(self._on_worker_died)
+
+    def _on_actor_started(self):
+        _log.info("%s starting worker threads", self)
+        self._watcher.start()
+        self._resync_greenlet.start()
+        self.status_reporter.start()
+        self._status_reporting_greenlet.start()
 
     @logging_exceptions
     def _periodically_resync(self):
@@ -353,6 +360,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             on_del=self.on_host_ip_delete)
         reg(PER_ENDPOINT_KEY,
             on_set=self.on_endpoint_set, on_del=self.on_endpoint_delete)
+        reg(HOST_IFACE_KEY,
+            on_set=self.on_host_ep_set, on_del=self.on_host_ep_delete)
         reg(CIDR_V4_KEY,
             on_set=self.on_ipam_v4_pool_set,
             on_del=self.on_ipam_v4_pool_delete)
@@ -553,25 +562,39 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         :return: the connected socket to the driver.
         """
         _log.info("Creating server socket.")
+        if os.path.exists("/run"):
+            # Linux FHS version 3.0+ location for runtime sockets etc.
+            sck_filename = "/run/felix-driver.sck"
+        else:
+            # Older Linux versions use /var/run.
+            sck_filename = "/var/run/felix-driver.sck"
         try:
-            os.unlink("/run/felix-driver.sck")
+            os.unlink(sck_filename)
         except OSError:
             _log.debug("Failed to delete driver socket, assuming it "
                        "didn't exist.")
         update_socket = socket.socket(socket.AF_UNIX,
                                       socket.SOCK_STREAM)
-        update_socket.bind("/run/felix-driver.sck")
+        update_socket.bind(sck_filename)
         update_socket.listen(1)
-        self._driver_process = subprocess.Popen([sys.executable,
-                                                 "-m",
-                                                 "calico.etcddriver",
-                                                 "/run/felix-driver.sck"])
+        if getattr(sys, "frozen", False):
+            # We're running under pyinstaller, where we share our executable
+            # with the etcd driver.  Re-run this executable with the "driver"
+            # argument to invoke the etcd driver.
+            cmd = [sys.argv[0], "driver"]
+        else:
+            # Not running under pyinstaller, execute the etcd driver directly.
+            cmd = [sys.executable, "-m", "calico.etcddriver"]
+        # etcd driver takes the felix socket name as argument.
+        cmd += [sck_filename]
+        _log.info("etcd-driver command line: %s", cmd)
+        self._driver_process = subprocess.Popen(cmd)
         _log.info("Started etcd driver with PID %s", self._driver_process.pid)
         update_conn, _ = update_socket.accept()
         _log.info("Accepted connection on socket")
         # No longer need the server socket, remove it.
         try:
-            os.unlink("/run/felix-driver.sck")
+            os.unlink(sck_filename)
         except OSError:
             # Unexpected but carry on...
             _log.exception("Failed to unlink socket")
@@ -599,8 +622,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_endpoint_set(self, response, hostname, orchestrator,
                         workload_id, endpoint_id):
         """Handler for endpoint updates, passes the update to the splitter."""
-        combined_id = EndpointId(hostname, orchestrator, workload_id,
-                                 endpoint_id)
+        combined_id = WloadEndpointId(hostname, orchestrator, workload_id,
+                                      endpoint_id)
         _log.debug("Endpoint %s updated", combined_id)
         _stats.increment("Endpoint created/updated")
         endpoint = parse_endpoint(self._config, combined_id, response.value)
@@ -609,11 +632,26 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_endpoint_delete(self, response, hostname, orchestrator,
                            workload_id, endpoint_id):
         """Handler for endpoint deleted, passes the update to the splitter."""
-        combined_id = EndpointId(hostname, orchestrator, workload_id,
-                                 endpoint_id)
+        combined_id = WloadEndpointId(hostname, orchestrator, workload_id,
+                                      endpoint_id)
         _log.debug("Endpoint %s deleted", combined_id)
         _stats.increment("Endpoint deleted")
         self.splitter.on_endpoint_update(combined_id, None)
+
+    def on_host_ep_set(self, response, hostname, endpoint_id):
+        """Handler for create/update of host endpoint."""
+        combined_id = HostEndpointId(hostname, endpoint_id)
+        _log.debug("Host iface %s updated", combined_id)
+        _stats.increment("Host iface created/updated")
+        iface_data = parse_host_ep(self._config, combined_id, response.value)
+        self.splitter.on_host_ep_update(combined_id, iface_data)
+
+    def on_host_ep_delete(self, response, hostname, endpoint_id):
+        """Handler for delete of host endpoint."""
+        combined_id = HostEndpointId(hostname, endpoint_id)
+        _log.debug("Host iface %s deleted", combined_id)
+        _stats.increment("Host iface deleted")
+        self.splitter.on_host_ep_update(combined_id, None)
 
     def on_rules_set(self, response, profile_id):
         """Handler for rules updates, passes the update to the splitter."""
@@ -980,6 +1018,20 @@ def parse_endpoint(config, combined_id, raw_json):
     else:
         _log.debug("Validated endpoint : %s", endpoint)
     return endpoint
+
+
+def parse_host_ep(config, combined_id, raw_json):
+    iface_data = safe_decode_json(raw_json,
+                                  log_tag="iface %s" % combined_id.endpoint)
+    try:
+        common.validate_host_endpoint(config, combined_id, iface_data)
+    except ValidationFailed as e:
+        _log.warning("Validation failed for host endpoint %s, treating as "
+                     "missing: %s; %r", combined_id, e.message, raw_json)
+        iface_data = None
+    else:
+        _log.debug("Validated endpoint : %s", iface_data)
+    return iface_data
 
 
 def parse_tier_data(tier, data):

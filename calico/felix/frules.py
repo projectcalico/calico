@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 # Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
@@ -173,15 +174,44 @@ POSTROUTING_LOCAL_NAT_FRAGMENT = (
 )
 
 # Chain names
+
+# Dispatch chains to and from workload endpoints.
 CHAIN_TO_ENDPOINT = FELIX_PREFIX + "TO-ENDPOINT"
 CHAIN_FROM_ENDPOINT = FELIX_PREFIX + "FROM-ENDPOINT"
 CHAIN_TO_LEAF = FELIX_PREFIX + "TO-EP-PFX"
 CHAIN_FROM_LEAF = FELIX_PREFIX + "FROM-EP-PFX"
+WORKLOAD_DISPATCH_CHAINS = {
+    "to_root": CHAIN_TO_ENDPOINT,
+    "from_root": CHAIN_FROM_ENDPOINT,
+    "to_leaf": CHAIN_TO_LEAF,
+    "from_leaf": CHAIN_FROM_LEAF,
+}
+
+# Ditto for host endpoints.
+CHAIN_TO_IFACE = FELIX_PREFIX + "TO-HOST-IF"
+CHAIN_FROM_IFACE = FELIX_PREFIX + "FROM-HOST-IF"
+CHAIN_TO_IFACE_LEAF = FELIX_PREFIX + "TO-IF-PFX"
+CHAIN_FROM_IFACE_LEAF = FELIX_PREFIX + "FROM-IF-PFX"
+HOST_DISPATCH_CHAINS = {
+    "to_root": CHAIN_TO_IFACE,
+    "from_root": CHAIN_FROM_IFACE,
+    "to_leaf": CHAIN_TO_IFACE_LEAF,
+    "from_leaf": CHAIN_FROM_IFACE_LEAF,
+}
+
+# Failsafe whitelist chains.
+CHAIN_FAILSAFE_IN = FELIX_PREFIX + "FAILSAFE-IN"
+CHAIN_FAILSAFE_OUT = FELIX_PREFIX + "FAILSAFE-OUT"
+
+# Per-endpoint/interface chain prefixes.
 CHAIN_TO_PREFIX = FELIX_PREFIX + "to-"
 CHAIN_FROM_PREFIX = FELIX_PREFIX + "from-"
+
+# Top-level felix chains.
 CHAIN_PREROUTING = FELIX_PREFIX + "PREROUTING"
 CHAIN_POSTROUTING = FELIX_PREFIX + "POSTROUTING"
 CHAIN_INPUT = FELIX_PREFIX + "INPUT"
+CHAIN_OUTPUT = FELIX_PREFIX + "OUTPUT"
 CHAIN_FORWARD = FELIX_PREFIX + "FORWARD"
 CHAIN_FIP_DNAT = FELIX_PREFIX + 'FIP-DNAT'
 CHAIN_FIP_SNAT = FELIX_PREFIX + 'FIP-SNAT'
@@ -303,23 +333,41 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
     input_chain, input_deps = (
         iptables_generator.filter_input_chain(ip_version, hosts_set_name)
     )
+    output_chain, output_deps = (
+        iptables_generator.filter_output_chain(ip_version)
+    )
     forward_chain, forward_deps = (
         iptables_generator.filter_forward_chain(ip_version)
+    )
+    failsafe_in_chain, failsafe_in_deps = (
+        iptables_generator.failsafe_in_chain()
+    )
+    failsafe_out_chain, failsafe_out_deps = (
+        iptables_generator.failsafe_out_chain()
     )
 
     filter_updater.rewrite_chains(
         {
             CHAIN_FORWARD: forward_chain,
             CHAIN_INPUT: input_chain,
+            CHAIN_OUTPUT: output_chain,
+            CHAIN_FAILSAFE_IN: failsafe_in_chain,
+            CHAIN_FAILSAFE_OUT: failsafe_out_chain,
         },
         {
             CHAIN_FORWARD: forward_deps,
             CHAIN_INPUT: input_deps,
+            CHAIN_OUTPUT: output_deps,
+            CHAIN_FAILSAFE_IN: failsafe_in_deps,
+            CHAIN_FAILSAFE_OUT: failsafe_out_deps,
         },
         async=False)
 
     filter_updater.ensure_rule_inserted(
         "INPUT --jump %s" % CHAIN_INPUT,
+        async=False)
+    filter_updater.ensure_rule_inserted(
+        "OUTPUT --jump %s" % CHAIN_OUTPUT,
         async=False)
     filter_updater.ensure_rule_inserted(
         "FORWARD --jump %s" % CHAIN_FORWARD,

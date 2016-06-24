@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2014, 2015 Metaswitch Networks
 # Copyright 2015 Cisco Systems
 #
@@ -40,7 +41,7 @@ else:
 
 import calico.common as common
 from calico.common import ValidationFailed
-from calico.datamodel_v1 import EndpointId, TieredPolicyId
+from calico.datamodel_v1 import WloadEndpointId, TieredPolicyId, HostEndpointId
 
 Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
 
@@ -56,8 +57,6 @@ class TestCommon(unittest.TestCase):
         self.m_config = mock.Mock()
         self.m_config.IFACE_PREFIX = "tap"
         self.m_config.HOSTNAME = "localhost"
-        self.m_id = EndpointId("localhost", "orchestrator",
-                               "workload", "endpoint")
 
     def tearDown(self):
         pass
@@ -77,158 +76,6 @@ class TestCommon(unittest.TestCase):
         self.assertFalse(common.validate_port("65536"))
         self.assertFalse(common.validate_port("1-10"))
         self.assertFalse(common.validate_port("blah"))
-
-    def test_validate_endpoint_mainline(self):
-        endpoint = {
-            "state": "active",
-            "name": "tap1234",
-            "mac": "AA:bb:cc:dd:ee:ff",
-            "ipv4_nets": ["10.0.1/32"],
-            "ipv4_gateway": "11.0.0.1",
-            "ipv6_nets": ["2001:0::1/64"],
-            "ipv6_gateway": "fe80:0::1",
-            "profile_id": "prof1",
-        }
-        common.validate_endpoint(self.m_config, self.m_id, endpoint)
-        self.assertEqual(endpoint, {
-            'state': 'active',
-            'name': 'tap1234',
-            'mac': 'aa:bb:cc:dd:ee:ff',
-            'ipv4_nets': ['10.0.1.0/32'],
-            'ipv4_gateway': '11.0.0.1',
-            'ipv6_nets': ['2001::1/64'],
-            'ipv6_gateway': 'fe80::1',
-            'profile_ids':['prof1'],
-        })
-
-    def test_validate_endpoint_mainline_fip(self):
-        endpoint = {
-            "state": "active",
-            "name": "tap1234",
-            "mac": "AA:bb:cc:dd:ee:ff",
-            "ipv4_nat": [{"int_ip": "10.0.0.1", "ext_ip": "192.168.1"}],
-            "ipv4_nets": ["10.0.0.1/32"],
-            "ipv4_gateway": "11.0.0.1",
-            "ipv6_nat": [{"int_ip": "2001::1", "ext_ip": "2001::2"}],
-            "ipv6_nets": ["2001::1/128"],
-            "ipv6_gateway": "fe80:0::1",
-            "profile_id": "prof1",
-        }
-        common.validate_endpoint(self.m_config, self.m_id, endpoint)
-        self.assertEqual(endpoint, {
-            'state': 'active',
-            'name': 'tap1234',
-            'mac': 'aa:bb:cc:dd:ee:ff',
-            'ipv4_nets': ['10.0.0.1/32'],
-            "ipv4_nat": [{"int_ip": "10.0.0.1", "ext_ip": "192.168.0.1"}],
-            'ipv4_gateway': '11.0.0.1',
-            'ipv6_nat': [{'int_ip': '2001::1', 'ext_ip': '2001::2'}],
-            'ipv6_nets': ['2001::1/128'],
-            'ipv6_gateway': 'fe80::1',
-            'profile_ids':['prof1'],
-        })
-
-    def test_validate_endpoint_mainline_profile_ids(self):
-        endpoint = {
-            "state": "active",
-            "name": "tap1234",
-            "mac": "AA-bb-cc-dd-ee-ff",
-            "ipv4_nets": ["10.0.1/32"],
-            "profile_ids": ["prof1", "prof2"],
-        }
-        common.validate_endpoint(self.m_config, self.m_id, endpoint)
-        self.assertEqual(endpoint, {
-            'state': 'active',
-            'name': 'tap1234',
-            'mac': 'aa:bb:cc:dd:ee:ff',
-            'ipv4_nets': ['10.0.1.0/32'],
-            "ipv6_nets": [],
-            "profile_ids": ["prof1", "prof2"],
-        })
-
-    def test_validate_endpoint_failures(self):
-        self.assert_invalid_endpoint([])
-        self.assert_invalid_endpoint("foo")
-        self.assert_invalid_endpoint("foo")
-
-        self.assert_tweak_invalidates_endpoint(state=MISSING)
-        self.assert_tweak_invalidates_endpoint(state=None)
-        self.assert_tweak_invalidates_endpoint(state="foo")
-
-        self.assert_tweak_invalidates_endpoint(name=MISSING)
-        self.assert_tweak_invalidates_endpoint(name=None)
-        self.assert_tweak_invalidates_endpoint(name=object())
-        self.assert_tweak_invalidates_endpoint(name=[])
-        self.assert_tweak_invalidates_endpoint(name="incorrect_prefix")
-
-        self.assert_tweak_invalidates_endpoint(mac=MISSING)
-        self.assert_tweak_invalidates_endpoint(mac=None)
-        self.assert_tweak_invalidates_endpoint(mac=object())
-        self.assert_tweak_invalidates_endpoint(mac="bad MAC")
-
-        self.assert_tweak_invalidates_endpoint(profile_id=MISSING)
-        self.assert_tweak_invalidates_endpoint(profile_id=None)
-        self.assert_tweak_invalidates_endpoint(profile_id=[])
-
-        self.assert_tweak_invalidates_endpoint(ipv4_gateway="not an IP")
-        self.assert_tweak_invalidates_endpoint(ipv4_gateway=[])
-
-        self.assert_tweak_invalidates_endpoint(ipv6_gateway="not an IP")
-        self.assert_tweak_invalidates_endpoint(ipv6_gateway=[])
-
-        self.assert_tweak_invalidates_endpoint(ipv4_nets="not a list")
-        self.assert_tweak_invalidates_endpoint(ipv4_nets={})
-        self.assert_tweak_invalidates_endpoint(ipv4_nets=["not an IP"])
-        self.assert_tweak_invalidates_endpoint(ipv4_nets=["12345"])
-        self.assert_tweak_invalidates_endpoint(ipv4_nets=["1234::1/64"])
-
-        self.assert_tweak_invalidates_endpoint(ipv6_nets="not a list")
-        self.assert_tweak_invalidates_endpoint(ipv6_nets={})
-        self.assert_tweak_invalidates_endpoint(ipv6_nets=["not an IP"])
-        self.assert_tweak_invalidates_endpoint(ipv6_nets=["12345"])
-        self.assert_tweak_invalidates_endpoint(ipv6_nets=["10.0.0.0/8"])
-
-        self.assert_tweak_invalidates_endpoint(ipv4_nets=["10.1.2.3/32"],
-                ipv4_nat=[{"int_ip": "10.1.2.4", "ext_ip": "1.2.3.4"}])
-
-    def assert_invalid_endpoint(self, bad_value):
-        self.assertRaises(common.ValidationFailed, common.validate_endpoint,
-                          self.m_config, self.m_id, bad_value)
-
-    def assert_endpoint_valid(self, original_endpoint):
-        endpoint = copy.deepcopy(original_endpoint)
-        try:
-            # First pass at validation, may canonicalise the data.
-            common.validate_endpoint(self.m_config, self.m_id, endpoint)
-            canonical_endpoint = copy.deepcopy(endpoint)
-            # Second pass, should make no changes.
-            common.validate_endpoint(self.m_config, self.m_id, canonical_endpoint)
-            self.assertEqual(endpoint, canonical_endpoint)
-        except common.ValidationFailed as e:
-            _log.exception("Validation unexpectedly failed for %s",
-                           original_endpoint)
-            self.fail("Validation unexpectedly failed for %s: %r" %
-                      (original_endpoint, e))
-
-    def assert_tweak_invalidates_endpoint(self, **tweak):
-        valid_endpoint = {
-            "state": "active",
-            "name": "tap1234",
-            "mac": "AA:bb:cc:dd:ee:ff",
-            "ipv4_nets": ["10.0.1/32"],
-            "ipv4_gateway": "11.0.0.1",
-            "ipv6_nets": ["2001:0::1/64"],
-            "ipv6_gateway": "fe80:0::1",
-            "profile_id": "prof1",
-        }
-        self.assert_endpoint_valid(valid_endpoint)
-        invalid_endpoint = valid_endpoint.copy()
-        for key, value in tweak.iteritems():
-            if value is MISSING:
-                invalid_endpoint.pop(key)
-            else:
-                invalid_endpoint[key] = value
-        self.assert_invalid_endpoint(invalid_endpoint)
 
     def test_validate_rules_canon(self):
         rules = {
@@ -334,173 +181,6 @@ class TestCommon(unittest.TestCase):
 
         self.assertIsNone(common.canonicalise_ip(None, 4))
         self.assertIsNone(common.canonicalise_ip(None, 6))
-
-    def test_validate_endpoint(self):
-        combined_id = EndpointId("host", "orchestrator",
-                                 "workload", "valid_name-ok.")
-        endpoint_dict = {'profile_id': "valid.prof-name",
-                         'state': "active",
-                         'name': "tapabcdef",
-                         'mac': "78:2b:cb:9f:ae:1c",
-                         'ipv4_nets': [],
-                         'ipv6_nets': []}
-        config = Config('tap', 'localhost')
-        ep_copy = endpoint_dict.copy()
-        common.validate_endpoint(config, combined_id, ep_copy)
-        self.assertTrue(ep_copy.get('profile_id') is None)
-        self.assertEqual(ep_copy.get('profile_ids'), ["valid.prof-name"])
-
-        # Now break it various ways.
-        # Bad endpoint ID.
-        for bad_str in ("with spaces", "$stuff", "^%@"):
-            bad_id = EndpointId("host", "orchestrator", "workload", bad_str)
-            with self.assertRaisesRegexp(ValidationFailed,
-                                         "Invalid endpoint ID"):
-                common.validate_endpoint(config, bad_id, endpoint_dict.copy())
-
-        # Bad dictionary.
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected endpoint to be a dict"):
-            common.validate_endpoint(config, combined_id, [1,2,3])
-
-        # No state, invalid state.
-        bad_dict = endpoint_dict.copy()
-        del bad_dict['state']
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'state' field"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-        bad_dict['state'] = "invalid"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected 'state' to be"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        # Missing mac and name; both must be reported as two errors
-        bad_dict = endpoint_dict.copy()
-        del bad_dict['name']
-        del bad_dict['mac']
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'name' field"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'mac' field"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        bad_dict['name'] = [1, 2, 3]
-        bad_dict['mac'] = 73
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected 'name' to be a string.*" +
-                                     "Expected 'mac' to be a string"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        # Bad profile ID
-        bad_dict = endpoint_dict.copy()
-        bad_dict['profile_id'] = "str£ing"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Invalid profile ID"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        bad_dict = endpoint_dict.copy()
-        del bad_dict['profile_id']
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Missing 'profile_id\(s\)' field"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        bad_dict = endpoint_dict.copy()
-        del bad_dict['profile_id']
-        bad_dict['profile_ids'] = [1, 2, 3]
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected profile IDs to be strings"):
-            common.validate_endpoint(config, combined_id, bad_dict)
-
-        # Bad interface name - acceptable if not local.
-        bad_dict = endpoint_dict.copy()
-        bad_dict['name'] = "vethabcdef"
-        common.validate_endpoint(config, combined_id, bad_dict)
-
-        local_id = EndpointId("localhost", "orchestrator",
-                              "workload", "valid_name-ok.")
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "does not start with"):
-            common.validate_endpoint(config, local_id, bad_dict)
-
-        # Valid networks.
-        good_dict = endpoint_dict.copy()
-        good_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "3.4.5.6"]
-        good_dict['ipv6_nets'] = [ "::1/128", "::", "2001:db8:abc:1400::/54"]
-        common.validate_endpoint(config, combined_id, good_dict.copy())
-
-        # Invalid networks
-        bad_dict = good_dict.copy()
-        bad_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "2001:db8:abc:1400::/54"]
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv4 CIDR"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        bad_dict['ipv4_nets'] = [ "1.2.3.4/32", "172.0.0.0/8", "nonsense"]
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv4 CIDR"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-
-        bad_dict = good_dict.copy()
-        bad_dict['ipv6_nets'] = [ "::1/128", "::", "1.2.3.4/8"]
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv6 CIDR"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        bad_dict['ipv6_nets'] = [ "::1/128", "::", "nonsense"]
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv6 CIDR"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-
-        # Gateway IPs.
-        good_dict['ipv4_gateway'] = "1.2.3.4"
-        good_dict['ipv6_gateway'] = "2001:db8:abc:1400::"
-        common.validate_endpoint(config, combined_id, good_dict.copy())
-
-        bad_dict = good_dict.copy()
-        bad_dict['ipv4_gateway'] = "2001:db8:abc:1400::"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv4 gateway"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        bad_dict['ipv4_gateway'] = "nonsense"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv4 gateway"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-
-        bad_dict = good_dict.copy()
-        bad_dict['ipv6_gateway'] = "1.2.3.4"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv6 gateway"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        bad_dict['ipv6_gateway'] = "nonsense"
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "not a valid IPv6 gateway"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-
-        # Labels, empty.
-        good_dict["labels"] = {}
-        common.validate_endpoint(config, combined_id, good_dict)
-        self.assertEqual(good_dict["labels"], {})
-        # Labels, valid.
-        good_dict["labels"] = {"a": "b"}
-        common.validate_endpoint(config, combined_id, good_dict)
-        self.assertEqual(good_dict["labels"], {"a": "b"})
-        # Labels, bad type.
-        bad_dict = good_dict.copy()
-        bad_dict["labels"] = []
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Expected labels to be a dict"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        # Labels, bad value.
-        bad_dict = good_dict.copy()
-        bad_dict["labels"] = {"a": {}}
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Invalid label value"):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
-        # Labels, bad key.
-        bad_dict = good_dict.copy()
-        bad_dict["labels"] = {"a+|%": {}}
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "Invalid label name 'a+|%'."):
-            common.validate_endpoint(config, combined_id, bad_dict.copy())
 
     def test_validate_tier_data(self):
         good_data = {"order": 10}
@@ -924,6 +604,440 @@ class TestCommon(unittest.TestCase):
         else:
             # Validation passed, should be allowed in expression too.
             parse_selector("%s == 'a'" % label)
+
+
+class _BaseTestValidateEndpoint(unittest.TestCase):
+    validate_endpoint = None
+    use_fip_by_default = True
+
+    def setUp(self):
+        self.m_config = mock.Mock()
+        self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.HOSTNAME = "localhost"
+
+    def create_id(self):
+        raise NotImplementedError()
+
+    def valid_endpoint(self, **kwargs):
+        raise NotImplementedError()
+    
+    def canonical_valid_endpoint(self, **kwargs):
+        raise NotImplementedError()
+
+    def do_canonicalisation_test(self, **kwargs):
+        endpoint = self.valid_endpoint(**kwargs)
+        self.validate_endpoint(self.m_config, self.create_id(), endpoint)
+        self.assertEqual(endpoint, self.canonical_valid_endpoint(**kwargs))
+
+    def test_validate_endpoint_canonicalises(self):
+        self.do_canonicalisation_test()
+
+    def test_validate_endpoint_mainline_profile_ids(self):
+        self.do_canonicalisation_test(use_prof_ids=True)
+
+    def test_validate_endpoint_mainline_profile_ids_missing(self):
+        self.do_canonicalisation_test(use_prof_ids=MISSING)
+
+    def test_validate_endpoint_failures_common(self):
+        self.assert_invalid_endpoint([])
+        self.assert_invalid_endpoint("foo")
+        self.assert_invalid_endpoint(1234)
+
+    def assert_invalid_endpoint(self, bad_value):
+        self.assertRaises(common.ValidationFailed, self.validate_endpoint,
+                          self.m_config, self.create_id(), bad_value)
+
+    def assert_endpoint_valid(self, original_endpoint):
+        endpoint = copy.deepcopy(original_endpoint)
+        try:
+            # First pass at validation, may canonicalise the data.
+            self.validate_endpoint(self.m_config, self.create_id(), endpoint)
+            canonical_endpoint = copy.deepcopy(endpoint)
+            # Second pass, should make no changes.
+            self.validate_endpoint(self.m_config, self.create_id(),
+                                   canonical_endpoint)
+            self.assertEqual(endpoint, canonical_endpoint)
+        except common.ValidationFailed as e:
+            _log.exception("Validation unexpectedly failed for %s",
+                           original_endpoint)
+            self.fail("Validation unexpectedly failed for %s: %r" %
+                      (original_endpoint, e))
+
+    def assert_tweak_invalidates_endpoint(self, **tweak):
+        use_prof_ids = "profile_id" not in tweak
+        valid_endpoint = self.valid_endpoint(use_prof_ids=use_prof_ids,
+                                             use_fip=self.use_fip_by_default)
+        self.assert_endpoint_valid(valid_endpoint)
+        invalid_endpoint = valid_endpoint.copy()
+        for key, value in tweak.iteritems():
+            if value is MISSING:
+                invalid_endpoint.pop(key)
+            else:
+                invalid_endpoint[key] = value
+        self.assert_invalid_endpoint(invalid_endpoint)
+
+
+class TestValidateWloadEndpoint(_BaseTestValidateEndpoint):
+    def validate_endpoint(self, *args, **kwargs):
+        common.validate_endpoint(*args, **kwargs)
+
+    def create_id(self):
+        return WloadEndpointId("localhost", "orchestrator",
+                               "workload", "endpoint")
+
+    def valid_endpoint(self, use_fip=False, use_prof_ids=False):
+        ep = {
+            "state": "active",
+            "name": "tap1234",
+            "mac": "AA:bb:cc:dd:ee:ff",
+            "ipv4_nets": ["10.0.1/32"],
+            "ipv4_gateway": "11.0.0.1",
+            "ipv6_nets": ["2001:0::1/128"],
+            "ipv6_gateway": "fe80:0::1",
+        }
+        if use_prof_ids == MISSING:
+            pass
+        elif use_prof_ids:
+            ep["profile_ids"] = ["prof1", "prof2"]
+        else:
+            ep["profile_id"] = "prof1"
+        if use_fip:
+            ep.update({
+                "ipv4_nat": [{"int_ip": "10.0.1.0", "ext_ip": "192.168.1"}],
+                "ipv6_nat": [{"int_ip": "2001::1", "ext_ip": "2001::2"}],
+            })
+        return ep
+
+    def canonical_valid_endpoint(self, use_fip=False, use_prof_ids=False):
+        ep = {
+            'state': 'active',
+            'name': 'tap1234',
+            'mac': 'aa:bb:cc:dd:ee:ff',
+            'ipv4_nets': ['10.0.1.0/32'],
+            'ipv4_gateway': '11.0.0.1',
+            'ipv6_nets': ['2001::1/128'],
+            'ipv6_gateway': 'fe80::1',
+        }
+        if use_prof_ids == MISSING:
+            ep["profile_ids"] = []
+        elif use_prof_ids:
+            ep["profile_ids"] = ["prof1", "prof2"]
+        else:
+            ep["profile_ids"] = ["prof1"]  # Normalised to a list.
+        if use_fip:
+            ep.update({
+                "ipv4_nat": [{"int_ip": "10.0.1.0", "ext_ip": "192.168.0.1"}],
+                'ipv6_nat': [{'int_ip': '2001::1', 'ext_ip': '2001::2'}],
+            })
+        return ep
+
+    def test_validate_endpoint_mainline_fip(self):
+        self.do_canonicalisation_test(use_fip=True)
+
+    def test_validate_endpoint_failures(self):
+        self.assert_tweak_invalidates_endpoint(state=MISSING)
+        self.assert_tweak_invalidates_endpoint(state=None)
+        self.assert_tweak_invalidates_endpoint(state="foo")
+
+        self.assert_tweak_invalidates_endpoint(name=MISSING)
+        self.assert_tweak_invalidates_endpoint(name=None)
+        self.assert_tweak_invalidates_endpoint(name="")
+        self.assert_tweak_invalidates_endpoint(name=object())
+        self.assert_tweak_invalidates_endpoint(name=[])
+        self.assert_tweak_invalidates_endpoint(name="incorrect_prefix")
+
+        self.assert_tweak_invalidates_endpoint(mac=object())
+        self.assert_tweak_invalidates_endpoint(mac="bad MAC")
+
+        self.assert_tweak_invalidates_endpoint(profile_id=None)
+        self.assert_tweak_invalidates_endpoint(profile_id=[])
+
+        self.assert_tweak_invalidates_endpoint(ipv4_gateway="not an IP")
+        self.assert_tweak_invalidates_endpoint(ipv4_gateway=[])
+
+        self.assert_tweak_invalidates_endpoint(ipv6_gateway="not an IP")
+        self.assert_tweak_invalidates_endpoint(ipv6_gateway=[])
+
+        self.assert_tweak_invalidates_endpoint(ipv4_nets="not a list")
+        self.assert_tweak_invalidates_endpoint(ipv4_nets={})
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["not an IP"])
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["12345"])
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["1234::1/64"])
+
+        self.assert_tweak_invalidates_endpoint(ipv6_nets="not a list")
+        self.assert_tweak_invalidates_endpoint(ipv6_nets={})
+        self.assert_tweak_invalidates_endpoint(ipv6_nets=["not an IP"])
+        self.assert_tweak_invalidates_endpoint(ipv6_nets=["12345"])
+        self.assert_tweak_invalidates_endpoint(ipv6_nets=["10.0.0.0/8"])
+
+        self.assert_tweak_invalidates_endpoint(
+            expected_ipv4_addrs=["10.0.0.1"])
+        self.assert_tweak_invalidates_endpoint(expected_ipv4_addrs={})
+        self.assert_tweak_invalidates_endpoint(
+            expected_ipv6_addrs=["10.0.0.1"])
+        self.assert_tweak_invalidates_endpoint(expected_ipv6_addrs={})
+
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["10.1.2.3/32"],
+                                               ipv4_nat=[{"int_ip": "10.1.2.4",
+                                                          "ext_ip": "1.2.3.4"}])
+
+    def test_validate_endpoint(self):
+        # This test method hit s afew cases that we don't hit above but it's
+        # hard to understand.  Please don't add more tests like this!
+        combined_id = WloadEndpointId("host", "orchestrator",
+                                      "workload", "valid_name-ok.")
+        endpoint_dict = {'profile_id': "valid.prof-name",
+                         'state': "active",
+                         'name': "tapabcdef",
+                         'mac': "78:2b:cb:9f:ae:1c",
+                         'ipv4_nets': [],
+                         'ipv6_nets': []}
+        config = Config('tap', 'localhost')
+        ep_copy = endpoint_dict.copy()
+        self.validate_endpoint(config, combined_id, ep_copy)
+        self.assertTrue(ep_copy.get('profile_id') is None)
+        self.assertEqual(ep_copy.get('profile_ids'), ["valid.prof-name"])
+
+        # Now break it various ways.
+        # Bad endpoint ID.
+        for bad_str in ("with spaces", "$stuff", "^%@"):
+            bad_id = WloadEndpointId("host", "orchestrator", "workload",
+                                     bad_str)
+            with self.assertRaisesRegexp(ValidationFailed,
+                                         "Invalid endpoint ID"):
+                self.validate_endpoint(config, bad_id,
+                                         endpoint_dict.copy())
+
+        # Bad dictionary.
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected endpoint to be a dict"):
+            self.validate_endpoint(config, combined_id, [1, 2, 3])
+
+        # No state, invalid state.
+        bad_dict = endpoint_dict.copy()
+        del bad_dict['state']
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Missing 'state' field"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+        bad_dict['state'] = "invalid"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected 'state' to be"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+
+        # Missing name.
+        bad_dict = endpoint_dict.copy()
+        del bad_dict['name']
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Missing 'name' field"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+
+        # It's OK to be missing a MAC.
+        ok_dict = endpoint_dict.copy()
+        del ok_dict['mac']
+        self.validate_endpoint(config, combined_id, ok_dict)
+
+        bad_dict['name'] = [1, 2, 3]
+        bad_dict['mac'] = 73
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected 'name' to be a string.*" +
+                                             "Invalid MAC"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+
+        # Bad profile ID
+        bad_dict = endpoint_dict.copy()
+        bad_dict['profile_id'] = "str£ing"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid profile ID"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+
+        bad_dict = endpoint_dict.copy()
+        del bad_dict['profile_id']
+        bad_dict['profile_ids'] = [1, 2, 3]
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected profile IDs to be strings"):
+            self.validate_endpoint(config, combined_id, bad_dict)
+
+        # Bad interface name - acceptable if not local.
+        bad_dict = endpoint_dict.copy()
+        bad_dict['name'] = "vethabcdef"
+        self.validate_endpoint(config, combined_id, bad_dict)
+
+        local_id = WloadEndpointId("localhost", "orchestrator",
+                                   "workload", "valid_name-ok.")
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "does not start with"):
+            self.validate_endpoint(config, local_id, bad_dict)
+
+        # Valid networks.
+        good_dict = endpoint_dict.copy()
+        good_dict['ipv4_nets'] = ["1.2.3.4/32", "172.0.0.0/8", "3.4.5.6"]
+        good_dict['ipv6_nets'] = ["::1/128", "::",
+                                  "2001:db8:abc:1400::/54"]
+        self.validate_endpoint(config, combined_id, good_dict.copy())
+
+        # Invalid networks
+        bad_dict = good_dict.copy()
+        bad_dict['ipv4_nets'] = ["1.2.3.4/32", "172.0.0.0/8",
+                                 "2001:db8:abc:1400::/54"]
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv4 CIDR"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        bad_dict['ipv4_nets'] = ["1.2.3.4/32", "172.0.0.0/8", "nonsense"]
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv4 CIDR"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+
+        bad_dict = good_dict.copy()
+        bad_dict['ipv6_nets'] = ["::1/128", "::", "1.2.3.4/8"]
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv6 CIDR"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        bad_dict['ipv6_nets'] = ["::1/128", "::", "nonsense"]
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv6 CIDR"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+
+        # Gateway IPs.
+        good_dict['ipv4_gateway'] = "1.2.3.4"
+        good_dict['ipv6_gateway'] = "2001:db8:abc:1400::"
+        self.validate_endpoint(config, combined_id, good_dict.copy())
+
+        bad_dict = good_dict.copy()
+        bad_dict['ipv4_gateway'] = "2001:db8:abc:1400::"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv4 gateway"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        bad_dict['ipv4_gateway'] = "nonsense"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv4 gateway"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+
+        bad_dict = good_dict.copy()
+        bad_dict['ipv6_gateway'] = "1.2.3.4"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv6 gateway"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        bad_dict['ipv6_gateway'] = "nonsense"
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "not a valid IPv6 gateway"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+
+        # Labels, empty.
+        good_dict["labels"] = {}
+        self.validate_endpoint(config, combined_id, good_dict)
+        self.assertEqual(good_dict["labels"], {})
+        # Labels, valid.
+        good_dict["labels"] = {"a": "b"}
+        self.validate_endpoint(config, combined_id, good_dict)
+        self.assertEqual(good_dict["labels"], {"a": "b"})
+        # Labels, bad type.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = []
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Expected labels to be a dict"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        # Labels, bad value.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = {"a": {}}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid label value"):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+        # Labels, bad key.
+        bad_dict = good_dict.copy()
+        bad_dict["labels"] = {"a+|%": {}}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Invalid label name 'a+|%'."):
+            self.validate_endpoint(config, combined_id, bad_dict.copy())
+
+
+class TestValidateHostEndpoint(_BaseTestValidateEndpoint):
+    """Tests for host endpoint-specific validation."""
+    use_fip_by_default = False
+
+    def validate_endpoint(self, *args, **kwargs):
+        common.validate_host_endpoint(*args, **kwargs)
+
+    def create_id(self):
+        return HostEndpointId("localhost", "endpoint")
+
+    def valid_endpoint(self, use_fip=False, use_prof_ids=True,
+                       use_exp_ips=True):
+        ep = {
+            "labels": {
+                "a": "b",
+                "c": "d",
+            }
+        }
+        if use_exp_ips:
+            ep["expected_ipv4_addrs"] = ["10.0.1", "1.2.3.4"]
+            ep["expected_ipv6_addrs"] = ["2001:0::1"]
+        else:
+            # Note: name doesn't start with tap, which is OK.
+            ep["name"] = "eth0"
+        if use_prof_ids == MISSING:
+            pass
+        elif use_prof_ids:
+            ep["profile_ids"] = ["prof1", "prof2"]
+        else:
+            ep["profile_id"] = "prof1"
+        if use_fip:
+            raise NotImplementedError()
+        return ep
+
+    def canonical_valid_endpoint(self, use_fip=False, use_prof_ids=True,
+                                 use_exp_ips=True):
+        ep = {
+            "labels": {
+                "a": "b",
+                "c": "d",
+            }
+        }
+        if use_exp_ips:
+            ep["expected_ipv4_addrs"] = ["10.0.0.1", "1.2.3.4"]
+            ep["expected_ipv6_addrs"] = ["2001::1"]
+        else:
+            ep["name"] = "eth0"
+        if use_prof_ids == MISSING:
+            ep["profile_ids"] = []
+        elif use_prof_ids:
+            ep["profile_ids"] = ["prof1", "prof2"]
+        else:
+            ep["profile_ids"] = ["prof1"]  # Normalised to a list.
+        if use_fip:
+            raise NotImplementedError()
+        return ep
+
+    def test_exp_ip_canon(self):
+        self.do_canonicalisation_test(use_exp_ips=True)
+
+    def test_no_exp_ip_canon(self):
+        self.do_canonicalisation_test(use_exp_ips=False)
+
+    def test_validate_endpoint_failures(self):
+        self.assert_tweak_invalidates_endpoint(state="active")
+        self.assert_tweak_invalidates_endpoint(state="inactive")
+        self.assert_tweak_invalidates_endpoint(state=[])
+        self.assert_tweak_invalidates_endpoint(mac="11:22:33:44:55:66")
+        self.assert_tweak_invalidates_endpoint(mac="inactive")
+        self.assert_tweak_invalidates_endpoint(mac=[])
+
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=[])
+        self.assert_tweak_invalidates_endpoint(ipv4_nets=["10.0.0.1"])
+        self.assert_tweak_invalidates_endpoint(ipv4_gateway=["10.0.0.1"])
+        self.assert_tweak_invalidates_endpoint(ipv4_nat=[])
+        self.assert_tweak_invalidates_endpoint(ipv6_nets=[])
+        self.assert_tweak_invalidates_endpoint(ipv6_nets=["1002::1"])
+        self.assert_tweak_invalidates_endpoint(ipv6_gateway=["1234::0"])
+        self.assert_tweak_invalidates_endpoint(ipv6_nat=[])
+
+        self.assert_tweak_invalidates_endpoint(expected_ipv4_addrs={})
+        self.assert_tweak_invalidates_endpoint(expected_ipv4_addrs="10.0.0.1")
+        self.assert_tweak_invalidates_endpoint(expected_ipv4_addrs=["10.0.Z"])
+        self.assert_tweak_invalidates_endpoint(expected_ipv4_addrs=MISSING,
+                                               expected_ipv6_addrs=MISSING)
+        self.assert_tweak_invalidates_endpoint(expected_ipv6_addrs={})
+        self.assert_tweak_invalidates_endpoint(expected_ipv6_addrs="10.0.0.1")
+        self.assert_tweak_invalidates_endpoint(expected_ipv6_addrs=["10.0.Z"])
 
 
 class _BaseRuleTests(unittest.TestCase):

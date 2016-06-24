@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright (c) 2015 Metaswitch Networks
 # All Rights Reserved.
 #
@@ -50,6 +51,7 @@ class UpdateSplitter(object):
         self.tags_upd_mgrs = self._managers_with("on_tags_update")
         self.iface_upd_mgrs = self._managers_with("on_interface_update")
         self.ep_upd_mgrs = self._managers_with("on_endpoint_update")
+        self.host_ep_upd_mgrs = self._managers_with("on_host_ep_update")
         self.ipam_upd_mgrs = self._managers_with("on_ipam_pool_updated")
         self.selector_mgrs = self._managers_with("on_policy_selector_update")
         self.tier_data_mgrs = self._managers_with("on_tier_data_update")
@@ -135,12 +137,23 @@ class UpdateSplitter(object):
         Process an update to the given endpoint.  endpoint may be None if
         the endpoint was deleted.
 
-        :param EndpointId endpoint_id: EndpointId object in question
+        :param WloadEndpointId endpoint_id: WloadEndpointId object in question
         :param dict endpoint: Endpoint data dict
         """
         _log.debug("Endpoint update for %s.", endpoint_id)
         for mgr in self.ep_upd_mgrs:
             mgr.on_endpoint_update(endpoint_id, endpoint, async=True)
+
+    def on_host_ep_update(self, combined_id, iface_data):
+        """
+        Fan out an update to a host endpoint.
+
+        :param HostEndpointId combined_id: Id of the interface.
+        :param dict|NoneType iface_data: JSON data or None for a deletion.
+        """
+        _log.info("Host interface %s updated", combined_id)
+        for mgr in self.host_ep_upd_mgrs:
+            mgr.on_host_ep_update(combined_id, iface_data, async=True)
 
     def on_ipam_pool_updated(self, pool_id, pool):
         """

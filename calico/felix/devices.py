@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2014, 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +24,7 @@ import re
 import os
 import socket
 import struct
+from collections import defaultdict
 
 from netaddr import IPAddress
 
@@ -117,6 +119,37 @@ def list_interface_ips(ip_type, interface):
     ips = re.findall(regex, data, re.MULTILINE)
     _log.debug("Interface %s has %s IPs %s", interface, ip_type, ips)
     return set(IPAddress(ip) for ip in ips)
+
+
+def list_ips_by_iface(ip_type):
+    """
+    List the local IPs assigned to all interfaces.
+    :param str ip_type: IP type, either futils.IPV4 or futils.IPV6
+    :returns: a set of all addresses directly assigned to the device.
+    """
+    assert ip_type in (futils.IPV4, futils.IPV6), (
+        "Expected an IP type, got %s" % ip_type
+    )
+    if ip_type == futils.IPV4:
+        data = futils.check_call(["ip", "-4", "addr", "list"]).stdout
+        regex = r'^    inet ([0-9.]+)'
+    else:
+        data = futils.check_call(["ip", "-6", "addr", "list"]).stdout
+        regex = r'^    inet6 ([0-9a-fA-F:.]+)'
+
+    ips_by_iface = defaultdict(set)
+    iface_name = None
+    for line in data.splitlines():
+        m = re.match(r"^\d+: ([^:]+):", line)
+        if m:
+            iface_name = m.group(1)
+        else:
+            assert iface_name
+            m = re.match(regex, line)
+            if m:
+                ip = IPAddress(m.group(1))
+                ips_by_iface[iface_name].add(ip)
+    return ips_by_iface
 
 
 def set_interface_ips(ip_type, interface, ips):
@@ -243,14 +276,12 @@ def add_route(ip_type, ip, interface, mac):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param str ip: IP address
     :param str interface: Interface name
-    :param str mac: MAC address. May not be None unless ip is None.
+    :param str mac: MAC address or None to skip programming the ARP cache.
     :raises FailedSystemCall
     """
-    if mac is None and ip:
-        raise ValueError("mac must be supplied if ip is provided")
-
     if ip_type == futils.IPV4:
-        futils.check_call(['arp', '-s', ip, mac, '-i', interface])
+        if mac:
+            futils.check_call(['arp', '-s', ip, mac, '-i', interface])
         futils.check_call(["ip", "route", "replace", ip, "dev", interface])
     else:
         futils.check_call(["ip", "-6", "route", "replace", ip, "dev",
@@ -280,11 +311,9 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
     :param ip_type: Type of IP (IPV4 or IPV6)
     :param set ips: IPs to set up (any not in the set are removed)
     :param str interface: Interface name
-    :param str mac|NoneType: MAC address. May not be none unless ips is empty.
+    :param str mac|NoneType: MAC address.
     :param bool reset_arp: Reset arp. Only valid if IPv4.
     """
-    if mac is None and ips:
-        raise ValueError("mac must be supplied if ips is not empty")
     if reset_arp and ip_type != futils.IPV4:
         raise ValueError("reset_arp may only be supplied for IPv4")
 
@@ -295,7 +324,7 @@ def set_routes(ip_type, ips, interface, mac=None, reset_arp=False):
         del_route(ip_type, ip, interface)
     for ip in (ips - current_ips):
         add_route(ip_type, ip, interface, mac)
-    if reset_arp:
+    if mac and reset_arp:
         for ip in (ips & current_ips):
             futils.check_call(['arp', '-s', ip, mac, '-i', interface])
 

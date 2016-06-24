@@ -49,7 +49,7 @@ class FloatingIPManager(Actor):
     @actor_message()
     def update_endpoint(self, endpoint_id, nat_maps):
         """
-        Message sent to us by the LocalEndpoint to tell us we should add it
+        Message sent to us by the WorkloadEndpoint to tell us we should add it
         to the NAT chain.
 
         Idempotent: does nothing if the mapping is already in the chain.
