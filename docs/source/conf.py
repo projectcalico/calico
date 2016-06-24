@@ -55,14 +55,14 @@ copyright = u'2015, Metaswitch Networks'
 # The short X.Y version.
 version = '1.4.0'
 # The full version, including alpha/beta/rc tags.
-release = '1.4.0-pre.2'
+release = '1.4.0-pre.3'
 
 if release != version:
     # Pre-release, add banner to all files:
     rst_prolog = """
-.. warning:: This is a pre-release version of the documentation for 
+.. warning:: This is a pre-release version of the documentation for
              version |version| of Calico.  Unless you are testing |release|
-             the instructions may be incorrect and you probably want 
+             the instructions may be incorrect and you probably want
              the `current stable documentation`_.
 
 .. _current stable documentation: http://docs.projectcalico.org/en/stable/
@@ -79,7 +79,7 @@ if release != version:
     rst_prolog = """
 .. warning:: This is the documentation for |release|, a pre-release of the
              |version| version of Calico.  Unless you are testing |release|
-             the instructions may be incorrect and you probably want 
+             the instructions may be incorrect and you probably want
              the `current stable documentation`_.
 
 .. _current stable documentation: http://docs.projectcalico.org/en/stable/
