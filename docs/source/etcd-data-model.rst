@@ -232,14 +232,15 @@ the fields are described below:
 The various properties in this object have the following meanings:
 
 ``name``
-  Required if none of the ``expected_ipvX_addr`` fiedls are present: the
+  Required if none of the ``expected_ipvX_addrs`` fields are present: the
   name of the interface to apply policy to; for example "eth0".  If "name" is
   not present then at least one expected IP must be specified.
 
-``expected_ipv4_addr`` and ``expected_ipv6_addr``
+``expected_ipv4_addrs`` and ``expected_ipv6_addrs``
   At least one required if ``name`` is not present: the expected local IP
   address of the endpoint.  If ``name`` is not present, Calico will look for
-  an interface with the matching IP and apply policy to that.
+  an interface matching *any* of the IPs in the list and apply policy to
+  that.
 
 ``profile_ids``
   a list of identifiers of :ref:`security-profile-data` objects that apply to
@@ -258,7 +259,7 @@ The various properties in this object have the following meanings:
   .. note:: When using the ``src_selector|tag`` or ``dst_selector|tag`` match
             criteria in a firewall rule, Calico converts the selector into a
             set of IP addresses.  For host endpoints, the
-            ``expected_ipvX_addr`` fields are used for that purpose.  (If
+            ``expected_ipvX_addrs`` fields are used for that purpose.  (If
             only the interface name is specified, Calico does not learn the
             IP of the interface for use in match criteria.)
 
