@@ -358,9 +358,11 @@ class TestEtcdWatcher(BaseTestCase):
 
     @patch("os.path.exists", autospec=True)
     @patch("subprocess.Popen")
+    @patch("gevent.Timeout", autospec=True)
     @patch("socket.socket")
     @patch("os.unlink")
-    def test_start_driver(self, m_unlink, m_socket, m_popen, m_exists):
+    def test_start_driver(self, m_unlink, m_socket, m_timeout, m_popen,
+                          m_exists):
         m_exists.return_value = True
         m_sck = Mock()
         m_socket.return_value = m_sck
@@ -380,6 +382,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.assertTrue(isinstance(reader, MessageReader))
         self.assertTrue(isinstance(writer, MessageWriter))
         m_exists.assert_called_once_with("/run")
+        m_timeout.assert_called_once_with(10)
 
     @patch("calico.felix.fetcd.sys")
     @patch("os.path.exists", autospec=True)

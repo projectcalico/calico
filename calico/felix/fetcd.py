@@ -590,7 +590,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _log.info("etcd-driver command line: %s", cmd)
         self._driver_process = subprocess.Popen(cmd)
         _log.info("Started etcd driver with PID %s", self._driver_process.pid)
-        update_conn, _ = update_socket.accept()
+        with gevent.Timeout(10):
+            update_conn, _ = update_socket.accept()
         _log.info("Accepted connection on socket")
         # No longer need the server socket, remove it.
         try:
