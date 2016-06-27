@@ -3,14 +3,23 @@
 ## 1.4.0-pre3
 
 - Add support for securing bare-metal host endpoints.  This is a significant
-  change that extends Calico's security model to hosts as well as the 
+  change that extends Calico's security model to hosts as well as the
   workloads running on them.
 - InterfacePrefix now defaults to "cali", which is a safe default that happens
   to be the correct value for container systems.
 - MAC address field in endpoint objects is now optional.  If omitted, the MAC
   address is not policed in iptables.
-- Add support for running Felix on RedHat 6.5+ and other distributions with 
+- Add support for running Felix on RedHat 6.5+ and other distributions with
   glibc 2.12+ and kernel 2.6.32+ via creation of Python 2.7 PyInstaller bundle.
+- Fix iptables programming for interfaces with untypically long names.
+- Documentation fixes and updates.
+- Add Xenial support (systemd configuration for Felix).
+- Update CLA process and copyrights for new sponsor Tigera.
+- Add Dockerfile metadata labels (as defined at label-schema.org).
+- Check that conntrack and iptables are installed at start-of-day.
+- Fix that a config section called [DEFAULT] was ignored.
+- Simplify upstart job. (#1035)
+- Add Timeout to socket.accept(). (#1045)
 
 ## 1.4.0-pre2
 
@@ -36,9 +45,9 @@
   as of 0.4.3.
 - Add IpInIpTunnelAddr configuration parameter to allow the IP address of
   the IPIP tunnel device to be set.
-- Add IptablesMarkMask configuration parameter to control which bits are 
+- Add IptablesMarkMask configuration parameter to control which bits are
   used from the iptables forwarding mark.
-- Increase default size of ipsets and make configurable via the 
+- Increase default size of ipsets and make configurable via the
   MaxIpsetSize parameter.
 - Bug fixes, including fixes to NAT when using IPIP mode.
 

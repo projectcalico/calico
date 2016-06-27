@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.4.0
-Release:        0.2pre2%{?dist}
+Release:        0.3pre3%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -146,6 +146,27 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Jun 27 2016 Neil Jerram <neil@tigera.io> 1.4.0-0.3.pre
+  - calico pre-release (from Git commit 4b1a68)
+    - Add support for securing bare-metal host endpoints.  This is a significant
+      change that extends Calico's security model to hosts as well as the
+      workloads running on them.
+    - InterfacePrefix now defaults to "cali", which is a safe default that happens
+      to be the correct value for container systems.
+    - MAC address field in endpoint objects is now optional.  If omitted, the MAC
+      address is not policed in iptables.
+    - Add support for running Felix on RedHat 6.5+ and other distributions with
+      glibc 2.12+ and kernel 2.6.32+ via creation of Python 2.7 PyInstaller bundle.
+    - Fix iptables programming for interfaces with untypically long names.
+    - Documentation fixes and updates.
+    - Add Xenial support (systemd configuration for Felix).
+    - Update CLA process and copyrights for new sponsor Tigera.
+    - Add Dockerfile metadata labels (as defined at label-schema.org).
+    - Check that conntrack and iptables are installed at start-of-day.
+    - Fix that a config section called [DEFAULT] was ignored.
+    - Simplify upstart job. (#1035)
+    - Add Timeout to socket.accept(). (#1045)
+
 * Thu Feb 25 2016 Shaun Crampton <shaun@projectcalico.org> 1.3.0-1
   - Felix now parses the etcd snapshot in parallel with the event stream;
     this dramatically increases scale when under load.
