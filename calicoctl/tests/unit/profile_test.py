@@ -36,7 +36,7 @@ class TestProfile(unittest.TestCase):
         ({'<ICMPCODE>':'5'}, False),
         ({'<ICMPTYPE>':'16'}, False),
         ({'<ICMPCODE>':100, '<ICMPTYPE>':100}, False),
-        ({'<ICMPCODE>':4, '<ICMPTYPE>':255}, True),
+        ({'<ICMPCODE>':4, '<ICMPTYPE>':256}, True),
         ({'<SRCPORTS>':'6,9,10', '<DSTPORTS>':'66,88,95'}, False),
         ({'<SRCPORTS>':'6,9,-10', '<DSTPORTS>':'66,88,95'}, True),
         ({'<SRCPORTS>':'53:99', '<DSTPORTS>':'66,88,95'}, False),
