@@ -1,3 +1,4 @@
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,4 +86,3 @@ class TestRouteReflectorCluster(TestBase):
                                         ip_pass_list=[DEFAULT_IPV4_ADDR_1,
                                                       DEFAULT_IPV4_ADDR_2,
                                                       DEFAULT_IPV4_ADDR_3])
-
