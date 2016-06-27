@@ -1,3 +1,27 @@
+calico (1.4.0~pre.3-xenial) xenial; urgency=low
+
+  * calico pre-release (from Git commit 6430099).
+    - Add support for securing bare-metal host endpoints.  This is a significant
+      change that extends Calico's security model to hosts as well as the
+      workloads running on them.
+    - InterfacePrefix now defaults to "cali", which is a safe default that happens
+      to be the correct value for container systems.
+    - MAC address field in endpoint objects is now optional.  If omitted, the MAC
+      address is not policed in iptables.
+    - Add support for running Felix on RedHat 6.5+ and other distributions with
+      glibc 2.12+ and kernel 2.6.32+ via creation of Python 2.7 PyInstaller bundle.
+    - Fix iptables programming for interfaces with untypically long names.
+    - Documentation fixes and updates.
+    - Add Xenial support (systemd configuration for Felix).
+    - Update CLA process and copyrights for new sponsor Tigera.
+    - Add Dockerfile metadata labels (as defined at label-schema.org).
+    - Check that conntrack and iptables are installed at start-of-day.
+    - Fix that a config section called [DEFAULT] was ignored.
+    - Simplify upstart job. (#1035)
+    - Add Timeout to socket.accept(). (#1045)
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 27 Jun 2016 15:43:44 +0100
+
 calico (1.4.0~pre.3-trusty) trusty; urgency=low
 
   * calico pre-release (from Git commit 6430099).
