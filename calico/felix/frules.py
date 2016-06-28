@@ -224,10 +224,12 @@ def load_nf_conntrack():
     _log.info("Running conntrack command to force load of "
               "nf_conntrack_netlink module.")
     try:
-        # Running the stats command is enough to make conntrack load the
-        # kernel module if needed.  We don't use modprobe here because it's
-        # not smart enough to tell if the module is compiled in.
-        futils.check_call(["conntrack", "-S"])
+        # Run a conntrack command to trigger it to load the kernel module if
+        # it's not already compiled in.  We list rules with a randomly-chosen
+        # link local address.  That makes it very unlikely that we generate
+        # any wasteful output.  We used to use "-S" (show stats) here but it
+        # seems to be bugged on some platforms, generating an error.
+        futils.check_call(["conntrack", "-L", "-s", "169.254.45.169"])
     except FailedSystemCall:
         _log.exception("Failed to execute conntrack command to force load of "
                        "nf_conntrack_netlink module.  conntrack commands may "
