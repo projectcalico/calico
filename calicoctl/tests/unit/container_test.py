@@ -1,3 +1,4 @@
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1187,4 +1188,3 @@ class TestContainer(unittest.TestCase):
         self.assertTrue(m_client.update_endpoint.called)
         self.assertTrue(m_netns.remove_ip_from_ns_veth.called)
         self.assertFalse(m_client.release_ips.called)
-

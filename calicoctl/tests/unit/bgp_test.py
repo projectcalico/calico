@@ -1,3 +1,4 @@
+# Copyright (c) 2016 Tigera, Inc. All rights reserved.
 # Copyright 2015 Metaswitch Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -157,4 +158,3 @@ class TestBgp(unittest.TestCase):
 
         # Assert
         m_client.set_bgp_node_mesh.assert_called_once_with(True)
-
