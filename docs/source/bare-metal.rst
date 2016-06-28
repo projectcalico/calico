@@ -183,7 +183,7 @@ how you might do that; the commands:
            "inbound_rules": [
              {"protocol": "tcp",
               "dst_ports": [22],
-              "src_net": "<your management CIDR>"
+              "src_net": "<your management CIDR>",
               "action": "allow"},
              {"protocol": "icmp", "action": "allow"},
              {"action": "next-tier"}
@@ -192,9 +192,9 @@ how you might do that; the commands:
            "outbound_rules": [
              {"protocol": "tcp",
               "dst_ports": [<your etcd ports>],
-              "dst_net": "<your etcd IP>/32"
+              "dst_net": "<your etcd IP>/32",
               "action": "allow"},
-             {"protocol": "udp", "dst_ports": [67], "action": "allow"}
+             {"protocol": "udp", "dst_ports": [67], "action": "allow"},
              {"action": "next-tier"}
            ]
          }'
