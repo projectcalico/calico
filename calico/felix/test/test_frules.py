@@ -474,13 +474,20 @@ class TestRules(BaseTestCase):
     def test_load_nf_conntrack(self):
         with patch("calico.felix.futils.check_call", autospec=True) as m_call:
             frules.load_nf_conntrack()
-        m_call.assert_called_once_with(["conntrack", "-S"])
+        m_call.assert_called_once_with(
+            ["conntrack", "-L", "-s", "169.254.45.169"]
+        )
 
     def test_load_nf_conntrack_fail(self):
         with patch("calico.felix.futils.check_call", autospec=True) as m_call:
-            m_call.side_effect = FailedSystemCall(message="bad call",
-                                                  args=["conntrack", "-S"],
-                                                  retcode=1,
-                                                  stdout="", stderr="")
+            m_call.side_effect = FailedSystemCall(
+                message="bad call",
+                args=["conntrack", "-L",
+                      "-s",
+                      "169.254.45.169"],
+                retcode=1,
+                stdout="", stderr="")
             frules.load_nf_conntrack()  # Exception should be caught
-        m_call.assert_called_once_with(["conntrack", "-S"])
+        m_call.assert_called_once_with(
+            ["conntrack", "-L", "-s", "169.254.45.169"]
+        )
