@@ -1467,7 +1467,8 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
                                  "openstack/wlid/endpoint/ep1"
         m_port_status_node.value = '{"status": "up"}'
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
-        ep_id = datamodel_v1.EndpointId("hostname", "openstack", "wlid", "ep1")
+        ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack",
+                                             "wlid", "ep1")
         self.assertEqual(self.watcher._endpoints_by_host,
                          {"hostname": set([ep_id])})
         return m_port_status_node
