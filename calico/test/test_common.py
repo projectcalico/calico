@@ -195,11 +195,18 @@ class TestCommon(unittest.TestCase):
             # Bad order value
             common.validate_tier_data("abc", {"order": "10"})
         with self.assertRaises(ValidationFailed):
-            # Missing order.
-            common.validate_tier_data("abc", {})
-        with self.assertRaises(ValidationFailed):
             # Non-dict.
             common.validate_tier_data("abc", "foo")
+        # Missing order.
+        tier = {}
+        common.validate_tier_data("abc", tier)
+        self.assertEqual(tier["order"], common.INFINITY)
+        self.assertGreater(tier["order"], 999999999999999999999999999999999999)
+        # "default" order.
+        tier = {"order": "default"}
+        common.validate_tier_data("abc", tier)
+        self.assertEqual(tier["order"], common.INFINITY)
+        self.assertGreater(tier["order"], 999999999999999999999999999999999999)
 
     def test_validate_rules(self):
         profile_id = "valid_name-ok."
@@ -490,8 +497,19 @@ class TestCommon(unittest.TestCase):
             "inbound_rules": [],
             "outbound_rules": [],
         }
-        with self.assertRaises(ValidationFailed):
-            common.validate_policy(TieredPolicyId("a", "b"), policy)
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
+        self.assertEqual(policy["order"], common.INFINITY)
+        self.assertGreater(policy["order"], 9999999999999999999999999999999999)
+
+        policy = {
+            "selector": "a == 'b'",
+            "inbound_rules": [],
+            "outbound_rules": [],
+            "order": "default",
+        }
+        common.validate_policy(TieredPolicyId("a", "b"), policy)
+        self.assertEqual(policy["order"], common.INFINITY)
+        self.assertGreater(policy["order"], 9999999999999999999999999999999999)
 
         policy = {
             "order": 10,

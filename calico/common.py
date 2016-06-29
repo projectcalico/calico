@@ -112,6 +112,8 @@ VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]{1,15}$')
 VALID_IPAM_POOL_ID_RE = re.compile(r'^[0-9\.:a-fA-F\-]{1,43}$')
 EXPECTED_IPAM_POOL_KEYS = set(["cidr", "masquerade"])
 
+INFINITY = float("inf")
+
 
 def validate_port(port):
     """
@@ -540,12 +542,13 @@ def validate_tier_data(tier, data):
     if not isinstance(data, dict):
         raise ValidationFailed("Expected tier data to be a dict not %r" % data)
 
-    if "order" in data:
+    if "order" not in data or data["order"] == "default":
+        data["order"] = INFINITY
+    else:
         order = data["order"]
         if not isinstance(order, numbers.Number):
-            issues.append("Tier data contained non-numeric order field")
-    else:
-        issues.append("Missing 'order' field in tier data")
+            issues.append('Tier data "order" field should be number or '
+                          '"default"')
 
     if issues:
         raise ValidationFailed(" ".join(issues))
@@ -599,12 +602,12 @@ def validate_policy(policy_id, policy):
     else:
         issues.append("Profile missing required selector field")
 
-    if "order" in policy:
-        if not isinstance(policy["order"], numbers.Number):
-            issues.append("Order should be a number, not %s" %
-                          policy["order"])
+    if "order" not in policy or policy["order"] == "default":
+        policy["order"] = INFINITY
     else:
-        issues.append("Profile missing required order field")
+        if not isinstance(policy["order"], numbers.Number):
+            issues.append('Order should be a number, or "default", not %s' %
+                          policy["order"])
 
     if issues:
         raise ValidationFailed(" ".join(issues))

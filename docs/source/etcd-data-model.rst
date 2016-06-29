@@ -357,17 +357,19 @@ a metadata key inside it::
 The metadata key contains a JSON dict, which currently contains only the order
 for the tier::
 
-    {"order": <number>}
+    {"order": <number>|"default"}
 
 
 Tiers with higher "order" values are applied after those with lower numbers.
+If the ``order`` is omitted or set to "default" then the tier effectively
+has infinite order, it will be applied after any other tiers.
 
 The security policy itself is very similar to the ``rules`` JSON dict that is
 used for policy, with the addition of a selector and order of its own::
 
     {
         "selector": "<selector-expression>",
-        "order": <number>,
+        "order": <number>|"default",
         "inbound_rules": [{<rule>}, ...],
         "outbound_rules": [{<rule>}, ...]
     }
