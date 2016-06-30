@@ -603,7 +603,7 @@ def check_command_deps():
     try:
         conntrack_version = check_output(["conntrack", "--version"])
     except (CalledProcessError, OSError):
-        _log.critical("Failed to execute conntrack; Calico requires iptables "
+        _log.critical("Failed to execute conntrack; Calico requires conntrack "
                       "to be installed.")
         sys.exit(1)
     else:
