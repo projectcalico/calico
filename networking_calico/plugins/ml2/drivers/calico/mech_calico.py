@@ -316,7 +316,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self._epoch += 1
             eventlet.spawn(self.periodic_resync_thread, self._epoch)
             eventlet.spawn(self._status_updating_thread, self._epoch)
-            for _ in xrange(cfg.CONF.calico.num_port_status_threads):
+            for _ in range(cfg.CONF.calico.num_port_status_threads):
                 eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
             LOG.info("Calico mechanism driver initialisation done in process "
                      "%s", current_pid)
