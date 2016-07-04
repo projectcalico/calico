@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2016 Tigera, Inc. All rights reserved.
-# Copyright 2015 Metaswitch Networks
+# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -351,4 +350,3 @@ class HostEndpointDispatchChains(_DispatchChains):
         return ['--append %s --jump RETURN --match comment '
                 '--comment "Unknown interface, return"' %
                 chain_name]
-

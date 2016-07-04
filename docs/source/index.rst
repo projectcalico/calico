@@ -1,4 +1,4 @@
-.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+.. # Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
    #
    #    Licensed under the Apache License, Version 2.0 (the "License"); you may
    #    not use this file except in compliance with the License. You may obtain
@@ -16,9 +16,8 @@ Welcome to Calico
 =================
 
 Calico is an open source solution for virtual networking in
-cloud data centers, developed by `Metaswitch
-Networks <http://www.metaswitch.com/>`__ and released under the `Apache
-2.0
+cloud data centers, developed by `Tigera, Inc. <http://www.tigera.io/>`__
+and released under the `Apache 2.0
 License <https://github.com/projectcalico/calico/blob/master/LICENSE>`__.
 You can find high level information about it on `our
 website <http://www.projectcalico.org/>`__, and more detailed documentation

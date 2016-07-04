@@ -1,4 +1,4 @@
-.. # Copyright (c) Metaswitch Networks 2015. All rights reserved.
+.. # Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
    #
    #    Licensed under the Apache License, Version 2.0 (the "License"); you may
    #    not use this file except in compliance with the License. You may obtain
@@ -83,5 +83,3 @@ and making a GitHub pull request.  If you're interested in doing that:
    docs <https://help.github.com/articles/using-pull-requests>`__ for
    how to create a Pull Request.
 -  Check our :doc:`contribute` for more information.
-
-

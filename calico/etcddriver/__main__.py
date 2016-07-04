@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2016 Tigera, Inc. All rights reserved.
-# Copyright (c) 2014, 2015 Metaswitch Networks
+# Copyright (c) 2014-2016 Tigera, Inc. All rights reserved.
+#
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may

@@ -1,6 +1,6 @@
 # -*- mode: python -*-
 # -*- coding: utf-8 -*-
-# Copyright 2015 Metaswitch Networks
+# Copyright (c) 2015 Tigera, Inc. All rights reserved.
 # Copyright 2015 Cisco Systems
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

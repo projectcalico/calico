@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # -*- coding: utf-8 -*-
 # Copyright (c) 2016 Tigera, Inc. All rights reserved.
 #
@@ -14,9 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# PyInstaller .spec file for building the bundle.  This file is actually a
-# Python file,  which is run with various pre-defined variables.
 
 # This script is run inside the container to actually do the pyinstaller
 # build.

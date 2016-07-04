@@ -154,4 +154,3 @@ For debugging, it's sometimes useful to run Felix manually and tell it to emit
 its logs to screen.  You can do that with the following command::
 
     FELIX_LOGSEVERITYSCREEN=INFO /opt/calico-felix/calico-felix
-
