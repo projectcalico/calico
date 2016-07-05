@@ -169,8 +169,6 @@ You should now be able to access the guestbook application from a browser at `ht
 
 Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
 
-You can also take a look at how you can use Calico [network policy on Kubernetes](NetworkPolicy.md).
-
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [coreos-gce]: https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/
