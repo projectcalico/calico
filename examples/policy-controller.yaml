@@ -14,8 +14,7 @@ spec:
   containers:
     # The Calico policy controller.
     - name: policy-controller 
-      image: calico/k8s-policy-controller
-      imagePullPolicy: IfNotPresent 
+      image: calico/kube-policy-controller:latest
       env:
         # Modify ETCD_ENDPOINTS to match your etcd cluster.
         - name: ETCD_ENDPOINTS
