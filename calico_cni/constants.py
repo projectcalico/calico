@@ -48,6 +48,11 @@ K8S_CERTIFICATE_AUTHORITY_VAR = "k8s_certificate_authority"
 # configuration file.
 ETCD_AUTHORITY_KEY = "etcd_authority"
 ETCD_ENDPOINTS_KEY = "etcd_endpoints"
+ETCD_SCHEME_KEY = "etcd_scheme"
+ETCD_KEY_FILE_KEY = "etcd_key_file"
+ETCD_CERT_FILE_KEY = "etcd_cert_file"
+ETCD_CA_CERT_FILE_KEY = "etcd_ca_cert_file"
+
 LOG_LEVEL_FILE_KEY = "log_level"
 LOG_LEVEL_STDERR_KEY = "log_level_stderr"
 POLICY_KEY = "policy"
