@@ -11,8 +11,12 @@
 This document describes the steps required to install Calico on an existing
 Kubernetes cluster.
 
+This document explains an installation of Calico that includes Kubernetes NetworkPolicy support.  Older versions
+of Calico include annotation-based policy support.  While this is no longer recommended, the documentation
+for annotation-based policy can still be found in [an older release](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md).
+
 ## Requirements
-- An existing Kubernetes cluster running Kubernetes >= v1.1
+- An existing Kubernetes cluster running Kubernetes >= v1.1.  To use NetworkPolicy, Kubernetes >= v1.3.0 is required.
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
   - Calico can share the etcd cluster used by Kubernetes, but it's recommended
   that a separate cluster is set up.
@@ -149,7 +153,7 @@ After=calico-node.service
 Requires=calico-node.service
 
 [Service]
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.1.4/bin/linux/amd64/kubelet
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
 ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
@@ -178,7 +182,8 @@ This unit file ensures that the `kubelet` binary and the `calico` plugin are pre
 ### Configuring the Kube-Proxy
 In order to use Calico policy with Kubernetes, the `kube-proxy` component must
 be configured to leave the source address of service bound traffic intact.
-This feature is first officially supported in Kubernetes v1.1.0.
+This feature is first officially supported in Kubernetes v1.1.0 and is the default mode starting
+in Kubernetes v1.2.0.
 
 We highly recommend using the latest stable Kubernetes release, but if you're using an older release
 there are two ways to enable this behavior.

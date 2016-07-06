@@ -72,7 +72,7 @@ Deploy the Kubernetes master node using the following command:
 gcloud compute instances create \
   kubernetes-master \
   --image-project coreos-cloud \
-  --image coreos-stable-835-9-0-v20151208 \
+  --image coreos-stable-1010-6-0-v20160628 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/master-config-ipip.yaml
 ```
@@ -82,7 +82,7 @@ Deploy at least one worker node using the following command:
 gcloud compute instances create \
   kubernetes-node-1 \
   --image-project coreos-cloud \
-  --image coreos-stable-835-9-0-v20151208 \
+  --image coreos-stable-1010-6-0-v20160628 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/node-config.yaml
 ```

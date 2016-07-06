@@ -7,7 +7,7 @@
 <!--- end of master only -->
 
 # Kubernetes with Calico networking
-Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy for workloads in a Kubernetes cluster.  
+Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy for workloads in a Kubernetes cluster. 
 
 To start using Calico Networking in your existing Kubernetes cluster, check out our [integration tutorial](KubernetesIntegration.md).
 
@@ -25,7 +25,7 @@ Bare-metal guides:
 
 
 # Requirements
-- The kube-proxy must be started in `iptables` proxy mode.
+- The kube-proxy must be started in `iptables` proxy mode.  This is the default as of Kubernetes v1.2.0.
 
 # Troubleshooting 
 - [Troubleshooting](Troubleshooting.md)
