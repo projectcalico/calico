@@ -1,15 +1,17 @@
 kind: NetworkPolicy
-apiVersion: net.alpha.kubernetes.io/v1alpha1
+apiVersion: extensions/v1beta1
 metadata:
   namespace: stars
   name: backend-policy
 spec:
   podSelector:
-    role: backend
+    matchLabels:
+      role: backend
   ingress:
     - from:
-        - pods:
-            role: frontend
+        - podSelector:
+            matchLabels:
+              role: frontend
       ports:
         - protocol: TCP
           port: 6379

@@ -83,22 +83,8 @@ And finally check that Docker is running on both hosts by running
     docker ps
 
 ## 2. Using your cluster
-### 2.1 Enable NetworkPolicy API on the Cluster 
-The Calico Policy Agent uses this API to enables network policy on Kubenrnetes.
 
-To install it:
-
-Log on to the master.
-```
-vagrant ssh k8s-master 
-```
-
-Install the manifest:
-```
-kubectl create -f policy.yaml
-```
-
-### 2.2 Deploying SkyDNS
+### 2.1 Deploying SkyDNS
 You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
 
 Log on to the master node.
@@ -128,7 +114,7 @@ Check that the DNS pod has been networked using Calico.  You should see a Calico
 calicoctl endpoint show --detailed
 ```
 
-### 2.3 Next Steps
+### 2.2 Next Steps
 Try deploying an application to the cluster.
 - [Calico Policy Demo](stars-demo/README.md)
 - [Kubernetes guestbook](vagrant-coreos/guestbook.md)

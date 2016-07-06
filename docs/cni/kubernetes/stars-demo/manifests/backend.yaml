@@ -16,7 +16,7 @@ metadata:
   name: backend 
   namespace: stars
 spec:
-  replicas: 2
+  replicas: 1
   template:
     metadata:
       labels:
