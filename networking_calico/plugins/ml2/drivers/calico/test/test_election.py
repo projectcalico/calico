@@ -88,7 +88,7 @@ class TestElection(unittest.TestCase):
         # client proceed to raise its exception.
         client.stop.send()
         # Double-check there were no failures.
-        self.assertEqual(client.failure, None, msg=client.failure)
+        self.assertEqual(None, client.failure, msg=client.failure)
 
     def test_basic_election(self):
         # Test that not elected using defaults.
@@ -226,10 +226,10 @@ class TestElection(unittest.TestCase):
         self.assertRaises(election.RestartElection,
                           elector._check_master_process, "server-id:1234")
         self.assertEqual(
-            client.delete.mock_calls,
             [
                 mock.call("/bloop", prevValue="server-id:1234")
-            ]
+            ],
+            client.delete.mock_calls
         )
 
     @mock.patch("os.path.exists")
@@ -239,7 +239,7 @@ class TestElection(unittest.TestCase):
         elector = election.Elector(client, "server-id", "/bloop",
                                    interval=5, ttl=15)
         elector._check_master_process("other-server:1234")
-        self.assertEqual(client.delete.mock_calls, [])
+        self.assertEqual([], client.delete.mock_calls)
 
     @mock.patch("os.path.exists")
     def test_check_master_process_still_alive(self, m_exists):
@@ -248,4 +248,4 @@ class TestElection(unittest.TestCase):
         elector = election.Elector(client, "server-id", "/bloop",
                                    interval=5, ttl=15)
         elector._check_master_process("server-id:1234")
-        self.assertEqual(client.delete.mock_calls, [])
+        self.assertEqual([], client.delete.mock_calls)
