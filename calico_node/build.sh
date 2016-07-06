@@ -16,13 +16,14 @@
 set -e
 set -x
 
-# Ensure the main and testing repros are present. Needed for runit
-echo "http://alpine.gliderlabs.com/alpine/edge/testing" >> /etc/apk/repositories
-
 # These packages make it into the final image.
-apk -U add runit python py-setuptools libffi ip6tables ipset iputils iproute2 yajl conntrack-tools
+# Install runit from the testing repository, as its not yet available in global
+apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edge/testing" runit
+# Install remaining runtime deps from the global repository
+apk add --update-cache python py-setuptools libffi ip6tables ipset iputils iproute2 yajl conntrack-tools
 
-# These packages are only used for building and get removed.
+# Add these build-tools packages under a virtual package named 'temp' which 
+# will be uninstalled post-build.
 apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk curl
 
 # Install Confd
