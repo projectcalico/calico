@@ -611,6 +611,8 @@ class TestCommon(unittest.TestCase):
         """
         # Whitespace is ignored in selectors.
         assume(not re.search(r'\s', label))
+        # A ! at the start of a label name is parsed as a negation.
+        assume(not re.match(r'^!+.+', label))
         try:
             common.validate_labels("foo", {label: "foo"})
         except ValidationFailed:
