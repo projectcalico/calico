@@ -2,6 +2,7 @@
 
 # Version of calico/build to use.
 BUILD_VERSION=latest
+CALICO_VERSION=$(shell git describe --tags)
 
 SRCFILES=$(shell find calico_cni -type f ! -path calico_cni/version.py) calico.py ipam.py
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -9,8 +10,9 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 K8S_VERSION=1.2.0
 
 default: all
-all: binary test
+all: docker test
 binary: update-version dist/calico dist/calico-ipam
+docker: binary dist/docker
 test: ut fv
 plugin: dist/calico
 ipam: dist/calico-ipam
@@ -30,11 +32,16 @@ dist/calico-ipam: $(SRCFILES)
 	calico/build:$(BUILD_VERSION) \
 	pyinstaller ipam.py -ayF -n calico-ipam
 
+# Makes a docker image
+dist/docker:
+	docker build -t calico/cni .
+	docker tag calico/cni calico/cni:$(CALICO_VERSION)
+
 # Updates the version information in version.py
 update-version:
 	echo "# Auto-generated contents.  Do not manually edit" > calico_cni/version.py
 	echo "# or check in this file." >> calico_cni/version.py
-	echo "__version__ = '$(shell git describe --tags)'" >> calico_cni/version.py
+	echo "__version__ = '${CALICO_VERSION}'" >> calico_cni/version.py
 	echo "__commit__ = '$(shell git rev-parse HEAD)'" >> calico_cni/version.py
 	echo "__branch__ = '$(shell git rev-parse --abbrev-ref HEAD)'" >> calico_cni/version.py
 
