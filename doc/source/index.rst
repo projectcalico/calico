@@ -43,13 +43,13 @@ For more detail please see :ref:`semantics`.
    :maxdepth: 2
 
    readme
+   contributing
    semantics
    floating-ips
    devstack
    implementation-notes
    host-routes
    dhcp-agent
-   contributing
 
 Indices and tables
 ==================

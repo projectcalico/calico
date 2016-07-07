@@ -1,0 +1,61 @@
+# Licensed under the Apache License, Version 2.0 (the "License"); you may
+# not use this file except in compliance with the License. You may obtain
+# a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations
+# under the License.
+
+#
+# This script is executed in the tempest-dsvm-networking-calico OpenStack CI
+# job that runs DevStack + tempest.  You can find the CI job configuration
+# here:
+#
+# http://git.openstack.org/cgit/openstack-infra/project-config/tree/jenkins/jobs/networking-calico.yaml
+#
+
+# Begin list of exclusions.
+r="^(?!.*"
+
+# exclude the slow tag (part of the default for 'full')
+r="$r(?:.*\[.*\bslow\b.*\])"
+
+# exclude things that just aren't enabled:
+r="$r|(?:tempest\.api\.network\.admin\.test_quotas\.QuotasTest\.test_lbaas_quotas.*)"
+r="$r|(?:tempest\.api\.network\.test_load_balancer.*)"
+r="$r|(?:tempest\.scenario\.test_load_balancer.*)"
+r="$r|(?:tempest\.api\.network\.admin\.test_load_balancer.*)"
+r="$r|(?:tempest\.api\.network\.admin\.test_lbaas.*)"
+r="$r|(?:tempest\.api\.network\.test_fwaas_extensions.*)"
+r="$r|(?:tempest\.api\.network\.test_metering_extensions.*)"
+r="$r|(?:tempest\.thirdparty\.boto\.test_s3.*)"
+
+# exclude some unrelated stuff to make networking-calico targeted runs go faster
+r="$r|(?:tempest\.api\.identity*)"
+r="$r|(?:tempest\.api\.image*)"
+r="$r|(?:tempest\.api\.volume*)"
+r="$r|(?:tempest\.api\.compute\.images*)"
+r="$r|(?:tempest\.api\.compute\.keypairs*)"
+r="$r|(?:tempest\.api\.compute\.certificates*)"
+r="$r|(?:tempest\.api\.compute\.flavors*)"
+r="$r|(?:tempest\.api\.compute\.test_quotas*)"
+r="$r|(?:tempest\.api\.compute\.test_versions*)"
+r="$r|(?:tempest\.api\.compute\.volumes*)"
+
+# End list of exclusions.
+r="$r)"
+
+# only run test_server_basic_ops
+r="$r(tempest\.scenario\.test_server_basic_ops).*$"
+
+if [ -z $DEVSTACK_GATE_GRENADE ]; then
+    # Do not run the tempest test cases on grenade jobs. By not setting this,
+    # we still do run the tempest smoke tests. The pre-upgraded stack too runs
+    # just the smoke tests. This is how openstack/neutron runs its post-upgrade
+    # tempest tests.
+    export DEVSTACK_GATE_TEMPEST_REGEX="$r"
+fi
