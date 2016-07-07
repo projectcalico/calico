@@ -7,8 +7,12 @@
 <!--- end of master only -->
 
 # Kubernetes with Calico networking
-Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy for workloads in a Kubernetes cluster. 
+Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy in a Kubernetes cluster. 
+Calico allows you to enforce fine-grained network security policy natively in Kubernetes. The video below shows a quick demonstration of Calico policy in action.
 
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/OE1n5PWtvMM/0.jpg)](http://www.youtube.com/watch?v=OE1n5PWtvMM "Calico network policy on Kubernetes")
+
+# Getting Started
 To start using Calico Networking in your existing Kubernetes cluster, check out our [integration tutorial](KubernetesIntegration.md).
 
 To build a new Kubernetes cluster with Calico networking, try one of the following guides:
