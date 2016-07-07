@@ -38,7 +38,7 @@ $ cat /etc/cni/net.d/10-calico.conf
     }
 }
 ```
-> More configuration options can be found [here](https://github.com/projectcalico/calico-cni/blob/master/configuration.md).
+> More configuration options can be found [here](https://github.com/projectcalico/calico-cni/blob/v1.3.1/configuration.md).
 
 This will configure label-based policy on Kuberetes pods.
 
@@ -59,7 +59,7 @@ To run the Calico Kubernetes policy agent:
 
 1. Download the policy services manifest file on your master.
 ```
-wget https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/calico-policy-agent.yaml
+wget https://raw.githubusercontent.com/projectcalico/k8s-policy/v0.1.4/examples/calico-policy-agent.yaml 
 ```
 
 2. Replace the ETCD_ENDPOINTS variable in that file with the correct configuration to access your etcd cluster.
