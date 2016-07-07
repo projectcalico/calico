@@ -35,12 +35,12 @@ write_files:
         echo "Calico not installed - installing."
        
         # Install the `calicoctl` binary
-        wget https://github.com/projectcalico/calico-containers/releases/download/v0.14.0/calicoctl
+        wget https://github.com/projectcalico/calico-containers/releases/download/v0.20.0/calicoctl
         chmod +x calicoctl
         sudo mv calicoctl /opt/bin
 
         # Fetch the calico/node container
-        sudo docker pull calico/node:v0.14.0
+        sudo docker pull calico/node:v0.20.0
       fi
 
   - path: /opt/bin/install-manifests.sh
@@ -67,6 +67,31 @@ write_files:
       echo "DEFAULT_IPV4: $DEFAULT_IPV4"
       sudo sed -i -e "s/<MASTER_IPV4>/$DEFAULT_IPV4/g" /etc/kubernetes/manifests/calico-etcd.manifest
 
+  - path: /etc/kubernetes/manifests/policy-controller.manifest
+    owner: root
+    permissions: 0755
+    content: |
+      apiVersion: v1
+      kind: Pod 
+      metadata:
+        name: policy-controller
+        namespace: kube-system 
+        labels:
+          projectcalico.org/app: "policy-controller"
+      spec:
+        hostNetwork: true
+        containers:
+          # The Calico policy controller.
+          - name: policy-controller 
+            image: calico/kube-policy-controller:v0.2.0
+            env:
+              # Modify ETCD_ENDPOINTS to match your etcd cluster.
+              - name: ETCD_ENDPOINTS
+                value: "http://127.0.0.1:2379"
+              - name: K8S_API
+                value: "http://127.0.0.1:8080"
+              - name: LEADER_ELECTION 
+                value: "false"
 coreos:
   update:
     reboot-strategy: off
