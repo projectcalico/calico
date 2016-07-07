@@ -200,7 +200,8 @@ class Config(object):
         self.add_parameter("EtcdCertFile", "Path to etcd certificate file",
                            "none", sources=[ENV, FILE])
         self.add_parameter("EtcdCaFile", "Path to etcd CA certificate file",
-                           "none", sources=[ENV, FILE])
+                           "/etc/ssl/certs/ca-certificates.crt",
+                           sources=[ENV, FILE])
         self.add_parameter("EtcdEndpoints", "Comma separated list of etcd "
                            "endpoints, of the form scheme://address:port.  "
                            "For example "

@@ -86,7 +86,8 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.ETCD_SCHEME, "http")
             self.assertEqual(config.ETCD_KEY_FILE, None)
             self.assertEqual(config.ETCD_CERT_FILE, None)
-            self.assertEqual(config.ETCD_CA_FILE, None)
+            self.assertEqual(config.ETCD_CA_FILE,
+                             "/etc/ssl/certs/ca-certificates.crt")
             self.assertEqual(config.HOSTNAME, socket.gethostname())
             self.assertEqual(config.IFACE_PREFIX, "blah")
             self.assertEqual(config.METADATA_PORT, 123)
@@ -197,6 +198,19 @@ class TestConfig(unittest.TestCase):
             with self.assertRaisesRegexp(ConfigException,
                                          "Missing CA certificate"):
                 config = Config("calico/felix/test/data/felix_unreadable_ca.cfg")
+
+    def test_none_ca(self):
+        """
+        Test that the CA can be overriden to None.
+        """
+        with nested(mock.patch("os.path.isfile", autospec=True),
+                    mock.patch("os.access", autospec=True)) \
+             as (m_isfile, m_access):
+
+            m_isfile.return_value = True
+            m_access.return_value = True
+            config = load_config("felix_none_ca.cfg")
+            self.assertEqual(config.ETCD_CA_FILE, None)
 
     def test_no_logfile(self):
         # Logging to file can be excluded by explicitly saying "none" -
