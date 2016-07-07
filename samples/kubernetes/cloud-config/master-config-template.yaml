@@ -20,8 +20,8 @@ write_files:
         echo "Kubenetes not installed - installing."
 
         # Extract the Kubernetes binaries.
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubectl
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
         sudo chmod +x /opt/bin/kubelet /opt/bin/kubectl
       fi
 
@@ -58,9 +58,9 @@ write_files:
         echo "Manifests not installed - installing."
 
         # Download config.
-        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/kubernetes-master.manifest
-        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/calico-etcd.manifest
-        sudo wget -N -P /etc/kubernetes/addons/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.1-docs/samples/kubernetes/master/dns/skydns.yaml
+        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.3-docs/samples/kubernetes/master/kubernetes-master.manifest
+        sudo wget -N -P /etc/kubernetes/manifests/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.3-docs/samples/kubernetes/master/calico-etcd.manifest
+        sudo wget -N -P /etc/kubernetes/addons/ https://raw.githubusercontent.com/projectcalico/calico-cni/k8s-1.3-docs/samples/kubernetes/master/dns/skydns.yaml
       fi
 
       # Insert the master's IP address into the manifest.
