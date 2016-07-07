@@ -35,7 +35,7 @@ write_files:
         echo "Kubenetes not installed - installing."
 
         # Extract the Kubernetes binaries.
-        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.1.3/bin/linux/amd64/kubelet
+        sudo wget -N -P /opt/bin http://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
         sudo chmod +x /opt/bin/kubelet
 
         # Create required folders
@@ -149,7 +149,7 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube:v1.1.3
+          image: gcr.io/google_containers/hyperkube:v1.3.0
           command:
           - /hyperkube
           - proxy
