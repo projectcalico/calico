@@ -72,7 +72,7 @@ Deploy the Kubernetes master node using the following command:
 gcloud compute instances create \
   kubernetes-master \
   --image-project coreos-cloud \
-  --image coreos-stable-835-9-0-v20151208 \
+  --image coreos-stable-1010-6-0-v20160628 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/master-config-ipip.yaml
 ```
@@ -82,7 +82,7 @@ Deploy at least one worker node using the following command:
 gcloud compute instances create \
   kubernetes-node-1 \
   --image-project coreos-cloud \
-  --image coreos-stable-835-9-0-v20151208 \
+  --image coreos-stable-1010-6-0-v20160628 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=cloud-config/node-config.yaml
 ```
@@ -168,8 +168,6 @@ You should now be able to access the guestbook application from a browser at `ht
 ### 3.4 Next Steps
 
 Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
-
-You can also take a look at how you can use Calico [network policy on Kubernetes](NetworkPolicy.md).
 
 
 [calico-cni]: https://github.com/projectcalico/calico-cni

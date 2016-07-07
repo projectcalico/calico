@@ -7,8 +7,12 @@
 <!--- end of master only -->
 
 # Kubernetes with Calico networking
-Calico can be used as a network plugin for Kubernetes using the Container Network Interface to provide connectivity for workloads in a Kubernetes cluster.  Calico is particularly suitable for large Kubernetes deployments on bare metal or private clouds, where the performance and complexity costs of overlay networks can become significant. It can also be used in public clouds.
+Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy in a Kubernetes cluster. 
+Calico allows you to enforce fine-grained network security policy natively in Kubernetes. The video below shows a quick demonstration of Calico policy in action.
 
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/OE1n5PWtvMM/0.jpg)](http://www.youtube.com/watch?v=OE1n5PWtvMM "Calico network policy on Kubernetes")
+
+# Getting Started
 To start using Calico Networking in your existing Kubernetes cluster, check out our [integration tutorial](KubernetesIntegration.md).
 
 To build a new Kubernetes cluster with Calico networking, try one of the following guides:
@@ -23,17 +27,9 @@ Bare-metal guides:
 - [CoreOS bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/coreos/bare_metal_calico.md)
 - [Ubuntu bare-metal](https://github.com/kubernetes/kubernetes/blob/master/docs/getting-started-guides/ubuntu-calico.md)
 
-# Kubernetes with Calico policy
-Calico can provide network policy for Kubernetes clusters using the v1alpha1 Kubernetes network-policy API.
-
-This feature is currently in alpha and disabled by default.  The following guide explains how to enable and use Calico policy on Kubernetes. 
-- [Kubernetes v1alpha1 Network Policy](NetworkPolicy.md)
-
-Calico also supports network policy using annotaions.  This method is deprecated, and as such is not recommended.
-- [Calico policy using Annotations](AnnotationPolicy.md) [Deprecated]
 
 # Requirements
-- The kube-proxy must be started in `iptables` proxy mode.
+- The kube-proxy must be started in `iptables` proxy mode.  This is the default as of Kubernetes v1.2.0.
 
 # Troubleshooting 
 - [Troubleshooting](Troubleshooting.md)
