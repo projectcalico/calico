@@ -90,7 +90,8 @@ chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 It's recommended that this is done as part of job that manages the `kubelet` process (see below)
 
-The Calico CNI plugins require a standard CNI config file.
+The Calico CNI plugins require a standard CNI config file.  The `policy` section is only required when
+deploying the `calico/kube-policy-controller` for NetworkPolicy.
 
 ```
 mkdir -p /etc/cni/net.d
@@ -102,6 +103,9 @@ $ cat >/etc/cni/net.d/10-calico.conf <<EOF
     "log_level": "info",
     "ipam": {
         "type": "calico-ipam"
+    },
+    "policy": {
+        "type": "k8s"
     }
 }
 EOF
