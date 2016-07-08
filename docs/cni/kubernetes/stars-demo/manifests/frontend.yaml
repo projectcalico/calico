@@ -29,6 +29,6 @@ spec:
         command:
         - probe
         - --http-port=80
-        - --urls=http://frontend.stars.cluster.local:80/status,http://backend.stars.cluster.local:6379/status,http://client.client.cluster.local:9000/status
+        - --urls=http://frontend.stars:80/status,http://backend.stars:6379/status,http://client.client:9000/status
         ports:
         - containerPort: 80 

@@ -23,7 +23,7 @@ spec:
         imagePullPolicy: Always
         command:
         - probe
-        - --urls=http://frontend.stars.cluster.local:80/status,http://backend.stars.cluster.local:6379/status
+        - --urls=http://frontend.stars:80/status,http://backend.stars:6379/status
         ports:
         - containerPort: 9000 
 ---
