@@ -51,22 +51,40 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 When using the Calico CNI plugin with Kubernetes, an additional config block can be specified to control how network policy is configured. The required config block is `policy`. See the [Calico Kubernetes documentation](https://github.com/projectcalico/calico-containers/tree/master/docs/cni/kubernetes) for more information.
 
 ### Type
-There are two supported policy types `k8s` and `k8s-annotations`
-* [`k8s`](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/NetworkPolicy.md) uses the Kubernetes NetworkPolicy API.
-* [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/AnnotationPolicy.md) is deprecated and uses annotations on pods to specify network policy.
+The type specifies which policy scheme to use.
+
+* `k8s` uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
+* [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) is deprecated and uses annotations on pods to specify network policy.
+
+To specify a policy, add the following block to the CNI network config:
+
+```json
+"policy": {
+  "type": "<type>"
+}
+```
 
 ### Kubernetes API access details
-When using either policy type, the CNI plugin needs to be told how to access the Kubernetes API server.
+When using either policy type, the CNI plugin needs to be told how to access the Kubernetes API server in the `policy` section of the network config.
 * `k8s_api_root` (default `https://10.100.0.1:443/api/v1/`)
 
-The CNI plugin may need to authenticate with the Kubernetes API server. The following methods are supported, none of which have default values.
+The CNI plugin may need to authenticate with the Kubernetes API server. The following methods are supported in the `policy` section of the CNI network config, 
+none of which have default values.
 * `k8s_auth_token`
 * `k8s_client_certificate`
 * `k8s_client_key`
 * `k8s_certificate_authority`
 	* Verifying the API certificate against a CA only works if connecting to the API server using a hostname.
+
+The following methods are supported in the `kubernetes` section of the CNI network config.
 * `kubeconfig`
 	* Path to a Kubernetes `kubeconfig` file.
+
+```json
+"kubernetes": {
+    "kubeconfig": "/path/to/kubeconfig"
+}
+```
 
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/configuration.md?pixel)](https://github.com/igrigorik/ga-beacon)
