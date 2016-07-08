@@ -51,9 +51,18 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 When using the Calico CNI plugin with Kubernetes, an additional config block can be specified to control how network policy is configured. The required config block is `policy`. See the [Calico Kubernetes documentation](https://github.com/projectcalico/calico-containers/tree/master/docs/cni/kubernetes) for more information.
 
 ### Type
-There are two supported policy types `k8s` and `k8s-annotations`
-* [`k8s`](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/NetworkPolicy.md) uses the Kubernetes NetworkPolicy API.
-* [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/AnnotationPolicy.md) is deprecated and uses annotations on pods to specify network policy.
+The type specifies which policy scheme to use.
+
+* `k8s` uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
+* [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) is deprecated and uses annotations on pods to specify network policy.
+
+To specify a policy, add the following block to the CNI network config:
+
+```
+"policy": {
+  "type": "<type>"
+}
+```
 
 ### Kubernetes API access details
 When using either policy type, the CNI plugin needs to be told how to access the Kubernetes API server.
