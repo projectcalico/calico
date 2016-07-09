@@ -126,7 +126,7 @@ To install the policy controller:
 kubectl create ns calico-system
 ```
 
-- Place [this manifest](https://raw.githubusercontent.com/projectcalico/k8s-policy/v0.2.0/examples/policy-controller.yaml) in the kubelet's config
+- Place [this manifest](https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/policy-controller.yaml) in the kubelet's config
 directory (usually `/etc/kubernetes/manifests`)
 
 After a few moments, you should see the policy controller enter `Running` state:
