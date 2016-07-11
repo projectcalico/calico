@@ -65,7 +65,7 @@ coreos:
         --etcd-servers=http://$private_ipv4:2379 \
         --insecure-bind-address=0.0.0.0 \
         --advertise-address=$private_ipv4 \
-        --runtime-config="extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true" \
+        --runtime-config=extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true \
         --service-cluster-ip-range=10.100.0.0/24 \
         --logtostderr=true
         Restart=always
@@ -141,7 +141,7 @@ coreos:
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStart=/opt/bin/kubelet \
         --register-node=true \
-        --register-schedulable=false  \
+        --register-schedulable=false \
         --allow-privileged=true \
         --config=/etc/kubernetes/manifests \
         --cluster-dns=10.100.0.10 \
