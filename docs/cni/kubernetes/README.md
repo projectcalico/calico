@@ -15,6 +15,8 @@ Calico allows you to enforce fine-grained network security policy natively in Ku
 # Getting Started
 To start using Calico Networking in your existing Kubernetes cluster, check out our [integration tutorial](KubernetesIntegration.md).
 
+An easy way to try out Calico network policy on Kubernetes is by following the [stars demo](stars-demo/README.md).
+
 To build a new Kubernetes cluster with Calico networking, try one of the following guides:
 
 Quick-start guides:
