@@ -365,16 +365,32 @@ class FelixIptablesGenerator(FelixPlugin):
                             "INVALID" % self.IFACE_MATCH,
                             None) +
             [
+                # First, a pair of conntrack rules, which accept established
+                # flows to/from workload interfaces.
                 "--append %s --in-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                 (CHAIN_FORWARD, self.IFACE_MATCH),
                 "--append %s --out-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump RETURN" %
+                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                 (CHAIN_FORWARD, self.IFACE_MATCH),
+
+                # Then, for traffic from a workload interface, jump to the
+                # from endpoint chain.  It will either DROP the packet or,
+                # if policy allows, return it to this chain for further
+                # processing.
                 "--append %s --jump %s --in-interface %s" %
                 (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, self.IFACE_MATCH),
+
+                # Then, for traffic to a workload interface, jump to the
+                # "to endpoint" chain.  Note: a packet that's going from one
+                # endpoint to another on the same host will go through both
+                # the "from" and "to" chains.
                 "--append %s --jump %s --out-interface %s" %
                 (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, self.IFACE_MATCH),
+
+                # Finally, if the packet is from/to a workload and it passes
+                # both the "from" and "to" chains without being dropped, it
+                # must be allowed by policy; ACCEPT it.
                 "--append %s --jump ACCEPT --in-interface %s" %
                 (CHAIN_FORWARD, self.IFACE_MATCH),
                 "--append %s --jump ACCEPT --out-interface %s" %
