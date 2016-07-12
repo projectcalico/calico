@@ -130,8 +130,8 @@ class TestRules(BaseTestCase):
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
@@ -320,8 +320,8 @@ class TestRules(BaseTestCase):
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
@@ -432,8 +432,8 @@ class TestRules(BaseTestCase):
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump RETURN',
+                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
