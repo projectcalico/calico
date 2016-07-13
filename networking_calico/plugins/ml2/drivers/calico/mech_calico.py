@@ -1459,8 +1459,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def get_floating_ips_for_port(self, context, port):
         """Obtains a list of floating IPs for a port."""
         return [
-            {'in_ip': ip['fixed_ip_address'],
-             'out_ip': ip['floating_ip_address']}
+            {'int_ip': ip['fixed_ip_address'],
+             'ext_ip': ip['floating_ip_address']}
             for ip in context.session.query(
                 l3_db.FloatingIP
             ).filter_by(
