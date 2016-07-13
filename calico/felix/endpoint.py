@@ -525,8 +525,8 @@ class EndpointManager(ReferenceManager):
             try:
                 tier_order = self.tier_orders[pol_id.tier]
             except KeyError:
-                _log.warn("Ignoring profile %s because its tier metadata is "
-                          "missing.")
+                _log.warn("Ignoring policy %s because its tier metadata is "
+                          "missing.", pol_id)
                 continue
             profile_order = self.profile_orders[pol_id]
             profiles.append((tier_order, pol_id.tier,
