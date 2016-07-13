@@ -437,7 +437,8 @@ The 'rules' key contains the following JSON-encoded data:
 
 Two lists of rules objects, one applying to traffic destined for that endpoint
 (``inbound_rules``), one applying to traffic emitted by that endpoint
-(``outbound_rules``).
+(``outbound_rules``).  If either list of rules is omitted, it defaults to
+an empty list ``[]``.
 
 Each rule sub-object has the following JSON-encoded structure:
 

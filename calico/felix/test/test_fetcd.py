@@ -591,7 +591,7 @@ class TestEtcdWatcher(BaseTestCase):
 
     def test_rules_set_invalid(self):
         self.dispatch("/calico/v1/policy/profile/prof1/rules", "set",
-                      value='{}')
+                      value='[]')
         self.m_splitter.on_rules_update.assert_called_once_with("prof1",
                                                                 None,)
 
