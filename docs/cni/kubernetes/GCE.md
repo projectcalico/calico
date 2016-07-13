@@ -98,7 +98,7 @@ The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
 ```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.1.4/bin/linux/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
