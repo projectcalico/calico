@@ -43,7 +43,7 @@ This will prevent all access to the frontend, backend, and client Services.
 Refresh the management UI (it may take up to 10 seconds for changes to be reflected in the UI).
 Now that we've enabled isolation, the UI can no longer access the pods, and so they will no longer show up in the UI.
 
-Allow the UI to access the Services using NetworkPolicy objects.
+4) Allow the UI to access the Services using NetworkPolicy objects
 ```
 # Allow access from the management UI.
 kubectl create -f stars-demo/policies/allow-ui.yaml
