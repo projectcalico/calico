@@ -24,11 +24,11 @@ spec:
     spec:
       containers:
       - name: backend 
-        image: caseydavenport/probe:calico-containers-demo
+        image: calico/star-probe:v0.1.0
         imagePullPolicy: Always
         command:
         - probe
         - --http-port=6379
-        - --urls=http://frontend.stars.cluster.local:80/status,http://backend.stars.cluster.local:6379/status,http://client.client.cluster.local:9000/status
+        - --urls=http://frontend.stars:80/status,http://backend.stars:6379/status,http://client.client:9000/status
         ports:
         - containerPort: 6379 

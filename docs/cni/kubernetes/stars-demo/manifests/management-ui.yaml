@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
       - name: management-ui 
-        image: caseydavenport/collect:calico-containers-demo
+        image: calico/star-collect:v0.1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 9001
