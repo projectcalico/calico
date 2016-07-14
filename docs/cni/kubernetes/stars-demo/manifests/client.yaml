@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: client 
-        image: caseydavenport/probe:calico-containers-demo
+        image: calico/star-probe:v0.1.0
         imagePullPolicy: Always
         command:
         - probe

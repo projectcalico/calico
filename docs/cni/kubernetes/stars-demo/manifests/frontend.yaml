@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: frontend 
-        image: caseydavenport/probe:calico-containers-demo
+        image: calico/star-probe:v0.1.0
         imagePullPolicy: Always
         command:
         - probe
