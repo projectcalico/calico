@@ -17,6 +17,7 @@ import netaddr
 
 from neutron.agent.linux import interface
 from neutron.agent.linux import ip_lib
+from oslo_config import cfg
 from oslo_log import log as logging
 
 
@@ -49,7 +50,10 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         ns_dummy = ip.add_dummy(device_name)
         ns_dummy.link.set_address(mac_address)
 
-        mtu = self.conf.network_device_mtu or mtu
+        try:
+            mtu = self.conf.network_device_mtu or mtu
+        except cfg.NoSuchOptError:
+            pass
         if mtu:
             ns_dummy.link.set_mtu(mtu)
 
