@@ -1,0 +1,72 @@
+hash: 13130a76b00fde63abcc63380af46cb23f64d747b52846c6ae4c5fdf494d488a
+updated: 2016-07-15T10:51:26.240297765-07:00
+imports:
+- name: github.com/cloudfoundry-incubator/candiedyaml
+  version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
+- name: github.com/coreos/etcd
+  version: 1ba7bb237fd54884381c7d4d46d78010d7aac2ad
+  subpackages:
+  - client
+  - pkg/transport
+  - pkg/pathutil
+  - pkg/types
+  - pkg/fileutil
+  - pkg/tlsutil
+- name: github.com/coreos/go-systemd
+  version: d4039021cfc2d0ea21d34afda21631314e83f75a
+  subpackages:
+  - journal
+- name: github.com/coreos/pkg
+  version: a48e304ff9331be6d5df352b6b47bd1395ab5dd7
+  subpackages:
+  - capnslog
+- name: github.com/docopt/docopt-go
+  version: 784ddc588536785e7299f7272f39101f7faccc3f
+- name: github.com/fvbock/trie
+  version: 1d40233c66bdef97a7d978cbe799531a6acf1ea6
+- name: github.com/ghodss/yaml
+  version: aa0c862057666179de291b67d9f093d12b5a8473
+- name: github.com/golang/glog
+  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
+- name: github.com/golang/protobuf
+  version: 874264fbbb43f4d91e999fecb4b40143ed611400
+  subpackages:
+  - proto
+- name: github.com/kelseyhightower/envconfig
+  version: 91921eb4cf999321cdbeebdba5a03555800d493b
+- name: github.com/onsi/gomega
+  version: 9574b2d94c03faf63bf1b296e21d9db950006ea4
+- name: github.com/op/go-logging
+  version: 970db520ece77730c7e4724c61121037378659d9
+- name: github.com/ugorji/go
+  version: b94837a2404ab90efe9289e77a70694c355739cb
+  subpackages:
+  - codec
+- name: golang.org/x/net
+  version: a728288923b47049b2ce791836767ffbe964a5bd
+  subpackages:
+  - context
+- name: google.golang.org/appengine
+  version: 267c27e7492265b84fc6719503b14a1e17975d79
+  subpackages:
+  - datastore
+  - internal
+  - internal/datastore
+  - internal/app_identity
+  - internal/modules
+  - internal/base
+  - internal/log
+  - internal/remote_api
+- name: gopkg.in/go-playground/validator.v8
+  version: 7a080ada5ba072a91fd7f677bcf4d0e1aa286d39
+- name: gopkg.in/tchap/go-patricia.v2
+  version: 8304b1f670ec9603eb3eebcb3bd08e13a8a2630b
+  subpackages:
+  - patricia
+- name: gopkg.in/vmihailenco/msgpack.v2
+  version: 585b09497e708217121c79a5aa185647b757605a
+  subpackages:
+  - codes
+- name: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+devImports: []
