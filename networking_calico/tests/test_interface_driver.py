@@ -36,3 +36,25 @@ class TestInterfaceDriver(base.BaseTestCase):
         ipdev_cls.assert_called_with('ns-dhcp')
         ipdev = ipdev_cls.return_value
         ipdev.route.delete_onlink_route.assert_called_with('10.65.0.0/24')
+
+    @mock.patch('neutron.agent.linux.ip_lib.IPWrapper.add_dummy')
+    def _test_plug_new_mtu(self, passed_mtu, expected_mtu, dummy):
+        self.driver = RoutedInterfaceDriver(cfg.CONF)
+        kwargs = {'mtu': passed_mtu} if passed_mtu else {}
+        self.driver.plug_new(
+            'net-id', 'port-id', 'device-name', 'mac-address', **kwargs)
+        set_mtu = dummy.return_value.link.set_mtu
+        if expected_mtu:
+            set_mtu.assert_called_with(expected_mtu)
+        else:
+            self.assertFalse(set_mtu.called)
+
+    def test_plug_new_mtu_None(self):
+        self._test_plug_new_mtu(None, None)
+
+    def test_plug_new_mtu_network_device_mtu_trumps(self):
+        cfg.CONF.set_override('network_device_mtu', 2000)
+        self._test_plug_new_mtu(3000, 2000)
+
+    def test_plug_new_mtu_passed_network_device_mtu_unset(self):
+        self._test_plug_new_mtu(2000, 2000)

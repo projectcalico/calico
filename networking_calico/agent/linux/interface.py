@@ -49,8 +49,9 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         ns_dummy = ip.add_dummy(device_name)
         ns_dummy.link.set_address(mac_address)
 
-        if self.conf.network_device_mtu:
-            ns_dummy.link.set_mtu(self.conf.network_device_mtu)
+        mtu = self.conf.network_device_mtu or mtu
+        if mtu:
+            ns_dummy.link.set_mtu(mtu)
 
         ns_dummy.link.set_up()
 
