@@ -87,13 +87,14 @@ KNOWN_RULE_KEYS = set(
     [
         "action",
         "ip_version",
+        "log_prefix",
     ] +
     NEGATABLE_MATCH_KEYS +
     ["!%s" % k for k in NEGATABLE_MATCH_KEYS]
 )
 
 # Valid actions to see in a rule.
-KNOWN_ACTIONS = set(["allow", "deny", "next-tier"])
+KNOWN_ACTIONS = set(["allow", "deny", "next-tier", "log"])
 
 # Regex that matches only names with valid characters in them. The list of
 # valid characters is the same for endpoints, profiles, and tags.
@@ -104,6 +105,8 @@ VALID_ID_RE = re.compile(r'^[a-zA-Z0-9_\.\-]+$')
 VALID_LABEL_NAME_RE = re.compile(r'^[%s]+$' % re.escape(LABEL_CHARS))
 
 VALID_LINUX_IFACE_NAME_RE = re.compile(r'^[a-zA-Z0-9_-]{1,15}$')
+
+INVALID_LOG_KEY_CHARS = re.compile(r'[^a-zA-Z0-9_:-]')
 
 # Not that thorough: we don't care if it's a valid CIDR, only that it doesn't
 # have anything malicious in it.
@@ -756,6 +759,15 @@ def _validate_rule_match_criteria(rule, issues, neg_pfx):
             issues.append("Invalid %s: %r" % (sel_type, sel_str))
         else:
             rule[sel_type] = sel
+
+    if "log_prefix" in rule:
+        log_pfx = rule["log_prefix"]
+        if not isinstance(log_pfx, basestring):
+            issues.append("Log prefix should be a string")
+        else:
+            # Sanitize the log prefix.  iptables length limit is 29 chars but
+            # we add ": " to the end in the iptables generator.
+            rule["log_prefix"] = INVALID_LOG_KEY_CHARS.sub("_", log_pfx)[:27]
 
     for key in (neg_pfx + "src_net", neg_pfx + "dst_net"):
         network = rule.get(key)

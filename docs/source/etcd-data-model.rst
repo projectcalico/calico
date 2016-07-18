@@ -448,6 +448,10 @@ Each rule sub-object has the following JSON-encoded structure:
       "!dst_ports": ...,
       "!icmp_type": ..., "!icmp_code": ...,  # Treated together, see below.
 
+      # If present, "log_prefix" causes the matched packet to be logged
+      # with the given prefix.
+      "log_prefix": "<log-prefix>",
+
       "action": "deny | allow | next-tier",
     }
 
@@ -546,6 +550,14 @@ requiring the protocol to be specified):
                that uses ``!icmp_type`` and ``!icmp_code`` together will match
                all ICMP traffic apart from traffic that matches **both** type
                and code.
+
+``log_prefix``
+  if present, in addition to doing the configured action, Calico will log the
+  packet with this prefix. The current implementation uses iptables LOG action,
+  which results in a log to syslog.
+
+  For iptables compatibility, Calico will truncate the prefix to 27 characters
+  and limit the character set.
 
 ``action``
   what action to take when traffic matches this rule. One of ``deny``, which
