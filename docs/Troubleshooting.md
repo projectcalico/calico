@@ -57,6 +57,9 @@ Look at `calicoctl status` on each host.  It should include output like this:
 
 If you do not see this, please check the following.
 
+- Can your hosts ping each other?  There must be IP connectivity between the
+  hosts.
+
 - Your hosts' names must be different.  Calico uses hostname as a key in the
   etcd data, and the etcd data is used to autogenerate the correct BIRD
   config - so a duplicate hostname will prevent correct BIRD setup.
