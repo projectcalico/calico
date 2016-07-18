@@ -93,8 +93,12 @@ func (g get) execute(client *client.Client, resource unversioned.Resource) (unve
 		resource, err = client.HostEndpoints().List(r.Metadata)
 	case api.Policy:
 		resource, err = client.Policies().List(r.Metadata)
+	case api.Pool:
+		resource, err = client.Pools().List(r.Metadata)
 	case api.Profile:
 		resource, err = client.Profiles().List(r.Metadata)
+	case api.WorkloadEndpoint:
+		resource, err = client.WorkloadEndpoints().List(r.Metadata)
 	default:
 		panic(fmt.Errorf("Unhandled resource type: %v", resource))
 	}

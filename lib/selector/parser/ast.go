@@ -16,8 +16,9 @@ package parser
 
 import (
 	_ "crypto/sha256"
-	"github.com/tigera/libcalico-go/lib/hash"
 	"strings"
+
+	"github.com/tigera/libcalico-go/lib/hash"
 )
 
 type Selector interface {

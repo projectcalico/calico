@@ -24,13 +24,8 @@ type IP struct {
 	net.IP
 }
 
-// Sub class net.IPNet so that we can add JSON marshalling and unmarshalling.
-type IPNet struct {
-	net.IPNet
-}
-
 // MarshalJSON interface for an IP
-func (i *IP) MarshalJSON() ([]byte, error) {
+func (i IP) MarshalJSON() ([]byte, error) {
 	s, err := i.MarshalText()
 	if err != nil {
 		return nil, err
@@ -47,8 +42,21 @@ func (i *IP) UnmarshalJSON(b []byte) error {
 	return i.UnmarshalText([]byte(s))
 }
 
+// Version returns the IP version for an IP
+func (i IP) Version() int {
+	if i.To4() == nil {
+		return 6
+	}
+	return 4
+}
+
+// Sub class net.IPNet so that we can add JSON marshalling and unmarshalling.
+type IPNet struct {
+	net.IPNet
+}
+
 // MarshalJSON interface for an IPNet
-func (i *IPNet) MarshalJSON() ([]byte, error) {
+func (i IPNet) MarshalJSON() ([]byte, error) {
 	return json.Marshal(i.String())
 }
 
@@ -63,7 +71,46 @@ func (i *IPNet) UnmarshalJSON(b []byte) error {
 	} else {
 		i.IP = ipnet.IP
 		i.Mask = ipnet.Mask
-
 		return nil
 	}
+}
+
+// Version returns the IP version for an IPNet
+func (i *IPNet) Version() int {
+	if i.IP.To4() == nil {
+		return 6
+	}
+	return 4
+}
+
+// Sub class net.HardwareAddr so that we can add JSON marshalling and unmarshalling.
+type MAC struct {
+	net.HardwareAddr
+}
+
+// MarshalJSON interface for a MAC
+func (m MAC) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+// UnmarshalJSON interface for a MAC
+func (m *MAC) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	if mac, err := net.ParseMAC(s); err != nil {
+		return err
+	} else {
+		m.HardwareAddr = mac
+		return nil
+	}
+}
+
+func ParseCIDR(c string) (*IP, *IPNet, error) {
+	netIP, netIPNet, e := net.ParseCIDR(c)
+	if netIPNet == nil {
+		return nil, nil, e
+	}
+	return &IP{netIP}, &IPNet{*netIPNet}, e
 }

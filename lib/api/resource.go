@@ -54,8 +54,10 @@ func init() {
 
 	// Register all API resources supported by the generic resource interface.
 	registerHelper(NewPolicy(), NewPolicyList())
+	registerHelper(NewPool(), NewPoolList())
 	registerHelper(NewProfile(), NewProfileList())
 	registerHelper(NewHostEndpoint(), NewHostEndpointList())
+	registerHelper(NewWorkloadEndpoint(), NewWorkloadEndpointList())
 }
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:

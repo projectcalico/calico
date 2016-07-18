@@ -107,8 +107,12 @@ func (d delete) execute(client *client.Client, resource unversioned.Resource) (u
 		err = client.HostEndpoints().Delete(r.Metadata)
 	case api.Policy:
 		err = client.Policies().Delete(r.Metadata)
+	case api.Pool:
+		err = client.Pools().Delete(r.Metadata)
 	case api.Profile:
 		err = client.Profiles().Delete(r.Metadata)
+	case api.WorkloadEndpoint:
+		err = client.WorkloadEndpoints().Delete(r.Metadata)
 	default:
 		panic(fmt.Errorf("Unhandled resource type: %v", resource))
 	}

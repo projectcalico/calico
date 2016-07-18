@@ -19,13 +19,15 @@ import (
 
 	"regexp"
 
+	"reflect"
+
 	"github.com/golang/glog"
 	. "github.com/tigera/libcalico-go/lib/common"
-	"reflect"
 )
 
 var (
 	matchHostEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/endpoint/([^/]+)$")
+	typeHostEndpoint  = reflect.TypeOf(HostEndpoint{})
 )
 
 type HostEndpointKey struct {
@@ -47,7 +49,7 @@ func (key HostEndpointKey) asEtcdDeleteKey() (string, error) {
 }
 
 func (key HostEndpointKey) valueType() reflect.Type {
-	return reflect.TypeOf(HostEndpoint{})
+	return typeHostEndpoint
 }
 
 type HostEndpointListOptions struct {
@@ -89,7 +91,6 @@ func (options HostEndpointListOptions) keyFromEtcdResult(ekey string) KeyInterfa
 }
 
 type HostEndpoint struct {
-	HostEndpointKey   `json:"-"`
 	Name              string            `json:"name,omitempty" validate:"omitempty,interface"`
 	ExpectedIPv4Addrs []IP              `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
 	ExpectedIPv6Addrs []IP              `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`

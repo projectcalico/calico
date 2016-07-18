@@ -42,31 +42,6 @@ func newPolicies(c *Client) *policies {
 	return &policies{c}
 }
 
-// List takes a Metadata, and returns the list of policies that match that Metadata
-// (wildcarding missing fields)
-func (h *policies) List(metadata api.PolicyMetadata) (*api.PolicyList, error) {
-	if l, err := h.c.list(backend.Policy{}, metadata, h, nil); err != nil {
-		return nil, err
-	} else {
-		hl := api.NewPolicyList()
-		hl.Items = make([]api.Policy, 0, len(l))
-		for _, h := range l {
-			hl.Items = append(hl.Items, *h.(*api.Policy))
-		}
-		return hl, nil
-	}
-}
-
-// Get returns information about a particular policy.
-func (h *policies) Get(metadata api.PolicyMetadata) (*api.Policy, error) {
-	if a, err := h.c.get(backend.Policy{}, metadata, h, nil); err != nil {
-		return nil, err
-	} else {
-		h := a.(api.Policy)
-		return &h, nil
-	}
-}
-
 // Create creates a new policy.
 func (h *policies) Create(a *api.Policy) (*api.Policy, error) {
 	return a, h.c.create(*a, h, nil)
@@ -74,7 +49,7 @@ func (h *policies) Create(a *api.Policy) (*api.Policy, error) {
 
 // Create creates a new policy.
 func (h *policies) Update(a *api.Policy) (*api.Policy, error) {
-	return a, h.c.update(*a, h, nil)
+	return a, h.c.update(*a, h)
 }
 
 // Create creates a new policy.
@@ -85,6 +60,23 @@ func (h *policies) Apply(a *api.Policy) (*api.Policy, error) {
 // Delete deletes an existing policy.
 func (h *policies) Delete(metadata api.PolicyMetadata) error {
 	return h.c.delete(metadata, h)
+}
+
+// Get returns information about a particular policy.
+func (h *policies) Get(metadata api.PolicyMetadata) (*api.Policy, error) {
+	if a, err := h.c.get(metadata, h); err != nil {
+		return nil, err
+	} else {
+		return a.(*api.Policy), nil
+	}
+}
+
+// List takes a Metadata, and returns the list of policies that match that Metadata
+// (wildcarding missing fields)
+func (h *policies) List(metadata api.PolicyMetadata) (*api.PolicyList, error) {
+	l := api.NewPolicyList()
+	err := h.c.list(metadata, h, l)
+	return l, err
 }
 
 // Convert a PolicyMetadata to a PolicyListInterface
@@ -106,43 +98,37 @@ func (h *policies) convertMetadataToKeyInterface(m interface{}) (backend.KeyInte
 }
 
 // Convert an API Policy structure to a Backend Policy structure
-func (h *policies) convertAPIToBackend(a interface{}) (interface{}, error) {
+func (h *policies) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreObject, error) {
 	ap := a.(api.Policy)
 	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
 	if err != nil {
 		return nil, err
 	}
-	pk := k.(backend.PolicyKey)
 
-	bp := backend.Policy{
-		PolicyKey: pk,
-
-		Order:         ap.Spec.Order,
-		InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
-		OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
-		Selector:      ap.Spec.Selector,
+	d := backend.DatastoreObject{
+		Key: k,
+		Object: backend.Policy{
+			Order:         ap.Spec.Order,
+			InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
+			OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
+			Selector:      ap.Spec.Selector,
+		},
 	}
 
-	return bp, nil
+	return &d, nil
 }
 
 // Convert a Backend Policy structure to an API Policy structure.
-func (h *policies) convertBackendToAPI(b interface{}) (interface{}, error) {
-	bp := *b.(*backend.Policy)
+func (h *policies) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
+	bp := d.Object.(backend.Policy)
+	bk := d.Key.(backend.PolicyKey)
+
 	ap := api.NewPolicy()
-
-	ap.Metadata.Name = bp.Name
-
+	ap.Metadata.Name = bk.Name
 	ap.Spec.Order = bp.Order
 	ap.Spec.IngressRules = rulesBackendToAPI(bp.InboundRules)
 	ap.Spec.EgressRules = rulesBackendToAPI(bp.OutboundRules)
 	ap.Spec.Selector = bp.Selector
 
 	return ap, nil
-}
-
-func (h *policies) copyKeyValues(kvs []backend.KeyValue, b interface{}) {
-	bp := b.(*backend.Policy)
-	k := kvs[0].Key.(backend.PolicyKey)
-	bp.PolicyKey = k
 }

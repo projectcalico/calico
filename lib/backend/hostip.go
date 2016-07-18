@@ -22,6 +22,7 @@ import (
 
 var (
 	matchHostIp = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip`)
+	typeHostIp  = reflect.TypeOf(HostIP{})
 )
 
 // TODO find a place to put this
@@ -39,7 +40,7 @@ func (key HostIPKey) asEtcdDeleteKey() (string, error) {
 }
 
 func (key HostIPKey) valueType() reflect.Type {
-	return reflect.TypeOf(HostIP{})
+	return typeHostIp
 }
 
 type HostIP struct {

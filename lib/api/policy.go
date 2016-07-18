@@ -24,6 +24,7 @@ import (
 
 type PolicyMetadata struct {
 	ObjectMetadata
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
 }
 
 type PolicySpec struct {

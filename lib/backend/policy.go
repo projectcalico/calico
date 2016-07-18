@@ -18,13 +18,15 @@ import (
 	"fmt"
 	"regexp"
 
+	"reflect"
+
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/common"
-	"reflect"
 )
 
 var (
 	matchPolicy = regexp.MustCompile("^/?calico/v1/policy/tier/([^/]+)/policy/([^/]+)$")
+	typePolicy  = reflect.TypeOf(Policy{})
 )
 
 type PolicyKey struct {
@@ -45,7 +47,7 @@ func (key PolicyKey) asEtcdDeleteKey() (string, error) {
 }
 
 func (key PolicyKey) valueType() reflect.Type {
-	return reflect.TypeOf(Policy{})
+	return typePolicy
 }
 
 type PolicyListOptions struct {
@@ -77,7 +79,6 @@ func (options PolicyListOptions) keyFromEtcdResult(ekey string) KeyInterface {
 }
 
 type Policy struct {
-	PolicyKey     `json:"-"`
 	Order         *float32 `json:"order"`
 	InboundRules  []Rule   `json:"inbound_rules" validate:"omitempty,dive"`
 	OutboundRules []Rule   `json:"outbound_rules" validate:"omitempty,dive"`

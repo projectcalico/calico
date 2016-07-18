@@ -116,6 +116,11 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 		h.Metadata.Name = name
 		h.Metadata.Hostname = hostname
 		return *h, nil
+	case "workloadEndpoint":
+		h := api.NewWorkloadEndpoint()  //TODO Need to add orchestrator ID and workload ID
+		h.Metadata.Name = name
+		h.Metadata.Hostname = hostname
+		return *h, nil
 	case "profile":
 		p := api.NewProfile()
 		p.Metadata.Name = name
@@ -124,6 +129,10 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 		p := api.NewPolicy()
 		p.Metadata.Name = name
 		return *p, nil
+	case "pool":
+		p := api.NewPool()
+		return *p, nil
+
 	default:
 		return nil, fmt.Errorf("Resource type '%s' is not unsupported", kind)
 	}
