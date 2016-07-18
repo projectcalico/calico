@@ -1,4 +1,2 @@
 .git
-venv
 build
-default.etcd
