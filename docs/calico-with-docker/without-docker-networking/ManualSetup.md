@@ -18,17 +18,16 @@ the example.
 
 ## Requirements
 
-You will need 2 servers (bare metal or VMs) with a modern 64-bit Linux OS and
-IP connectivity between them.  The servers must not run any software that tries
-to manage or interfere with new interfaces or related config (for example
-routes, iptables, ipsets or interface state), as that is likely to conflict
-with Calico's programming and lead to loss of endpoint connectivity.  We
-recommend using 'server' OS installs rather than 'desktop'.  (For
-NetworkManager in particular, please see also
-[Troubleshooting](../../Troubleshooting.md).)
+You will need 2 hosts (bare metal or VMs) with a modern 64-bit Linux OS and IP
+connectivity between them.  The servers must not run any software that tries to
+manage or interfere with new interfaces or related config (for example routes,
+iptables, ipsets or interface state), as that is likely to conflict with
+Calico's programming and lead to loss of endpoint connectivity.  We recommend
+using 'server' OS installs rather than 'desktop'.  (For NetworkManager in
+particular, please see also [Troubleshooting](../../Troubleshooting.md).)
 
-We recommend configuring the hosts with the hostname `calico-01` and
-`calico-02`.  The tutorial will refer to these hostnames.
+The hosts must have different hostnames.  We recommend `calico-01` and
+`calico-02`, and the tutorial will use those names.
 
 Each node must have the following software installed:
 
