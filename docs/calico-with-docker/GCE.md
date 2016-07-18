@@ -66,7 +66,7 @@ For the first server run:
 gcloud compute instances create \
   calico-1 \
   --image-project coreos-cloud \
-  --image coreos-alpha-976-0-0-v20160304 \
+  --image coreos-alpha-1109-1-0-v20160715 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-first
 ```
@@ -79,7 +79,7 @@ Then, for the second server, run:
 gcloud compute instances create \
   calico-2 \
   --image-project coreos-cloud \
-  --image coreos-alpha-976-0-0-v20160304 \
+  --image coreos-alpha-1109-1-0-v20160715 \
   --machine-type n1-standard-1 \
   --metadata-from-file user-data=<PATH_TO_CLOUD_CONFIG>/user-data-others
 ```
@@ -92,6 +92,13 @@ SSH access to the nodes.
 SSH into each node using gcloud (names are calico-1 and calico-2):
 ```
 gcloud compute ssh <instance name>
+```
+
+Sudo to user core on each node.  User core is the coreos default user and this is where the worked
+example ETCD environment variables will exist.
+```
+sudo -u core -i
+env | grep ETCD_AUTHORITY
 ```
 
 There are two worked examples you can follow: Calico as a Docker network
