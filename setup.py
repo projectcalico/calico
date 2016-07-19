@@ -76,6 +76,7 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'calico-felix = calico.felix.felix:main',
+            'calico-cleanup = calico.felix.cleanup:main',
         ],
         'calico.felix.iptables_generator': [
             'default = '
