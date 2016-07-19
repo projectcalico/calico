@@ -77,6 +77,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.IPTABLES_MARK_NEXT_TIER = None
         self.FAILSAFE_INBOUND_PORTS = None
         self.FAILSAFE_OUTBOUND_PORTS = None
+        self.ACTION_ON_DROP = None
 
     def store_and_validate_config(self, config):
         # We don't have any plugin specific parameters, but we need to save
@@ -93,6 +94,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.IPTABLES_MARK_NEXT_TIER = config.IPTABLES_MARK_NEXT_TIER
         self.FAILSAFE_INBOUND_PORTS = config.FAILSAFE_INBOUND_PORTS
         self.FAILSAFE_OUTBOUND_PORTS = config.FAILSAFE_OUTBOUND_PORTS
+        self.ACTION_ON_DROP = config.ACTION_ON_DROP
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -576,13 +578,29 @@ class FelixIptablesGenerator(FelixPlugin):
                 "Invalid comment %r" % comment
             comment_str = '-m comment --comment "%s"' % comment
 
-        parts = [p for p in [ipt_action,
-                             chain_name,
-                             rule_spec,
-                             '--jump DROP',
-                             comment_str]
-                 if p is not None]
-        return [' '.join(parts)]
+        rules = []
+
+        if self.ACTION_ON_DROP.startswith("LOG-"):
+            # log-and-accept, log-and-drop.
+            log_spec = '--jump LOG --log-prefix "CalicoDrop" --log-level 4'
+            log_rule = " ".join(
+                [p for p in [ipt_action, chain_name, rule_spec, log_spec,
+                             comment_str] if p is not None]
+            )
+            rules.append(log_rule)
+
+        if self.ACTION_ON_DROP.endswith("ACCEPT"):
+            action_spec = "--jump ACCEPT"
+        else:
+            assert self.ACTION_ON_DROP.endswith("DROP")
+            action_spec = "--jump DROP"
+
+        drop_rule = " ".join(
+            [p for p in [ipt_action, chain_name, rule_spec, action_spec,
+                         comment_str] if p is not None]
+        )
+        rules.append(drop_rule)
+        return rules
 
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
                                 prof_ids_by_tier, chain_name, direction,

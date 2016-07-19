@@ -230,6 +230,16 @@ class Config(object):
         self.add_parameter("DefaultEndpointToHostAction",
                            "Action to take for packets that arrive from"
                            "an endpoint to the host.", "DROP")
+        self.add_parameter("DropActionOverride",
+                           "Override for the action taken when a packet would "
+                           "normally be dropped by Calico's firewall rules. "
+                           "This setting is useful when prototyping policy. "
+                           "Note: if the policy is set to 'ACCEPT' or "
+                           "'LOG-and-ACCEPT'; Calico's security is "
+                           "disabled! "
+                           "One of 'DROP', 'ACCEPT', 'LOG-and-DROP', "
+                           "'LOG-and-ACCEPT'.",
+                           "DROP")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("EtcdDriverLogFilePath",
@@ -408,6 +418,7 @@ class Config(object):
             self.parameters["FailsafeInboundHostPorts"].value
         self.FAILSAFE_OUTBOUND_PORTS = \
             self.parameters["FailsafeOutboundHostPorts"].value
+        self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
 
         self._validate_cfg(final=final)
 
@@ -678,6 +689,12 @@ class Config(object):
                 "Invalid field value",
                 self.parameters["DefaultEndpointToHostAction"]
             )
+
+        if self.ACTION_ON_DROP not in ("DROP", "LOG-and-DROP", "ACCEPT",
+                                       "LOG-and-ACCEPT"):
+            log.warning("Unknown setting for DropActionOverride setting: %s, "
+                        "defaulting to 'DROP'.", self.ACTION_ON_DROP)
+            self.ACTION_ON_DROP = "DROP"
 
         # For non-positive time values of reporting interval we set both
         # interval and ttl to 0 - i.e. status reporting is disabled.
