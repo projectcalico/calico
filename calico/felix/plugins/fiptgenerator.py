@@ -516,8 +516,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     self._profile_to_chain_name("outbound", profile_id)])
 
     def profile_updates(self, profile_id, profile, ip_version, tag_to_ipset,
-                        selector_to_ipset, on_allow="ACCEPT", on_deny="DROP",
-                        comment_tag=None):
+                        selector_to_ipset, comment_tag=None):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given profile.
@@ -550,9 +549,7 @@ class FelixIptablesGenerator(FelixPlugin):
                         r,
                         ip_version,
                         tag_to_ipset,
-                        selector_to_ipset,
-                        on_allow=on_allow,
-                        on_deny=on_deny))
+                        selector_to_ipset))
             updates[chain_name] = fragments
 
         return updates, deps
@@ -782,9 +779,7 @@ class FelixIptablesGenerator(FelixPlugin):
                                                  inbound_or_outbound[:1])
 
     def _rule_to_iptables_fragments(self, chain_name, rule, ip_version,
-                                    tag_to_ipset, selector_to_ipset,
-                                    on_allow="ACCEPT",
-                                    on_deny="DROP"):
+                                    tag_to_ipset, selector_to_ipset):
         """
         Convert a rule dict to a list of iptables fragments suitable to use
         with iptables-restore.
@@ -799,10 +794,6 @@ class FelixIptablesGenerator(FelixPlugin):
                name.
         :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
                from selector to the name of the ipset that represents it.
-        :param str on_allow: iptables action to use when the rule allows
-               traffic.  For example: "ACCEPT" or "RETURN".
-        :param str on_deny: iptables action to use when the rule denies
-               traffic.  For example: "DROP".
         :return list[str]: iptables --append fragments.
         """
 
@@ -833,9 +824,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     rule_copy,
                     ip_version,
                     tag_to_ipset,
-                    selector_to_ipset,
-                    on_allow=on_allow,
-                    on_deny=on_deny)
+                    selector_to_ipset)
                 fragments.extend(frags)
 
             return fragments
@@ -881,9 +870,7 @@ class FelixIptablesGenerator(FelixPlugin):
         return chunks
 
     def _rule_to_iptables_fragments_inner(self, chain_name, rule, ip_version,
-                                          tag_to_ipset, selector_to_ipset,
-                                          on_allow="ACCEPT",
-                                          on_deny="DROP"):
+                                          tag_to_ipset, selector_to_ipset):
         """
         Convert a rule dict to iptables fragments suitable to use with
         iptables-restore.
@@ -896,10 +883,6 @@ class FelixIptablesGenerator(FelixPlugin):
                name.
         :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
                from selector to the name of the ipset that represents it.
-        :param str on_allow: iptables action to use when the rule allows
-                traffic. For example: "ACCEPT" or "RETURN".
-        :param str on_deny: iptables action to use when the rule denies
-                traffic. For example: "DROP".
         :returns list[str]: list of iptables --append fragments.
         """
 
@@ -1035,7 +1018,7 @@ class FelixIptablesGenerator(FelixPlugin):
         elif action == "log":
             ipt_target = self._log_target(rule=rule)
         elif action == "deny":
-            ipt_target = on_deny
+            ipt_target = "DROP"
         else:
             # Validation should prevent unknown actions from getting this
             # far.

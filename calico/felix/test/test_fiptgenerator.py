@@ -683,8 +683,6 @@ class TestRules(BaseTestCase):
                 test["ip_version"],
                 test["tag_to_ipset"],
                 selector_to_ipset=test.get("sel_to_ipset", {}),
-                on_allow=test.get("on_allow", "RETURN"),
-                on_deny=test.get("on_deny", "DROP")
             )
             _log.info("Updates:\n%s", pformat(updates))
             _log.info("Deps:\n%s", pformat(deps))

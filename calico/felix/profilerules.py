@@ -281,7 +281,6 @@ class ProfileRules(RefCountedActor):
             self.ip_version,
             tag_to_ipset=tag_to_ip_set_name,
             selector_to_ipset=sel_to_ip_set_name,
-            on_allow="RETURN",
             comment_tag=self.id)
 
         _log.debug("Queueing programming for rules %s: %s", self.id,
