@@ -560,11 +560,18 @@ requiring the protocol to be specified):
   and limit the character set.
 
 ``action``
-  what action to take when traffic matches this rule. One of ``deny``, which
-  drops the packet immediately; ``allow``, which accepts the packet
-  unconditionally and ``next-tier``, which, in tiered security policies,
-  jumps to the next tier and continues processing.  (In profiles, the
-  ``next-tier`` action is a synonym for ``allow``.)
+  what action to take when traffic matches this rule. One of
+
+  - ``deny``, which drops the packet immediately
+  - ``allow``, which accepts the packet unconditionally
+  - ``next-tier``, which, in tiered security policies, jumps to the next tier
+    and continues processing.  (In profiles, the ``next-tier`` action is a
+    synonym for ``allow``.)
+  - ``log``, which logs the packet (to syslog) and then continues processing
+    rules.
+
+    .. note:: Since Calico implements a stateful firewall, normally only the
+              first packet in a TCP or ICMP flow will be logged.
 
 Tags
 ^^^^

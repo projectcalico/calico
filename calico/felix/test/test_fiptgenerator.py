@@ -96,7 +96,7 @@ RULES_TESTS = [
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-i --match mark '
                     '--mark 0x2000000/0x2000000 --jump LOG '
-                    '--log-prefix "foo: " --log-level 4',
+                    '--log-prefix "foo: " --log-level 5',
                     '--append felix-p-prof1-i --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
                 ],
@@ -127,12 +127,12 @@ RULES_TESTS = [
             'felix-p-prof1-i':
                 [
                     '--append felix-p-prof1-i  --jump LOG '
-                    '--log-prefix "foo: " --log-level 4',
+                    '--log-prefix "foo: " --log-level 5',
                 ],
             'felix-p-prof1-o':
                 [
                     '--append felix-p-prof1-o  --jump LOG '
-                    '--log-prefix "calico: " --log-level 4',
+                    '--log-prefix "calico-packet: " --log-level 5',
                 ]
         },
     },
@@ -352,7 +352,7 @@ RULES_TESTS = [
                 [
                     "--append felix-p-prof1-o --protocol icmpv6 --source "
                     "1234::beef --match icmp6 --icmpv6-type 7 "
-                    "--jump LOG --log-prefix \"dropped: \" --log-level 4",
+                    "--jump LOG --log-prefix \"dropped: \" --log-level 5",
                     "--append felix-p-prof1-o --protocol icmpv6 --source "
                     "1234::beef --match icmp6 --icmpv6-type 7 "
                     "--jump DROP",

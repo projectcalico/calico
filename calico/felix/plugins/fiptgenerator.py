@@ -39,6 +39,8 @@ import logging
 import re
 import itertools
 
+import syslog
+
 from calico.common import KNOWN_RULE_KEYS
 from calico.datamodel_v1 import TieredPolicyId
 from calico.felix import futils
@@ -60,6 +62,10 @@ _log = logging.getLogger(__name__)
 # Maximum number of port entries in a "multiport" match rule.  Ranges count for
 # 2 entries.
 MAX_MULTIPORT_ENTRIES = 15
+
+# The default syslog level that packets get logged at when using the log
+# action.
+DEFAULT_PACKET_LOG_LEVEL = syslog.LOG_NOTICE
 
 
 class FelixIptablesGenerator(FelixPlugin):
@@ -576,11 +582,10 @@ class FelixIptablesGenerator(FelixPlugin):
                                      rule_spec=rule_spec, comment=comment,
                                      ipt_action=ipt_action)
         if log_pfx is not None:
-            log_rule = " ".join([ipt_action,
-                                 chain_name,
-                                 rule_spec,
-                                 '--jump LOG --log-prefix "%s: " '
-                                 '--log-level 4' % log_pfx])
+            log_target = self._log_target(log_pfx=log_pfx)
+            log_rule = " ".join(
+                [ipt_action, chain_name, rule_spec, "--jump", log_target]
+            )
             drop_rules[0:0] = [log_rule]
         return drop_rules
 
@@ -1023,11 +1028,12 @@ class FelixIptablesGenerator(FelixPlugin):
             if "log_prefix" in rule:
                 # We've been asked to log when we hit this rule.
                 extra_rules.append(
-                    mark_match_fragment + "--jump " + self._log_target(rule)
+                    mark_match_fragment + "--jump " +
+                    self._log_target(rule=rule)
                 )
             extra_rules.append(mark_match_fragment + "--jump RETURN")
         elif action == "log":
-            ipt_target = self._log_target(rule)
+            ipt_target = self._log_target(rule=rule)
         elif action == "deny":
             ipt_target = on_deny
         else:
@@ -1048,9 +1054,17 @@ class FelixIptablesGenerator(FelixPlugin):
                 rules.extend(extra_rules)
         return rules
 
-    def _log_target(self, rule):
-        log_pfx = rule.get("log_prefix", "calico")
-        log_target = 'LOG --log-prefix "%s: " --log-level 4' % log_pfx
+    def _log_target(self, rule=None, log_pfx=None):
+        """
+        :return: an iptables logging target "LOG --log-prefix ..." for the
+                 given rule or explicit prefix.
+        """
+        if log_pfx is None:
+            log_pfx = rule.get("log_prefix", "calico-packet")
+        log_target = (
+            'LOG --log-prefix "%s: " --log-level %s' %
+            (log_pfx, DEFAULT_PACKET_LOG_LEVEL)
+        )
         return log_target
 
     def _ports_to_multiport(self, ports):
