@@ -41,6 +41,7 @@ from calico.etcdutils import EtcdWatcher
 from calico.etcdutils import safe_decode_json
 
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
+from networking_calico.common import config as calico_config
 
 LOG = logging.getLogger(__name__)
 
@@ -122,6 +123,21 @@ def make_net_model(net_spec):
     return net_model
 
 
+def get_etcd_connection_settings():
+    """Provide common initializing arguments for etcd watchers"""
+    etcd_host = cfg.CONF.calico.etcd_host
+    etcd_port = cfg.CONF.calico.etcd_port
+    etcd_endpoint = "{0}:{1}".format(etcd_host, etcd_port)
+    watcher_kwargs = {
+        'etcd_addrs': etcd_endpoint,
+        'etcd_scheme': cfg.CONF.calico.etcd_scheme,
+        'etcd_key': cfg.CONF.calico.etcd_key_file,
+        'etcd_cert': cfg.CONF.calico.etcd_cert_file,
+        'etcd_ca': cfg.CONF.calico.etcd_ca_cert_file
+    }
+    return watcher_kwargs
+
+
 class CalicoEtcdWatcher(EtcdWatcher):
 
     NETWORK_ID = 'calico'
@@ -139,10 +155,10 @@ class CalicoEtcdWatcher(EtcdWatcher):
     """
 
     def __init__(self, agent):
-        super(CalicoEtcdWatcher, self).__init__(
-            '127.0.0.1:4001',
+        watcher_kwargs = get_etcd_connection_settings()
+        watcher_kwargs['key_to_poll'] = \
             dir_for_host(socket.gethostname()) + "/workload"
-        )
+        super(CalicoEtcdWatcher, self).__init__(**watcher_kwargs)
         self.agent = agent
         self.suppress_on_ports_changed = False
 
@@ -425,7 +441,10 @@ class CalicoEtcdWatcher(EtcdWatcher):
 class SubnetWatcher(EtcdWatcher):
 
     def __init__(self, endpoint_watcher):
-        super(SubnetWatcher, self).__init__('127.0.0.1:4001', SUBNET_DIR)
+        watcher_kwargs = get_etcd_connection_settings()
+        watcher_kwargs['key_to_poll'] = SUBNET_DIR
+        super(SubnetWatcher, self).__init__(**watcher_kwargs)
+
         self.endpoint_watcher = endpoint_watcher
         self.register_path(
             SUBNET_DIR + "/<subnet_id>",
@@ -535,6 +554,7 @@ def setup_logging():
 
 def main():
     register_options(cfg.CONF)
+    calico_config.register_options(cfg.CONF)
     common_config.init(sys.argv[1:])
     setup_logging()
     agent = CalicoDhcpAgent()

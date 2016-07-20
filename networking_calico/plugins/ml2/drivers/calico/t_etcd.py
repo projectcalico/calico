@@ -42,36 +42,26 @@ from calico import datamodel_v1
 from calico import etcdutils
 import etcd
 from eventlet.semaphore import Semaphore
+from networking_calico.common import config as calico_config
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 
 
 # The node hostname is used as the default identity for leader election
 _hostname = socket.gethostname()
 
+
+# Elector configuration;
+elector_opt = cfg.StrOpt(
+    'elector_name', default=_hostname,
+    help="A unique name to identify this node in leader election"
+)
+
+# Register Calico related configuration options
+calico_config.register_options(cfg.CONF, additional_options=[elector_opt])
+
+
 # The amount of time in seconds to wait for etcd responses.
 ETCD_TIMEOUT = 5
-
-# Register Calico-specific options.
-calico_opts = [
-    # etcd connection information.
-    cfg.StrOpt('etcd_host', default='127.0.0.1',
-               help="The hostname or IP of the etcd node/proxy"),
-    cfg.IntOpt('etcd_port', default=4001,
-               help="The port to use for the etcd node/proxy"),
-    # etcd TLS-related options.
-    cfg.StrOpt('etcd_key_file', default=None,
-               help="The path to the TLS key file to use with etcd."),
-    cfg.StrOpt('etcd_cert_file', default=None,
-               help="The path to the TLS client certificate file to use with "
-                    "etcd."),
-    cfg.StrOpt('etcd_ca_cert_file', default=None,
-               help="The path to the TLS CA certificate file to use with "
-                    "etcd."),
-    # Elector configuration.
-    cfg.StrOpt('elector_name', default=_hostname,
-               help="A unique name to identify this node in leader election"),
-]
-cfg.CONF.register_opts(calico_opts, 'calico')
 
 OPENSTACK_ENDPOINT_RE = re.compile(
     r'^' + datamodel_v1.HOST_DIR +

@@ -143,3 +143,24 @@ In the Calico model, a single 'fqdn' field is added to endpoint data, e.g.
     'fqdn': 'calico-vm17.datcon.co.uk'
 
 and hostname is derived from that by splitting at the first '.'.
+
+Invocation
+~~~~~~~~~~
+
+DHCP agent can be invoked in the same way as neutron DHCP agent, using the
+neutron configuration file. Note, however, that
+calico DHCP agent in addition consumes specific settings (e.g. etcd cluster
+connection information) which are provided under option group (in terms of
+oslo config) with name 'calico'.
+
+With that said, user who wants to tune the agent to his/her needs may supply
+additional configuration files (or modify the neutron one) with the mentioned
+option group. As a side effect of this, configuration file for calico ml2
+plugin might be used as a such source as it already contains
+all sufficient settings.
+
+Here is one of the examples of invocation:
+
+::
+
+    calico-dhcp-agent --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini

@@ -26,7 +26,9 @@ from calico import datamodel_v1
 from calico.etcdutils import EtcdWatcher
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
+from networking_calico.agent.dhcp_agent import get_etcd_connection_settings
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
+from networking_calico.common import config as calico_config
 from neutron.agent.dhcp_agent import register_options
 from neutron.common import constants
 from neutron.tests import base
@@ -57,6 +59,7 @@ class TestDhcpAgent(base.BaseTestCase):
     def setUp(self):
         super(TestDhcpAgent, self).setUp()
         register_options(cfg.CONF)
+        calico_config.register_options(cfg.CONF)
 
     @mock.patch('etcd.Client')
     def test_mainline(self, etcd_client_cls):
@@ -480,6 +483,36 @@ class TestDhcpAgent(base.BaseTestCase):
             any_order=True
         )
         etcd_client.read.reset_mock()
+
+    @mock.patch('etcd.Client')
+    def test_etcd_watchers_init_with_conf_values(self, *_):
+        agent = CalicoDhcpAgent()
+
+        provided_kwargs = get_etcd_connection_settings()
+
+        def check_provided_args(watcher_obj, expected_key_to_poll):
+            for attr_name in ('etcd_scheme', 'etcd_key',
+                              'etcd_cert', 'etcd_ca'):
+                self.assertEqual(
+                    getattr(watcher_obj, attr_name),
+                    provided_kwargs[attr_name]
+                )
+
+            # provided hosts are stored in form of list [(host, port)...]
+            # on etcd watcher
+            etcd_host, etcd_port = provided_kwargs['etcd_addrs'].split(':')
+            self.assertEqual(watcher_obj.etcd_hosts,
+                             [(etcd_host, int(etcd_port))])
+
+            self.assertEqual(watcher_obj.key_to_poll, expected_key_to_poll)
+
+        expected_key = \
+            datamodel_v1.dir_for_host(socket.gethostname()) + '/workload'
+        check_provided_args(agent.etcd, expected_key)
+
+        expected_key = datamodel_v1.SUBNET_DIR
+        check_provided_args(agent.etcd.subnet_watcher, expected_key)
+
 
 commonutils = 'neutron.agent.linux.dhcp.commonutils'
 try:
