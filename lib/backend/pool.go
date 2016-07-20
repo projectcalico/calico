@@ -31,15 +31,15 @@ var (
 )
 
 type PoolKey struct {
-	Cidr common.IPNet `json:"-" validate:"required,name"`
+	CIDR common.IPNet `json:"-" validate:"required,name"`
 }
 
 func (key PoolKey) asEtcdKey() (string, error) {
-	if key.Cidr.IP == nil {
+	if key.CIDR.IP == nil {
 		return "", common.ErrorInsufficientIdentifiers{}
 	}
-	c := strings.Replace(key.Cidr.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", key.Cidr.Version(), c)
+	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", key.CIDR.Version(), c)
 	return e, nil
 }
 
@@ -52,16 +52,16 @@ func (key PoolKey) valueType() reflect.Type {
 }
 
 type PoolListOptions struct {
-	Cidr common.IPNet
+	CIDR common.IPNet
 }
 
 func (options PoolListOptions) asEtcdKeyRoot() string {
 	k := "/calico/v1/ipam/"
-	if options.Cidr.IP == nil {
+	if options.CIDR.IP == nil {
 		return k
 	}
-	c := strings.Replace(options.Cidr.String(), "/", "-", 1)
-	k = k + fmt.Sprintf("v%d/pool/", options.Cidr.Version()) + fmt.Sprintf("%s", c)
+	c := strings.Replace(options.CIDR.String(), "/", "-", 1)
+	k = k + fmt.Sprintf("v%d/pool/", options.CIDR.Version()) + fmt.Sprintf("%s", c)
 	return k
 }
 
@@ -74,15 +74,15 @@ func (options PoolListOptions) keyFromEtcdResult(ekey string) KeyInterface {
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
 	_, cidr, _ := common.ParseCIDR(cidrStr)
-	if options.Cidr.IP != nil && reflect.DeepEqual(*cidr, options.Cidr) {
-		glog.V(2).Infof("Didn't match cidr %s != %s", options.Cidr.String(), cidr.String())
+	if options.CIDR.IP != nil && reflect.DeepEqual(*cidr, options.CIDR) {
+		glog.V(2).Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
 	}
-	return PoolKey{Cidr: *cidr}
+	return PoolKey{CIDR: *cidr}
 }
 
 type Pool struct {
-	Cidr          common.IPNet `json:"cidr"`
+	CIDR          common.IPNet `json:"cidr"`
 	IPIPInterface string       `json:"ipip"`
 	Masquerade    bool         `json:"masquerade"`
 	Ipam          bool         `json:"ipam"`

@@ -1,18 +1,17 @@
-package ipam
+package client
 
 import (
 	"errors"
 	"fmt"
-	"net"
+	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/common"
 )
 
 type allocationHandle struct {
-	HandleID string         `json:"id"`
-	Block    map[string]int `json:"block"`
-	DbResult string         `json:"-"`
+	backend.IPAMHandle
 }
 
-func (h allocationHandle) incrementBlock(blockCidr net.IPNet, num int) int {
+func (h allocationHandle) incrementBlock(blockCidr common.IPNet, num int) int {
 	blockId := blockCidr.String()
 	newNum := num
 	if val, ok := h.Block[blockId]; ok {
@@ -24,7 +23,7 @@ func (h allocationHandle) incrementBlock(blockCidr net.IPNet, num int) int {
 	return newNum
 }
 
-func (h allocationHandle) decrementBlock(blockCidr net.IPNet, num int) (*int, error) {
+func (h allocationHandle) decrementBlock(blockCidr common.IPNet, num int) (*int, error) {
 	blockId := blockCidr.String()
 	if current, ok := h.Block[blockId]; !ok {
 		// This entry doesn't exist.

@@ -22,16 +22,14 @@ import (
 
 type PoolMetadata struct {
 	ObjectMetadata
-	Cidr IPNet `json:"cidr"`
+	CIDR IPNet `json:"cidr"`
 }
 
 type PoolSpec struct {
-	// TODO: These values taken directly from etcd data-model.
-	// I don't think they're right yet (e.g Masquerade is actually "nat-outgoing", yeah?)
-	IPIPInterface string `json:"ipip,omitempty"`
-	Masquerade    bool   `json:"masquerade"`
-	Ipam          bool   `json:"ipam"` // TODO: Default this to true.  Check this field in ipam code.
-	Disabled      bool   `json:"disabled"`
+	IPIP        bool `json:"ipip,omitempty"`
+	NATOutgoing bool `json:"nat-outgoing"`
+	Ipam        bool `json:"ipam"`
+	Disabled    bool `json:"disabled"`
 }
 
 type Pool struct {

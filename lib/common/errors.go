@@ -33,7 +33,7 @@ type ErrorResourceDoesNotExist struct {
 }
 
 func (e ErrorResourceDoesNotExist) Error() string {
-	return fmt.Sprintf("resource does not exists with name '%s'", e.Name)
+	return fmt.Sprintf("resource does not exist with name '%s'", e.Name)
 }
 
 // Error indicating a resource already exists.  Used when attempting to create a

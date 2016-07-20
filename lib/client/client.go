@@ -63,7 +63,7 @@ func (c *Client) WorkloadEndpoints() WorkloadEndpointInterface {
 
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c *Client) IPAM() IPAMInterface {
-	return NewIPAM(c)
+	return newIPAM(c)
 }
 
 // LoadClientConfig loads the client config from the specified file (if specified)

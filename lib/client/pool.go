@@ -80,7 +80,7 @@ func (h *pools) List(metadata api.PoolMetadata) (*api.PoolList, error) {
 func (h *pools) convertMetadataToListInterface(m interface{}) (backend.ListInterface, error) {
 	pm := m.(api.PoolMetadata)
 	l := backend.PoolListOptions{
-		Cidr: pm.Cidr,
+		CIDR: pm.CIDR,
 	}
 	return l, nil
 }
@@ -89,7 +89,7 @@ func (h *pools) convertMetadataToListInterface(m interface{}) (backend.ListInter
 func (h *pools) convertMetadataToKeyInterface(m interface{}) (backend.KeyInterface, error) {
 	pm := m.(api.PoolMetadata)
 	k := backend.PoolKey{
-		Cidr: pm.Cidr,
+		CIDR: pm.CIDR,
 	}
 	return k, nil
 }
@@ -105,9 +105,9 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 	d := backend.DatastoreObject{
 		Key: k,
 		Object: backend.Pool{
-			Cidr:          ap.Metadata.Cidr,
-			IPIPInterface: ap.Spec.IPIPInterface,
-			Masquerade:    ap.Spec.Masquerade,
+			CIDR:          ap.Metadata.CIDR,
+			IPIPInterface: "", // TODO ap.Spec.IPIPInterface,
+			Masquerade:    ap.Spec.NATOutgoing,
 			Ipam:          ap.Spec.Ipam,
 			Disabled:      ap.Spec.Disabled,
 		},
@@ -122,9 +122,9 @@ func (h *pools) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interfa
 	//bk := d.Key.(backend.PoolKey)
 
 	apiPool := api.NewPool()
-	apiPool.Metadata.Cidr = backendPool.Cidr
-	apiPool.Spec.IPIPInterface = backendPool.IPIPInterface
-	apiPool.Spec.Masquerade = backendPool.Masquerade
+	apiPool.Metadata.CIDR = backendPool.CIDR
+	apiPool.Spec.IPIP = false // TODO: backendPool.IPIPInterface
+	apiPool.Spec.NATOutgoing = backendPool.Masquerade
 	apiPool.Spec.Ipam = backendPool.Ipam
 	apiPool.Spec.Disabled = backendPool.Disabled
 
