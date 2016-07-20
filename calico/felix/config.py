@@ -695,6 +695,10 @@ class Config(object):
             log.warning("Unknown setting for DropActionOverride setting: %s, "
                         "defaulting to 'DROP'.", self.ACTION_ON_DROP)
             self.ACTION_ON_DROP = "DROP"
+        if self.ACTION_ON_DROP.endswith("ACCEPT"):
+            log.warning("Security disabled! DropActionOverride set to ACCEPT "
+                        "or LOG-and-ACCEPT.  DROP rules will be replaced with"
+                        "ACCEPT rules. ")
 
         # For non-positive time values of reporting interval we set both
         # interval and ttl to 0 - i.e. status reporting is disabled.

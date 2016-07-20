@@ -582,7 +582,7 @@ class FelixIptablesGenerator(FelixPlugin):
 
         if self.ACTION_ON_DROP.startswith("LOG-"):
             # log-and-accept, log-and-drop.
-            log_spec = '--jump LOG --log-prefix "CalicoDrop" --log-level 4'
+            log_spec = '--jump LOG --log-prefix "calico-drop: " --log-level 4'
             log_rule = " ".join(
                 [p for p in [ipt_action, chain_name, rule_spec, log_spec,
                              comment_str] if p is not None]
@@ -590,7 +590,10 @@ class FelixIptablesGenerator(FelixPlugin):
             rules.append(log_rule)
 
         if self.ACTION_ON_DROP.endswith("ACCEPT"):
-            action_spec = "--jump ACCEPT"
+            action_spec = (
+                '--jump ACCEPT -m comment '
+                '--comment "!SECURITY DISABLED! DROP overridden to ACCEPT"'
+            )
         else:
             assert self.ACTION_ON_DROP.endswith("DROP")
             action_spec = "--jump DROP"

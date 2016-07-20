@@ -695,20 +695,23 @@ class TestRules(BaseTestCase):
             4, "foo", "--rulespec", "comment"
         )
         self.assertEqual(drop_rules, [
-            '--append foo --rulespec --jump LOG --log-prefix "CalicoDrop" '
-            '--log-level 4 -m comment --comment "comment"',
-            '--append foo --rulespec --jump ACCEPT -m comment '
-            '--comment "comment"'
+            '--append foo --rulespec --jump LOG '
+            '--log-prefix "calico-drop: " --log-level 4 -m comment '
+            '--comment "comment"',
+            '--append foo --rulespec --jump ACCEPT -m comment --comment '
+            '"!SECURITY DISABLED! DROP overridden to ACCEPT" '
+            '-m comment --comment "comment"'
         ])
 
-    def test_drop_rules_log_accept(self):
+    def test_drop_rules_accept(self):
         self.iptables_generator.ACTION_ON_DROP = "ACCEPT"
         drop_rules = self.iptables_generator.drop_rules(
             4, "foo", "--rulespec", "comment"
         )
         self.assertEqual(drop_rules, [
-            '--append foo --rulespec --jump ACCEPT -m comment '
-            '--comment "comment"'
+            '--append foo --rulespec --jump ACCEPT -m comment --comment '
+            '"!SECURITY DISABLED! DROP overridden to ACCEPT" '
+            '-m comment --comment "comment"'
         ])
 
     def test_drop_rules_log_drop(self):
@@ -717,7 +720,7 @@ class TestRules(BaseTestCase):
             4, "foo", "--rulespec", "comment"
         )
         self.assertEqual(drop_rules, [
-            '--append foo --rulespec --jump LOG --log-prefix "CalicoDrop" '
+            '--append foo --rulespec --jump LOG --log-prefix "calico-drop: " '
             '--log-level 4 -m comment --comment "comment"',
             '--append foo --rulespec --jump DROP -m comment '
             '--comment "comment"'
