@@ -124,6 +124,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-,root,root,-)
 %{python_sitelib}/calico*
 /usr/bin/calico-diags
+/usr/bin/calico-cleanup
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
 /usr/bin/calico-gen-bird-mesh-conf.sh
