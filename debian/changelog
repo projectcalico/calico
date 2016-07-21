@@ -1,3 +1,9 @@
+networking-calico (1:1.2.0-xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit beeb729).
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 21 Jul 2016 18:29:53 +0100
+
 networking-calico (1:1.2.0-trusty) trusty; urgency=low
 
   * networking-calico release (from Git commit beeb729).
