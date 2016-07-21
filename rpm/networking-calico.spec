@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.1.3
+Version:        1.2.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,30 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Jul 21 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.2.0-1
+  - networking-calico version 1.2.0 release
+    - py26/py33 are no longer supported by Infra's CI
+    - remove python 2.6 trove classifier
+    - (beta) Add floating IP support in OpenStack plugin.
+    - Update DevStack plugin settings for new Calico core plugin
+    - Adapt test code for recent change in common Calico code
+    - DevStack plugin: complete IPv6 support
+    - DevStack script: better commenting of supported env. variables
+    - Support master Neutron code (Mitaka) as well as previous releases
+    - Use Neutron master for DevStack and testing, instead of Liberty
+    - Improve urllib3/requests unvendoring fix
+    - DevStack: Don't run calico-dhcp-agent with sudo
+    - Rewrap all docs to 79 columns
+    - Add systemd packaging for Calico DHCP agent on Ubuntu/Debian
+    - Prefix the profile IDs that we program into etcd
+    - Remove dependency on removed neutron.i18n module
+    - Debian package version pinning
+    - Use proper interface of endpoint class from calico package
+    - Fix NAT internal/external IP naming scheme
+    - Use network MTU if network_device_mtu not set
+    - Gracefully handle absence of network_device_mtu option
+    - Add file handler for dhcp-agent log
+
 * Wed Mar 02 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.1.3-1
   - Change default host for etcd connections from localhost to 127.0.0.1
 
