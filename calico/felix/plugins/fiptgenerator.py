@@ -698,16 +698,13 @@ class FelixIptablesGenerator(FelixPlugin):
                                  "chain": chain_name,
                                  "mark": self.IPTABLES_MARK_ACCEPT,
                              })
-            # If the next-tier mark bit is still clear then no policy
-            # in the tier allowed the packet through, drop it.
-            chain.append('--append %(chain)s --match mark --mark 0/%(mark)s '
-                         '--match comment '
-                         '--comment "Drop if no policy in tier passed" '
-                         '--jump DROP' %
-                         {
-                             "chain": chain_name,
-                             "mark": self.IPTABLES_MARK_NEXT_TIER,
-                         })
+
+            chain.extend(self.drop_rules(
+                ip_version,
+                chain_name,
+                "--match mark --mark 0/%s" % self.IPTABLES_MARK_NEXT_TIER,
+                comment="Drop if no policy in tier passed"
+            ))
 
         # Then, jump to each directly-referenced profile in turn.  The profile
         # will do one of the following:
