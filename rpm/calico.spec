@@ -3,7 +3,7 @@
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        1.4.0
-Release:        0.3pre3%{?dist}
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
@@ -147,6 +147,23 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+
+* Thu Jun 21 2016 Neil Jerram <neil@tigera.io> 1.4.0-1
+  - Calico version 1.4.0 release
+    - Fix example policy in bare metal docs to be valid json
+    - Use a different conntrack command to trigger module load.
+    - Missing conntrack requires conntrack, not iptables
+    - Allow missing or "default" for tier order.
+    - Updates for transition to Tigera. (#1055, #1049)
+    - specified coverage >=4.02,<4.1 to work around #1057
+    - Fix hypothesis test for label validation. (#1060)
+    - Default to using system certificate store.
+    - Fix that conntrack rules only RETURNed packets rather than ACCEPTing.
+    - Fill in missing log substitution (#1066)
+    - Add tool to remove all felix iptables/ipsets changes. (#1048)
+    - Add option to override DROP rules for debugging policy.
+    - Add log action, and ability to log any rule.
+
 * Mon Jun 27 2016 Neil Jerram <neil@tigera.io> 1.4.0-0.3.pre
   - calico pre-release (from Git commit 4b1a68)
     - Add support for securing bare-metal host endpoints.  This is a significant

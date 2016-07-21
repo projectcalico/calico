@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+- Fix example policy in bare metal docs to be valid json
+- Use a different conntrack command to trigger module load.
+- Missing conntrack requires conntrack, not iptables
+- Allow missing or "default" for tier order.
+- Updates for transition to Tigera. (#1055, #1049)
+- specified coverage >=4.02,<4.1 to work around #1057
+- Fix hypothesis test for label validation. (#1060)
+- Default to using system certificate store.
+- Fix that conntrack rules only RETURNed packets rather than ACCEPTing.
+- Fill in missing log substitution (#1066)
+- Add tool to remove all felix iptables/ipsets changes. (#1048)
+- Add option to override DROP rules for debugging policy.
+- Add log action, and ability to log any rule.
+
 ## 1.4.0-pre3
 
 - Add support for securing bare-metal host endpoints.  This is a significant
