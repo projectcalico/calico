@@ -265,6 +265,22 @@ The various properties in this object have the following meanings:
 
 .. _security-profile-data:
 
+Traffic Filtering
+~~~~~~~~~~~~~~~~~
+
+Calico implements traffic filtering controlled by security profiles
+and tiered security policies.  Traffic is connection-like: the
+filtering applies to packets traveling in the forward direction, and
+if the forward packets are accepted then the reply packets are
+implicitly accepted.
+
+Calico applies filtering at forward egress from each Calico endpoint,
+and independently applies filtering at forward ingress to each Calico
+endpoint.  Refusal at either site blocks the traffic.  Thus, Calico
+gets two bites at the filtering apple for traffic that is between
+Calico endpoints, one bite for traffic between a Calico endpoint and a
+non-Calico thing.
+
 Security Profiles
 ~~~~~~~~~~~~~~~~~
 
