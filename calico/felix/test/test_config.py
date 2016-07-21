@@ -645,3 +645,18 @@ class TestConfig(unittest.TestCase):
         }
         self.assertRaises(ConfigException, load_config,
                           "felix_missing.cfg", host_dict=cfg_dict)
+
+    def test_drop_action_defaulting(self):
+        cfg_dict = {
+            "DropActionOverride": "foobar",
+        }
+        config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+        self.assertEqual(config.ACTION_ON_DROP, "DROP")
+
+    def test_drop_valid(self):
+        for value in ("DROP", "LOG-and-DROP", "ACCEPT", "LOG-and-ACCEPT"):
+            cfg_dict = {
+                "DropActionOverride": value,
+            }
+            config = load_config("felix_missing.cfg", host_dict=cfg_dict)
+            self.assertEqual(config.ACTION_ON_DROP, value)

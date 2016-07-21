@@ -94,6 +94,15 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be       |
 |                                  |                                       | processed) or "ACCEPT" (which immediately accepts packets).                               |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
+| DropActionOverride               | DROP                                  | Override for the action taken when a packet would normally be dropped by Calico's         |
+|                                  |                                       | firewall rules. This setting is useful when prototyping policy. Note: if the policy is    |
+|                                  |                                       | set to 'ACCEPT' or 'LOG-and-ACCEPT'; Calico's security is disabled!                       |
+|                                  |                                       |                                                                                           |
+|                                  |                                       | In the current implementation, the LOG-and-XXX actions use an iptables LOG action,        |
+|                                  |                                       | which logs to syslog.                                                                     |
+|                                  |                                       |                                                                                           |
+|                                  |                                       | Should be set to one of 'DROP', 'ACCEPT', 'LOG-and-DROP', 'LOG-and-ACCEPT'.               |
++----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | FelixHostname                    | socket.gethostname()                  | The hostname Felix reports to the plugin. Should be used if the hostname Felix            |
 |                                  |                                       | autodetects is incorrect or does not match what the plugin will expect.                   |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
