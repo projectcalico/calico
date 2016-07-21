@@ -39,6 +39,8 @@ import logging
 import re
 import itertools
 
+import syslog
+
 from calico.common import KNOWN_RULE_KEYS
 from calico.datamodel_v1 import TieredPolicyId
 from calico.felix import futils
@@ -60,6 +62,10 @@ _log = logging.getLogger(__name__)
 # Maximum number of port entries in a "multiport" match rule.  Ranges count for
 # 2 entries.
 MAX_MULTIPORT_ENTRIES = 15
+
+# The default syslog level that packets get logged at when using the log
+# action.
+DEFAULT_PACKET_LOG_LEVEL = syslog.LOG_NOTICE
 
 
 class FelixIptablesGenerator(FelixPlugin):
@@ -510,8 +516,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     self._profile_to_chain_name("outbound", profile_id)])
 
     def profile_updates(self, profile_id, profile, ip_version, tag_to_ipset,
-                        selector_to_ipset, on_allow="ACCEPT", on_deny="DROP",
-                        comment_tag=None):
+                        selector_to_ipset, comment_tag=None):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given profile.
@@ -544,12 +549,42 @@ class FelixIptablesGenerator(FelixPlugin):
                         r,
                         ip_version,
                         tag_to_ipset,
-                        selector_to_ipset,
-                        on_allow=on_allow,
-                        on_deny=on_deny))
+                        selector_to_ipset))
             updates[chain_name] = fragments
 
         return updates, deps
+
+    def logged_drop_rules(self, ip_version, chain_name, rule_spec=None,
+                          comment=None, ipt_action="--append", log_pfx=None):
+        """
+        Return a list of iptables updates that can be applied to a chain to
+        drop packets that meet a given rule_spec, with optional log.
+
+        :param ip_version.  Whether these are for the IPv4 or IPv6 iptables.
+        :param chain_name: the chain that the updates will be applied to
+        :param rule_spec: the rule spec (e.g. match criteria).   May be None
+        to drop all packets.
+        :param comment: any comment that should be associated with the
+        rule.  May be None to not include a comment.
+        :param ipt_action: the action that should be used to apply the rule
+        (e.g. --append or --insert)
+        :param log_pfx: If not None, the rules will trigger an iptables LOG
+        action with this log prefix before dropping the packet.
+
+        :return list: a list of iptables fragments of the form
+        [ipt_action] [chain_name] [rule_spec] [action] [comment] e.g.
+        --append my_chain --match conntrack --ctstate INVALID --jump DROP
+        """
+        drop_rules = self.drop_rules(ip_version, chain_name,
+                                     rule_spec=rule_spec, comment=comment,
+                                     ipt_action=ipt_action)
+        if log_pfx is not None:
+            log_target = self._log_target(log_pfx=log_pfx)
+            log_rule = " ".join(
+                [ipt_action, chain_name, rule_spec, "--jump", log_target]
+            )
+            drop_rules[0:0] = [log_rule]
+        return drop_rules
 
     def drop_rules(self, ip_version, chain_name, rule_spec=None, comment=None,
                    ipt_action="--append"):
@@ -744,9 +779,7 @@ class FelixIptablesGenerator(FelixPlugin):
                                                  inbound_or_outbound[:1])
 
     def _rule_to_iptables_fragments(self, chain_name, rule, ip_version,
-                                    tag_to_ipset, selector_to_ipset,
-                                    on_allow="ACCEPT",
-                                    on_deny="DROP"):
+                                    tag_to_ipset, selector_to_ipset):
         """
         Convert a rule dict to a list of iptables fragments suitable to use
         with iptables-restore.
@@ -761,10 +794,6 @@ class FelixIptablesGenerator(FelixPlugin):
                name.
         :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
                from selector to the name of the ipset that represents it.
-        :param str on_allow: iptables action to use when the rule allows
-               traffic.  For example: "ACCEPT" or "RETURN".
-        :param str on_deny: iptables action to use when the rule denies
-               traffic.  For example: "DROP".
         :return list[str]: iptables --append fragments.
         """
 
@@ -795,9 +824,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     rule_copy,
                     ip_version,
                     tag_to_ipset,
-                    selector_to_ipset,
-                    on_allow=on_allow,
-                    on_deny=on_deny)
+                    selector_to_ipset)
                 fragments.extend(frags)
 
             return fragments
@@ -843,9 +870,7 @@ class FelixIptablesGenerator(FelixPlugin):
         return chunks
 
     def _rule_to_iptables_fragments_inner(self, chain_name, rule, ip_version,
-                                          tag_to_ipset, selector_to_ipset,
-                                          on_allow="ACCEPT",
-                                          on_deny="DROP"):
+                                          tag_to_ipset, selector_to_ipset):
         """
         Convert a rule dict to iptables fragments suitable to use with
         iptables-restore.
@@ -858,10 +883,6 @@ class FelixIptablesGenerator(FelixPlugin):
                name.
         :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
                from selector to the name of the ipset that represents it.
-        :param str on_allow: iptables action to use when the rule allows
-                traffic. For example: "ACCEPT" or "RETURN".
-        :param str on_deny: iptables action to use when the rule denies
-                traffic. For example: "DROP".
         :returns list[str]: list of iptables --append fragments.
         """
 
@@ -967,37 +988,37 @@ class FelixIptablesGenerator(FelixPlugin):
                            neg_pfx, "--icmpv6-type", icmp_filter)
 
         action = rule.get("action", "allow")
-        extra_rule = None
-        if action == "allow":
-            # allow requires two rules, one to mark the packet and another
-            # to return the packet to the calling chain.
+        extra_rules = []
+        if action in {"allow", "next-tier"}:
+            if action == "allow":
+                mark_bit = self.IPTABLES_MARK_ACCEPT
+            else:
+                mark_bit = self.IPTABLES_MARK_NEXT_TIER
+
+            # allow and next-tier require two rules, one to mark the packet
+            # so the parent chain knows what happened and a second rule to
+            # return to the parent chain if the packet was marked.
             ipt_target = "MARK --set-mark %(mark)s/%(mark)s" % {
-                "mark": self.IPTABLES_MARK_ACCEPT
+                "mark": mark_bit
             }
-            extra_rule = (
-                "--append %(chain)s --match mark --mark %(mark)s/%(mark)s "
-                "--jump RETURN" %
+            mark_match_fragment = (
+                "--append %(chain)s --match mark --mark %(mark)s/%(mark)s " %
                 {
                     "chain": chain_name,
-                    "mark": self.IPTABLES_MARK_ACCEPT,
+                    "mark": mark_bit,
                 }
             )
+            if "log_prefix" in rule:
+                # We've been asked to log when we hit this rule.
+                extra_rules.append(
+                    mark_match_fragment + "--jump " +
+                    self._log_target(rule=rule)
+                )
+            extra_rules.append(mark_match_fragment + "--jump RETURN")
+        elif action == "log":
+            ipt_target = self._log_target(rule=rule)
         elif action == "deny":
-            ipt_target = on_deny
-        elif action == "next-tier":
-            # next-tier requires two rules, one to mark the packet and another
-            # to return the packet to the calling chain.
-            ipt_target = "MARK --set-mark %(mark)s/%(mark)s" % {
-                "mark": self.IPTABLES_MARK_NEXT_TIER
-            }
-            extra_rule = (
-                "--append %(chain)s --match mark --mark %(mark)s/%(mark)s "
-                "--jump RETURN" %
-                {
-                    "chain": chain_name,
-                    "mark": self.IPTABLES_MARK_NEXT_TIER,
-                }
-            )
+            ipt_target = "DROP"
         else:
             # Validation should prevent unknown actions from getting this
             # far.
@@ -1006,13 +1027,28 @@ class FelixIptablesGenerator(FelixPlugin):
         rule_spec_str = " ".join(str(x) for x in rule_spec if x != "")
 
         if ipt_target == "DROP":
-            rules = self.drop_rules(ip_version, chain_name, rule_spec_str, None)
+            rules = self.logged_drop_rules(ip_version, chain_name,
+                                           rule_spec_str,
+                                           log_pfx=rule.get("log_prefix"))
         else:
             rules = [" ".join(["--append", chain_name, rule_spec_str,
                                "--jump", ipt_target])]
-            if extra_rule:
-                rules.append(extra_rule)
+            if extra_rules:
+                rules.extend(extra_rules)
         return rules
+
+    def _log_target(self, rule=None, log_pfx=None):
+        """
+        :return: an iptables logging target "LOG --log-prefix ..." for the
+                 given rule or explicit prefix.
+        """
+        if log_pfx is None:
+            log_pfx = rule.get("log_prefix", "calico-packet")
+        log_target = (
+            'LOG --log-prefix "%s: " --log-level %s' %
+            (log_pfx, DEFAULT_PACKET_LOG_LEVEL)
+        )
+        return log_target
 
     def _ports_to_multiport(self, ports):
         """

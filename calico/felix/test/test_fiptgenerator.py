@@ -80,6 +80,7 @@ RULES_TESTS = [
             "id": "prof1",
             "inbound_rules": [
                 {"src_selector": SELECTOR_A_EQ_B,
+                 "log_prefix": "foo",
                  "action": "next-tier"}
             ],
             "outbound_rules": [
@@ -94,6 +95,9 @@ RULES_TESTS = [
                     '--match set --match-set a-eq-b src '
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-i --match mark '
+                    '--mark 0x2000000/0x2000000 --jump LOG '
+                    '--log-prefix "foo: " --log-level 5',
+                    '--append felix-p-prof1-i --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
                 ],
             'felix-p-prof1-o':
@@ -103,6 +107,32 @@ RULES_TESTS = [
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-o --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
+                ]
+        },
+    },
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {},
+        "sel_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {"log_prefix": "foo", "action": "log"}
+            ],
+            "outbound_rules": [
+                {"action": "log"}
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i':
+                [
+                    '--append felix-p-prof1-i  --jump LOG '
+                    '--log-prefix "foo: " --log-level 5',
+                ],
+            'felix-p-prof1-o':
+                [
+                    '--append felix-p-prof1-o  --jump LOG '
+                    '--log-prefix "calico-packet: " --log-level 5',
                 ]
         },
     },
@@ -304,6 +334,7 @@ RULES_TESTS = [
                 {"protocol": "icmpv6",
                  "src_net": "1234::beef",
                  "icmp_type": 7,
+                 "log_prefix": "dropped",
                  "action": "deny"
                 }
             ]
@@ -319,6 +350,9 @@ RULES_TESTS = [
                 ],
             'felix-p-prof1-o':
                 [
+                    "--append felix-p-prof1-o --protocol icmpv6 --source "
+                    "1234::beef --match icmp6 --icmpv6-type 7 "
+                    "--jump LOG --log-prefix \"dropped: \" --log-level 5",
                     "--append felix-p-prof1-o --protocol icmpv6 --source "
                     "1234::beef --match icmp6 --icmpv6-type 7 "
                     "--jump DROP",
@@ -649,8 +683,6 @@ class TestRules(BaseTestCase):
                 test["ip_version"],
                 test["tag_to_ipset"],
                 selector_to_ipset=test.get("sel_to_ipset", {}),
-                on_allow=test.get("on_allow", "RETURN"),
-                on_deny=test.get("on_deny", "DROP")
             )
             _log.info("Updates:\n%s", pformat(updates))
             _log.info("Deps:\n%s", pformat(deps))

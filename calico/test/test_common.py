@@ -81,7 +81,9 @@ class TestCommon(unittest.TestCase):
             "inbound_rules": [
                 {"protocol": "tcp", "ip_version": 4, "src_net": "10/8",
                  "dst_net": "11.0/16", "src_ports": [10, "11:12"],
-                 "action": "allow"},
+                 "action": "allow",
+                 "log_prefix": "foo!@#$012345678901234567890123456789"},
+                {"action": "log"},
                 {"protocol": "tcp", "src_net": None},
             ],
             "outbound_rules": [
@@ -97,7 +99,9 @@ class TestCommon(unittest.TestCase):
             "inbound_rules": [
                 {"protocol": "tcp", "ip_version": 4, "src_net": "10.0.0.0/8",
                  "dst_net": "11.0.0.0/16", "src_ports": [10, "11:12"],
-                 "action": "allow"},
+                 "action": "allow",
+                 "log_prefix": "foo____01234567890123456789"},
+                {"action": "log"},
                 {"protocol": "tcp"},
             ],
             "outbound_rules": [
@@ -431,6 +435,13 @@ class TestCommon(unittest.TestCase):
                  'outbound_rules': []}
         with self.assertRaisesRegexp(ValidationFailed,
                                      "ICMP code specified without ICMP type"):
+            common.validate_profile(profile_id, rules)
+
+        rule = {'log_prefix': []}
+        rules = {'inbound_rules': [rule],
+                 'outbound_rules': []}
+        with self.assertRaisesRegexp(ValidationFailed,
+                                     "Log prefix should be a string"):
             common.validate_profile(profile_id, rules)
 
     def test_validate_policy(self):

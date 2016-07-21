@@ -448,6 +448,10 @@ Each rule sub-object has the following JSON-encoded structure:
       "!dst_ports": ...,
       "!icmp_type": ..., "!icmp_code": ...,  # Treated together, see below.
 
+      # If present, "log_prefix" causes the matched packet to be logged
+      # with the given prefix.
+      "log_prefix": "<log-prefix>",
+
       "action": "deny | allow | next-tier",
     }
 
@@ -547,12 +551,27 @@ requiring the protocol to be specified):
                all ICMP traffic apart from traffic that matches **both** type
                and code.
 
+``log_prefix``
+  if present, in addition to doing the configured action, Calico will log the
+  packet with this prefix. The current implementation uses iptables LOG action,
+  which results in a log to syslog.
+
+  For iptables compatibility, Calico will truncate the prefix to 27 characters
+  and limit the character set.
+
 ``action``
-  what action to take when traffic matches this rule. One of ``deny``, which
-  drops the packet immediately; ``allow``, which accepts the packet
-  unconditionally and ``next-tier``, which, in tiered security policies,
-  jumps to the next tier and continues processing.  (In profiles, the
-  ``next-tier`` action is a synonym for ``allow``.)
+  what action to take when traffic matches this rule. One of
+
+  - ``deny``, which drops the packet immediately
+  - ``allow``, which accepts the packet unconditionally
+  - ``next-tier``, which, in tiered security policies, jumps to the next tier
+    and continues processing.  (In profiles, the ``next-tier`` action is a
+    synonym for ``allow``.)
+  - ``log``, which logs the packet (to syslog) and then continues processing
+    rules.
+
+    .. note:: Since Calico implements a stateful firewall, normally only the
+              first packet in a TCP or ICMP flow will be logged.
 
 Tags
 ^^^^
