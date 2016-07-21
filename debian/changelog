@@ -1,3 +1,22 @@
+calico (1.4.0-trusty) trusty; urgency=low
+
+  * calico release (from Git commit 4ab7e42).
+    - Fix example policy in bare metal docs to be valid json
+    - Use a different conntrack command to trigger module load.
+    - Missing conntrack requires conntrack, not iptables
+    - Allow missing or "default" for tier order.
+    - Updates for transition to Tigera. (#1055, #1049)
+    - specified coverage >=4.02,<4.1 to work around #1057
+    - Fix hypothesis test for label validation. (#1060)
+    - Default to using system certificate store.
+    - Fix that conntrack rules only RETURNed packets rather than ACCEPTing.
+    - Fill in missing log substitution (#1066)
+    - Add tool to remove all felix iptables/ipsets changes. (#1048)
+    - Add option to override DROP rules for debugging policy.
+    - Add log action, and ability to log any rule.
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 21 Jul 2016 18:01:06 +0100
+
 calico (1.4.0~pre.3-xenial) xenial; urgency=low
 
   * calico pre-release (from Git commit 6430099).
