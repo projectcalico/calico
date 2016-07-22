@@ -148,7 +148,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %changelog
 
-* Thu Jun 21 2016 Neil Jerram <neil@tigera.io> 1.4.0-1
+* Fri Jul 22 2016 Neil Jerram <neil@tigera.io> 1.4.0-1
   - Calico version 1.4.0 release
     - Fix example policy in bare metal docs to be valid json
     - Use a different conntrack command to trigger module load.
