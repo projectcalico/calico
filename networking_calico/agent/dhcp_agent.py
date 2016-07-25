@@ -16,6 +16,7 @@
 
 import etcd
 import logging
+import os
 import socket
 import sys
 
@@ -32,6 +33,7 @@ from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
 from neutron.common import constants
 
+from calico.common import mkdir_p
 from calico.datamodel_v1 import dir_for_host
 from calico.datamodel_v1 import key_for_subnet
 from calico.datamodel_v1 import SUBNET_DIR
@@ -520,6 +522,9 @@ def setup_logging():
     log_format = ('%(asctime)s [%(thread)d] (%(levelname)s) '
                   '%(module)s: %(message)s')
     log_level = logging.DEBUG
+
+    # Ensure that log file directory exists.
+    mkdir_p(os.path.dirname(log_file))
 
     fh = logging.FileHandler(log_file)
     fh.setLevel(log_level)
