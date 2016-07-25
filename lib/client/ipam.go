@@ -350,7 +350,9 @@ func (c ipams) releaseIPsFromBlock(ips []common.IP, blockCIDR common.IPNet) ([]c
 		var casError error
 		if b.empty() && b.HostAffinity == nil {
 			glog.V(3).Infof("Deleting non-affine block '%s'", b.CIDR.String())
-			casError = c.client.backend.Delete(backend.BlockKey{CIDR: blockCIDR})
+			casError = c.client.backend.Delete(&backend.DatastoreObject{
+				Key: backend.BlockKey{CIDR: blockCIDR},
+			})
 		} else {
 			glog.V(3).Infof("Updating assignments in block '%s'", b.CIDR.String())
 			obj.Object = b.AllocationBlock
@@ -667,7 +669,9 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 		}
 
 		if block.empty() && block.HostAffinity == nil {
-			err = c.client.backend.Delete(backend.BlockKey{blockCIDR})
+			err = c.client.backend.Delete(&backend.DatastoreObject{
+				Key: backend.BlockKey{blockCIDR},
+			})
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 					// Already deleted - carry on.
@@ -751,7 +755,9 @@ func (c ipams) decrementHandle(handleID string, blockCIDR common.IPNet, num int)
 		// Update / Delete as appropriate.
 		if handle.empty() {
 			glog.V(3).Infof("Deleting handle: %s", handleID)
-			err = c.client.backend.Delete(backend.IPAMHandleKey{HandleID: handleID})
+			err = c.client.backend.Delete(&backend.DatastoreObject{
+				Key: backend.IPAMHandleKey{HandleID: handleID},
+			})
 		} else {
 			glog.V(3).Infof("Updating handle: %s", handleID)
 			obj.Object = handle.IPAMHandle

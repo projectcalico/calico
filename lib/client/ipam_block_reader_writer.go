@@ -139,7 +139,9 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 			}
 
 			// Some other host beat us to this block.  Cleanup and return error.
-			err = rw.client.backend.Delete(backend.BlockAffinityKey{Host: host, CIDR: b.CIDR})
+			err = rw.client.backend.Delete(&backend.DatastoreObject{
+				Key: backend.BlockAffinityKey{Host: host, CIDR: b.CIDR},
+			})
 			if err != nil {
 				glog.Errorf("Error cleaning up block affinity: %s", err)
 				return err
@@ -173,7 +175,9 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 
 		if b.empty() {
 			// If the block is empty, we can delete it.
-			err := rw.client.backend.Delete(backend.BlockKey{CIDR: b.CIDR})
+			err := rw.client.backend.Delete(&backend.DatastoreObject{
+				Key: backend.BlockKey{CIDR: b.CIDR},
+			})
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 					// Block already deleted.  Carry on.
@@ -205,7 +209,9 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 
 		// We've removed / updated the block, so update the host config
 		// to remove the CIDR.
-		err = rw.client.backend.Delete(backend.BlockAffinityKey{Host: host, CIDR: b.CIDR})
+		err = rw.client.backend.Delete(&backend.DatastoreObject{
+			Key: backend.BlockAffinityKey{Host: host, CIDR: b.CIDR},
+		})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Already deleted - carry on.
