@@ -7,4 +7,4 @@ To use the v1beta1 API, you must be running Kubernetes v1.3, with the following 
 --runtime-config=extensions/v1beta1,extensions/v1beta1/networkpolicies
 ```
 
-See our documentation on [enabling network policy in Kubernetes](https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/NetworkPolicy.md) for more on how to get started.
+See the documentation on [network policy in Kubernetes](http://kubernetes.io/docs/user-guide/networkpolicies/) for more information on how to use NetworkPolicy. 
