@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	matchBlockAff = regexp.MustCompile("^/?/calico/ipam/v2/host/([^/]+)/ipv./block/([^/]+)$")
-	typeBlockAff  = reflect.TypeOf(BlockAffinity{})
+	matchBlockAffinity = regexp.MustCompile("^/?calico/ipam/v2/host/([^/]+)/ipv./block/([^/]+)$")
+	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
 )
 
 type BlockAffinityKey struct {
@@ -52,19 +52,21 @@ func (key BlockAffinityKey) valueType() reflect.Type {
 }
 
 type BlockAffinityListOptions struct {
-	// TODO: Have some options here?
+	Host string
 }
 
 func (options BlockAffinityListOptions) asEtcdKeyRoot() string {
 	k := "/calico/ipam/v2/host/"
-	// TODO: Allow filtering on individual host?
+	if options.Host != "" {
+		k = k + options.Host
+	}
 	return k
 }
 
 func (options BlockAffinityListOptions) keyFromEtcdResult(ekey string) KeyInterface {
 	glog.V(2).Infof("Get Block affinity key from %s", ekey)
-	r := matchBlock.FindAllStringSubmatch(ekey, -1)
-	if len(r) != 2 {
+	r := matchBlockAffinity.FindAllStringSubmatch(ekey, -1)
+	if len(r) != 1 {
 		glog.V(2).Infof("%s didn't match regex", ekey)
 		return nil
 	}
