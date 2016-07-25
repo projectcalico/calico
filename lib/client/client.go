@@ -98,6 +98,8 @@ type conversionHelper interface {
 	convertMetadataToListInterface(interface{}) (backend.ListInterface, error)
 }
 
+//TODO Plumb through revision data so that front end can do atomic operations.
+
 // Untyped interface for creating an API object.  This is called from the
 // typed interface.  This assumes a 1:1 mapping between the API resource and
 // the backend object.
@@ -140,7 +142,7 @@ func (c *Client) apply(apiObject interface{}, helper conversionHelper) error {
 func (c *Client) delete(metadata interface{}, helper conversionHelper) error {
 	if k, err := helper.convertMetadataToKeyInterface(metadata); err != nil {
 		return err
-	} else if err := c.backend.Delete(k); err != nil {
+	} else if err := c.backend.Delete(&backend.DatastoreObject{Key: k}); err != nil {
 		return err
 	} else {
 		return nil

@@ -44,7 +44,7 @@ type DatastoreReadWriteInterface interface {
 	Create(object *DatastoreObject) (*DatastoreObject, error)
 	Update(object *DatastoreObject) (*DatastoreObject, error)
 	Apply(object *DatastoreObject) (*DatastoreObject, error)
-	Delete(key KeyInterface) error
+	Delete(object *DatastoreObject) error
 	Get(key KeyInterface) (*DatastoreObject, error)
 	List(list ListInterface) ([]*DatastoreObject, error)
 }
@@ -90,8 +90,8 @@ func (c *Client) Apply(d *DatastoreObject) (*DatastoreObject, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *Client) Delete(k KeyInterface) error {
-	return c.rw.Delete(k)
+func (c *Client) Delete(d *DatastoreObject) error {
+	return c.rw.Delete(d)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.

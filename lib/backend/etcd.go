@@ -34,7 +34,6 @@ import (
 var (
 	etcdApplyOpts  = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
 	etcdCreateOpts = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
-	etcdDeleteOpts = &etcd.DeleteOptions{Recursive: true}
 	etcdGetOpts    = &etcd.GetOptions{Quorum: true}
 	etcdListOpts   = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
 	clientTimeout  = 30 * time.Second
@@ -130,10 +129,14 @@ func (c *EtcdClient) Apply(d *DatastoreObject) (*DatastoreObject, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *EtcdClient) Delete(k KeyInterface) error {
-	key, err := k.asEtcdDeleteKey()
+func (c *EtcdClient) Delete(d *DatastoreObject) error {
+	key, err := d.Key.asEtcdDeleteKey()
 	if err != nil {
 		return err
+	}
+	etcdDeleteOpts := &etcd.DeleteOptions{Recursive: true}
+	if d.Revision != nil {
+		etcdDeleteOpts.PrevIndex = d.Revision.(uint64)
 	}
 	glog.V(2).Infof("Delete Key: %s\n", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
