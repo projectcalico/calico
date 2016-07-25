@@ -90,3 +90,12 @@ type ErrorInsufficientIdentifiers struct {
 func (e ErrorInsufficientIdentifiers) Error() string {
 	return "insufficient identifiers"
 }
+
+// Error indicating an atomic update attempt that failed due to a update conflict.
+type ErrorResourceUpdateConflict struct {
+	Identifier interface{}
+}
+
+func (e ErrorResourceUpdateConflict) Error() string {
+	return fmt.Sprintf("update conflict: '%s'", e.Identifier)
+}

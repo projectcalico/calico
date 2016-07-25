@@ -240,6 +240,9 @@ func convertEtcdError(err error, key string) error {
 	switch err.(type) {
 	case etcd.Error:
 		switch err.(etcd.Error).Code {
+		case etcd.ErrorCodeTestFailed:
+			glog.V(2).Info("Test failed error")
+			return common.ErrorResourceUpdateConflict{Identifier: key}
 		case etcd.ErrorCodeNodeExist:
 			glog.V(2).Info("Node exists error")
 			return common.ErrorResourceAlreadyExists{Err: err, Name: key}
