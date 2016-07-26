@@ -26,16 +26,36 @@ type PoolMetadata struct {
 }
 
 type PoolSpec struct {
-	IPIP        bool `json:"ipip,omitempty"`
-	NATOutgoing bool `json:"nat-outgoing"`
-	Ipam        bool `json:"ipam"`
-	Disabled    bool `json:"disabled"`
+	// Contains configuration for ipip tunneling
+	// for this pool. If not specified, then ipip
+	// tunneling is disabled for this pool.
+	IPIP *IPIPConfiguration `json:"ipip,omitempty"`
+
+	// When nat-outgoing is true, packets sent from Calico networked
+	// containers in this pool to destinations outside of this pool
+	// will be masqueraded.
+	NATOutgoing bool `json:"nat-outgoing,omitempty"`
+
+	// When disabled is true, Calico IPAM will not assign
+	// addreses from this pool.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+type IPIPConfiguration struct {
+	// When enabled is true, ipip tunneling will be
+	// used to deliver packets to destinations within this
+	// pool.
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 type Pool struct {
 	TypeMetadata
+
+	// Metadata for a Pool.
 	Metadata PoolMetadata `json:"metadata,omitempty"`
-	Spec     PoolSpec     `json:"spec,omitempty"`
+
+	// Specification for a Pool.
+	Spec PoolSpec `json:"spec,omitempty"`
 }
 
 func NewPool() *Pool {

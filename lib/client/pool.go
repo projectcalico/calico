@@ -102,13 +102,20 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 		return nil, err
 	}
 
+	// Only valid interface for now is tunl0.
+	var ipipInterface string
+	if ap.Spec.IPIP != nil && ap.Spec.IPIP.Enabled {
+		ipipInterface = "tunl0"
+	} else {
+		ipipInterface = ""
+	}
+
 	d := backend.DatastoreObject{
 		Key: k,
 		Object: backend.Pool{
 			CIDR:          ap.Metadata.CIDR,
-			IPIPInterface: "", // TODO ap.Spec.IPIPInterface,
+			IPIPInterface: ipipInterface,
 			Masquerade:    ap.Spec.NATOutgoing,
-			Ipam:          ap.Spec.Ipam,
 			Disabled:      ap.Spec.Disabled,
 		},
 	}
@@ -119,14 +126,16 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 // Convert a Backend Pool structure to an API Pool structure
 func (h *pools) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
 	backendPool := d.Object.(backend.Pool)
-	//bk := d.Key.(backend.PoolKey)
 
 	apiPool := api.NewPool()
 	apiPool.Metadata.CIDR = backendPool.CIDR
-	apiPool.Spec.IPIP = false // TODO: backendPool.IPIPInterface
 	apiPool.Spec.NATOutgoing = backendPool.Masquerade
-	apiPool.Spec.Ipam = backendPool.Ipam
 	apiPool.Spec.Disabled = backendPool.Disabled
+
+	// If an IPIP interface is specified, then IPIP is enabled.
+	if backendPool.IPIPInterface != "" {
+		apiPool.Spec.IPIP = &api.IPIPConfiguration{Enabled: true}
+	}
 
 	return apiPool, nil
 }
