@@ -43,7 +43,7 @@ endpoints
 security profiles
   A security profile encapsulates a specific set of security rules to apply
   to an endpoint. Each endpoint can reference one or more security profiles.
-  See :ref:`security-profile-data` for more.
+  See :ref:`security-profile-data` and :ref:`traffic-filtering` for more.
 
 security policies
   Similarly, a security policy contains a set of security rules to apply.
@@ -56,7 +56,7 @@ security policies
   priority. For each endpoint, Calico applies the security policies that
   apply to it, in priority order, and then that endpoint's security profiles.
 
-  See :ref:`security-policy-data` for more.
+  See :ref:`security-policy-data` and :ref:`traffic-filtering` for more.
 
 The structure of all of this information can be found below.
 
@@ -262,6 +262,24 @@ The various properties in this object have the following meanings:
             only the interface name is specified, Calico does not learn the
             IP of the interface for use in match criteria.)
 
+.. _traffic-filtering:
+
+
+Traffic Filtering
+~~~~~~~~~~~~~~~~~
+
+Calico implements traffic filtering controlled by security profiles
+and tiered security policies.  Traffic is connection-based: the
+filtering applies to packets traveling in the forward direction, and
+if the forward packets are accepted then the reply packets are
+implicitly accepted.
+
+Calico applies filtering at forward egress from each Calico endpoint,
+and independently applies filtering at forward ingress to each Calico
+endpoint.  Refusal at either site blocks the traffic.  Thus, Calico
+gets two bites at the filtering apple for traffic that is between
+Calico endpoints, one bite for traffic between a Calico endpoint and a
+non-Calico thing.
 
 .. _security-profile-data:
 
@@ -333,7 +351,7 @@ Each policy must do one of the following:
 
 .. note:: If no policies in a tier match an endpoint then the packet skips
           the tier completely.  The "default deny" behavior described above
-          only applies once one of the profiles in a tier has matched a packet.
+          only applies if some of the policies in a tier matches the endpoint.
 
 Calico implements the security policy for each endpoint individually and
 only the policies that have matching selectors are implemented.  This ensures
