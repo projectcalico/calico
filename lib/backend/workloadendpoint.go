@@ -37,8 +37,17 @@ type WorkloadEndpointKey struct {
 }
 
 func (key WorkloadEndpointKey) asEtcdKey() (string, error) {
-	if key.Hostname == "" || key.OrchestratorID == "" || key.WorkloadID == "" || key.EndpointID == "" {
-		return "", ErrorInsufficientIdentifiers{}
+	if key.Hostname == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
+	}
+	if key.OrchestratorID == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "orchestrator"}
+	}
+	if key.WorkloadID == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "workload"}
+	}
+	if key.EndpointID == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
@@ -50,6 +59,11 @@ func (key WorkloadEndpointKey) asEtcdDeleteKey() (string, error) {
 
 func (key WorkloadEndpointKey) valueType() reflect.Type {
 	return reflect.TypeOf(WorkloadEndpoint{})
+}
+
+func (key WorkloadEndpointKey) String() string {
+	return fmt.Sprintf("WorkloadEndpoint(hostname=%s,orchestrator=%s,workload=%s,name=%s)",
+		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
 }
 
 type WorkloadEndpointListOptions struct {

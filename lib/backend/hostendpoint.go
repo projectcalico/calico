@@ -36,8 +36,11 @@ type HostEndpointKey struct {
 }
 
 func (key HostEndpointKey) asEtcdKey() (string, error) {
-	if key.Hostname == "" || key.EndpointID == "" {
-		return "", ErrorInsufficientIdentifiers{}
+	if key.Hostname == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
+	}
+	if key.EndpointID == "" {
+		return "", ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
 		key.Hostname, key.EndpointID)
@@ -50,6 +53,10 @@ func (key HostEndpointKey) asEtcdDeleteKey() (string, error) {
 
 func (key HostEndpointKey) valueType() reflect.Type {
 	return typeHostEndpoint
+}
+
+func (key HostEndpointKey) String() string {
+	return fmt.Sprintf("HostEndpoint(hostname=%s, name=%s)", key.Hostname, key.EndpointID)
 }
 
 type HostEndpointListOptions struct {

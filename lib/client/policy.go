@@ -15,8 +15,6 @@
 package client
 
 import (
-	"fmt"
-
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend"
 	"github.com/tigera/libcalico-go/lib/common"
@@ -44,7 +42,7 @@ func newPolicies(c *Client) *policies {
 
 // Create creates a new policy.
 func (h *policies) Create(a *api.Policy) (*api.Policy, error) {
-	return a, h.c.create(*a, h, nil)
+	return a, h.c.create(*a, h)
 }
 
 // Create creates a new policy.
@@ -54,7 +52,7 @@ func (h *policies) Update(a *api.Policy) (*api.Policy, error) {
 
 // Create creates a new policy.
 func (h *policies) Apply(a *api.Policy) (*api.Policy, error) {
-	return a, h.c.apply(*a, h, nil)
+	return a, h.c.apply(*a, h)
 }
 
 // Delete deletes an existing policy.

@@ -36,7 +36,7 @@ type PoolKey struct {
 
 func (key PoolKey) asEtcdKey() (string, error) {
 	if key.CIDR.IP == nil {
-		return "", common.ErrorInsufficientIdentifiers{}
+		return "", common.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
 	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", key.CIDR.Version(), c)
@@ -49,6 +49,10 @@ func (key PoolKey) asEtcdDeleteKey() (string, error) {
 
 func (key PoolKey) valueType() reflect.Type {
 	return typePool
+}
+
+func (key PoolKey) String() string {
+	return fmt.Sprintf("Policy(cidr=%s)", key.CIDR)
 }
 
 type PoolListOptions struct {

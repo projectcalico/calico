@@ -14,11 +14,14 @@
 
 package common
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Error indicating a problem connecting to the backend.
 type ErrorDatastoreError struct {
-	Err error
+	Err        error
+	Identifier interface{}
 }
 
 func (e ErrorDatastoreError) Error() string {
@@ -28,23 +31,23 @@ func (e ErrorDatastoreError) Error() string {
 // Error indicating a resource does not exist.  Used when attempting to delete or
 // udpate a non-existent resource.
 type ErrorResourceDoesNotExist struct {
-	Err  error
-	Name string
+	Err        error
+	Identifier interface{}
 }
 
 func (e ErrorResourceDoesNotExist) Error() string {
-	return fmt.Sprintf("resource does not exist with name '%s'", e.Name)
+	return fmt.Sprintf("resource does not exist: %s", e.Identifier)
 }
 
 // Error indicating a resource already exists.  Used when attempting to create a
 // resource that already exists.
 type ErrorResourceAlreadyExists struct {
-	Err  error
-	Name string
+	Err        error
+	Identifier interface{}
 }
 
 func (e ErrorResourceAlreadyExists) Error() string {
-	return fmt.Sprintf("resource already exists with name '%s'", e.Name)
+	return fmt.Sprintf("resource already exists: %s", e.Identifier)
 }
 
 // Error indicating a problem connecting to the backend.
@@ -84,11 +87,14 @@ func (e ErrorValidation) Error() string {
 	}
 }
 
+// Error indicating insufficient identifiers have been supplied on a resource
+// management request (create, apply, update, get, delete).
 type ErrorInsufficientIdentifiers struct {
+	Name string
 }
 
 func (e ErrorInsufficientIdentifiers) Error() string {
-	return "insufficient identifiers"
+	return fmt.Sprintf("insufficient identifiers, missing '%s'", e.Name)
 }
 
 // Error indicating an atomic update attempt that failed due to a update conflict.

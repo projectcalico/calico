@@ -40,7 +40,7 @@ type ProfileKey struct {
 
 func (key ProfileKey) asEtcdKey() (string, error) {
 	if key.Name == "" {
-		return "", common.ErrorInsufficientIdentifiers{}
+		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/policy/profile/%s", key.Name)
 	return e, nil
@@ -52,6 +52,10 @@ func (key ProfileKey) asEtcdDeleteKey() (string, error) {
 
 func (key ProfileKey) valueType() reflect.Type {
 	return typeProfile // FIXME is this required?
+}
+
+func (key ProfileKey) String() string {
+	return fmt.Sprintf("Profile(name=%s)", key.Name)
 }
 
 // ProfileRulesKey implements the KeyInterface for the profile rules
