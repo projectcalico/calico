@@ -116,6 +116,7 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 			CIDR:          ap.Metadata.CIDR,
 			IPIPInterface: ipipInterface,
 			Masquerade:    ap.Spec.NATOutgoing,
+			IPAM:          !ap.Spec.Disabled,
 			Disabled:      ap.Spec.Disabled,
 		},
 	}

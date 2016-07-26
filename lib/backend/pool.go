@@ -89,6 +89,6 @@ type Pool struct {
 	CIDR          common.IPNet `json:"cidr"`
 	IPIPInterface string       `json:"ipip"`
 	Masquerade    bool         `json:"masquerade"`
-	Ipam          bool         `json:"ipam"`
+	IPAM          bool         `json:"ipam"`
 	Disabled      bool         `json:"disabled"`
 }
