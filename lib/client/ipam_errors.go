@@ -16,15 +16,7 @@ package client
 
 import (
 	"fmt"
-	"net"
 )
-
-// casError incidates an error performing a compare-and-swap atomic update.
-type casError string
-
-func (e casError) Error() string {
-	return string(e)
-}
 
 // invalidSizeError indicates that the requested IP network size is not valid.
 type invalidSizeError string
@@ -39,15 +31,6 @@ type ipamConfigConflictError string
 
 func (e ipamConfigConflictError) Error() string {
 	return string(e)
-}
-
-// noSuchBlock error indicates that the requested block does not exist.
-type noSuchBlockError struct {
-	CIDR net.IPNet
-}
-
-func (e noSuchBlockError) Error() string {
-	return fmt.Sprintf("No such block: %s", e.CIDR)
 }
 
 // noFreeBlocksError indicates an attempt to claim a block

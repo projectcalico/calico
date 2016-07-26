@@ -140,7 +140,7 @@ func (c *EtcdClient) Delete(d *DatastoreObject) error {
 	}
 	glog.V(2).Infof("Delete Key: %s\n", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
-	return convertEtcdError(err, k)
+	return convertEtcdError(err, d.Key)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.

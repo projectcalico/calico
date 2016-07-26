@@ -135,7 +135,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 	}
 	_, err = rw.client.backend.Create(&o)
 	if err != nil {
-		if _, ok := err.(casError); ok {
+		if _, ok := err.(common.ErrorResourceAlreadyExists); ok {
 			// Block already exists, check affinity.
 			glog.Warningf("Problem claiming block affinity:", err)
 			obj, err := rw.client.backend.Get(backend.BlockKey{subnet})
@@ -162,7 +162,6 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 				glog.Errorf("Error cleaning up block affinity: %s", err)
 				return err
 			}
-
 			return affinityClaimedError{Block: b}
 		} else {
 			return err
@@ -214,7 +213,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 			obj.Object = b
 			_, err = rw.client.backend.Update(obj)
 			if err != nil {
-				if _, ok := err.(casError); ok {
+				if _, ok := err.(common.ErrorResourceUpdateConflict); ok {
 					// CASError - continue.
 					continue
 				} else {
@@ -247,7 +246,7 @@ func (rw blockReaderWriter) withinConfiguredPools(ip common.IP) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
-		if !p.Spec.Disabled && p.Metadata.CIDR.IPNet.Contains(ip.IP) {
+		if !p.Spec.Disabled && p.Metadata.CIDR.Contains(ip.IP) {
 			return true
 		}
 	}

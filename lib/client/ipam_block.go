@@ -268,7 +268,7 @@ func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 
 func (b *allocationBlock) releaseByHandle(handleID string) int {
 	attrIndexes := b.attributeIndexesByHandle(handleID)
-	glog.V(3).Infof("Attribute indexes to release: %s", attrIndexes)
+	glog.V(3).Infof("Attribute indexes to release: %v", attrIndexes)
 	if len(attrIndexes) == 0 {
 		// Nothing to release.
 		glog.V(3).Infof("No addresses assigned to handle '%s'", handleID)
