@@ -58,7 +58,8 @@ Vagrant.configure(2) do |config|
         host.vm.provision :docker do |d|
           d.run "quay.io/coreos/etcd",
             args: "--net=host",
-            cmd: "--advertise-client-urls http://#{primary_ip}:2379 "\
+            cmd: "/usr/local/bin/etcd "\
+                 "--advertise-client-urls http://#{primary_ip}:2379 "\
                  "--listen-client-urls http://0.0.0.0:2379 "
         end
       end
