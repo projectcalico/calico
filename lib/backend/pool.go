@@ -52,7 +52,7 @@ func (key PoolKey) valueType() reflect.Type {
 }
 
 func (key PoolKey) String() string {
-	return fmt.Sprintf("Policy(cidr=%s)", key.CIDR)
+	return fmt.Sprintf("Pool(cidr=%s)", key.CIDR)
 }
 
 type PoolListOptions struct {

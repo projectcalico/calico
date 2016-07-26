@@ -62,7 +62,7 @@ func (key WorkloadEndpointKey) valueType() reflect.Type {
 }
 
 func (key WorkloadEndpointKey) String() string {
-	return fmt.Sprintf("WorkloadEndpoint(hostname=%s,orchestrator=%s,workload=%s,name=%s)",
+	return fmt.Sprintf("WorkloadEndpoint(hostname=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
 }
 
