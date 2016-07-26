@@ -17,10 +17,12 @@ import copy
 import re
 
 from neutron.agent.linux import dhcp
+from neutron.common import constants
 from oslo_log import log as logging
 
 
 LOG = logging.getLogger(__name__)
+WIN2k3_STATIC_DNS = 249
 
 
 class DnsmasqRouted(dhcp.Dnsmasq):
@@ -55,6 +57,63 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         except RuntimeError:
             LOG.warning('Failed trying to delete interface: %s',
                         self.interface_name)
+
+    def _generate_opts_per_subnet(self):
+        options = []
+        subnet_index_map = {}
+        for i, subnet in enumerate(self.network.subnets):
+            addr_mode = getattr(subnet, 'ipv6_address_mode', None)
+            if (not subnet.enable_dhcp or
+                (subnet.ip_version == 6 and
+                 addr_mode == constants.IPV6_SLAAC)):
+                continue
+            if subnet.dns_nameservers:
+                options.append(
+                    self._format_option(
+                        subnet.ip_version, i, 'dns-server',
+                        ','.join(
+                            dhcp.Dnsmasq._convert_to_literal_addrs(
+                                subnet.ip_version, subnet.dns_nameservers))))
+            else:
+                # use the dnsmasq ip as nameservers only if there is no
+                # dns-server submitted by the server
+                subnet_index_map[subnet.id] = i
+
+            if self.conf.dhcp_domain and subnet.ip_version == 6:
+                options.append('tag:tag%s,option6:domain-search,%s' %
+                               (i, ''.join(self.conf.dhcp_domain)))
+
+            gateway = subnet.gateway_ip
+            host_routes = []
+            for hr in subnet.host_routes:
+                if hr.destination == constants.IPv4_ANY:
+                    if not gateway:
+                        gateway = hr.nexthop
+                else:
+                    host_routes.append("%s,%s" % (hr.destination, hr.nexthop))
+
+            if subnet.ip_version == 4:
+                if host_routes:
+                    if gateway:
+                        host_routes.append("%s,%s" % (constants.IPv4_ANY,
+                                                      gateway))
+                    options.append(
+                        self._format_option(subnet.ip_version, i,
+                                            'classless-static-route',
+                                            ','.join(host_routes)))
+                    options.append(
+                        self._format_option(subnet.ip_version, i,
+                                            WIN2k3_STATIC_DNS,
+                                            ','.join(host_routes)))
+
+                if gateway:
+                    options.append(self._format_option(subnet.ip_version,
+                                                       i, 'router',
+                                                       gateway))
+                else:
+                    options.append(self._format_option(subnet.ip_version,
+                                                       i, 'router'))
+        return options, subnet_index_map
 
 
 class CalicoDeviceManager(dhcp.DeviceManager):
