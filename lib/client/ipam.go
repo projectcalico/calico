@@ -79,7 +79,7 @@ type IPAMInterface interface {
 
 	// ReleasePoolAffinities releases affinity for all blocks within
 	// the specified pool across all hosts.
-	ReleasePoolAffinities(pool *common.IPNet) error
+	ReleasePoolAffinities(pool common.IPNet) error
 
 	// GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 	// has been set, returns a default configuration with StrictAffinity disabled
@@ -511,7 +511,7 @@ func (c ipams) ReleaseHostAffinities(host *string) error {
 
 // ReleasePoolAffinities releases affinity for all blocks within
 // the specified pool across all hosts.
-func (c ipams) ReleasePoolAffinities(pool *common.IPNet) error {
+func (c ipams) ReleasePoolAffinities(pool common.IPNet) error {
 	glog.V(2).Infof("Releasing block affinities within pool '%s'", pool.String())
 	for i := 0; i < ipamKeyErrRetries; i++ {
 		retry := false
@@ -575,7 +575,7 @@ func (c ipams) RemoveIPAMHost(host *string) error {
 	return nil
 }
 
-func (c ipams) hostBlockPairs(pool *common.IPNet) (map[string]string, error) {
+func (c ipams) hostBlockPairs(pool common.IPNet) (map[string]string, error) {
 	pairs := map[string]string{}
 
 	// Get all blocks and their affinities.

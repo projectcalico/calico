@@ -64,7 +64,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	var pools []common.IPNet
 	if pool != nil {
 		// Validate the given pool is actually configured.
-		if !rw.isConfiguredPool(pool) {
+		if !rw.isConfiguredPool(*pool) {
 			estr := fmt.Sprintf("The given pool (%s) does not exist", pool.String())
 			return nil, errors.New(estr)
 		}
@@ -256,11 +256,11 @@ func (rw blockReaderWriter) withinConfiguredPools(ip common.IP) bool {
 
 // isConfiguredPool returns true if the given IPNet is a configured
 // Calico pool, and false otherwise.
-func (rw blockReaderWriter) isConfiguredPool(cidr *common.IPNet) bool {
+func (rw blockReaderWriter) isConfiguredPool(cidr common.IPNet) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
-		if !p.Spec.Disabled && reflect.DeepEqual(p.Metadata.CIDR, *cidr) {
+		if !p.Spec.Disabled && reflect.DeepEqual(p.Metadata.CIDR, cidr) {
 			return true
 		}
 	}
