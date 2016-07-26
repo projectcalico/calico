@@ -79,7 +79,10 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 
 		// Grab all the IP networks in these pools.
 		for _, p := range allPools.Items {
-			pools = append(pools, p.Metadata.CIDR)
+			// Don't include disabled pools.
+			if !p.Spec.Disabled {
+				pools = append(pools, p.Metadata.CIDR)
+			}
 		}
 	}
 
@@ -243,7 +246,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 func (rw blockReaderWriter) withinConfiguredPools(ip common.IP) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
-		if p.Metadata.CIDR.IPNet.Contains(ip.IP) {
+		// Compare any enabled pools.
+		if !p.Spec.Disabled && p.Metadata.CIDR.IPNet.Contains(ip.IP) {
 			return true
 		}
 	}
@@ -255,7 +259,8 @@ func (rw blockReaderWriter) withinConfiguredPools(ip common.IP) bool {
 func (rw blockReaderWriter) isConfiguredPool(cidr *common.IPNet) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
-		if reflect.DeepEqual(p.Metadata.CIDR, *cidr) {
+		// Compare any enabled pools.
+		if !p.Spec.Disabled && reflect.DeepEqual(p.Metadata.CIDR, *cidr) {
 			return true
 		}
 	}
