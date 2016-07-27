@@ -265,6 +265,7 @@ def cut_release():
            "(e.g. git checkout tags/%s):" % new_version)
     bullet("CoreOS libnetwork", level=1)
     bullet("Ubuntu default networking", level=1)
+    bullet("Make sure to check the reported versions of all artifacts.")
     next("Once you have completed the testing, re-run the script.")
 
 
