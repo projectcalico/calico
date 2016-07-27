@@ -47,7 +47,8 @@ func (key WorkloadEndpointKey) asEtcdKey() (string, error) {
 		return "", ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	if key.EndpointID == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "name"}
+		return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
+			key.Hostname, key.OrchestratorID, key.WorkloadID), nil
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
