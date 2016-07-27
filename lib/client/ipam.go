@@ -121,6 +121,7 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]common.IP, []common.IP, error)
 
 	if args.Num4 != 0 {
 		// Assign IPv4 addresses.
+		glog.V(4).Infof("Assigning IPv4 addresses")
 		v4list, err = c.autoAssign(args.Num4, args.HandleID, args.Attrs, args.IPv4Pool, ipv4, hostname)
 		if err != nil {
 			glog.Errorf("Error assigning IPV4 addresses: %s", err)
@@ -130,8 +131,10 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]common.IP, []common.IP, error)
 
 	if args.Num6 != 0 {
 		// If no err assigning V4, try to assign any V6.
+		glog.V(4).Infof("Assigning IPv6 addresses")
 		v6list, err = c.autoAssign(args.Num6, args.HandleID, args.Attrs, args.IPv6Pool, ipv6, hostname)
 		if err != nil {
+			glog.Errorf("Error assigning IPV6 addresses: %s", err)
 			return nil, nil, err
 		}
 	}

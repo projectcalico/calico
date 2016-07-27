@@ -51,11 +51,14 @@ func (key BlockKey) valueType() reflect.Type {
 }
 
 type BlockListOptions struct {
-	// TODO: Have some options here?
+	IPVersion int `json:"-"`
 }
 
 func (options BlockListOptions) asEtcdKeyRoot() string {
 	k := "/calico/ipam/v2/assignment/"
+	if options.IPVersion != 0 {
+		k = k + fmt.Sprintf("ipv%d/", options.IPVersion)
+	}
 	return k
 }
 
