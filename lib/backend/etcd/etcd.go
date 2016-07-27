@@ -200,7 +200,7 @@ func (c *EtcdClient) set(d *KVPair, options *etcd.SetOptions) (*KVPair, error) {
 
 	glog.V(2).Infof("Key: %#v\n", key)
 	glog.V(2).Infof("Value: %s\n", value)
-	glog.V(2).Infof("Options: %v\n", options)
+	glog.V(2).Infof("Options: %+v\n", options)
 	result, err := c.etcdKeysAPI.Set(context.Background(), key, value, options)
 	if err != nil {
 		return nil, convertEtcdError(err, d.Key)

@@ -401,7 +401,7 @@ func (c ipams) assignFromExistingBlock(
 		// Pull out the block.
 		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
-		glog.V(4).Infof("Got block: %v", b)
+		glog.V(4).Infof("Got block: %+v", b)
 		ips, err = b.autoAssign(num, handleID, host, attrs, true)
 		if err != nil {
 			glog.Errorf("Error in auto assign: %s", err)
@@ -589,22 +589,18 @@ func (c ipams) RemoveIPAMHost(host *string) error {
 	// Determine the hostname to use.
 	hostname := decideHostname(host)
 
-	// Release host affinities.
-	c.ReleaseHostAffinities(&hostname)
-
-	// Remove the host ipam tree.
-	// TODO: Support this in the backend.
-	// key := fmt.Sprintf(ipamHostPath, hostname)
-	// opts := client.DeleteOptions{Recursive: true}
-	// _, err := c.blockReaderWriter.etcd.Delete(context.Background(), key, &opts)
-	// if err != nil {
-	// 	if eerr, ok := err.(client.Error); ok && eerr.Code == client.ErrorCodeNodeExist {
-	// 		// Already deleted.  Carry on.
-
-	// 	} else {
-	// 		return err
-	// 	}
-	// }
+	// Remove the host tree from the datastore.
+	err := c.client.backend.Delete(&backend.DatastoreObject{
+		Key: backend.IPAMHostKey{Host: hostname},
+	})
+	if err != nil {
+		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
+			// Already deleted - carry on.
+		} else {
+			glog.Errorf("Error removing IPAM host: %s", err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -737,7 +733,7 @@ func (c ipams) incrementHandle(handleID string, blockCIDR common.IPNet, num int)
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Handle doesn't exist - create it.
-				glog.V(2).Infof("Creating new handle:", handleID)
+				glog.V(2).Infof("Creating new handle: %s", handleID)
 				bh := model.IPAMHandle{
 					HandleID: handleID,
 					Block:    map[string]int{},
