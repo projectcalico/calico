@@ -67,14 +67,16 @@ type AutoAssignArgs struct {
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.
+// This IPAM configuration is stored in the datastore and configures the behavior
+// of Calico IPAM across an entire Calico cluster.
 type IPAMConfig struct {
 	// When StrictAffinity is true, addresses from a given block can only be
 	// assigned by hosts with the blocks affinity.  If false, then AutoAllocateBlocks
-	// must be true.
+	// must be true.  The default value is false.
 	StrictAffinity bool
 
-	// When AutoAllocateBlocks is true, the IPAM client will automatically
-	// allocate blocks as needed to assign addresses.  If false, then
-	// StrictAffinity must be true.
+	// When AutoAllocateBlocks is true, Calico will automatically
+	// allocate blocks of IP address to hosts as needed to assign addresses.
+	// If false, then StrictAffinity must be true.  The default value is true.
 	AutoAllocateBlocks bool
 }
