@@ -70,7 +70,9 @@ def save_diags(log_dir):
     write_diags("Dumping interface info (IPv6)", "ip -6 addr")
     write_diags("Dumping iptables (IPv4)", "iptables-save")
     write_diags("Dumping iptables (IPv6)", "ip6tables-save")
-    write_diags("Dumping ipsets", "ipset list")
+    # Sometimes the host doesn't have ipset installed, or it's the wrong version;
+    # so fall back to running it inside the calico/node container.
+    write_diags("Dumping ipsets", "ipset list || docker run --privileged --net=host -it calico/node ipset list")
     # If running under rkt, get the journal for the calico/node container.
     write_diags("Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager")
 
@@ -127,11 +129,11 @@ def write_diags(comment, command):
     if comment:
         print comment
 
-    # Strip out non letters and numbers from the command to form the filename
-    filename = re.sub(r'[^a-zA-Z0-9 -]', "", command)
-
-    # And substitute underscore for spaces
-    filename = re.sub(r'\s', "_", filename)
+    # Sanitize the filename.
+    filename = command
+    filename = re.sub(r'\s*\|\|.*', "", filename)  # Strip out any optional (||) clauses
+    filename = re.sub(r'[^a-zA-Z0-9 -]', "", filename)  # Strip out non letters and numbers
+    filename = re.sub(r'\s', "_", filename)  # Substitute underscore for spaces
 
     with DiagsErrorWriter(temp_diags_dir, filename) as f:
         try:
