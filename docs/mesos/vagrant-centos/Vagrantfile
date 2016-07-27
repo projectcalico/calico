@@ -7,7 +7,7 @@ num_instances = 3
 instance_name_prefix="calico-mesos"
 
 # Version of mesos to install from official mesos repo
-mesos_version = "0.28.0"
+mesos_version = "1.0.0"
 
 # Download URL for Mesos DNS.
 mesos_dns_url = "https://github.com/mesosphere/mesos-dns/releases/download/v0.5.0/mesos-dns-v0.5.0-linux-amd64"
@@ -114,16 +114,16 @@ Vagrant.configure("2") do |config|
       host.vm.provision :docker
 
       # Add official Mesos Repos and install Mesos.
-      host.vm.provision :shell, inline: "sudo rpm -Uvh http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm"
-      host.vm.provision :shell, inline: "yum -y install mesos-#{mesos_version}"
+      host.vm.provision :shell, inline: "sudo rpm -Uvh http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-3.noarch.rpm"
+      host.vm.provision :shell, inline: "yum -y install --enablerepo=mesosphere-unstable mesos-#{mesos_version}"
 
       # Write out the Calico environment file.
       host.vm.provision :shell, inline: $write_calico_env, args: "#{master_ip}"
 
       # Master
       if i == 1
-        host.vm.provision :shell, inline: "yum -y install marathon-0.14.2 mesosphere-zookeeper etcd"
-        
+        host.vm.provision :shell, inline: "yum -y install mesosphere-zookeeper etcd"
+
         # Zookeeper
         host.vm.provision :shell, inline: "systemctl start zookeeper"
 
@@ -133,11 +133,13 @@ Vagrant.configure("2") do |config|
         host.vm.provision :shell, inline: "systemctl start mesos-master"
 
         # Marathon
+        host.vm.provision "file", source: "units/marathon.service", destination: "/tmp/marathon.service"
+        host.vm.provision :shell, inline: "mv /tmp/marathon.service /usr/lib/systemd/system/marathon.service"
         host.vm.provision :shell, inline: "systemctl start marathon"
 
         # etcd
         host.vm.provision :shell, inline: "sh -c 'echo ETCD_LISTEN_CLIENT_URLS=\"http://0.0.0.0:2379\" >> /etc/etcd/etcd.conf'"
-        host.vm.provision :shell, inline: "sh -c 'echo ETCD_ADVERTISE_CLIENT_URLS=\"http://#{master_ip}:2379\" >> /etc/etcd/etcd.conf'"        
+        host.vm.provision :shell, inline: "sh -c 'echo ETCD_ADVERTISE_CLIENT_URLS=\"http://#{master_ip}:2379\" >> /etc/etcd/etcd.conf'"
         host.vm.provision :shell, inline: "systemctl enable etcd.service"
         host.vm.provision :shell, inline: "systemctl start etcd.service"
 
@@ -148,19 +150,6 @@ Vagrant.configure("2") do |config|
         host.vm.provision "file", source: "units/mesos-dns.service", destination: "/tmp/mesos-dns.service"
         host.vm.provision :shell, inline: "mv /tmp/mesos-dns.service /usr/lib/systemd/system/mesos-dns.service"
         host.vm.provision :shell, inline: "systemctl start mesos-dns"
-      else
-        # Configure Calico Mesos on each agent for Unified Containerizer
-        host.vm.provision :shell, inline: "mkdir -p /calico"
-        host.vm.provision :shell, inline: "mkdir -p /etc/mesos-slave/"
-        host.vm.provision :shell, inline: "curl -L -o /calico/calico_mesos https://github.com/projectcalico/calico-mesos/releases/download/v0.1.5/calico_mesos", :privileged => true
-        host.vm.provision :shell, inline: "chmod +x /calico/calico_mesos", :privileged => true
-        host.vm.provision :shell, inline: "curl -L -o /calico/modules.json https://raw.githubusercontent.com/projectcalico/calico-containers/master/docs/mesos/vagrant-centos/sources/modules.json", :privileged => true
-        host.vm.provision :shell, inline: "echo file:///calico/modules.json > /etc/mesos-slave/modules", :privileged => true
-        host.vm.provision :shell, inline: "echo ETCD_AUTHORITY=#{master_ip}:2379 >> /etc/default/mesos-slave", :privileged => true
-
-        # Configure Net Modules on the Agent
-        host.vm.provision :shell, inline: "curl -L -o /tmp/net-modules-0.2.0-1.i386.rpm https://github.com/projectcalico/calico-mesos/releases/download/v0.1.5/net-modules-0.2.0-1.i386.rpm", :privileged => true
-        host.vm.provision :shell, inline: "rpm -ivh /tmp/net-modules-0.2.0-1.i386.rpm", :privileged => true
       end
 
       # Configure all hosts to use Mesos DNS.  Do this after configuring Mesos DNS
@@ -169,7 +158,7 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, inline: "sh -c 'echo DNS1=#{master_ip} >> /etc/sysconfig/network-scripts/ifcfg-eth1'"
       host.vm.provision :shell, inline: "sh -c 'echo PEERDNS=yes >> /etc/sysconfig/network-scripts/ifcfg-eth1'"
       host.vm.provision :shell, inline: "systemctl restart network"
-      
+
       # Provision with docker, and download the calico-node docker image
       host.vm.provision :docker, images: [
 	        "calico/node-libnetwork:#{calico_libnetwork_ver}",
@@ -192,7 +181,7 @@ Vagrant.configure("2") do |config|
         host.vm.provision "file", source: "units/#{service_name}.service", destination: "/tmp/#{service_name}.service"
         host.vm.provision :shell, inline: "mv /tmp/#{service_name}.service /usr/lib/systemd/system/#{service_name}.service"
         host.vm.provision :shell, inline: "systemctl start #{service_name}"
-      end      
+      end
 
       if i == 1
         # Master specific stuff.

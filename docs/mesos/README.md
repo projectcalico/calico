@@ -6,78 +6,66 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Mesos with Calico networking
-Calico can be used as a network plugin for Mesos both for the Docker
-Containerizer and the Unified Containerizer.
+# Calico Networking for Mesos
+Calico introduces ip-per-container & fine-grained security policies to Mesos, while
+maintaining speed and scalability and rendering port-forwarding obsolete.
 
-### Docker Containerizer
-Calico with the Docker Containerizer uses a Calico network and IPAM
-driver that hooks directly into the Docker networking infrastructure.
-Docker networks using the Calico plugin are created up-front, and Mesos
-can then be used to launch Docker containers using these networks.  Each
-network is associated with a single Calico profile.  Fine grained policy
-can be modified using the `calicoctl profile` commands.
+Mesos supports several different Networking API's depending on which
+Containerizer is being used. Calico provides compatible plugins for each.
+Below, we list three different guides for each:
 
-### Unified Containerizer
-Calico with the Unified Containerizer uses the [Calico Mesos plugin]
-(https://github.com/projectcalico/calico-mesos) to configure
-networking for a Mesos agent that is using the [net-modules network
-isolator](https://github.com/mesosphere/net-modules). Networks are
-specified as net-groups when launching a Mesos task.  A Calico
-profile is automatically created for each net-group (if it doesn't
-already exist), defaulting to allow communication between containers
-using the same net-group.  Fine grained policy can be modified using
-the `calicoctl profile` commands.
+1. Quickstart scripts to launch a demo Mesos cluster pre-configured with Calico.
+2. Manual instructions on adding Calico to a standard Mesos Cluster.
+3. Usage guide detailing how to launch applications networked with Calico for
+the described networking interface.
 
-## Cluster Configuration Requirements
-The installation requirements to use Calico networking are different
-depending on whether you are using the Docker Containerizer or the
-Unified Containerizer.  When setting up your cluster, follow the
-appropriate guide based on your requirements.
+### a.) Docker Containerizer
+Tasks launched in Mesos using the Docker Containerizer (i.e. Docker Engine) are
+networked by Calico's Docker-Libnetwork plugin. Once installed on each Mesos
+Agent, operators can create Docker networks up-front, then launch Docker
+tasks on them.
 
-Calico is particularly suitable for large Mesos deployments on bare
-metal or private clouds, where the performance and complexity costs of
-overlay networks can become significant. It can also be used in public
-clouds.
+- [Quickstart with Vagrant Install: Calico for Docker Tasks in Mesos](Vagrant.md)
+- [Manual Install: Calico for Docker Tasks in Mesos](ManualInstallCalicoDockerContainerizer.md)
+- [Usage Guide: Launching Docker Tasks networked by Calico in Mesos](UsageGuideDockerContainerizer.md)
 
-If you have an existing Mesos cluster, follow the appropriate
-installation guide. However, please ensure that Mesos (and Marathon
-if you are using it) are installed at the appropriate minimum
-version, upgrading if necessary.
+### b.) Unified Containerizer with CNI
+Mesos v1.0.0 has introduced first-class support of the [Container Network
+Interface (CNI)](https://github.com/containernetworking/cni) for the Unified
+Containerizer.
 
-## Guides
+- [Quickstart with Docker-Compose: Calico for Mesos CNI](cni-compose-demo/)
+- [Manual Install: Calico for Mesos Tasks (CNI)](ManualInstallCalicoUnifiedContainerizer.md)
+- [Usage Guide: Launching Mesos Tasks networked with Calico CNI](UsageGuideUnifiedCNI.md)
 
-To build a new Mesos cluster with Calico networking, try one of the
-following guides:
+### c.) Unified Containerizer with Net-Modules [Deprecated]
 
-#### Quick Start a Sample Cluster:
-- [Centos Vagrant guide](Vagrant.md) - set up a Calico Mesos cluster with
-  one Mesos Master and two Mesos Agents.
-  - This is the easiest way to set up a cluster with all of the required
-  services running to launch tasks with either the Unified Containerizer or
-  Docker Containerizer.
+**Note: The net-modules API is deprecated as it only currently supports Mesos 0.28.0.**
 
-#### Installation guides:
-- [DC/OS Calico Install Guide](./DCOS.md) -
-  install Calico using Mesos' DC/OS web interface.
-- [Manual Install Calico Unified Containerizer Guide](ManualInstallCalicoUnifiedContainerizer.md) -
-  install Calico for use with the Unified Containerizer.
-- [Manual Install Calico Docker Containerizer Guide](ManualInstallCalicoDockerContainerizer.md) -
-  install Calico for use with the Docker Containerizer.
-- [Mesos Cluster Preparation Guide](MesosClusterPreparation.md) - installation
-  instructions for running required services of a Calico Mesos cluster.
+Calico's net-modules plugin
+([calico-mesos](https://github.com/projectcalico/calico-mesos))
+performs networking isolation for the Unified Containerizer by responding
+to the
+[networking hooks](https://github.com/mesosphere/net-modules/blob/master/docs/api.md)
+executed by the
+[net-modules network isolator](https://github.com/mesosphere/net-modules).
 
-#### Demonstration guides:
-- [Docker Containerizer Usage Guide](UsageGuideDockerContainerizer.md) - configure
-  and launch tasks with Calico using the Docker Containerizer.
-- [Unified Containerizer Usage Guide](UsageGuideUnifiedContainerizer.md) - configure
-  and launch tasks with Calico using the Unified Containerizer.
-- [Stars demo](stars-demo/) - use the Docker Containerizer to show
-  a network policy visualization of how a Calico cluster is configured.
+Calico enforces
+["net-groups"](https://github.com/apache/mesos/blob/master/include/mesos/mesos.proto#L1779)
+as Calico profiles, which allows communication between containers
+using the same net-group.  Fine grained policy for each net-group can be
+modified using the `calicoctl profile` commands.
 
-## Contact Us
+To get started, you'll need a Agent with net-modules compiled.
+- [Quickstart with Docker-Compose: Calico for Mesos Tasks in Mesos using net-modules](https://github.com/mesosphere/net-modules)
+- [Manual Install: Calico for Unified Containerizer (net-modules)](ManualInstallCalicoUnifiedContainerizer.md)
+- [Usage Guide: Launching Mesos Tasks with Calico using net-modules with the Unified Containerizer](UsageGuideUnifiedContainerizer.md)
 
-Get in touch with us directly in our `#mesos` channel on
-[Slack](https://slack.projectcalico.org)
+## Calico for DC/OS
+Calico maintains a Framework for DC/OS which serves as an installer to quickly
+add Calico to Mesos.
+Calico's DC/OS package installs and configures everything you need to use Calico
+with the Docker Containerizer and the Unified Containerizer (using CNI).
+See the [Calico for DC/OS 1.8 Install Guide](./DCOS.md) for more information.
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

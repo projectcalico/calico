@@ -10,8 +10,8 @@
 The following information includes application json and information on launching tasks in a Mesos Cluster with Calico.
 
 ## Prerequisites
-This guide assumes you have a cluster configured with a Mesos Master and at least
-one Mesos Agent running Calico Mesos.
+This guide assumes you have a cluster configured with a Mesos Master and at
+least one Mesos Agent running Calico Mesos.
 
 Your cluster must have the following components installed:
 
@@ -34,24 +34,9 @@ You can start a cluster in one of the following ways:
 	- [Install Calico](ManualInstallCalicoUnifiedContainerizer.md) - install Calico
       on each agent for use with the Unified Containerizer.
 
-
-
 ## Launching Tasks with Marathon
 Calico is compatible with all frameworks which use the new NetworkInfo protobuf when
 launching tasks. Marathon has introduced limited support for this in v0.14.0.
-
-### Launching Marathon
-If you have not installed Marathon, you can run Marathon directly by running
-the commands [here](MesosClusterPreparation.md#marathon), or you can quickly
-start it as a Docker container like the following:
-
-```
-docker run \
--e MARATHON_MASTER=zk://<ZOOKEEPER_IP>:2181/mesos \
--e MARATHON_ZK=zk://<ZOOKEEPER_IP>:2181/marathon \
--p 8080:8080 \
-mesosphere/marathon:v0.14.0
-```
 
 ### Launching Tasks
 Marathon-v0.14.0 supports two new fields in an application's JSON file:
@@ -62,7 +47,7 @@ networked by Calico.
 implementation isolates applications so they can only communicate with
 other applications in the same group. Assign the static `public` group
 to a task to allow it to communicate with any other application.
- 
+
 > See [Marathon's IP-Per-Task documentation][marathon-ip-per-task-doc] for more information.
 
 The Marathon UI does not yet include a field for specifiying NetworkInfo,

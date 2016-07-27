@@ -45,7 +45,7 @@ using the Docker containerizer:
 - Management-UI
 
 Client, Backend, and Frontend will each be run as a star-probe, which will attempt
-to communicate with each other probe, and report their status on a self-hosted webserver.
+to communicate with each other probe, and report their status on a self-hosted my-calico-net.
 
 Management-UI runs star-collect, which collects the status from each of the
 probes and generates a viewable web page illustrating the current state of

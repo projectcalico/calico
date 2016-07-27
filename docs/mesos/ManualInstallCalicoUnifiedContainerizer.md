@@ -18,8 +18,7 @@ for the Unified Containerizer.
 ### Mesos-Agent with Mesos and Netmodules installed
 This guide will focus on only the Calico components of a
 calico-mesos-agent. You must have an agent with net-modules
-activated. See the [Manual Net-Modules install Guide](net-modules/README.md)
-and [Mesos' Slave Setup documentation](https://open.mesosphere.com/getting-started/install/#slave-setup).
+activated.
 
 ### Docker
 Calico's core services are run in a Docker container, so we'll need
