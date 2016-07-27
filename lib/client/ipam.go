@@ -310,10 +310,27 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 func (c ipams) ReleaseIPs(ips []common.IP) ([]common.IP, error) {
 	glog.V(2).Infof("Releasing IP addresses: %v", ips)
 	unallocated := []common.IP{}
+
+	// Group IP addresses by block to minimize the number of writes
+	// to the datastore required to release the given addresses.
+	ipsByBlock := map[string][]common.IP{}
 	for _, ip := range ips {
+		// Check if we've already got an entry for this block.
 		blockCIDR := getBlockCIDRForAddress(ip)
-		// TODO: Group IP addresses per-block to minimize writes to etcd.
-		unalloc, err := c.releaseIPsFromBlock([]common.IP{ip}, blockCIDR)
+		cidrStr := blockCIDR.String()
+		if _, exists := ipsByBlock[cidrStr]; !exists {
+			// Entry does not exist, create it.
+			ipsByBlock[cidrStr] = []common.IP{}
+		}
+
+		// Append to the list.
+		ipsByBlock[cidrStr] = append(ipsByBlock[cidrStr], ip)
+	}
+
+	// Release IPs for each block.
+	for cidrStr, ips := range ipsByBlock {
+		_, cidr, _ := common.ParseCIDR(cidrStr)
+		unalloc, err := c.releaseIPsFromBlock(ips, *cidr)
 		if err != nil {
 			glog.Errorf("Error releasing IPs: %s", err)
 			return nil, err
