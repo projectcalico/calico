@@ -1,5 +1,7 @@
 # Changelog
 
+## 1.2.2
+
 - Ensure that DHCP agent log file directory exists
 - DHCP agent: don't directly connect different subnets
 

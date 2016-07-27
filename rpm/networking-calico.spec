@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.2.0
+Version:        1.2.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,11 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Jul 28 2016 Neil Jerram <neil@tigera.io> 1:1.2.2-1
+  - networking-calico version 1.2.2 release
+    - Ensure that DHCP agent log file directory exists
+    - DHCP agent: don't directly connect different subnets
+
 * Thu Jul 21 2016 Neil Jerram <Neil.Jerram@metaswitch.com> 1:1.2.0-1
   - networking-calico version 1.2.0 release
     - py26/py33 are no longer supported by Infra's CI
