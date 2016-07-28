@@ -26,7 +26,6 @@ import (
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 	"golang.org/x/net/context"
@@ -40,12 +39,23 @@ var (
 	clientTimeout  = 30 * time.Second
 )
 
+type EtcdConfig struct {
+	EtcdScheme     string `json:"etcdScheme" envconfig:"ETCD_SCHEME" default:"http"`
+	EtcdAuthority  string `json:"etcdAuthority" envconfig:"ETCD_AUTHORITY" default:"127.0.0.1:2379"`
+	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
+	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
+	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
+	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
+	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
+	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+}
+
 type EtcdClient struct {
 	etcdClient  etcd.Client
 	etcdKeysAPI etcd.KeysAPI
 }
 
-func ConnectEtcdClient(config *api.ClientConfig) (*EtcdClient, error) {
+func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}

@@ -14,14 +14,30 @@
 
 package api
 
+import (
+	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/backend/etcd"
+)
+
+type BackendType string
+
+const (
+	EtcdV2 BackendType = "etcdv2"
+)
+
+// NewConfig returns a pointer to a new config struct for the relevant datastore.
+func (b BackendType) NewConfig() interface{} {
+	switch b {
+	case EtcdV2:
+		return &etcd.EtcdConfig{}
+	default:
+		glog.Errorf("Unknown backend type: %v", b)
+		return nil
+	}
+}
+
 // Client configuration required to instantiate a Calico client interface.
 type ClientConfig struct {
-	EtcdScheme     string `json:"etcdScheme" envconfig:"ETCD_SCHEME" default:"http"`
-	EtcdAuthority  string `json:"etcdAuthority" envconfig:"ETCD_AUTHORITY" default:"127.0.0.1:2379"`
-	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
-	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
-	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
-	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
-	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
-	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+	BackendType   BackendType `json:"datastoreType" envconfig:"DATASTORE_TYPE" default:"etcdv2"`
+	BackendConfig interface{} `json:"-"`
 }

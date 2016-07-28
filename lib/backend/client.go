@@ -15,6 +15,8 @@
 package backend
 
 import (
+	"errors"
+	"fmt"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/etcd"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
@@ -32,7 +34,12 @@ type Client interface {
 
 // NewClient creates a new backend datastore client.
 func NewClient(config *api.ClientConfig) (c Client, err error) {
-	// Currently backend client is only supported by etcd.
-	c, err = etcd.ConnectEtcdClient(config)
+	switch config.BackendType {
+	case api.EtcdV2:
+		c, err = etcd.NewEtcdClient(config.BackendConfig.(*etcd.EtcdConfig))
+	default:
+		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
+			config.BackendType))
+	}
 	return
 }
