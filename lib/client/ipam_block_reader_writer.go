@@ -98,17 +98,20 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	// Iterate through pools to find a new block.
 	glog.V(2).Infof("Claiming a new affine block for host '%s'", host)
 	for _, pool := range pools {
-		for _, subnet := range blocks(pool) {
+		// Use a block generator to iterate through all of the blocks
+		// that fall within the pool.
+		blocks := blockGenerator(pool)
+		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			glog.V(4).Infof("Getting block: %s", subnet.String())
-			key := backend.BlockKey{CIDR: subnet}
+			key := backend.BlockKey{CIDR: *subnet}
 			_, err := rw.client.backend.Get(key)
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 					// The block does not yet exist in etcd.  Try to grab it.
-					glog.V(3).Infof("Found free block: %+v", subnet)
-					err = rw.claimBlockAffinity(subnet, host, config)
-					return &subnet, err
+					glog.V(3).Infof("Found free block: %+v", *subnet)
+					err = rw.claimBlockAffinity(*subnet, host, config)
+					return subnet, err
 				} else {
 					glog.Errorf("Error getting block: %s", err)
 					return nil, err
@@ -271,17 +274,22 @@ func (rw blockReaderWriter) isConfiguredPool(cidr common.IPNet) bool {
 	return false
 }
 
-// Return the list of block CIDRs which fall within
-// the given pool.
-func blocks(pool common.IPNet) []common.IPNet {
+// Generator to get list of block CIDRs which
+// fall within the given pool. Returns nil when no more
+// blocks can be generated.
+func blockGenerator(pool common.IPNet) func() *common.IPNet {
 	// Determine the IP type to use.
 	version := getIPVersion(common.IP{pool.IP})
-	nets := []common.IPNet{}
 	ip := common.IP{pool.IP}
-	for pool.Contains(ip.IP) {
-		netIP := net.IPNet{ip.IP, version.BlockPrefixMask}
-		nets = append(nets, common.IPNet{netIP})
+	return func() *common.IPNet {
+		returnIP := ip
 		ip = incrementIP(ip, blockSize)
+		if pool.Contains(ip.IP) {
+			ipnet := net.IPNet{returnIP.IP, version.BlockPrefixMask}
+			cidr := common.IPNet{ipnet}
+			return &cidr
+		} else {
+			return nil
+		}
 	}
-	return nets
 }

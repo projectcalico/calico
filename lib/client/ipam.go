@@ -463,18 +463,19 @@ func (c ipams) ClaimAffinity(cidr common.IPNet, host *string) ([]common.IPNet, [
 	}
 
 	// Claim all blocks within the given cidr.
-	for _, blockCIDR := range blocks(cidr) {
-		err := c.blockReaderWriter.claimBlockAffinity(blockCIDR, hostname, *cfg)
+	blocks := blockGenerator(cidr)
+	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
+		err := c.blockReaderWriter.claimBlockAffinity(*blockCIDR, hostname, *cfg)
 		if err != nil {
 			if _, ok := err.(affinityClaimedError); ok {
 				// Claimed by someone else - add to failed list.
-				failed = append(failed, blockCIDR)
+				failed = append(failed, *blockCIDR)
 			} else {
 				glog.Errorf("Failed to claim block: %s", err)
 				return claimed, failed, err
 			}
 		} else {
-			claimed = append(claimed, blockCIDR)
+			claimed = append(claimed, *blockCIDR)
 		}
 	}
 	return claimed, failed, nil
@@ -497,15 +498,16 @@ func (c ipams) ReleaseAffinity(cidr common.IPNet, host *string) error {
 	hostname := decideHostname(host)
 
 	// Release all blocks within the given cidr.
-	for _, blockCIDR := range blocks(cidr) {
-		err := c.blockReaderWriter.releaseBlockAffinity(hostname, blockCIDR)
+	blocks := blockGenerator(cidr)
+	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
+		err := c.blockReaderWriter.releaseBlockAffinity(hostname, *blockCIDR)
 		if err != nil {
 			if _, ok := err.(affinityClaimedError); ok {
 				// Not claimed by this host - ignore.
 			} else if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Block does not exist - ignore.
 			} else {
-				glog.Errorf("Error releasing affinity for '%s': %s", blockCIDR, err)
+				glog.Errorf("Error releasing affinity for '%s': %s", *blockCIDR, err)
 				return err
 			}
 		}
