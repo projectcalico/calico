@@ -160,8 +160,11 @@ func (c *EtcdClient) Get(k KeyInterface) (*DatastoreObject, error) {
 	} else if object, err := ParseValue(k, []byte(results.Node.Value)); err != nil {
 		return nil, err
 	} else {
-		elem := reflect.ValueOf(object).Elem().Interface()
-		return &DatastoreObject{Key: k, Object: elem, Revision: results.Node.ModifiedIndex}, nil
+		if reflect.ValueOf(object).Kind() == reflect.Ptr {
+			// Unwrap any pointers.
+			object = reflect.ValueOf(object).Elem().Interface()
+		}
+		return &DatastoreObject{Key: k, Object: object, Revision: results.Node.ModifiedIndex}, nil
 	}
 }
 
