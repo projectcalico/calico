@@ -20,7 +20,7 @@ copyright_owner="Tigera, Inc"
 echo "Checking changed files with gofmt..."
 gofmt_failed=false
 for filename in $changed_go_files; do
-  if gofmt -d "${filename}" | grep '.'; then
+  if [ -e "${filename}" ] &&  gofmt -d "${filename}" | grep '.'; then
     echo "gofmt would make changes to file:" ${filename}
     gofmt_failed=true
   fi
@@ -40,7 +40,7 @@ year=$(date +'%Y')
 copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserved\."
 
 for filename in $changed_go_files; do
-  if ! grep -q -E "$copyright_re" "${filename}"; then
+  if [ -e "${filename}" ] && ! grep -q -E "$copyright_re" "${filename}"; then
     echo "Changed file is missing Tigera copyright:" ${filename}
     copyright_check_failed=true
   fi
