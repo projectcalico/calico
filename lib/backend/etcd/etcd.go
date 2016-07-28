@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package etcd
 
 import (
 	"errors"
@@ -45,7 +45,7 @@ type EtcdClient struct {
 	etcdKeysAPI etcd.KeysAPI
 }
 
-func ConnectEtcdClient(config *api.ClientConfig) (Client, error) {
+func ConnectEtcdClient(config *api.ClientConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}

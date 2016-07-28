@@ -16,6 +16,7 @@ package backend
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/backend/etcd"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
 
@@ -32,6 +33,6 @@ type Client interface {
 // NewClient creates a new backend datastore client.
 func NewClient(config *api.ClientConfig) (c Client, err error) {
 	// Currently backend client is only supported by etcd.
-	c, err = ConnectEtcdClient(config)
+	c, err = etcd.ConnectEtcdClient(config)
 	return
 }
