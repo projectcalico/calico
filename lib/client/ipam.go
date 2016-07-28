@@ -256,8 +256,12 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 					return errors.New(estr)
 				}
 				glog.V(3).Infof("Block for IP %s does not yet exist, creating", args.IP)
-				cfg := IPAMConfig{StrictAffinity: false, AutoAllocateBlocks: true}
-				err := c.blockReaderWriter.claimBlockAffinity(blockCIDR, hostname, cfg)
+				cfg, err := c.GetIPAMConfig()
+				if err != nil {
+					glog.Errorf("Error getting IPAM Config: %s", err)
+					return err
+				}
+				err = c.blockReaderWriter.claimBlockAffinity(blockCIDR, hostname, *cfg)
 				if err != nil {
 					if _, ok := err.(*affinityClaimedError); ok {
 						glog.Warningf("Someone else claimed block %s before us", blockCIDR.String())
