@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/backend"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
@@ -184,6 +186,10 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 			b, err := c.blockReaderWriter.claimNewAffineBlock(host, version, pool, *config)
 			if err != nil {
 				// Error claiming new block.
+				if _, ok := err.(noFreeBlocksError); ok {
+					// No free blocks.  Break.
+					break
+				}
 				glog.Errorf("Error claiming new block: %s", err)
 				return nil, err
 			} else {
@@ -222,7 +228,51 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 	rem := num - len(ips)
 	if config.StrictAffinity != true && rem != 0 {
 		glog.V(1).Infof("Attempting to assign %d more addresses from non-affine blocks", rem)
-		// TODO: this
+		// Figure out the pools to allocate from.
+		pools := []common.IPNet{}
+		if pool == nil {
+			// Default to all configured pools.
+			allPools, err := c.client.Pools().List(api.PoolMetadata{})
+			if err != nil {
+				glog.Errorf("Error reading configured pools: %s", err)
+				return ips, nil
+			}
+
+			// Grab all the IP networks in these pools.
+			for _, p := range allPools.Items {
+				// Don't include disabled pools.
+				if !p.Spec.Disabled {
+					pools = append(pools, p.Metadata.CIDR)
+				}
+			}
+		} else {
+			// Use the given pool.
+			pools = []common.IPNet{*pool}
+		}
+
+		// Iterate over pools and assign addresses until we either run out of pools,
+		// or the request has been satisfied.
+		for _, p := range pools {
+			glog.V(3).Infof("Assigning from random blocks in pool %s", p.String())
+			newBlock := randomBlockGenerator(p)
+			for rem > 0 {
+				// Grab a new random block.
+				blockCIDR := newBlock()
+				if blockCIDR == nil {
+					glog.Warningf("All addresses exhausted in pool %s", p.String())
+					break
+				}
+
+				// Attempt to assign from the block.
+				newIPs, err := c.assignFromExistingBlock(*blockCIDR, rem, handleID, attrs, host, nil)
+				if err != nil {
+					glog.Warningf("Failed to assign IPs in pool %s: %s", p.String(), err)
+					break
+				}
+				ips = append(ips, newIPs...)
+				rem = num - len(ips)
+			}
+		}
 	}
 
 	glog.V(2).Infof("Auto-assigned %d out of %d IPv%ds: %v", len(ips), num, version.Number, ips)
