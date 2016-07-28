@@ -29,7 +29,7 @@ import (
 	"github.com/tigera/libcalico-go/lib/common"
 )
 
-// Create a new CalicoClient usng connection information in the specified
+// Create a new CalicoClient using connection information in the specified
 // filename (if it exists), dropping back to environment variables for any
 // parameter not loaded from file.
 func NewClient(cf *string) (*client.Client, error) {
@@ -41,7 +41,7 @@ func NewClient(cf *string) (*client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(2).Infof("Loaded client config: %v", *cfg)
+	glog.V(2).Infof("Loaded client config: type=%v %#v", cfg.BackendType, cfg.BackendConfig)
 
 	c, err := client.New(cfg)
 	if err != nil {
