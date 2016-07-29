@@ -22,7 +22,7 @@ import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 func Create(args []string) error {
@@ -119,7 +119,7 @@ func (c create) execute(client *client.Client, resource unversioned.Resource) (u
 
 	// Handle resource does not exist errors explicitly.
 	switch err.(type) {
-	case common.ErrorResourceAlreadyExists:
+	case errors.ErrorResourceAlreadyExists:
 		if c.skipIfExists {
 			return resource, nil
 		}

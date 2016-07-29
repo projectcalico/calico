@@ -26,7 +26,8 @@ import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/resourcemgr"
+	"github.com/tigera/libcalico-go/lib/types"
 )
 
 // Create a new CalicoClient using connection information in the specified
@@ -133,7 +134,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	case "pool":
 		p := api.NewPool()
 		if name != "" {
-			_, cidr, err := common.ParseCIDR(name)
+			_, cidr, err := types.ParseCIDR(name)
 			if err != nil {
 				return nil, err
 			}
@@ -176,10 +177,10 @@ type commandResults struct {
 
 // Common function for configuration commands create, replace and delete.  All
 // these commands:
-// -  Load resources from file (or if not specified determine the resource from
-//    the command line options).
-// -  Convert the loaded resources into a list of resources (easier to handle)
-// -  Process each resource individually, collate results and exit on the first error.
+// 	-  Load resources from file (or if not specified determine the resource from
+// 	   the command line options).
+// 	-  Convert the loaded resources into a list of resources (easier to handle)
+// 	-  Process each resource individually, collate results and exit on the first error.
 func executeConfigCommand(args map[string]interface{}, cmd commandInterface) commandResults {
 	var r interface{}
 	var err error
@@ -190,7 +191,7 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 	if filename := args["--filename"]; filename != nil {
 		// Filename is specified, load the resource from file and convert to a slice
 		// of resources for easier handling.
-		if r, err = api.CreateResourceFromFile(filename.(string)); err != nil {
+		if r, err = resourcemgr.CreateResourceFromFile(filename.(string)); err != nil {
 			return commandResults{err: err, fileInvalid: true}
 		}
 
