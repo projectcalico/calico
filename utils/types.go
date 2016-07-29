@@ -24,6 +24,24 @@ type Kubernetes struct {
 	NodeName   string `json:"node_name"`
 }
 
+type Args struct {
+	Mesos Mesos `json:"org.apache.mesos,omitempty"`
+}
+
+type Mesos struct {
+	NetworkInfo NetworkInfo `json:"network_info"`
+}
+
+type NetworkInfo struct {
+	Name string `json:"name"`
+	Labels struct {
+		Labels [] struct {
+			Key string `json:"key"`
+			Value string `json:"value"`
+	       } `json:"labels,omitempty"`
+       } `json:"labels,omitempty"`
+}
+
 // NetConf stores the common network config for Calico CNI plugin
 type NetConf struct {
 	Name string `json:"name,omitempty"`
@@ -42,6 +60,7 @@ type NetConf struct {
 	Debug         bool       `json:"debug"`
 	Policy        Policy     `json:"policy"`
 	Kubernetes    Kubernetes `json:"kubernetes"`
+	Args          Args	 `json:"args,omitempty"`
 }
 
 // K8sArgs is the valid CNI_ARGS used for Kubernetes
