@@ -1,0 +1,27 @@
+machine:
+  environment:
+    GODIST: "go1.6.linux-amd64.tar.gz"
+    PATH: "/usr/local/go/bin:/usr/local/go_workspace/bin:~/.go_workspace/bin:${PATH}"
+    GOPATH: "${HOME}/.go_workspace:/usr/local/go_workspace:${HOME}/.go_project"
+  post:
+    - mkdir -p download
+    - test -e download/$GODIST || curl -o download/$GODIST https://storage.googleapis.com/golang/$GODIST
+    - sudo rm -rf /usr/local/go
+    - sudo tar -C /usr/local -xzf download/$GODIST
+
+dependencies:
+  cache_directories:
+    - ~/download
+
+checkout:
+  post:
+    - mkdir -p ${HOME}/.go_project/src/github.com/tigera/
+    - ln -s ${HOME}/libcalico-go ${HOME}/.go_project/src/github.com/tigera/
+    - go get "github.com/Masterminds/glide"
+    - go get "github.com/onsi/ginkgo/ginkgo"
+    - go get "github.com/onsi/gomega"
+    - cd ${HOME}/.go_project/src/github.com/tigera/libcalico-go && glide up
+
+test:
+  override:
+    - cd ${HOME}/.go_project/src/github.com/tigera/libcalico-go && ./run-uts

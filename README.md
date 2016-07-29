@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/tigera/libcalico-go.svg?style=svg)](https://circleci.com/gh/tigera/libcalico-go)
+
 # libcalico-go
 This repositiory contains Calico's Go components:
 
