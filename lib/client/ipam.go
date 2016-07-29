@@ -21,7 +21,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
@@ -657,8 +656,8 @@ func (c ipams) RemoveIPAMHost(host *string) error {
 	hostname := decideHostname(host)
 
 	// Remove the host tree from the datastore.
-	err := c.client.backend.Delete(&backend.DatastoreObject{
-		Key: backend.IPAMHostKey{Host: hostname},
+	err := c.client.backend.Delete(&model.KVPair{
+		Key: model.IPAMHostKey{Host: hostname},
 	})
 	if err != nil {
 		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {

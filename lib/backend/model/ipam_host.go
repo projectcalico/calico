@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"github.com/tigera/libcalico-go/lib/common"
@@ -27,7 +27,7 @@ type IPAMHostKey struct {
 	Host string
 }
 
-func (key IPAMHostKey) asEtcdKey() (string, error) {
+func (key IPAMHostKey) DefaultPath() (string, error) {
 	if key.Host == "" {
 		return "", common.ErrorInsufficientIdentifiers{Name: "host"}
 	}
@@ -36,8 +36,8 @@ func (key IPAMHostKey) asEtcdKey() (string, error) {
 	return k, nil
 }
 
-func (key IPAMHostKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key IPAMHostKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key IPAMHostKey) valueType() reflect.Type {
