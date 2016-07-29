@@ -87,9 +87,6 @@ func (c *ModelAdaptor) Apply(d *KVPair) (*KVPair, error) {
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
 func (c *ModelAdaptor) Delete(d *KVPair) error {
-	if _, ok := d.Key.(ProfileKey); ok {
-
-	}
 	return c.client.Delete(d)
 }
 
