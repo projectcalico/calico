@@ -18,23 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tigera/libcalico-go/lib/api"
+	bapi "github.com/tigera/libcalico-go/lib/backend/api"
 	"github.com/tigera/libcalico-go/lib/backend/compat"
 	"github.com/tigera/libcalico-go/lib/backend/etcd"
-	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
 
-// Client is the interface that a backend datastore must implement.
-type Client interface {
-	Create(object *KVPair) (*KVPair, error)
-	Update(object *KVPair) (*KVPair, error)
-	Apply(object *KVPair) (*KVPair, error)
-	Delete(object *KVPair) error
-	Get(key Key) (*KVPair, error)
-	List(list ListInterface) ([]*KVPair, error)
-}
-
 // NewClient creates a new backend datastore client.
-func NewClient(config *api.ClientConfig) (c Client, err error) {
+func NewClient(config *api.ClientConfig) (c bapi.Client, err error) {
 	switch config.BackendType {
 	case api.EtcdV2:
 		c, err = etcd.NewEtcdClient(config.BackendConfig.(*etcd.EtcdConfig))

@@ -15,23 +15,17 @@
 package compat
 
 import (
+	"github.com/tigera/libcalico-go/lib/backend/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
 
-type client interface {
-	Create(object *KVPair) (*KVPair, error)
-	Update(object *KVPair) (*KVPair, error)
-	Apply(object *KVPair) (*KVPair, error)
-	Delete(object *KVPair) error
-	Get(key Key) (*KVPair, error)
-	List(list ListInterface) ([]*KVPair, error)
-}
-
 type ModelAdaptor struct {
-	client client
+	client api.Client
 }
 
-func NewAdaptor(c client) *ModelAdaptor {
+var _ api.Client = (*ModelAdaptor)(nil)
+
+func NewAdaptor(c api.Client) *ModelAdaptor {
 	return &ModelAdaptor{client: c}
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/common"
 	"reflect"
+	"strings"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
@@ -60,32 +61,52 @@ type KVPair struct {
 // ParseKey parses a datastore key into one of the <Type>Key structs.
 // Returns nil if the string doesn't match one of our objects.
 func ParseKey(key string) Key {
+	glog.V(4).Infof("Parsing key %v", key)
 	if m := matchWorkloadEndpoint.FindStringSubmatch(key); m != nil {
+		glog.V(5).Infof("Workload endpoint")
 		return WorkloadEndpointKey{
 			Hostname:       m[1],
 			OrchestratorID: m[2],
 			WorkloadID:     m[3],
 			EndpointID:     m[4],
 		}
+	} else if m := matchHostEndpoint.FindStringSubmatch(key); m != nil {
+		glog.V(5).Infof("Host endpoint")
+		return HostEndpointKey{
+			Hostname:   m[1],
+			EndpointID: m[2],
+		}
 	} else if m := matchPolicy.FindStringSubmatch(key); m != nil {
+		glog.V(5).Infof("Policy")
 		return PolicyKey{
 			Name: m[2],
 		}
 	} else if m := matchProfile.FindStringSubmatch(key); m != nil {
+		glog.V(5).Infof("Profile %v", m)
 		pk := ProfileKey{m[1]}
 		switch m[2] {
 		case "tags":
+			glog.V(5).Infof("Profile tags")
 			return ProfileTagsKey{ProfileKey: pk}
 		case "rules":
+			glog.V(5).Infof("Profile rules")
 			return ProfileRulesKey{ProfileKey: pk}
 		case "labels":
+			glog.V(5).Infof("Profile labels")
 			return ProfileLabelsKey{ProfileKey: pk}
 		}
 		return nil
 	} else if m := matchHostIp.FindStringSubmatch(key); m != nil {
+		glog.V(5).Infof("Host ID")
 		return HostIPKey{Hostname: m[1]}
 	} else if m := matchPool.FindStringSubmatch(key); m != nil {
-		_, c, _ := common.ParseCIDR(m[1])
+		glog.V(5).Infof("Pool")
+		mungedCIDR := m[1]
+		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
+		_, c, err := common.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
 		return PoolKey{CIDR: *c}
 	} else if m := matchGlobalConfig.FindStringSubmatch(key); m != nil {
 		return GlobalConfigKey{Name: m[1]}
@@ -107,16 +128,22 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		return string(rawData) == "true", nil
 	}
 	value := reflect.New(valueType)
+	elem := value.Elem()
+	if elem.Kind() == reflect.Struct && elem.NumField() > 0 {
+		if elem.Field(0).Type() == reflect.ValueOf(key).Type() {
+			elem.Field(0).Set(reflect.ValueOf(key))
+		}
+	}
 	iface := value.Interface()
 	err := json.Unmarshal(rawData, iface)
 	if err != nil {
-		glog.Errorf("Failed to unmarshal %#v into value %#v",
+		glog.V(0).Infof("Failed to unmarshal %#v into value %#v",
 			string(rawData), value)
 		return nil, err
 	}
-	if value.Elem().Kind() != reflect.Struct {
+	if elem.Kind() != reflect.Struct {
 		// Pointer to a map or slice, unwrap.
-		iface = value.Elem().Interface()
+		iface = elem.Interface()
 	}
 	return iface, nil
 }
