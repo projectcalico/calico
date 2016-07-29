@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package common
-
-type Protocol struct {
-	Int32OrString
-}
+/*
+Package resourcemgr implements generic resource handling methods.  Whereas the
+public client API provides a typed interface for managing resources (and other
+configuration), this package provides an untyped interface that is useful when
+streaming resource configuration to and from YAML/JSON files.
+*/
+package resourcemgr

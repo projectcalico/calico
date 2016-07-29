@@ -21,7 +21,8 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/tigera/libcalico-go/lib/types"
 )
 
 var (
@@ -30,12 +31,12 @@ var (
 )
 
 type BlockKey struct {
-	CIDR common.IPNet `json:"-" validate:"required,name"`
+	CIDR types.IPNet `json:"-" validate:"required,name"`
 }
 
 func (key BlockKey) DefaultPath() (string, error) {
 	if key.CIDR.IP == nil {
-		return "", common.ErrorInsufficientIdentifiers{}
+		return "", errors.ErrorInsufficientIdentifiers{}
 	}
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
 	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", key.CIDR.Version(), c)
@@ -70,12 +71,12 @@ func (options BlockListOptions) ParseDefaultKey(ekey string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
-	_, cidr, _ := common.ParseCIDR(cidrStr)
+	_, cidr, _ := types.ParseCIDR(cidrStr)
 	return BlockKey{CIDR: *cidr}
 }
 
 type AllocationBlock struct {
-	CIDR           common.IPNet          `json:"cidr"`
+	CIDR           types.IPNet           `json:"cidr"`
 	HostAffinity   *string               `json:"hostAffinity"`
 	StrictAffinity bool                  `json:"strictAffinity"`
 	Allocations    []*int                `json:"allocations"`

@@ -14,7 +14,7 @@
 
 package model
 
-import . "github.com/tigera/libcalico-go/lib/common"
+import . "github.com/tigera/libcalico-go/lib/types"
 
 type Rule struct {
 	Action string `json:"action,omitempty" validate:"backendaction"`

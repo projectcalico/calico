@@ -12,37 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model
-
-import (
-	"github.com/tigera/libcalico-go/lib/errors"
-	"reflect"
-)
-
-var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
-)
-
-type IPAMHostKey struct {
-	Host string
-}
-
-func (key IPAMHostKey) DefaultPath() (string, error) {
-	if key.Host == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
-	}
-
-	k := "/calico/ipam/v2/host/" + key.Host
-	return k, nil
-}
-
-func (key IPAMHostKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
-}
-
-func (key IPAMHostKey) valueType() reflect.Type {
-	return typeIPAMHost
-}
-
-type IPAMHost struct {
-}
+/*
+Package validator implements common field and structure validation that is
+used to validate the API structures supplied on the client interface, and
+is also used internally to validate the information stored in the backend
+datastore.
+*/package validator

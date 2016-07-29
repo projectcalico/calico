@@ -17,7 +17,7 @@ package client
 import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 // PolicyInterface has methods to work with Policy resources.

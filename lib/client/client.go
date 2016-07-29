@@ -20,6 +20,7 @@ import (
 
 	"errors"
 	"fmt"
+
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
 	"github.com/kelseyhightower/envconfig"

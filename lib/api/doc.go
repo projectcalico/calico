@@ -13,6 +13,7 @@
 // limitations under the License.
 
 /*
-Package api implements the struct definitions used by the northbound client API.
+Package api implements the resource struct definitions used by the northbound
+client API.
 */
 package api

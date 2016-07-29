@@ -22,7 +22,8 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	. "github.com/tigera/libcalico-go/lib/common"
+	. "github.com/tigera/libcalico-go/lib/errors"
+	. "github.com/tigera/libcalico-go/lib/types"
 )
 
 var (

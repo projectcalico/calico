@@ -22,7 +22,8 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/tigera/libcalico-go/lib/types"
 )
 
 var (
@@ -31,12 +32,12 @@ var (
 )
 
 type PoolKey struct {
-	CIDR common.IPNet `json:"-" validate:"required,name"`
+	CIDR types.IPNet `json:"-" validate:"required,name"`
 }
 
 func (key PoolKey) DefaultPath() (string, error) {
 	if key.CIDR.IP == nil {
-		return "", common.ErrorInsufficientIdentifiers{Name: "cidr"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
 	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", key.CIDR.Version(), c)
@@ -56,7 +57,7 @@ func (key PoolKey) String() string {
 }
 
 type PoolListOptions struct {
-	CIDR common.IPNet
+	CIDR types.IPNet
 }
 
 func (options PoolListOptions) DefaultPathRoot() string {
@@ -77,7 +78,7 @@ func (options PoolListOptions) ParseDefaultKey(ekey string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
-	_, cidr, _ := common.ParseCIDR(cidrStr)
+	_, cidr, _ := types.ParseCIDR(cidrStr)
 	if options.CIDR.IP != nil && reflect.DeepEqual(*cidr, options.CIDR) {
 		glog.V(2).Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
@@ -86,9 +87,9 @@ func (options PoolListOptions) ParseDefaultKey(ekey string) Key {
 }
 
 type Pool struct {
-	CIDR          common.IPNet `json:"cidr"`
-	IPIPInterface string       `json:"ipip"`
-	Masquerade    bool         `json:"masquerade"`
-	IPAM          bool         `json:"ipam"`
-	Disabled      bool         `json:"disabled"`
+	CIDR          types.IPNet `json:"cidr"`
+	IPIPInterface string      `json:"ipip"`
+	Masquerade    bool        `json:"masquerade"`
+	IPAM          bool        `json:"ipam"`
+	Disabled      bool        `json:"disabled"`
 }

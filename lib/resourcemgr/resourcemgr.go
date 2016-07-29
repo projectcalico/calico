@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package resourcemgr
 
 import (
 	"errors"
@@ -24,11 +24,13 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/tigera/libcalico-go/lib/api"
 	. "github.com/tigera/libcalico-go/lib/api/unversioned"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/validator"
+	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 )
 
 var helpers map[TypeMetadata]resourceHelper
@@ -53,17 +55,18 @@ func init() {
 	}
 
 	// Register all API resources supported by the generic resource interface.
-	registerHelper(NewPolicy(), NewPolicyList())
-	registerHelper(NewPool(), NewPoolList())
-	registerHelper(NewProfile(), NewProfileList())
-	registerHelper(NewHostEndpoint(), NewHostEndpointList())
-	registerHelper(NewWorkloadEndpoint(), NewWorkloadEndpointList())
+	registerHelper(api.NewPolicy(), api.NewPolicyList())
+	registerHelper(api.NewPool(), api.NewPoolList())
+	registerHelper(api.NewProfile(), api.NewProfileList())
+	registerHelper(api.NewHostEndpoint(), api.NewHostEndpointList())
+	registerHelper(api.NewWorkloadEndpoint(), api.NewWorkloadEndpointList())
 }
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:
-// -  The type of resource (Kind and Version)
-// -  The concrete resource struct for this version
-// -  The concrete resource list struct for this version
+//
+// 	-  The type of resource (Kind and Version)
+// 	-  The concrete resource struct for this version
+// 	-  The concrete resource list struct for this version
 type resourceHelper struct {
 	typeMetadata     TypeMetadata
 	resourceType     interface{}
@@ -144,9 +147,9 @@ func NewResourceListFromType(t reflect.Type) (interface{}, error) {
 }
 
 // Create the Resource from the specified file f.
-// -  The file format may be JSON or YAML encoding of either a single resource or list of
-//    resources as defined by the API objects in /api.
-// -  A filename of "-" means "Read from stdin".
+// 	-  The file format may be JSON or YAML encoding of either a single resource or list of
+// 	   resources as defined by the API objects in /api.
+// 	-  A filename of "-" means "Read from stdin".
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
@@ -208,7 +211,7 @@ func unmarshalResource(tm TypeMetadata, b []byte) (interface{}, error) {
 	}
 
 	glog.V(2).Infof("Type of unpacked data: %v\n", reflect.TypeOf(unpacked))
-	if err = common.Validate(unpacked); err != nil {
+	if err = validator.Validate(unpacked); err != nil {
 		return nil, err
 	}
 
@@ -238,7 +241,7 @@ func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error)
 	// Validate the data in the structures.  The validator does not handle slices, so
 	// validate each resource separately.
 	for _, r := range unpacked {
-		if err := common.Validate(r); err != nil {
+		if err := validator.Validate(r); err != nil {
 			return nil, err
 		}
 	}

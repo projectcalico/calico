@@ -12,37 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model
-
-import (
-	"github.com/tigera/libcalico-go/lib/errors"
-	"reflect"
-)
-
-var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
-)
-
-type IPAMHostKey struct {
-	Host string
-}
-
-func (key IPAMHostKey) DefaultPath() (string, error) {
-	if key.Host == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
-	}
-
-	k := "/calico/ipam/v2/host/" + key.Host
-	return k, nil
-}
-
-func (key IPAMHostKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
-}
-
-func (key IPAMHostKey) valueType() reflect.Type {
-	return typeIPAMHost
-}
-
-type IPAMHost struct {
-}
+/*
+Package types implements a set of common type definitions used by the public
+client API and the private backend infrastructure.
+*/
+package types

@@ -15,8 +15,9 @@
 package model
 
 import (
-	"github.com/tigera/libcalico-go/lib/common"
 	"reflect"
+
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (
@@ -31,7 +32,7 @@ func (key IPAMConfigKey) DefaultPath() (string, error) {
 }
 
 func (key IPAMConfigKey) DefaultDeletePath() (string, error) {
-	return "", common.ErrorResourceUpdateConflict{"Cannot delete IPAMConfig"}
+	return "", errors.ErrorResourceUpdateConflict{"Cannot delete IPAMConfig"}
 }
 
 func (key IPAMConfigKey) valueType() reflect.Type {

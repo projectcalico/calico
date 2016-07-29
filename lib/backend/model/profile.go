@@ -23,7 +23,7 @@ import (
 	"sort"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (
@@ -40,7 +40,7 @@ type ProfileKey struct {
 
 func (key ProfileKey) DefaultPath() (string, error) {
 	if key.Name == "" {
-		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/policy/profile/%s", key.Name)
 	return e, nil

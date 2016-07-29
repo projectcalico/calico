@@ -17,7 +17,8 @@ package api
 import (
 	"reflect"
 
-	. "github.com/tigera/libcalico-go/lib/common"
+	. "github.com/tigera/libcalico-go/lib/types"
+	. "github.com/tigera/libcalico-go/lib/validator"
 	"gopkg.in/go-playground/validator.v8"
 )
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package common
+package validator
 
 import (
 	"reflect"
@@ -21,7 +21,9 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/selector"
+	"github.com/tigera/libcalico-go/lib/types"
 	"gopkg.in/go-playground/validator.v8"
 )
 
@@ -50,8 +52,8 @@ func init() {
 	RegisterFieldValidator("interface", validateInterface)
 	RegisterFieldValidator("order", validateOrder)
 
-	RegisterStructValidator(validateProtocol, Protocol{})
-	RegisterStructValidator(validatePort, Port{})
+	RegisterStructValidator(validateProtocol, types.Protocol{})
+	RegisterStructValidator(validatePort, types.Port{})
 }
 
 func RegisterFieldValidator(key string, fn validator.Func) {
@@ -68,10 +70,10 @@ func Validate(current interface{}) error {
 		return nil
 	}
 
-	verr := ErrorValidation{}
+	verr := errors.ErrorValidation{}
 	for _, f := range err.(validator.ValidationErrors) {
 		verr.ErrFields = append(verr.ErrFields,
-			ErroredField{Name: f.Name, Value: f.Value})
+			errors.ErroredField{Name: f.Name, Value: f.Value})
 	}
 	return verr
 }
@@ -136,23 +138,23 @@ func validateOrder(v *validator.Validate, topStruct reflect.Value, currentStruct
 
 func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
 	glog.V(2).Infof("Validate protocol")
-	p := structLevel.CurrentStruct.Interface().(Protocol)
+	p := structLevel.CurrentStruct.Interface().(types.Protocol)
 	glog.V(2).Infof("Validate protocol: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
-	if p.Type == NumOrStringNum && ((p.NumVal < 1) || (p.NumVal > 255)) {
+	if p.Type == types.NumOrStringNum && ((p.NumVal < 1) || (p.NumVal > 255)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Protocol", "protocol", "protocol number invalid")
-	} else if p.Type == NumOrStringString && !protocolRegex.MatchString(p.StrVal) {
+	} else if p.Type == types.NumOrStringString && !protocolRegex.MatchString(p.StrVal) {
 		structLevel.ReportError(reflect.ValueOf(p.StrVal), "Protocol", "protocol", "protocol name invalid")
 	}
 }
 
 func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 	glog.V(2).Infof("Validate port")
-	p := structLevel.CurrentStruct.Interface().(Port)
+	p := structLevel.CurrentStruct.Interface().(types.Port)
 	glog.V(2).Infof("Validate port: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
-	if p.Type == NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
+	if p.Type == types.NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Port", "port", "port number invalid")
 		return
-	} else if p.Type == NumOrStringString {
+	} else if p.Type == types.NumOrStringString {
 		ports := strings.Split(p.StrVal, ":")
 		if len(ports) > 2 {
 			structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")

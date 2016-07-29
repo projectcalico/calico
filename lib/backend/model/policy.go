@@ -21,8 +21,7 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
-	"k8s.io/kubernetes/pkg/apis/policy"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (
@@ -36,7 +35,7 @@ type PolicyKey struct {
 
 func (key PolicyKey) DefaultPath() (string, error) {
 	if key.Name == "" {
-		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/policy/tier/default/policy/%s",
 		key.Name)

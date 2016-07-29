@@ -20,7 +20,7 @@ import (
 	"regexp"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (
@@ -34,7 +34,7 @@ type IPAMHandleKey struct {
 
 func (key IPAMHandleKey) DefaultPath() (string, error) {
 	if key.HandleID == "" {
-		return "", common.ErrorInsufficientIdentifiers{}
+		return "", errors.ErrorInsufficientIdentifiers{}
 	}
 	e := fmt.Sprintf("/calico/ipam/v2/handle/%s", key.HandleID)
 	return e, nil

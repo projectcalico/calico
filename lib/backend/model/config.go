@@ -16,10 +16,11 @@ package model
 
 import (
 	"fmt"
-	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/common"
 	"reflect"
 	"regexp"
+
+	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (
@@ -57,7 +58,7 @@ func (key GlobalConfigKey) DefaultPath() (string, error) {
 
 func (key GlobalConfigKey) DefaultDeletePath() (string, error) {
 	if key.Name == "" {
-		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/config/%s", key.Name)
 	return e, nil
@@ -111,10 +112,10 @@ func (key HostConfigKey) DefaultPath() (string, error) {
 
 func (key HostConfigKey) DefaultDeletePath() (string, error) {
 	if key.Name == "" {
-		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	if key.Hostname == "" {
-		return "", common.ErrorInsufficientIdentifiers{Name: "hostname"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/config/%s", key.Hostname, key.Name)
 	return e, nil
