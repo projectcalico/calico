@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ type HostEndpointKey struct {
 	EndpointID string `json:"-" validate:"required,hostname"`
 }
 
-func (key HostEndpointKey) asEtcdKey() (string, error) {
+func (key HostEndpointKey) DefaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -47,8 +47,8 @@ func (key HostEndpointKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key HostEndpointKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key HostEndpointKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key HostEndpointKey) valueType() reflect.Type {
@@ -64,7 +64,7 @@ type HostEndpointListOptions struct {
 	EndpointID string
 }
 
-func (options HostEndpointListOptions) asEtcdKeyRoot() string {
+func (options HostEndpointListOptions) DefaultPathRoot() string {
 	k := "/calico/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -77,7 +77,7 @@ func (options HostEndpointListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options HostEndpointListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options HostEndpointListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get HostEndpoint key from %s", ekey)
 	r := matchHostEndpoint.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

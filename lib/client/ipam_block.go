@@ -22,7 +22,7 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
 
@@ -54,11 +54,11 @@ var ipv6 ipVersion = ipVersion{
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
 type allocationBlock struct {
-	backend.AllocationBlock
+	model.AllocationBlock
 }
 
 func newBlock(cidr common.IPNet) allocationBlock {
-	b := backend.AllocationBlock{}
+	b := model.AllocationBlock{}
 	b.Allocations = make([]*int, blockSize)
 	b.Unallocated = make([]int, blockSize)
 	b.StrictAffinity = false
@@ -213,7 +213,7 @@ func (b *allocationBlock) release(addresses []common.IP) ([]common.IP, map[strin
 
 func (b *allocationBlock) deleteAttributes(delIndexes, ordinals []int) {
 	newIndexes := make([]*int, len(b.Attributes))
-	newAttrs := []backend.AllocationAttribute{}
+	newAttrs := []model.AllocationAttribute{}
 	y := 0 // Next free slot in the new attributes list.
 	for x := range b.Attributes {
 		if !intInSlice(x, delIndexes) {
@@ -326,7 +326,7 @@ func (b allocationBlock) attributesForIP(ip common.IP) (map[string]string, error
 }
 
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
-	attr := backend.AllocationAttribute{handleID, attrs}
+	attr := model.AllocationAttribute{handleID, attrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
 			glog.V(4).Infof("Attribute '%+v' already exists", attr)

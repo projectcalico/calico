@@ -16,7 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 func ruleActionAPIToBackend(action string) string {
@@ -28,8 +28,8 @@ func ruleActionBackendToAPI(action string) string {
 }
 
 // Convert an API Rule structure to a Backend Rule structure
-func ruleAPIToBackend(ar api.Rule) backend.Rule {
-	return backend.Rule{
+func ruleAPIToBackend(ar api.Rule) model.Rule {
+	return model.Rule{
 		Action:      ruleActionAPIToBackend(ar.Action),
 		Protocol:    ar.Protocol,
 		ICMPCode:    ar.ICMPCode,
@@ -59,7 +59,7 @@ func ruleAPIToBackend(ar api.Rule) backend.Rule {
 }
 
 // Convert a Backend Rule structure to an API Rule structure
-func ruleBackendToAPI(br backend.Rule) api.Rule {
+func ruleBackendToAPI(br model.Rule) api.Rule {
 	return api.Rule{
 		Action:      ruleActionBackendToAPI(br.Action),
 		Protocol:    br.Protocol,
@@ -94,12 +94,12 @@ func ruleBackendToAPI(br backend.Rule) api.Rule {
 }
 
 // Convert an API Rule structure slice to a Backend Rule structure slice
-func rulesAPIToBackend(ars []api.Rule) []backend.Rule {
+func rulesAPIToBackend(ars []api.Rule) []model.Rule {
 	if ars == nil {
-		return []backend.Rule{}
+		return []model.Rule{}
 	}
 
-	brs := make([]backend.Rule, len(ars))
+	brs := make([]model.Rule, len(ars))
 	for idx, ar := range ars {
 		brs[idx] = ruleAPIToBackend(ar)
 	}
@@ -107,7 +107,7 @@ func rulesAPIToBackend(ars []api.Rule) []backend.Rule {
 }
 
 // Convert a Backend Rule structure slice to an API Rule structure slice
-func rulesBackendToAPI(brs []backend.Rule) []api.Rule {
+func rulesBackendToAPI(brs []model.Rule) []api.Rule {
 	if brs == nil {
 		return nil
 	}

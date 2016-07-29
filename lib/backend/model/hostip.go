@@ -1,5 +1,5 @@
 // Copyright (c) 2016 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,33 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
-	"github.com/tigera/libcalico-go/lib/common"
+	"fmt"
 	"reflect"
+	"regexp"
 )
 
 var (
-	typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
+	matchHostIp = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip`)
+	typeHostIp  = reflect.TypeOf(HostIP{})
 )
 
-type IPAMConfigKey struct {
+// TODO find a place to put this
+type HostIPKey struct {
+	Hostname string
 }
 
-func (key IPAMConfigKey) asEtcdKey() (string, error) {
-	return "/calico/ipam/v2/config", nil
+func (key HostIPKey) DefaultPath() (string, error) {
+	return fmt.Sprintf("/calico/v1/host/%s/bird_ip",
+		key.Hostname), nil
 }
 
-func (key IPAMConfigKey) asEtcdDeleteKey() (string, error) {
-	return "", common.ErrorResourceUpdateConflict{"Cannot delete IPAMConfig"}
+func (key HostIPKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
-func (key IPAMConfigKey) valueType() reflect.Type {
-	return typeIPAMConfig
+func (key HostIPKey) valueType() reflect.Type {
+	return typeHostIp
 }
 
-type IPAMConfig struct {
-	StrictAffinity     bool `json:"strict_affinity,omitempty"`
-	AutoAllocateBlocks bool `json:"auto_allocate_blocks,omitempty"`
+type HostIP struct {
 }

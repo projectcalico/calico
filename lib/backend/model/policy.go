@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/common"
+	"k8s.io/kubernetes/pkg/apis/policy"
 )
 
 var (
@@ -33,7 +34,7 @@ type PolicyKey struct {
 	Name string `json:"-" validate:"required,name"`
 }
 
-func (key PolicyKey) asEtcdKey() (string, error) {
+func (key PolicyKey) DefaultPath() (string, error) {
 	if key.Name == "" {
 		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
 	}
@@ -42,8 +43,8 @@ func (key PolicyKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key PolicyKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key PolicyKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key PolicyKey) valueType() reflect.Type {
@@ -58,7 +59,7 @@ type PolicyListOptions struct {
 	Name string
 }
 
-func (options PolicyListOptions) asEtcdKeyRoot() string {
+func (options PolicyListOptions) DefaultPathRoot() string {
 	k := "/calico/v1/policy/tier/default/policy"
 	if options.Name == "" {
 		return k
@@ -67,7 +68,7 @@ func (options PolicyListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options PolicyListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options PolicyListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get Policy key from %s", ekey)
 	r := matchPolicy.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

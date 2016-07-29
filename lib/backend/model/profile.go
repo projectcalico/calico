@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -38,7 +38,7 @@ type ProfileKey struct {
 	Name string `json:"-" validate:"required,name"`
 }
 
-func (key ProfileKey) asEtcdKey() (string, error) {
+func (key ProfileKey) DefaultPath() (string, error) {
 	if key.Name == "" {
 		return "", common.ErrorInsufficientIdentifiers{Name: "name"}
 	}
@@ -46,8 +46,8 @@ func (key ProfileKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key ProfileKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key ProfileKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key ProfileKey) valueType() reflect.Type {
@@ -63,8 +63,8 @@ type ProfileRulesKey struct {
 	ProfileKey
 }
 
-func (key ProfileRulesKey) asEtcdKey() (string, error) {
-	e, err := key.ProfileKey.asEtcdKey()
+func (key ProfileRulesKey) DefaultPath() (string, error) {
+	e, err := key.ProfileKey.DefaultPath()
 	return e + "/rules", err
 }
 
@@ -77,8 +77,8 @@ type ProfileTagsKey struct {
 	ProfileKey
 }
 
-func (key ProfileTagsKey) asEtcdKey() (string, error) {
-	e, err := key.ProfileKey.asEtcdKey()
+func (key ProfileTagsKey) DefaultPath() (string, error) {
+	e, err := key.ProfileKey.DefaultPath()
 	return e + "/tags", err
 }
 
@@ -91,8 +91,8 @@ type ProfileLabelsKey struct {
 	ProfileKey
 }
 
-func (key ProfileLabelsKey) asEtcdKey() (string, error) {
-	e, err := key.ProfileKey.asEtcdKey()
+func (key ProfileLabelsKey) DefaultPath() (string, error) {
+	e, err := key.ProfileKey.DefaultPath()
 	return e + "/labels", err
 }
 
@@ -104,7 +104,7 @@ type ProfileListOptions struct {
 	Name string
 }
 
-func (options ProfileListOptions) asEtcdKeyRoot() string {
+func (options ProfileListOptions) DefaultPathRoot() string {
 	k := "/calico/v1/policy/profile"
 	if options.Name == "" {
 		return k
@@ -113,7 +113,7 @@ func (options ProfileListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options ProfileListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options ProfileListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get Profile key from %s", ekey)
 	r := matchProfile.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
@@ -152,29 +152,36 @@ type ProfileRules struct {
 	OutboundRules []Rule `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 }
 
-// Convert a Profile DatastoreObject to separate DatastoreObject types for Keys, Labels and Rules.
-func toTagsLabelsRules(d *DatastoreObject) (t, l, r *DatastoreObject) {
-	p := d.Object.(Profile)
+// Convert a Profile KVPair to separate KVPair types for Keys, Labels and Rules.
+func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
+	p := d.Value.(Profile)
 	pk := d.Key.(ProfileKey)
 
-	t = &DatastoreObject{
+	t = &KVPair{
 		Key:      ProfileTagsKey{pk},
-		Object:   p.Tags,
+		Value:    p.Tags,
 		Revision: d.Revision,
 	}
-	l = &DatastoreObject{
-		Key:    ProfileLabelsKey{pk},
-		Object: p.Labels,
+	l = &KVPair{
+		Key:   ProfileLabelsKey{pk},
+		Value: p.Labels,
 	}
-	r = &DatastoreObject{
-		Key:    ProfileRulesKey{pk},
-		Object: p.Rules,
+	r = &KVPair{
+		Key:   ProfileRulesKey{pk},
+		Value: p.Rules,
 	}
 
 	return t, l, r
 }
 
-func (_ ProfileKey) Create(c *EtcdClient, d *DatastoreObject) (*DatastoreObject, error) {
+type client interface {
+	Create(object *KVPair) (*KVPair, error)
+	Update(object *KVPair) (*KVPair, error)
+	Apply(object *KVPair) (*KVPair, error)
+	Get(key Key) (*KVPair, error)
+}
+
+func (_ ProfileKey) Create(c client, d *KVPair) (*KVPair, error) {
 	t, l, r := toTagsLabelsRules(d)
 	if t, err := c.Create(t); err != nil {
 		return nil, err
@@ -188,7 +195,7 @@ func (_ ProfileKey) Create(c *EtcdClient, d *DatastoreObject) (*DatastoreObject,
 	}
 }
 
-func (_ ProfileKey) Update(c *EtcdClient, d *DatastoreObject) (*DatastoreObject, error) {
+func (_ ProfileKey) Update(c client, d *KVPair) (*KVPair, error) {
 	t, l, r := toTagsLabelsRules(d)
 	if t, err := c.Update(t); err != nil {
 		return nil, err
@@ -202,7 +209,7 @@ func (_ ProfileKey) Update(c *EtcdClient, d *DatastoreObject) (*DatastoreObject,
 	}
 }
 
-func (_ ProfileKey) Apply(c *EtcdClient, d *DatastoreObject) (*DatastoreObject, error) {
+func (_ ProfileKey) Apply(c client, d *KVPair) (*KVPair, error) {
 	t, l, r := toTagsLabelsRules(d)
 	if t, err := c.Apply(t); err != nil {
 		return nil, err
@@ -216,34 +223,34 @@ func (_ ProfileKey) Apply(c *EtcdClient, d *DatastoreObject) (*DatastoreObject, 
 	}
 }
 
-func (_ ProfileKey) Get(c *EtcdClient, k KeyInterface) (*DatastoreObject, error) {
-	var t, l, r *DatastoreObject
+func (_ ProfileKey) Get(c client, k Key) (*KVPair, error) {
+	var t, l, r *KVPair
 	var err error
 	pk := k.(ProfileKey)
 
 	if t, err = c.Get(ProfileTagsKey{pk}); err != nil {
 		return nil, err
 	}
-	d := DatastoreObject{
+	d := KVPair{
 		Key: k,
-		Object: Profile{
-			Tags: t.Object.([]string),
+		Value: Profile{
+			Tags: t.Value.([]string),
 		},
 		Revision: t.Revision,
 	}
-	p := d.Object.(Profile)
+	p := d.Value.(Profile)
 	if l, err = c.Get(ProfileLabelsKey{pk}); err == nil {
-		p.Labels = l.Object.(map[string]string)
+		p.Labels = l.Value.(map[string]string)
 	}
 	if r, err = c.Get(ProfileRulesKey{pk}); err == nil {
-		p.Rules = r.Object.(ProfileRules)
+		p.Rules = r.Value.(ProfileRules)
 	}
 	return &d, nil
 }
 
-func (_ *ProfileListOptions) ListConvert(ds []*DatastoreObject) []*DatastoreObject {
+func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 
-	profiles := make(map[string]*DatastoreObject)
+	profiles := make(map[string]*KVPair)
 	var name string
 	for _, d := range ds {
 		switch t := d.Key.(type) {
@@ -257,19 +264,19 @@ func (_ *ProfileListOptions) ListConvert(ds []*DatastoreObject) []*DatastoreObje
 			panic(fmt.Errorf("Unexpected key type: %v", t))
 		}
 
-		// Get the DatastoreObject for the profile, initialising if just created.
+		// Get the KVPair for the profile, initialising if just created.
 		pd, ok := profiles[name]
 		if !ok {
 			glog.V(2).Infof("Initialise profile %v", name)
-			pd = &DatastoreObject{
-				Object: Profile{},
-				Key:    ProfileKey{Name: name},
+			pd = &KVPair{
+				Value: Profile{},
+				Key:   ProfileKey{Name: name},
 			}
 			profiles[name] = pd
 		}
 
-		p := pd.Object.(Profile)
-		switch t := d.Object.(type) {
+		p := pd.Value.(Profile)
+		switch t := d.Value.(type) {
 		case []string: // must be tags #TODO should type these
 			glog.V(2).Infof("Store tags %v", t)
 			p.Tags = t
@@ -283,7 +290,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*DatastoreObject) []*DatastoreObje
 		default:
 			panic(fmt.Errorf("Unexpected type: %v", t))
 		}
-		pd.Object = p
+		pd.Value = p
 	}
 
 	glog.V(2).Infof("Map of profiles: %v", profiles)
@@ -295,7 +302,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*DatastoreObject) []*DatastoreObje
 	}
 	sort.Strings(keys)
 
-	out := make([]*DatastoreObject, len(keys))
+	out := make([]*KVPair, len(keys))
 	for i, k := range keys {
 		out[i] = profiles[k]
 	}

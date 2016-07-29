@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ type PoolKey struct {
 	CIDR common.IPNet `json:"-" validate:"required,name"`
 }
 
-func (key PoolKey) asEtcdKey() (string, error) {
+func (key PoolKey) DefaultPath() (string, error) {
 	if key.CIDR.IP == nil {
 		return "", common.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
@@ -43,8 +43,8 @@ func (key PoolKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key PoolKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key PoolKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key PoolKey) valueType() reflect.Type {
@@ -59,7 +59,7 @@ type PoolListOptions struct {
 	CIDR common.IPNet
 }
 
-func (options PoolListOptions) asEtcdKeyRoot() string {
+func (options PoolListOptions) DefaultPathRoot() string {
 	k := "/calico/v1/ipam/"
 	if options.CIDR.IP == nil {
 		return k
@@ -69,7 +69,7 @@ func (options PoolListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options PoolListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options PoolListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get Pool key from %s", ekey)
 	r := matchPool.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

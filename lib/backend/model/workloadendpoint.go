@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -36,7 +36,7 @@ type WorkloadEndpointKey struct {
 	EndpointID     string `json:"-"`
 }
 
-func (key WorkloadEndpointKey) asEtcdKey() (string, error) {
+func (key WorkloadEndpointKey) DefaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -54,8 +54,8 @@ func (key WorkloadEndpointKey) asEtcdKey() (string, error) {
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
-func (key WorkloadEndpointKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key WorkloadEndpointKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key WorkloadEndpointKey) valueType() reflect.Type {
@@ -74,7 +74,7 @@ type WorkloadEndpointListOptions struct {
 	EndpointID     string
 }
 
-func (options WorkloadEndpointListOptions) asEtcdKeyRoot() string {
+func (options WorkloadEndpointListOptions) DefaultPathRoot() string {
 	k := "/calico/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -95,7 +95,7 @@ func (options WorkloadEndpointListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options WorkloadEndpointListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options WorkloadEndpointListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get WorkloadEndpoint key from %s", ekey)
 	r := matchWorkloadEndpoint.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

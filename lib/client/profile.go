@@ -16,7 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 // ProfileInterface has methods to work with Profile resources.
@@ -77,35 +77,35 @@ func (h *profiles) List(metadata api.ProfileMetadata) (*api.ProfileList, error) 
 }
 
 // Convert a ProfileMetadata to a ProfileListInterface
-func (h *profiles) convertMetadataToListInterface(m interface{}) (backend.ListInterface, error) {
+func (h *profiles) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
 	hm := m.(api.ProfileMetadata)
-	l := backend.ProfileListOptions{
+	l := model.ProfileListOptions{
 		Name: hm.Name,
 	}
 	return l, nil
 }
 
 // Convert a ProfileMetadata to a ProfileKeyInterface
-func (h *profiles) convertMetadataToKeyInterface(m interface{}) (backend.KeyInterface, error) {
+func (h *profiles) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
 	hm := m.(api.ProfileMetadata)
-	k := backend.ProfileKey{
+	k := model.ProfileKey{
 		Name: hm.Name,
 	}
 	return k, nil
 }
 
 // Convert an API Profile structure to a Backend Profile structure
-func (h *profiles) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreObject, error) {
+func (h *profiles) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ap := a.(api.Profile)
 	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
 	if err != nil {
 		return nil, err
 	}
 
-	d := backend.DatastoreObject{
+	d := model.KVPair{
 		Key: k,
-		Object: backend.Profile{
-			Rules: backend.ProfileRules{
+		Value: model.Profile{
+			Rules: model.ProfileRules{
 				InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 				OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
 			},
@@ -118,9 +118,9 @@ func (h *profiles) convertAPIToDatastoreObject(a interface{}) (*backend.Datastor
 }
 
 // Convert a Backend Profile structure to an API Profile structure
-func (h *profiles) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
-	bp := d.Object.(backend.Profile)
-	bk := d.Key.(backend.ProfileKey)
+func (h *profiles) convertKVPairToAPI(d *model.KVPair) (interface{}, error) {
+	bp := d.Value.(model.Profile)
+	bk := d.Key.(model.ProfileKey)
 
 	ap := api.NewProfile()
 	ap.Metadata.Name = bk.Name

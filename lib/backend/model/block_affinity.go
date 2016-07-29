@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ type BlockAffinityKey struct {
 	Host string       `json:"-"`
 }
 
-func (key BlockAffinityKey) asEtcdKey() (string, error) {
+func (key BlockAffinityKey) DefaultPath() (string, error) {
 	if key.CIDR.IP == nil || key.Host == "" {
 		return "", common.ErrorInsufficientIdentifiers{}
 	}
@@ -43,8 +43,8 @@ func (key BlockAffinityKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key BlockAffinityKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key BlockAffinityKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key BlockAffinityKey) valueType() reflect.Type {
@@ -55,7 +55,7 @@ type BlockAffinityListOptions struct {
 	Host string
 }
 
-func (options BlockAffinityListOptions) asEtcdKeyRoot() string {
+func (options BlockAffinityListOptions) DefaultPathRoot() string {
 	k := "/calico/ipam/v2/host/"
 	if options.Host != "" {
 		k = k + options.Host
@@ -63,7 +63,7 @@ func (options BlockAffinityListOptions) asEtcdKeyRoot() string {
 	return k
 }
 
-func (options BlockAffinityListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options BlockAffinityListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get Block affinity key from %s", ekey)
 	r := matchBlockAffinity.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

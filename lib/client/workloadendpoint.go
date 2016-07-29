@@ -16,7 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	. "github.com/tigera/libcalico-go/lib/common"
 )
 
@@ -78,9 +78,9 @@ func (w *workloadEndpoints) List(metadata api.WorkloadEndpointMetadata) (*api.Wo
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointListInterface
-func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (backend.ListInterface, error) {
+func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
-	l := backend.WorkloadEndpointListOptions{
+	l := model.WorkloadEndpointListOptions{
 		Hostname:       hm.Hostname,
 		OrchestratorID: hm.OrchestratorID,
 		WorkloadID:     hm.WorkloadID,
@@ -90,9 +90,9 @@ func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (backe
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointKeyInterface
-func (w *workloadEndpoints) convertMetadataToKeyInterface(m interface{}) (backend.KeyInterface, error) {
+func (w *workloadEndpoints) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
-	k := backend.WorkloadEndpointKey{
+	k := model.WorkloadEndpointKey{
 		Hostname:       hm.Hostname,
 		OrchestratorID: hm.OrchestratorID,
 		WorkloadID:     hm.WorkloadID,
@@ -102,7 +102,7 @@ func (w *workloadEndpoints) convertMetadataToKeyInterface(m interface{}) (backen
 }
 
 // Convert an API WorkloadEndpoint structure to a Backend WorkloadEndpoint structure
-func (w *workloadEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreObject, error) {
+func (w *workloadEndpoints) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ah := a.(api.WorkloadEndpoint)
 	k, err := w.convertMetadataToKeyInterface(ah.Metadata)
 	if err != nil {
@@ -119,9 +119,9 @@ func (w *workloadEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend
 		}
 	}
 
-	d := backend.DatastoreObject{
+	d := model.KVPair{
 		Key: k,
-		Object: backend.WorkloadEndpoint{
+		Value: model.WorkloadEndpoint{
 			Labels:     ah.Metadata.Labels,
 			State:      "active",
 			Name:       ah.Spec.InterfaceName,
@@ -136,9 +136,9 @@ func (w *workloadEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend
 }
 
 // Convert a Backend WorkloadEndpoint structure to an API WorkloadEndpoint structure
-func (w *workloadEndpoints) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
-	bh := d.Object.(backend.WorkloadEndpoint)
-	bk := d.Key.(backend.WorkloadEndpointKey)
+func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (interface{}, error) {
+	bh := d.Value.(model.WorkloadEndpoint)
+	bk := d.Key.(model.WorkloadEndpointKey)
 
 	n := bh.IPv4Nets
 	n = append(n, bh.IPv6Nets...)

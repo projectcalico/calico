@@ -16,7 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	. "github.com/tigera/libcalico-go/lib/common"
 )
 
@@ -98,9 +98,9 @@ func (h *hostEndpoints) List(metadata api.HostEndpointMetadata) (*api.HostEndpoi
 }
 
 // Convert a HostEndpointMetadata to a HostEndpointListInterface
-func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (backend.ListInterface, error) {
+func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
 	hm := m.(api.HostEndpointMetadata)
-	l := backend.HostEndpointListOptions{
+	l := model.HostEndpointListOptions{
 		Hostname:   hm.Hostname,
 		EndpointID: hm.Name,
 	}
@@ -108,9 +108,9 @@ func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (backend.L
 }
 
 // Convert a HostEndpointMetadata to a HostEndpointKeyInterface
-func (h *hostEndpoints) convertMetadataToKeyInterface(m interface{}) (backend.KeyInterface, error) {
+func (h *hostEndpoints) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
 	hm := m.(api.HostEndpointMetadata)
-	k := backend.HostEndpointKey{
+	k := model.HostEndpointKey{
 		Hostname:   hm.Hostname,
 		EndpointID: hm.Name,
 	}
@@ -118,7 +118,7 @@ func (h *hostEndpoints) convertMetadataToKeyInterface(m interface{}) (backend.Ke
 }
 
 // Convert an API HostEndpoint structure to a Backend HostEndpoint structure
-func (h *hostEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreObject, error) {
+func (h *hostEndpoints) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ah := a.(api.HostEndpoint)
 	k, err := h.convertMetadataToKeyInterface(ah.Metadata)
 	if err != nil {
@@ -135,9 +135,9 @@ func (h *hostEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend.Dat
 		}
 	}
 
-	d := backend.DatastoreObject{
+	d := model.KVPair{
 		Key: k,
-		Object: backend.HostEndpoint{
+		Value: model.HostEndpoint{
 			Labels: ah.Metadata.Labels,
 
 			Name:              ah.Spec.InterfaceName,
@@ -151,9 +151,9 @@ func (h *hostEndpoints) convertAPIToDatastoreObject(a interface{}) (*backend.Dat
 }
 
 // Convert a Backend HostEndpoint structure to an API HostEndpoint structure
-func (h *hostEndpoints) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
-	bh := d.Object.(backend.HostEndpoint)
-	bk := d.Key.(backend.HostEndpointKey)
+func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (interface{}, error) {
+	bh := d.Value.(model.HostEndpoint)
+	bk := d.Key.(model.HostEndpointKey)
 
 	ips := bh.ExpectedIPv4Addrs
 	ips = append(ips, bh.ExpectedIPv6Addrs...)

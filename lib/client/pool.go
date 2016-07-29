@@ -16,7 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 // PoolInterface has methods to work with Pool resources.
@@ -77,25 +77,25 @@ func (h *pools) List(metadata api.PoolMetadata) (*api.PoolList, error) {
 }
 
 // Convert a PoolMetadata to a PoolListInterface
-func (h *pools) convertMetadataToListInterface(m interface{}) (backend.ListInterface, error) {
+func (h *pools) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
 	pm := m.(api.PoolMetadata)
-	l := backend.PoolListOptions{
+	l := model.PoolListOptions{
 		CIDR: pm.CIDR,
 	}
 	return l, nil
 }
 
 // Convert a PoolMetadata to a PoolKeyInterface
-func (h *pools) convertMetadataToKeyInterface(m interface{}) (backend.KeyInterface, error) {
+func (h *pools) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
 	pm := m.(api.PoolMetadata)
-	k := backend.PoolKey{
+	k := model.PoolKey{
 		CIDR: pm.CIDR,
 	}
 	return k, nil
 }
 
 // Convert an API Pool structure to a Backend Pool structure
-func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreObject, error) {
+func (h *pools) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ap := a.(api.Pool)
 	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
 	if err != nil {
@@ -110,9 +110,9 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 		ipipInterface = ""
 	}
 
-	d := backend.DatastoreObject{
+	d := model.KVPair{
 		Key: k,
-		Object: backend.Pool{
+		Value: model.Pool{
 			CIDR:          ap.Metadata.CIDR,
 			IPIPInterface: ipipInterface,
 			Masquerade:    ap.Spec.NATOutgoing,
@@ -125,8 +125,8 @@ func (h *pools) convertAPIToDatastoreObject(a interface{}) (*backend.DatastoreOb
 }
 
 // Convert a Backend Pool structure to an API Pool structure
-func (h *pools) convertDatastoreObjectToAPI(d *backend.DatastoreObject) (interface{}, error) {
-	backendPool := d.Object.(backend.Pool)
+func (h *pools) convertKVPairToAPI(d *model.KVPair) (interface{}, error) {
+	backendPool := d.Value.(model.Pool)
 
 	apiPool := api.NewPool()
 	apiPool.Metadata.CIDR = backendPool.CIDR

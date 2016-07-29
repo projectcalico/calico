@@ -22,11 +22,12 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 // Client contains
 type Client struct {
-	backend *backend.Client
+	backend backend.Client
 }
 
 // New returns a connected Client.
@@ -92,10 +93,10 @@ func LoadClientConfig(f *string) (*api.ClientConfig, error) {
 // Interface used to convert between backand and API representations of our
 // objects.
 type conversionHelper interface {
-	convertAPIToDatastoreObject(interface{}) (*backend.DatastoreObject, error)
-	convertDatastoreObjectToAPI(*backend.DatastoreObject) (interface{}, error)
-	convertMetadataToKeyInterface(interface{}) (backend.KeyInterface, error)
-	convertMetadataToListInterface(interface{}) (backend.ListInterface, error)
+	convertAPIToKVPair(interface{}) (*model.KVPair, error)
+	convertKVPairToAPI(*model.KVPair) (interface{}, error)
+	convertMetadataToKeyInterface(interface{}) (model.Key, error)
+	convertMetadataToListInterface(interface{}) (model.ListInterface, error)
 }
 
 //TODO Plumb through revision data so that front end can do atomic operations.
@@ -104,7 +105,7 @@ type conversionHelper interface {
 // typed interface.  This assumes a 1:1 mapping between the API resource and
 // the backend object.
 func (c *Client) create(apiObject interface{}, helper conversionHelper) error {
-	if d, err := helper.convertAPIToDatastoreObject(apiObject); err != nil {
+	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Create(d); err != nil {
 		return err
@@ -116,7 +117,7 @@ func (c *Client) create(apiObject interface{}, helper conversionHelper) error {
 // Untyped interface for updating an API object.  This is called from the
 // typed interface.
 func (c *Client) update(apiObject interface{}, helper conversionHelper) error {
-	if d, err := helper.convertAPIToDatastoreObject(apiObject); err != nil {
+	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Update(d); err != nil {
 		return err
@@ -128,7 +129,7 @@ func (c *Client) update(apiObject interface{}, helper conversionHelper) error {
 // Untyped interface for applying an API object.  This is called from the
 // typed interface.
 func (c *Client) apply(apiObject interface{}, helper conversionHelper) error {
-	if d, err := helper.convertAPIToDatastoreObject(apiObject); err != nil {
+	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Apply(d); err != nil {
 		return err
@@ -142,7 +143,7 @@ func (c *Client) apply(apiObject interface{}, helper conversionHelper) error {
 func (c *Client) delete(metadata interface{}, helper conversionHelper) error {
 	if k, err := helper.convertMetadataToKeyInterface(metadata); err != nil {
 		return err
-	} else if err := c.backend.Delete(&backend.DatastoreObject{Key: k}); err != nil {
+	} else if err := c.backend.Delete(&model.KVPair{Key: k}); err != nil {
 		return err
 	} else {
 		return nil
@@ -156,7 +157,7 @@ func (c *Client) get(metadata interface{}, helper conversionHelper) (interface{}
 		return nil, err
 	} else if d, err := c.backend.Get(k); err != nil {
 		return nil, err
-	} else if a, err := helper.convertDatastoreObjectToAPI(d); err != nil {
+	} else if a, err := helper.convertKVPairToAPI(d); err != nil {
 		return nil, err
 	} else {
 		return a, nil
@@ -178,7 +179,7 @@ func (c *Client) list(metadata interface{}, helper conversionHelper, listp inter
 		i := reflect.ValueOf(f.Interface())
 
 		for _, d := range dos {
-			if a, err := helper.convertDatastoreObjectToAPI(d); err != nil {
+			if a, err := helper.convertKVPairToAPI(d); err != nil {
 				return err
 			} else {
 				i = reflect.Append(i, reflect.ValueOf(a).Elem())

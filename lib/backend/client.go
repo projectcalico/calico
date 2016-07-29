@@ -15,92 +15,23 @@
 package backend
 
 import (
-	"reflect"
-
 	"github.com/tigera/libcalico-go/lib/api"
+	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
 
-// Interface used to calculate a datastore key.
-type KeyInterface interface {
-	asEtcdKey() (string, error)
-	asEtcdDeleteKey() (string, error)
-	valueType() reflect.Type
-}
-
-// Interface used to perform datastore lookups.
-type ListInterface interface {
-	asEtcdKeyRoot() string
-	keyFromEtcdResult(key string) KeyInterface
-}
-
-// Encapsulated datastore key interface with serializable object.
-type DatastoreObject struct {
-	Key      KeyInterface
-	Object   interface{}
-	Revision interface{}
-}
-
-type DatastoreReadWriteInterface interface {
-	Create(object *DatastoreObject) (*DatastoreObject, error)
-	Update(object *DatastoreObject) (*DatastoreObject, error)
-	Apply(object *DatastoreObject) (*DatastoreObject, error)
-	Delete(object *DatastoreObject) error
-	Get(key KeyInterface) (*DatastoreObject, error)
-	List(list ListInterface) ([]*DatastoreObject, error)
-}
-
-// Backend client data
-type Client struct {
-	// Calico client config
-	config *api.ClientConfig
-
-	// ---- Internal package data ----
-	rw DatastoreReadWriteInterface
+// Client is the interface that a backend datastore must implement.
+type Client interface {
+	Create(object *KVPair) (*KVPair, error)
+	Update(object *KVPair) (*KVPair, error)
+	Apply(object *KVPair) (*KVPair, error)
+	Delete(object *KVPair) error
+	Get(key Key) (*KVPair, error)
+	List(list ListInterface) ([]*KVPair, error)
 }
 
 // NewClient creates a new backend datastore client.
-func NewClient(config *api.ClientConfig) (*Client, error) {
-	c := Client{config: config}
-
+func NewClient(config *api.ClientConfig) (c Client, err error) {
 	// Currently backend client is only supported by etcd.
-	rw, err := ConnectEtcdClient(config)
-	if err != nil {
-		return nil, err
-	}
-	c.rw = rw
-
-	return &c, nil
-}
-
-// Create an entry in the datastore.  This errors if the entry already exists.
-func (c *Client) Create(d *DatastoreObject) (*DatastoreObject, error) {
-	return c.rw.Create(d)
-}
-
-// Update an existing entry in the datastore.  This errors if the entry does
-// not exist.
-func (c *Client) Update(d *DatastoreObject) (*DatastoreObject, error) {
-	return c.rw.Update(d)
-}
-
-// Set an existing entry in the datastore.  This ignores whether an entry already
-// exists.
-func (c *Client) Apply(d *DatastoreObject) (*DatastoreObject, error) {
-	return c.rw.Apply(d)
-}
-
-// Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *Client) Delete(d *DatastoreObject) error {
-	return c.rw.Delete(d)
-}
-
-// Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *Client) Get(k KeyInterface) (*DatastoreObject, error) {
-	return c.rw.Get(k)
-}
-
-// List entries in the datastore.  This may return an empty list of there are
-// no entries matching the request in the ListInterface.
-func (c *Client) List(l ListInterface) ([]*DatastoreObject, error) {
-	return c.rw.List(l)
+	c, err = ConnectEtcdClient(config)
+	return
 }

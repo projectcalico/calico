@@ -12,20 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"encoding/json"
 	"errors"
-	"reflect"
-
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/common"
+	"reflect"
 )
+
+// Key represents a parsed datastore key.
+type Key interface {
+	// DefaultPath() returns a default stringified path for this object,
+	// suitable for use in most datastores (and used on the Felix API,
+	// for example).
+	DefaultPath() (string, error)
+	// DefaultDeletePath() returns a default stringified path for deleting
+	// this object.
+	DefaultDeletePath() (string, error)
+	valueType() reflect.Type
+}
+
+// Interface used to perform datastore lookups.
+type ListInterface interface {
+	// DefaultPathRoot() returns a default stringified root path, i.e. path
+	// to the directory containing all the keys to be listed.
+	DefaultPathRoot() string
+	ParseDefaultKey(key string) Key
+}
+
+// KVPair holds a parsed key and value as well as datastore specific revision
+// information.
+type KVPair struct {
+	Key      Key
+	Value    interface{}
+	Revision interface{}
+}
 
 // ParseKey parses a datastore key into one of the <Type>Key structs.
 // Returns nil if the string doesn't match one of our objects.
-func ParseKey(key string) KeyInterface {
+func ParseKey(key string) Key {
 	if m := matchWorkloadEndpoint.FindStringSubmatch(key); m != nil {
 		return WorkloadEndpointKey{
 			Hostname:       m[1],
@@ -58,7 +85,7 @@ func ParseKey(key string) KeyInterface {
 	return nil
 }
 
-func ParseValue(key KeyInterface, rawData []byte) (interface{}, error) {
+func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	value := reflect.New(key.valueType())
 	iface := value.Interface()
 	err := json.Unmarshal(rawData, iface)
@@ -74,11 +101,27 @@ func ParseValue(key KeyInterface, rawData []byte) (interface{}, error) {
 	return iface, nil
 }
 
-func ParseKeyValue(key string, rawData []byte) (KeyInterface, interface{}, error) {
+func ParseKeyValue(key string, rawData []byte) (Key, interface{}, error) {
 	parsedKey := ParseKey(key)
 	if parsedKey == nil {
 		return nil, nil, errors.New("Failed to parse key")
 	}
 	value, err := ParseValue(parsedKey, rawData)
 	return parsedKey, value, err
+}
+
+type CreateOverrider interface {
+	Create(c client, d *KVPair) (*KVPair, error)
+}
+
+type UpdateOverrider interface {
+	Update(c client, d *KVPair) (*KVPair, error)
+}
+
+type ApplyOverrider interface {
+	Apply(c client, d *KVPair) (*KVPair, error)
+}
+
+type GetOverrider interface {
+	Get(c client, k Key) (*KVPair, error)
 }

@@ -20,7 +20,7 @@ import (
 	"os"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
 
@@ -245,7 +245,7 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 	blockCIDR := getBlockCIDRForAddress(args.IP)
 	glog.V(3).Infof("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err := c.client.backend.Get(backend.BlockKey{blockCIDR})
+		obj, err := c.client.backend.Get(model.BlockKey{blockCIDR})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Block doesn't exist, we need to create it.  First,
@@ -277,7 +277,7 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 				return err
 			}
 		}
-		block := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		block := allocationBlock{obj.Value.(model.AllocationBlock)}
 		err = block.assign(args.IP, args.HandleID, args.Attrs, hostname)
 		if err != nil {
 			glog.Errorf("Failed to assign address %s: %s", args.IP, err)
@@ -289,9 +289,9 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 			c.incrementHandle(*args.HandleID, blockCIDR, 1)
 		}
 
-		// Update the block using the original DatastoreObject
+		// Update the block using the original KVPair
 		// to do a CAS.
-		obj.Object = block.AllocationBlock
+		obj.Value = block.AllocationBlock
 		_, err = c.client.backend.Update(obj)
 		if err != nil {
 			glog.Warningf("Update failed on block %s", block.CIDR.String())
@@ -325,7 +325,7 @@ func (c ipams) ReleaseIPs(ips []common.IP) ([]common.IP, error) {
 
 func (c ipams) releaseIPsFromBlock(ips []common.IP, blockCIDR common.IPNet) ([]common.IP, error) {
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err := c.client.backend.Get(backend.BlockKey{CIDR: blockCIDR})
+		obj, err := c.client.backend.Get(model.BlockKey{CIDR: blockCIDR})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// The block does not exist - all addresses must be unassigned.
@@ -336,8 +336,8 @@ func (c ipams) releaseIPsFromBlock(ips []common.IP, blockCIDR common.IPNet) ([]c
 			}
 		}
 
-		// Block exists - get the allocationBlock from the DatastoreObject.
-		b := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		// Block exists - get the allocationBlock from the KVPair.
+		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 		// Release the IPs.
 		unallocated, handles, err2 := b.release(ips)
@@ -355,12 +355,12 @@ func (c ipams) releaseIPsFromBlock(ips []common.IP, blockCIDR common.IPNet) ([]c
 		var updateErr error
 		if b.empty() && b.HostAffinity == nil {
 			glog.V(3).Infof("Deleting non-affine block '%s'", b.CIDR.String())
-			updateErr = c.client.backend.Delete(&backend.DatastoreObject{
-				Key: backend.BlockKey{CIDR: blockCIDR},
+			updateErr = c.client.backend.Delete(&model.KVPair{
+				Key: model.BlockKey{CIDR: blockCIDR},
 			})
 		} else {
 			glog.V(3).Infof("Updating assignments in block '%s'", b.CIDR.String())
-			obj.Object = b.AllocationBlock
+			obj.Value = b.AllocationBlock
 			_, updateErr = c.client.backend.Update(obj)
 		}
 
@@ -392,14 +392,14 @@ func (c ipams) assignFromExistingBlock(
 	var ips []common.IP
 	for i := 0; i < ipamEtcdRetries; i++ {
 		glog.V(4).Infof("Auto-assign from %s - retry %d", blockCIDR.String(), i)
-		obj, err := c.client.backend.Get(backend.BlockKey{blockCIDR})
+		obj, err := c.client.backend.Get(model.BlockKey{blockCIDR})
 		if err != nil {
 			glog.Errorf("Error getting block: %s", err)
 			return nil, err
 		}
 
 		// Pull out the block.
-		b := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 		glog.V(4).Infof("Got block: %v", b)
 		ips, err = b.autoAssign(num, handleID, host, attrs, true)
@@ -418,8 +418,8 @@ func (c ipams) assignFromExistingBlock(
 		}
 
 		// Update the block using CAS by passing back the original
-		// DatastoreObject.
-		obj.Object = b.AllocationBlock
+		// KVPair.
+		obj.Value = b.AllocationBlock
 		_, err = c.client.backend.Update(obj)
 		if err != nil {
 			glog.V(2).Infof("Failed to update block '%s' - try again", b.CIDR.String())
@@ -612,7 +612,7 @@ func (c ipams) hostBlockPairs(pool common.IPNet) (map[string]string, error) {
 	pairs := map[string]string{}
 
 	// Get all blocks and their affinities.
-	objs, err := c.client.backend.List(backend.BlockAffinityListOptions{})
+	objs, err := c.client.backend.List(model.BlockAffinityListOptions{})
 	if err != nil {
 		glog.Errorf("Error querying block affinities: %s", err)
 		return nil, err
@@ -622,7 +622,7 @@ func (c ipams) hostBlockPairs(pool common.IPNet) (map[string]string, error) {
 	// of blockCidr -> host.
 	glog.V(4).Infof("Getting block -> host mappings")
 	for _, o := range objs {
-		k := o.Key.(backend.BlockAffinityKey)
+		k := o.Key.(model.BlockAffinityKey)
 		pairs[k.CIDR.String()] = k.Host
 		glog.V(4).Infof("Block %s -> %s", k.CIDR.String(), k.Host)
 	}
@@ -633,16 +633,16 @@ func (c ipams) hostBlockPairs(pool common.IPNet) (map[string]string, error) {
 // IpsByHandle returns a list of all IP addresses that have been
 // assigned using the provided handle.
 func (c ipams) IPsByHandle(handleID string) ([]common.IP, error) {
-	obj, err := c.client.backend.Get(backend.IPAMHandleKey{HandleID: handleID})
+	obj, err := c.client.backend.Get(model.IPAMHandleKey{HandleID: handleID})
 	if err != nil {
 		return nil, err
 	}
-	handle := allocationHandle{obj.Object.(backend.IPAMHandle)}
+	handle := allocationHandle{obj.Value.(model.IPAMHandle)}
 
 	assignments := []common.IP{}
 	for k, _ := range handle.Block {
 		_, blockCIDR, _ := common.ParseCIDR(k)
-		obj, err := c.client.backend.Get(backend.BlockKey{*blockCIDR})
+		obj, err := c.client.backend.Get(model.BlockKey{*blockCIDR})
 		if err != nil {
 			glog.Warningf("Couldn't read block %s referenced by handle %s", blockCIDR, handleID)
 			continue
@@ -650,7 +650,7 @@ func (c ipams) IPsByHandle(handleID string) ([]common.IP, error) {
 
 		// Pull out the allocationBlock and get all the assignments
 		// from it.
-		b := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 		assignments = append(assignments, b.ipsByHandle(handleID)...)
 	}
 	return assignments, nil
@@ -660,11 +660,11 @@ func (c ipams) IPsByHandle(handleID string) ([]common.IP, error) {
 // using the provided handle.
 func (c ipams) ReleaseByHandle(handleID string) error {
 	glog.V(2).Infof("Releasing all IPs with handle '%s'", handleID)
-	obj, err := c.client.backend.Get(backend.IPAMHandleKey{HandleID: handleID})
+	obj, err := c.client.backend.Get(model.IPAMHandleKey{HandleID: handleID})
 	if err != nil {
 		return err
 	}
-	handle := allocationHandle{obj.Object.(backend.IPAMHandle)}
+	handle := allocationHandle{obj.Value.(model.IPAMHandle)}
 
 	for blockStr, _ := range handle.Block {
 		_, blockCIDR, _ := common.ParseCIDR(blockStr)
@@ -675,7 +675,7 @@ func (c ipams) ReleaseByHandle(handleID string) error {
 
 func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err := c.client.backend.Get(backend.BlockKey{CIDR: blockCIDR})
+		obj, err := c.client.backend.Get(model.BlockKey{CIDR: blockCIDR})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Block doesn't exist, so all addresses are already
@@ -686,7 +686,7 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 				return err
 			}
 		}
-		block := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		block := allocationBlock{obj.Value.(model.AllocationBlock)}
 		num := block.releaseByHandle(handleID)
 		if num == 0 {
 			// Block has no addresses with this handle, so
@@ -695,8 +695,8 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 		}
 
 		if block.empty() && block.HostAffinity == nil {
-			err = c.client.backend.Delete(&backend.DatastoreObject{
-				Key: backend.BlockKey{blockCIDR},
+			err = c.client.backend.Delete(&model.KVPair{
+				Key: model.BlockKey{blockCIDR},
 			})
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
@@ -707,8 +707,8 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 			}
 		} else {
 			// Compare and swap the AllocationBlock using the original
-			// DatastoreObject read from before.
-			obj.Object = block.AllocationBlock
+			// KVPair read from before.
+			obj.Value = block.AllocationBlock
 			_, err = c.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceUpdateConflict); ok {
@@ -730,21 +730,21 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 }
 
 func (c ipams) incrementHandle(handleID string, blockCIDR common.IPNet, num int) error {
-	var obj *backend.DatastoreObject
+	var obj *model.KVPair
 	var err error
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err = c.client.backend.Get(backend.IPAMHandleKey{HandleID: handleID})
+		obj, err = c.client.backend.Get(model.IPAMHandleKey{HandleID: handleID})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 				// Handle doesn't exist - create it.
 				glog.V(2).Infof("Creating new handle:", handleID)
-				bh := backend.IPAMHandle{
+				bh := model.IPAMHandle{
 					HandleID: handleID,
 					Block:    map[string]int{},
 				}
-				obj = &backend.DatastoreObject{
-					Key:    backend.IPAMHandleKey{HandleID: handleID},
-					Object: bh,
+				obj = &model.KVPair{
+					Key:   model.IPAMHandleKey{HandleID: handleID},
+					Value: bh,
 				}
 			} else {
 				// Unexpected error reading handle.
@@ -752,14 +752,14 @@ func (c ipams) incrementHandle(handleID string, blockCIDR common.IPNet, num int)
 			}
 		}
 
-		// Get the handle from the DatastoreObject.
-		handle := allocationHandle{obj.Object.(backend.IPAMHandle)}
+		// Get the handle from the KVPair.
+		handle := allocationHandle{obj.Value.(model.IPAMHandle)}
 
 		// Increment the handle for this block.
 		handle.incrementBlock(blockCIDR, num)
 
-		// Compare and swap the handle using the DatastoreObject from above.
-		obj.Object = handle.IPAMHandle
+		// Compare and swap the handle using the KVPair from above.
+		obj.Value = handle.IPAMHandle
 		_, err = c.client.backend.Apply(obj)
 		if err != nil {
 			continue
@@ -772,11 +772,11 @@ func (c ipams) incrementHandle(handleID string, blockCIDR common.IPNet, num int)
 
 func (c ipams) decrementHandle(handleID string, blockCIDR common.IPNet, num int) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
-		obj, err := c.client.backend.Get(backend.IPAMHandleKey{HandleID: handleID})
+		obj, err := c.client.backend.Get(model.IPAMHandleKey{HandleID: handleID})
 		if err != nil {
 			glog.Fatalf("Can't decrement block because it doesn't exist")
 		}
-		handle := allocationHandle{obj.Object.(backend.IPAMHandle)}
+		handle := allocationHandle{obj.Value.(model.IPAMHandle)}
 
 		_, err = handle.decrementBlock(blockCIDR, num)
 		if err != nil {
@@ -786,12 +786,12 @@ func (c ipams) decrementHandle(handleID string, blockCIDR common.IPNet, num int)
 		// Update / Delete as appropriate.
 		if handle.empty() {
 			glog.V(3).Infof("Deleting handle: %s", handleID)
-			err = c.client.backend.Delete(&backend.DatastoreObject{
-				Key: backend.IPAMHandleKey{HandleID: handleID},
+			err = c.client.backend.Delete(&model.KVPair{
+				Key: model.IPAMHandleKey{HandleID: handleID},
 			})
 		} else {
 			glog.V(3).Infof("Updating handle: %s", handleID)
-			obj.Object = handle.IPAMHandle
+			obj.Value = handle.IPAMHandle
 			_, err = c.client.backend.Update(obj)
 		}
 
@@ -809,12 +809,12 @@ func (c ipams) decrementHandle(handleID string, blockCIDR common.IPNet, num int)
 // upon assignment.
 func (c ipams) GetAssignmentAttributes(addr common.IP) (map[string]string, error) {
 	blockCIDR := getBlockCIDRForAddress(addr)
-	obj, err := c.client.backend.Get(backend.BlockKey{blockCIDR})
+	obj, err := c.client.backend.Get(model.BlockKey{blockCIDR})
 	if err != nil {
 		glog.Errorf("Error reading block %s: %s", blockCIDR, err)
 		return nil, errors.New(fmt.Sprintf("%s is not assigned", addr))
 	}
-	block := allocationBlock{obj.Object.(backend.AllocationBlock)}
+	block := allocationBlock{obj.Value.(model.AllocationBlock)}
 	return block.attributesForIP(addr)
 }
 
@@ -822,7 +822,7 @@ func (c ipams) GetAssignmentAttributes(addr common.IP) (map[string]string, error
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
 func (c ipams) GetIPAMConfig() (*IPAMConfig, error) {
-	obj, err := c.client.backend.Get(backend.IPAMConfigKey{})
+	obj, err := c.client.backend.Get(model.IPAMConfigKey{})
 	if err != nil {
 		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
 			// IPAMConfig has not been explicitly set.  Return
@@ -832,7 +832,7 @@ func (c ipams) GetIPAMConfig() (*IPAMConfig, error) {
 		glog.Errorf("Error getting IPAMConfig: %s", err)
 		return nil, err
 	}
-	return c.convertBackendToIPAMConfig(obj.Object.(backend.IPAMConfig)), nil
+	return c.convertBackendToIPAMConfig(obj.Value.(model.IPAMConfig)), nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
@@ -851,15 +851,15 @@ func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
 		return errors.New("Cannot disable 'StrictAffinity' and 'AutoAllocateBlocks' at the same time")
 	}
 
-	allObjs, err := c.client.backend.List(backend.BlockListOptions{})
+	allObjs, err := c.client.backend.List(model.BlockListOptions{})
 	if len(allObjs) != 0 {
 		return errors.New("Cannot change IPAM config while allocations exist")
 	}
 
 	// Write to datastore.
-	obj := backend.DatastoreObject{
-		Key:    backend.IPAMConfigKey{},
-		Object: c.convertIPAMConfigToBackend(cfg),
+	obj := model.KVPair{
+		Key:   model.IPAMConfigKey{},
+		Value: c.convertIPAMConfigToBackend(cfg),
 	}
 	_, err = c.client.backend.Apply(&obj)
 	if err != nil {
@@ -869,14 +869,14 @@ func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
 	return nil
 }
 
-func (c ipams) convertIPAMConfigToBackend(cfg IPAMConfig) *backend.IPAMConfig {
-	return &backend.IPAMConfig{
+func (c ipams) convertIPAMConfigToBackend(cfg IPAMConfig) *model.IPAMConfig {
+	return &model.IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
 	}
 }
 
-func (c ipams) convertBackendToIPAMConfig(cfg backend.IPAMConfig) *IPAMConfig {
+func (c ipams) convertBackendToIPAMConfig(cfg model.IPAMConfig) *IPAMConfig {
 	return &IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,

@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
 
@@ -33,7 +33,7 @@ type blockReaderWriter struct {
 func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *common.IPNet) ([]common.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
-	opts := backend.BlockListOptions{IPVersion: ver.Number}
+	opts := model.BlockListOptions{IPVersion: ver.Number}
 	datastoreObjs, err := rw.client.backend.List(opts)
 	if err != nil {
 		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
@@ -50,7 +50,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *co
 	// Iterate through and extract the block CIDRs.
 	ids := []common.IPNet{}
 	for _, o := range datastoreObjs {
-		b := o.Object.(backend.AllocationBlock)
+		b := o.Value.(model.AllocationBlock)
 		ids = append(ids, b.CIDR)
 	}
 	return ids, nil
@@ -104,7 +104,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			glog.V(4).Infof("Getting block: %s", subnet.String())
-			key := backend.BlockKey{CIDR: *subnet}
+			key := model.BlockKey{CIDR: subnet}
 			_, err := rw.client.backend.Get(key)
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
@@ -125,9 +125,9 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string, config IPAMConfig) error {
 	// Claim the block affinity for this host.
 	glog.V(2).Infof("Host %s claiming block affinity for %s", host, subnet)
-	obj := backend.DatastoreObject{
-		Key:    backend.BlockAffinityKey{Host: host, CIDR: subnet},
-		Object: backend.BlockAffinity{},
+	obj := model.KVPair{
+		Key:   model.BlockAffinityKey{Host: host, CIDR: subnet},
+		Value: model.BlockAffinity{},
 	}
 	_, err := rw.client.backend.Create(&obj)
 
@@ -137,23 +137,23 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 	block.StrictAffinity = config.StrictAffinity
 
 	// Create the new block in the datastore.
-	o := backend.DatastoreObject{
-		Key:    backend.BlockKey{block.CIDR},
-		Object: block.AllocationBlock,
+	o := model.KVPair{
+		Key:   model.BlockKey{block.CIDR},
+		Value: block.AllocationBlock,
 	}
 	_, err = rw.client.backend.Create(&o)
 	if err != nil {
 		if _, ok := err.(common.ErrorResourceAlreadyExists); ok {
 			// Block already exists, check affinity.
 			glog.Warningf("Problem claiming block affinity:", err)
-			obj, err := rw.client.backend.Get(backend.BlockKey{subnet})
+			obj, err := rw.client.backend.Get(model.BlockKey{subnet})
 			if err != nil {
 				glog.Errorf("Error reading block:", err)
 				return err
 			}
 
 			// Pull out the allocationBlock object.
-			b := allocationBlock{obj.Object.(backend.AllocationBlock)}
+			b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 			if b.HostAffinity != nil && *b.HostAffinity == host {
 				// Block has affinity to this host, meaning another
@@ -163,8 +163,8 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 			}
 
 			// Some other host beat us to this block.  Cleanup and return error.
-			err = rw.client.backend.Delete(&backend.DatastoreObject{
-				Key: backend.BlockAffinityKey{Host: host, CIDR: b.CIDR},
+			err = rw.client.backend.Delete(&model.KVPair{
+				Key: model.BlockAffinityKey{Host: host, CIDR: b.CIDR},
 			})
 			if err != nil {
 				glog.Errorf("Error cleaning up block affinity: %s", err)
@@ -180,15 +180,15 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet common.IPNet, host string,
 
 func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.IPNet) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
-		// Read the backend.DatastoreObject containing the block
+		// Read the model.KVPair containing the block
 		// and pull out the allocationBlock object.  We need to hold on to this
 		// so that we can pass it back to the datastore on Update.
-		obj, err := rw.client.backend.Get(backend.BlockKey{CIDR: blockCIDR})
+		obj, err := rw.client.backend.Get(model.BlockKey{CIDR: blockCIDR})
 		if err != nil {
 			glog.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
 			return err
 		}
-		b := allocationBlock{obj.Object.(backend.AllocationBlock)}
+		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 		// Check that the block affinity matches the given affinity.
 		if b.HostAffinity != nil && *b.HostAffinity != host {
@@ -198,8 +198,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 
 		if b.empty() {
 			// If the block is empty, we can delete it.
-			err := rw.client.backend.Delete(&backend.DatastoreObject{
-				Key: backend.BlockKey{CIDR: b.CIDR},
+			err := rw.client.backend.Delete(&model.KVPair{
+				Key: model.BlockKey{CIDR: b.CIDR},
 			})
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
@@ -216,9 +216,9 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 			// non-affine blocks.
 			b.HostAffinity = nil
 
-			// Pass back the original DatastoreObject with the new
+			// Pass back the original KVPair with the new
 			// block information so we can do a CAS.
-			obj.Object = b
+			obj.Value = b
 			_, err = rw.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(common.ErrorResourceUpdateConflict); ok {
@@ -232,8 +232,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 
 		// We've removed / updated the block, so update the host config
 		// to remove the CIDR.
-		err = rw.client.backend.Delete(&backend.DatastoreObject{
-			Key: backend.BlockAffinityKey{Host: host, CIDR: b.CIDR},
+		err = rw.client.backend.Delete(&model.KVPair{
+			Key: model.BlockAffinityKey{Host: host, CIDR: b.CIDR},
 		})
 		if err != nil {
 			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend
+package model
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ type IPAMHandleKey struct {
 	HandleID string `json:"id"`
 }
 
-func (key IPAMHandleKey) asEtcdKey() (string, error) {
+func (key IPAMHandleKey) DefaultPath() (string, error) {
 	if key.HandleID == "" {
 		return "", common.ErrorInsufficientIdentifiers{}
 	}
@@ -40,8 +40,8 @@ func (key IPAMHandleKey) asEtcdKey() (string, error) {
 	return e, nil
 }
 
-func (key IPAMHandleKey) asEtcdDeleteKey() (string, error) {
-	return key.asEtcdKey()
+func (key IPAMHandleKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
 }
 
 func (key IPAMHandleKey) valueType() reflect.Type {
@@ -52,13 +52,13 @@ type IPAMHandleListOptions struct {
 	// TODO: Have some options here?
 }
 
-func (options IPAMHandleListOptions) asEtcdKeyRoot() string {
+func (options IPAMHandleListOptions) DefaultPathRoot() string {
 	k := "/calico/ipam/v2/handle/"
 	// TODO: Allow filtering on individual host?
 	return k
 }
 
-func (options IPAMHandleListOptions) keyFromEtcdResult(ekey string) KeyInterface {
+func (options IPAMHandleListOptions) ParseDefaultKey(ekey string) Key {
 	glog.V(2).Infof("Get IPAM handle key from %s", ekey)
 	r := matchBlock.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

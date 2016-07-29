@@ -18,12 +18,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tigera/libcalico-go/lib/backend"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/common"
 )
 
 type allocationHandle struct {
-	backend.IPAMHandle
+	model.IPAMHandle
 }
 
 func (h allocationHandle) incrementBlock(blockCidr common.IPNet, num int) int {
