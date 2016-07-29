@@ -896,5 +896,6 @@ func decideHostname(host *string) string {
 			glog.Fatalf("Failed to acquire hostname")
 		}
 	}
+	glog.V(4).Infof("Using hostname=%s", hostname)
 	return hostname
 }

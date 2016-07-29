@@ -33,7 +33,7 @@ type blockReaderWriter struct {
 func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *common.IPNet) ([]common.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
-	opts := model.BlockListOptions{IPVersion: ver.Number}
+	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver.Number}
 	datastoreObjs, err := rw.client.backend.List(opts)
 	if err != nil {
 		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
@@ -50,8 +50,8 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *co
 	// Iterate through and extract the block CIDRs.
 	ids := []common.IPNet{}
 	for _, o := range datastoreObjs {
-		b := o.Value.(model.AllocationBlock)
-		ids = append(ids, b.CIDR)
+		k := o.Key.(model.BlockAffinityKey)
+		ids = append(ids, k.CIDR)
 	}
 	return ids, nil
 }
