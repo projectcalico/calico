@@ -25,9 +25,26 @@ import (
 var (
 	matchGlobalConfig = regexp.MustCompile("^/?calico/v1/config/(.+)$")
 	matchHostConfig   = regexp.MustCompile("^/?calico/v1/host/([^/]+)/config/(.+)$")
+	matchReadyFlag    = regexp.MustCompile("^/calico/v1/Ready$")
 	typeGlobalConfig  = rawStringType
 	typeHostConfig    = rawStringType
+	typeReadyFlag     = rawBoolType
 )
+
+type ReadyFlagKey struct {
+}
+
+func (key ReadyFlagKey) DefaultPath() (string, error) {
+	return "/calico/v1/Ready", nil
+}
+
+func (key ReadyFlagKey) DefaultDeletePath() (string, error) {
+	return key.DefaultPath()
+}
+
+func (key ReadyFlagKey) valueType() reflect.Type {
+	return typeReadyFlag
+}
 
 type GlobalConfigKey struct {
 	Name string `json:"-" validate:"required,name"`
