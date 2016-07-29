@@ -152,100 +152,11 @@ type ProfileRules struct {
 	OutboundRules []Rule `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 }
 
-// Convert a Profile KVPair to separate KVPair types for Keys, Labels and Rules.
-func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
-	p := d.Value.(Profile)
-	pk := d.Key.(ProfileKey)
-
-	t = &KVPair{
-		Key:      ProfileTagsKey{pk},
-		Value:    p.Tags,
-		Revision: d.Revision,
-	}
-	l = &KVPair{
-		Key:   ProfileLabelsKey{pk},
-		Value: p.Labels,
-	}
-	r = &KVPair{
-		Key:   ProfileRulesKey{pk},
-		Value: p.Rules,
-	}
-
-	return t, l, r
-}
-
 type client interface {
 	Create(object *KVPair) (*KVPair, error)
 	Update(object *KVPair) (*KVPair, error)
 	Apply(object *KVPair) (*KVPair, error)
 	Get(key Key) (*KVPair, error)
-}
-
-func (_ ProfileKey) Create(c client, d *KVPair) (*KVPair, error) {
-	t, l, r := toTagsLabelsRules(d)
-	if t, err := c.Create(t); err != nil {
-		return nil, err
-	} else if _, err := c.Create(l); err != nil {
-		return nil, err
-	} else if _, err := c.Create(r); err != nil {
-		return nil, err
-	} else {
-		d.Revision = t.Revision
-		return d, nil
-	}
-}
-
-func (_ ProfileKey) Update(c client, d *KVPair) (*KVPair, error) {
-	t, l, r := toTagsLabelsRules(d)
-	if t, err := c.Update(t); err != nil {
-		return nil, err
-	} else if _, err := c.Apply(l); err != nil {
-		return nil, err
-	} else if _, err := c.Apply(r); err != nil {
-		return nil, err
-	} else {
-		d.Revision = t.Revision
-		return d, nil
-	}
-}
-
-func (_ ProfileKey) Apply(c client, d *KVPair) (*KVPair, error) {
-	t, l, r := toTagsLabelsRules(d)
-	if t, err := c.Apply(t); err != nil {
-		return nil, err
-	} else if _, err := c.Apply(l); err != nil {
-		return nil, err
-	} else if _, err := c.Apply(r); err != nil {
-		return nil, err
-	} else {
-		d.Revision = t.Revision
-		return d, nil
-	}
-}
-
-func (_ ProfileKey) Get(c client, k Key) (*KVPair, error) {
-	var t, l, r *KVPair
-	var err error
-	pk := k.(ProfileKey)
-
-	if t, err = c.Get(ProfileTagsKey{pk}); err != nil {
-		return nil, err
-	}
-	d := KVPair{
-		Key: k,
-		Value: Profile{
-			Tags: t.Value.([]string),
-		},
-		Revision: t.Revision,
-	}
-	p := d.Value.(Profile)
-	if l, err = c.Get(ProfileLabelsKey{pk}); err == nil {
-		p.Labels = l.Value.(map[string]string)
-	}
-	if r, err = c.Get(ProfileRulesKey{pk}); err == nil {
-		p.Rules = r.Value.(ProfileRules)
-	}
-	return &d, nil
 }
 
 func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {

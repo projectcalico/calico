@@ -90,7 +90,7 @@ func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (model
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointKeyInterface
-func (w *workloadEndpoints) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
+func (w *workloadEndpoints) convertMetadataToKey(m interface{}) (model.Key, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
 	k := model.WorkloadEndpointKey{
 		Hostname:       hm.Hostname,
@@ -104,7 +104,7 @@ func (w *workloadEndpoints) convertMetadataToKeyInterface(m interface{}) (model.
 // Convert an API WorkloadEndpoint structure to a Backend WorkloadEndpoint structure
 func (w *workloadEndpoints) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ah := a.(api.WorkloadEndpoint)
-	k, err := w.convertMetadataToKeyInterface(ah.Metadata)
+	k, err := w.convertMetadataToKey(ah.Metadata)
 	if err != nil {
 		return nil, err
 	}

@@ -108,7 +108,7 @@ func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (model.Lis
 }
 
 // Convert a HostEndpointMetadata to a HostEndpointKeyInterface
-func (h *hostEndpoints) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
+func (h *hostEndpoints) convertMetadataToKey(m interface{}) (model.Key, error) {
 	hm := m.(api.HostEndpointMetadata)
 	k := model.HostEndpointKey{
 		Hostname:   hm.Hostname,
@@ -120,7 +120,7 @@ func (h *hostEndpoints) convertMetadataToKeyInterface(m interface{}) (model.Key,
 // Convert an API HostEndpoint structure to a Backend HostEndpoint structure
 func (h *hostEndpoints) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ah := a.(api.HostEndpoint)
-	k, err := h.convertMetadataToKeyInterface(ah.Metadata)
+	k, err := h.convertMetadataToKey(ah.Metadata)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/backend/compat"
 	"github.com/tigera/libcalico-go/lib/backend/etcd"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
@@ -40,6 +41,13 @@ func NewClient(config *api.ClientConfig) (c Client, err error) {
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
 			config.BackendType))
+	}
+	if c != nil {
+		// Wrap the backend, which deals only in raw KV pairs with an
+		// adaptor that handles aggregate datatypes.  This allows for
+		// reading and writing Profile objects, which are composed
+		// of multiple backend keys.
+		c = compat.NewAdaptor(c)
 	}
 	return
 }

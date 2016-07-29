@@ -86,7 +86,7 @@ func (h *profiles) convertMetadataToListInterface(m interface{}) (model.ListInte
 }
 
 // Convert a ProfileMetadata to a ProfileKeyInterface
-func (h *profiles) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
+func (h *profiles) convertMetadataToKey(m interface{}) (model.Key, error) {
 	hm := m.(api.ProfileMetadata)
 	k := model.ProfileKey{
 		Name: hm.Name,
@@ -97,7 +97,7 @@ func (h *profiles) convertMetadataToKeyInterface(m interface{}) (model.Key, erro
 // Convert an API Profile structure to a Backend Profile structure
 func (h *profiles) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ap := a.(api.Profile)
-	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
+	k, err := h.convertMetadataToKey(ap.Metadata)
 	if err != nil {
 		return nil, err
 	}

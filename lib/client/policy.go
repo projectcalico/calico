@@ -87,7 +87,7 @@ func (h *policies) convertMetadataToListInterface(m interface{}) (model.ListInte
 }
 
 // Convert a PolicyMetadata to a PolicyKeyInterface
-func (h *policies) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
+func (h *policies) convertMetadataToKey(m interface{}) (model.Key, error) {
 	pm := m.(api.PolicyMetadata)
 	k := model.PolicyKey{
 		Name: pm.Name,
@@ -98,7 +98,7 @@ func (h *policies) convertMetadataToKeyInterface(m interface{}) (model.Key, erro
 // Convert an API Policy structure to a Backend Policy structure
 func (h *policies) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ap := a.(api.Policy)
-	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
+	k, err := h.convertMetadataToKey(ap.Metadata)
 	if err != nil {
 		return nil, err
 	}

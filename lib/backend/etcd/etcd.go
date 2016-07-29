@@ -104,19 +104,12 @@ func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
 
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *EtcdClient) Create(d *KVPair) (*KVPair, error) {
-	if co, ok := d.Key.(CreateOverrider); ok {
-		return co.Create(c, d)
-	}
 	return c.set(d, etcdCreateOpts)
 }
 
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
 func (c *EtcdClient) Update(d *KVPair) (*KVPair, error) {
-	if co, ok := d.Key.(UpdateOverrider); ok {
-		return co.Update(c, d)
-	}
-
 	// If the request includes a revision, set it as the etcd previous index.
 	options := etcd.SetOptions{PrevExist: etcd.PrevExist}
 	if d.Revision != nil {
@@ -129,9 +122,6 @@ func (c *EtcdClient) Update(d *KVPair) (*KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *EtcdClient) Apply(d *KVPair) (*KVPair, error) {
-	if co, ok := d.Key.(ApplyOverrider); ok {
-		return co.Apply(c, d)
-	}
 	return c.set(d, etcdApplyOpts)
 }
 
@@ -152,9 +142,6 @@ func (c *EtcdClient) Delete(d *KVPair) error {
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
 func (c *EtcdClient) Get(k Key) (*KVPair, error) {
-	if co, ok := k.(GetOverrider); ok {
-		return co.Get(c, k)
-	}
 	key, err := k.DefaultPath()
 	if err != nil {
 		return nil, err

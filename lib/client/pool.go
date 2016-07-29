@@ -86,7 +86,7 @@ func (h *pools) convertMetadataToListInterface(m interface{}) (model.ListInterfa
 }
 
 // Convert a PoolMetadata to a PoolKeyInterface
-func (h *pools) convertMetadataToKeyInterface(m interface{}) (model.Key, error) {
+func (h *pools) convertMetadataToKey(m interface{}) (model.Key, error) {
 	pm := m.(api.PoolMetadata)
 	k := model.PoolKey{
 		CIDR: pm.CIDR,
@@ -97,7 +97,7 @@ func (h *pools) convertMetadataToKeyInterface(m interface{}) (model.Key, error) 
 // Convert an API Pool structure to a Backend Pool structure
 func (h *pools) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 	ap := a.(api.Pool)
-	k, err := h.convertMetadataToKeyInterface(ap.Metadata)
+	k, err := h.convertMetadataToKey(ap.Metadata)
 	if err != nil {
 		return nil, err
 	}

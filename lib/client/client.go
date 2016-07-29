@@ -118,7 +118,7 @@ func LoadClientConfig(f *string) (*api.ClientConfig, error) {
 type conversionHelper interface {
 	convertAPIToKVPair(interface{}) (*model.KVPair, error)
 	convertKVPairToAPI(*model.KVPair) (interface{}, error)
-	convertMetadataToKeyInterface(interface{}) (model.Key, error)
+	convertMetadataToKey(interface{}) (model.Key, error)
 	convertMetadataToListInterface(interface{}) (model.ListInterface, error)
 }
 
@@ -164,7 +164,7 @@ func (c *Client) apply(apiObject interface{}, helper conversionHelper) error {
 // Untyped get interface for deleting a single API object.  This is called from the typed
 // interface.
 func (c *Client) delete(metadata interface{}, helper conversionHelper) error {
-	if k, err := helper.convertMetadataToKeyInterface(metadata); err != nil {
+	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
 	} else if err := c.backend.Delete(&model.KVPair{Key: k}); err != nil {
 		return err
@@ -176,7 +176,7 @@ func (c *Client) delete(metadata interface{}, helper conversionHelper) error {
 // Untyped get interface for getting a single API object.  This is called from the typed
 // interface.  The result is
 func (c *Client) get(metadata interface{}, helper conversionHelper) (interface{}, error) {
-	if k, err := helper.convertMetadataToKeyInterface(metadata); err != nil {
+	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return nil, err
 	} else if d, err := c.backend.Get(k); err != nil {
 		return nil, err

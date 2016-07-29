@@ -109,19 +109,3 @@ func ParseKeyValue(key string, rawData []byte) (Key, interface{}, error) {
 	value, err := ParseValue(parsedKey, rawData)
 	return parsedKey, value, err
 }
-
-type CreateOverrider interface {
-	Create(c client, d *KVPair) (*KVPair, error)
-}
-
-type UpdateOverrider interface {
-	Update(c client, d *KVPair) (*KVPair, error)
-}
-
-type ApplyOverrider interface {
-	Apply(c client, d *KVPair) (*KVPair, error)
-}
-
-type GetOverrider interface {
-	Get(c client, k Key) (*KVPair, error)
-}
