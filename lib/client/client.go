@@ -25,12 +25,13 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend"
+	bapi "github.com/tigera/libcalico-go/lib/backend/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 // Client contains
 type Client struct {
-	backend backend.Client
+	backend bapi.Client
 }
 
 // New returns a connected Client.

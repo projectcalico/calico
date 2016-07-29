@@ -22,6 +22,11 @@ import (
 	"reflect"
 )
 
+// RawString is used a value type to indicate that the value is a bare non-JSON string
+type rawString string
+
+var rawStringType = reflect.TypeOf(rawString(""))
+
 // Key represents a parsed datastore key.
 type Key interface {
 	// DefaultPath() returns a default stringified path for this object,
@@ -80,13 +85,21 @@ func ParseKey(key string) Key {
 	} else if m := matchPool.FindStringSubmatch(key); m != nil {
 		_, c, _ := common.ParseCIDR(m[1])
 		return PoolKey{CIDR: *c}
+	} else if m := matchGlobalConfig.FindStringSubmatch(key); m != nil {
+		return GlobalConfigKey{Name: m[1]}
+	} else if m := matchHostConfig.FindStringSubmatch(key); m != nil {
+		return HostConfigKey{Hostname: m[1], Name: m[2]}
 	}
 	// Not a key we know about.
 	return nil
 }
 
 func ParseValue(key Key, rawData []byte) (interface{}, error) {
-	value := reflect.New(key.valueType())
+	valueType := key.valueType()
+	if valueType == rawStringType {
+		return string(rawData), nil
+	}
+	value := reflect.New(valueType)
 	iface := value.Interface()
 	err := json.Unmarshal(rawData, iface)
 	if err != nil {
