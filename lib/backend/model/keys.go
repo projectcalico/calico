@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/types"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
@@ -104,7 +104,7 @@ func ParseKey(key string) Key {
 		glog.V(5).Infof("Pool")
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
-		_, c, err := types.ParseCIDR(cidr)
+		_, c, err := net.ParseCIDR(cidr)
 		if err != nil {
 			panic(err)
 		}

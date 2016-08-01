@@ -13,7 +13,8 @@
 // limitations under the License.
 
 /*
-Package types implements a set of common type definitions used by the public
-client API and the private backend infrastructure.
+Package net implements a set of net types that are extensions to the built-in
+net package.  The extensions provide additional function such as JSON marshaling
+and unmarshaling.
 */
-package types
+package net

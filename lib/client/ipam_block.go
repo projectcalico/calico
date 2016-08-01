@@ -23,7 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/backend/model"
-	"github.com/tigera/libcalico-go/lib/types"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
 const (
@@ -57,7 +57,7 @@ type allocationBlock struct {
 	model.AllocationBlock
 }
 
-func newBlock(cidr types.IPNet) allocationBlock {
+func newBlock(cidr cnet.IPNet) allocationBlock {
 	b := model.AllocationBlock{}
 	b.Allocations = make([]*int, blockSize)
 	b.Unallocated = make([]int, blockSize)
@@ -73,7 +73,7 @@ func newBlock(cidr types.IPNet) allocationBlock {
 }
 
 func (b *allocationBlock) autoAssign(
-	num int, handleID *string, host string, attrs map[string]string, affinityCheck bool) ([]types.IP, error) {
+	num int, handleID *string, host string, attrs map[string]string, affinityCheck bool) ([]cnet.IP, error) {
 
 	// Determine if we need to check for affinity.
 	checkAffinity := b.StrictAffinity || affinityCheck
@@ -91,18 +91,18 @@ func (b *allocationBlock) autoAssign(
 	}
 
 	// Create slice of IPs and perform the allocations.
-	ips := []types.IP{}
+	ips := []cnet.IP{}
 	for _, o := range ordinals {
 		attrIndex := b.findOrAddAttribute(handleID, attrs)
 		b.Allocations[o] = &attrIndex
-		ips = append(ips, incrementIP(types.IP{b.CIDR.IP}, o))
+		ips = append(ips, incrementIP(cnet.IP{b.CIDR.IP}, o))
 	}
 
 	glog.V(3).Infof("Block %s returned ips: %v", b.CIDR.String(), ips)
 	return ips, nil
 }
 
-func (b *allocationBlock) assign(address types.IP, handleID *string, attrs map[string]string, host string) error {
+func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[string]string, host string) error {
 	if b.StrictAffinity && b.HostAffinity != nil && host != *b.HostAffinity {
 		// Affinity check is enabled but the host does not match - error.
 		return errors.New("Block host affinity does not match")
@@ -141,9 +141,9 @@ func (b allocationBlock) empty() bool {
 	return b.numFreeAddresses() == blockSize
 }
 
-func (b *allocationBlock) release(addresses []types.IP) ([]types.IP, map[string]int, error) {
+func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
-	unallocated := []types.IP{}
+	unallocated := []cnet.IP{}
 	countByHandle := map[string]int{}
 
 	// Used internally.
@@ -297,8 +297,8 @@ func (b *allocationBlock) releaseByHandle(handleID string) int {
 	return len(ordinals)
 }
 
-func (b allocationBlock) ipsByHandle(handleID string) []types.IP {
-	ips := []types.IP{}
+func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
+	ips := []cnet.IP{}
 	attrIndexes := b.attributeIndexesByHandle(handleID)
 	var o int
 	for o = 0; o < blockSize; o++ {
@@ -310,7 +310,7 @@ func (b allocationBlock) ipsByHandle(handleID string) []types.IP {
 	return ips
 }
 
-func (b allocationBlock) attributesForIP(ip types.IP) (map[string]string, error) {
+func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
 	// Convert to an ordinal.
 	ordinal := ipToOrdinal(ip, b)
 	if (ordinal < 0) || (ordinal > blockSize) {
@@ -341,7 +341,7 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	return attrIndex
 }
 
-func getBlockCIDRForAddress(addr types.IP) types.IPNet {
+func getBlockCIDRForAddress(addr cnet.IP) cnet.IPNet {
 	var mask net.IPMask
 	if addr.Version() == 6 {
 		// This is an IPv6 address.
@@ -351,20 +351,20 @@ func getBlockCIDRForAddress(addr types.IP) types.IPNet {
 		mask = ipv4.BlockPrefixMask
 	}
 	masked := addr.Mask(mask)
-	return types.IPNet{net.IPNet{IP: masked, Mask: mask}}
+	return cnet.IPNet{net.IPNet{IP: masked, Mask: mask}}
 }
 
-func getIPVersion(ip types.IP) ipVersion {
+func getIPVersion(ip cnet.IP) ipVersion {
 	if ip.To4() == nil {
 		return ipv6
 	}
 	return ipv4
 }
 
-func largerThanBlock(blockCIDR types.IPNet) bool {
+func largerThanBlock(blockCIDR cnet.IPNet) bool {
 	ones, bits := blockCIDR.Mask.Size()
 	prefixLength := bits - ones
-	ipVersion := getIPVersion(types.IP{blockCIDR.IP})
+	ipVersion := getIPVersion(cnet.IP{blockCIDR.IP})
 	return prefixLength < ipVersion.BlockPrefixLength
 }
 
@@ -377,7 +377,7 @@ func intInSlice(searchInt int, slice []int) bool {
 	return false
 }
 
-func ipToInt(ip types.IP) *big.Int {
+func ipToInt(ip cnet.IP) *big.Int {
 	if ip.To4() != nil {
 		return big.NewInt(0).SetBytes(ip.To4())
 	} else {
@@ -385,19 +385,19 @@ func ipToInt(ip types.IP) *big.Int {
 	}
 }
 
-func intToIP(ipInt *big.Int) types.IP {
-	ip := types.IP{net.IP(ipInt.Bytes())}
+func intToIP(ipInt *big.Int) cnet.IP {
+	ip := cnet.IP{net.IP(ipInt.Bytes())}
 	return ip
 }
 
-func incrementIP(ip types.IP, increment int) types.IP {
+func incrementIP(ip cnet.IP, increment int) cnet.IP {
 	sum := big.NewInt(0).Add(ipToInt(ip), big.NewInt(int64(increment)))
 	return intToIP(sum)
 }
 
-func ipToOrdinal(ip types.IP, b allocationBlock) int {
+func ipToOrdinal(ip cnet.IP, b allocationBlock) int {
 	ip_int := ipToInt(ip)
-	base_int := ipToInt(types.IP{b.CIDR.IP})
+	base_int := ipToInt(cnet.IP{b.CIDR.IP})
 	ord := big.NewInt(0).Sub(ip_int, base_int).Int64()
 	if ord < 0 || ord >= blockSize {
 		// IP address not in the given block.
@@ -406,7 +406,7 @@ func ipToOrdinal(ip types.IP, b allocationBlock) int {
 	return int(ord)
 }
 
-func ordinalToIP(ord int, b allocationBlock) types.IP {
-	sum := big.NewInt(0).Add(ipToInt(types.IP{b.CIDR.IP}), big.NewInt(int64(ord)))
+func ordinalToIP(ord int, b allocationBlock) cnet.IP {
+	sum := big.NewInt(0).Add(ipToInt(cnet.IP{b.CIDR.IP}), big.NewInt(int64(ord)))
 	return intToIP(sum)
 }

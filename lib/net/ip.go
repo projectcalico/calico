@@ -12,38 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model
+package net
 
 import (
-	"reflect"
-
-	"github.com/tigera/libcalico-go/lib/errors"
+	"encoding/json"
+	"net"
 )
 
-var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
-)
-
-type IPAMHostKey struct {
-	Host string
+// Sub class net.IP so that we can add JSON marshalling and unmarshalling.
+type IP struct {
+	net.IP
 }
 
-func (key IPAMHostKey) DefaultPath() (string, error) {
-	if key.Host == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
+// MarshalJSON interface for an IP
+func (i IP) MarshalJSON() ([]byte, error) {
+	s, err := i.MarshalText()
+	if err != nil {
+		return nil, err
 	}
-
-	k := "/calico/ipam/v2/host/" + key.Host
-	return k, nil
+	return json.Marshal(string(s))
 }
 
-func (key IPAMHostKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+// UnmarshalJSON interface for an IP
+func (i *IP) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	return i.UnmarshalText([]byte(s))
 }
 
-func (key IPAMHostKey) valueType() reflect.Type {
-	return typeIPAMHost
-}
-
-type IPAMHost struct {
+// Version returns the IP version for an IP
+func (i IP) Version() int {
+	if i.To4() == nil {
+		return 6
+	}
+	return 4
 }

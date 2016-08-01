@@ -23,7 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	. "github.com/tigera/libcalico-go/lib/errors"
-	. "github.com/tigera/libcalico-go/lib/types"
+	. "github.com/tigera/libcalico-go/lib/net"
 )
 
 var (

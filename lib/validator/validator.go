@@ -22,8 +22,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/tigera/libcalico-go/lib/numorstring"
 	"github.com/tigera/libcalico-go/lib/selector"
-	"github.com/tigera/libcalico-go/lib/types"
 	"gopkg.in/go-playground/validator.v8"
 )
 
@@ -52,8 +52,8 @@ func init() {
 	RegisterFieldValidator("interface", validateInterface)
 	RegisterFieldValidator("order", validateOrder)
 
-	RegisterStructValidator(validateProtocol, types.Protocol{})
-	RegisterStructValidator(validatePort, types.Port{})
+	RegisterStructValidator(validateProtocol, numorstring.Protocol{})
+	RegisterStructValidator(validatePort, numorstring.Port{})
 }
 
 func RegisterFieldValidator(key string, fn validator.Func) {
@@ -138,23 +138,23 @@ func validateOrder(v *validator.Validate, topStruct reflect.Value, currentStruct
 
 func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
 	glog.V(2).Infof("Validate protocol")
-	p := structLevel.CurrentStruct.Interface().(types.Protocol)
+	p := structLevel.CurrentStruct.Interface().(numorstring.Protocol)
 	glog.V(2).Infof("Validate protocol: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
-	if p.Type == types.NumOrStringNum && ((p.NumVal < 1) || (p.NumVal > 255)) {
+	if p.Type == numorstring.NumOrStringNum && ((p.NumVal < 1) || (p.NumVal > 255)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Protocol", "protocol", "protocol number invalid")
-	} else if p.Type == types.NumOrStringString && !protocolRegex.MatchString(p.StrVal) {
+	} else if p.Type == numorstring.NumOrStringString && !protocolRegex.MatchString(p.StrVal) {
 		structLevel.ReportError(reflect.ValueOf(p.StrVal), "Protocol", "protocol", "protocol name invalid")
 	}
 }
 
 func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 	glog.V(2).Infof("Validate port")
-	p := structLevel.CurrentStruct.Interface().(types.Port)
+	p := structLevel.CurrentStruct.Interface().(numorstring.Port)
 	glog.V(2).Infof("Validate port: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
-	if p.Type == types.NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
+	if p.Type == numorstring.NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Port", "port", "port number invalid")
 		return
-	} else if p.Type == types.NumOrStringString {
+	} else if p.Type == numorstring.NumOrStringString {
 		ports := strings.Split(p.StrVal, ":")
 		if len(ports) > 2 {
 			structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")

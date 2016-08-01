@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/types"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 )
 
 type BlockKey struct {
-	CIDR types.IPNet `json:"-" validate:"required,name"`
+	CIDR net.IPNet `json:"-" validate:"required,name"`
 }
 
 func (key BlockKey) DefaultPath() (string, error) {
@@ -71,12 +71,12 @@ func (options BlockListOptions) ParseDefaultKey(ekey string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
-	_, cidr, _ := types.ParseCIDR(cidrStr)
+	_, cidr, _ := net.ParseCIDR(cidrStr)
 	return BlockKey{CIDR: *cidr}
 }
 
 type AllocationBlock struct {
-	CIDR           types.IPNet           `json:"cidr"`
+	CIDR           net.IPNet             `json:"cidr"`
 	HostAffinity   *string               `json:"hostAffinity"`
 	StrictAffinity bool                  `json:"strictAffinity"`
 	Allocations    []*int                `json:"allocations"`

@@ -27,14 +27,14 @@ import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/types"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
 type blockReaderWriter struct {
 	client *Client
 }
 
-func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *types.IPNet) ([]types.IPNet, error) {
+func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *cnet.IPNet) ([]cnet.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver.Number}
@@ -43,7 +43,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *ty
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 			// The block path does not exist yet.  This is OK - it means
 			// there are no affine blocks.
-			return []types.IPNet{}, nil
+			return []cnet.IPNet{}, nil
 
 		} else {
 			glog.Errorf("Error getting affine blocks: %s", err)
@@ -52,7 +52,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *ty
 	}
 
 	// Iterate through and extract the block CIDRs.
-	ids := []types.IPNet{}
+	ids := []cnet.IPNet{}
 	for _, o := range datastoreObjs {
 		k := o.Key.(model.BlockAffinityKey)
 		ids = append(ids, k.CIDR)
@@ -61,11 +61,11 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *ty
 }
 
 func (rw blockReaderWriter) claimNewAffineBlock(
-	host string, version ipVersion, pool *types.IPNet, config IPAMConfig) (*types.IPNet, error) {
+	host string, version ipVersion, pool *cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 
 	// If pool is not nil, use the given pool.  Otherwise, default to
 	// all configured pools.
-	var pools []types.IPNet
+	var pools []cnet.IPNet
 	if pool != nil {
 		// Validate the given pool is actually configured and matches the version.
 		if !rw.isConfiguredPool(*pool) {
@@ -75,7 +75,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 			estr := fmt.Sprintf("The given pool (%s) does not match IP version %d", pool.String(), version.Number)
 			return nil, goerrors.New(estr)
 		}
-		pools = []types.IPNet{*pool}
+		pools = []cnet.IPNet{*pool}
 	} else {
 		// Default to all configured pools.
 		allPools, err := rw.client.Pools().List(api.PoolMetadata{})
@@ -126,7 +126,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	return nil, noFreeBlocksError("No Free Blocks")
 }
 
-func (rw blockReaderWriter) claimBlockAffinity(subnet types.IPNet, host string, config IPAMConfig) error {
+func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, config IPAMConfig) error {
 	// Claim the block affinity for this host.
 	glog.V(2).Infof("Host %s claiming block affinity for %s", host, subnet)
 	obj := model.KVPair{
@@ -182,7 +182,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet types.IPNet, host string, 
 	return nil
 }
 
-func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR types.IPNet) error {
+func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPNet) error {
 	for i := 0; i < ipamEtcdRetries; i++ {
 		// Read the model.KVPair containing the block
 		// and pull out the allocationBlock object.  We need to hold on to this
@@ -253,7 +253,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR types.IP
 
 // withinConfiguredPools returns true if the given IP is within a configured
 // Calico pool, and false otherwise.
-func (rw blockReaderWriter) withinConfiguredPools(ip types.IP) bool {
+func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
@@ -266,7 +266,7 @@ func (rw blockReaderWriter) withinConfiguredPools(ip types.IP) bool {
 
 // isConfiguredPool returns true if the given IPNet is a configured
 // Calico pool, and false otherwise.
-func (rw blockReaderWriter) isConfiguredPool(cidr types.IPNet) bool {
+func (rw blockReaderWriter) isConfiguredPool(cidr cnet.IPNet) bool {
 	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
@@ -280,16 +280,16 @@ func (rw blockReaderWriter) isConfiguredPool(cidr types.IPNet) bool {
 // Generator to get list of block CIDRs which
 // fall within the given pool. Returns nil when no more
 // blocks can be generated.
-func blockGenerator(pool types.IPNet) func() *types.IPNet {
+func blockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	// Determine the IP type to use.
-	version := getIPVersion(types.IP{pool.IP})
-	ip := types.IP{pool.IP}
-	return func() *types.IPNet {
+	version := getIPVersion(cnet.IP{pool.IP})
+	ip := cnet.IP{pool.IP}
+	return func() *cnet.IPNet {
 		returnIP := ip
 		ip = incrementIP(ip, blockSize)
 		if pool.Contains(ip.IP) {
 			ipnet := net.IPNet{returnIP.IP, version.BlockPrefixMask}
-			cidr := types.IPNet{ipnet}
+			cidr := cnet.IPNet{ipnet}
 			return &cidr
 		} else {
 			return nil
@@ -300,10 +300,10 @@ func blockGenerator(pool types.IPNet) func() *types.IPNet {
 // Returns a generator that, when called, returns a random
 // block from the given pool.  When there are no blocks left,
 // the it returns nil.
-func randomBlockGenerator(pool types.IPNet) func() *types.IPNet {
+func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	// Determine the IP type to use.
-	version := getIPVersion(types.IP{pool.IP})
-	baseIP := types.IP{pool.IP}
+	version := getIPVersion(cnet.IP{pool.IP})
+	baseIP := cnet.IP{pool.IP}
 
 	// Determine the number of blocks within this pool.
 	ones, size := pool.Mask.Size()
@@ -315,7 +315,7 @@ func randomBlockGenerator(pool types.IPNet) func() *types.IPNet {
 	randm := rand.New(source)
 	idxs := randm.Perm(numBlocks)
 	i := 0
-	return func() *types.IPNet {
+	return func() *cnet.IPNet {
 		// Pop a block index off of the indexes slice.
 		if len(idxs) != 0 {
 			i, idxs = idxs[len(idxs)-1], idxs[:len(idxs)-1]
@@ -327,6 +327,6 @@ func randomBlockGenerator(pool types.IPNet) func() *types.IPNet {
 		// Return the block from this pool that corresponds with the index.
 		ip := incrementIP(baseIP, i*blockSize)
 		ipnet := net.IPNet{ip.IP, version.BlockPrefixMask}
-		return &types.IPNet{ipnet}
+		return &cnet.IPNet{ipnet}
 	}
 }

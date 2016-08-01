@@ -12,38 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package model
+package numorstring
 
-import (
-	"reflect"
+// Type represents the stored type of Int32OrString.
+type NumOrStringType int
 
-	"github.com/tigera/libcalico-go/lib/errors"
+const (
+	NumOrStringNum    NumOrStringType = iota // The structure holds a number.
+	NumOrStringString                        // The structure holds a string.
 )
-
-var (
-	typeIPAMHost = reflect.TypeOf(IPAMHost{})
-)
-
-type IPAMHostKey struct {
-	Host string
-}
-
-func (key IPAMHostKey) DefaultPath() (string, error) {
-	if key.Host == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
-	}
-
-	k := "/calico/ipam/v2/host/" + key.Host
-	return k, nil
-}
-
-func (key IPAMHostKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
-}
-
-func (key IPAMHostKey) valueType() reflect.Type {
-	return typeIPAMHost
-}
-
-type IPAMHost struct {
-}

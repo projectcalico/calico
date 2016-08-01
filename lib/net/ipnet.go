@@ -12,43 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package net
 
 import (
 	"encoding/json"
 	"net"
 )
-
-// Sub class net.IP so that we can add JSON marshalling and unmarshalling.
-type IP struct {
-	net.IP
-}
-
-// MarshalJSON interface for an IP
-func (i IP) MarshalJSON() ([]byte, error) {
-	s, err := i.MarshalText()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(string(s))
-}
-
-// UnmarshalJSON interface for an IP
-func (i *IP) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	return i.UnmarshalText([]byte(s))
-}
-
-// Version returns the IP version for an IP
-func (i IP) Version() int {
-	if i.To4() == nil {
-		return 6
-	}
-	return 4
-}
 
 // Sub class net.IPNet so that we can add JSON marshalling and unmarshalling.
 type IPNet struct {
@@ -81,30 +50,6 @@ func (i *IPNet) Version() int {
 		return 6
 	}
 	return 4
-}
-
-// Sub class net.HardwareAddr so that we can add JSON marshalling and unmarshalling.
-type MAC struct {
-	net.HardwareAddr
-}
-
-// MarshalJSON interface for a MAC
-func (m MAC) MarshalJSON() ([]byte, error) {
-	return json.Marshal(m.String())
-}
-
-// UnmarshalJSON interface for a MAC
-func (m *MAC) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	if mac, err := net.ParseMAC(s); err != nil {
-		return err
-	} else {
-		m.HardwareAddr = mac
-		return nil
-	}
 }
 
 func ParseCIDR(c string) (*IP, *IPNet, error) {

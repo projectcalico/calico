@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/types"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
 var (
@@ -31,8 +31,8 @@ var (
 )
 
 type BlockAffinityKey struct {
-	CIDR types.IPNet `json:"-" validate:"required,name"`
-	Host string      `json:"-"`
+	CIDR net.IPNet `json:"-" validate:"required,name"`
+	Host string    `json:"-"`
 }
 
 func (key BlockAffinityKey) DefaultPath() (string, error) {
@@ -77,7 +77,7 @@ func (options BlockAffinityListOptions) ParseDefaultKey(ekey string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
-	_, cidr, _ := types.ParseCIDR(cidrStr)
+	_, cidr, _ := net.ParseCIDR(cidrStr)
 	host := r[0][1]
 
 	if options.Host != host {

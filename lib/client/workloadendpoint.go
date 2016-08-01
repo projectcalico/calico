@@ -17,7 +17,7 @@ package client
 import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
-	. "github.com/tigera/libcalico-go/lib/types"
+	. "github.com/tigera/libcalico-go/lib/net"
 )
 
 // WorkloadEndpointInterface has methods to work with WorkloadEndpoint resources.

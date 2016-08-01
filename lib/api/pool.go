@@ -16,7 +16,7 @@ package api
 
 import (
 	. "github.com/tigera/libcalico-go/lib/api/unversioned"
-	. "github.com/tigera/libcalico-go/lib/types"
+	. "github.com/tigera/libcalico-go/lib/net"
 	. "github.com/tigera/libcalico-go/lib/validator"
 	"gopkg.in/go-playground/validator.v8"
 )
