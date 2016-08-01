@@ -35,7 +35,7 @@ Interface (CNI)](https://github.com/containernetworking/cni) for the Unified
 Containerizer.
 
 - [Quickstart with Docker-Compose: Calico for Mesos CNI](cni-compose-demo/)
-- [Manual Install: Calico for Mesos Tasks (CNI)](ManualInstallCalicoUnifiedContainerizer.md)
+- [Manual Install: Calico for Mesos Tasks (CNI)](ManualInstallCalicoCNI.md)
 - [Usage Guide: Launching Mesos Tasks networked with Calico CNI](UsageGuideUnifiedCNI.md)
 
 ### c.) Unified Containerizer with Net-Modules [Deprecated]
