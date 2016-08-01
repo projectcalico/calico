@@ -86,7 +86,8 @@ class TestDhcpAgent(base.BaseTestCase):
                                  '/calico/dhcp/v1/subnet/v4subnet-1')
                 return EtcdResponse(value=json.dumps({
                     'cidr': '10.28.0.0/24',
-                    'gateway_ip': '10.28.0.1'
+                    'gateway_ip': '10.28.0.1',
+                    'host_routes': []
                 }))
             if 'v6subnet-1' in key:
                 return EtcdResponse(value=json.dumps({
@@ -96,7 +97,9 @@ class TestDhcpAgent(base.BaseTestCase):
             if 'v4subnet-2' in key:
                 return EtcdResponse(value=json.dumps({
                     'cidr': '10.29.0.0/24',
-                    'gateway_ip': '10.29.0.1'
+                    'gateway_ip': '10.29.0.1',
+                    'host_routes': [{'destination': '11.11.0.0/16',
+                                     'nexthop': '10.65.0.1'}]
                 }))
             if key == '/calico/v1/host/nj-ubuntu/workload':
                 if self.first_workload_read:

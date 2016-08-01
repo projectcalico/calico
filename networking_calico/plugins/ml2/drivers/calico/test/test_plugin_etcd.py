@@ -760,11 +760,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                    'id': 'subnet-id-10.65.0--24',
                    'cidr': '10.65.0/24',
                    'gateway_ip': '10.65.0.1',
+                   'host_routes': [{'destination': '11.11.0.0/16',
+                                    'nexthop': '10.65.0.1'}],
                    'dns_nameservers': []}
         subnet2 = {'enable_dhcp': False,
                    'id': 'subnet-id-10.28.0--24',
                    'cidr': '10.28.0/24',
                    'gateway_ip': '10.28.0.1',
+                   'host_routes': [],
                    'dns_nameservers': ['172.18.10.55']}
         self.osdb_subnets = [subnet1, subnet2]
 
@@ -775,7 +778,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
                 'cidr': '10.65.0.0/24',
-                'gateway_ip': '10.65.0.1'
+                'gateway_ip': '10.65.0.1',
+                'host_routes': [{'destination': '11.11.0.0/16',
+                                 'nexthop': '10.65.0.1'}]
             }
         })
 
@@ -808,6 +813,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
                 'cidr': '10.28.0.0/24',
                 'gateway_ip': '10.28.0.1',
+                'host_routes': [],
                 'dns_servers': ['172.18.10.55']
             }
         })
@@ -820,6 +826,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
                 'cidr': '10.28.0.0/24',
                 'gateway_ip': '10.28.0.1',
+                'host_routes': [],
                 'dns_servers': ['172.18.10.55']},
             '/calico/v1/Ready': True,
             '/calico/v1/config/EndpointReportingEnabled': True,
@@ -852,7 +859,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
                 'cidr': '10.65.0.0/24',
-                'gateway_ip': '10.65.0.1'}
+                'gateway_ip': '10.65.0.1',
+                'host_routes': [{'destination': '11.11.0.0/16',
+                                 'nexthop': '10.65.0.1'}]}
         })
         self.assertEtcdDeletes(set([
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24'
@@ -866,7 +875,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
                 'cidr': '10.65.0.0/24',
-                'gateway_ip': '10.65.0.2'}
+                'gateway_ip': '10.65.0.2',
+                'host_routes': [{'destination': '11.11.0.0/16',
+                                 'nexthop': '10.65.0.1'}]}
         })
         self.assertEtcdDeletes(set())
 

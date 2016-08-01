@@ -377,7 +377,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
                               'dns_nameservers': data.get('dns_servers') or [],
                               'id': subnet_id,
                               'gateway_ip': data['gateway_ip'],
-                              'host_routes': []}
+                              'host_routes': data.get('host_routes', [])}
                     if ip_version == 6:
                         subnet['ipv6_address_mode'] = constants.DHCPV6_STATEFUL
                         subnet['ipv6_ra_mode'] = constants.DHCPV6_STATEFUL
