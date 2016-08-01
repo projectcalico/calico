@@ -205,9 +205,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 				Key: model.BlockKey{CIDR: b.CIDR},
 			})
 			if err != nil {
-				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
-					// Block already deleted.  Carry on.
-				} else {
+				// Return the error unless the block didn't exist.
+				if _, ok := err.(common.ErrorResourceDoesNotExist); !ok {
 					glog.Errorf("Error deleting block: %s", err)
 					return err
 				}
@@ -239,10 +238,10 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR common.I
 			Key: model.BlockAffinityKey{Host: host, CIDR: b.CIDR},
 		})
 		if err != nil {
-			if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
-				// Already deleted - carry on.
-			} else {
+			// Return the error unless the affinity didn't exist.
+			if _, ok := err.(common.ErrorResourceDoesNotExist); !ok {
 				glog.Errorf("Error deleting block affinity: %s", err)
+				return err
 			}
 		}
 		return nil

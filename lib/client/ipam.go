@@ -655,14 +655,16 @@ func (c ipams) RemoveIPAMHost(host *string) error {
 	// Determine the hostname to use.
 	hostname := decideHostname(host)
 
+	// Release affinities for this host.
+	c.ReleaseHostAffinities(&hostname)
+
 	// Remove the host tree from the datastore.
 	err := c.client.backend.Delete(&model.KVPair{
 		Key: model.IPAMHostKey{Host: hostname},
 	})
 	if err != nil {
-		if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
-			// Already deleted - carry on.
-		} else {
+		// Return the error unless the resource does not exist.
+		if _, ok := err.(common.ErrorResourceDoesNotExist); !ok {
 			glog.Errorf("Error removing IPAM host: %s", err)
 			return err
 		}
@@ -761,10 +763,10 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR common.IPNet) error {
 				Key: model.BlockKey{blockCIDR},
 			})
 			if err != nil {
-				if _, ok := err.(common.ErrorResourceDoesNotExist); ok {
-					// Already deleted - carry on.
-				} else {
+				// Return the error unless the resource does not exist.
+				if _, ok := err.(common.ErrorResourceDoesNotExist); !ok {
 					glog.Errorf("Error deleting block: %s", err)
+					return err
 				}
 			}
 		} else {
