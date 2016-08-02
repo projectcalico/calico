@@ -78,7 +78,7 @@ func (h *pools) List(metadata api.PoolMetadata) (*api.PoolList, error) {
 }
 
 // Convert a PoolMetadata to a PoolListInterface
-func (h *pools) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
+func (h *pools) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	pm := m.(api.PoolMetadata)
 	l := model.PoolListOptions{
 		CIDR: pm.CIDR,
@@ -87,7 +87,7 @@ func (h *pools) convertMetadataToListInterface(m interface{}) (model.ListInterfa
 }
 
 // Convert a PoolMetadata to a PoolKeyInterface
-func (h *pools) convertMetadataToKey(m interface{}) (model.Key, error) {
+func (h *pools) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	pm := m.(api.PoolMetadata)
 	k := model.PoolKey{
 		CIDR: pm.CIDR,

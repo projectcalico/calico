@@ -79,7 +79,7 @@ func (w *workloadEndpoints) List(metadata api.WorkloadEndpointMetadata) (*api.Wo
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointListInterface
-func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
+func (w *workloadEndpoints) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
 	l := model.WorkloadEndpointListOptions{
 		Hostname:       hm.Hostname,
@@ -91,7 +91,7 @@ func (w *workloadEndpoints) convertMetadataToListInterface(m interface{}) (model
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointKeyInterface
-func (w *workloadEndpoints) convertMetadataToKey(m interface{}) (model.Key, error) {
+func (w *workloadEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
 	k := model.WorkloadEndpointKey{
 		Hostname:       hm.Hostname,

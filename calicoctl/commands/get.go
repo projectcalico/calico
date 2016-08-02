@@ -61,7 +61,7 @@ Options:
 
 	cmd := get{}
 	results := executeConfigCommand(parsedArgs, cmd)
-	glog.V(2).Infof("results: %v", results)
+	glog.V(2).Infof("results: %+v", results)
 
 	if results.err != nil {
 		fmt.Printf("Error getting resources: %v\n", results.err)

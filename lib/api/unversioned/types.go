@@ -21,6 +21,7 @@ type Resource interface {
 
 // ---- Type metadata ----
 //
+// All resource and resource lists embed a TypeMetadata as an anonymous field.
 type TypeMetadata struct {
 	Kind       string `json:"kind" validate:"required"`
 	APIVersion string `json:"apiVersion" validate:"required"`
@@ -30,8 +31,17 @@ func (md TypeMetadata) GetTypeMetadata() TypeMetadata {
 	return md
 }
 
+// All resource Metadata (not lists) implement the ResourceMetadata interface.
+type ResourceMetadata interface {
+	GetObjectMetadata() ObjectMetadata
+}
+
 // ---- Metadata common to all resources ----
 type ObjectMetadata struct {
+}
+
+func (md ObjectMetadata) GetObjectMetadata() ObjectMetadata {
+	return md
 }
 
 // ---- Metadata common to all lists ----

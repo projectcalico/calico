@@ -99,7 +99,7 @@ func (h *hostEndpoints) List(metadata api.HostEndpointMetadata) (*api.HostEndpoi
 }
 
 // Convert a HostEndpointMetadata to a HostEndpointListInterface
-func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
+func (h *hostEndpoints) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.HostEndpointMetadata)
 	l := model.HostEndpointListOptions{
 		Hostname:   hm.Hostname,
@@ -109,7 +109,7 @@ func (h *hostEndpoints) convertMetadataToListInterface(m interface{}) (model.Lis
 }
 
 // Convert a HostEndpointMetadata to a HostEndpointKeyInterface
-func (h *hostEndpoints) convertMetadataToKey(m interface{}) (model.Key, error) {
+func (h *hostEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.HostEndpointMetadata)
 	k := model.HostEndpointKey{
 		Hostname:   hm.Hostname,

@@ -55,7 +55,7 @@ Options:
 
 	cmd := create{skipIfExists: parsedArgs["--skip-exists"].(bool)}
 	results := executeConfigCommand(parsedArgs, cmd)
-	glog.V(2).Infof("results: %v", results)
+	glog.V(2).Infof("results: %+v", results)
 
 	if results.fileInvalid {
 		fmt.Printf("Error processing input file: %v\n", results.err)

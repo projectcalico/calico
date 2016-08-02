@@ -24,7 +24,7 @@ import (
 	"os"
 
 	"github.com/tigera/libcalico-go/lib/api"
-	. "github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/tigera/libcalico-go/lib/api/unversioned"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
@@ -38,7 +38,7 @@ import (
 //	   though they are not strictly resources themselves).
 // 	-  The concrete resource struct for this version
 type resourceHelper struct {
-	typeMetadata TypeMetadata
+	typeMetadata unversioned.TypeMetadata
 	resourceType reflect.Type
 }
 
@@ -46,14 +46,14 @@ func (r resourceHelper) String() string {
 	return fmt.Sprintf("Resource %s, version %s", r.typeMetadata.Kind, r.typeMetadata.APIVersion)
 }
 
-// Store a resourceHelper for each resource TypeMetadata.
-var helpers map[TypeMetadata]resourceHelper
+// Store a resourceHelper for each resource unversioned.TypeMetadata.
+var helpers map[unversioned.TypeMetadata]resourceHelper
 
 // Register all of the available resource types, this includes resource lists as well.
 func init() {
-	helpers = make(map[TypeMetadata]resourceHelper)
+	helpers = make(map[unversioned.TypeMetadata]resourceHelper)
 
-	registerHelper := func(t Resource) {
+	registerHelper := func(t unversioned.Resource) {
 		tmd := t.GetTypeMetadata()
 		rh := resourceHelper{
 			tmd,
@@ -77,7 +77,7 @@ func init() {
 
 // Create a new concrete resource structure based on the type.  If the type is
 // a list, this creates a concrete Resource-List of the required type.
-func newResource(tm TypeMetadata) (Resource, error) {
+func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 	rh, ok := helpers[tm]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion))
@@ -90,7 +90,7 @@ func newResource(tm TypeMetadata) (Resource, error) {
 	elem.FieldByName("Kind").SetString(rh.typeMetadata.Kind)
 	elem.FieldByName("APIVersion").SetString(rh.typeMetadata.APIVersion)
 
-	return new.Interface().(Resource), nil
+	return new.Interface().(unversioned.Resource), nil
 }
 
 // Create the resource from the specified byte array encapsulating the resource.
@@ -99,12 +99,12 @@ func newResource(tm TypeMetadata) (Resource, error) {
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
-func createResourcesFromBytes(b []byte) ([]Resource, error) {
+func createResourcesFromBytes(b []byte) ([]unversioned.Resource, error) {
 	// Start by unmarshalling the bytes into a TypeMetadata structure - this will ignore
 	// other fields.
 	var err error
-	tm := TypeMetadata{}
-	tms := []TypeMetadata{}
+	tm := unversioned.TypeMetadata{}
+	tms := []unversioned.TypeMetadata{}
 	if err = yaml.Unmarshal(b, &tm); err == nil {
 		// We processed a metadata, so create a concrete resource struct to unpack
 		// into.
@@ -124,7 +124,7 @@ func createResourcesFromBytes(b []byte) ([]Resource, error) {
 //
 // Return as a slice of Resource interfaces, containing a single element that is
 // the unmarshalled resource.
-func unmarshalResource(tm TypeMetadata, b []byte) ([]Resource, error) {
+func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
 	glog.V(2).Infof("Processing type %s\n", tm.Kind)
 	unpacked, err := newResource(tm)
 	if err != nil {
@@ -142,7 +142,7 @@ func unmarshalResource(tm TypeMetadata, b []byte) ([]Resource, error) {
 
 	glog.V(2).Infof("Unpacked: %+v\n", unpacked)
 
-	return []Resource{unpacked}, nil
+	return []unversioned.Resource{unpacked}, nil
 }
 
 // Unmarshal a bytearray containing a list of resources of the specified types into
@@ -150,9 +150,9 @@ func unmarshalResource(tm TypeMetadata, b []byte) ([]Resource, error) {
 //
 // Return as a slice of Resource interfaces, containing an element that is each of
 // the unmarshalled resources.
-func unmarshalSliceOfResources(tml []TypeMetadata, b []byte) ([]Resource, error) {
+func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
 	glog.V(2).Infof("Processing list of resources\n")
-	unpacked := make([]Resource, len(tml))
+	unpacked := make([]unversioned.Resource, len(tml))
 	for i, tm := range tml {
 		glog.V(2).Infof("  - processing type %s\n", tm.Kind)
 		r, err := newResource(tm)
@@ -186,7 +186,7 @@ func unmarshalSliceOfResources(tml []TypeMetadata, b []byte) ([]Resource, error)
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
-func CreateResourcesFromFile(f string) ([]Resource, error) {
+func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 
 	// Load the bytes from file or from stdin.
 	var b []byte

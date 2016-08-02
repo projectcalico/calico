@@ -78,7 +78,7 @@ func (h *profiles) List(metadata api.ProfileMetadata) (*api.ProfileList, error) 
 }
 
 // Convert a ProfileMetadata to a ProfileListInterface
-func (h *profiles) convertMetadataToListInterface(m interface{}) (model.ListInterface, error) {
+func (h *profiles) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.ProfileMetadata)
 	l := model.ProfileListOptions{
 		Name: hm.Name,
@@ -87,7 +87,7 @@ func (h *profiles) convertMetadataToListInterface(m interface{}) (model.ListInte
 }
 
 // Convert a ProfileMetadata to a ProfileKeyInterface
-func (h *profiles) convertMetadataToKey(m interface{}) (model.Key, error) {
+func (h *profiles) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.ProfileMetadata)
 	k := model.ProfileKey{
 		Name: hm.Name,
