@@ -270,6 +270,9 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_host_ep_update(self, combined_id, data):
+        if combined_id.host != self.config.HOSTNAME:
+            _log.debug("Skipping endpoint %s; not on our host.", combined_id)
+            return
         if data is not None:
             self.host_eps_by_id[combined_id] = data
         else:

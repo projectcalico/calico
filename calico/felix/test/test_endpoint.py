@@ -348,21 +348,21 @@ class TestEndpointManager(BaseTestCase):
 
     def test_resolve_host_eps_mainline(self):
         ep1 = {"name": "eth0"}
-        self.mgr.on_host_ep_update(HostEndpointId("host", "ep1"),
+        self.mgr.on_host_ep_update(HostEndpointId("hostname", "ep1"),
                                    ep1,
                                    async=True)
         ep2 = {"expected_ipv4_addrs": ["10.0.0.1"]}
-        self.mgr.on_host_ep_update(HostEndpointId("host", "ep2"),
+        self.mgr.on_host_ep_update(HostEndpointId("hostname", "ep2"),
                                    ep2,
                                    async=True)
-        self.mgr.on_host_ep_update(HostEndpointId("host", "ep3"),
+        self.mgr.on_host_ep_update(HostEndpointId("hostname", "ep3"),
                                    {"expected_ipv4_addrs": ["10.0.0.2"]},
                                    async=True)
         with mock.patch.object(self.mgr, "on_endpoint_update") as m_on_ep_upd:
             self.step_actor(self.mgr)
         # Only one interface resolved by its explicit name.
         m_on_ep_upd.assert_called_once_with(
-            ResolvedHostEndpointId("host", "ep1", "eth0"),
+            ResolvedHostEndpointId("hostname", "ep1", "eth0"),
             ep1
         )
 
@@ -372,7 +372,7 @@ class TestEndpointManager(BaseTestCase):
             self.step_actor(self.mgr)
         # Only one interface resolved by its explicit name.
         m_on_ep_upd.assert_called_once_with(
-            ResolvedHostEndpointId("host", "ep2", "eth2"),
+            ResolvedHostEndpointId("hostname", "ep2", "eth2"),
             {"expected_ipv4_addrs": ["10.0.0.1"], "name": "eth2"}
         )
 
@@ -382,7 +382,7 @@ class TestEndpointManager(BaseTestCase):
             self.step_actor(self.mgr)
         # Only one interface resolved by its explicit name.
         m_on_ep_upd.assert_called_once_with(
-            ResolvedHostEndpointId("host", "ep2", "eth3"),
+            ResolvedHostEndpointId("hostname", "ep2", "eth3"),
             {"expected_ipv4_addrs": ["10.0.0.1"], "name": "eth3"}
         )
 
@@ -392,13 +392,13 @@ class TestEndpointManager(BaseTestCase):
             self.step_actor(self.mgr)
         # Only one interface resolved by its explicit name.
         m_on_ep_upd.assert_called_once_with(
-            ResolvedHostEndpointId("host", "ep2", "eth2"),
+            ResolvedHostEndpointId("hostname", "ep2", "eth2"),
             None
         )
 
     def test_resolve_host_eps_multiple_ips(self):
         ep1 = {"expected_ipv4_addrs": ["10.0.0.1", "10.0.0.2"]}
-        self.mgr.on_host_ep_update(HostEndpointId("host", "ep1"),
+        self.mgr.on_host_ep_update(HostEndpointId("hostname", "ep1"),
                                    ep1,
                                    async=True)
         self.mgr._on_iface_ips_update("eth1", ["10.0.0.1", "10.0.0.2"],
@@ -407,9 +407,20 @@ class TestEndpointManager(BaseTestCase):
             self.step_actor(self.mgr)
         # Two IPs, but should resolve only once.
         m_on_ep_upd.assert_called_once_with(
-            ResolvedHostEndpointId("host", "ep1", "eth1"),
+            ResolvedHostEndpointId("hostname", "ep1", "eth1"),
             {"expected_ipv4_addrs": ["10.0.0.1", "10.0.0.2"], "name": "eth1"}
         )
+
+    def test_other_host_ep_ignored(self):
+        ep1 = {"expected_ipv4_addrs": ["10.0.0.1"]}
+        self.mgr.on_host_ep_update(HostEndpointId("otherhost", "ep1"),
+                                   ep1,
+                                   async=True)
+        self.mgr._on_iface_ips_update("eth1", ["10.0.0.1"],
+                                      async=True)
+        with mock.patch.object(self.mgr, "on_endpoint_update") as m_on_ep_upd:
+            self.step_actor(self.mgr)
+        self.assertFalse(m_on_ep_upd.called)
 
     def test_resolve_host_eps_multiple_conflicting_matches(self):
         # Check that, if multiple endpoints match an interface, the first
@@ -420,12 +431,12 @@ class TestEndpointManager(BaseTestCase):
         # consistently.
         for ii in xrange(9):
             id_1 = "ep%s" % ii
-            ep_id_1 = HostEndpointId("host", id_1)
-            self.mgr.on_host_ep_update(HostEndpointId("host", id_1),
+            ep_id_1 = HostEndpointId("hostname", id_1)
+            self.mgr.on_host_ep_update(HostEndpointId("hostname", id_1),
                                        ep1,
                                        async=True)
             id_2 = "ep%s" % (ii + 1)
-            self.mgr.on_host_ep_update(HostEndpointId("host", id_2),
+            self.mgr.on_host_ep_update(HostEndpointId("hostname", id_2),
                                        ep2,
                                        async=True)
             self.mgr._on_iface_ips_update("eth1", ["10.0.0.1", "10.0.0.2"],
@@ -434,7 +445,7 @@ class TestEndpointManager(BaseTestCase):
                 self.step_actor(self.mgr)
             # Should resolve only once.
             m_on_ep_upd.assert_called_once_with(
-                ResolvedHostEndpointId("host", id_1, "eth1"),
+                ResolvedHostEndpointId("hostname", id_1, "eth1"),
                 {"expected_ipv4_addrs": ["10.0.0.1"], "name": "eth1"}
             )
             # Removing first ep should resolve with other.
@@ -447,11 +458,11 @@ class TestEndpointManager(BaseTestCase):
                 m_on_ep_upd.mock_calls,
                 [
                     mock.call(
-                        ResolvedHostEndpointId("host", id_1, "eth1"),
+                        ResolvedHostEndpointId("hostname", id_1, "eth1"),
                         None
                     ),
                     mock.call(
-                        ResolvedHostEndpointId("host", id_2, "eth1"),
+                        ResolvedHostEndpointId("hostname", id_2, "eth1"),
                         {"expected_ipv4_addrs": ["10.0.0.2"], "name": "eth1"}
                     ),
                 ]
