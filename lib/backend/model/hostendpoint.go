@@ -22,8 +22,8 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	. "github.com/tigera/libcalico-go/lib/errors"
-	. "github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
 var (
@@ -38,10 +38,10 @@ type HostEndpointKey struct {
 
 func (key HostEndpointKey) DefaultPath() (string, error) {
 	if key.Hostname == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
 	if key.EndpointID == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "name"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/endpoint/%s",
 		key.Hostname, key.EndpointID)
@@ -100,8 +100,8 @@ func (options HostEndpointListOptions) ParseDefaultKey(ekey string) Key {
 
 type HostEndpoint struct {
 	Name              string            `json:"name,omitempty" validate:"omitempty,interface"`
-	ExpectedIPv4Addrs []IP              `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
-	ExpectedIPv6Addrs []IP              `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
+	ExpectedIPv4Addrs []net.IP          `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
+	ExpectedIPv6Addrs []net.IP          `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
 	Labels            map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 	ProfileIDs        []string          `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
 }

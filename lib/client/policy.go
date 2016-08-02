@@ -16,6 +16,7 @@ package client
 
 import (
 	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/errors"
 )
@@ -96,7 +97,7 @@ func (h *policies) convertMetadataToKey(m interface{}) (model.Key, error) {
 }
 
 // Convert an API Policy structure to a Backend Policy structure
-func (h *policies) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
+func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ap := a.(api.Policy)
 	k, err := h.convertMetadataToKey(ap.Metadata)
 	if err != nil {
@@ -117,7 +118,7 @@ func (h *policies) convertAPIToKVPair(a interface{}) (*model.KVPair, error) {
 }
 
 // Convert a Backend Policy structure to an API Policy structure.
-func (h *policies) convertKVPairToAPI(d *model.KVPair) (interface{}, error) {
+func (h *policies) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	bp := d.Value.(model.Policy)
 	bk := d.Key.(model.PolicyKey)
 

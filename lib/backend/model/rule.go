@@ -15,34 +15,34 @@
 package model
 
 import (
-	. "github.com/tigera/libcalico-go/lib/net"
-	. "github.com/tigera/libcalico-go/lib/numorstring"
+	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/numorstring"
 )
 
 type Rule struct {
 	Action string `json:"action,omitempty" validate:"backendaction"`
 
-	Protocol    *Protocol `json:"protocol,omitempty" validate:"omitempty"`
-	SrcTag      string    `json:"src_tag,omitempty" validate:"omitempty,tag"`
-	SrcNet      *IPNet    `json:"src_net,omitempty" validate:"omitempty"`
-	SrcSelector string    `json:"src_selector,omitempty" validate:"omitempty,selector"`
-	SrcPorts    []Port    `json:"src_ports,omitempty" validate:"omitempty"`
-	DstTag      string    `json:"dst_tag,omitempty" validate:"omitempty,tag"`
-	DstSelector string    `json:"dst_selector,omitempty" validate:"omitempty,selector"`
-	DstNet      *IPNet    `json:"dst_net,omitempty" validate:"omitempty"`
-	DstPorts    []Port    `json:"dst_ports,omitempty" validate:"omitempty"`
-	ICMPType    *int      `json:"icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
-	ICMPCode    *int      `json:"icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
+	Protocol    *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
+	SrcTag      string                `json:"src_tag,omitempty" validate:"omitempty,tag"`
+	SrcNet      *net.IPNet            `json:"src_net,omitempty" validate:"omitempty"`
+	SrcSelector string                `json:"src_selector,omitempty" validate:"omitempty,selector"`
+	SrcPorts    []numorstring.Port    `json:"src_ports,omitempty" validate:"omitempty"`
+	DstTag      string                `json:"dst_tag,omitempty" validate:"omitempty,tag"`
+	DstSelector string                `json:"dst_selector,omitempty" validate:"omitempty,selector"`
+	DstNet      *net.IPNet            `json:"dst_net,omitempty" validate:"omitempty"`
+	DstPorts    []numorstring.Port    `json:"dst_ports,omitempty" validate:"omitempty"`
+	ICMPType    *int                  `json:"icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
+	ICMPCode    *int                  `json:"icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
 
-	NotProtocol    *Protocol `json:"!protocol,omitempty" validate:"omitempty"`
-	NotSrcTag      string    `json:"!src_tag,omitempty" validate:"omitempty,tag"`
-	NotSrcNet      *IPNet    `json:"!src_net,omitempty" validate:"omitempty"`
-	NotSrcSelector string    `json:"!src_selector,omitempty" validate:"omitempty,selector"`
-	NotSrcPorts    []Port    `json:"!src_ports,omitempty" validate:"omitempty"`
-	NotDstTag      string    `json:"!dst_tag,omitempty" validate:"omitempty"`
-	NotDstSelector string    `json:"!dst_selector,omitempty" validate:"omitempty,selector"`
-	NotDstNet      *IPNet    `json:"!dst_net,omitempty" validate:"omitempty"`
-	NotDstPorts    []Port    `json:"!dst_ports,omitempty" validate:"omitempty"`
-	NotICMPType    *int      `json:"!icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
-	NotICMPCode    *int      `json:"!icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
+	NotProtocol    *numorstring.Protocol `json:"!protocol,omitempty" validate:"omitempty"`
+	NotSrcTag      string                `json:"!src_tag,omitempty" validate:"omitempty,tag"`
+	NotSrcNet      *net.IPNet            `json:"!src_net,omitempty" validate:"omitempty"`
+	NotSrcSelector string                `json:"!src_selector,omitempty" validate:"omitempty,selector"`
+	NotSrcPorts    []numorstring.Port    `json:"!src_ports,omitempty" validate:"omitempty"`
+	NotDstTag      string                `json:"!dst_tag,omitempty" validate:"omitempty"`
+	NotDstSelector string                `json:"!dst_selector,omitempty" validate:"omitempty,selector"`
+	NotDstNet      *net.IPNet            `json:"!dst_net,omitempty" validate:"omitempty"`
+	NotDstPorts    []numorstring.Port    `json:"!dst_ports,omitempty" validate:"omitempty"`
+	NotICMPType    *int                  `json:"!icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
+	NotICMPCode    *int                  `json:"!icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
 }

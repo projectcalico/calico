@@ -19,7 +19,6 @@ import (
 
 	"fmt"
 	"reflect"
-	"strings"
 
 	"io/ioutil"
 	"os"
@@ -33,81 +32,65 @@ import (
 	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 )
 
-var helpers map[TypeMetadata]resourceHelper
-var helpersByType map[reflect.Type]resourceHelper
+// ResourceHelper encapsulates details about a specific version of a specific resource:
+//
+// 	-  The type of resource (Kind and Version).  This includes the list types (even
+//	   though they are not strictly resources themselves).
+// 	-  The concrete resource struct for this version
+type resourceHelper struct {
+	typeMetadata TypeMetadata
+	resourceType reflect.Type
+}
 
-// Register all of the available resource types.
+func (r resourceHelper) String() string {
+	return fmt.Sprintf("Resource %s, version %s", r.typeMetadata.Kind, r.typeMetadata.APIVersion)
+}
+
+// Store a resourceHelper for each resource TypeMetadata.
+var helpers map[TypeMetadata]resourceHelper
+
+// Register all of the available resource types, this includes resource lists as well.
 func init() {
 	helpers = make(map[TypeMetadata]resourceHelper)
-	helpersByType = make(map[reflect.Type]resourceHelper)
 
-	registerHelper := func(t Resource, tl Resource) {
-		// [smc] how about using an interface here rather than reflection?
+	registerHelper := func(t Resource) {
 		tmd := t.GetTypeMetadata()
 		rh := resourceHelper{
 			tmd,
-			// [smc] I'm not up to speed on reflection, but can't you just use t here?
-			reflect.ValueOf(t).Elem().Interface(),
-			reflect.ValueOf(tl).Elem().Interface(),
+			reflect.ValueOf(t).Elem().Type(),
 		}
 		helpers[tmd] = rh
-		helpersByType[reflect.TypeOf(t)] = rh
 	}
 
 	// Register all API resources supported by the generic resource interface.
-	registerHelper(api.NewPolicy(), api.NewPolicyList())
-	registerHelper(api.NewPool(), api.NewPoolList())
-	registerHelper(api.NewProfile(), api.NewProfileList())
-	registerHelper(api.NewHostEndpoint(), api.NewHostEndpointList())
-	registerHelper(api.NewWorkloadEndpoint(), api.NewWorkloadEndpointList())
-}
-
-// ResourceHelper encapsulates details about a specific version of a specific resource:
-//
-// 	-  The type of resource (Kind and Version)
-// 	-  The concrete resource struct for this version
-// 	-  The concrete resource list struct for this version
-type resourceHelper struct {
-	typeMetadata     TypeMetadata
-	resourceType     interface{}
-	resourceListType interface{}
+	registerHelper(api.NewPolicy())
+	registerHelper(api.NewPolicyList())
+	registerHelper(api.NewPool())
+	registerHelper(api.NewPoolList())
+	registerHelper(api.NewProfile())
+	registerHelper(api.NewProfileList())
+	registerHelper(api.NewHostEndpoint())
+	registerHelper(api.NewHostEndpointList())
+	registerHelper(api.NewWorkloadEndpoint())
+	registerHelper(api.NewWorkloadEndpointList())
 }
 
 // Create a new concrete resource structure based on the type.  If the type is
 // a list, this creates a concrete Resource-List of the required type.
-func newResource(tm TypeMetadata) (interface{}, error) {
-	isList := false
-	itemType := tm
-
-	// If this is a list type, then the item type is the resource that the list
-	// contains rather than the list itself.
-	if strings.HasSuffix(tm.Kind, "List") {
-		itemType = TypeMetadata{
-			Kind:       strings.TrimSuffix(tm.Kind, "List"),
-			APIVersion: tm.APIVersion,
-		}
-		isList = true
-	}
-
-	rh, ok := helpers[itemType]
+func newResource(tm TypeMetadata) (Resource, error) {
+	rh, ok := helpers[tm]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", itemType.Kind, itemType.APIVersion))
+		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion))
 	}
-	glog.V(2).Infof("Found resource helper: %v\n", rh)
-	glog.V(2).Infof("Type: %v\n", reflect.TypeOf(rh.resourceType))
+	glog.V(2).Infof("Found resource helper: %s\n", rh)
 
 	// Create new resource and fill in the type metadata.
-	var new reflect.Value
-	if isList {
-		new = reflect.New(reflect.TypeOf(rh.resourceListType))
-	} else {
-		new = reflect.New(reflect.TypeOf(rh.resourceType))
-	}
+	new := reflect.New(rh.resourceType)
 	elem := new.Elem()
-	elem.FieldByName("Kind").SetString(tm.Kind)
-	elem.FieldByName("APIVersion").SetString(tm.APIVersion)
+	elem.FieldByName("Kind").SetString(rh.typeMetadata.Kind)
+	elem.FieldByName("APIVersion").SetString(rh.typeMetadata.APIVersion)
 
-	return new.Interface(), nil
+	return new.Interface().(Resource), nil
 }
 
 // Create the resource from the specified byte array encapsulating the resource.
@@ -116,20 +99,20 @@ func newResource(tm TypeMetadata) (interface{}, error) {
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
-func createResourceFromBytes(b []byte) (interface{}, error) {
+func createResourcesFromBytes(b []byte) ([]Resource, error) {
 	// Start by unmarshalling the bytes into a TypeMetadata structure - this will ignore
 	// other fields.
 	var err error
 	tm := TypeMetadata{}
-	tml := []TypeMetadata{}
+	tms := []TypeMetadata{}
 	if err = yaml.Unmarshal(b, &tm); err == nil {
 		// We processed a metadata, so create a concrete resource struct to unpack
 		// into.
 		return unmarshalResource(tm, b)
-	} else if err = yaml.Unmarshal(b, &tml); err == nil {
-		// We processed a list of metadata's, create a list of concrete resource
+	} else if err = yaml.Unmarshal(b, &tms); err == nil {
+		// We processed a slice of metadata's, create a list of concrete resource
 		// structs to unpack into.
-		return unmarshalListOfResources(tml, b)
+		return unmarshalSliceOfResources(tms, b)
 	} else {
 		// Failed to parse a single resource or list of resources.
 		return nil, err
@@ -138,7 +121,10 @@ func createResourceFromBytes(b []byte) (interface{}, error) {
 
 // Unmarshal a bytearray containing a single resource of the specified type into
 // a concrete structure for that resource type.
-func unmarshalResource(tm TypeMetadata, b []byte) (interface{}, error) {
+//
+// Return as a slice of Resource interfaces, containing a single element that is
+// the unmarshalled resource.
+func unmarshalResource(tm TypeMetadata, b []byte) ([]Resource, error) {
 	glog.V(2).Infof("Processing type %s\n", tm.Kind)
 	unpacked, err := newResource(tm)
 	if err != nil {
@@ -154,23 +140,26 @@ func unmarshalResource(tm TypeMetadata, b []byte) (interface{}, error) {
 		return nil, err
 	}
 
-	glog.V(2).Infof("Unpacked: %v\n", unpacked)
+	glog.V(2).Infof("Unpacked: %+v\n", unpacked)
 
-	return unpacked, nil
+	return []Resource{unpacked}, nil
 }
 
-// Unmarshal a bytearray containing a list of resources of the specified type into
-// a list of concrete structures for that resource type.
-func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error) {
+// Unmarshal a bytearray containing a list of resources of the specified types into
+// a slice of concrete structures for those resource types.
+//
+// Return as a slice of Resource interfaces, containing an element that is each of
+// the unmarshalled resources.
+func unmarshalSliceOfResources(tml []TypeMetadata, b []byte) ([]Resource, error) {
 	glog.V(2).Infof("Processing list of resources\n")
-	unpacked := []interface{}{}
-	for _, tm := range tml {
+	unpacked := make([]Resource, len(tml))
+	for i, tm := range tml {
 		glog.V(2).Infof("  - processing type %s\n", tm.Kind)
 		r, err := newResource(tm)
 		if err != nil {
 			return nil, err
 		}
-		unpacked = append(unpacked, r)
+		unpacked[i] = r
 	}
 
 	if err := yaml.Unmarshal(b, &unpacked); err != nil {
@@ -185,7 +174,7 @@ func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error)
 		}
 	}
 
-	glog.V(2).Infof("Unpacked: %v\n", unpacked)
+	glog.V(2).Infof("Unpacked: %+v\n", unpacked)
 
 	return unpacked, nil
 }
@@ -197,7 +186,7 @@ func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error)
 //
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
-func CreateResourceFromFile(f string) (interface{}, error) {
+func CreateResourcesFromFile(f string) ([]Resource, error) {
 
 	// Load the bytes from file or from stdin.
 	var b []byte
@@ -212,5 +201,5 @@ func CreateResourceFromFile(f string) (interface{}, error) {
 		return nil, err
 	}
 
-	return createResourceFromBytes(b)
+	return createResourcesFromBytes(b)
 }

@@ -22,8 +22,8 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
-	. "github.com/tigera/libcalico-go/lib/errors"
-	. "github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
 var (
@@ -39,13 +39,13 @@ type WorkloadEndpointKey struct {
 
 func (key WorkloadEndpointKey) DefaultPath() (string, error) {
 	if key.Hostname == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "hostname"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
 	if key.OrchestratorID == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "orchestrator"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
 	if key.WorkloadID == "" {
-		return "", ErrorInsufficientIdentifiers{Name: "workload"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	if key.EndpointID == "" {
 		return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
@@ -130,9 +130,9 @@ type WorkloadEndpoint struct {
 	// TODO: Validation for workload endpoint.
 	State      string            `json:"state"`
 	Name       string            `json:"name"`
-	Mac        MAC               `json:"mac"`
+	Mac        net.MAC           `json:"mac"`
 	ProfileIDs []string          `json:"profile_ids,omitempty"`
-	IPv4Nets   []IPNet           `json:"ipv4_nets,omitempty"`
-	IPv6Nets   []IPNet           `json:"ipv6_nets,omitempty"`
+	IPv4Nets   []net.IPNet       `json:"ipv4_nets,omitempty"`
+	IPv6Nets   []net.IPNet       `json:"ipv6_nets,omitempty"`
 	Labels     map[string]string `json:"labels,omitempty"`
 }

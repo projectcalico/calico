@@ -25,6 +25,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/backend"
 	bapi "github.com/tigera/libcalico-go/lib/backend/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
@@ -118,8 +119,8 @@ func LoadClientConfig(f *string) (*api.ClientConfig, error) {
 // Interface used to convert between backend and API representations of our
 // objects.
 type conversionHelper interface {
-	convertAPIToKVPair(interface{}) (*model.KVPair, error)
-	convertKVPairToAPI(*model.KVPair) (interface{}, error)
+	convertAPIToKVPair(unversioned.Resource) (*model.KVPair, error)
+	convertKVPairToAPI(*model.KVPair) (unversioned.Resource, error)
 	convertMetadataToKey(interface{}) (model.Key, error)
 	convertMetadataToListInterface(interface{}) (model.ListInterface, error)
 }
@@ -129,7 +130,7 @@ type conversionHelper interface {
 // Untyped interface for creating an API object.  This is called from the
 // typed interface.  This assumes a 1:1 mapping between the API resource and
 // the backend object.
-func (c *Client) create(apiObject interface{}, helper conversionHelper) error {
+func (c *Client) create(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Create(d); err != nil {
@@ -141,7 +142,7 @@ func (c *Client) create(apiObject interface{}, helper conversionHelper) error {
 
 // Untyped interface for updating an API object.  This is called from the
 // typed interface.
-func (c *Client) update(apiObject interface{}, helper conversionHelper) error {
+func (c *Client) update(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Update(d); err != nil {
@@ -153,7 +154,7 @@ func (c *Client) update(apiObject interface{}, helper conversionHelper) error {
 
 // Untyped interface for applying an API object.  This is called from the
 // typed interface.
-func (c *Client) apply(apiObject interface{}, helper conversionHelper) error {
+func (c *Client) apply(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
 	} else if d, err = c.backend.Apply(d); err != nil {
@@ -177,7 +178,7 @@ func (c *Client) delete(metadata interface{}, helper conversionHelper) error {
 
 // Untyped get interface for getting a single API object.  This is called from the typed
 // interface.  The result is
-func (c *Client) get(metadata interface{}, helper conversionHelper) (interface{}, error) {
+func (c *Client) get(metadata interface{}, helper conversionHelper) (unversioned.Resource, error) {
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return nil, err
 	} else if d, err := c.backend.Get(k); err != nil {
