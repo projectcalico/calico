@@ -36,10 +36,15 @@ type Client struct {
 	backend bapi.Client
 }
 
-// New returns a connected Client.
-func New(config *api.ClientConfig) (c *Client, err error) {
+// New returns a connected Client.  This is the only mechanism by which to create a
+// Client.  The ClientConfig can either be created explicitly, or can be loaded from
+// a config file or environment variables using the LoadClientConfig() function.
+func New(config api.ClientConfig) (*Client, error) {
+	var err error
 	cc := Client{}
-	cc.backend, err = backend.NewClient(config)
+	if cc.backend, err = backend.NewClient(config); err != nil {
+		return nil, err
+	}
 	return &cc, err
 }
 
@@ -73,18 +78,18 @@ func (c *Client) IPAM() IPAMInterface {
 	return newIPAM(c)
 }
 
-// LoadClientConfig loads the client config from the specified file (if specified)
-// or from environment variables (if the file does not exist, or is not specified).
-func LoadClientConfig(f *string) (*api.ClientConfig, error) {
+// LoadClientConfig loads the ClientConfig from the specified file (if specified)
+// or from environment variables (if the file is not specified).
+func LoadClientConfig(filename string) (*api.ClientConfig, error) {
 	var c api.ClientConfig
 
 	// Override / merge with values loaded from the specified file.
-	if f != nil {
-		b, err := ioutil.ReadFile(*f)
+	if filename != "" {
+		b, err := ioutil.ReadFile(filename)
 		if err != nil {
 			return nil, err
 		}
-		// First unmarshall should fill in the BackendType field only.
+		// First unmarshal should fill in the BackendType field only.
 		if err := yaml.Unmarshal(b, &c); err != nil {
 			return nil, err
 		}
@@ -93,7 +98,7 @@ func LoadClientConfig(f *string) (*api.ClientConfig, error) {
 		if c.BackendConfig == nil {
 			return nil, errors.New(fmt.Sprintf("Unknown datastore type: %v", c.BackendType))
 		}
-		// Now unmarshall into the store-specific config struct.
+		// Now unmarshal into the store-specific config struct.
 		if err := yaml.Unmarshal(b, c.BackendConfig); err != nil {
 			return nil, err
 		}
