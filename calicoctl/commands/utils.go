@@ -191,7 +191,7 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 	if filename := args["--filename"]; filename != nil {
 		// Filename is specified, load the resource from file and convert to a slice
 		// of resources for easier handling.
-		if r, err = resourcemgr.CreateResourceFromFile(filename.(string)); err != nil {
+		if r, err = resourcemgr.CreateResourcesFromFile(filename.(string)); err != nil {
 			return commandResults{err: err, fileInvalid: true}
 		}
 
