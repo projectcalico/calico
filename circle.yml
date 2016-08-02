@@ -1,0 +1,19 @@
+## Global the test machine; use the system-wide Python becaues tox will create
+## its own virtualenvs.
+machine:
+  post:
+    - pyenv global
+
+## Install Calico build/test deps.
+dependencies:
+  pre:
+    - sudo apt-get install -y libffi-dev libyajl2 python-dev
+    - sudo pip install tox coverage
+
+## Run our test script, which ultimately runs tox.  We need to call
+## "deactivate" to get out of the virtualenv that CircleCI creates by default.
+test:
+  override:
+    - deactivate && ./run-unit-test.sh
+  post:
+    - cp -r .coverage coverage.xml htmlcov $CIRCLE_ARTIFACTS
