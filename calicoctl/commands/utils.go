@@ -33,7 +33,7 @@ import (
 // Create a new CalicoClient using connection information in the specified
 // filename (if it exists), dropping back to environment variables for any
 // parameter not loaded from file.
-func NewClient(cf *string) (*client.Client, error) {
+func newClient(cf *string) (*client.Client, error) {
 	if _, err := os.Stat(*cf); err != nil {
 		cf = nil
 	}
@@ -219,7 +219,7 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 
 	// Load the client config and connect.
 	cf := args["--config"].(string)
-	client, err := NewClient(&cf)
+	client, err := newClient(&cf)
 	if err != nil {
 		return commandResults{err: err}
 	}
