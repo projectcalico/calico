@@ -23,10 +23,10 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/resourcemgr"
 	"github.com/tigera/libcalico-go/lib/net"
 )
 

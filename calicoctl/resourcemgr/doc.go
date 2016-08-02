@@ -13,9 +13,7 @@
 // limitations under the License.
 
 /*
-Package resourcemgr implements generic resource handling methods.  Whereas the
-public client API provides a typed interface for managing resources (and other
-configuration), this package provides an untyped interface that is useful when
-streaming resource configuration to and from YAML/JSON files.
+Package resourcemgr implements generic resource handling methods.  This provides
+a mechanism for creating specific resources from a JSON or YAML input.
 */
 package resourcemgr

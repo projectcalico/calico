@@ -75,7 +75,7 @@ type resourceHelper struct {
 
 // Create a new concrete resource structure based on the type.  If the type is
 // a list, this creates a concrete Resource-List of the required type.
-func NewResource(tm TypeMetadata) (interface{}, error) {
+func newResource(tm TypeMetadata) (interface{}, error) {
 	isList := false
 	itemType := tm
 
@@ -110,74 +110,13 @@ func NewResource(tm TypeMetadata) (interface{}, error) {
 	return new.Interface(), nil
 }
 
-// Create a new concrete Resource from the type of resource class.  This correctly
-// fills in the type Metadata.
-func NewResourceFromType(t reflect.Type) (interface{}, error) {
-	rh, ok := helpersByType[t]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("Unknown resource type %v", t))
-	}
-	glog.V(2).Infof("Found resource helper: %v\n", rh)
-	glog.V(2).Infof("Type: %v\n", reflect.TypeOf(rh.resourceType))
-
-	// Create new resource and fill in the type metadata.
-	new := reflect.New(reflect.TypeOf(rh.resourceListType)).Elem()
-	new.FieldByName("Kind").SetString(rh.typeMetadata.Kind)
-	new.FieldByName("APIVersion").SetString(rh.typeMetadata.APIVersion)
-
-	return new.Interface(), nil
-}
-
-// Create a new concrete Resource List from the type of resource class.  This correctly
-// fills in the type Metadata.
-func NewResourceListFromType(t reflect.Type) (interface{}, error) {
-	rh, ok := helpersByType[t]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("Unknown resource type %v", t))
-	}
-	glog.V(2).Infof("Found resource helper: %v\n", rh)
-	glog.V(2).Infof("Type: %v\n", reflect.TypeOf(rh.resourceType))
-
-	// Create new resource and fill in the type metadata.
-	new := reflect.New(reflect.TypeOf(rh.resourceListType)).Elem()
-	new.FieldByName("Kind").SetString(rh.typeMetadata.Kind)
-	new.FieldByName("APIVersion").SetString(rh.typeMetadata.APIVersion)
-
-	return new.Interface(), nil
-}
-
-// Create the Resource from the specified file f.
-// 	-  The file format may be JSON or YAML encoding of either a single resource or list of
-// 	   resources as defined by the API objects in /api.
-// 	-  A filename of "-" means "Read from stdin".
-//
-// The returned Resource will either be a single Resource or a List containing zero or more
-// Resources.  If the file does not contain any valid Resources this function returns an error.
-func CreateResourceFromFile(f string) (interface{}, error) {
-
-	// Load the bytes from file or from stdin.
-	var b []byte
-	var err error
-
-	if f == "-" {
-		b, err = ioutil.ReadAll(os.Stdin)
-	} else {
-		b, err = ioutil.ReadFile(f)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return CreateResourceFromBytes(b)
-}
-
 // Create the resource from the specified byte array encapsulating the resource.
 // -  The byte array may be JSON or YAML encoding of either a single resource or list of
 //    resources as defined by the API objects in /api.
 //
 // The returned Resource will either be a single resource document or a List of documents.
 // If the file does not contain any valid Resources this function returns an error.
-func CreateResourceFromBytes(b []byte) (interface{}, error) {
+func createResourceFromBytes(b []byte) (interface{}, error) {
 	// Start by unmarshalling the bytes into a TypeMetadata structure - this will ignore
 	// other fields.
 	var err error
@@ -201,7 +140,7 @@ func CreateResourceFromBytes(b []byte) (interface{}, error) {
 // a concrete structure for that resource type.
 func unmarshalResource(tm TypeMetadata, b []byte) (interface{}, error) {
 	glog.V(2).Infof("Processing type %s\n", tm.Kind)
-	unpacked, err := NewResource(tm)
+	unpacked, err := newResource(tm)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +166,7 @@ func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error)
 	unpacked := []interface{}{}
 	for _, tm := range tml {
 		glog.V(2).Infof("  - processing type %s\n", tm.Kind)
-		r, err := NewResource(tm)
+		r, err := newResource(tm)
 		if err != nil {
 			return nil, err
 		}
@@ -249,4 +188,29 @@ func unmarshalListOfResources(tml []TypeMetadata, b []byte) (interface{}, error)
 	glog.V(2).Infof("Unpacked: %v\n", unpacked)
 
 	return unpacked, nil
+}
+
+// Create the Resource from the specified file f.
+// 	-  The file format may be JSON or YAML encoding of either a single resource or list of
+// 	   resources as defined by the API objects in /api.
+// 	-  A filename of "-" means "Read from stdin".
+//
+// The returned Resource will either be a single Resource or a List containing zero or more
+// Resources.  If the file does not contain any valid Resources this function returns an error.
+func CreateResourceFromFile(f string) (interface{}, error) {
+
+	// Load the bytes from file or from stdin.
+	var b []byte
+	var err error
+
+	if f == "-" {
+		b, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		b, err = ioutil.ReadFile(f)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return createResourceFromBytes(b)
 }
