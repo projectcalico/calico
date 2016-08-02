@@ -14,6 +14,7 @@
 
 import os
 import sys
+import socket
 
 import netaddr
 from netaddr import AddrFormatError, IPAddress
@@ -259,9 +260,10 @@ def main():
     # Write a startup environment file containing the IP address that may have
     # just been detected.
     # This is required because the confd templates expect to be able to fill in
-    #  the IP by fetching it from the environment.
+    # some templates by fetching them from the environment.
     with open('startup.env', 'w') as f:
-        f.write("IP=" + ip)
+        f.write("IP=%s\n" % ip)
+        f.write("HOSTNAME=%s\n" % hostname)
 
     warn_if_hostname_conflict(ip)
 
@@ -303,7 +305,12 @@ def main():
         _remove_host_tunnel_addr()
 
 
+# Try the HOSTNAME environment variable, but default to
+# the socket.gethostname() value if unset.
 hostname = os.getenv("HOSTNAME")
+if not hostname:
+    hostname = socket.gethostname()
+
 client = IPAMClient()
 
 if __name__ == "__main__":
