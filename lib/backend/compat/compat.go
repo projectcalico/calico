@@ -15,6 +15,7 @@
 package compat
 
 import (
+	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/backend/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
@@ -126,6 +127,8 @@ func (c *ModelAdaptor) List(l ListInterface) ([]*KVPair, error) {
 }
 
 // Convert a Profile KVPair to separate KVPair types for Keys, Labels and Rules.
+// These separate KVPairs are used to write three separate objects that make up
+// a single profile.
 func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
 	p := d.Value.(Profile)
 	pk := d.Key.(ProfileKey)
@@ -142,6 +145,18 @@ func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
 	r = &KVPair{
 		Key:   ProfileRulesKey{pk},
 		Value: p.Rules,
+	}
+
+	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
+	// expect a null value in the JSON, so we fix up to make Labels an empty map
+	// and tags an empty slice.
+	if p.Labels == nil {
+		glog.V(1).Info("Labels is nil - convert to empty map for backend")
+		l.Value = map[string]string{}
+	}
+	if p.Tags == nil {
+		glog.V(1).Info("Tags is nil - convert to empty map for backend")
+		t.Value = []string{}
 	}
 
 	return t, l, r

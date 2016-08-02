@@ -107,6 +107,7 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 		Key: k,
 		Value: model.Profile{
 			Rules: model.ProfileRules{
+				ProfileID:     ap.Metadata.Name,
 				InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 				OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
 			},
