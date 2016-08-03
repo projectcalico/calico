@@ -228,11 +228,18 @@ aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID_SLAVE_1 --source-de
 The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
+> The linux kubectl binary can be fetched with a command like:
+
 ```
 wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
+> On an OS X workstation, replace linux in the URL above with darwin:
+
+```
+wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/darwin/amd64/kubectl
+```
 Save the public DNS name for the master in an environment variable. Replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name - you can find this in the AWS portal, or by running `aws ec2 describe-instances`.
 ```
 export MASTER_DNS=<ec2-###-##-##-###.compute-1.amazonaws.com>
