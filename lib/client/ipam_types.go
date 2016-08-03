@@ -33,7 +33,7 @@ type AssignIPArgs struct {
 	// If specified, the hostname of the host on which IP addresses
 	// will be allocated.  If not specified, this will default
 	// to the value provided by os.Hostname.
-	Hostname *string
+	Hostname string
 }
 
 // AutoAssignArgs defines the set of arguments for assigning one or more
@@ -55,7 +55,7 @@ type AutoAssignArgs struct {
 	// If specified, the hostname of the host on which IP addresses
 	// will be allocated.  If not specified, this will default
 	// to the value provided by os.Hostname.
-	Hostname *string
+	Hostname string
 
 	// If specified, the previously configured IPv4 pool from which
 	// to assign IPv4 addresses.  If not specified, this defaults to all IPv4 pools.

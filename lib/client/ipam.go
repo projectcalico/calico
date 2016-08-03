@@ -66,18 +66,18 @@ type IPAMInterface interface {
 
 	// ClaimAffinity claims affinity to the given host for all blocks
 	// within the given CIDR.  The given CIDR must fall within a configured
-	// pool.
-	ClaimAffinity(cidr net.IPNet, host *string) ([]net.IPNet, []net.IPNet, error)
+	// pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
+	ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error)
 
 	// ReleaseAffinity releases affinity for all blocks within the given CIDR
-	// on the given host.  If host is not specified, then the value returned by os.Hostname
-	// will be used.
-	ReleaseAffinity(cidr net.IPNet, host *string) error
+	// on the given host.  If an empty string is passed as the host, then the
+	// value returned by os.Hostname will be used.
+	ReleaseAffinity(cidr net.IPNet, host string) error
 
 	// ReleaseHostAffinities releases affinity for all blocks that are affine
-	// to the given host.  If host is not specified, the value returned by os.Hostname
-	// will be used.
-	ReleaseHostAffinities(host *string) error
+	// to the given host.  If an empty string is passed as the host, the value returned by
+	// os.Hostname will be used.
+	ReleaseHostAffinities(host string) error
 
 	// ReleasePoolAffinities releases affinity for all blocks within
 	// the specified pool across all hosts.
@@ -95,7 +95,8 @@ type IPAMInterface interface {
 	// RemoveIPAMHost releases affinity for all blocks on the given host,
 	// and removes all host-specific IPAM data from the datastore.
 	// RemoveIPAMHost does not release any IP addresses claimed on the given host.
-	RemoveIPAMHost(host *string) error
+	// If an empty string is passed as the host then the value returned by os.Hostname is used.
+	RemoveIPAMHost(host string) error
 }
 
 // newIPAM returns a new ipamClient, which implements the IPAMInterface
@@ -504,7 +505,8 @@ func (c ipams) assignFromExistingBlock(
 // within the given CIDR.  The given CIDR must fall within a configured
 // pool.  Returns a list of blocks that were claimed, as well as a
 // list of blocks that were claimed by another host.
-func (c ipams) ClaimAffinity(cidr net.IPNet, host *string) ([]net.IPNet, []net.IPNet, error) {
+// If an empty string is passed as the host, then the value of os.Hostname is used.
+func (c ipams) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
@@ -552,9 +554,8 @@ func (c ipams) ClaimAffinity(cidr net.IPNet, host *string) ([]net.IPNet, []net.I
 // ReleaseAffinity releases affinity for all blocks within the given CIDR
 // on the given host.  If a block does not have affinity for the given host,
 // its affinity will not be released and no error will be returned.
-// If host is not specified, then the value returned by os.Hostname
-// will be used.
-func (c ipams) ReleaseAffinity(cidr net.IPNet, host *string) error {
+// If an empty string is passed as the host, then the value of os.Hostname is used.
+func (c ipams) ReleaseAffinity(cidr net.IPNet, host string) error {
 	// Validate that the given CIDR is at least as big as a block.
 	if !largerThanBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
@@ -583,9 +584,9 @@ func (c ipams) ReleaseAffinity(cidr net.IPNet, host *string) error {
 }
 
 // ReleaseHostAffinities releases affinity for all blocks that are affine
-// to the given host.  If host is not specified, the value returned by os.Hostname
-// will be used.
-func (c ipams) ReleaseHostAffinities(host *string) error {
+// to the given host.  If an empty string is passed as the host,
+// then the value of os.Hostname is used.
+func (c ipams) ReleaseHostAffinities(host string) error {
 	hostname := decideHostname(host)
 
 	versions := []ipVersion{ipv4, ipv6}
@@ -596,7 +597,7 @@ func (c ipams) ReleaseHostAffinities(host *string) error {
 		}
 
 		for _, blockCIDR := range blockCIDRs {
-			err := c.ReleaseAffinity(blockCIDR, &hostname)
+			err := c.ReleaseAffinity(blockCIDR, hostname)
 			if err != nil {
 				if _, ok := err.(affinityClaimedError); ok {
 					// Claimed by a different host.
@@ -652,12 +653,13 @@ func (c ipams) ReleasePoolAffinities(pool net.IPNet) error {
 // RemoveIPAMHost releases affinity for all blocks on the given host,
 // and removes all host-specific IPAM data from the datastore.
 // RemoveIPAMHost does not release any IP addresses claimed on the given host.
-func (c ipams) RemoveIPAMHost(host *string) error {
+// If an empty string is passed as the host, then the value of os.Hostname is used.
+func (c ipams) RemoveIPAMHost(host string) error {
 	// Determine the hostname to use.
 	hostname := decideHostname(host)
 
 	// Release affinities for this host.
-	c.ReleaseHostAffinities(&hostname)
+	c.ReleaseHostAffinities(hostname)
 
 	// Remove the host tree from the datastore.
 	err := c.client.backend.Delete(&model.KVPair{
@@ -948,13 +950,13 @@ func (c ipams) convertBackendToIPAMConfig(cfg model.IPAMConfig) *IPAMConfig {
 	}
 }
 
-func decideHostname(host *string) string {
+func decideHostname(host string) string {
 	// Determine the hostname to use - prefer the provided hostname if
 	// non-nil, otherwise use the hostname reported by os.
 	var hostname string
 	var err error
-	if host != nil {
-		hostname = *host
+	if host != "" {
+		hostname = host
 	} else {
 		hostname, err = os.Hostname()
 		if err != nil {
