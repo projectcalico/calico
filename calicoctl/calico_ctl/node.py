@@ -258,9 +258,16 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
         if not etcd_ok or (using_docker and not docker_ok):
             sys.exit(1)
 
-    # Ensure log directory exists
-    if not os.path.exists(log_dir):
+    # Ensure log directory and /var/run/calico exist so that they can be
+    # mounted into the containers.
+    try:
         os.makedirs(log_dir)
+    except OSError:
+        pass
+    try:
+        os.makedirs("/var/run/calico")
+    except OSError:
+        pass
 
     # The format of the authority and endpoints strings have already been
     # validated.
@@ -380,6 +387,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         binds=binds)
 
     volumes = ["/var/log/calico", "/var/run/calico", "/lib/modules"] + etcd_volumes
+
     container = docker_client.create_container(
         node_image,
         name="calico-node",
@@ -447,11 +455,6 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
     env_commands = []
     for env_var in environment:
         env_commands += ["--set-env=%s" % (env_var)]
-
-    # Ensure /var/run/calico exists on the host machine so it can be
-    # mounted into the node container.
-    if not os.path.exists("/var/run/calico"):
-        os.makedirs("/var/run/calico")
 
     # Maybe in future we'll want to have a configurable path for the
     # stage1-fly.aci but for now use the following algorithm

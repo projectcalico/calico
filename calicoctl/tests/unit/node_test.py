@@ -223,8 +223,7 @@ class TestNode(unittest.TestCase):
                         libnetwork, no_pull)
 
         # Assert
-        m_os_path_exists.assert_called_once_with(log_dir)
-        m_os_makedirs.assert_called_once_with(log_dir)
+        m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork,
                                                check_docker=False,
@@ -323,8 +322,7 @@ class TestNode(unittest.TestCase):
         }
 
         # Assert
-        m_os_path_exists.assert_called_once_with(log_dir)
-        m_os_makedirs.assert_called_once_with(log_dir)
+        m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork,
                                                check_docker=True,
@@ -353,7 +351,6 @@ class TestNode(unittest.TestCase):
         m_attach_and_stream.assert_called_once_with(container, False)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
-    @patch('os.path.exists', autospec=True)
     @patch('os.makedirs', autospec=True)
     @patch('os.getenv', autospec=True)
     @patch('calico_ctl.node.check_system', autospec=True)
@@ -371,7 +368,7 @@ class TestNode(unittest.TestCase):
                                m_find_or_pull_node_image, m_docker, m_call,
                                m_docker_client, m_client,
                                m_conntrack, m_setup_ip, m_check_system,
-                               m_os_getenv, m_os_makedirs, m_os_path_exists,
+                               m_os_getenv, m_os_makedirs,
                                m_ipv6_enabled):
         """
         Test that the node_start function passes in correct values when
@@ -386,7 +383,6 @@ class TestNode(unittest.TestCase):
         m_docker_client.create_container.side_effect = iter([container1,
                                                              container2])
         m_docker_client.create_host_config.return_value = 'host_config'
-        m_os_path_exists.return_value = True
         m_check_system.return_value = [True, True, True]
 
         etcd_ca_path = "/path/to/ca.crt"
@@ -404,6 +400,9 @@ class TestNode(unittest.TestCase):
         def m_getenv(env_var, *args, **kwargs):
             return env[env_var]
         m_os_getenv.side_effect = m_getenv
+
+        # Assume log and run directories already exist to test exception path.
+        m_os_makedirs.side_effect = OSError
 
         # Set up arguments
         node_image = 'node_image'
@@ -466,7 +465,7 @@ class TestNode(unittest.TestCase):
                              ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
 
         # Assert
-        m_os_path_exists.assert_called_once_with(log_dir)
+        m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
                                                libnetwork=libnetwork_image,
                                                check_docker=True,
