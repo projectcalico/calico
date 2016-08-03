@@ -11,7 +11,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/common"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 
 	"encoding/json"
 
@@ -112,7 +112,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	if err != nil {
 		return nil, err
 	}
-	endpoint.Spec.MAC = common.MAC{HardwareAddr: mac}
+	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
 
 	// Write the endpoint object (either the newly created one, or the updated one)

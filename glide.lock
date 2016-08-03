@@ -1,5 +1,5 @@
 hash: 948daa21c3ba00b20f0d2b84d6a2e875a1c86af74c795b248d2a13fe82549109
-updated: 2016-07-28T14:06:33.5790698-07:00
+updated: 2016-08-04T10:07:17.313871772-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -10,13 +10,14 @@ imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/containernetworking/cni
-  version: c1ff202179dc15839825bed39e59d40b1c08a469
+  version: 7c579af7898c2e50fc02de711e031408450979a3
   subpackages:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
   - pkg/skel
   - pkg/types
+  - pkg/utils/hwaddr
   - pkg/invoke
 - name: github.com/coreos/etcd
   version: 8b320e7c550067b1dfb37bd1682e8067023e0751
@@ -244,14 +245,21 @@ imports:
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/tigera/libcalico-go
-  version: c30ea3cd594d01657f3f9fd22b176386fd042daf
+  version: 0da7f2c70f1fc610466e76bda4fc1be50251e2c6
   subpackages:
   - lib/api
-  - lib/common
+  - lib/errors
+  - lib/net
   - lib/client
   - lib/api/unversioned
-  - lib/selector
+  - lib/backend/etcd
+  - lib/numorstring
+  - lib/validator
   - lib/backend
+  - lib/backend/api
+  - lib/backend/model
+  - lib/selector
+  - lib/backend/compat
   - lib/selector/parser
   - lib/hash
   - lib/selector/tokenizer
@@ -310,7 +318,7 @@ imports:
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: k8s.io/kubernetes
-  version: e7f022c926583ed8e755a52f23abc4cf8b532d12
+  version: a0bfee0d3899d2b91530552a536405c1fe1a1d2a
   subpackages:
   - pkg/api
   - pkg/client/restclient
