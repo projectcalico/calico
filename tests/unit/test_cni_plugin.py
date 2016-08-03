@@ -732,6 +732,10 @@ class CniPluginTest(unittest.TestCase):
     def test_main(self, m_conf_log, m_plugin, m_sys, m_os):
         # Mock
         m_os.environ = self.env
+        self.network_config["etcd_scheme"] = "https"
+        self.network_config["etcd_key_file"] = "etcdkeyfile"
+        self.network_config["etcd_cert_file"] = "certfile"
+        self.network_config["etcd_ca_cert_file"] = "cacertfile"
         m_sys.stdin.readlines.return_value = json.dumps(self.network_config)
         m_plugin(self.env, self.network_config).execute.return_value = 0
         m_plugin.reset_mock()
