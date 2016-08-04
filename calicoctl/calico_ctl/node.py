@@ -281,12 +281,13 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     if etcd_endpoints:
         etcd_envs.append("ETCD_ENDPOINTS=%s" % etcd_endpoints)
 
-    if etcd_ca_cert_file and etcd_key_file and etcd_cert_file:
+    if etcd_ca_cert_file:
         etcd_volumes.append(ETCD_CA_CERT_NODE_FILE)
         etcd_binds[etcd_ca_cert_file] = {"bind": ETCD_CA_CERT_NODE_FILE,
                                          "ro": True}
         etcd_envs.append("ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE)
 
+    if etcd_key_file and etcd_cert_file:
         etcd_volumes.append(ETCD_KEY_NODE_FILE)
         etcd_binds[etcd_key_file] = {"bind": ETCD_KEY_NODE_FILE,
                                      "ro": True}
