@@ -48,15 +48,28 @@ func (key WorkloadEndpointKey) DefaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	if key.EndpointID == "" {
-		return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
-			key.Hostname, key.OrchestratorID, key.WorkloadID), nil
+		return "", errors.ErrorInsufficientIdentifiers{Name: "endpointID"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
 func (key WorkloadEndpointKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+	if key.Hostname == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+	}
+	if key.OrchestratorID == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
+	}
+	if key.WorkloadID == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
+	}
+	if key.EndpointID == "" {
+		return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/",
+			key.Hostname, key.OrchestratorID, key.WorkloadID), nil
+	}
+	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
+		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
 func (key WorkloadEndpointKey) valueType() reflect.Type {

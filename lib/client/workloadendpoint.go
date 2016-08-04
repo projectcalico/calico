@@ -15,6 +15,8 @@
 package client
 
 import (
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/backend/model"
@@ -43,6 +45,9 @@ func newWorkloadEndpoints(c *Client) *workloadEndpoints {
 
 // Create creates a new workload endpoint.
 func (w *workloadEndpoints) Create(a *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
+	// Set any defaults.
+	w.setCreateDefaults(a)
+
 	return a, w.c.create(*a, w)
 }
 
@@ -76,6 +81,13 @@ func (w *workloadEndpoints) List(metadata api.WorkloadEndpointMetadata) (*api.Wo
 	l := api.NewWorkloadEndpointList()
 	err := w.c.list(metadata, w, l)
 	return l, err
+}
+
+// Set's any defaults on a newly created object WorkloadEndpoint.
+func (w *workloadEndpoints) setCreateDefaults(wep *api.WorkloadEndpoint) {
+	if wep.Metadata.Name == "" {
+		wep.Metadata.Name = uuid.NewV4().String()
+	}
 }
 
 // Convert a WorkloadEndpointMetadata to a WorkloadEndpointListInterface
