@@ -235,12 +235,9 @@ class TestCommon(unittest.TestCase):
                                    rules.copy())
 
         # No rules.
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "No outbound_rules"):
-            common.validate_profile(profile_id, {'inbound_rules': []})
-        with self.assertRaisesRegexp(ValidationFailed,
-                                     "No inbound_rules"):
-            common.validate_profile(profile_id, {'outbound_rules': []})
+        prof = {}
+        common.validate_profile("prof1", prof)
+        self.assertEqual(prof, {"inbound_rules": [], "outbound_rules": []})
 
         rules = {'inbound_rules': 3,
                  'outbound_rules': []}

@@ -670,7 +670,7 @@ def _validate_rules(rules_dict, issues):
     """
     for dirn in ("inbound_rules", "outbound_rules"):
         if dirn not in rules_dict:
-            issues.append("No %s in rules." % dirn)
+            rules_dict[dirn] = []
             continue
 
         if not isinstance(rules_dict[dirn], list):
