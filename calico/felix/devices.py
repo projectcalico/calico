@@ -36,7 +36,7 @@ from calico.felix.futils import FailedSystemCall
 _log = logging.getLogger(__name__)
 
 
-def configure_global_kernel_config():
+def configure_global_kernel_config(config):
     """
     Configures the global kernel config.  In particular, sets the flags
     that we rely on to ensure security, such as the kernel's RPF check.
@@ -67,11 +67,20 @@ def configure_global_kernel_config():
     ps_name = "/proc/sys/net/ipv4/conf/all/rp_filter"
     rp_filter = int(_read_proc_sys(ps_name))
     if rp_filter > 1:
-        _log.critical("Kernel's RPF check is set to 'loose'.  This would "
-                      "allow endpoints to spoof their IP address.  Calico "
-                      "requires net.ipv4.conf.all.rp_filter to be set to "
-                      "0 or 1.")
-        raise BadKernelConfig("net.ipv4.conf.all.rp_filter set to 'loose'")
+        if config.IGNORE_LOOSE_RPF:
+            _log.warning(
+                "Kernel's RPF check is set to 'loose' and IgnoreLooseRPF "
+                "set to true.  Calico will not be able to prevent workloads "
+                "from spoofing their source IP.  Please ensure that some "
+                "other anti-spoofing mechanism is in place (such as running "
+                "only non-privileged containers)."
+            )
+        else:
+            _log.critical("Kernel's RPF check is set to 'loose'.  This would "
+                          "allow endpoints to spoof their IP address.  Calico "
+                          "requires net.ipv4.conf.all.rp_filter to be set to "
+                          "0 or 1.")
+            raise BadKernelConfig("net.ipv4.conf.all.rp_filter set to 'loose'")
 
     # Make sure the default for new interfaces is set to strict checking so
     # that there's no race when a new interface is added and felix hasn't

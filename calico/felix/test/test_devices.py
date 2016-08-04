@@ -59,7 +59,9 @@ class TestDevices(unittest.TestCase):
                                             m_read_proc_sys,
                                             m_write_proc_sys,
                                             m_exists):
-        devices.configure_global_kernel_config()
+        m_config = mock.Mock()
+        m_config.IGNORE_LOOSE_RPF = True
+        devices.configure_global_kernel_config(m_config)
         m_write_proc_sys.assert_called_once_with(
             "/proc/sys/net/ipv4/conf/default/rp_filter", "1"
         )
@@ -73,14 +75,29 @@ class TestDevices(unittest.TestCase):
                                                      m_read_proc_sys,
                                                      m_write_proc_sys,
                                                      m_exists):
+        m_config = mock.Mock()
+        m_config.IGNORE_LOOSE_RPF = False
         self.assertRaises(devices.BadKernelConfig,
-                          devices.configure_global_kernel_config)
+                          devices.configure_global_kernel_config, m_config)
 
     def test_configure_global_kernel_config_bad_rp_filter(self):
+        m_config = mock.Mock()
+        m_config.IGNORE_LOOSE_RPF = False
         with mock.patch("calico.felix.devices._read_proc_sys",
                         autospec=True, return_value="2") as m_read_proc_sys:
             self.assertRaises(devices.BadKernelConfig,
-                              devices.configure_global_kernel_config)
+                              devices.configure_global_kernel_config,
+                              m_config)
+
+    @mock.patch("calico.felix.devices._write_proc_sys",
+                autospec=True)
+    @mock.patch("calico.felix.devices._read_proc_sys",
+                autospec=True)
+    def test_configure_global_kernel_config_bad_rp_filter_ignored(self, m_rps, m_wps):
+        m_config = mock.Mock()
+        m_config.IGNORE_LOOSE_RPF = True
+        m_rps.return_value = "2"
+        devices.configure_global_kernel_config(m_config)
 
     def test_read_proc_sys(self):
         m_open = mock.mock_open(read_data="1\n")
