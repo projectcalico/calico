@@ -53,7 +53,7 @@ The network name can be supplied as the profile name and the `calicoctl` tool
 will look up the profile associated with that network.
 
 Be sure to replace `<etcd-ip:port>` with the address and port at which etcd
-is listening. 
+is listening.
 ```
 $ export ETCD_AUTHORITY=<etcd-ip:port>
 $ calicoctl profile my-calico-net rule show
@@ -72,7 +72,10 @@ traffic only from containers attached the "my-calico-net" network.
 For more information no how to configure your Calico profiles, see [Configuring Advanced Network Policy Guide](../calico-with-docker/docker-network-plugin/AdvancedPolicy.md#configuring-the-network-policy).
 
 ## Launching Containers
-With your networks configured, it is trivial to launch a calico-networked Docker container using the standard Marathon API. In your Marathon application definition, set `container.docker.network` to `USER`, and specify which network the task should join in `ipAddress.networkName`:
+With your networks configured, it is trivial to launch a calico-networked Docker container using the standard Marathon API.
+
+#### Marathon v1.2.0+
+In your Marathon application definition, set `container.docker.network` to `USER`, and specify which network the task should join in `ipAddress.networkName`:
 ```
 {
     "id": "my-docker-task",
@@ -100,7 +103,36 @@ With your networks configured, it is trivial to launch a calico-networked Docker
 }
 ```
 
-This JSON application will start an nginx webserver accessible via its Calico IP.
+#### Marathon <v1.2.0
+Though "USER" is not a valid network type in Marathon <v1.2.0, you can still launch applications on a Calico network in earlier versions of Marathon, by passing the network name as an arbitrary docker parameter:
+```
+{
+    "id": "my-docker-task",
+    "cpus": 0.1,
+    "mem": 64.0,
+    "container": {
+        "type": "DOCKER",
+        "docker": {
+            "image": "nginx",
+            "parameters": [
+              {"key": "net", "value": "my-calico-net"}
+            ]
+        }
+    },
+    "ipAddress": {},
+    "healthChecks": [{
+        "protocol": "HTTP",
+        "path": "/",
+        "port": 80,
+        "gracePeriodSeconds": 300,
+        "intervalSeconds": 60,
+        "timeoutSeconds": 20,
+        "maxConsecutiveFailures": 3
+    }]
+}
+```
+
+This application will start an nginx webserver accessible via its Calico IP.
 
 You can launch this task by pasting the JSON into the "JSON Mode" editor in the Marathon UI, or by calling into the Marathon REST API
 using the command line as follows:
