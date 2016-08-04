@@ -37,19 +37,19 @@ up a cluster.
 > NOTE: If you are running etcd with SSL/TLS, see the (Etcd Secure Cluster)[../../EtcdSecureCluster.md]
 > documentation.
 
-### Docker
+### Docker (with multi-host networking)
 
 Follow the instructions for installing [Docker][docker].  A version of 1.9 or
 greater is required.
 
-To use the multi-host native networking feature of Docker, the Docker daemon
-needs to be run specifying a cluster store.  If using etcd as a cluster store,
-run Docker daemon with the following additional parameter:
+To use Calico as a Docker network plugin, the Docker daemon
+needs to run specifying a cluster store.  If using etcd as a cluster store,
+configure the `cluster-store` on the Docker daemon to `etcd://<ETCD_IP>:<ETCD_PORT>`,
+replacing `<ETCD IP>` and <ETCD_PORT> with the appropriate address and client
+port for your etcd cluster.
 
-    --cluster-store=etcd://<ETCD IP>:2379
-
-Replacing `<ETCD IP>` with the appropriate address for your etcd cluster.  This
-also assumes your cluster uses the standard etcd port 2379.
+> For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
+> or for 1.9 see the appropriate 'Configuring Docker' section in [configuring docker][configuring-docker-1.9].
 
 #### Docker permissions
 
@@ -110,5 +110,7 @@ example in the [Calico as a Docker network plugin tutorial](README.md).
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/
 [docker]: https://docs.docker.com/installation/
+[daemon-config-file]: https://docs.docker.com/engine/reference/commandline/dockerd/#/daemon-configuration-file
+[configuring-docker-1.9]: https://docs.docker.com/v1.9/engine/articles/configuring/
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/calico-with-docker/docker-network-plugin/ManualSetup.md?pixel)](https://github.com/igrigorik/ga-beacon)
