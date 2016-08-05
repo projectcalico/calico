@@ -144,8 +144,8 @@ type WorkloadEndpoint struct {
 	State      string            `json:"state"`
 	Name       string            `json:"name"`
 	Mac        net.MAC           `json:"mac"`
-	ProfileIDs []string          `json:"profile_ids,omitempty"`
-	IPv4Nets   []net.IPNet       `json:"ipv4_nets,omitempty"`
-	IPv6Nets   []net.IPNet       `json:"ipv6_nets,omitempty"`
-	Labels     map[string]string `json:"labels,omitempty"`
+	ProfileIDs []string          `json:"profile_ids"`
+	IPv4Nets   []net.IPNet       `json:"ipv4_nets"`
+	IPv6Nets   []net.IPNet       `json:"ipv6_nets"`
+	Labels     map[string]string `json:"labels"`
 }

@@ -122,8 +122,8 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 		return nil, err
 	}
 
-	var ipv4Nets []net.IPNet
-	var ipv6Nets []net.IPNet
+	ipv4Nets := []net.IPNet{}
+	ipv6Nets := []net.IPNet{}
 	for _, n := range ah.Spec.IPNetworks {
 		if n.Version() == 4 {
 			ipv4Nets = append(ipv4Nets, n)
