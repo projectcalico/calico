@@ -13,6 +13,7 @@
 # limitations under the License.
 from unittest import skip
 import re
+import subprocess
 
 from netaddr import IPAddress, IPNetwork
 from test_base import TestBase
@@ -30,6 +31,9 @@ capture?
 
 
 class TestIPIP(TestBase):
+    def tearDown(self):
+        self.remove_tunl_ip()
+
     @skip("Not written yet")
     def test_ipip(self):
         pass
@@ -90,3 +94,23 @@ class TestIPIP(TestBase):
                     raise e
             else:
                 return
+
+    def remove_tunl_ip(self):
+        """
+        Remove tunl IP address if assigned.
+        """
+        try:
+            output = subprocess.check_output(["ip", "addr", "show", "tunl0"])
+        except subprocess.CalledProcessError:
+            return
+
+        match = re.search(r'inet ([\d]{1,3}\.[\d]{1,3}\.[\d]{1,3}\.[\d]{1,3})', output)
+        if not match:
+            return
+
+        ipnet = str(IPNetwork(match.group(1)))
+
+        try:
+            output = subprocess.check_output(["ip", "addr", "del", ipnet, "dev", "tunl0"])
+        except subprocess.CalledProcessError:
+            return
