@@ -50,9 +50,10 @@ func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*types.Result, error) {
 	result := &types.Result{}
 
 	for _, v := range ep.Spec.IPNetworks {
-		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v)
+		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v.String())
 		parsedIP := types.IPConfig{}
 		if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
+			glog.Errorf("Error unmarshalling existing endpoint IP: %s", err)
 			return nil, err
 		}
 

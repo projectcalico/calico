@@ -83,6 +83,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 		// Create the endpoint object and configure it
 		endpoint = api.NewWorkloadEndpoint()
+		endpoint.Metadata.Name = args.IfName
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID

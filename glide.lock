@@ -1,5 +1,5 @@
 hash: 948daa21c3ba00b20f0d2b84d6a2e875a1c86af74c795b248d2a13fe82549109
-updated: 2016-08-04T10:07:17.313871772-07:00
+updated: 2016-08-05T10:46:09.013060942-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -245,7 +245,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/tigera/libcalico-go
-  version: 0da7f2c70f1fc610466e76bda4fc1be50251e2c6
+  version: 372ebe73277d4b6c9138c666939c0d8442c20f3e
   subpackages:
   - lib/api
   - lib/errors
