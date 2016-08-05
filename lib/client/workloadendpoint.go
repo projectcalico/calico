@@ -51,12 +51,12 @@ func (w *workloadEndpoints) Create(a *api.WorkloadEndpoint) (*api.WorkloadEndpoi
 	return a, w.c.create(*a, w)
 }
 
-// Create creates a new workload endpoint.
+// Update updates an existing workload endpoint.
 func (w *workloadEndpoints) Update(a *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
 	return a, w.c.update(*a, w)
 }
 
-// Create creates a new workload endpoint.
+// Apply creates a new workload endpoint or updates an existing one.
 func (w *workloadEndpoints) Apply(a *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
 	return a, w.c.apply(*a, w)
 }
