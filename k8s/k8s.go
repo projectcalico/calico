@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"os"
 
@@ -128,8 +129,14 @@ func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 
-	// but that config can be overridden by config passed in explicitly in the network config.
+	// Config can be overridden by config passed in explicitly in the network config.
 	configOverrides := &clientcmd.ConfigOverrides{}
+
+	// If an API root is given, make sure we're using using the name / port rather than
+	// the full URL. Earlier versions of the config required the full `/api/v1/` extension,
+	// so split that off to ensure compatibility.
+	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]
+
 	var overridesMap = []struct {
 		variable *string
 		value    string
