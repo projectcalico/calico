@@ -767,20 +767,24 @@ def main():
         _log.debug("Using %s=%s", ETCD_ENDPOINTS_ENV, etcd_endpoints)
 
     etcd_scheme = network_config.get(ETCD_SCHEME_KEY)
-    os.environ[ETCD_SCHEME_ENV] = etcd_scheme
-    _log.debug("Using %s=%s", ETCD_SCHEME_ENV, etcd_scheme)
+    if etcd_scheme:
+        os.environ[ETCD_SCHEME_ENV] = etcd_scheme
+        _log.debug("Using %s=%s", ETCD_SCHEME_ENV, etcd_scheme)
 
     etcd_key_file = network_config.get(ETCD_KEY_FILE_KEY)
-    os.environ[ETCD_KEY_FILE_ENV] = etcd_key_file
-    _log.debug("Using %s=%s", ETCD_KEY_FILE_ENV, etcd_key_file)
+    if etcd_key_file:
+        os.environ[ETCD_KEY_FILE_ENV] = etcd_key_file
+        _log.debug("Using %s=%s", ETCD_KEY_FILE_ENV, etcd_key_file)
 
     etcd_cert_file = network_config.get(ETCD_CERT_FILE_KEY)
-    os.environ[ETCD_CERT_FILE_ENV] = etcd_cert_file
-    _log.debug("Using %s=%s", ETCD_CERT_FILE_ENV, etcd_cert_file)
+    if etcd_cert_file:
+        os.environ[ETCD_CERT_FILE_ENV] = etcd_cert_file
+        _log.debug("Using %s=%s", ETCD_CERT_FILE_ENV, etcd_cert_file)
 
     etcd_ca_cert_file = network_config.get(ETCD_CA_CERT_FILE_KEY)
-    os.environ[ETCD_CA_CERT_FILE_ENV] = etcd_ca_cert_file
-    _log.debug("Using %s=%s", ETCD_CA_CERT_FILE_ENV, etcd_ca_cert_file)
+    if etcd_ca_cert_file:
+        os.environ[ETCD_CA_CERT_FILE_ENV] = etcd_ca_cert_file
+        _log.debug("Using %s=%s", ETCD_CA_CERT_FILE_ENV, etcd_ca_cert_file)
 
     # Get the CNI environment.
     env = os.environ.copy()
