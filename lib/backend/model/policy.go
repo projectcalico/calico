@@ -22,6 +22,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/errors"
+	"strings"
 )
 
 var (
@@ -87,4 +88,23 @@ type Policy struct {
 	InboundRules  []Rule   `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules []Rule   `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 	Selector      string   `json:"selector" validate:"selector"`
+}
+
+func (p Policy) String() string {
+	parts := make([]string, 0)
+	if p.Order != nil {
+		parts = append(parts, fmt.Sprintf("order:%v", *p.Order))
+	}
+	parts = append(parts, fmt.Sprintf("selector:%#v", p.Selector))
+	inRules := make([]string, len(p.InboundRules))
+	for ii, rule := range p.InboundRules {
+		inRules[ii] = rule.String()
+	}
+	parts = append(parts, fmt.Sprintf("inbound:%v", strings.Join(inRules, ";")))
+	outRules := make([]string, len(p.OutboundRules))
+	for ii, rule := range p.OutboundRules {
+		outRules[ii] = rule.String()
+	}
+	parts = append(parts, fmt.Sprintf("outbound:%v", strings.Join(outRules, ";")))
+	return strings.Join(parts, ",")
 }

@@ -15,8 +15,11 @@
 package model
 
 import (
+	"fmt"
 	"github.com/tigera/libcalico-go/lib/net"
 	"github.com/tigera/libcalico-go/lib/numorstring"
+	"strconv"
+	"strings"
 )
 
 type Rule struct {
@@ -45,4 +48,104 @@ type Rule struct {
 	NotDstPorts    []numorstring.Port    `json:"!dst_ports,omitempty" validate:"omitempty"`
 	NotICMPType    *int                  `json:"!icmp_type,omitempty" validate:"omitempty,gte=1,lte=255"`
 	NotICMPCode    *int                  `json:"!icmp_code,omitempty" validate:"omitempty,gte=1,lte=255"`
+}
+
+func (r Rule) String() string {
+	parts := make([]string, 0)
+	if r.Action != "" {
+		parts = append(parts, r.Action)
+	} else {
+		parts = append(parts, "allow")
+	}
+	if r.Protocol != nil {
+		parts = append(parts, r.Protocol.String())
+	}
+	if r.ICMPType != nil {
+		parts = append(parts, "type", strconv.Itoa(*r.ICMPType))
+	}
+	if r.ICMPCode != nil {
+		parts = append(parts, "code", strconv.Itoa(*r.ICMPCode))
+	}
+	if r.NotICMPType != nil {
+		parts = append(parts, "!type", strconv.Itoa(*r.NotICMPType))
+	}
+	if r.NotICMPCode != nil {
+		parts = append(parts, "!code", strconv.Itoa(*r.NotICMPCode))
+	}
+
+	if r.SrcTag != "" || len(r.SrcPorts) > 0 || r.SrcNet != nil || r.SrcSelector != "" ||
+		r.NotSrcTag != "" || len(r.NotSrcPorts) > 0 || r.NotSrcNet != nil || r.NotSrcSelector != "" {
+		parts = append(parts, "from")
+	}
+	if len(r.SrcPorts) > 0 {
+		srcPorts := make([]string, len(r.SrcPorts))
+		for ii, port := range r.SrcPorts {
+			srcPorts[ii] = port.String()
+		}
+		parts = append(parts, "ports", strings.Join(srcPorts, ","))
+	}
+	if r.SrcTag != "" {
+		parts = append(parts, "tag", r.SrcTag)
+	}
+	if r.SrcSelector != "" {
+		parts = append(parts, "selector", fmt.Sprintf("%#v", r.SrcSelector))
+	}
+	if r.SrcNet != nil {
+		parts = append(parts, "cidr", r.SrcNet.String())
+	}
+	if len(r.NotSrcPorts) > 0 {
+		notSrcPorts := make([]string, len(r.NotSrcPorts))
+		for ii, port := range r.NotSrcPorts {
+			notSrcPorts[ii] = port.String()
+		}
+		parts = append(parts, "!ports", strings.Join(notSrcPorts, ","))
+	}
+	if r.NotSrcTag != "" {
+		parts = append(parts, "!tag", r.NotSrcTag)
+	}
+	if r.NotSrcSelector != "" {
+		parts = append(parts, "!selector", fmt.Sprintf("%#v", r.NotSrcSelector))
+	}
+	if r.NotSrcNet != nil {
+		parts = append(parts, "!cidr", r.NotSrcNet.String())
+	}
+
+	if r.DstTag != "" || len(r.DstPorts) > 0 || r.DstNet != nil || r.DstSelector != "" ||
+		r.NotDstTag != "" || len(r.NotDstPorts) > 0 || r.NotDstNet != nil || r.NotDstSelector != "" {
+		parts = append(parts, "to")
+	}
+	if len(r.DstPorts) > 0 {
+		DstPorts := make([]string, len(r.DstPorts))
+		for ii, port := range r.DstPorts {
+			DstPorts[ii] = port.String()
+		}
+		parts = append(parts, "ports", strings.Join(DstPorts, ","))
+	}
+	if r.DstTag != "" {
+		parts = append(parts, "tag", r.DstTag)
+	}
+	if r.DstSelector != "" {
+		parts = append(parts, "selector", fmt.Sprintf("%#v", r.DstSelector))
+	}
+	if r.DstNet != nil {
+		parts = append(parts, "cidr", r.DstNet.String())
+	}
+	if len(r.NotDstPorts) > 0 {
+		NotDstPorts := make([]string, len(r.NotDstPorts))
+		for ii, port := range r.NotDstPorts {
+			NotDstPorts[ii] = port.String()
+		}
+		parts = append(parts, "!ports", strings.Join(NotDstPorts, ","))
+	}
+	if r.NotDstTag != "" {
+		parts = append(parts, "!tag", r.NotDstTag)
+	}
+	if r.NotDstSelector != "" {
+		parts = append(parts, "!selector", fmt.Sprintf("%#v", r.NotDstSelector))
+	}
+	if r.NotDstNet != nil {
+		parts = append(parts, "!cidr", r.NotDstNet.String())
+	}
+
+	return strings.Join(parts, " ")
 }
