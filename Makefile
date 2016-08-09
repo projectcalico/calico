@@ -54,7 +54,7 @@ $(BUILD_CONTAINER_MARKER): Dockerfile.build
 
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized
-test-containerized: dist/host-local run-etcd $(BUILD_CONTAINER_MARKER) build-containerized
+test-containerized: dist/host-local dist/calicoctl run-etcd $(BUILD_CONTAINER_MARKER) build-containerized
 	docker run -ti --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e PLUGIN=calico \
