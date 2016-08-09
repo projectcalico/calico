@@ -23,19 +23,19 @@ Specify the location of your etcd cluster using either
 
 If both are set then `etcd_endpoints` is used.
 
-### Log levels
-* Logging to `stderr` is controller through `log_level_stderr` (default is `NONE`)
-* Logging to file is controlled through `log_level` (default is `INFO`).
-  * Files appear in /var/log/calico/cni/cni.log (and cni_ipam.log)
-  * Files are automatically rotated. 5 files of 1MB each are kept.
-
-Possible log levels are
-* CRITICAL
-* ERROR
-* WARNING
-* INFO
-* DEBUG
-* NONE
+### Logging
+* Logging is always to `stderr`
+* Additional logging can be enabled by setting `"debug"` to `true` in the netconf, e.g.
+```json
+{
+    "name": "any_name",
+    "type": "calico",
+    "debug": true,
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+```
 
 ### IPAM
 When using Calico IPAM, the following flags determine what IP addresses should be assigned.
@@ -48,7 +48,7 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 
 ## Kubernetes specific
 
-When using the Calico CNI plugin with Kubernetes, an additional config block can be specified to control how network policy is configured. The required config block is `policy`. See the [Calico Kubernetes documentation](https://github.com/projectcalico/calico-containers/tree/master/docs/cni/kubernetes) for more information.
+When using the Calico CNI plugin with Kubernetes, two additional config blocks can be specified to control how network policy is configured.
 
 ### Type
 The type specifies which policy scheme to use.
@@ -66,10 +66,11 @@ To specify a policy, add the following block to the CNI network config:
 
 ### Kubernetes API access details
 When using either policy type, the CNI plugin needs to be told how to access the Kubernetes API server in the `policy` section of the network config.
-* `k8s_api_root` (default `https://10.100.0.1:443/api/v1/`)
+* `k8s_api_root` (default `http://127.0.0.1:8080`)
 
-The CNI plugin may need to authenticate with the Kubernetes API server. The following methods are supported in the `policy` section of the CNI network config, 
-none of which have default values.
+The CNI plugin may need to authenticate with the Kubernetes API server. The following methods are supported in the `policy` section of the CNI network config, none of which have default values.
+* `k8s_username`
+* `k8s_password`
 * `k8s_auth_token`
 * `k8s_client_certificate`
 * `k8s_client_key`
@@ -79,6 +80,8 @@ none of which have default values.
 The following methods are supported in the `kubernetes` section of the CNI network config.
 * `kubeconfig`
 	* Path to a Kubernetes `kubeconfig` file.
+* `node_name`
+    * The node name to use when looking up the `usePodCidr` value (defaults to current hostname)
 
 ```json
 "kubernetes": {

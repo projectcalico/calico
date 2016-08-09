@@ -1,3 +1,0 @@
-[run]
-omit =
-    */calico_cni/tests/*
