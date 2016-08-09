@@ -88,7 +88,7 @@ coreos:
         Requires=docker.service
 
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/wget -c -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
         ExecStartPre=/usr/bin/wget -O /opt/cni/bin/calico https://github.com/projectcalico/calico-cni/releases/download/v1.3.0/calico 
@@ -119,7 +119,7 @@ coreos:
         Requires=kubelet.service
         After=kubelet.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/wget -c -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
