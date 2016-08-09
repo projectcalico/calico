@@ -39,7 +39,7 @@ dist/calico-ipam: $(SRCFILES) vendor
 
 .PHONY: test
 # Run the unit tests.
-test: dist/calico dist/calico-ipam run-etcd
+test: dist/calico dist/calico-ipam dist/calicoctl dist/host-local run-etcd
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
