@@ -13,7 +13,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/common"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
 func min(a, b int) int {
@@ -50,9 +50,10 @@ func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*types.Result, error) {
 	result := &types.Result{}
 
 	for _, v := range ep.Spec.IPNetworks {
-		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v)
+		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v.String())
 		parsedIP := types.IPConfig{}
 		if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
+			glog.Errorf("Error unmarshalling existing endpoint IP: %s", err)
 			return nil, err
 		}
 
@@ -90,12 +91,12 @@ func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *types.Result) 
 
 	if result.IP4 != nil {
 		result.IP4.IP.Mask = net.CIDRMask(32, 32)
-		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, common.IPNet{result.IP4.IP})
+		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{result.IP4.IP})
 	}
 
 	if result.IP6 != nil {
 		result.IP6.IP.Mask = net.CIDRMask(128, 128)
-		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, common.IPNet{result.IP6.IP})
+		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{result.IP6.IP})
 	}
 
 	return nil
@@ -106,19 +107,23 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 		return nil, err
 	}
 
-	clientConfig, err := client.LoadClientConfig(nil)
+	// Use the config file to override environment variables.
+	// These variables will be loaded into the client config.
+	if conf.EtcdAuthority != "" {
+		os.Setenv("ETCD_AUTHORITY", conf.EtcdAuthority)
+	}
+	if conf.EtcdEndpoints != "" {
+		os.Setenv("ETCD_ENDPOINTS", conf.EtcdEndpoints)
+	}
+
+	// Load the client config from the current environment.
+	clientConfig, err := client.LoadClientConfig("")
 	if err != nil {
 		return nil, err
 	}
 
-	if conf.EtcdAuthority != "" {
-		clientConfig.EtcdAuthority = conf.EtcdAuthority
-	}
-	if conf.EtcdEndpoints != "" {
-		clientConfig.EtcdEndpoints = conf.EtcdEndpoints
-	}
-
-	calicoClient, err := client.New(clientConfig)
+	// Create a new client.
+	calicoClient, err := client.New(*clientConfig)
 	if err != nil {
 		return nil, err
 	}

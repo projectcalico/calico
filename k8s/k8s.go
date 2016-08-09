@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"os"
 
@@ -11,7 +12,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/common"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 
 	"encoding/json"
 
@@ -83,6 +84,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 		// Create the endpoint object and configure it
 		endpoint = api.NewWorkloadEndpoint()
+		endpoint.Metadata.Name = args.IfName
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID
@@ -112,7 +114,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	if err != nil {
 		return nil, err
 	}
-	endpoint.Spec.MAC = common.MAC{HardwareAddr: mac}
+	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
 
 	// Write the endpoint object (either the newly created one, or the updated one)
@@ -127,8 +129,14 @@ func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 
-	// but that config can be overridden by config passed in explicitly in the network config.
+	// Config can be overridden by config passed in explicitly in the network config.
 	configOverrides := &clientcmd.ConfigOverrides{}
+
+	// If an API root is given, make sure we're using using the name / port rather than
+	// the full URL. Earlier versions of the config required the full `/api/v1/` extension,
+	// so split that off to ensure compatibility.
+	conf.Policy.K8sAPIRoot = strings.Split(conf.Policy.K8sAPIRoot, "/api/")[0]
+
 	var overridesMap = []struct {
 		variable *string
 		value    string

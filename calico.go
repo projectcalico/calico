@@ -31,9 +31,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/k8s"
 	. "github.com/projectcalico/calico-cni/utils"
-	"github.com/satori/go.uuid"
 	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/common"
+	"github.com/tigera/libcalico-go/lib/errors"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
 var hostname string
@@ -127,10 +127,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			// 2) Create the endpoint object
 			endpoint = api.NewWorkloadEndpoint()
+			endpoint.Metadata.Name = args.IfName
 			endpoint.Metadata.Hostname = hostname
 			endpoint.Metadata.OrchestratorID = orchestratorID
 			endpoint.Metadata.WorkloadID = workloadID
-			endpoint.Metadata.Name = fmt.Sprintf("%x", uuid.NewV1())
 			endpoint.Spec.Profiles = []string{profileID}
 
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
@@ -150,7 +150,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
-			endpoint.Spec.MAC = common.MAC{HardwareAddr: mac}
+			endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
@@ -167,7 +167,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		exists := true
 		_, err = calicoClient.Profiles().Get(api.ProfileMetadata{Name: conf.Name})
 		if err != nil {
-			_, ok := err.(common.ErrorResourceDoesNotExist)
+			_, ok := err.(errors.ErrorResourceDoesNotExist)
 			if ok {
 				exists = false
 			} else {
