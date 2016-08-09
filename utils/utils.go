@@ -126,9 +126,9 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 }
 
 func EnableDebugLogging() {
-	flag.Set("logtostderr", "true")
-	flag.Set("v", "10")
-	flag.Set("stderrthreshold", "10")
+	_ = flag.Set("logtostderr", "true")
+	_ = flag.Set("v", "10")
+	_ = flag.Set("stderrthreshold", "10")
 	flag.Parse()
 	glog.Info("Calico CNI debug logging configured")
 }
