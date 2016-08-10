@@ -141,6 +141,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			endpoint.Spec.Profiles = []string{profileID}
 
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
+				// Cleanup IP allocation and return the error.
+				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
@@ -149,11 +151,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 3) Set up the veth
 			hostVethName, contVethMac, err := DoNetworking(args, conf, result)
 			if err != nil {
+				// Cleanup IP allocation and return the error.
+				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
 			mac, err := net.ParseMAC(contVethMac)
 			if err != nil {
+				// Cleanup IP allocation and return the error.
+				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
@@ -163,6 +169,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
+			// Cleanup IP allocation and return the error.
+			ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return err
 		}
 	}
@@ -178,6 +186,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if ok {
 				exists = false
 			} else {
+				// Cleanup IP allocation and return the error.
+				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
@@ -201,6 +211,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			profile.Spec.IngressRules = inboundRules
 
 			if _, err := calicoClient.Profiles().Create(profile); err != nil {
+				// Cleanup IP allocation and return the error.
+				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
