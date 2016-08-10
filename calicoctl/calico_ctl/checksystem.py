@@ -226,12 +226,12 @@ def check_etcd_version():
     try:
         detected_version_string_raw = \
             client.etcd_client.api_execute("/version", 'GET').data
-    except EtcdConnectionFailed:
+    except EtcdConnectionFailed as e:
         etcd_env = os.getenv(ETCD_ENDPOINTS_ENV)
         if not etcd_env:
             etcd_env = os.getenv(ETCD_AUTHORITY_ENV, ETCD_AUTHORITY_DEFAULT)
-        print >> sys.stderr, "ERROR: Could not connect to etcd at %s" % \
-            etcd_env
+        print >> sys.stderr, "ERROR: Could not connect to etcd at %s: %s" % \
+            (etcd_env, str(e))
         system_ok = False
     else:
         # Different version of etcd provide different version strings e.g.
