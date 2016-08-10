@@ -183,33 +183,6 @@ class TestProfile(unittest.TestCase):
         m_client.get_profile.assert_called_once_with('Profile_1')
         self.assertFalse(m_sys_stdin.called)
 
-    @patch('calico_ctl.profile.client', autospec=True)
-    @patch('sys.stdin', autospec=True)
-    @patch('calico_ctl.profile.Rules', autospec=True)
-    def test_profile_rule_update_no_matching_id(self, m_Rules, m_sys_stdin,
-                                                m_client):
-        """
-        Test for profile_rule_update function when the Rules id does not match
-        specified Profile name
-
-        Assert that the system exits
-        """
-        # Set up mock objects
-        m_Profile = Mock(spec=Profile, name='Profile_1')
-        m_client.get_profile.return_value = m_Profile
-        m_sys_stdin.read.return_value = 'rules'
-        m_Rules_return = Mock(spec=Rules, id='Profile_2')
-        m_Rules.from_json.return_value = m_Rules_return
-
-        # Call method under test
-        self.assertRaises(SystemExit, profile_rule_update, 'Profile_1')
-
-        # Assert
-        m_client.get_profile.assert_called_once_with('Profile_1')
-        m_sys_stdin.read.assert_called_once_with()
-        m_Rules.from_json.assert_called_once_with('rules')
-        self.assertFalse(m_client.profile_update_rules.called)
-
     @parameterized.expand([
         ('inbound', None), ('inbound', 2), ('inbound', 5),
         ('outbound', None), ('outbound', 2), ('outbound', 5),

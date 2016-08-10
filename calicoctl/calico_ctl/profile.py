@@ -400,10 +400,6 @@ def profile_rule_update(name):
     # Read in the JSON from standard in.
     rules_str = sys.stdin.read()
     rules = Rules.from_json(rules_str)
-    if rules.id != name:
-        print 'Rules JSON "id"=%s doesn\'t match profile name %s.' % \
-              (rules.id, name)
-        sys.exit(1)
 
     nmp.profile.rules = rules
     nmp.update_rules()
