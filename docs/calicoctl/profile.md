@@ -469,7 +469,6 @@ Examples:
 # Default rules for newly created profile named PROF
 $ calicoctl profile PROF rule json
 {
-  "id": "PROF", 
   "inbound_rules": [
     {
       "action": "allow", 
@@ -505,7 +504,6 @@ Examples:
 ```
 # Configure a profile using JSON file web_rules.json with the following contents:
 # {
-#   "id": "WEB",
 #   "inbound_rules": [
 #     {
 #       "action": "allow",
