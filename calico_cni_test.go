@@ -64,7 +64,9 @@ var _ = Describe("CalicoCni", func() {
 				// etcd things:
 				// Profile is created with correct details
 				Expect(GetEtcdString("/calico/v1/policy/profile/net1/tags")).Should(MatchJSON(`["net1"]`))
-				Expect(GetEtcdString("/calico/v1/policy/profile/net1/rules")).Should(MatchJSON(`{"inbound_rules":[{"action":"allow","src_tag":"net1"}],"outbound_rules":[{"action":"allow"}]}`))
+
+				//NOTE - The id field here is temporary and should go away with the next libcalico-go update we take.
+				Expect(GetEtcdString("/calico/v1/policy/profile/net1/rules")).Should(MatchJSON(`{"id": "net1", "inbound_rules":[{"action":"allow","src_tag":"net1"}],"outbound_rules":[{"action":"allow"}]}`))
 
 				// The endpoint is created in etcd
 				endpoint_path := GetEtcdMostRecentSubdir(fmt.Sprintf("/calico/v1/host/%s/workload/cni/%s", hostname, containerID))
