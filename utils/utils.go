@@ -110,10 +110,14 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 	// Use the config file to override environment variables.
 	// These variables will be loaded into the client config.
 	if conf.EtcdAuthority != "" {
-		os.Setenv("ETCD_AUTHORITY", conf.EtcdAuthority)
+		if err := os.Setenv("ETCD_AUTHORITY", conf.EtcdAuthority); err != nil {
+			return nil, err
+		}
 	}
 	if conf.EtcdEndpoints != "" {
-		os.Setenv("ETCD_ENDPOINTS", conf.EtcdEndpoints)
+		if err := os.Setenv("ETCD_ENDPOINTS", conf.EtcdEndpoints); err != nil {
+			return nil, err
+		}
 	}
 
 	// Load the client config from the current environment.
