@@ -125,12 +125,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
+			// Parse endpoint labels passed in by Mesos, and store in a map.
+			labels := map[string]string{}
+			for _, label := range conf.Args.Mesos.NetworkInfo.Labels.Labels {
+				labels[label.Key] = label.Value
+			}
+
 			// 2) Create the endpoint object
 			endpoint = api.NewWorkloadEndpoint()
 			endpoint.Metadata.Name = args.IfName
 			endpoint.Metadata.Hostname = hostname
 			endpoint.Metadata.OrchestratorID = orchestratorID
 			endpoint.Metadata.WorkloadID = workloadID
+			endpoint.Metadata.Labels = labels
 			endpoint.Spec.Profiles = []string{profileID}
 
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
