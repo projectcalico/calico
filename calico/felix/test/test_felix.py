@@ -111,7 +111,7 @@ class TestBasic(BaseTestCase):
         m_load.assert_called_once_with(async=False)
         m_iface_exists.assert_called_once_with("tunl0")
         m_iface_up.assert_called_once_with("tunl0")
-        m_configure_global_kernel_config.assert_called_once_with()
+        m_configure_global_kernel_config.assert_called_once_with(config)
         m_conntrack.assert_called_once_with()
         m_http_server.assert_called_once_with(("0.0.0.0", 9091),
                                               felix.MetricsHandler)
@@ -170,7 +170,7 @@ class TestBasic(BaseTestCase):
             self.assertRaises(TestException,
                               felix._main_greenlet, config)
         m_load.assert_called_once_with(async=False)
-        m_configure_global_kernel_config.assert_called_once_with()
+        m_configure_global_kernel_config.assert_called_once_with(config)
         m_install_globals.assert_called_once_with(mock.ANY, mock.ANY, mock.ANY,
                                                   ip_version=4)
         m_conntrack.assert_called_once_with()

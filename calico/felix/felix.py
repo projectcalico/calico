@@ -76,7 +76,7 @@ def _main_greenlet(config):
 
         # Ensure the Kernel's global options are correctly configured for
         # Calico.
-        devices.configure_global_kernel_config()
+        devices.configure_global_kernel_config(config)
 
         # Check the commands we require are present.
         futils.check_command_deps()

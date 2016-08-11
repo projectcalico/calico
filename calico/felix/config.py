@@ -240,6 +240,14 @@ class Config(object):
                            "One of 'DROP', 'ACCEPT', 'LOG-and-DROP', "
                            "'LOG-and-ACCEPT'.",
                            "DROP")
+        self.add_parameter("IgnoreLooseRPF",
+                           "If set to true, Felix will ignore the kernel's "
+                           "RPF check setting.  If set to false, Felix will "
+                           "abort if the RPF setting is not 'strict'.  Should "
+                           "only be set to true if workloads are incapable of "
+                           "spoofing their source IP.  (For example, "
+                           "unprivileged containers.)",
+                           False, value_is_bool=True)
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("EtcdDriverLogFilePath",
@@ -419,6 +427,7 @@ class Config(object):
         self.FAILSAFE_OUTBOUND_PORTS = \
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
+        self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
 
         self._validate_cfg(final=final)
 
