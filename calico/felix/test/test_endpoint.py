@@ -315,6 +315,34 @@ class TestEndpointManager(BaseTestCase):
         self.assertEqual(self.mgr.decref.mock_calls, [mock.call(ENDPOINT_ID)])
         self.assertFalse(ENDPOINT_ID in self.mgr.local_endpoint_ids)
 
+    def test_endpoint_interface_rename(self):
+        ep = {"name": "tap1234"}
+        # First send in an update to trigger creation.
+        self.mgr.on_endpoint_update(ENDPOINT_ID, ep, async=True)
+        self.step_actor(self.mgr)
+        self.assertEqual(self.mgr.get_and_incref.mock_calls,
+                         [mock.call(ENDPOINT_ID)])
+        m_endpoint = Mock(spec=WorkloadEndpoint)
+        self.mgr.objects_by_id[ENDPOINT_ID] = m_endpoint
+        # Then send an update with a different interface name.  This should be
+        # treated as a delete then an add.
+        ep2 = {"name": "tap2345"}
+        with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
+            m_sol.side_effect = iter([True, False])
+            self.mgr.on_endpoint_update(ENDPOINT_ID, ep2, async=True)
+            self.step_actor(self.mgr)
+        # One call for deletion, one for creation:
+        self.assertEqual(m_sol.mock_calls, [mock.call(ENDPOINT_ID)] * 2)
+        # Deletion of old endpoint:
+        self.assertEqual(m_endpoint.on_endpoint_update.mock_calls,
+                         [mock.call(None, force_reprogram=False,
+                                    async=True)])
+        self.assertEqual(self.mgr.decref.mock_calls, [mock.call(ENDPOINT_ID)])
+        # Should have another creation:
+        self.assertEqual(self.mgr.get_and_incref.mock_calls,
+                         [mock.call(ENDPOINT_ID)] * 2)
+        self.assertTrue(ENDPOINT_ID in self.mgr.local_endpoint_ids)
+
     def test_on_interface_update_unknown(self):
         with mock.patch.object(self.mgr, "_is_starting_or_live") as m_sol:
             self.mgr.on_interface_update("foo", True, async=True)
