@@ -12,20 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package numorstring
+package model_test
 
-type Protocol struct {
-	Int32OrString
-}
+import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
-func ProtocolFromInt(p int32) Protocol {
-	return Protocol{
-		Int32OrString{Type: NumOrStringNum, NumVal: p},
-	}
-}
+	"testing"
+)
 
-func ProtocolFromString(p string) Protocol {
-	return Protocol{
-		Int32OrString{Type: NumOrStringString, StrVal: p},
-	}
+func TestModel(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Model Suite")
 }

@@ -14,6 +14,22 @@
 
 package numorstring
 
+import "fmt"
+
 type Port struct {
 	Int32OrString
+}
+
+func PortFromInt(p int32) Port {
+	return Port{Int32OrString{
+		Type:   NumOrStringNum,
+		NumVal: p,
+	}}
+}
+
+func PortFromRange(from, to int32) Port {
+	return Port{Int32OrString{
+		Type:   NumOrStringString,
+		StrVal: fmt.Sprintf("%v:%v", from, to),
+	}}
 }
