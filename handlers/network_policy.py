@@ -33,8 +33,7 @@ def add_update_network_policy(policy):
                        json.dumps(policy, indent=2))
         os.exit(1)
     else:
-        rules = Rules(id=name,
-                      inbound_rules=inbound_rules,
+        rules = Rules(inbound_rules=inbound_rules,
                       outbound_rules=[Rule(action="allow")])
 
         # Create the network policy using the calculated selector and rules.
