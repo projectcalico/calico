@@ -91,11 +91,15 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Spec.Profiles = []string{profileID}
 
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
+			// Cleanup IP allocation and return the error.
+			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
 
 		labels, err := getK8sLabels(client, k8sArgs)
 		if err != nil {
+			// Cleanup IP allocation and return the error.
+			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
 
@@ -107,11 +111,15 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result)
 	if err != nil {
+		// Cleanup IP allocation and return the error.
+		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 
 	mac, err := net.ParseMAC(contVethMac)
 	if err != nil {
+		// Cleanup IP allocation and return the error.
+		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
@@ -119,6 +127,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
+		// Cleanup IP allocation and return the error.
+		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 

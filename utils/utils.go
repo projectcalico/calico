@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/golang/glog"
@@ -140,4 +141,19 @@ func EnableDebugLogging() {
 	_ = flag.Set("stderrthreshold", "10")
 	flag.Parse()
 	glog.Info("Calico CNI debug logging configured")
+}
+
+// ReleaseIPAM is called to cleanup IPAM allocations if something goes wrong during
+// CNI ADD execution.
+func ReleaseIPAllocation(ipamType string, stdinData []byte) {
+	glog.V(3).Infof("Cleaning up IP allocations for failed ADD")
+	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
+		// Failed to set CNI_COMMAND to DEL.
+		glog.Warningf("Failed to set CNI_COMMAND=DEL")
+	}
+
+	if err := ipam.ExecDel(ipamType, stdinData); err != nil {
+		// Failed to cleanup the IP allocation.
+		glog.Warningf("Failed to clean up IP allocations for failed ADD")
+	}
 }
