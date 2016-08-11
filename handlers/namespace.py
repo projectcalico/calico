@@ -49,8 +49,7 @@ def add_update_namespace(namespace):
         inbound_rules = [Rule(action="deny")]
     else:
         inbound_rules = [Rule(action="allow")]
-    rules = Rules(id=profile_name,
-                  inbound_rules=inbound_rules,
+    rules = Rules(inbound_rules=inbound_rules,
                   outbound_rules=outbound_rules)
 
     # Assign labels to the profile.  We modify the keys to use
