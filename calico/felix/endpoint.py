@@ -293,6 +293,35 @@ class EndpointManager(ReferenceManager):
             _log.debug("Skipping endpoint %s; not on our host.", endpoint_id)
             return
 
+        old_ep = self.endpoints_by_id.get(endpoint_id, {})
+        old_iface_name = old_ep.get("name")
+        new_iface_name = (endpoint or {}).get("name")
+
+        if (old_iface_name is not None and
+                new_iface_name is not None and
+                old_iface_name != new_iface_name):
+            # Special-case: if the interface name of an active endpoint
+            # changes we need to clean up routes and iptables and start from
+            # scratch.  Force that through the deletion path so that we don't
+            # introduce any more complexity in LocalEndpoint.
+            _log.info("Name of interface for endpoint %s changed from %s "
+                      "to %s.  Forcing a delete/re-add.",
+                      endpoint_id, old_iface_name, new_iface_name)
+            self._on_endpoint_update_internal(endpoint_id, None,
+                                              force_reprogram)
+
+        self._on_endpoint_update_internal(endpoint_id, endpoint, force_reprogram)
+
+    def _on_endpoint_update_internal(self, endpoint_id, endpoint, force_reprogram=False):
+        """Handles a single update or deletion of an endpoint.
+
+        Increfs/decrefs the actor as appropriate and forwards on the update
+        if the endpoint is active.
+
+        :param EndpointId endpoint_id: The endpoint ID in question.
+        :param dict[str]|NoneType endpoint: Dictionary of all endpoint
+            data or None if the endpoint is to be deleted.
+        """
         if self._is_starting_or_live(endpoint_id):
             # Local endpoint thread is running; tell it of the change.
             _log.info("Update for live endpoint %s", endpoint_id)
@@ -850,10 +879,17 @@ class LocalEndpoint(RefCountedActor):
                 self._iptables_in_sync = False
                 self._device_in_sync = False
 
+            new_iface_name = pending_endpoint["name"]
+            # Interface renames are handled in the EndpointManager by
+            # simulating a delete then an add.  We shouldn't see one here.
+            assert (self.endpoint is None or
+                    self._iface_name == new_iface_name), (
+                "Unexpected change of interface name."
+            )
             if self.endpoint is None:
                 # This is the first time we have seen the endpoint, so extract
                 # the interface name and endpoint ID.
-                self._iface_name = pending_endpoint["name"]
+                self._iface_name = new_iface_name
                 self._suffix = interface_to_chain_suffix(self.config,
                                                          self._iface_name)
                 _log.debug("Learned interface name/suffix: %s/%s",
