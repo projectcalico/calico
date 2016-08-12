@@ -1,5 +1,5 @@
-hash: d21fd185528e7b58b57c5c559a4be6881c1ab8e15658d46b6047af458e998845
-updated: 2016-07-20T14:01:29.394819232-07:00
+hash: 1a696e4d1f4b30ceb1b1305d8baeb4201a10aa006f78ca8024b838896f6f2901
+updated: 2016-08-12T10:34:11.659733358-07:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -28,6 +28,8 @@ imports:
   version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
 - name: github.com/kelseyhightower/envconfig
   version: 91921eb4cf999321cdbeebdba5a03555800d493b
+- name: github.com/satori/go.uuid
+  version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/ugorji/go
   version: b94837a2404ab90efe9289e77a70694c355739cb
   subpackages:
