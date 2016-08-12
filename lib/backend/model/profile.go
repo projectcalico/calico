@@ -148,7 +148,6 @@ type Profile struct {
 }
 
 type ProfileRules struct {
-	ProfileID     string `json:"id,omitempty" validate:"omitempty"`
 	InboundRules  []Rule `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules []Rule `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 }
