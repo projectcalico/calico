@@ -26,6 +26,13 @@ ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 dist/calicoctl: $(CALICOCTL_FILE) birdcl 
 	# Ignore errors on docker command. CircleCI throws an benign error
 	# from the use of the --rm flag
+    #
+    # We create two versions of calicoctl built using wheezy and jessie based
+    # build containers.  The main build is the more up-to-date jessie build,
+    # but we also build a wheezy version for support of older versions of glibc.
+	-docker run -v `pwd`:/code --rm \
+	 calico/build:latest-wheezy \
+	 pyinstaller calicoctl-debian-glibc-2.13.spec -ayF
 
 	-docker run -v `pwd`:/code --rm \
 	 calico/build:latest \
