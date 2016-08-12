@@ -108,7 +108,7 @@ func (c replace) execute(client *client.Client, resource unversioned.Resource) (
 	case api.Profile:
 		_, err = client.Profiles().Update(&r)
 	case api.WorkloadEndpoint:
-		_, err = client.WorkloadEndpoints().Update(&r)
+		err = fmt.Errorf("Workload endpoints cannot be managed directly")
 	default:
 		panic(fmt.Errorf("Unhandled resource type: %v", resource))
 	}

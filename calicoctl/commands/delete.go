@@ -112,7 +112,7 @@ func (d delete) execute(client *client.Client, resource unversioned.Resource) (u
 	case api.Profile:
 		err = client.Profiles().Delete(r.Metadata)
 	case api.WorkloadEndpoint:
-		err = client.WorkloadEndpoints().Delete(r.Metadata)
+		err = fmt.Errorf("Workload endpoints cannot be managed directly")
 	default:
 		panic(fmt.Errorf("Unhandled resource type: %v", resource))
 	}
