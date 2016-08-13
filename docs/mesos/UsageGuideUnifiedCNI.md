@@ -71,4 +71,4 @@ The application should show a Calico IP when viewed in the Marathon UI.
 
 [calico-slack]: https://slack.projectcalico.org/
 [marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/docs/ip-per-task.md
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/UsageGuideUnifiedContainerizer.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/UsageGuideUnifiedCNI.md?pixel)](https://github.com/igrigorik/ga-beacon)

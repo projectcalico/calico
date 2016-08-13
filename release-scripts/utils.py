@@ -320,12 +320,20 @@ def url_exists(url):
     :param url:
     :return: True if it exists, False otherwise.
     """
+    # Check for URLs we can't validate
+    if url.startswith("https://kiwiirc.com"):
+        return True
+    if url.startswith("https://www.projectcalico.org"):
+        return True
+
     try:
         urllib2.urlopen(url)
         return True
     except urllib2.HTTPError, e:
+        print_bullet("Hit error reading %s: %s" % (url, e))
         return False
     except urllib2.URLError, e:
+        print_bullet("Hit error reading %s: %s" % (url, e))
         return False
 
 
@@ -454,6 +462,12 @@ def validate_uri(filename, uri):
             uri.startswith("https://www.github.com/projectcalico/calico-containers")):
 
             if README_RE.match(uri):
+                return True
+
+            # If an explicit version has been specified then keep it in, but warn the user.
+            if (uri.startswith("https://github.com/projectcalico/calico-containers/blob") or
+                uri.startswith("https://www.github.com/projectcalico/calico-containers/blob")):
+                print_bullet("%s: WARNING: Should this be a relative URL?: %s" % (filename, uri))
                 return True
 
             if ((uri.find("/calico-containers/issues") < 0) and
