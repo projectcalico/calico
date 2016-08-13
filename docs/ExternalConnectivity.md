@@ -53,6 +53,6 @@ configuration guide for the exact steps, but generally speaking, you'll need to
 If you have a L3 routed fabric or some other scenario not covered by the above,
 detailed datacenter networking recommendations are given in the main 
 [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
-We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
+We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/ExternalConnectivity.md?pixel)](https://github.com/igrigorik/ga-beacon)

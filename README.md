@@ -16,7 +16,7 @@ scalable IP networking principles as the internet: providing connectivity using
 a pure Layer 3 approach.  Calico can be deployed without encapsulation or
 overlays to provide high performance at massive scales.
 
-Read more about it on the [Project Calico website](http://www.projectcalico.org).
+Read more about it on the [Project Calico website](https://www.projectcalico.org).
 
 When using Calico networking in containerized environments, each container
 gets its own IP and fine grain security policy.  A `calico-node` service runs

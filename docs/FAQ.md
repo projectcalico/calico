@@ -47,7 +47,7 @@ If this describes your infrastructure, the
 [External Connectivity tutorial](ExternalConnectivity.md) explains in more detail
 what to do. Otherwise, detailed datacenter networking recommendations are given
 in the main [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
-We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
+We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?

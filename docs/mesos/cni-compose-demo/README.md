@@ -69,3 +69,5 @@ Command exited with status 0 (pid: 1762)
 ```
 
 For more information on using Calico with Mesos CNI, see the [Calico-CNI for Mesos Unified Containerizer Usage Guide](../UsageGuideUnifiedCNI.md).
+
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/mesos/cni-compose-demo/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
