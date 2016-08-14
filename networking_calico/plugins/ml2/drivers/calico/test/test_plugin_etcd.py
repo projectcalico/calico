@@ -36,6 +36,7 @@ import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
 import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
 
 _log = logging.getLogger(__name__)
+logging.getLogger().addHandler(logging.NullHandler())
 
 
 class TestPluginEtcd(lib.Lib, unittest.TestCase):
