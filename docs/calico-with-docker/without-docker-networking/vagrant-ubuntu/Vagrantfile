@@ -53,11 +53,14 @@ Vagrant.configure(2) do |config|
       host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl #{calicoctl_url}", :privileged => true
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 
-      # Calico uses etcd for clustering. Install it on the first host only.
+      # Calico uses etcd for clustering. Install it on the first host only.  We do not
+      # auto-assign the name because the name may include the : of the Docker image
+      # which will not be allowed.
       if i == 1
         host.vm.provision :docker do |d|
           d.run "quay.io/coreos/etcd:v3.0.3",
             args: "--net=host",
+            auto_assign_name: false,
             cmd: "/usr/local/bin/etcd "\
                  "--advertise-client-urls http://#{primary_ip}:2379 "\
                  "--listen-client-urls http://0.0.0.0:2379 "

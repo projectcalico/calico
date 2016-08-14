@@ -63,14 +63,11 @@ configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64
 
 On calico-01, run:
 
-    docker run --name workload-F -tid ubuntu
+    docker run --name workload-F -tid busybox
 
 On calico-02, run:
 
-    docker run --name workload-G -tid ubuntu
-
-> Note that we have used `ubuntu` instead of `busybox`.  Busybox doesn't support 
-> IPv6 versions of network tools like ping.
+    docker run --name workload-G -tid busybox
 
 ## 5. Adding Calico networking
 
