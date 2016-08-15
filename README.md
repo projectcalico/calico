@@ -17,12 +17,16 @@ The [calico-containers repository][calico-containers] contains getting started g
 To learn more about CNI, visit the [appc/cni][cni] repo.
 
 ## Building the plugins and running tests
-To build the Calico Networking Plugin for CNI locally, clone this repository and run `make`.  This will build both CNI plugin binaries and run the unit and fv tests.
+To build the Calico Networking Plugin for CNI locally, clone this repository and run `make`.  This will build both CNI plugin binaries and run the tests.
 
 - To just build the binaries, with no tests, run `make binary`. This will produce `dist/calico` and `dist/calico-ipam`.
-- To only run the unit tests, simply run `make ut`.
-- To only run the fv tests, simply run `make fv`.
-- To build the docker image, run `make docker`.
+- To only run the tests, simply run `make test`.
+
+## Release process
+* Create a release on Github and use it to create a tag
+* Check the tag out locally and run
+    * `make release`
+* Attach `dist/calico` and `dist/calico-ipam` to the Github release
 
 [cni]: https://github.com/appc/cni
 [config]: configuration.md

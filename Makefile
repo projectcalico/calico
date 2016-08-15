@@ -132,6 +132,9 @@ dist/calicoctl:
 deploy-rkt: dist/calico
 	cp dist/calico /etc/rkt/net.d
 
+# Build a binary for a release
+release: clean update-tools build-containerized test-containerized
+
 run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
