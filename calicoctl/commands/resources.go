@@ -17,7 +17,6 @@ package commands
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
@@ -153,7 +152,7 @@ type commandResults struct {
 	resources []unversioned.Resource
 }
 
-// Common function for configuration commands apply, create, replace and delete.  All
+// Common function for configuration commands apply, create, replace, get and delete.  All
 // these commands:
 // 	-  Load resources from file (or if not specified determine the resource from
 // 	   the command line options).
@@ -175,7 +174,11 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 
 		resources = convertToSliceOfResources(r)
 	} else if r, err := getResourceFromArguments(args); err != nil {
-		return commandResults{err: err, fileInvalid: true}
+		// Filename is not specific so extract the resource from the arguments.  This
+		// is only useful for delete and get functions - but we don't need to check that
+		// here since the command syntax requires a filename for the other resource
+		// management commands.
+		return commandResults{err: err}
 	} else {
 		// We extracted a single resource type with identifiers from the CLI, convert to
 		// a list for simpler handling.
