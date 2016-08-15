@@ -7,6 +7,8 @@ import (
 
 	"os"
 
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
@@ -29,9 +31,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if conf.Debug {
-		utils.EnableDebugLogging()
-	}
+	utils.ConfigureLogging(conf.LogLevel)
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -42,6 +42,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+	logger := utils.CreateContextLogger(workloadID)
 
 	ipamArgs := ipamArgs{}
 	if err = types.LoadArgs(args.Args, &ipamArgs); err != nil {
@@ -54,6 +55,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// The hostname will be defaulted to the actual hostname if cong.Hostname is empty
 		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: conf.Hostname}
+		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := calicoClient.IPAM().AssignIP(assignArgs)
 		if err != nil {
 			return err
@@ -61,6 +63,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		ipV4Network := net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
 		r.IP4 = &types.IPConfig{IP: ipV4Network}
+		logger.WithField("result.IP4", r.IP4).Info("Result IPv4")
 	} else {
 		// Default to assigning an IPv4 address
 		num4 := 1
@@ -77,6 +80,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request count IPv4=%d IPv6=%d\n", num4, num6)
 
 		assignArgs := client.AutoAssignArgs{Num4: num4, Num6: num6, HandleID: &workloadID, Hostname: conf.Hostname}
+		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
 		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(assignArgs)
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v\n", assignedV4, assignedV6)
 		if err != nil {
@@ -92,6 +96,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			ipV6Network := net.IPNet{IP: assignedV6[0].IP, Mask: net.CIDRMask(128, 128)}
 			r.IP6 = &types.IPConfig{IP: ipV6Network}
 		}
+		logger.WithFields(log.Fields{"result.IP4": r.IP4, "result.IP6": r.IP6}).Info("IPAM Result")
 	}
 
 	return r.Print()
@@ -103,9 +108,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if conf.Debug {
-		utils.EnableDebugLogging()
-	}
+	utils.ConfigureLogging(conf.LogLevel)
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -118,10 +121,14 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
+	logger := utils.CreateContextLogger(workloadID)
+
+	logger.Info("Releasing address using workloadID")
 	if err := calicoClient.IPAM().ReleaseByHandle(workloadID); err != nil {
 		return err
 	}
 
+	logger.Info("Released address using workloadID")
 	return nil
 
 }

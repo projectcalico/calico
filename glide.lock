@@ -1,5 +1,5 @@
-hash: 948daa21c3ba00b20f0d2b84d6a2e875a1c86af74c795b248d2a13fe82549109
-updated: 2016-08-17T13:20:56.055758651-07:00
+hash: 98b141197c52f9db771ba07deb3486ae15c6bb8de5c59bd2d5e03e720c933735
+updated: 2016-08-17T17:33:06.493014688-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -243,6 +243,8 @@ imports:
   version: 490cc6eb5fa45bf8a8b7b73c8bc82a8160e8531d
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
+- name: github.com/Sirupsen/logrus
+  version: 08a8a7c27e3d058a8989316a850daad1c10bf4ab
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/tigera/libcalico-go

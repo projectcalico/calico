@@ -138,8 +138,9 @@ dist/calicoctl:
 deploy-rkt: binary
 	cp dist/calico /etc/rkt/net.d
 	cp dist/calico-ipam /etc/rkt/net.d
-	echo '{"name": "prod","debug":true,"type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"calico-ipam"}}' >/etc/rkt/net.d/calico-ipam.conf
-	echo '{"name": "dev", "debug":true,"type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"host-local","subnet": "10.10.0.0/8"}}' >/etc/rkt/net.d/calico-hostlocal.conf
+	echo '{"name": "prod","log_level":"warning","type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"host-local","subnet": "10.10.0.0/8"}}' >/etc/rkt/net.d/calico-warning.conf
+	echo '{"name": "dev", "log_level":"info","type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"calico-ipam"}}' >/etc/rkt/net.d/calico-info.conf
+	echo '{"name": "debug", "log_level":"debug","type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"calico-ipam"}}' >/etc/rkt/net.d/calico-debug.conf
 	@echo ""
 	@echo Now create containers using rkt e.g.
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod
@@ -153,7 +154,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "podCidr"}}' >net.d/10-calico.conf
-	echo '{"debug":true, "name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "10.101.0.0/16"}}' >net.d/10-calico.conf
+	echo '{"log_level":"DEBUG", "name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "10.101.0.0/16"}}' >net.d/10-calico.conf
 	# Run the kubelet which will launch the master components in a pod.
 	docker run \
 		--volume=/:/rootfs:ro \

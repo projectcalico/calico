@@ -1,7 +1,7 @@
 {
   "name": "net1",
   "type": "calico",
-  "debug": true,
+  "log_level": "DEBUG",
   "etcd_authority": "1.2.3.4:2379",
   "etcd_endpoints": "http://127.0.0.1:2379",
   "ipam": {

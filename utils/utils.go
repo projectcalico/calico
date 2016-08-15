@@ -8,6 +8,10 @@ import (
 	"os"
 	"regexp"
 
+	log "github.com/Sirupsen/logrus"
+
+	"strings"
+
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -54,7 +58,7 @@ func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*types.Result, error) {
 		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v.String())
 		parsedIP := types.IPConfig{}
 		if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
-			glog.Errorf("Error unmarshalling existing endpoint IP: %s", err)
+			log.Errorf("Error unmarshalling existing endpoint IP: %s", err)
 			return nil, err
 		}
 
@@ -135,25 +139,53 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 	return calicoClient, nil
 }
 
-func EnableDebugLogging() {
-	_ = flag.Set("logtostderr", "true")
-	_ = flag.Set("v", "10")
-	_ = flag.Set("stderrthreshold", "10")
-	flag.Parse()
-	glog.Info("Calico CNI debug logging configured")
-}
-
 // ReleaseIPAM is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution.
 func ReleaseIPAllocation(ipamType string, stdinData []byte) {
-	glog.V(3).Infof("Cleaning up IP allocations for failed ADD")
+	log.Info("Cleaning up IP allocations for failed ADD")
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
-		glog.Warningf("Failed to set CNI_COMMAND=DEL")
+		log.Warning("Failed to set CNI_COMMAND=DEL")
+	} else {
+		if err := ipam.ExecDel(ipamType, stdinData); err != nil {
+			// Failed to cleanup the IP allocation.
+			log.Warning("Failed to clean up IP allocations for failed ADD")
+		}
+	}
+}
+
+// Set up logging for both Calico and libcalico usng the provided log level,
+func ConfigureLogging(logLevel string) {
+	// Debug is _everything_
+	// Info is just CNI info level logs
+	// Warning is the default - and again is just CNI logs
+	if strings.EqualFold(logLevel, "debug") {
+		// Enable glogging for libcalico
+		_ = flag.Set("logtostderr", "true")
+		_ = flag.Set("v", "10")
+		_ = flag.Set("stderrthreshold", "10")
+		flag.Parse()
+		glog.Info("libcalico glog logging configured")
+
+		// Change logging level for CNI plugin
+		log.SetLevel(log.DebugLevel)
+	} else if strings.EqualFold(logLevel, "info") {
+		log.SetLevel(log.InfoLevel)
+	} else {
+		// Default level
+		log.SetLevel(log.WarnLevel)
 	}
 
-	if err := ipam.ExecDel(ipamType, stdinData); err != nil {
-		// Failed to cleanup the IP allocation.
-		glog.Warningf("Failed to clean up IP allocations for failed ADD")
-	}
+	log.SetOutput(os.Stderr)
+}
+
+// Create a logger which always includes common fields
+func CreateContextLogger(workloadID string) *log.Entry {
+	// A common pattern is to re-use fields between logging statements by re-using
+	// the logrus.Entry returned from WithFields()
+	contextLogger := log.WithFields(log.Fields{
+		"WorkloadID": workloadID,
+	})
+
+	return contextLogger
 }
