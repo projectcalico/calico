@@ -125,7 +125,7 @@ Create some profiles (this can be done on either host)
     calicoctl profile add PROF_B
     calicoctl profile add PROF_D
 
-When each container is added to Calico, an "endpoint" is registered for each
+When each container is added to Calico, an "[endpoint] (https://github.com/docker/libnetwork/blob/master/docs/design.md#the-container-network-model)" is registered for each
 container's interface. Containers are only allowed to communicate with one
 another when both of their endpoints are assigned the same profile. To assign
 a profile to an endpoint run the following commands.
