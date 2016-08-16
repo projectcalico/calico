@@ -18,6 +18,7 @@ import (
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tigera/libcalico-go/lib/net"

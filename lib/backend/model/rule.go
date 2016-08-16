@@ -16,10 +16,11 @@ package model
 
 import (
 	"fmt"
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/numorstring"
 	"strconv"
 	"strings"
+
+	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/numorstring"
 )
 
 type Rule struct {

@@ -20,9 +20,10 @@ import (
 
 	"reflect"
 
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/errors"
-	"strings"
 )
 
 var (

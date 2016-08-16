@@ -56,8 +56,8 @@ type hostEndpoints struct {
 	c *Client
 }
 
-// newHostEndpoints returns a hostEndpoints
-func newHostEndpoints(c *Client) *hostEndpoints {
+// newHostEndpoints returns a HostEndpointInterface bound to the supplied client.
+func newHostEndpoints(c *Client) HostEndpointInterface {
 	return &hostEndpoints{c}
 }
 
@@ -66,12 +66,12 @@ func (h *hostEndpoints) Create(a *api.HostEndpoint) (*api.HostEndpoint, error) {
 	return a, h.c.create(*a, h)
 }
 
-// Create creates a new host endpoint.
+// Update updates an existing host endpoint.
 func (h *hostEndpoints) Update(a *api.HostEndpoint) (*api.HostEndpoint, error) {
 	return a, h.c.update(*a, h)
 }
 
-// Create creates a new host endpoint.
+// Apply updates a host endpoint if it exists, or creates a new host endpoint if it does not exist.
 func (h *hostEndpoints) Apply(a *api.HostEndpoint) (*api.HostEndpoint, error) {
 	return a, h.c.apply(*a, h)
 }
@@ -90,15 +90,16 @@ func (h *hostEndpoints) Get(metadata api.HostEndpointMetadata) (*api.HostEndpoin
 	}
 }
 
-// List takes a Metadata, and returns the list of host endpoints that match that Metadata
-// (wildcarding missing fields)
+// List takes a Metadata, and returns a HostEndpointList that contains the list of host endpoints
+// that match the Metadata (wildcarding missing fields).
 func (h *hostEndpoints) List(metadata api.HostEndpointMetadata) (*api.HostEndpointList, error) {
 	l := api.NewHostEndpointList()
 	err := h.c.list(metadata, h, l)
 	return l, err
 }
 
-// Convert a HostEndpointMetadata to a HostEndpointListInterface
+// convertMetadataToListInterface converts a HostEndpointMetadata to a HostEndpointListOptions.
+// This is part of the conversionHelper interface.
 func (h *hostEndpoints) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.HostEndpointMetadata)
 	l := model.HostEndpointListOptions{
@@ -108,7 +109,8 @@ func (h *hostEndpoints) convertMetadataToListInterface(m unversioned.ResourceMet
 	return l, nil
 }
 
-// Convert a HostEndpointMetadata to a HostEndpointKeyInterface
+// convertMetadataToKey converts a HostEndpointMetadata to a HostEndpointKey
+// This is part of the conversionHelper interface.
 func (h *hostEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.HostEndpointMetadata)
 	k := model.HostEndpointKey{
@@ -118,7 +120,9 @@ func (h *hostEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (mo
 	return k, nil
 }
 
-// Convert an API HostEndpoint structure to a Backend HostEndpoint structure
+// convertAPIToKVPair converts an API HostEndpoint structure to a KVPair containing a
+// backend HostEndpoint and HostEndpointKey.
+// This is part of the conversionHelper interface.
 func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ah := a.(api.HostEndpoint)
 	k, err := h.convertMetadataToKey(ah.Metadata)
@@ -151,7 +155,9 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 	return &d, nil
 }
 
-// Convert a Backend HostEndpoint structure to an API HostEndpoint structure
+// convertKVPairToAPI converts a KVPair containing a backend HostEndpoint and HostEndpointKey
+// to an API HostEndpoint structure.
+// This is part of the conversionHelper interface.
 func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	bh := d.Value.(model.HostEndpoint)
 	bk := d.Key.(model.HostEndpointKey)

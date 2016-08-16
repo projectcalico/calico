@@ -35,8 +35,8 @@ type pools struct {
 	c *Client
 }
 
-// newPools returns a pools
-func newPools(c *Client) *pools {
+// newPools returns a new PoolInterface bound to the supplied client.
+func newPools(c *Client) PoolInterface {
 	return &pools{c}
 }
 
@@ -45,12 +45,12 @@ func (h *pools) Create(a *api.Pool) (*api.Pool, error) {
 	return a, h.c.create(*a, h)
 }
 
-// Create creates a new pool.
+// Update updates an existing pool.
 func (h *pools) Update(a *api.Pool) (*api.Pool, error) {
 	return a, h.c.update(*a, h)
 }
 
-// Create creates a new pool.
+// Apply updates a pool if it exists, or creates a new pool if it does not exist.
 func (h *pools) Apply(a *api.Pool) (*api.Pool, error) {
 	return a, h.c.apply(*a, h)
 }
@@ -69,15 +69,16 @@ func (h *pools) Get(metadata api.PoolMetadata) (*api.Pool, error) {
 	}
 }
 
-// List takes a Metadata, and returns the list of pools that match that Metadata
-// (wildcarding missing fields)
+// List takes a Metadata, and returns a PoolList that contains the list of pools
+// that match the Metadata (wildcarding missing fields).
 func (h *pools) List(metadata api.PoolMetadata) (*api.PoolList, error) {
 	l := api.NewPoolList()
 	err := h.c.list(metadata, h, l)
 	return l, err
 }
 
-// Convert a PoolMetadata to a PoolListInterface
+// convertMetadataToListInterface converts a PoolMetadata to a PoolListOptions.
+// This is part of the conversionHelper interface.
 func (h *pools) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	pm := m.(api.PoolMetadata)
 	l := model.PoolListOptions{
@@ -86,7 +87,8 @@ func (h *pools) convertMetadataToListInterface(m unversioned.ResourceMetadata) (
 	return l, nil
 }
 
-// Convert a PoolMetadata to a PoolKeyInterface
+// convertMetadataToKey converts a PoolMetadata to a PoolKey
+// This is part of the conversionHelper interface.
 func (h *pools) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	pm := m.(api.PoolMetadata)
 	k := model.PoolKey{
@@ -95,7 +97,9 @@ func (h *pools) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key,
 	return k, nil
 }
 
-// Convert an API Pool structure to a Backend Pool structure
+// convertAPIToKVPair converts an API Pool structure to a KVPair containing a
+// backend Pool and PoolKey.
+// This is part of the conversionHelper interface.
 func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ap := a.(api.Pool)
 	k, err := h.convertMetadataToKey(ap.Metadata)
@@ -125,7 +129,9 @@ func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 	return &d, nil
 }
 
-// Convert a Backend Pool structure to an API Pool structure
+// convertKVPairToAPI converts a KVPair containing a backend Pool and PoolKey
+// to an API Pool structure.
+// This is part of the conversionHelper interface.
 func (h *pools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	backendPool := d.Value.(model.Pool)
 

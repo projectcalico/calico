@@ -107,6 +107,8 @@ func (a apply) execute(client *client.Client, resource unversioned.Resource) (un
 		_, err = client.Profiles().Apply(&r)
 	case api.WorkloadEndpoint:
 		err = fmt.Errorf("Workload endpoints cannot be managed directly")
+	case api.BGPPeer:
+		_, err = client.BGPPeers().Apply(&r)
 	default:
 		panic(fmt.Errorf("Unhandled resource type: %v", resource))
 	}

@@ -38,8 +38,8 @@ type workloadEndpoints struct {
 	c *Client
 }
 
-// newWorkloadEndpoints returns a workloadEndpoints
-func newWorkloadEndpoints(c *Client) *workloadEndpoints {
+// newWorkloadEndpoints returns a new WorkloadEndpointInterface bound to the supplied client.
+func newWorkloadEndpoints(c *Client) WorkloadEndpointInterface {
 	return &workloadEndpoints{c}
 }
 
@@ -56,7 +56,7 @@ func (w *workloadEndpoints) Update(a *api.WorkloadEndpoint) (*api.WorkloadEndpoi
 	return a, w.c.update(*a, w)
 }
 
-// Apply creates a new workload endpoint or updates an existing one.
+// Apply updates a workload endpoint if it exists, or creates a new workload endpoint if it does not exist.
 func (w *workloadEndpoints) Apply(a *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
 	return a, w.c.apply(*a, w)
 }
@@ -75,22 +75,23 @@ func (w *workloadEndpoints) Get(metadata api.WorkloadEndpointMetadata) (*api.Wor
 	}
 }
 
-// List takes a Metadata, and returns the list of workload endpoints that match that Metadata
-// (wildcarding missing fields)
+// List takes a Metadata, and returns a WorkloadEndpointList that contains the list of workload endpoints
+// that match the Metadata (wildcarding missing fields).
 func (w *workloadEndpoints) List(metadata api.WorkloadEndpointMetadata) (*api.WorkloadEndpointList, error) {
 	l := api.NewWorkloadEndpointList()
 	err := w.c.list(metadata, w, l)
 	return l, err
 }
 
-// Set's any defaults on a newly created object WorkloadEndpoint.
+// setCreateDefaults sets any defaults on a newly created object WorkloadEndpoint.
 func (w *workloadEndpoints) setCreateDefaults(wep *api.WorkloadEndpoint) {
 	if wep.Metadata.Name == "" {
 		wep.Metadata.Name = uuid.NewV4().String()
 	}
 }
 
-// Convert a WorkloadEndpointMetadata to a WorkloadEndpointListInterface
+// convertMetadataToListInterface converts a WorkloadEndpointMetadata to a WorkloadEndpointListInterface.
+// This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
 	l := model.WorkloadEndpointListOptions{
@@ -102,7 +103,8 @@ func (w *workloadEndpoints) convertMetadataToListInterface(m unversioned.Resourc
 	return l, nil
 }
 
-// Convert a WorkloadEndpointMetadata to a WorkloadEndpointKeyInterface
+// convertMetadataToKey converts a WorkloadEndpointMetadata to a WorkloadEndpointKey
+// This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.WorkloadEndpointMetadata)
 	k := model.WorkloadEndpointKey{
@@ -114,7 +116,9 @@ func (w *workloadEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata)
 	return k, nil
 }
 
-// Convert an API WorkloadEndpoint structure to a Backend WorkloadEndpoint structure
+// convertAPIToKVPair converts an API WorkloadEndpoint structure to a KVPair containing a
+// backend WorkloadEndpoint and WorkloadEndpointKey.
+// This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ah := a.(api.WorkloadEndpoint)
 	k, err := w.convertMetadataToKey(ah.Metadata)
@@ -148,7 +152,9 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 	return &d, nil
 }
 
-// Convert a Backend WorkloadEndpoint structure to an API WorkloadEndpoint structure
+// convertKVPairToAPI converts a KVPair containing a backend WorkloadEndpoint and WorkloadEndpointKey
+// to an API WorkloadEndpoint structure.
+// This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	bh := d.Value.(model.WorkloadEndpoint)
 	bk := d.Key.(model.WorkloadEndpointKey)

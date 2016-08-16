@@ -35,8 +35,8 @@ type profiles struct {
 	c *Client
 }
 
-// newProfiles returns a profiles
-func newProfiles(c *Client) *profiles {
+// newProfiles returns a new ProfileInterface bound to the supplied client.
+func newProfiles(c *Client) ProfileInterface {
 	return &profiles{c}
 }
 
@@ -50,7 +50,7 @@ func (h *profiles) Update(a *api.Profile) (*api.Profile, error) {
 	return a, h.c.update(*a, h)
 }
 
-// Apply creates a new or replaces an existing profile.
+// Apply updates a profile if it exists, or creates a new profile if it does not exist.
 func (h *profiles) Apply(a *api.Profile) (*api.Profile, error) {
 	return a, h.c.apply(*a, h)
 }
@@ -69,15 +69,16 @@ func (h *profiles) Get(metadata api.ProfileMetadata) (*api.Profile, error) {
 	}
 }
 
-// List takes a Metadata, and returns the list of profiles that match that Metadata
-// (wildcarding missing fields)
+// List takes a Metadata, and returns a ProfileList that contains the list of profiles
+// that match the Metadata (wildcarding missing fields).
 func (h *profiles) List(metadata api.ProfileMetadata) (*api.ProfileList, error) {
 	l := api.NewProfileList()
 	err := h.c.list(metadata, h, l)
 	return l, err
 }
 
-// Convert a ProfileMetadata to a ProfileListInterface
+// convertMetadataToListInterface converts a ProfileMetadata to a ProfileListOptions.
+// This is part of the conversionHelper interface.
 func (h *profiles) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.ProfileMetadata)
 	l := model.ProfileListOptions{
@@ -86,7 +87,8 @@ func (h *profiles) convertMetadataToListInterface(m unversioned.ResourceMetadata
 	return l, nil
 }
 
-// Convert a ProfileMetadata to a ProfileKeyInterface
+// convertMetadataToKey converts a ProfileMetadata to a ProfileKey
+// This is part of the conversionHelper interface.
 func (h *profiles) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.ProfileMetadata)
 	k := model.ProfileKey{
@@ -95,7 +97,8 @@ func (h *profiles) convertMetadataToKey(m unversioned.ResourceMetadata) (model.K
 	return k, nil
 }
 
-// Convert an API Profile structure to a Backend Profile structure
+// convertMetadataToKey converts a ProfileMetadata to a ProfileKey
+// This is part of the conversionHelper interface.
 func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ap := a.(api.Profile)
 	k, err := h.convertMetadataToKey(ap.Metadata)
@@ -118,7 +121,9 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 	return &d, nil
 }
 
-// Convert a Backend Profile structure to an API Profile structure
+// convertKVPairToAPI converts a KVPair containing a backend Profile and ProfileKey
+// to an API Profile structure.
+// This is part of the conversionHelper interface.
 func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	bp := d.Value.(model.Profile)
 	bk := d.Key.(model.ProfileKey)

@@ -73,6 +73,11 @@ func (c *Client) WorkloadEndpoints() WorkloadEndpointInterface {
 	return newWorkloadEndpoints(c)
 }
 
+// BGPPeers returns an interface for managing BGP peer resources.
+func (c *Client) BGPPeers() BGPPeerInterface {
+	return newBGPPeers(c)
+}
+
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c *Client) IPAM() IPAMInterface {
 	return newIPAM(c)
