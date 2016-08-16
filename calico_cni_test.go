@@ -8,6 +8,8 @@ import (
 
 	"net"
 
+	"syscall"
+
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	. "github.com/onsi/ginkgo"
@@ -65,13 +67,12 @@ var _ = Describe("CalicoCni", func() {
 				// Profile is created with correct details
 				Expect(GetEtcdString("/calico/v1/policy/profile/net1/tags")).Should(MatchJSON(`["net1"]`))
 
-				//NOTE - The id field here is temporary and should go away with the next libcalico-go update we take.
-				Expect(GetEtcdString("/calico/v1/policy/profile/net1/rules")).Should(MatchJSON(`{"id": "net1", "inbound_rules":[{"action":"allow","src_tag":"net1"}],"outbound_rules":[{"action":"allow"}]}`))
+				Expect(GetEtcdString("/calico/v1/policy/profile/net1/rules")).Should(MatchJSON(`{"inbound_rules":[{"action":"allow","src_tag":"net1"}],"outbound_rules":[{"action":"allow"}]}`))
 
 				// The endpoint is created in etcd
 				endpoint_path := GetEtcdMostRecentSubdir(fmt.Sprintf("/calico/v1/host/%s/workload/cni/%s", hostname, containerID))
 				Expect(endpoint_path).Should(ContainSubstring(containerID))
-				Expect(GetEtcdString(endpoint_path)).Should(MatchJSON(fmt.Sprintf(`{"state":"active","name":"cali%s","mac":"%s","profile_ids":["net1"],"ipv4_nets":["%s/32"]}`, containerID, mac, ip)))
+				Expect(GetEtcdString(endpoint_path)).Should(MatchJSON(fmt.Sprintf(`{"state":"active","name":"cali%s","mac":"%s","profile_ids":["net1"],"ipv4_nets":["%s/32"],"ipv6_nets":[],"labels":{}}`, containerID, mac, ip)))
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging
@@ -87,11 +88,17 @@ var _ = Describe("CalicoCni", func() {
 				Expect(contRoutes).Should(SatisfyAll(ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
 					Gw:        net.IPv4(169, 254, 1, 1).To4(),
+					Protocol:  syscall.RTPROT_BOOT,
+					Table:     syscall.RT_TABLE_MAIN,
+					Type:      syscall.RTN_UNICAST,
 				}),
 					ContainElement(netlink.Route{
 						LinkIndex: contVeth.Attrs().Index,
 						Scope:     netlink.SCOPE_LINK,
 						Dst:       &net.IPNet{IP: net.IPv4(169, 254, 1, 1).To4(), Mask: net.CIDRMask(32, 32)},
+						Protocol:  syscall.RTPROT_BOOT,
+						Table:     syscall.RT_TABLE_MAIN,
+						Type:      syscall.RTN_UNICAST,
 					})))
 
 				session, err = DeleteContainer(netconf, netnspath)
