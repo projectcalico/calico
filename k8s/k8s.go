@@ -58,7 +58,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			return nil, err
 		}
 
-		if conf.IPAM.Type == "host-local" && conf.IPAM.Subnet == "podCidr" {
+		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
 			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
 			var stdinData map[string]interface{}
@@ -70,6 +70,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 				return nil, err
 			}
 			stdinData["ipam"].(map[string]interface{})["subnet"] = podCidr
+			fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
 			args.StdinData, err = json.Marshal(stdinData)
 			if err != nil {
 				return nil, err
