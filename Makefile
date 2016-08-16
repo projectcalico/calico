@@ -129,8 +129,16 @@ dist/calicoctl:
 	chmod +x dist/calicoctl
 
 # Copy the plugin into place
-deploy-rkt: dist/calico
+deploy-rkt: binary
 	cp dist/calico /etc/rkt/net.d
+	cp dist/calico-ipam /etc/rkt/net.d
+	echo '{"name": "prod","debug":true,"type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"calico-ipam"}}' >/etc/rkt/net.d/calico-ipam.conf
+	echo '{"name": "dev", "debug":true,"type":"calico","etcd_authority":"127.0.0.1:2379","ipam":{"type":"host-local","subnet": "10.10.0.0/8"}}' >/etc/rkt/net.d/calico-hostlocal.conf
+	@echo ""
+	@echo Now create containers using rkt e.g.
+	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod
+	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=dev
+	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
 
 run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
