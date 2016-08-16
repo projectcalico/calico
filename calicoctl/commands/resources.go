@@ -27,6 +27,7 @@ import (
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/client"
 	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/scope"
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
@@ -89,6 +90,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	}
 	name := stringOrBlank("<NAME>")
 	hostname := stringOrBlank("--hostname")
+	resScope := stringOrBlank("--scope")
 	switch kind {
 	case "hostEndpoint":
 		h := api.NewHostEndpoint()
@@ -116,6 +118,26 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 				return nil, err
 			}
 			p.Metadata.CIDR = *cidr
+		}
+		return *p, nil
+	case "bgpPeer":
+		p := api.NewBGPPeer()
+		if name != "" {
+			err := p.Metadata.PeerIP.UnmarshalText([]byte(name))
+			if err != nil {
+				return nil, err
+			}
+		}
+		p.Metadata.Hostname = hostname
+		switch resScope {
+		case "node":
+			p.Metadata.Scope = scope.Node
+		case "global":
+			p.Metadata.Scope = scope.Global
+		case "":
+			p.Metadata.Scope = scope.Undefined
+		default:
+			return nil, fmt.Errorf("Unrecognized scope '%s', must be one of: global, node", resScope)
 		}
 		return *p, nil
 
