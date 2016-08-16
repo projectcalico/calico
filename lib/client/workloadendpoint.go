@@ -159,7 +159,7 @@ func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Res
 	ah := api.NewWorkloadEndpoint()
 	ah.Metadata.Hostname = bk.Hostname
 	ah.Metadata.OrchestratorID = bk.OrchestratorID
-	ah.Metadata.WorkloadID = bk.OrchestratorID
+	ah.Metadata.WorkloadID = bk.WorkloadID
 	ah.Metadata.Name = bk.EndpointID
 	ah.Metadata.Labels = bh.Labels
 	ah.Spec.InterfaceName = bh.Name

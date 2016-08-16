@@ -136,7 +136,12 @@ func (options WorkloadEndpointListOptions) ParseDefaultKey(ekey string) Key {
 		glog.V(2).Infof("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
-	return WorkloadEndpointKey{Hostname: hostname, EndpointID: endpointID}
+	return WorkloadEndpointKey {
+		Hostname: hostname,
+		OrchestratorID: orch,
+		WorkloadID: workload,
+		EndpointID: endpointID,
+	}
 }
 
 type WorkloadEndpoint struct {
