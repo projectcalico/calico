@@ -1,0 +1,34 @@
+<div class="tile">
+    {% if post.featured_image or post.featured_video_id %}
+    <a href="{{ post.url | prepend: site.baseurl }}" class="featurette">
+        {% if post.featured_image %}
+        <span class="img" style="background-image: url('{{ post.featured_image }}');"></span>
+        {% endif %}
+
+        {% if post.featured_video_id %}
+        <iframe src="https://www.youtube.com/embed/{{ post.featured_video_id }}" frameborder="0" allowfullscreen></iframe>
+        {% endif %}
+    </a>
+    {% endif %}
+    <div class="inner-guts">
+        <h2><a href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a></h2>
+        <aside>
+            {{ post.date | date: "%m.%d.%y" }}
+            {% if post.categories != empty %}
+                &middot;
+                {% for category in post.categories %}
+                    <span>{{ category }}</span>
+                {% endfor %}
+            {% endif %}
+        </aside>
+        <div class="excerpt">{{ post.excerpt }}</div>
+        <a href="{{ post.url | prepend: site.baseurl }}" class="read-more btn btn-info btn-lg">Read More <i class="fa fa-angle-right"></i></a>
+        {% if post.categories != empty %}
+        <div class="tags">
+            {% for tag in post.tags %}
+            <span>{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>

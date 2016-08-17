@@ -1,0 +1,13 @@
+bigheader: "Community"
+abstract: "Information on joining the Calico Community and helping contribute to the project"
+toc:
+- title: Calico Community
+  path: /docs/community/
+- title: Getting Involved
+  path: /docs/community/involved
+- title: Contribution Guidelines
+  path: /docs/community/contribute
+- title: Building and testing calico-containers images
+  path: /docs/community/Building
+- title: Calico Repositories
+  path: /docs/community/RepoStructure

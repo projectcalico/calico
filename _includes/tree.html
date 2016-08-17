@@ -1,0 +1,6 @@
+{% for item in tree %}{% if item.section %}
+<div class="item" data-title="{{ item.title }}">
+  <div class="container">{% assign tree = item.section %}{% include tree.html %}
+  </div>
+</div>{% else %}{% assign prefix = item.path | slice: 0, 4 %}{% if prefix == "http" %}{% assign target=" target='_blank'" %}{% else %}{% assign target="" %}{% endif %}
+    <a class="item" data-title="{{ item.title }}" href="{{ item.path }}"{{ target }}></a>{% endif %}{% endfor %}

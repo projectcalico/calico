@@ -1,0 +1,58 @@
+{% for thistoc in site.data.globals.tocs %}{% if foundTOC %}{% break %}{% else %}{% assign tree = site.data[thistoc].toc %}{% include tocsearch.html %}{% endif %}{% endfor %}
+{% for override in site.data.overrides.overrides %}{% if page.path contains override.path %}{% assign notitle = "true" %}{% endif %}{% endfor %}
+<!Doctype html>
+<html id="docs" class="{{site.data[foundTOC].bigheader}}">
+
+{% include head-header.html %}
+
+<!--  HERO  -->
+<section id="hero" class="dark-text">
+	<h1>{{ site.data[foundTOC].bigheader }}</h1>
+	<div style="float: left;"><h5>{{ site.data[foundTOC].abstract }}</h5></div>
+	<!--	Ideally here, we would have a drop-down button to select the version 
+			For now, we'll just print the current version -->
+	<div style="float: right;"><h5>Version {{ page.version }}</h5></div>
+	<div style="clear: both;"></div>
+	<div id="vendorStrip" class="dark-text">
+		<ul>
+			<li><a href="/docs/" {% if site.data[foundTOC].bigheader == "Getting Started" %}class="YAH"{% endif %}>GETTING STARTED</a></li>
+			<li><a href="/docs/using-calico" {% if site.data[foundTOC].bigheader == "Using Calico" %}class="YAH"{% endif %}>USING CALICO</a></li>
+			<li><a href="/docs/what-is-calico" {% if site.data[foundTOC].bigheader == "What is Calico" %}class="YAH"{% endif %}>WHAT IS CALICO</a></li>
+			<li><a href="/docs/reference" {% if site.data[foundTOC].bigheader == "Reference Documentation" %}class="YAH"{% endif %}>REFERENCE</a></li>
+			<li><a href="/docs/community" {% if site.data[foundTOC].bigheader == "Community" %}class="YAH"{% endif %}>COMMUNITY</a></li>		
+			<li><a href="/docs/other-releases" {% if site.data[foundTOC].bigheader == "Other Releases" %}class="YAH"{% endif %}>OTHER RELEASES</a></li>
+		</ul>
+	</div>
+</section>
+
+<section id="encyclopedia">
+	<div id="docsToc">
+        <div class="pi-accordion">
+        {% assign tree = site.data[foundTOC].toc %}{% include tree.html %}
+        </div> <!-- /pi-accordion -->
+		<button class="push-menu-close-button" onclick="kub.toggleToc()"></button>
+	</div> <!-- /docsToc -->
+	<div id="docsContent">
+    	{% if notitle != "true" %}<h1>{{ title }}</h1>{% endif %}
+		{{ content }}
+	</div>
+</section>
+
+{% include footer.html %}
+
+<button class="flyout-button" onclick="kub.toggleToc()"></button>
+
+<style>
+	.cse .gsc-control-cse, .gsc-control-cse, {
+		padding: 0;
+	}
+	.gsc-control-cse table, .gsc-control-cse-en table {
+		margin:0px !important;
+	}
+
+	.gsc-above-wrapper-area {
+		border-bottom: 0;
+	}
+</style>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{% if page.title %}{% assign title=page.title %}{% endif %}
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!-- <link rel="canonical" href="http://www.projectcalico.org/docs{{page.url}}" /> -->
+	<link rel="shortcut icon" type="image/png" href="/images/favicon.png">
+	<link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
+	<link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
+	<link rel="stylesheet" href="/css/styles.css"/>
+        <link rel="stylesheet" href="/css/jquery-ui.min.css">
+        <link rel="stylesheet" href="/css/sweetalert.css">
+	<script src="/js/jquery-2.2.0.min.js"></script>
+        <script src="/js/jquery-ui.min.js"></script>
+	<script src="/js/script.js"></script>
+        <script src="/js/sweetalert.min.js"></script>
+	<title>Calico - {{ title }}</title>
+</head>
+<body>
+<div id="cellophane" onclick="kub.toggleMenu()"></div>
+<header>
+	<a href="/" class="logo"></a>
+	<div class="nav-buttons" data-auto-burger="primary">
+		<a href="/docs/" class="button" id="viewDocs" data-auto-burger-exclude>View Documentation</a>
+		<a href="/docs/getting-started/" class="button" id="tryCalico" data-auto-burger-exclude>Get Started</a>
+		<button id="hamburger" onclick="kub.toggleMenu()" data-auto-burger-exclude><div></div></button>
+	</div>
+
+	<nav id="mainNav">
+		<main data-auto-burger="primary">
+			<div class="nav-box">
+				<h3><a href="/docs/getting-started/">Get Started</a></h3>
+				<p>Looking to try Calico with one our Kubernetes, Mesos, Docker, OpenStack or Bare Metal integration?</p>
+			</div>
+			<div class="nav-box">
+				<h3><a href="/docs/">Documentation</a></h3>
+				<p>Learn more about Calico in our documentation.</p>
+			</div>
+			<div class="nav-box">
+				<h3><a href="/docs/community/">Community</a></h3>
+				<p>Join the Calico community and chat with other Calico users and the project authos.</p>
+			</div>
+			<div class="nav-box">
+				<h3><a href="http://www.projectcalico.org/blog">Blog</a></h3>
+				<p>See what the Calico team are up in our latest blog posts.</p>
+			</div>
+		</main>
+		<main data-auto-burger="primary">
+			<div class="left">
+				<h5 class="github-invite">Interested in contributing to Calico?</h5>
+				<a href="https://github.com/projectcalico/calico" class="button" data-auto-burger-exclude>View On Github</a>
+			</div>
+
+			<div class="right">
+				<h5 class="github-invite">Explore the community</h5>
+				<div class="social">
+					<a href="https://twitter.com/projectalico" class="twitter"><span>Twitter</span></a>
+					<a href="https://github.com/projectcalico/calico" class="github"><span>Github</span></a>
+					<a href="http://slack.projectcalico.org/" class="slack"><span>Slack</span></a>
+					<a href="http://stackoverflow.com/questions/tagged/calico" class="stack-overflow"><span>Stack Overflow</span></a>
+				</div>
+			</div>
+			<div class="clear" style="clear: both"></div>
+		</main>
+	</nav>
+</header>

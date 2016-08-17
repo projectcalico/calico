@@ -1,0 +1,6 @@
+main:
+    - { url: '/docs/getting_started', text: 'Getting Started' }
+    - { url: '/docs/using_calico', text: 'Using Calico' }
+    - { url: '/docs/what_is_calico', text: 'What is Calico?' }
+    - { url: '/docs/reference', text: 'Reference' }
+    - { url: '/docs/community', text: 'Community'}

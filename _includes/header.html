@@ -1,0 +1,100 @@
+<!doctype html>
+<!--[if lt IE 7 ]><html itemscope itemtype="http://schema.org/{% if page.id or post.id %}Article{% else %}Organization{% endif %}" id="ie6" class="ie ie-old" lang="en-US"><![endif]-->
+<!--[if IE 7 ]>   <html itemscope itemtype="http://schema.org/{% if page.id or post.id %}Article{% else %}Organization{% endif %}" id="ie7" class="ie ie-old" lang="en-US"><![endif]-->
+<!--[if IE 8 ]>   <html itemscope itemtype="http://schema.org/{% if page.id or post.id %}Article{% else %}Organization{% endif %}" id="ie8" class="ie ie-old" lang="en-US"><![endif]-->
+<!--[if IE 9 ]>   <html itemscope itemtype="http://schema.org/{% if page.id or post.id %}Article{% else %}Organization{% endif %}" id="ie9" class="ie" lang="en-US"><![endif]-->
+<!--[if gt IE 9]><!--><html itemscope itemtype="http://schema.org/{% if page.id or post.id %}Article{% else %}Organization{% endif %}" lang="en-US"><!--<![endif]-->
+<head>
+
+    <!-- Meta -->
+    <meta charset="utf-8">
+    <!--
+      /$$$$$$                        /$$               /$$
+     /$$__  $$                      | $$              | $$
+    | $$  \__/  /$$$$$$$  /$$$$$$  /$$$$$$    /$$$$$$$| $$$$$$$
+    |  $$$$$$  /$$_____/ /$$__  $$|_  $$_/   /$$_____/| $$__  $$
+     \____  $$| $$      | $$  \ $$  | $$    | $$      | $$  \ $$
+     /$$  \ $$| $$      | $$  | $$  | $$ /$$| $$      | $$  | $$
+    |  $$$$$$/|  $$$$$$$|  $$$$$$/  |  $$$$/|  $$$$$$$| $$  | $$
+     \______/  \_______/ \______/    \___/   \_______/|__/  |__/
+
+
+
+        /$$$$$           /$$                 /$$ /$$
+       |__  $$          | $$                | $$| $$
+          | $$  /$$$$$$ | $$   /$$ /$$   /$$| $$| $$
+          | $$ /$$__  $$| $$  /$$/| $$  | $$| $$| $$
+     /$$  | $$| $$$$$$$$| $$$$$$/ | $$  | $$| $$| $$
+    | $$  | $$| $$_____/| $$_  $$ | $$  | $$| $$| $$
+    |  $$$$$$/|  $$$$$$$| $$ \  $$|  $$$$$$$| $$| $$
+     \______/  \_______/|__/  \__/ \____  $$|__/|__/
+                                   /$$  | $$
+                                  |  $$$$$$/
+                                   \______/
+    -->
+    <title>{% if page.title %}{{ page.title }} :: {{ site.data.global.title }}{% elsif post.title %}{{ post.title }} :: {{ site.data.global.title }}{% else %}{{ site.data.global.title }} :: {{ site.data.global.description }}{% endif %}</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta content="yes" name="apple-mobile-web-app-capable">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- RSS -->
+    <link rel="alternate" type="application/rss+xml" title="{{ site.data.global.title }} :: {{ site.data.global.description }}" href="{{ site.data.global.url }}/feed.xml">
+    <link rel="alternate" type="application/atom+xml" title="{{ site.data.global.title }} :: {{ site.data.global.description }}" href="{{ site.data.global.url }}/atom.xml">
+
+    <!-- Favicons -->
+    <link rel="shortcut icon" sizes="16x16 24x24 32x32 48x48 64x64 96x96" href="{{ site.data.global.url }}/favicon.ico">
+    <link rel="apple-touch-icon" sizes="57x57" href="{{ site.data.global.url }}/img/favicons/favicon-57.png">
+    <link rel="apple-touch-icon-precomposed" sizes="57x57" href="{{ site.data.global.url }}/img/favicons/favicon-57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="{{ site.data.global.url }}/img/favicons/favicon-60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="{{ site.data.global.url }}/img/favicons/favicon-72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="{{ site.data.global.url }}/img/favicons/favicon-76.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="{{ site.data.global.url }}/img/favicons/favicon-96.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="{{ site.data.global.url }}/img/favicons/favicon-114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ site.data.global.url }}/img/favicons/favicon-120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="{{ site.data.global.url }}/img/favicons/favicon-144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ site.data.global.url }}/img/favicons/favicon-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ site.data.global.url }}/img/favicons/favicon-180.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ site.data.global.url }}/img/favicons/favicon-192.png">
+    <meta name="application-name" content="{{ site.data.global.title }} :: {{ site.data.global.description }}">
+    <meta name="msapplication-TileImage" content="{{ site.data.global.url }}/img/favicons/favicon-144.png">
+    <meta name="msapplication-TileColor" content="#ffffff">
+
+    <!-- Fonts -->
+    <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Roboto+Condensed:300,300italic,400,400italic,700,700italic|Oswald:300,400,700">
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ site.data.global.url }}/css/style.css">
+    <!--[if lt IE 9]>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.2/html5shiv.min.js"></script>
+        <script src="{{ site.data.global.url }}/js/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+<body class="{{ post.title | downcase | replace:' ','-' | replace:',','' | strip_html }}{% if page.category %} category-{{ page.category }}{% endif %}{% if page.layout-class %} layout-{{ page.layout-class }}{% endif %}">
+
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/"><i class="fa fa-heart"></i> {{ site.data.global.title }}</a>
+            </div>
+            <div id="navbar" class="navbar-collapse collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    {% for item in site.data.nav.main %}
+                        <li>
+                            <a href="{{ item.url }}">{{ item.text }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+

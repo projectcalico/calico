@@ -1,0 +1,23 @@
+bigheader: "What is Calico"
+abstract: "Background information on Calico"
+toc:
+- title: What is Calico?
+  path: /docs/what-is-calico/
+- title: Calico Architecture
+  path: /docs/what-is-calico/architecture
+- title: Calico Connectivity
+  section:
+  - title: Addressing and Connectivity Overview
+    path: /docs/what-is-calico/connectivity/addressing
+  - title:  The Calico Data Path
+    path: /docs/what-is-calico/connectivity/datapath
+  - title:  Calico over and Ethernet interconnect fabric
+    path: /docs/what-is-calico/connectivity/l2-interconnectFabric
+  - title:  IP Interconnect Fabrics in Calico
+    path: /docs/what-is-calico/connectivity/l3-interconnectFabric
+- title: More information
+  section:
+  - title: Anatomy of a calico-node container 
+    path: /docs/what-is-calico/more-info/Components
+  - title: Lifecycle of a container (Calico without Docker networking)
+    path: /docs/what-is-calico/more-info/DockerContainerLifecycle

@@ -1,0 +1,26 @@
+# Place this manifest in the kubelet config directory 
+# on each of your Kubernetes master nodes.  The 
+# pod will automatically be created by the kubelet.
+apiVersion: v1
+kind: Pod 
+metadata:
+  name: calico-policy-agent
+  namespace: calico-system 
+  labels:
+    version: "v1.4.0"
+    projectcalico.org/app: "policy-agent"
+spec:
+  hostNetwork: true
+  containers:
+    # The Calico policy agent.
+    - name: k8s-policy-agent
+      image: calico/k8s-policy-agent:v0.1.4
+      imagePullPolicy: IfNotPresent 
+      env:
+        # Modify ETCD_ENDPOINTS to match your etcd cluster.
+        - name: ETCD_ENDPOINTS
+          value: "http://127.0.0.1:2379"
+        - name: K8S_API
+          value: "http://127.0.0.1:8080"
+        - name: LEADER_ELECTION 
+          value: "false"

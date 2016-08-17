@@ -1,0 +1,46 @@
+bigheader: "Reference Documentation"
+abstract: "Reference information about Calico"
+toc:
+- title: Reference Documentation
+  path: /docs/reference/
+- title: Supported platforms
+  path: /docs/reference/supported-platforms
+- title: Earlier releases of Calico
+  path: /docs/reference/previous-releases
+
+- title: Calicoctl
+  section:
+  - title: Calicoctl overview
+    path: /docs/reference/calicoctl/calicoctl
+  - title: Command reference
+    section:
+    - title: calicoctl status
+      path: /docs/reference/calicoctl/status
+    - title: calicoctl node
+      path: /docs/reference/calicoctl/node
+    - title: calicoctl container
+      path: /docs/reference/calicoctl/container
+    - title: calicoctl profile
+      path: /docs/reference/calicoctl/profile
+    - title: calicoctl pool
+      path: /docs/reference/calicoctl/pool
+    - title: calicoctl bgp
+      path: /docs/reference/calicoctl/bgp
+    - title: calicoctl ipam
+      path: /docs/reference/calicoctl/ipam
+    - title: calicoctl checksystem
+      path: /docs/reference/calicoctl/checksystem
+    - title: calicoctl diags
+      path: /docs/reference/calicoctl/diags
+    - title: calicoctl version
+      path: /docs/reference/calicoctl/version
+    - title: calicoctl config
+      path: /docs/reference/calicoctl/config
+
+- title: etcd
+  section:
+  - title: Data Model
+    path: /docs/reference/etcd/etcd-data-model
+  - title: Structure
+    path: /docs/reference/etcd/etcdStructure
+

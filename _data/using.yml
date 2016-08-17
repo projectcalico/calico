@@ -1,0 +1,48 @@
+bigheader: "Using Calico"
+abstract: "How to configure and troubleshoot Calico system"
+toc:
+- title: Using Calico
+  path: /docs/using-calico/
+
+- title: Troubleshooting
+  section:
+  - title: Troubleshooting guide
+    path: /docs/using-calico/troubleshooting/Troubleshooting
+  - title: Calico logging
+    path: /docs/using-calico/troubleshooting/logging
+  - title: Frequently asked questions
+    path: /docs/using-calico/troubleshooting/faq
+
+
+- title: Configuration
+  section:
+  - title: Configuration guide
+    path: /docs/using-calico/configuration/configuration
+  - title: Advanced Network Policy
+    path: /docs/using-calico/configuration/AdvancedNetworkPolicy
+  - title: Running Calico Node Containers as Services
+    path: /docs/using-calico/configuration/CalicoAsService
+  - title: BGP Configuration
+    path: /docs/using-calico/configuration/bgp
+  - title: Securing Calico
+    path: /docs/using-calico/configuration/securing-calico
+  - title: Calico Security Model
+    path: /docs/using-calico/configuration/security-model
+
+- title: Advanced Topics
+  section:
+  - title: Route Refelctor Configuration
+    path: /docs/using-calico/advanced/bird-rr-config
+  - title: IPv6 support
+    path: /docs/using-calico/advanced/IPv6
+  - title: Calico's use of the Neutron API
+    path: /docs/using-calico/advanced/calico-neutron-api
+  - title: Dockerless Calico
+    path: /docs/using-calico/advanced/DockerlessCalicoManual
+  - title: Securing etcd
+    path: /docs/using-calico/advanced/EtcdSecureCluster
+  - title: Exposing ports to the ExposePortsToInternet
+    path: /docs/using-calico/advanced/ExposePortsToInternet
+  - title: Calico External Connectivity
+    path: /docs/using-calico/advanced/ExternalConnectivity
+
