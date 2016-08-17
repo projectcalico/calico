@@ -18,7 +18,7 @@ write_files:
         containers:
           # The Calico policy controller.
           - name: policy-controller 
-            image: calico/kube-policy-controller:v0.2.0
+            image: calico/kube-policy-controller:v0.3.0
             env:
               # Modify ETCD_ENDPOINTS to match your etcd cluster.
               - name: ETCD_ENDPOINTS
