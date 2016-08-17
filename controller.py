@@ -9,6 +9,7 @@ import time
 from threading import Thread
 
 from pycalico.datastore import DatastoreClient
+from pycalico.datastore_datatypes import Rules, Rule
 
 from handlers.network_policy import (add_update_network_policy,
                                      delete_network_policy)
@@ -18,7 +19,6 @@ from handlers.pod import add_pod, update_pod, delete_pod
 from constants import *
 
 _log = logging.getLogger(__name__)
-
 
 # Raised upon receiving an error from the Kubernetes API.
 class KubernetesApiError(Exception):
@@ -136,6 +136,18 @@ class Controller(object):
         # Ensure the tier exists.
         metadata = {"order": NET_POL_TIER_ORDER}
         self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
+
+        # Ensure the backstop policy exists.  This policy fowards
+        # any traffic to Kubernetes pods which doesn't match another policy
+        # to the next-tier (i.e the per-namespace Profiles).
+        selector = "has(%s)" % K8S_NAMESPACE_LABEL
+        rules = Rules(inbound_rules=[Rule(action="next-tier")],
+                      outbound_rules=[Rule(action="next-tier")])
+        self._client.create_policy(NET_POL_TIER_NAME,
+                                   "k8s-policy-no-match",
+                                   selector,
+                                   order=NET_POL_BACKSTOP_ORDER,
+                                   rules=rules)
 
         # Read initial state from Kubernetes API.
         self.start_workers()

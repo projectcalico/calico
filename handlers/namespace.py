@@ -63,14 +63,14 @@ def add_update_namespace(namespace):
     # update it if it already exists.
     client.create_profile(profile_name, rules, labels)
 
-    # Create / update the tiered policy object for this namespace.
-    selector = "%s == '%s'" % (K8S_NAMESPACE_LABEL, namespace_name)
+    # Delete any per-namespace policy.  Older versions of the policy-controller
+    # used to install these, but they're not relevant any more.
     name = "calico-%s" % profile_name
-    client.create_policy(NET_POL_TIER_NAME,
-                         name,
-                         selector,
-                         order=NET_POL_NS_ORDER,
-                         rules=rules)
+    try:
+        client.remove_policy(NET_POL_TIER_NAME, name)
+    except KeyError:
+        # Policy doesn't exist, we're all good.
+        pass
 
     _log.debug("Created/updated profile for namespace %s", namespace_name)
 

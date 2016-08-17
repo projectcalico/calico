@@ -36,9 +36,10 @@ NET_POL_TIER_ORDER = 1000
 # Lower order -> higher priority.
 NET_POL_ORDER = 1000
 
-# The priority assigned to namespace policies.
-# This policy is hit when no NetworkPolicy objects match.
-NET_POL_NS_ORDER = 2000
+# The priority assigned to the backstop policy that applies
+# to traffic which doesn't match one of the configured policies
+# in the NET_POL_TIER_NAME tier.
+NET_POL_BACKSTOP_ORDER = 2000
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
