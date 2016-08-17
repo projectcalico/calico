@@ -10,6 +10,8 @@ MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
 
 BUILD_CONTAINER_NAME=calico/cni_build_container
 BUILD_CONTAINER_MARKER=cni_build_container.created
+DEPLOY_CONTAINER_NAME=calico/cni
+DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
 
 .PHONY: all binary plugin ipam
 default: all
@@ -50,7 +52,11 @@ test-watch: dist/calico dist/calico-ipam
 
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
-	touch $(BUILD_CONTAINER_MARKER)
+	touch $@
+
+$(DEPLOY_CONTAINER_MARKER): Dockerfile
+	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
+	touch $@
 
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized
