@@ -140,6 +140,9 @@ deploy-rkt: binary
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=dev
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
 
+# Build a binary for a release
+release: clean update-tools build-containerized test-containerized
+
 run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
