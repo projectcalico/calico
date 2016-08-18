@@ -24,17 +24,13 @@ To build older versions of the docs:
 -  Check out the branch you want to build.
 -  Update _config.yml with the correct version number (probably not necessary as it should be part of the branch!)
 -  run `jekyll build` to build the docs
--  used the following `sed` command in the `_site` directory to set root path for the docs to be the appropriate version (in this example, v1_3):
 
-```
-find . -name "*.html" | xargs sed -i -e 's/"\//"\/v1_3\//g' 
-```
 
-Having done this, fix the resulting `docs/version.html` - this one file should be reverted to have the original links.
+Having done this, you need to copy the resulting `_site` directory to an appropriate location for hosting.  
 
-- Copy the resulting `_site` directory to an  appropriate location for hosting (e.g. the /v1_3/ directory of the latest master docs).
+One easy way to do this is to copy the _site/* to, say v1_3/* in the master docs.  When you rebuild/serve the master jekyll site, jekyll will just serve up the entire v1_3/ directory as well.
 
-[One easy way to do this is to copy the _site/* to, say v1_3/* in the master docs.  When you rebuild/serve the master jekyll site, jekyll will just serve up the entire v1_3/ directory as well.]
+Once you've worked out where you're going to host the docs, though, you'll need to fix up the docs/other_releases pages so that the links to the appropriate versions are correct (both in the old docs you've just built and in the latest docs).
 
 ## TOCs and Navigation
 The docs are split into 5 sections, with the navigation controlled by _data/globals.yml and an individual yml file for each of the following sections:
@@ -46,6 +42,13 @@ The docs are split into 5 sections, with the navigation controlled by _data/glob
 - community
 
 To modify the navigation (e.g. when adding a new file), you should change the yml file for the appropriate section.  The format is, hopefully, pretty obvious.
+
+## Relative and absolute links
+
+You can use relative links in doc pages.  However, if you want to make absolute links (for example, to /images) you should prepend the link or reference with `{{base}}`.  For example `<a href="{{base}}/images"` or `[link]({{base}}/docs/page)`.  The base variable is calculated for each page when served and converts absolute paths to relative (which allows us to not worry about where github pages may host the site, for example).
+
+For reasons related to getting the TOCs working properly with a changing "base" URL, note you shouldn't use "index.md" pages with implicit links to the owning directory as this screws up the calculation of the relative path.
+
 
 Most of the theming of this site is based on the Kubernetes documentation.  The original Kubernetes Apache license in in [LICENSE](LICENSE).
 
