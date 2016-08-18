@@ -19,6 +19,7 @@ all: vendor build-containerized test-containerized
 binary:  plugin ipam
 plugin: dist/calico
 ipam: dist/calico-ipam
+docker-image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:

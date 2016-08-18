@@ -7,11 +7,15 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:/opt/cni/bin:$PATH
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 RUN mkdir -p /opt/cni/bin
 
+# Add source files.
 ADD glide.yaml glide.lock Makefile /go/src/github.com/projectcalico/calico-cni/
 ADD *.go /go/src/github.com/projectcalico/calico-cni/
 ADD utils /go/src/github.com/projectcalico/calico-cni/utils
 ADD ipam /go/src/github.com/projectcalico/calico-cni/ipam
 ADD k8s /go/src/github.com/projectcalico/calico-cni/k8s
+
+# Add CNI install script.
+ADD ./k8s-install/scripts/install-cni.sh /install-cni.sh
 
 RUN set -ex \
 	&& apk add --no-cache --virtual .build-deps \
