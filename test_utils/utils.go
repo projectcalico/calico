@@ -12,6 +12,8 @@ import (
 
 	"encoding/json"
 
+	"syscall"
+
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/onsi/ginkgo"
@@ -110,19 +112,18 @@ func CreateContainer(netconf string) (container_id, netnspath string, session *g
 			return err
 		}
 
-		contAddr, err = netlink.AddrList(contVeth, 4)
+		contAddr, err = netlink.AddrList(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}
 
-		contRoutes, err = netlink.RouteList(contVeth, 4)
+		contRoutes, err = netlink.RouteList(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	})
-
 	return
 }
 
