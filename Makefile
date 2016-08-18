@@ -82,7 +82,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 run-etcd:
 	@-docker rm -f calico-etcd
 	docker run --detach \
-	--net=host \
+	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
