@@ -169,7 +169,7 @@ on the container endpoints.
 > containers with a single interface managed using calicoctl, we treat a 
 > container and endpoint as the same thing.  For more complicated scenarios, 
 > calicoctl provides commands for managing actual endpoints (see the 
-> [`calicoctl endpoint` reference guide](/docs/reference/calicoctl/endpoint) for usage and 
+> [`calicoctl endpoint` reference guide]({{base}}/docs/reference/calicoctl/endpoint) for usage and 
 > examples).
 
 ### System Response
@@ -192,5 +192,5 @@ remote routes are programmed.  Connectivity has been achieved between
 endpoints!  The containers are now able to send any kind of traffic to each
 other.
 
-![calicoctl container set profile](/images/lifecycle/set_profile.png)
+![calicoctl container set profile]({{base}}/images/lifecycle/set_profile.png)
 

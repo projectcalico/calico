@@ -2,7 +2,7 @@ bigheader: "Using Calico"
 abstract: "How to configure and troubleshoot Calico system"
 toc:
 - title: Using Calico
-  path: /docs/using-calico/
+  path: /docs/using-calico/using-calico
 
 - title: Troubleshooting
   section:

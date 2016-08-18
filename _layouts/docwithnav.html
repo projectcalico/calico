@@ -3,6 +3,7 @@
 <!Doctype html>
 <html id="docs" class="{{site.data[foundTOC].bigheader}}">
 
+{% include base.html %}
 {% include head-header.html %}
 
 <!--  HERO  -->
@@ -15,12 +16,12 @@
 	<div style="clear: both;"></div>
 	<div id="vendorStrip" class="dark-text">
 		<ul>
-			<li><a href="/docs/" {% if site.data[foundTOC].bigheader == "Getting Started" %}class="YAH"{% endif %}>GETTING STARTED</a></li>
-			<li><a href="/docs/using-calico" {% if site.data[foundTOC].bigheader == "Using Calico" %}class="YAH"{% endif %}>USING CALICO</a></li>
-			<li><a href="/docs/what-is-calico" {% if site.data[foundTOC].bigheader == "What is Calico" %}class="YAH"{% endif %}>WHAT IS CALICO</a></li>
-			<li><a href="/docs/reference" {% if site.data[foundTOC].bigheader == "Reference Documentation" %}class="YAH"{% endif %}>REFERENCE</a></li>
-			<li><a href="/docs/community" {% if site.data[foundTOC].bigheader == "Community" %}class="YAH"{% endif %}>COMMUNITY</a></li>		
-			<li><a href="/docs/other-releases" {% if site.data[foundTOC].bigheader == "Other Releases" %}class="YAH"{% endif %}>OTHER RELEASES</a></li>
+			<li><a href="{{base}}/docs/calico" {% if site.data[foundTOC].bigheader == "Getting Started" %}class="YAH"{% endif %}>GETTING STARTED</a></li>
+			<li><a href="{{base}}/docs/using-calico/using-calico" {% if site.data[foundTOC].bigheader == "Using Calico" %}class="YAH"{% endif %}>USING CALICO</a></li>
+			<li><a href="{{base}}/docs/what-is-calico/what-is-calico" {% if site.data[foundTOC].bigheader == "What is Calico" %}class="YAH"{% endif %}>WHAT IS CALICO</a></li>
+			<li><a href="{{base}}/docs/reference/reference" {% if site.data[foundTOC].bigheader == "Reference Documentation" %}class="YAH"{% endif %}>REFERENCE</a></li>
+			<li><a href="{{base}}/docs/community/community-overview" {% if site.data[foundTOC].bigheader == "Community" %}class="YAH"{% endif %}>COMMUNITY</a></li>		
+			<li><a href="{{base}}/docs/other-releases" {% if site.data[foundTOC].bigheader == "Other Releases" %}class="YAH"{% endif %}>OTHER RELEASES</a></li>
 		</ul>
 	</div>
 </section>

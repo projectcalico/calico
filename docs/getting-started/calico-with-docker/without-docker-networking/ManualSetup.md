@@ -18,7 +18,7 @@ manage or interfere with new interfaces or related config (for example routes,
 iptables, ipsets or interface state), as that is likely to conflict with
 Calico's programming and lead to loss of endpoint connectivity.  We recommend
 using 'server' OS installs rather than 'desktop'.  (For NetworkManager in
-particular, please see also [Troubleshooting](/docs/using-calico/troubleshooting/Troubleshooting).)
+particular, please see also [Troubleshooting]({{base}}/docs/using-calico/troubleshooting/Troubleshooting).)
 
 The hosts must have different hostnames.  We recommend `calico-01` and
 `calico-02`, and the tutorial will use those names.
@@ -33,7 +33,7 @@ Each node must have the following software installed:
 Calico uses an etcd cluster for coordinating state between the nodes.  See the
 [etcd documentation][etcd] for details on setting up an etcd cluster.
 
-> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster](/docs/using-calico/advanced/EtcdSecureCluster.md)
+> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster]({{base}}/docs/using-calico/advanced/EtcdSecureCluster.md)
 > page.
 
 ### Docker permissions

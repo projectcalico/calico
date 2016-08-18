@@ -135,5 +135,5 @@ display the valid profile commands.
 ## Further reading
 
 For more details about advanced policy options read the 
-[Advanced Network Policy tutorial](/docs/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{base}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
 

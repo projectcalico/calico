@@ -7,7 +7,7 @@ allows us to focus on how IP addresses are assigned to workloads, and
 whether and how workloads have connectivity to and from the Internet (as
 well as to other workloads within the data center).
 
-![](/images/calico-connectivity.png)
+![]({{base}}/images/calico-connectivity.png)
 
 Network provisioning and IP addresses
 =====================================
