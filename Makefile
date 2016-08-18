@@ -23,7 +23,7 @@ node_image: calico_node/.calico_node.created ## Create the calico/node image
 test: st ut              ## Run all the tests
 ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
-dist/calicoctl: $(CALICOCTL_FILE) birdcl 
+dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
 	# Ignore errors on docker command. CircleCI throws an benign error
 	# from the use of the --rm flag
     #
@@ -43,9 +43,17 @@ simple-binary:
 	pip install -r https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements.txt
 	pyinstaller calicoctl/calicoctl.py -ayF --clean
 
-calico_node/.calico_node.created: $(NODE_CONTAINER_FILES)
+calico_node/.calico_node.created: $(NODE_CONTAINER_FILES) calico_node/bin/calico-bgp-daemon
 	cd calico_node && docker build -t calico/node:latest .
 	touch calico_node/.calico_node.created
+
+calico_node/bin/calico-bgp-daemon:
+	-mkdir -p calico_node/bin/
+	docker run \
+	-v `pwd`/calico_node/calico-bgp-daemon:/go/src/github.com/projectcalico/calico-bgp-daemon \
+	-v `pwd`/calico_node/bin:/calico_node/bin \
+	golang:1.7 sh -c \
+	'cd /go/src/github.com/projectcalico/calico-bgp-daemon/ && go get -v . && go build -o /calico_node/bin/calico-bgp-daemon .'
 
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
@@ -87,6 +95,14 @@ routereflector.tar:
 birdcl:
 	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
 	chmod +x birdcl
+
+gobgp:
+	docker pull osrg/gobgp
+	docker run \
+	-v `pwd`:/code \
+	--entrypoint=sh \
+	osrg/gobgp \
+	-c 'cp /go/bin/gobgp /code'
 
 ## Run the UTs in a container.
 ut:
@@ -221,6 +237,7 @@ clean:
 	-docker rm -f calico-node
 	-docker rmi calico/node
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
+	-rm -rf calico_node/bin
 
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660

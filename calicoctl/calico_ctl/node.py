@@ -43,6 +43,7 @@ Usage:
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
     [--detach=<DETACH>] [--no-pull]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
+    [--backend=(bird | gobgp | none)]
   calicoctl node stop [--force]
   calicoctl node remove [--hostname=<HOSTNAME>] [--remove-endpoints]
   calicoctl node show
@@ -82,10 +83,15 @@ Options:
                             will be launched via the calico-node container,
                             whereas a value of "none" will not launch them at
                             all. [default: docker]
+  --backend=<BACKEND>       Specify which networking backend to use.
+                            Choices are "bird", "gobgp" or "none".
+                            When set to "none", Calico node run in policy
+                            only mode.
 """
 
 CALICO_NETWORKING_ENV = "CALICO_NETWORKING"
 CALICO_NETWORKING_DEFAULT = "true"
+
 
 NO_DEFAULT_POOLS_ENV = "NO_DEFAULT_POOLS"
 
@@ -157,6 +163,37 @@ def validate_arguments(arguments):
         sys.exit(1)
 
 
+def get_networking_backend(docopt_backend):
+    """
+    Weighs both the deprecated CALICO_NETWORKING_ENV and the new --backend from docopt to determine
+    which backend should be used. Ideally, we could use the docopt [default: bird], but until we've
+    finished deprecating CALICO_NETWORKING_ENV, we need to be able to consider every combination of the
+    two variables.
+
+    :param docopt_backend: The docopt value for --backend. Should be "bird", "gobgp", "none", or None (if
+    they are using CALICO_NETWORKING_ENV instead).
+    :return:
+    """
+    # If backend was specified via docopt, use it, as command line args take precedence over ENV vars.
+    if docopt_backend != None:
+        return docopt_backend
+    else:
+        # Otherwise, check if they are using the old binary flag: CALICO_NETWORK_ENV
+        calico_networking = os.getenv(CALICO_NETWORKING_ENV)
+        if not calico_networking:
+            # Neither environment variable nor command line passed, use default: bird.
+            return "bird"
+        else:
+            print >> sys.stderr, "WARNING: %s will be deprecated: use '--backend' instead" \
+                                 % (CALICO_NETWORKING_ENV)
+            if calico_networking == "false":
+                # environment variable passed to disable Bird. use: none
+                return "none"
+            else:
+                # environment variable passed as assumed default. use: bird.
+                return "bird"
+
+
 def node(arguments):
     """
     Main dispatcher for node commands. Calls the corresponding helper function.
@@ -166,6 +203,8 @@ def node(arguments):
     :return: None
     """
     validate_arguments(arguments)
+
+    backend = get_networking_backend(arguments.get('--backend'))
 
     as_num = convert_asn_to_asplain(arguments.get("<AS_NUM>") or arguments.get("--as"))
 
@@ -204,11 +243,12 @@ def node(arguments):
                    as_num=as_num,
                    detach=detach,
                    libnetwork_image=libnetwork_image,
-                   no_pull=arguments.get("--no-pull"))
+                   no_pull=arguments.get("--no-pull"),
+                   backend=backend)
 
 
 def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-               libnetwork_image, no_pull):
+               libnetwork_image, no_pull, backend):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -224,6 +264,7 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     use.  None, if not using libnetwork.
     :param no_pull: Boolean, True to prevent function from pulling the Calico
     node Docker images.
+    :param backend: String, backend choice. Should be "bird", "none", or "gobgp".
     :return:  None.
     """
     # The command has to be run as root to access iptables and services
@@ -307,17 +348,17 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
 
     if runtime == 'docker':
         _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach,
-                                     etcd_envs, etcd_volumes, etcd_binds, no_pull)
+                                     etcd_envs, etcd_volumes, etcd_binds, no_pull, backend)
         if libnetwork_image:
             _start_libnetwork_container(libnetwork_image, etcd_envs,
                                         etcd_volumes, etcd_binds, no_pull)
     if runtime == 'rkt':
         _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
-                                  etcd_volumes, etcd_binds)
+                                  etcd_volumes, etcd_binds, backend)
 
 
 def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
-                                 etcd_volumes, etcd_binds, no_pull):
+                                 etcd_volumes, etcd_binds, no_pull, backend):
     """
     Start the main Calico node container.
 
@@ -337,9 +378,6 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     node Docker image.
     :return: None.
     """
-    calico_networking = os.getenv(CALICO_NETWORKING_ENV,
-                                  CALICO_NETWORKING_DEFAULT)
-
     no_default_pools = os.getenv(NO_DEFAULT_POOLS_ENV)
 
     if not no_pull:
@@ -357,7 +395,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         "HOSTNAME=%s" % hostname,
         "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
-        "CALICO_NETWORKING=%s" % calico_networking,
+        "CALICO_NETWORKING_BACKEND=%s" % backend,
         "AS=%s" % (as_num or ""),
         "NO_DEFAULT_POOLS=%s" % (no_default_pools or "")
     ] + etcd_envs
@@ -417,7 +455,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     _attach_and_stream(container, detach)
 
 def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
-                              etcd_volumes, etcd_binds):
+                              etcd_volumes, etcd_binds, backend):
     """
     Start the main Calico node container using rkt
 
@@ -430,14 +468,12 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
     container
     :param etcd_binds: Dictionary of host file and mount file pairs for etcd
     files to mount on the container
+    :param backend:
     :return: None.
     """
     if node_image == "calico/node:latest":
         # The default image is being used so convert to the rkt format.
         node_image = "registry-1.docker.io/calico/node:latest"
-
-    calico_networking = os.getenv(CALICO_NETWORKING_ENV,
-                                  CALICO_NETWORKING_DEFAULT)
 
     no_default_pools = os.getenv(NO_DEFAULT_POOLS_ENV)
 
@@ -446,7 +482,7 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
         "HOSTNAME=%s" % hostname,
         "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
-        "CALICO_NETWORKING=%s" % calico_networking,
+        "CALICO_NETWORKING_BACKEND=%s" % backend,
         "AS=%s" % (as_num or ""),
         "NO_DEFAULT_POOLS=%s" % (no_default_pools or "")
     ] + etcd_envs
