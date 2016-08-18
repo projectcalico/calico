@@ -31,7 +31,7 @@ else
     ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
 
     # confd needs a "-node" arguments for each etcd endpoint.
-    ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/'`
+    ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
 
     confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
           -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
