@@ -1,6 +1,7 @@
 ---
 title: Accessing Calico policy with Calico as a network plugin
 ---
+{% include base.html %}
 
 ## Background
 

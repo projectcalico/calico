@@ -1,6 +1,7 @@
 ---
 title: Stars demo with the Mesos Docker Containerizer
 ---
+{% include base.html %}
 
 This demo uses the stars network visualizer to simulate a frontend and backend service,
 as well as a client service and UI, all running on Mesos. It then configures network

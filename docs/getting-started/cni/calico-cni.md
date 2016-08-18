@@ -1,6 +1,7 @@
 ---
 title: Calico for CNI
 ---
+{% include base.html %}
 
 Calico provides a CNI plugin for integration with orchestrators which use the [app/cni][appc-repo] interface.
 

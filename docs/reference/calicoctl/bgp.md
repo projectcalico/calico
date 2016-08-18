@@ -1,6 +1,7 @@
 ---
 title: calicoctl bgp
 ---
+{% include base.html %}
 
 # User reference for 'calicoctl bgp' commands
 

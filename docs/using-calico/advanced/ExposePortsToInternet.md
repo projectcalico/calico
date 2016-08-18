@@ -1,6 +1,7 @@
 ---
 title: # Expose Container Port to Host Interface / Internet
 ---
+{% include base.html %}
 
 In the [Calico without Docker networking tutorial]({{base}}/docs/getting-started/calico-with-docker/without-docker-networking/CalicoAsPlugin)
 or the [Calico as a Docker network plugin tutorial]({{base}}/docs/getting-started/calico-with-docker/docker-network-plugin/CalicoWithoutDockerNetworking)

@@ -1,6 +1,7 @@
 ---
 title: Building and testing calico-containers images
 ---
+{% include base.html %}
 
 This document describes how to build the `calicoctl` binary and the `calico/node` Docker image, and how to run the Calico Docker test suites.
 

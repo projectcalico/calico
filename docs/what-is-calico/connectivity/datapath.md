@@ -1,6 +1,7 @@
 ---
 title: 'The Calico Data Path: IP Routing and iptables'
 ---
+{% include base.html %}
 
 One of Calico’s key features is how packets flow between workloads in a
 data center, or between a workload and the Internet, without additional

@@ -2,6 +2,7 @@
 title: IP Interconnect Fabrics in Calico
 lead_text: 'Where large-scale IP networks and hardware collide'
 ---
+{% include base.html %}
 
 Calico provides an end-to-end IP network that interconnects the
 endpoints [^1] in a scale-out or cloud environment. To do that, it needs

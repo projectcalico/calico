@@ -1,6 +1,7 @@
 ---
 title: Preparing the environment for Calico without Docker networking
 ---
+{% include base.html %}
 
 The worked example in the _Calico without Docker networking tutorial_ is run on
 two Linux servers that have a number of installation requirements.

@@ -1,6 +1,7 @@
 ---
 title: # External Connectivity - Hosts on their own Layer 2 segment
 ---
+{% include base.html %}
 
 Calico creates a routed network on which your containers look like normal IP 
 speakers.  You can connect to them from a host in your cluster (assuming the 

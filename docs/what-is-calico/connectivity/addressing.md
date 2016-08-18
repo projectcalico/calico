@@ -1,6 +1,7 @@
 ---
 title: Addressing and Connectivity Overview
 ---
+{% include base.html %}
 
 This diagram shows elements of a Calico network in a simplified way that
 allows us to focus on how IP addresses are assigned to workloads, and

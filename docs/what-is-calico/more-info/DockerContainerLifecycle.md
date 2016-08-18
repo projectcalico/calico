@@ -1,6 +1,7 @@
 ---
 title: Lifecycle of a container (Calico without Docker networking)
 ---
+{% include base.html %}
 
 This page provides low-level details about what happens within Calico when 
 Docker containers are networked with Calico when Docker is not providing any

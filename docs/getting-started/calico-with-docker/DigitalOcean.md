@@ -1,6 +1,7 @@
 ---
 title: Running the Calico tutorials on DigitalOcean
 ---
+{% include base.html %}
 
 Calico is designed to provide high performance massively scalable virtual networking for private data centers. But you 
 can also run Calico within a public cloud such as DigitalOcean.  The following instructions show how to network 

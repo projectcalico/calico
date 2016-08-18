@@ -2,6 +2,7 @@
 subtitle: 'At scale, and no, we''re not joking'
 title: Calico over an Ethernet interconnect fabric
 ---
+{% include base.html %}
 
 This is the first of a few *tech notes* that I will be authoring that
 will discuss some of the various interconnect fabric options in a Calico

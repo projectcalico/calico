@@ -1,6 +1,7 @@
 ---
 title: Calico without Docker networking (i.e. `--net=none`)
 ---
+{% include base.html %}
 
 This tutorial describes how to set up a Calico cluster in a Docker environment
 without Docker networking (i.e. --net=none).  With this option, Docker creates

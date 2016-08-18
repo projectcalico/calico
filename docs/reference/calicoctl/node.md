@@ -1,6 +1,7 @@
 ---
 title: calicoctl node
 ---
+{% include base.html %}
 
 # User reference for 'calicoctl node' commands
 

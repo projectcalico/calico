@@ -1,6 +1,7 @@
 ---
 title: Using Calico to Secure Host Interfaces
 ---
+{% include base.html %}
 
 This guide describes how to use Calico to secure the network interfaces
 of the host itself (as opposed to those of any container/VM workloads

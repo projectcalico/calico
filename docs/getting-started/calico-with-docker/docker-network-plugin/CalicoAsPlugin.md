@@ -1,6 +1,7 @@
 ---
 title: Calico as a Docker network plugin
 ---
+{% include base.html %}
 
 This tutorial describes how to set up a Calico cluster in a Docker environment
 using Docker's native networking framework (built around libnetwork) with

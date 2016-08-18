@@ -1,6 +1,7 @@
 ---
 title: Using Calico with a secure etcd cluster
 ---
+{% include base.html %}
 
 Calico supports insecure and TLS/certificate-enabled etcd clusters.
 

@@ -1,6 +1,7 @@
 ---
 title: Frequently Asked Questions
 ---
+{% include base.html %}
 
 This page contains answers to some frequently-asked questions about Calico on Docker.
 

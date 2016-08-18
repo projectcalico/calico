@@ -1,6 +1,7 @@
 ---
 tile: Installing Calico in DC/OS
 ---
+{% include base.html %}
 
 This guide provides instructions for installing Calico and its
 prerequisites on a [Mesos DC/OS](https://dcos.io/) cluster.
