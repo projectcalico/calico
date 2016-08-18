@@ -82,7 +82,7 @@ Here's a list of commands that must be run as root:
 - `calicoctl container ip add`
 - `calicoctl container ip remove`
 
-See the [calicoctl reference guide](/docs/reference/calicoctl/calicoctl) for details on specific 
+See the [calicoctl reference guide]({{base}}/docs/reference/calicoctl/calicoctl) for details on specific 
 calicoctl commands.
 
 ### Calico as a Docker network plugin

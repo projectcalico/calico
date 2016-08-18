@@ -2,7 +2,7 @@ bigheader: "What is Calico"
 abstract: "Background information on Calico"
 toc:
 - title: What is Calico?
-  path: /docs/what-is-calico/
+  path: /docs/what-is-calico/what-is-calico
 - title: Calico Architecture
   path: /docs/what-is-calico/architecture
 - title: Calico Connectivity

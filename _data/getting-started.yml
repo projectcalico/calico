@@ -2,15 +2,15 @@ bigheader: "Getting Started"
 abstract: "All you need to know, to get started with Calico"
 toc:
 - title: Getting Started with Calico
-  path: /docs/
+  path: /docs/calico
 - title: Calico Integrations
-  path: /docs/getting-started/
+  path: /docs/getting-started/calico-integrations
 - title: Calico for CNI
-  path: /docs/getting-started/cni/
+  path: /docs/getting-started/cni/calico-cni
 - title: Calico on Kubernetes
   section:
   - title: Overview
-    path: /docs/getting-started/kubernetes/
+    path: /docs/getting-started/kubernetes/calico-kubernetes-overview
   - title: Adding Calico to an Existing Kubernetes Cluster
     path: /docs/getting-started/kubernetes/KubernetesIntegration
   - title: Deploying Calico and Kubernetes on AWS
@@ -28,18 +28,18 @@ toc:
     - title: Overview
       path: /docs/getting-started/kubernetes/NetworkPolicy
     - title: Demonstrating Network Policy
-      path: /docs/getting-started/kubernetes/stars-demo/
+      path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
   - title: Troubleshooting Calico for Kubernetes
     path: /docs/getting-started/kubernetes/Troubleshooting-Calico-Kubernetes    
 
 - title: Calico on Mesos
   section:
   - title: Calico Networking for Mesos
-    path: /docs/getting-started/mesos/
+    path: /docs/getting-started/mesos/CalicoOnMesos
   - title: Installing Calico in DC/OS
     path: /docs/getting-started/mesos/DCOS
   - title: Installing Calico-CNI for the Unified Containerizer
-    path: /docs/getting-started/mesos/ManualInstallCalicoCNI.md
+    path: /docs/getting-started/mesos/ManualInstallCalicoCNI
   - title: Calico with Docker Containerizer - Manual Install Guide
     path: /docs/getting-started/mesos/ManualInstallCalicoDockerContainerizer
   - title: Calico with the Unified Containerizer - Manual Install Guide
@@ -55,11 +55,11 @@ toc:
   - title: Vagrant Deployed Mesos Cluster with Calico
     path: /docs/getting-started/mesos/Vagrant
   - title: Installing Net-modules
-    path: /docs/getting-started/mesos/net-modules/
+    path: /docs/getting-started/mesos/net-modules/installing-netmodules
   - title: Stars demo with the Mesos Docker Containerizer
-    path: /docs/getting-started/mesos/stars-demo/
+    path: /docs/getting-started/mesos/stars-demo/stars-demo-mesos
   - title: Quickstart with Docker-Compose - Calico for Mesos CNI
-    path: /docs/getting-started/mesos/cni-compose-demo/
+    path: /docs/getting-started/mesos/cni-compose-demo/quickstart-compose-mesos-cni
 
 - title: Calico on OpenStack
   section:
@@ -101,7 +101,7 @@ toc:
   - title: Calico as a docker network plugin
     section:
     - title: Overview
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/
+      path: /docs/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin
     - title:  Preparing the environment
       path: /docs/getting-started/calico-with-docker/docker-network-plugin/ManualSetup
     - title: Running Calico on a Docker Swarm
@@ -113,7 +113,7 @@ toc:
   - title: Calico without Docker networking (--net=none)
     section:
     - title: Overview
-      path: /docs/getting-started/calico-with-docker/without-docker-networking/
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/CalicoWithoutDockerNetworking
     - title: Preparing the environment
       path: /docs/getting-started/calico-with-docker/without-docker-networking/ManualSetup
     - title: Calico IPv6 Networking
@@ -122,9 +122,9 @@ toc:
 - title: Calico and rkt
   section:
   - title: Calico Networking with rkt
-    path: /docs/getting-started/rkt/
+    path: /docs/getting-started/rkt/calico-rkt
   - title: Managing calico using systemd
-    path: /docs/getting-started/rkt/systemd/
+    path: /docs/getting-started/rkt/systemd/calico-node-systemd
 
 - title: Calico on Bare Metal
   section:

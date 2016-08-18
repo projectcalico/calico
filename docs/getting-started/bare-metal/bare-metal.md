@@ -39,7 +39,7 @@ to/from other interfaces is left alone.
 >     would need to be very broad to allow all traffic destined for any
 >     possible workload.
 >
-> ![](/images/bare-metal-packet-flows.png)
+> ![]({{base}}/images/bare-metal-packet-flows.png)
 
 Overview
 ========

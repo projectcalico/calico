@@ -6,37 +6,37 @@
 	<link rel="shortcut icon" type="image/png" href="/images/favicon.png">
 	<link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
 	<link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
-	<link rel="stylesheet" href="/css/styles.css"/>
-        <link rel="stylesheet" href="/css/jquery-ui.min.css">
-        <link rel="stylesheet" href="/css/sweetalert.css">
-	<script src="/js/jquery-2.2.0.min.js"></script>
-        <script src="/js/jquery-ui.min.js"></script>
-	<script src="/js/script.js"></script>
-        <script src="/js/sweetalert.min.js"></script>
+	<link rel="stylesheet" href="{{base}}/css/styles.css"/>
+        <link rel="stylesheet" href="{{base}}/css/jquery-ui.min.css">
+        <link rel="stylesheet" href="{{base}}/css/sweetalert.css">
+	<script src="{{base}}/js/jquery-2.2.0.min.js"></script>
+        <script src="{{base}}/js/jquery-ui.min.js"></script>
+	<script src="{{base}}/js/script.js"></script>
+        <script src="{{base}}/js/sweetalert.min.js"></script>
 	<title>Calico - {{ title }}</title>
 </head>
 <body>
 <div id="cellophane" onclick="kub.toggleMenu()"></div>
 <header>
-	<a href="/" class="logo"></a>
+	<a href="{{base}}/" class="logo"></a>
 	<div class="nav-buttons" data-auto-burger="primary">
-		<a href="/docs/" class="button" id="viewDocs" data-auto-burger-exclude>View Documentation</a>
-		<a href="/docs/getting-started/" class="button" id="tryCalico" data-auto-burger-exclude>Get Started</a>
+		<a href="{{base}}/docs/calico" class="button" id="viewDocs" data-auto-burger-exclude>View Documentation</a>
+		<a href="{{base}}/docs/getting-started/calico-integrations" class="button" id="tryCalico" data-auto-burger-exclude>Get Started</a>
 		<button id="hamburger" onclick="kub.toggleMenu()" data-auto-burger-exclude><div></div></button>
 	</div>
 
 	<nav id="mainNav">
 		<main data-auto-burger="primary">
 			<div class="nav-box">
-				<h3><a href="/docs/getting-started/">Get Started</a></h3>
+				<h3><a href="{{base}}/docs/getting-started/calico-integrations">Get Started</a></h3>
 				<p>Looking to try Calico with one our Kubernetes, Mesos, Docker, OpenStack or Bare Metal integration?</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="/docs/">Documentation</a></h3>
+				<h3><a href="{{base}}/docs/calico">Documentation</a></h3>
 				<p>Learn more about Calico in our documentation.</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="/docs/community/">Community</a></h3>
+				<h3><a href="{{base}}/docs/community/community-overview">Community</a></h3>
 				<p>Join the Calico community and chat with other Calico users and the project authos.</p>
 			</div>
 			<div class="nav-box">

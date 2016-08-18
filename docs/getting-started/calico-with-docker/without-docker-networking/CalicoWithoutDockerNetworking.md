@@ -19,11 +19,11 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for using _Calico without Docker networking_.
 
-- [Vagrant install with CoreOS](/docs/getting-started/calico-with-docker/VagrantCoreOS)
-- [Vagrant install with Ubuntu](/docs/getting-started/calico-with-docker//VagrantUbuntu)
-- [Amazon Web Services (AWS)](/docs/getting-started/calico-with-docker//AWS)
-- [Google Compute Engine (GCE)](/docs/getting-started/calico-with-docker//GCE)
-- [DigitalOcean](/docs/getting-started/calico-with-docker//DigitalOcean)
+- [Vagrant install with CoreOS]({{base}}/docs/getting-started/calico-with-docker/VagrantCoreOS)
+- [Vagrant install with Ubuntu]({{base}}/docs/getting-started/calico-with-docker//VagrantUbuntu)
+- [Amazon Web Services (AWS)]({{base}}/docs/getting-started/calico-with-docker//AWS)
+- [Google Compute Engine (GCE)]({{base}}/docs/getting-started/calico-with-docker//GCE)
+- [DigitalOcean]({{base}}/docs/getting-started/calico-with-docker//DigitalOcean)
 
 Altenatively, you can manually configure your hosts.
 - [Manual setup](ManualSetup)
@@ -172,7 +172,7 @@ See the [IPv6 worked example](IPv6) for a worked example.
 ## Advanced network policy
 
 For details about advanced policy options read the
-[Advanced Network Policy tutorial](/docs/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{base}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 

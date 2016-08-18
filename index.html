@@ -6,6 +6,7 @@ description: Home
 <!Doctype html>
 <html id="home">
 
+{% include base.html %}
 {% include head-header.html %}
 
 <!--  HERO  -->
@@ -15,15 +16,8 @@ description: Home
             <h1>Cloud Networks, Secured</h1>
             <h5>A Pure Layer 3 Approach to Virtual Networking for Highly Scalable Data Centers</h5>
         </div>
-        <a href="/docs/getting-started/" id="quickstartButton" class="button">Get Started</a>
+        <a href="{{base}}/docs/getting-started/calico-integrations" id="quickstartButton" class="button">Get Started</a>
     </main>
-    <!--<div id="vendorStrip" class="light-text">-->
-        <!--<img src="images/logos/viacom_logo.png">-->
-        <!--<img src="images/logos/soundcloud_logo.png">-->
-        <!--<img src="images/logos/redhat_logo.png">-->
-        <!--<img src="images/logos/wepay_logo.png">-->
-        <!--<img src="images/logos/verizon_logo.png">-->
-    <!--</div>--> 
 </section>
 <!--  OCEAN NODES  -->
 <section id="oceanNodes">

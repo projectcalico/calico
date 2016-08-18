@@ -2,7 +2,7 @@ bigheader: "Reference Documentation"
 abstract: "Reference information about Calico"
 toc:
 - title: Reference Documentation
-  path: /docs/reference/
+  path: /docs/reference/reference
 - title: Supported platforms
   path: /docs/reference/supported-platforms
 - title: Earlier releases of Calico

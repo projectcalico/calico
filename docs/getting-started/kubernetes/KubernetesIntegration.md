@@ -47,7 +47,7 @@ sudo chmod +x calicoctl
 sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
 ```
 
-See the [`calicoctl node` documentation](/docs/reference/calicoctl/node.md#calicoctl-node)
+See the [`calicoctl node` documentation]({{base}}/docs/reference/calicoctl/node.md#calicoctl-node)
 for more information.
 
 #### Example systemd unit file (calico-node.service)

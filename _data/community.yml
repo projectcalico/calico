@@ -2,7 +2,7 @@ bigheader: "Community"
 abstract: "Information on joining the Calico Community and helping contribute to the project"
 toc:
 - title: Calico Community
-  path: /docs/community/
+  path: /docs/community/community-overview
 - title: Getting Involved
   path: /docs/community/involved
 - title: Contribution Guidelines

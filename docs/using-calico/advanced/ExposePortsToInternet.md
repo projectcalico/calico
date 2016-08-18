@@ -2,8 +2,8 @@
 title: # Expose Container Port to Host Interface / Internet
 ---
 
-In the [Calico without Docker networking tutorial](/docs/getting-started/calico-with-docker/without-docker-networking/index)
-or the [Calico as a Docker network plugin tutorial](/docs/getting-started/calico-with-docker/docker-network-plugin/index)
+In the [Calico without Docker networking tutorial]({{base}}/docs/getting-started/calico-with-docker/without-docker-networking/CalicoAsPlugin)
+or the [Calico as a Docker network plugin tutorial]({{base}}/docs/getting-started/calico-with-docker/docker-network-plugin/CalicoWithoutDockerNetworking)
 we created containers and assigned endpoints (a container interface) to them. This is used for Container-
 To-Container communication.
 
@@ -46,5 +46,5 @@ iptables -t nat -A OUTPUT -p tcp -o lo --dport 80 -j DNAT --to-destination 192.1
 Now all traffic to your host interface on port 80 will be forwarded to the container IP 192.168.0.1.
 
 For additional information on managing policy for your containers, you can read
-the [Advanced Network Policy Guide](/docs/using-calico/configuration/AdvancedNetworkPolicy).
+the [Advanced Network Policy Guide]({{base}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
 

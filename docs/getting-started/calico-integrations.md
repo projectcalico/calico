@@ -10,10 +10,10 @@ using Calico.  In most cases we provide worked examples using manual setup on
 your own servers, a quick set-up in a virtualized environment using Vagrant and
 a number of cloud services.
 
-- [Calico with Kubernetes](kubernetes/)
-- [Calico as a Docker network plugin](calico-with-docker/docker-network-plugin)
-- [Calico without Docker networking](calico-with-docker/without-docker-networking)
-- [Calico with rkt](rkt/)
+- [Calico with Kubernetes](kubernetes/calico-kubernetes-overview)
+- [Calico as a Docker network plugin](calico-with-docker/docker-network-plugin/CalicoAsPlugin)
+- [Calico without Docker networking](calico-with-docker/without-docker-networking/CalicoWithoutDockerNetworking)
+- [Calico with rkt](rkt/calico-rkt)
 - [Calico with Mesos](mesos/)
   - [Calico with DC/OS](mesos/DCOS)
 - [Calico with Docker Swarm](calico-with-docker/docker-network-plugin/CalicoSwarm)
