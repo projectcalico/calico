@@ -202,7 +202,12 @@ func getK8sLabels(client *k8sclient.Client, k8sargs utils.K8sArgs) (map[string]s
 	}
 
 	labels := pods.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
 	labels["calico/k8s_ns"] = fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)
+
 	return labels, nil
 }
 

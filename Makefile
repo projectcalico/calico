@@ -88,6 +88,15 @@ run-etcd:
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
+# Etcd is used by the kubernetes
+run-etcd-host:
+	@-docker rm -f calico-etcd
+	docker run --detach \
+	--net=host \
+	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
 # Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:
@@ -151,7 +160,7 @@ deploy-rkt: binary
 # Build a binary for a release
 release: clean update-tools build-containerized test-containerized
 
-run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
+run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "podCidr"}}' >net.d/10-calico.conf
