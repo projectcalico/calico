@@ -5,6 +5,8 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 K8S_VERSION=1.3.1
 CALICO_NODE_VERSION=0.20.0
 
+CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
+
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
 
@@ -33,12 +35,12 @@ vendor:
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico \
-	-ldflags "-X main.VERSION=$(shell git describe --tags --dirty)" calico.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION)" calico.go;
 
 # Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
-	-ldflags "-X main.VERSION=$(shell git describe --tags --dirty)" ipam/calico-ipam.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION)" ipam/calico-ipam.go;
 
 .PHONY: test
 # Run the unit tests.
@@ -56,7 +58,7 @@ $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	touch $@
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile
-	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
+	docker build -f Dockerfile --build-arg CALICO_CNI_VERSION=$(CALICO_CNI_VERSION) -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
 
 # Run the tests in a container. Useful for CI

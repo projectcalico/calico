@@ -6,6 +6,8 @@ ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:/opt/cni/bin:$PATH
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 RUN mkdir -p /opt/cni/bin
+ARG CALICO_CNI_VERSION
+ENV CALICO_CNI_VERSION ${CALICO_CNI_VERSION}
 
 # Add source files.
 ADD glide.yaml glide.lock Makefile /go/src/github.com/projectcalico/calico-cni/
@@ -29,7 +31,7 @@ RUN set -ex \
 		make \
     && go get -u github.com/Masterminds/glide \
     && cd /go/src/github.com/projectcalico/calico-cni \
-    && make binary \
+    && make binary CALICO_CNI_VERSION=$CALICO_CNI_VERSION \
     && mv dist/calico* /opt/cni/bin \
 	&& rm -rf /go /root/.glide \
 	&& apk del .build-deps
