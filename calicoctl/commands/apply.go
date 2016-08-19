@@ -19,9 +19,6 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
 )
 
 func Apply(args []string) error {
@@ -51,8 +48,7 @@ Options:
 		return nil
 	}
 
-	cmd := apply{}
-	results := executeConfigCommand(parsedArgs, cmd)
+	results := executeConfigCommand(parsedArgs, actionApply)
 	glog.V(2).Infof("results: %+v", results)
 
 	if results.fileInvalid {
@@ -86,32 +82,4 @@ Options:
 	}
 
 	return results.err
-}
-
-// commandInterface for create command.
-// Maps the generic resource types to the typed client interface.
-type apply struct {
-	skipIfExists bool
-}
-
-func (a apply) execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	var err error
-	switch r := resource.(type) {
-	case api.HostEndpoint:
-		_, err = client.HostEndpoints().Apply(&r)
-	case api.Policy:
-		_, err = client.Policies().Apply(&r)
-	case api.Pool:
-		_, err = client.Pools().Apply(&r)
-	case api.Profile:
-		_, err = client.Profiles().Apply(&r)
-	case api.WorkloadEndpoint:
-		err = fmt.Errorf("Workload endpoints cannot be managed directly")
-	case api.BGPPeer:
-		_, err = client.BGPPeers().Apply(&r)
-	default:
-		panic(fmt.Errorf("Unhandled resource type: %v", resource))
-	}
-
-	return resource, err
 }

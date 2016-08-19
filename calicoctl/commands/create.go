@@ -19,10 +19,6 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 func Create(args []string) error {
@@ -53,8 +49,7 @@ Options:
 		return nil
 	}
 
-	cmd := create{skipIfExists: parsedArgs["--skip-exists"].(bool)}
-	results := executeConfigCommand(parsedArgs, cmd)
+	results := executeConfigCommand(parsedArgs, actionCreate)
 	glog.V(2).Infof("results: %+v", results)
 
 	if results.fileInvalid {
@@ -88,43 +83,4 @@ Options:
 	}
 
 	return results.err
-}
-
-// commandInterface for create command.
-// Maps the generic resource types to the typed client interface.
-type create struct {
-	skipIfExists bool
-}
-
-func (c create) execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	var err error
-	switch r := resource.(type) {
-	case api.HostEndpoint:
-		_, err = client.HostEndpoints().Create(&r)
-	case api.Policy:
-		_, err = client.Policies().Create(&r)
-	case api.Pool:
-		_, err = client.Pools().Create(&r)
-	case api.Profile:
-		_, err = client.Profiles().Create(&r)
-	case api.WorkloadEndpoint:
-		err = fmt.Errorf("Workload endpoints cannot be managed directly")
-	case api.BGPPeer:
-		_, err = client.BGPPeers().Create(&r)
-	default:
-		panic(fmt.Errorf("Unhandled resource type: %v", resource))
-	}
-
-	if err == nil {
-		return resource, nil
-	}
-
-	// Handle resource does not exist errors explicitly.
-	switch err.(type) {
-	case errors.ErrorResourceAlreadyExists:
-		if c.skipIfExists {
-			return resource, nil
-		}
-	}
-	return nil, err
 }

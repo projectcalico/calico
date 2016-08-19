@@ -20,9 +20,6 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
 )
 
 func Replace(args []string) error {
@@ -54,8 +51,7 @@ Options:
 		return nil
 	}
 
-	cmd := replace{}
-	results := executeConfigCommand(parsedArgs, cmd)
+	results := executeConfigCommand(parsedArgs, actionUpdate)
 	glog.V(2).Infof("results: %+v", results)
 
 	if results.fileInvalid {
@@ -89,31 +85,4 @@ Options:
 	}
 
 	return results.err
-}
-
-// commandInterface for replace command.
-// Maps the generic resource types to the typed client interface.
-type replace struct {
-}
-
-func (c replace) execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	var err error
-	switch r := resource.(type) {
-	case api.HostEndpoint:
-		_, err = client.HostEndpoints().Update(&r)
-	case api.Policy:
-		_, err = client.Policies().Update(&r)
-	case api.Pool:
-		_, err = client.Pools().Update(&r)
-	case api.Profile:
-		_, err = client.Profiles().Update(&r)
-	case api.WorkloadEndpoint:
-		err = fmt.Errorf("Workload endpoints cannot be managed directly")
-	case api.BGPPeer:
-		_, err = client.BGPPeers().Update(&r)
-	default:
-		panic(fmt.Errorf("Unhandled resource type: %v", resource))
-	}
-
-	return resource, err
 }

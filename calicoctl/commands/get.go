@@ -16,23 +16,18 @@ package commands
 
 import (
 	"github.com/docopt/docopt-go"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/client"
 
 	"fmt"
+	"strings"
 
-	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
 )
 
 func Get(args []string) error {
 	doc := EtcdIntro + `Display one or many resources identified by file, stdin or resource type and name.
 
-Possible resource types include: policy
-
-By specifying the output as 'template' and providing a Go template as the value
-of the --template flag, you can filter the attributes of the fetched resource(s).
+By specifying the output as 'go-template' and providing a Go template as the value
+of the --go-template flag, you can filter the attributes of the fetched resource(s).
 
 Usage:
   calicoctl get ([--hostname=<HOSTNAME>] [--scope=<SCOPE>] (<KIND> [<NAME>]) |
@@ -48,7 +43,8 @@ Examples:
 
 Options:
   -f --filename=<FILENAME>     Filename to use to get the resource.  If set to "-" loads from stdin.
-  -o --output=<OUTPUT FORMAT>  Output format.  One of: yaml, json.  [Default: yaml]
+  -o --output=<OUTPUT FORMAT>  Output format.  One of: ps, wide, custom-columns=..., yaml, json,
+                               go-template=..., go-template-file=...   [Default: ps]
   -n --hostname=<HOSTNAME>     The hostname.
   -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
                                [default: /etc/calico/calicoctl.cfg]
@@ -64,8 +60,54 @@ Options:
 		return nil
 	}
 
-	cmd := get{}
-	results := executeConfigCommand(parsedArgs, cmd)
+	var rp resourcePrinter
+	output := parsedArgs["--output"].(string)
+	switch output {
+	case "yaml":
+		rp = resourcePrinterYAML{}
+	case "json":
+		rp = resourcePrinterJSON{}
+	case "ps":
+		rp = resourcePrinterTable{wide: false}
+	case "wide":
+		rp = resourcePrinterTable{wide: true}
+	default:
+		// Output format may be a key=value pair, so split on "=" to find out.  Pull
+		// out the key and value, and split the value by "," as some options allow
+		// a multiple-valued value.
+		outputParms := strings.SplitN(output, "=", 2)
+		outputKey := outputParms[0]
+		outputValue := ""
+		outputValues := []string{}
+		if len(outputParms) == 2 {
+			outputValue = outputParms[1]
+			outputValues = strings.Split(outputValue, ",")
+		}
+
+		switch outputKey {
+		case "go-template":
+			if outputValue == "" {
+				return fmt.Errorf("need to specify a template")
+			}
+			rp = resourcePrinterTemplate{template: outputValue}
+		case "go-template-file":
+			if outputValue == "" {
+				return fmt.Errorf("need to specify a template file")
+			}
+			rp = resourcePrinterTemplateFile{templateFile: outputValue}
+		case "custom-columns":
+			if outputValue == "" {
+				return fmt.Errorf("need to specify at least one column")
+			}
+			rp = resourcePrinterTable{headings: outputValues}
+		}
+	}
+
+	if rp == nil {
+		return fmt.Errorf("unrecognized output format '%s'", output)
+	}
+
+	results := executeConfigCommand(parsedArgs, actionList)
 	glog.V(2).Infof("results: %+v", results)
 
 	if results.err != nil {
@@ -73,42 +115,5 @@ Options:
 		return err
 	}
 
-	// TODO Handle better - results should be groups as per input file
-	// For simplicity convert the returned list of resources to expand any lists
-	resources := convertToSliceOfResources(results.resources)
-
-	if output, err := yaml.Marshal(resources); err != nil {
-		fmt.Printf("Error outputing data: %v", err)
-	} else {
-		fmt.Printf("%s", string(output))
-	}
-
-	return nil
-}
-
-// commandInterface for replace command.
-// Maps the generic resource types to the typed client interface.
-type get struct {
-}
-
-func (g get) execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	var err error
-	switch r := resource.(type) {
-	case api.HostEndpoint:
-		resource, err = client.HostEndpoints().List(r.Metadata)
-	case api.Policy:
-		resource, err = client.Policies().List(r.Metadata)
-	case api.Pool:
-		resource, err = client.Pools().List(r.Metadata)
-	case api.Profile:
-		resource, err = client.Profiles().List(r.Metadata)
-	case api.WorkloadEndpoint:
-		resource, err = client.WorkloadEndpoints().List(r.Metadata)
-	case api.BGPPeer:
-		resource, err = client.BGPPeers().List(r.Metadata)
-	default:
-		panic(fmt.Errorf("Unhandled resource type: %v", resource))
-	}
-
-	return resource, err
+	return rp.print(results.resources)
 }

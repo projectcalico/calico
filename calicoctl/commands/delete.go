@@ -20,10 +20,6 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 func Delete(args []string) error {
@@ -62,8 +58,7 @@ Options:
 		return nil
 	}
 
-	cmd := delete{skipIfNotExists: parsedArgs["--skip-not-exists"].(bool)}
-	results := executeConfigCommand(parsedArgs, cmd)
+	results := executeConfigCommand(parsedArgs, actionDelete)
 	glog.V(2).Infof("results: %+v", results)
 
 	if results.fileInvalid {
@@ -97,43 +92,4 @@ Options:
 	}
 
 	return results.err
-}
-
-// commandInterface for delete command.
-// Maps the generic resource types to the typed client interface.
-type delete struct {
-	skipIfNotExists bool
-}
-
-func (d delete) execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-	var err error
-	switch r := resource.(type) {
-	case api.HostEndpoint:
-		err = client.HostEndpoints().Delete(r.Metadata)
-	case api.Policy:
-		err = client.Policies().Delete(r.Metadata)
-	case api.Pool:
-		err = client.Pools().Delete(r.Metadata)
-	case api.Profile:
-		err = client.Profiles().Delete(r.Metadata)
-	case api.WorkloadEndpoint:
-		err = fmt.Errorf("Workload endpoints cannot be managed directly")
-	case api.BGPPeer:
-		err = client.BGPPeers().Delete(r.Metadata)
-	default:
-		panic(fmt.Errorf("Unhandled resource type: %v", resource))
-	}
-
-	if err == nil {
-		return resource, nil
-	}
-
-	// Handle resource does not exist errors explicitly.
-	switch err.(type) {
-	case errors.ErrorResourceDoesNotExist:
-		if d.skipIfNotExists {
-			return resource, nil
-		}
-	}
-	return nil, err
 }
