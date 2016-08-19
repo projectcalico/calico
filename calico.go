@@ -24,6 +24,7 @@ import (
 
 	"net"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/ns"
@@ -54,19 +55,25 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if conf.Debug {
-		EnableDebugLogging()
-	}
+	ConfigureLogging(conf.LogLevel)
 
 	workloadID, orchestratorID, err := GetIdentifiers(args)
 	if err != nil {
 		return err
 	}
 
+	logger := CreateContextLogger(workloadID)
+
 	// Allow the hostname to be overridden by the network config
 	if conf.Hostname != "" {
 		hostname = conf.Hostname
 	}
+
+	logger.WithFields(log.Fields{
+		"OrchestratorID": orchestratorID,
+		"Hostname":       hostname,
+	}).Info("Extracted identifiers")
+
 	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
@@ -79,6 +86,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	logger.Debug("Retrieved endpoints: %v", endpoints)
+
 	var endpoint *api.WorkloadEndpoint
 	if len(endpoints.Items) == 1 {
 		endpoint = &endpoints.Items[0]
@@ -110,6 +120,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			fmt.Fprintf(os.Stderr, "Calico CNI appending profile: %s\n", profileID)
 			endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
 			result, err = CreateResultFromEndpoint(endpoint)
+			logger.WithField("result", result).Debug("Created result from endpoint")
 			if err != nil {
 				return err
 			}
@@ -121,6 +132,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
 			result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			logger.WithField("result", result).Info("Got result from IPAM plugin")
 			if err != nil {
 				return err
 			}
@@ -140,11 +152,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			endpoint.Metadata.Labels = labels
 			endpoint.Spec.Profiles = []string{profileID}
 
+			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
 				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
+			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
 
 			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
@@ -155,6 +169,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 				return err
 			}
+
+			logger.WithFields(log.Fields{
+				"HostVethName":     hostVethName,
+				"ContainerVethMac": contVethMac,
+			}).Info("Networked namespace")
 
 			mac, err := net.ParseMAC(contVethMac)
 			if err != nil {
@@ -173,10 +192,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 			ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return err
 		}
+
+		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.
 	if conf.Policy.PolicyType == "" {
+		logger.Debug("Handling profiles")
 		// Start by checking if the profile already exists. If it already exists then there is no work to do.
 		// The CNI plugin never updates a profile.
 		exists := true
@@ -210,6 +232,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			profile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
 			profile.Spec.IngressRules = inboundRules
 
+			logger.WithField("profile", profile).Info("Creating profile")
+
 			if _, err := calicoClient.Profiles().Create(profile); err != nil {
 				// Cleanup IP allocation and return the error.
 				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
@@ -227,22 +251,32 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	if conf.Debug {
-		EnableDebugLogging()
-	}
+	ConfigureLogging(conf.LogLevel)
 
-	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
-	ipamErr := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
-
-	// Always try to clean up the workload/endpoint.
 	workloadID, orchestratorID, err := GetIdentifiers(args)
 	if err != nil {
 		return err
 	}
 
+	logger := CreateContextLogger(workloadID)
+
 	// Allow the hostname to be overridden by the network config
 	if conf.Hostname != "" {
 		hostname = conf.Hostname
+	}
+
+	logger.WithFields(log.Fields{
+		"WorkloadID":     workloadID,
+		"OrchestratorID": orchestratorID,
+		"Hostname":       hostname,
+	}).Info("Extracted identifiers")
+
+	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
+	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
+	ipamErr := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
+
+	if ipamErr != nil {
+		logger.Error(ipamErr)
 	}
 
 	calicoClient, err := CreateClient(conf)
@@ -259,6 +293,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// Only try to delete the device if a namespace was passed in.
 	if args.Netns != "" {
+		fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
 		err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
 			_, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
 			return err

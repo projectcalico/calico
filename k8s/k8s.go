@@ -16,6 +16,7 @@ import (
 
 	"encoding/json"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/client"
 	k8sclient "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
@@ -34,12 +35,19 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		return nil, err
 	}
 
+	utils.ConfigureLogging(conf.LogLevel)
+
 	profileID := fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)
 
 	workloadID, orchestratorID, err := utils.GetIdentifiers(args)
 	if err != nil {
 		return nil, err
 	}
+	logger := utils.CreateContextLogger(workloadID)
+	logger.WithFields(log.Fields{
+		"OrchestratorID": orchestratorID,
+		"Hostname":       hostname,
+	}).Info("Extracted identifiers")
 
 	if endpoint != nil {
 		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
@@ -50,6 +58,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		if err != nil {
 			return nil, err
 		}
+		logger.WithField("result", result).Debug("Created result from existing endpoint")
 		// If any labels changed whilst the container was being restarted, they will be picked up by the policy
 		// controller so there's no need to update the labels here.
 	} else {
@@ -57,10 +66,12 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		if err != nil {
 			return nil, err
 		}
+		logger.WithField("client", client).Debug("Created Kubernetes client")
 
 		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
 			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
+			logger.Info("Fetching podCidr")
 			var stdinData map[string]interface{}
 			if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 				return nil, err
@@ -69,12 +80,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			if err != nil {
 				return nil, err
 			}
+			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
 			stdinData["ipam"].(map[string]interface{})["subnet"] = podCidr
 			fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
 			args.StdinData, err = json.Marshal(stdinData)
 			if err != nil {
 				return nil, err
 			}
+			logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 		}
 
 		// Run the IPAM plugin
@@ -96,6 +109,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
+		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
 
 		labels, err := getK8sLabels(client, k8sArgs)
 		if err != nil {
@@ -103,6 +117,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
+		logger.WithField("labels", labels).Info("Fetched K8s labels")
 
 		endpoint.Metadata.Labels = labels
 
@@ -125,6 +140,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	}
 	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
+	logger.WithField("endpoint", endpoint).Info("Added Mac and interface name to endpoint")
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
@@ -132,6 +148,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
+	logger.Info("Wrote updated endpoint to datastore")
 
 	return result, nil
 }

@@ -25,12 +25,16 @@ If both are set then `etcd_endpoints` is used.
 
 ### Logging
 * Logging is always to `stderr`
-* Additional logging can be enabled by setting `"debug"` to `true` in the netconf, e.g.
+* Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
+  * `WARNING` - the default.
+  * `INFO` - Enables some additional logging from the CNI plugin.
+  * `DEBUG` - Enables lots of debug logging from both the CNI plugin and the underlying libcalico library.
+
 ```json
 {
     "name": "any_name",
     "type": "calico",
-    "debug": true,
+    "log_level": "DEBUG",
     "ipam": {
         "type": "calico-ipam"
     }
@@ -38,7 +42,7 @@ If both are set then `etcd_endpoints` is used.
 ```
 
 ### IPAM
-When using Calico IPAM, the following flags determine what IP addresses should be assigned.
+When using Calico IPAM, the following flags determine what IP addresses should be assigned. NOTE: These flags are strings and not boolean values.
 * `assign_ipv4` (default `true`)
 * `assign_ipv6` (default `false`)
 

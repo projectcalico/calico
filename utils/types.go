@@ -57,7 +57,7 @@ type NetConf struct {
 	Hostname      string     `json:"hostname"`
 	EtcdAuthority string     `json:"etcd_authority"`
 	EtcdEndpoints string     `json:"etcd_endpoints"`
-	Debug         bool       `json:"debug"`
+	LogLevel      string     `json:"log_level"`
 	Policy        Policy     `json:"policy"`
 	Kubernetes    Kubernetes `json:"kubernetes"`
 	Args          Args       `json:"args,omitempty"`
