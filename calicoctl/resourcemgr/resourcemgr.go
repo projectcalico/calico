@@ -19,62 +19,101 @@ import (
 
 	"fmt"
 	"reflect"
+	"strings"
 
 	"io/ioutil"
 	"os"
 
-	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
+
+	"bytes"
 
 	"github.com/ghodss/yaml"
 	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/client"
 	"github.com/tigera/libcalico-go/lib/validator"
 	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 )
+
+// The ResourceManager interface provides useful function for each resource type.  This includes:
+//	-  Commands to assist with generation of table output format of resources
+//	-  Commands to manage resource instances through an un-typed interface.
+type ResourceManager interface {
+	GetTableDefaultHeadings(wide bool) []string
+	GetTableTemplate(columns []string) (string, error)
+	Apply(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+	Create(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+	Update(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+	Delete(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+	List(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
+}
+
+type ResourceActionCommand func(*client.Client, unversioned.Resource) (unversioned.Resource, error)
 
 // ResourceHelper encapsulates details about a specific version of a specific resource:
 //
 // 	-  The type of resource (Kind and Version).  This includes the list types (even
 //	   though they are not strictly resources themselves).
 // 	-  The concrete resource struct for this version
+//	-  Template strings used to format output for each resource type.
+//	-  Functions to handle resource management actions (apply, create, update, delete, list).
+//         These functions are an untyped interface (generic Resource interfaces) that map through
+//         to the Calicc clients typed interface.
 type resourceHelper struct {
-	typeMetadata unversioned.TypeMetadata
-	resourceType reflect.Type
+	typeMetadata      unversioned.TypeMetadata
+	resourceType      reflect.Type
+	tableHeadings     []string
+	tableHeadingsWide []string
+	headingsMap       map[string]string
+	isList            bool
+	apply             ResourceActionCommand
+	create            ResourceActionCommand
+	update            ResourceActionCommand
+	delete            ResourceActionCommand
+	list              ResourceActionCommand
 }
 
 func (r resourceHelper) String() string {
-	return fmt.Sprintf("Resource %s, version %s", r.typeMetadata.Kind, r.typeMetadata.APIVersion)
+	return fmt.Sprintf("Resource(%s %s)", r.typeMetadata.Kind, r.typeMetadata.APIVersion)
 }
 
 // Store a resourceHelper for each resource unversioned.TypeMetadata.
 var helpers map[unversioned.TypeMetadata]resourceHelper
 
-// Register all of the available resource types, this includes resource lists as well.
-func init() {
-	helpers = make(map[unversioned.TypeMetadata]resourceHelper)
+func registerResource(res unversioned.Resource, resList unversioned.Resource,
+	tableHeadings []string, tableHeadingsWide []string, headingsMap map[string]string,
+	apply, create, update, delete, list ResourceActionCommand) {
 
-	registerHelper := func(t unversioned.Resource) {
-		tmd := t.GetTypeMetadata()
-		rh := resourceHelper{
-			tmd,
-			reflect.ValueOf(t).Elem().Type(),
-		}
-		helpers[tmd] = rh
+	if helpers == nil {
+		helpers = make(map[unversioned.TypeMetadata]resourceHelper)
 	}
 
-	// Register all API resources supported by the generic resource interface.
-	registerHelper(api.NewPolicy())
-	registerHelper(api.NewPolicyList())
-	registerHelper(api.NewPool())
-	registerHelper(api.NewPoolList())
-	registerHelper(api.NewProfile())
-	registerHelper(api.NewProfileList())
-	registerHelper(api.NewHostEndpoint())
-	registerHelper(api.NewHostEndpointList())
-	registerHelper(api.NewWorkloadEndpoint())
-	registerHelper(api.NewWorkloadEndpointList())
-	registerHelper(api.NewBGPPeer())
-	registerHelper(api.NewBGPPeerList())
+	tmd := res.GetTypeMetadata()
+	rh := resourceHelper{
+		typeMetadata:      tmd,
+		resourceType:      reflect.ValueOf(res).Elem().Type(),
+		tableHeadings:     tableHeadings,
+		tableHeadingsWide: tableHeadingsWide,
+		headingsMap:       headingsMap,
+		isList:            false,
+		apply:             apply,
+		create:            create,
+		update:            update,
+		delete:            delete,
+		list:              list,
+	}
+	helpers[tmd] = rh
+
+	tmd = resList.GetTypeMetadata()
+	rh = resourceHelper{
+		typeMetadata:      tmd,
+		resourceType:      reflect.ValueOf(resList).Elem().Type(),
+		tableHeadings:     tableHeadings,
+		tableHeadingsWide: tableHeadingsWide,
+		headingsMap:       headingsMap,
+		isList:            true,
+	}
+	helpers[tmd] = rh
 }
 
 // Create a new concrete resource structure based on the type.  If the type is
@@ -84,7 +123,7 @@ func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion))
 	}
-	glog.V(2).Infof("Found resource helper: %s\n", rh)
+	glog.V(2).Infof("Found resource helper: %s\t\n", rh)
 
 	// Create new resource and fill in the type metadata.
 	new := reflect.New(rh.resourceType)
@@ -127,7 +166,7 @@ func createResourcesFromBytes(b []byte) ([]unversioned.Resource, error) {
 // Return as a slice of Resource interfaces, containing a single element that is
 // the unmarshalled resource.
 func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
-	glog.V(2).Infof("Processing type %s\n", tm.Kind)
+	glog.V(2).Infof("Processing type %s\t\n", tm.Kind)
 	unpacked, err := newResource(tm)
 	if err != nil {
 		return nil, err
@@ -137,12 +176,12 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 		return nil, err
 	}
 
-	glog.V(2).Infof("Type of unpacked data: %v\n", reflect.TypeOf(unpacked))
+	glog.V(2).Infof("Type of unpacked data: %v\t\n", reflect.TypeOf(unpacked))
 	if err = validator.Validate(unpacked); err != nil {
 		return nil, err
 	}
 
-	glog.V(2).Infof("Unpacked: %+v\n", unpacked)
+	glog.V(2).Infof("Unpacked: %+v\t\n", unpacked)
 
 	return []unversioned.Resource{unpacked}, nil
 }
@@ -153,10 +192,10 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 // Return as a slice of Resource interfaces, containing an element that is each of
 // the unmarshalled resources.
 func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
-	glog.V(2).Infof("Processing list of resources\n")
+	glog.V(2).Infof("Processing list of resources\t\n")
 	unpacked := make([]unversioned.Resource, len(tml))
 	for i, tm := range tml {
-		glog.V(2).Infof("  - processing type %s\n", tm.Kind)
+		glog.V(2).Infof("  - processing type %s\t\n", tm.Kind)
 		r, err := newResource(tm)
 		if err != nil {
 			return nil, err
@@ -176,7 +215,7 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 		}
 	}
 
-	glog.V(2).Infof("Unpacked: %+v\n", unpacked)
+	glog.V(2).Infof("Unpacked: %+v\t\n", unpacked)
 
 	return unpacked, nil
 }
@@ -189,7 +228,6 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 // The returned Resource will either be a single Resource or a List containing zero or more
 // Resources.  If the file does not contain any valid Resources this function returns an error.
 func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
-
 	// Load the bytes from file or from stdin.
 	var b []byte
 	var err error
@@ -204,4 +242,99 @@ func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 	}
 
 	return createResourcesFromBytes(b)
+}
+
+// Implement the ResourceManager interface on the resourceHelper struct.
+
+// GetTableDefaultHeadings returns the default headings to use in the ps-style get output
+// for the resource.  Wide indicates whether the wide (true) or concise (false) column set is
+// required.
+func (rh resourceHelper) GetTableDefaultHeadings(wide bool) []string {
+	if wide {
+		return rh.tableHeadingsWide
+	} else {
+		return rh.tableHeadings
+	}
+}
+
+// GetTableTemplate constructs the go-lang template string from the supplied set of headings.
+// The template separates columns using tabs so that a tabwriter can be used to pretty-print
+// the table.
+func (rh resourceHelper) GetTableTemplate(headings []string) (string, error) {
+	// Write the headings line.
+	buf := new(bytes.Buffer)
+	for _, heading := range headings {
+		buf.WriteString(heading)
+		buf.WriteByte('\t')
+	}
+	buf.WriteByte('\n')
+
+	// If this is a list type, we need to iterate over the list items.
+	if rh.isList {
+		buf.WriteString("{{range .Items}}")
+	}
+
+	// For each column, add the go-template snippet for the corresponding field value.
+	for _, heading := range headings {
+		value, ok := rh.headingsMap[heading]
+		if !ok {
+			headings := make([]string, 0, len(rh.headingsMap))
+			for heading := range rh.headingsMap {
+				headings = append(headings, heading)
+			}
+			return "", fmt.Errorf("Unknown heading %s, valid values are: %s",
+				heading,
+				strings.Join(headings, ", "))
+		}
+		buf.WriteString(value)
+		buf.WriteByte('\t')
+	}
+	buf.WriteByte('\n')
+
+	// If this is a list, close off the range.
+	if rh.isList {
+		buf.WriteString("{{end}}")
+	}
+
+	return buf.String(), nil
+}
+
+// Apply is an un-typed method to apply (create or update) a resource.  This calls directly
+// through to the resource helper specific Apply method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Apply(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
+	return rh.apply(client, resource)
+}
+
+// Create is an un-typed method to create a new resource.  This calls directly
+// through to the resource helper specific Create method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Create(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
+	return rh.create(client, resource)
+}
+
+// Update is an un-typed method to update an existing resource.  This calls directly
+// through to the resource helper specific Update method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Update(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
+	return rh.update(client, resource)
+}
+
+// Delete is an un-typed method to delete an existing resource.  This calls directly
+// through to the resource helper specific Delete method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) Delete(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
+	return rh.delete(client, resource)
+}
+
+// List is an un-typed method to list existing resources.  This calls directly
+// through to the resource helper specific List method which will map the untyped call to
+// the typed interface on the client.
+func (rh resourceHelper) List(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
+	return rh.list(client, resource)
+}
+
+// Return the Resource Manager for a particular resource type.
+func GetResourceManager(resource unversioned.Resource) ResourceManager {
+	return helpers[resource.GetTypeMetadata()]
 }

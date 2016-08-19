@@ -26,8 +26,19 @@ import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/client"
+	calicoErrors "github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/net"
 	"github.com/tigera/libcalico-go/lib/scope"
+)
+
+type action int
+
+const (
+	actionApply action = iota
+	actionCreate
+	actionUpdate
+	actionDelete
+	actionList
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
@@ -79,18 +90,12 @@ func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
 	return r
 }
 
-// Return a resource instance from the command line arguments.
+// getResourceFromArguments returns a resource instance from the command line arguments.
 func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource, error) {
 	kind := args["<KIND>"].(string)
-	stringOrBlank := func(argName string) string {
-		if args[argName] != nil {
-			return args[argName].(string)
-		}
-		return ""
-	}
-	name := stringOrBlank("<NAME>")
-	hostname := stringOrBlank("--hostname")
-	resScope := stringOrBlank("--scope")
+	name := argStringOrBlank(args, "<NAME>")
+	hostname := argStringOrBlank(args, "--hostname")
+	resScope := argStringOrBlank(args, "--scope")
 	switch strings.ToLower(kind) {
 	case "hostendpoints":
 		fallthrough
@@ -151,12 +156,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	}
 }
 
-// Interface to execute a command for a specific resource type.
-type commandInterface interface {
-	execute(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error)
-}
-
-// Results from executing a CLI command
+// commandResults contains the results from executing a CLI command
 type commandResults struct {
 	// Whether the input file was invalid.
 	fileInvalid bool
@@ -179,13 +179,15 @@ type commandResults struct {
 	resources []unversioned.Resource
 }
 
-// Common function for configuration commands apply, create, replace, get and delete.  All
-// these commands:
+// executeConfigCommand is main function called by all of the resource management commands
+// in calicoctl (apply, create, replace, get and delete).  This provides common function
+// for all these commands:
 // 	-  Load resources from file (or if not specified determine the resource from
 // 	   the command line options).
 // 	-  Convert the loaded resources into a list of resources (easier to handle)
-// 	-  Process each resource individually, collate results and exit on the first error.
-func executeConfigCommand(args map[string]interface{}, cmd commandInterface) commandResults {
+// 	-  Process each resource individually, fanning out to the appropriate methods on
+//	   the client interface, collate results and exit on the first error.
+func executeConfigCommand(args map[string]interface{}, action action) commandResults {
 	var r interface{}
 	var err error
 	var resources []unversioned.Resource
@@ -250,7 +252,7 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 	// Now execute the command on each resource in order, exiting as soon as we hit an
 	// error.
 	for _, r := range resources {
-		r, err = cmd.execute(client, r)
+		r, err = executeResourceAction(args, client, r, action)
 		if err != nil {
 			results.err = err
 			break
@@ -260,4 +262,60 @@ func executeConfigCommand(args map[string]interface{}, cmd commandInterface) com
 	}
 
 	return results
+}
+
+// argStringOrBlank returns the requested argument as a string, or as a blank
+// string if the argument is not present.
+func argStringOrBlank(args map[string]interface{}, argName string) string {
+	if args[argName] != nil {
+		return args[argName].(string)
+	}
+	return ""
+}
+
+// argBoolOrFalse returns the requested argument as a boolean, or as false
+// if the argument is not present.
+func argBoolOrFalse(args map[string]interface{}, argName string) bool {
+	if args[argName] != nil {
+		return args[argName].(bool)
+	}
+	return false
+}
+
+// execureResourceAction fans out the specific resource action to the appropriate method
+// on the ResourceManager for the specific resource.
+func executeResourceAction(args map[string]interface{}, client *client.Client, resource unversioned.Resource, action action) (unversioned.Resource, error) {
+	rm := resourcemgr.GetResourceManager(resource)
+	var err error
+	var resourceOut unversioned.Resource
+
+	switch action {
+	case actionApply:
+		resourceOut, err = rm.Apply(client, resource)
+	case actionCreate:
+		resourceOut, err = rm.Create(client, resource)
+	case actionUpdate:
+		resourceOut, err = rm.Update(client, resource)
+	case actionDelete:
+		resourceOut, err = rm.Delete(client, resource)
+	case actionList:
+		resourceOut, err = rm.List(client, resource)
+	}
+
+	// Skip over some errors depending on command line options.
+	if err != nil {
+		skip := false
+		switch err.(type) {
+		case calicoErrors.ErrorResourceAlreadyExists:
+			skip = argBoolOrFalse(args, "--skip-exists")
+		case calicoErrors.ErrorResourceDoesNotExist:
+			skip = argBoolOrFalse(args, "--skip-not-exists")
+		}
+		if skip {
+			resourceOut = resource
+			err = nil
+		}
+	}
+
+	return resourceOut, err
 }

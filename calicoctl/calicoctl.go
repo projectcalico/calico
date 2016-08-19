@@ -70,6 +70,7 @@ See 'calicoctl <command> --help' to read about a specific subcommand.`
 	}
 
 	if err != nil {
+		fmt.Printf("Error executing command: %s\n", err)
 		os.Exit(1)
 	}
 }
