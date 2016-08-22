@@ -91,25 +91,28 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	name := stringOrBlank("<NAME>")
 	hostname := stringOrBlank("--hostname")
 	resScope := stringOrBlank("--scope")
-	switch kind {
-	case "hostEndpoint":
+	switch strings.ToLower(kind) {
+	case "hostendpoints":
+		fallthrough
+	case "hostendpoint":
 		h := api.NewHostEndpoint()
 		h.Metadata.Name = name
 		h.Metadata.Hostname = hostname
 		return *h, nil
-	case "workloadEndpoint":
-		h := api.NewWorkloadEndpoint() //TODO Need to add orchestrator ID and workload ID
-		h.Metadata.Name = name
-		h.Metadata.Hostname = hostname
-		return *h, nil
+	case "profiles":
+		fallthrough
 	case "profile":
 		p := api.NewProfile()
 		p.Metadata.Name = name
 		return *p, nil
+	case "policies":
+		fallthrough
 	case "policy":
 		p := api.NewPolicy()
 		p.Metadata.Name = name
 		return *p, nil
+	case "pools":
+		fallthrough
 	case "pool":
 		p := api.NewPool()
 		if name != "" {
@@ -120,7 +123,9 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 			p.Metadata.CIDR = *cidr
 		}
 		return *p, nil
-	case "bgpPeer":
+	case "bgppeers":
+		fallthrough
+	case "bgppeer":
 		p := api.NewBGPPeer()
 		if name != "" {
 			err := p.Metadata.PeerIP.UnmarshalText([]byte(name))
