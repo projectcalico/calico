@@ -44,23 +44,27 @@ type NetworkInfo struct {
 
 // NetConf stores the common network config for Calico CNI plugin
 type NetConf struct {
-	Name string `json:"name,omitempty"`
-	Type string `json:"type,omitempty"`
+	Name string `json:"name"`
+	Type string `json:"type"`
 	IPAM struct {
 		Name       string
-		Type       string  `json:"type,omitempty"`
-		Subnet     string  `json:"subnet,omitempty"`
+		Type       string  `json:"type"`
+		Subnet     string  `json:"subnet"`
 		AssignIpv4 *string `json:"assign_ipv4"`
 		AssignIpv6 *string `json:"assign_ipv6"`
 	} `json:"ipam,omitempty"`
-	MTU           int        `json:"mtu"`
-	Hostname      string     `json:"hostname"`
-	EtcdAuthority string     `json:"etcd_authority"`
-	EtcdEndpoints string     `json:"etcd_endpoints"`
-	LogLevel      string     `json:"log_level"`
-	Policy        Policy     `json:"policy"`
-	Kubernetes    Kubernetes `json:"kubernetes"`
-	Args          Args       `json:"args,omitempty"`
+	MTU            int        `json:"mtu"`
+	Hostname       string     `json:"hostname"`
+	EtcdAuthority  string     `json:"etcd_authority"`
+	EtcdEndpoints  string     `json:"etcd_endpoints"`
+	LogLevel       string     `json:"log_level"`
+	Policy         Policy     `json:"policy"`
+	Kubernetes     Kubernetes `json:"kubernetes"`
+	Args           Args       `json:"args"`
+	EtcdScheme     string     `json:"etcd_scheme"`
+	EtcdKeyFile    string     `json:"etcd_key_file"`
+	EtcdCertFile   string     `json:"etcd_cert_file"`
+	EtcdCaCertFile string     `json:"etcd_ca_cert_file"`
 }
 
 // K8sArgs is the valid CNI_ARGS used for Kubernetes
