@@ -37,7 +37,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 	utils.ConfigureLogging(conf.LogLevel)
 
-	profileID := fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)
+	// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network
+	// name (which is the normal behavior) otherwise use one based on the Kubernetes pod namespace.
+	var profileID string
+	if conf.Policy.PolicyType == "" {
+		profileID = conf.Name
+	} else {
+		profileID = fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)
+	}
 
 	workloadID, orchestratorID, err := utils.GetIdentifiers(args)
 	if err != nil {
