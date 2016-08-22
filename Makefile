@@ -57,8 +57,8 @@ $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
 	touch $@
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile
-	docker build -f Dockerfile --build-arg CALICO_CNI_VERSION=$(CALICO_CNI_VERSION) -t $(DEPLOY_CONTAINER_NAME) .
+$(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized
+	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
 
 # Run the tests in a container. Useful for CI
@@ -162,6 +162,12 @@ deploy-rkt: binary
 
 # Build a binary for a release
 release: clean update-tools build-containerized test-containerized
+	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME):$(CALICO_CNI_VERSION) .
+	docker tag calico/cni:$(CALICO_CNI_VERSION) quay.io/calico/cni:$(CALICO_CNI_VERSION)
+	@echo Now attach the binaries to github dist/calico and dist/calico-ipam
+	@echo And push the images to Docker Hub and quay.io:
+	@echo docker push calico/cni:$(CALICO_CNI_VERSION)
+	@echo docker push quay.io/calico/cni:$(CALICO_CNI_VERSION)
 
 run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
