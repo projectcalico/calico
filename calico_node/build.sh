@@ -17,8 +17,8 @@ set -e
 set -x
 
 # These packages make it into the final image.
-# Install runit from the testing repository, as its not yet available in global
-apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edge/testing" runit
+# Install runit from the community repository, as its not yet available in global
+apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edge/community" runit
 # Install remaining runtime deps from the global repository
 apk add --update-cache python py-setuptools libffi ip6tables ipset iputils iproute2 yajl conntrack-tools
 
