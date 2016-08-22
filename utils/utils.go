@@ -124,6 +124,26 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 			return nil, err
 		}
 	}
+	if conf.EtcdScheme != "" {
+		if err := os.Setenv("ETCD_SCHEME", conf.EtcdScheme); err != nil {
+			return nil, err
+		}
+	}
+	if conf.EtcdKeyFile != "" {
+		if err := os.Setenv("ETCD_KEY_FILE", conf.EtcdKeyFile); err != nil {
+			return nil, err
+		}
+	}
+	if conf.EtcdCertFile != "" {
+		if err := os.Setenv("ETCD_CERT_FILE", conf.EtcdCertFile); err != nil {
+			return nil, err
+		}
+	}
+	if conf.EtcdCaCertFile != "" {
+		if err := os.Setenv("ETCD_CA_CERT_FILE", conf.EtcdCaCertFile); err != nil {
+			return nil, err
+		}
+	}
 
 	// Load the client config from the current environment.
 	clientConfig, err := client.LoadClientConfig("")
