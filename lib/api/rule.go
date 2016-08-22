@@ -26,16 +26,20 @@ import (
 type Rule struct {
 	Action string `json:"action" validate:"action"`
 
-	Protocol *Protocol `json:"protocol,omitempty" validate:"omitempty"`
-	ICMPType *int      `json:"icmpType,omitempty" validate:"omitempty,gte=0,lte=255"`
-	ICMPCode *int      `json:"icmpCode,omitempty" validate:"omitempty,gte=0,lte=255"`
+	Protocol *Protocol   `json:"protocol,omitempty" validate:"omitempty"`
+	ICMP     *ICMPFields `json:"icmp,omitempty" validate:"omitempty"`
 
-	NotProtocol *Protocol `json:"!protocol,omitempty" validate:"omitempty"`
-	NotICMPType *int      `json:"!icmpType,omitempty" validate:"omitempty,gte=0,lte=255"`
-	NotICMPCode *int      `json:"!icmpCode,omitempty" validate:"omitempty,gte=0,lte=255"`
+	NotProtocol *Protocol   `json:"!protocol,omitempty" validate:"omitempty"`
+	NotICMP     *ICMPFields `json:"!icmp,omitempty" validate:"omitempty"`
 
 	Source      EntityRule `json:"source,omitempty" validate:"omitempty"`
 	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+}
+
+// ICMPFields defines structure for ICMP and NotICMP sub-struct for ICMP code and type
+type ICMPFields struct {
+	Type *int `json:"type,omitempty" validate:"omitempty,gte=0,lte=255"`
+	Code *int `json:"code,omitempty" validate:"omitempty,gte=0,lte=255"`
 }
 
 type EntityRule struct {
@@ -58,8 +62,12 @@ func init() {
 
 func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	rule := structLevel.CurrentStruct.Interface().(Rule)
-	if rule.ICMPCode != nil && rule.ICMPType == nil {
-		structLevel.ReportError(reflect.ValueOf(rule.ICMPCode), "ICMPCode", "icmpCode", "icmpCodeWithoutType")
+	if rule.ICMP != nil && rule.ICMP.Code != nil && rule.ICMP.Type == nil {
+		structLevel.ReportError(reflect.ValueOf(rule.ICMP.Code), "Code", "code", "icmpCodeWithoutType")
+	}
+
+	if rule.NotICMP != nil && rule.NotICMP.Code != nil && rule.NotICMP.Type == nil {
+		structLevel.ReportError(reflect.ValueOf(rule.NotICMP.Code), "Code", "code", "icmpCodeWithoutType")
 	}
 
 	// TODO other cross-struct validation

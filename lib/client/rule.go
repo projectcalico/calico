@@ -33,14 +33,25 @@ func ruleActionBackendToAPI(action string) string {
 
 // ruleAPIToBackend converts an API Rule structure to a Backend Rule structure.
 func ruleAPIToBackend(ar api.Rule) model.Rule {
+	var icmpCode, icmpType, notICMPCode, notICMPType *int
+	if ar.ICMP != nil {
+		icmpCode = ar.ICMP.Code
+		icmpType = ar.ICMP.Type
+	}
+
+	if ar.NotICMP != nil {
+		notICMPCode = ar.NotICMP.Code
+		notICMPType = ar.NotICMP.Type
+	}
+
 	return model.Rule{
 		Action:      ruleActionAPIToBackend(ar.Action),
 		Protocol:    ar.Protocol,
-		ICMPCode:    ar.ICMPCode,
-		ICMPType:    ar.ICMPType,
+		ICMPCode:    icmpCode,
+		ICMPType:    icmpType,
 		NotProtocol: ar.NotProtocol,
-		NotICMPCode: ar.NotICMPCode,
-		NotICMPType: ar.NotICMPType,
+		NotICMPCode: notICMPCode,
+		NotICMPType: notICMPType,
 
 		SrcTag:      ar.Source.Tag,
 		SrcNet:      ar.Source.Net,
@@ -65,13 +76,17 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 // ruleBackendToAPI convert a Backend Rule structure to an API Rule structure.
 func ruleBackendToAPI(br model.Rule) api.Rule {
 	return api.Rule{
-		Action:      ruleActionBackendToAPI(br.Action),
-		Protocol:    br.Protocol,
-		ICMPCode:    br.ICMPCode,
-		ICMPType:    br.ICMPType,
+		Action:   ruleActionBackendToAPI(br.Action),
+		Protocol: br.Protocol,
+		ICMP: &api.ICMPFields{
+			Code: br.ICMPCode,
+			Type: br.ICMPType,
+		},
 		NotProtocol: br.NotProtocol,
-		NotICMPCode: br.NotICMPCode,
-		NotICMPType: br.NotICMPType,
+		NotICMP: &api.ICMPFields{
+			Code: br.NotICMPCode,
+			Type: br.NotICMPType,
+		},
 
 		Source: api.EntityRule{
 			Tag:         br.SrcTag,
