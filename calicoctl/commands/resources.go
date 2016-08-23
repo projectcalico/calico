@@ -147,7 +147,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 		return *p, nil
 
 	default:
-		return nil, fmt.Errorf("Resource type '%s' is not unsupported", kind)
+		return nil, fmt.Errorf("Resource type '%s' is not supported", kind)
 	}
 }
 
