@@ -180,8 +180,7 @@ func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
 		{&configOverrides.AuthInfo.ClientCertificate, conf.Policy.K8sClientCertificate},
 		{&configOverrides.AuthInfo.ClientKey, conf.Policy.K8sClientKey},
 		{&configOverrides.ClusterInfo.CertificateAuthority, conf.Policy.K8sCertificateAuthority},
-		{&configOverrides.AuthInfo.Username, conf.Policy.K8sUsername},
-		{&configOverrides.AuthInfo.Password, conf.Policy.K8sPassword},
+		{&configOverrides.AuthInfo.Token, conf.Policy.K8sAuthToken},
 	}
 
 	// Using the override map above, populate any non-empty values.
@@ -189,6 +188,11 @@ func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
 		if override.value != "" {
 			*override.variable = override.value
 		}
+	}
+
+	// Also allow the K8sAPIRoot to appear under the "kubernetes" block in the network config.
+	if conf.Kubernetes.K8sAPIRoot != "" {
+		configOverrides.ClusterInfo.Server = conf.Kubernetes.K8sAPIRoot
 	}
 
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.

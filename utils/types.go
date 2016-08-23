@@ -14,12 +14,11 @@ type Policy struct {
 	K8sClientCertificate    string `json:"k8s_client_certificate"`
 	K8sClientKey            string `json:"k8s_client_key"`
 	K8sCertificateAuthority string `json:"k8s_certificate_authority"`
-	K8sUsername             string `json:"k8s_username"`
-	K8sPassword             string `json:"k8s_password"`
 }
 
 // Kubernetes a K8s specific struct to hold config
 type Kubernetes struct {
+	K8sAPIRoot string `json:"k8s_api_root"`
 	Kubeconfig string `json:"kubeconfig"`
 	NodeName   string `json:"node_name"`
 }
