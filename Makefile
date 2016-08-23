@@ -44,3 +44,12 @@ test-containerized: $(BUILD_CONTAINER_MARKER)
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
 	touch $@
+
+# Etcd is used by the tests
+run-etcd:
+	@-docker rm -f calico-etcd
+	docker run --detach \
+	-p 2379:2379 \
+	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
