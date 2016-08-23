@@ -235,7 +235,7 @@ func filterEtcdList(n *etcd.Node, l ListInterface) []*KVPair {
 
 func convertEtcdError(err error, key Key) error {
 	if err == nil {
-		glog.V(2).Info("Comand completed without error")
+		glog.V(2).Info("Command completed without error")
 		return nil
 	}
 
