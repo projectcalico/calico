@@ -113,7 +113,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 			// Cleanup IP allocation and return the error.
-			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
 		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
@@ -121,7 +121,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		labels, err := getK8sLabels(client, k8sArgs)
 		if err != nil {
 			// Cleanup IP allocation and return the error.
-			utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
 		logger.WithField("labels", labels).Info("Fetched K8s labels")
@@ -135,14 +135,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 
 	mac, err := net.ParseMAC(contVethMac)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
@@ -152,7 +152,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
 	logger.Info("Wrote updated endpoint to datastore")

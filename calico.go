@@ -155,7 +155,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -166,7 +166,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			hostVethName, contVethMac, err := DoNetworking(args, conf, result)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
@@ -178,7 +178,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			mac, err := net.ParseMAC(contVethMac)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
@@ -189,7 +189,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 			// Cleanup IP allocation and return the error.
-			ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+			ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return err
 		}
 
@@ -209,7 +209,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
@@ -236,7 +236,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			if _, err := calicoClient.Profiles().Create(profile); err != nil {
 				// Cleanup IP allocation and return the error.
-				ReleaseIPAllocation(conf.IPAM.Type, args.StdinData)
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 		}
