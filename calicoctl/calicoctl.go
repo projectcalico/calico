@@ -34,6 +34,7 @@ func main() {
     delete         Delete a resource identified by file, stdin or resource type and name.
     get            Get a resource identified by file, stdin or resource type and name.
     version        Display the version of calicoctl.
+    node           Node related commands.
 
 See 'calicoctl <command> --help' to read about a specific subcommand.`
 	var err error
@@ -64,6 +65,8 @@ See 'calicoctl <command> --help' to read about a specific subcommand.`
 			err = commands.Get(args)
 		case "version":
 			err = commands.Version(args)
+		case "node":
+			err = commands.Node(args)
 		default:
 			fmt.Println(usage)
 		}
