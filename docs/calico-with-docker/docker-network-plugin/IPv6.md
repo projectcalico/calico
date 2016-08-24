@@ -82,9 +82,9 @@ Start by creating an IPv4 and IPv6 pool:
 To create the networks passing in an IPv6 subnet that exactly matches one of
 the configured IPv6 pools (we only created one):
 
-    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net10
-    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net11
-    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net12
+    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net10 --ipv6
+    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net11 --ipv6
+    docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net12 --ipv6
     
 > Note that a particular IP Pool does not have to be confined for use by a single
 > network, multiple networks may all reference the same IP Pool.
@@ -137,7 +137,7 @@ Also check that V cannot ping W or Z.
 Again, since V and W are on the same host, we can run a single command that
 inspects the IPv6 address and issues the ping.  On calico-01
 
-    docker exec workload-V ping6 -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net11.IPAddress }}" workload-W`
+    docker exec workload-V ping6 -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net11.GlobalIPv6Address }}" workload-W`
     
 These pings will fail.
 
