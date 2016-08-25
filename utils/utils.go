@@ -161,15 +161,15 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 
 // ReleaseIPAM is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution.
-func ReleaseIPAllocation(ipamType string, stdinData []byte) {
-	log.Info("Cleaning up IP allocations for failed ADD")
+func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
+	logger.Info("Cleaning up IP allocations for failed ADD")
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
-		log.Warning("Failed to set CNI_COMMAND=DEL")
+		logger.Warning("Failed to set CNI_COMMAND=DEL")
 	} else {
 		if err := ipam.ExecDel(ipamType, stdinData); err != nil {
 			// Failed to cleanup the IP allocation.
-			log.Warning("Failed to clean up IP allocations for failed ADD")
+			logger.Warning("Failed to clean up IP allocations for failed ADD")
 		}
 	}
 }
