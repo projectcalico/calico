@@ -35,7 +35,7 @@ type HostEndpointStatusKey struct {
 	EndpointID string `json:"-" validate:"required,hostname"`
 }
 
-func (key HostEndpointStatusKey) DefaultPath() (string, error) {
+func (key HostEndpointStatusKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -47,8 +47,8 @@ func (key HostEndpointStatusKey) DefaultPath() (string, error) {
 	return e, nil
 }
 
-func (key HostEndpointStatusKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+func (key HostEndpointStatusKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
 }
 
 func (key HostEndpointStatusKey) valueType() reflect.Type {
@@ -64,7 +64,7 @@ type HostEndpointStatusListOptions struct {
 	EndpointID string
 }
 
-func (options HostEndpointStatusListOptions) DefaultPathRoot() string {
+func (options HostEndpointStatusListOptions) defaultPathRoot() string {
 	k := "/calico/felix/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -77,7 +77,7 @@ func (options HostEndpointStatusListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options HostEndpointStatusListOptions) ParseDefaultKey(ekey string) Key {
+func (options HostEndpointStatusListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get HostEndpointStatus key from %s", ekey)
 	r := matchHostEndpointStatus.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

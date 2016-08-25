@@ -36,7 +36,7 @@ type WorkloadEndpointStatusKey struct {
 	EndpointID     string `json:"-"`
 }
 
-func (key WorkloadEndpointStatusKey) DefaultPath() (string, error) {
+func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -53,7 +53,7 @@ func (key WorkloadEndpointStatusKey) DefaultPath() (string, error) {
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
-func (key WorkloadEndpointStatusKey) DefaultDeletePath() (string, error) {
+func (key WorkloadEndpointStatusKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -87,7 +87,7 @@ type WorkloadEndpointStatusListOptions struct {
 	EndpointID     string
 }
 
-func (options WorkloadEndpointStatusListOptions) DefaultPathRoot() string {
+func (options WorkloadEndpointStatusListOptions) defaultPathRoot() string {
 	k := "/calico/felix/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -108,7 +108,7 @@ func (options WorkloadEndpointStatusListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options WorkloadEndpointStatusListOptions) ParseDefaultKey(ekey string) Key {
+func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get WorkloadEndpoint key from %s", ekey)
 	r := matchWorkloadEndpoint.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

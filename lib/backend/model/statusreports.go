@@ -32,11 +32,11 @@ type ActiveStatusReportKey struct {
 	Hostname string `json:"-" validate:"required,hostname"`
 }
 
-func (key ActiveStatusReportKey) DefaultPath() (string, error) {
-	return key.DefaultDeletePath()
+func (key ActiveStatusReportKey) defaultPath() (string, error) {
+	return key.defaultDeletePath()
 }
 
-func (key ActiveStatusReportKey) DefaultDeletePath() (string, error) {
+func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -56,7 +56,7 @@ type ActiveStatusReportListOptions struct {
 	Hostname string
 }
 
-func (options ActiveStatusReportListOptions) DefaultPathRoot() string {
+func (options ActiveStatusReportListOptions) defaultPathRoot() string {
 	k := "/calico/felix/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -65,7 +65,7 @@ func (options ActiveStatusReportListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options ActiveStatusReportListOptions) ParseDefaultKey(ekey string) Key {
+func (options ActiveStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get StatusReport key from %s", ekey)
 	r := matchActiveStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
@@ -84,11 +84,11 @@ type LastStatusReportKey struct {
 	Hostname string `json:"-" validate:"required,hostname"`
 }
 
-func (key LastStatusReportKey) DefaultPath() (string, error) {
-	return key.DefaultDeletePath()
+func (key LastStatusReportKey) defaultPath() (string, error) {
+	return key.defaultDeletePath()
 }
 
-func (key LastStatusReportKey) DefaultDeletePath() (string, error) {
+func (key LastStatusReportKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
@@ -108,7 +108,7 @@ type LastStatusReportListOptions struct {
 	Hostname string
 }
 
-func (options LastStatusReportListOptions) DefaultPathRoot() string {
+func (options LastStatusReportListOptions) defaultPathRoot() string {
 	k := "/calico/felix/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -117,7 +117,7 @@ func (options LastStatusReportListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options LastStatusReportListOptions) ParseDefaultKey(ekey string) Key {
+func (options LastStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get StatusReport key from %s", ekey)
 	r := matchLastStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
