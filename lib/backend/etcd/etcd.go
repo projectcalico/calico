@@ -26,6 +26,7 @@ import (
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/golang/glog"
+	"github.com/tigera/libcalico-go/lib/backend/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"golang.org/x/net/context"
@@ -100,6 +101,10 @@ func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
 	keys := etcd.NewKeysAPI(client)
 
 	return &EtcdClient{etcdClient: client, etcdKeysAPI: keys}, nil
+}
+
+func (c *EtcdClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
+	return newSyncer(c.etcdKeysAPI, callbacks)
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.

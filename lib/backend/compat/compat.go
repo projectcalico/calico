@@ -126,6 +126,10 @@ func (c *ModelAdaptor) List(l ListInterface) ([]*KVPair, error) {
 	return c.client.List(l)
 }
 
+func (c *ModelAdaptor) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
+	return c.client.Syncer(callbacks)
+}
+
 // Convert a Profile KVPair to separate KVPair types for Keys, Labels and Rules.
 // These separate KVPairs are used to write three separate objects that make up
 // a single profile.
