@@ -51,7 +51,7 @@ func init() {
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.HostEndpoint)
-			return client.HostEndpoints().Get(r.Metadata)
+			return client.HostEndpoints().List(r.Metadata)
 		},
 	)
 }

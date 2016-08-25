@@ -25,6 +25,9 @@ import (
 func Delete(args []string) error {
 	doc := EtcdIntro + `Delete a resource identified by file, stdin or resource type and name.
 
+Valid resource kinds are bgpPeer, hostEndpoint, policy, pool and profile.  The <KIND>
+parameter is case insensitive and may be pluralized.
+
 Usage:
   calicoctl delete (([--hostname=<HOSTNAME>] [--scope=<SCOPE>] <KIND> <NAME>) |
                     --filename=<FILE>)
@@ -44,11 +47,11 @@ Options:
   -s --skip-not-exists         Skip over and treat as successful, resources that don't exist.
   -f --filename=<FILENAME>     Filename to use to delete the resource.  If set to "-" loads from stdin.
   -n --hostname=<HOSTNAME>     The hostname.
-  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
-                               [default: /etc/calico/calicoctl.cfg]
   --scope=<SCOPE>              The scope of the resource type.  One of global, node.  This is only valid
                                for BGP peers and is used to indicate whether the peer is a global peer
                                or node-specific.
+  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
+                               [default: /etc/calico/calicoctl.cfg]
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
