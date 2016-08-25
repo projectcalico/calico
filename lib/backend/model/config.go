@@ -156,7 +156,7 @@ func (options HostConfigListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	hostname := r[0][1]
 	name := r[0][2]
-	if options.Hostname != "" && hostname != options.Name {
+	if options.Hostname != "" && hostname != options.Hostname {
 		glog.V(2).Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
@@ -164,5 +164,5 @@ func (options HostConfigListOptions) KeyFromDefaultPath(path string) Key {
 		glog.V(2).Infof("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
-	return HostConfigKey{Name: name}
+	return HostConfigKey{Hostname: hostname, Name: name}
 }
