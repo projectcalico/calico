@@ -58,11 +58,11 @@ func (options IPAMHandleListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options IPAMHandleListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get IPAM handle key from %s", ekey)
-	r := matchBlock.FindAllStringSubmatch(ekey, -1)
+func (options IPAMHandleListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get IPAM handle key from %s", path)
+	r := matchBlock.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("%s didn't match regex", ekey)
+		glog.V(2).Infof("%s didn't match regex", path)
 		return nil
 	}
 	return IPAMHandleKey{HandleID: r[0][1]}

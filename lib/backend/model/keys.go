@@ -43,6 +43,7 @@ type ListInterface interface {
 	// to the directory containing all the keys to be listed.
 	defaultPathRoot() string
 
+	// BUG(smc) I think we should remove this and use the package KeyFromDefaultPath function.
 	// KeyFromDefaultPath parses the default path representation of the
 	// Key type for this list.  It returns nil if passed a different kind
 	// of path.

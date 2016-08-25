@@ -69,9 +69,9 @@ func (options PolicyListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options PolicyListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get Policy key from %s", ekey)
-	r := matchPolicy.FindAllStringSubmatch(ekey, -1)
+func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get Policy key from %s", path)
+	r := matchPolicy.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil

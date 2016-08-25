@@ -85,9 +85,9 @@ func (options GlobalConfigListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options GlobalConfigListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get GlobalConfig key from %s", ekey)
-	r := matchGlobalConfig.FindAllStringSubmatch(ekey, -1)
+func (options GlobalConfigListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get GlobalConfig key from %s", path)
+	r := matchGlobalConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil
@@ -147,9 +147,9 @@ func (options HostConfigListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options HostConfigListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get HostConfig key from %s", ekey)
-	r := matchHostConfig.FindAllStringSubmatch(ekey, -1)
+func (options HostConfigListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get HostConfig key from %s", path)
+	r := matchHostConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil

@@ -78,9 +78,9 @@ func (options HostEndpointListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options HostEndpointListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get HostEndpoint key from %s", ekey)
-	r := matchHostEndpoint.FindAllStringSubmatch(ekey, -1)
+func (options HostEndpointListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get HostEndpoint key from %s", path)
+	r := matchHostEndpoint.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil

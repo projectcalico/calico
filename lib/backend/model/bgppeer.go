@@ -119,11 +119,11 @@ func (options BGPPeerListOptions) defaultPathRoot() string {
 	panic(fmt.Errorf("Unexpected scope value: %d", options.Scope))
 }
 
-func (options BGPPeerListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get BGPPeer key from %s", ekey)
+func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get BGPPeer key from %s", path)
 	hostname := ""
 	peerIP := net.IP{}
-	ekeyb := []byte(ekey)
+	ekeyb := []byte(path)
 	var peerScope scope.Scope
 
 	if r := matchGlobalBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
@@ -134,7 +134,7 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(ekey string) Key {
 		_ = peerIP.UnmarshalText(r[0][2])
 		peerScope = scope.Node
 	} else {
-		glog.V(2).Infof("%s didn't match regex", ekey)
+		glog.V(2).Infof("%s didn't match regex", path)
 		return nil
 	}
 

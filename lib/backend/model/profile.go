@@ -113,9 +113,9 @@ func (options ProfileListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options ProfileListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get Profile key from %s", ekey)
-	r := matchProfile.FindAllStringSubmatch(ekey, -1)
+func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get Profile key from %s", path)
+	r := matchProfile.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil

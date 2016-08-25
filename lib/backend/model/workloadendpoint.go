@@ -109,9 +109,9 @@ func (options WorkloadEndpointListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options WorkloadEndpointListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get WorkloadEndpoint key from %s", ekey)
-	r := matchWorkloadEndpoint.FindAllStringSubmatch(ekey, -1)
+func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get WorkloadEndpoint key from %s", path)
+	r := matchWorkloadEndpoint.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		glog.V(2).Infof("Didn't match regex")
 		return nil

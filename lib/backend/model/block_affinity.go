@@ -69,11 +69,11 @@ func (options BlockAffinityListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options BlockAffinityListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get Block affinity key from %s", ekey)
-	r := matchBlockAffinity.FindAllStringSubmatch(ekey, -1)
+func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
+	glog.V(2).Infof("Get Block affinity key from %s", path)
+	r := matchBlockAffinity.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("%s didn't match regex", ekey)
+		glog.V(2).Infof("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
