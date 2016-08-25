@@ -205,6 +205,14 @@ func (c *EtcdClient) set(d *KVPair, options *etcd.SetOptions) (*KVPair, error) {
 
 	glog.V(2).Infof("Key: %#v\n", key)
 	glog.V(2).Infof("Value: %s\n", value)
+	if d.TTL != 0 {
+		glog.V(2).Infof("TTL: %v", d.TTL)
+		// Take a copy of the default options so we can set the TTL for
+		// this request only.
+		optionsCopy := *options
+		optionsCopy.TTL = d.TTL
+		options = &optionsCopy
+	}
 	glog.V(2).Infof("Options: %+v\n", options)
 	result, err := c.etcdKeysAPI.Set(context.Background(), key, value, options)
 	if err != nil {
