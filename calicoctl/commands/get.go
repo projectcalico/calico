@@ -26,6 +26,9 @@ import (
 func Get(args []string) error {
 	doc := EtcdIntro + `Display one or many resources identified by file, stdin or resource type and name.
 
+Valid resource kinds are bgpPeer, hostEndpoint, policy, pool and profile.  The <KIND>
+parameter is case insensitive and may be pluralized.
+
 By specifying the output as 'go-template' and providing a Go template as the value
 of the --go-template flag, you can filter the attributes of the fetched resource(s).
 
@@ -46,11 +49,11 @@ Options:
   -o --output=<OUTPUT FORMAT>  Output format.  One of: ps, wide, custom-columns=..., yaml, json,
                                go-template=..., go-template-file=...   [Default: ps]
   -n --hostname=<HOSTNAME>     The hostname.
-  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
-                               [default: /etc/calico/calicoctl.cfg]
   --scope=<SCOPE>              The scope of the resource type.  One of global, node.  This is only valid
                                for BGP peers and is used to indicate whether the peer is a global peer
                                or node-specific.
+  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
+                               [default: /etc/calico/calicoctl.cfg]
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {

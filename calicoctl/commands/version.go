@@ -27,7 +27,8 @@ func Version(args []string) error {
 calicoctl version
 
 Description:
-  Display the version of calicoctl`
+  Display the version of calicoctl
+`
 
 	_, _ = docopt.Parse(doc, args, true, "calicoctl", false, false)
 

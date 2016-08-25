@@ -60,7 +60,7 @@ func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
 	// takes precedence if both are specified.
 	etcdLocation := []string{}
 	if config.EtcdAuthority != "" {
-		etcdLocation = []string{"http://" + config.EtcdAuthority}
+		etcdLocation = []string{config.EtcdScheme + "://" + config.EtcdAuthority}
 	}
 	if config.EtcdEndpoints != "" {
 		etcdLocation = strings.Split(config.EtcdEndpoints, ",")

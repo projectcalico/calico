@@ -94,6 +94,11 @@ func LoadClientConfig(filename string) (*api.ClientConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Default the backend type to be etcd v2.  This will be overridden if
+		// explicitly specified in the file.
+		c = api.ClientConfig{BackendType: api.EtcdV2}
+
 		// First unmarshal should fill in the BackendType field only.
 		if err := yaml.Unmarshal(b, &c); err != nil {
 			return nil, err

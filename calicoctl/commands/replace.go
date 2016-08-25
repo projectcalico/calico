@@ -35,8 +35,8 @@ Examples:
   # Replace a policy using the data in policy.yaml.
   calicoctl replace -f ./policy.yaml
 
-  # Replace a pod based on the YAML passed into stdin.
-  cat policy.yaml | calicoctl replace -f -
+  # Replace a policy based on the JSON passed into stdin.
+  cat policy.json | calicoctl replace -f -
 
 Options:
   -f --filename=<FILENAME>     Filename to use to replace the resource.  If set to "-" loads from stdin.
