@@ -37,15 +37,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 	utils.ConfigureLogging(conf.LogLevel)
 
-	// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network
-	// name (which is the normal behavior) otherwise use one based on the Kubernetes pod namespace.
-	var profileID string
-	if conf.Policy.PolicyType == "" {
-		profileID = conf.Name
-	} else {
-		profileID = fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)
-	}
-
 	workloadID, orchestratorID, err := utils.GetIdentifiers(args)
 	if err != nil {
 		return nil, err
@@ -78,7 +69,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
 			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
-			logger.Info("Fetching podCidr")
+			fmt.Fprintf(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
 			var stdinData map[string]interface{}
 			if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 				return nil, err
@@ -109,7 +100,15 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID
-		endpoint.Spec.Profiles = []string{profileID}
+
+		// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network
+		// name (which is the normal behavior) otherwise use one based on the Kubernetes pod's Mamespace.
+
+		if conf.Policy.PolicyType == "k8s" {
+			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)}
+		} else {
+			endpoint.Spec.Profiles = []string{conf.Name}
+		}
 
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 			// Cleanup IP allocation and return the error.
@@ -118,15 +117,18 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		}
 		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
 
-		labels, err := getK8sLabels(client, k8sArgs)
-		if err != nil {
-			// Cleanup IP allocation and return the error.
-			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-			return nil, err
+		// Only attempt to fetch the labels from Kubernetes if the policy type has been set to "k8s"
+		// This allows users to run the plugin under Kubernetes without needing it to access the Kubernetes API
+		if conf.Policy.PolicyType == "k8s" {
+			labels, err := getK8sLabels(client, k8sArgs)
+			if err != nil {
+				// Cleanup IP allocation and return the error.
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				return nil, err
+			}
+			logger.WithField("labels", labels).Info("Fetched K8s labels")
+			endpoint.Metadata.Labels = labels
 		}
-		logger.WithField("labels", labels).Info("Fetched K8s labels")
-
-		endpoint.Metadata.Labels = labels
 
 		fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 	}
