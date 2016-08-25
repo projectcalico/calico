@@ -51,6 +51,8 @@ type Rule struct {
 	NotDstSelector string             `json:"!dst_selector,omitempty" validate:"omitempty,selector"`
 	NotDstNet      *net.IPNet         `json:"!dst_net,omitempty" validate:"omitempty"`
 	NotDstPorts    []numorstring.Port `json:"!dst_ports,omitempty" validate:"omitempty"`
+
+	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
 }
 
 func (r Rule) String() string {
