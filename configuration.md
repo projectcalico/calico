@@ -1,6 +1,6 @@
 # CNI Configuration
 
-The Calico CNI plugin is configured through the standard CNI [configuration mechanism](https://github.com/appc/cni/blob/master/SPEC.md#network-configuration)
+The Calico CNI plugin is configured through the standard CNI [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
 
 A minimal configuration file that uses Calico for networking and IPAM looks like this
 ```json
@@ -17,11 +17,16 @@ Additional configuration can be added as detailed below.
 
 ## Generic
 ### Etcd location
-Specify the location of your etcd cluster using either
-* `etcd_authority` (default is `127.0.0.1:2379`)
-* `etcd_endpoints` (no default. Format is comma separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`
+Configure access to your etcd cluster using the following options
+* `etcd_endpoints` (no default. Format is comma separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`)
+* `etcd_key_file` (no default. Format is an absolute path to a file)
+* `etcd_cert_file` (no default. Format is an absolute path to a file)
+* `etcd_ca_cert_file` (no default. Format is an absolute path to a file)
 
-If both are set then `etcd_endpoints` is used.
+The following deprecated options are also supported
+* `etcd_authority` (default is `127.0.0.1:2379`)
+  * If `etcd_authority` is set at the same time as `etcd_endpoints` then `etcd_endpoints` is used.
+* `etcd_scheme` (default is `http`)
 
 ### Logging
 * Logging is always to `stderr`
@@ -43,55 +48,91 @@ If both are set then `etcd_endpoints` is used.
 
 ### IPAM
 When using Calico IPAM, the following flags determine what IP addresses should be assigned. NOTE: These flags are strings and not boolean values.
-* `assign_ipv4` (default `true`)
-* `assign_ipv6` (default `false`)
+* `assign_ipv4` (default `"true"`)
+* `assign_ipv6` (default `"false"`)
 
 A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
 
-When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  This is currently only supported when using `kubeconfig` for accessing the API. 
-
 ## Kubernetes specific
 
-When using the Calico CNI plugin with Kubernetes, two additional config blocks can be specified to control how network policy is configured.
-
-### Type
-The type specifies which policy scheme to use.
-
-* `k8s` uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
-* [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) is deprecated and uses annotations on pods to specify network policy.
-
-To specify a policy, add the following block to the CNI network config:
+When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
 
 ```json
-"policy": {
-  "type": "<type>"
+{
+    "name": "any_name",
+    "type": "calico",
+    "kubernetes": {
+        "kubeconfig": "/path/to/kubeconfig"
+    },
+    "ipam": {
+        "type": "calico-ipam"
+    }
 }
 ```
 
-### Kubernetes API access details
-When using either policy type, the CNI plugin needs to be told how to access the Kubernetes API server in the `policy` section of the network config.
+As a convenience, the API location location can also be configured directly, e.g.
+```json
+{
+    "name": "any_name",
+    "type": "calico",
+    "kubernetes": {
+        "k8s_api_root": "http://127.0.0.1:8080"
+    },
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+```
+
+### Enabling Kubernetes Policy
+If you wish to use the Kubernetes NetworkPolicy API then you must set a policy type in the network config.
+There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
+
+```json
+{
+    "name": "any_name",
+    "type": "calico",
+    "policy": {
+      "type": "k8s",
+      "k8s_api_root": "http://127.0.0.1:8080"
+    },
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+```
+
+Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
+
+### Deprecated ways of specifying Kubernetes API access details
+From the examples above, you can see that the `k8s_api_root` can appear in either the `kubernetes` or `policy` configuration blocks.
 * `k8s_api_root` (default `http://127.0.0.1:8080`)
 
-The CNI plugin may need to authenticate with the Kubernetes API server. The following methods are supported in the `policy` section of the CNI network config, none of which have default values.
-* `k8s_username`
-* `k8s_password`
+In addition, the following methods are supported in the `policy` section of the CNI network config only. None of them have default values.
 * `k8s_auth_token`
 * `k8s_client_certificate`
 * `k8s_client_key`
 * `k8s_certificate_authority`
-	* Verifying the API certificate against a CA only works if connecting to the API server using a hostname.
 
-The following methods are supported in the `kubernetes` section of the CNI network config.
-* `kubeconfig`
-	* Path to a Kubernetes `kubeconfig` file.
+### IPAM
+When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.
+
 * `node_name`
     * The node name to use when looking up the `usePodCidr` value (defaults to current hostname)
 
 ```json
-"kubernetes": {
-    "kubeconfig": "/path/to/kubeconfig"
+{
+    "name": "any_name",
+    "type": "calico",
+    "kubernetes": {
+        "kubeconfig": "/path/to/kubeconfig",
+        "node_name": "node-name-in-k8s"
+    },
+    "ipam": {
+        "type": "host-local",
+        "subnet": "usePodCidr"
+    }
 }
 ```
-
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/configuration.md?pixel)](https://github.com/igrigorik/ga-beacon)
