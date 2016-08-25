@@ -18,9 +18,9 @@ import (
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/golang/glog"
-	"github.com/tigera/libcalico-go/lib/hwm"
 	"github.com/tigera/libcalico-go/lib/backend/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/tigera/libcalico-go/lib/hwm"
 	"golang.org/x/net/context"
 	"time"
 )
@@ -295,7 +295,7 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 
 func (syn *etcdSyncer) sendUpdate(key string, value *string, revision uint64) {
 	glog.V(4).Infof("Parsing etcd key %#v", key)
-	parsedKey := model.ParseKey(key)
+	parsedKey := model.KeyFromDefaultPath(key)
 	if parsedKey == nil {
 		glog.V(3).Infof("Failed to parse key %v", key)
 		if cb, ok := syn.callbacks.(api.SyncerParseFailCallbacks); ok {
@@ -323,7 +323,7 @@ func (syn *etcdSyncer) sendUpdate(key string, value *string, revision uint64) {
 func (syn *etcdSyncer) sendDeletions(deletedKeys []string, revision uint64) {
 	updates := make([]model.KVPair, 0, len(deletedKeys))
 	for _, key := range deletedKeys {
-		parsedKey := model.ParseKey(key)
+		parsedKey := model.KeyFromDefaultPath(key)
 		if parsedKey == nil {
 			glog.V(3).Infof("Failed to parse key %v", key)
 			if cb, ok := syn.callbacks.(api.SyncerParseFailCallbacks); ok {

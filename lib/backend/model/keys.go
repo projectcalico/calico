@@ -16,7 +16,6 @@ package model
 
 import (
 	"encoding/json"
-	"errors"
 	"reflect"
 	"strings"
 
@@ -33,37 +32,75 @@ var rawBoolType = reflect.TypeOf(rawBool(true))
 
 // Key represents a parsed datastore key.
 type Key interface {
-	// DefaultPath() returns a default stringified path for this object,
-	// suitable for use in most datastores (and used on the Felix API,
-	// for example).
-	DefaultPath() (string, error)
-	// DefaultDeletePath() returns a default stringified path for deleting
-	// this object.
-	DefaultDeletePath() (string, error)
+	defaultPath() (string, error)
+	defaultDeletePath() (string, error)
 	valueType() reflect.Type
 }
 
 // Interface used to perform datastore lookups.
 type ListInterface interface {
-	// DefaultPathRoot() returns a default stringified root path, i.e. path
+	// defaultPathRoot() returns a default stringified root path, i.e. path
 	// to the directory containing all the keys to be listed.
-	DefaultPathRoot() string
-	ParseDefaultKey(key string) Key
+	defaultPathRoot() string
+
+	// KeyFromDefaultPath parses the default path representation of the
+	// Key type for this list.  It returns nil if passed a different kind
+	// of path.
+	KeyFromDefaultPath(key string) Key
 }
 
-// KVPair holds a parsed key and value as well as datastore specific revision
-// information.
+// KVPair holds a typed key and value struct as well as datastore specific
+// revision information.
 type KVPair struct {
 	Key      Key
 	Value    interface{}
 	Revision interface{}
 }
 
-// ParseKey parses a datastore key into one of the <Type>Key structs.
-// Returns nil if the string doesn't match one of our objects.
-func ParseKey(key string) Key {
-	glog.V(4).Infof("Parsing key %v", key)
-	if m := matchWorkloadEndpoint.FindStringSubmatch(key); m != nil {
+// KeyToDefaultPath converts one of the Keys from this package into a unique
+// '/'-delimited path, which is suitable for use as the key when storing the
+// value in a hierarchical (i.e. one with directories and leaves) key/value
+// datastore such as etcd v2.
+//
+// Each unique key returns a unique path.
+//
+// Keys with a hierarchical relationship share a common prefix.  However, in
+// order to support datastores that do not support storing data at non-leaf
+// nodes in the hierarchy (such as etcd v2), the path returned for a "parent"
+// key, is not a direct ancestor of its children.
+func KeyToDefaultPath(key Key) (string, error) {
+	return key.defaultPath()
+}
+
+// KeyToDefaultDeletePath converts one of the Keys from this package into a
+// unique '/'-delimited path, which is suitable for use as the key when
+// (recursively) deleting the value from a hierarchical (i.e. one with
+// directories and leaves) key/value datastore such as etcd v2.
+//
+// KeyToDefaultDeletePath returns a different path to KeyToDefaultPath when
+// it is a passed a Key that represents a non-leaf which, for example, has its
+// own metadata but also contains other resource types as children.
+//
+// KeyToDefaultDeletePath returns the common prefix of the non-leaf key and
+// its children so that a recursive delete of that key would delete the
+// object itself and any children it has.
+func KeyToDefaultDeletePath(key Key) (string, error) {
+	return key.defaultDeletePath()
+}
+
+// ListOptionsToDefaultPathRoot converts list options struct into a
+// common-prefix path suitable for querying a datastore that uses the paths
+// returned by KeyToDefaultPath.
+func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
+	return listOptions.defaultPathRoot()
+}
+
+// KeyFromDefaultPath parses the default path representation of a key into one
+// of our <Type>Key structs.  Returns nil if the string doesn't match one of
+// our key types.
+func KeyFromDefaultPath(path string) Key {
+	glog.V(4).Infof("Parsing key %v", path)
+	if m := matchWorkloadEndpoint.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Workload endpoint")
 		return WorkloadEndpointKey{
 			Hostname:       m[1],
@@ -71,18 +108,18 @@ func ParseKey(key string) Key {
 			WorkloadID:     m[3],
 			EndpointID:     m[4],
 		}
-	} else if m := matchHostEndpoint.FindStringSubmatch(key); m != nil {
+	} else if m := matchHostEndpoint.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Host endpoint")
 		return HostEndpointKey{
 			Hostname:   m[1],
 			EndpointID: m[2],
 		}
-	} else if m := matchPolicy.FindStringSubmatch(key); m != nil {
+	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Policy")
 		return PolicyKey{
 			Name: m[2],
 		}
-	} else if m := matchProfile.FindStringSubmatch(key); m != nil {
+	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Profile %v", m)
 		pk := ProfileKey{m[1]}
 		switch m[2] {
@@ -97,10 +134,10 @@ func ParseKey(key string) Key {
 			return ProfileLabelsKey{ProfileKey: pk}
 		}
 		return nil
-	} else if m := matchHostIp.FindStringSubmatch(key); m != nil {
+	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Host ID")
 		return HostIPKey{Hostname: m[1]}
-	} else if m := matchPool.FindStringSubmatch(key); m != nil {
+	} else if m := matchPool.FindStringSubmatch(path); m != nil {
 		glog.V(5).Infof("Pool")
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
@@ -109,17 +146,21 @@ func ParseKey(key string) Key {
 			panic(err)
 		}
 		return PoolKey{CIDR: *c}
-	} else if m := matchGlobalConfig.FindStringSubmatch(key); m != nil {
+	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
 		return GlobalConfigKey{Name: m[1]}
-	} else if m := matchHostConfig.FindStringSubmatch(key); m != nil {
+	} else if m := matchHostConfig.FindStringSubmatch(path); m != nil {
 		return HostConfigKey{Hostname: m[1], Name: m[2]}
-	} else if matchReadyFlag.MatchString(key) {
+	} else if matchReadyFlag.MatchString(path) {
 		return ReadyFlagKey{}
 	}
 	// Not a key we know about.
 	return nil
 }
 
+// ParseValue parses the default JSON representation of our data into one of
+// our value structs, according to the type of key.  I.e. if passed a
+// PolicyKey as the first parameter, it will try to parse rawData into a
+// Policy struct.
 func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	valueType := key.valueType()
 	if valueType == rawStringType {
@@ -147,13 +188,4 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		iface = elem.Interface()
 	}
 	return iface, nil
-}
-
-func ParseKeyValue(key string, rawData []byte) (Key, interface{}, error) {
-	parsedKey := ParseKey(key)
-	if parsedKey == nil {
-		return nil, nil, errors.New("Failed to parse key")
-	}
-	value, err := ParseValue(parsedKey, rawData)
-	return parsedKey, value, err
 }

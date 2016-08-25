@@ -79,8 +79,6 @@ type Client interface {
 	// revision is still current.
 	//
 	// Some keys are hierarchical, and Delete is a recursive operation.
-	// For example, deleting a Tier also deletes all the policies under
-	// that Tier.
 	Delete(object *KVPair) error
 
 	// Get returns the object identified by the given key as a KVPair with

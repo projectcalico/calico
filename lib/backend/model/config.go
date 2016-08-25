@@ -35,12 +35,12 @@ var (
 type ReadyFlagKey struct {
 }
 
-func (key ReadyFlagKey) DefaultPath() (string, error) {
+func (key ReadyFlagKey) defaultPath() (string, error) {
 	return "/calico/v1/Ready", nil
 }
 
-func (key ReadyFlagKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+func (key ReadyFlagKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
 }
 
 func (key ReadyFlagKey) valueType() reflect.Type {
@@ -51,12 +51,12 @@ type GlobalConfigKey struct {
 	Name string `json:"-" validate:"required,name"`
 }
 
-func (key GlobalConfigKey) DefaultPath() (string, error) {
-	k, err := key.DefaultDeletePath()
+func (key GlobalConfigKey) defaultPath() (string, error) {
+	k, err := key.defaultDeletePath()
 	return k + "/metadata", err
 }
 
-func (key GlobalConfigKey) DefaultDeletePath() (string, error) {
+func (key GlobalConfigKey) defaultDeletePath() (string, error) {
 	if key.Name == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
@@ -76,7 +76,7 @@ type GlobalConfigListOptions struct {
 	Name string
 }
 
-func (options GlobalConfigListOptions) DefaultPathRoot() string {
+func (options GlobalConfigListOptions) defaultPathRoot() string {
 	k := "/calico/v1/config"
 	if options.Name == "" {
 		return k
@@ -85,7 +85,7 @@ func (options GlobalConfigListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options GlobalConfigListOptions) ParseDefaultKey(ekey string) Key {
+func (options GlobalConfigListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get GlobalConfig key from %s", ekey)
 	r := matchGlobalConfig.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
@@ -105,12 +105,12 @@ type HostConfigKey struct {
 	Name     string `json:"-" validate:"required,name"`
 }
 
-func (key HostConfigKey) DefaultPath() (string, error) {
-	k, err := key.DefaultDeletePath()
+func (key HostConfigKey) defaultPath() (string, error) {
+	k, err := key.defaultDeletePath()
 	return k + "/metadata", err
 }
 
-func (key HostConfigKey) DefaultDeletePath() (string, error) {
+func (key HostConfigKey) defaultDeletePath() (string, error) {
 	if key.Name == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
@@ -134,7 +134,7 @@ type HostConfigListOptions struct {
 	Name     string
 }
 
-func (options HostConfigListOptions) DefaultPathRoot() string {
+func (options HostConfigListOptions) defaultPathRoot() string {
 	k := "/calico/v1/host"
 	if options.Hostname == "" {
 		return k
@@ -147,7 +147,7 @@ func (options HostConfigListOptions) DefaultPathRoot() string {
 	return k
 }
 
-func (options HostConfigListOptions) ParseDefaultKey(ekey string) Key {
+func (options HostConfigListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get HostConfig key from %s", ekey)
 	r := matchHostConfig.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {

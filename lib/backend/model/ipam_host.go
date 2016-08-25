@@ -28,7 +28,7 @@ type IPAMHostKey struct {
 	Host string
 }
 
-func (key IPAMHostKey) DefaultPath() (string, error) {
+func (key IPAMHostKey) defaultPath() (string, error) {
 	if key.Host == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "host"}
 	}
@@ -37,8 +37,8 @@ func (key IPAMHostKey) DefaultPath() (string, error) {
 	return k, nil
 }
 
-func (key IPAMHostKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+func (key IPAMHostKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
 }
 
 func (key IPAMHostKey) valueType() reflect.Type {

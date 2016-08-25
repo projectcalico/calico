@@ -32,7 +32,7 @@ type IPAMHandleKey struct {
 	HandleID string `json:"id"`
 }
 
-func (key IPAMHandleKey) DefaultPath() (string, error) {
+func (key IPAMHandleKey) defaultPath() (string, error) {
 	if key.HandleID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
@@ -40,8 +40,8 @@ func (key IPAMHandleKey) DefaultPath() (string, error) {
 	return e, nil
 }
 
-func (key IPAMHandleKey) DefaultDeletePath() (string, error) {
-	return key.DefaultPath()
+func (key IPAMHandleKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
 }
 
 func (key IPAMHandleKey) valueType() reflect.Type {
@@ -52,13 +52,13 @@ type IPAMHandleListOptions struct {
 	// TODO: Have some options here?
 }
 
-func (options IPAMHandleListOptions) DefaultPathRoot() string {
+func (options IPAMHandleListOptions) defaultPathRoot() string {
 	k := "/calico/ipam/v2/handle/"
 	// TODO: Allow filtering on individual host?
 	return k
 }
 
-func (options IPAMHandleListOptions) ParseDefaultKey(ekey string) Key {
+func (options IPAMHandleListOptions) KeyFromDefaultPath(ekey string) Key {
 	glog.V(2).Infof("Get IPAM handle key from %s", ekey)
 	r := matchBlock.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
