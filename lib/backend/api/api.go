@@ -50,12 +50,46 @@ func (s SyncStatus) String() string {
 	}
 }
 
+// Client is the interface to the backend datastore.  It makes heavy use of the
+// KVPair struct, which contains a key and (optional) value drawn from the
+// backend/model package along with opaque revision information that the
+// datastore uses to enforce consistency.
 type Client interface {
+	// Create creates the object specified in the KVPair, which must not
+	// already exist. On success, returns a KVPair for the object with
+	// revision  information filled-in.
 	Create(object *KVPair) (*KVPair, error)
+
+	// Update modifies the existing object specified in the KVPair.
+	// On success, returns a KVPair for the object with revision
+	// information filled-in.  If the input KVPair has revision
+	// information then the update only succeeds if the revision is still
+	// current.
 	Update(object *KVPair) (*KVPair, error)
+
+	// Apply updates or creates the object specified in the KVPair.
+	// On success, returns a KVPair for the object with revision
+	// information filled-in.  If the input KVPair has revision
+	// information then the update only succeeds if the revision is still
+	// current.
 	Apply(object *KVPair) (*KVPair, error)
+
+	// Delete removes the object specified by the KVPair.  If the KVPair
+	// contains revision information, the delete only succeeds if the
+	// revision is still current.
+	//
+	// Some keys are hierarchical, and Delete is a recursive operation.
+	// For example, deleting a Tier also deletes all the policies under
+	// that Tier.
 	Delete(object *KVPair) error
+
+	// Get returns the object identified by the given key as a KVPair with
+	// revision information.
 	Get(key Key) (*KVPair, error)
+
+	// List returns a slice of KVPairs matching the input list options.
+	// list should be passed one of the model.<Type>ListOptions structs.
+	// Non-zero fields in the struct are used as filters.
 	List(list ListInterface) ([]*KVPair, error)
 
 	// Syncer creates an object that generates a series of KVPair updates,
@@ -66,18 +100,29 @@ type Client interface {
 }
 
 type Syncer interface {
+	// Starts the Syncer.  May start a background goroutine.
 	Start()
 }
 
 type SyncerCallbacks interface {
+	// OnStatusUpdated is called when the status of the sync status of the
+	// datastore changes.
 	OnStatusUpdated(status SyncStatus)
+
 	// OnUpdates is called when the Syncer has one or more updates to report.
 	// Updates consist of typed key-value pairs.  The keys are drawn from the
 	// backend.model package.  The values are either nil, to indicate a
-	// deletion, or a pointer to a value of the associated value type.
+	// deletion (or failure to parse a value), or a pointer to a value of
+	// the associated value type.
+	//
+	// When a recursive delete is made, deleting many leaf keys, the Syncer
+	// generates deletion updates for all the leaf keys.
 	OnUpdates(updates []KVPair)
 }
 
+// SyncerParseFailCallbacks is an optional interface that can be implemented
+// by a Syncer callback.  Datastores that support it can report a failure to
+// parse a particular key or value.
 type SyncerParseFailCallbacks interface {
 	ParseFailed(rawKey string, rawValue *string)
 }
