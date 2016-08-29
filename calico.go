@@ -131,6 +131,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
+			logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
+				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 			result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 			logger.WithField("result", result).Info("Got result from IPAM plugin")
 			if err != nil {
@@ -273,6 +275,8 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
 	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
+	logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
+		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 	ipamErr := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
 
 	if ipamErr != nil {
