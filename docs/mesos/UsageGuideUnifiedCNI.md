@@ -30,25 +30,58 @@ EOF
 ```
 > Note: If you have used the Docker-Compose demo to launch a cluster, this network configuration has already been created for you.
 
-Mesos will actively scan that directory when launching containers, so without needing to restart the Agent process, you are now ready to launch Calico-CNI Mesos tasks.
+Mesos-Agent loads these network configurations into memory at launch, so you will need to restart the Agent process for your new configuration to take effect.
 
 ## 2. Launch a Calico-Networked Task
-#### Using Mesos-Execute
-With our network configured, we can use `mesos-execute` to launch a task on the CNI network you just configured by setting `--networks` to the name of the network you just configured:
+With your CNI network configured, you are now ready to launch tasks on it. There are several common methods you can use to do so.
+
+#### a.) Using Mesos-Execute
+To quickly test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
 ```
 mesos-execute --containerizer=mesos \
-              --name=cni \
+              --name=calico-cni-base-test \
               --master=172.17.0.4:5050 \
               --networks=calico-net-1 \
               --command="ifconfig"
 ```
+The task will have been successfully networked by Calico if its return code is `0`. Additionally, the task's `stdout` log should show an IP address from the default Calico pool: `192.168.0.0/16`
 
-#### Using Marathon
-Create `app.json` with `ipAddress.networkName` set to the CNI network:
+#### b.) Using Marathon
+In Marathon v1.2.0+, set the task's `ipAddress.networkName` to the name of the CNI network:
 ```
+curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -d '
+{
+    "id": "calico-cni-marathon-test",
+    "cmd": "ifconfig && sleep 1000",
+    "cpus": 0.1,
+    "mem": 64.0,
+    "ipAddress": {
+        "networkName": "calico-net-1",
+        "labels": {
+          "app": "test",
+          "group": "development"
+        }
+    }
+}'
+```
+Again, this task should show a Calico IP in the Marathon UI.
+#### c.) Using Marathon - Unified Containerizer
+
+With the release of Mesos-1.0, the Unified Containerizer can now launch Docker Images using the Mesos Containerizer. Calico can perform networking for these tasks.
+
+> To make use of this feature, ensure you are using Mesos 1.0.0+ with agents [configured to use the Unified Containerizer](http://mesos.apache.org/documentation/latest/container-image/). Also ensure you are using Marathon v1.3.0+.
+
+Our `app.json` looks similar to the one above, but with a few extra settings (and some more practical use):
+```
+curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -d '
 {
     "id": "frontend",
-    "cmd": "ifconfig && sleep 1000",
+    "container": {
+      "type": "MESOS",
+      "docker": {
+        "image": "nginx"
+      }
+    },
     "cpus": 0.1,
     "mem": 64.0,
     "ipAddress": {
@@ -58,16 +91,41 @@ Create `app.json` with `ipAddress.networkName` set to the CNI network:
           "group": "production"
         }
     }
-}
-```
-You can curl `app.json` using Marathon's REST API to launch
-the application:
-
-```
-curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -d @app.json
+}'
 ```
 
-The application should show a Calico IP when viewed in the Marathon UI.
+The application will show its Calico IP when viewed using the Marathon UI, however it will be unreachable until Calico policy is configured to allow traffic.
+
+## 3. Configuring Policy
+Calico-CNI v1.4.0+ supports label-based policy for Mesos v1.0.0+.
+
+The above Marathon Application Definition has assigned the labels `app=frontend` and `group=production` to the task's NetworkInfo. Calico-CNI automatically reads these labels and assign them to the endpoint, allowing us to enforce policy based on them.
+
+The following YAML policy spec describes rules based on these labels:
+```
+version: v1
+kind: policy
+metadata:
+  name: frontend-policy
+spec:
+  order: 50
+  selector: app == 'frontend'
+  inbound_rules:
+  - protocol: tcp
+    dst_ports: [80]
+    action: allow
+  outbound_rules:
+  - protocol: tcp
+    dst_selector: app == 'database'
+    dst_ports: [6379]
+    action: allow
+```
+
+[The new calicoctl](https://github.com/tigera/libcalico-go) can be used to register this policy spec:
+```
+calicoctl create -f frontend-policy.yaml
+```
+
 
 [calico-slack]: https://slack.projectcalico.org/
 [marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/docs/ip-per-task.md
