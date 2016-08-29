@@ -2,19 +2,41 @@
 >
 > See note at top of [calicoctl guide](../../README.md) main page.
 
-# BGP Peer resources
+# BGP Peer Resource
+A BGP Peer resource represents a BGP peer which node(s) in this cluster will connect to. Configuration of BGP peers is required when configuring Calico to peer with your existing datacenter infrastructure (e.g. ToR). For more information on cluster layouts, see Calico's documentation on [L3 Topologies](http://docs.projectcalico.org/en/latest/l3-interconnectFabric.html).
 
-## YAML format
+There are two types of BGP Peers.
 
-Type
-Brief description
-profile
-Profile objects can be thought of as describing the properties of an endpoint (virtual interface, or bare metal interface).  Each endpoint can reference zero or more profiles.  A profile encapsulates a specific set of tags, labels and ACL rules that are directly applied to the endpoint.  Depending on the use case, profiles may be sufficient to express all policy.
-policy
-Policy objects can be thought of as being applied to a set of endpoints (rather than being a property of the endpoint) to give more flexible policy arrangements.
-Each policy has a label/tag based selector predicate, such as “type == ‘webserver’ && role == ‘frontend’”, that selects which endpoints it should apply to, and an ordering number that specifies the policy’s priority. For each endpoint, Calico applies the security policies that apply to it, in priority order, and then that endpoint’s security profiles.
-A host endpoints refer to the “bare-metal” interfaces attached to the host that is running Calico’s agent, Felix.  Each endpoint may specify a set of labels and list of profiles that Calico will use to apply policy to the interface.  If no profiles or labels are applied, Calico, by default, will not apply any policy.
+#### Global Peer
+If this is a `global` scoped BGP peer, all nodes in the cluster will attempt to establish a BGP connection with it.
+
+#### Node Peer
+A BGP peer can also be added at the `node` scope, meaning only a single specified node will peer with it. BGP peer resources of this nature must specify a `hostname` to inform Calico which Node this peer is targeting.
 
 
+### Sample YAML
+```
+apiVersion: v1
+kind: bgppeer
+metadata:
+  name: rack001-tor
+  scope: node
+  hostname: rack1-host1
+  peerIP: 192.168.1.1
+spec:
+  asNumber: 63400
+```
 
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/resources/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+### Definitions
+#### Metadata
+| name     | description                                               | requirements                                                                     | schema |
+|----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
+| name     | The name of this peer resource.                           |                                                                                  | string |
+| scope    | The scope of this peer.                                   | Accepted values: `global` or `node`                                              | string |
+| hostname | The hostname of the node that should peer with this peer. | Must be specified if scope is `node`, and must be omitted when scope is `global` | string |
+| peerIP   | The IP address of this peer.                              | Valid IPv4 or IPv6 address.                                                      | string |
+
+#### Spec
+| name     | description                 | requirements               | schema  |
+|----------|-----------------------------|----------------------------|---------|
+| asNumber | The AS Number of this peer. | Must be a valid AS Number. | integer |
