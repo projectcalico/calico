@@ -1,0 +1,8 @@
+[template]
+src = "custom_filters6.cfg.template"
+dest = "/etc/calico/confd/config/custom_filters6.cfg"
+prefix = "/calico/bgp/v1/global/custom_filters"
+keys = [
+    "/v6",
+]
+reload_cmd = "pkill -HUP bird || true"
