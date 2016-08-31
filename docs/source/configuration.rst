@@ -123,8 +123,9 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | OpenStack deployments, this should be set to "tap".  Calico polices all traffic to/from   |
 |                                  |                                       | interfaces with this prefix.  Calico blocks traffic to/from such interfaces by default.   |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
-| UsageReportingEnabled            | "true"                                | Periodically report cluster version, hostname, size and guid to projectcalico.org.        |
-|                                  |                                       | Receive version deprecation / security warnings.                                          |+----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
+| UsageReportingEnabled            | True                                  | Periodically report cluster version, hostname, size and guid to projectcalico.org.        |
+|                                  |                                       | Receive version deprecation / security warnings.                                          |
++----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | LogFilePath                      | /var/log/calico/felix.log             | The full path to the felix log. Set to "none" to disable file logging.                    |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdDriverLogFilePath            | /var/log/calico/felix-etcd.log        | Felix's etcd driver has its own log file. This parameter contains its full path.          |
@@ -159,7 +160,7 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | number with at least 8 bits set, none of which clash with any other mark bits in use on   |
 |                                  |                                       | the system.                                                                               |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
-| PrometheusMetricsEnabled         | "false"                               | Set to "true" to enable the experimental Prometheus metrics server in Felix.              |
+| PrometheusMetricsEnabled         | False                                 | Set to True to enable the experimental Prometheus metrics server in Felix.                |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | PrometheusMetricsPort            | 9091                                  | TCP port that the Prometheus metrics server should bind to.                               |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
