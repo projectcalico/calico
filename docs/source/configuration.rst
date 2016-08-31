@@ -124,7 +124,8 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | interfaces with this prefix.  Calico blocks traffic to/from such interfaces by default.   |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | UsageReportingEnabled            | "true"                                | Periodically report cluster version, hostname, size and guid to projectcalico.org.        |
-|                                  |                                       | Receive version deprecation / security warnings.                                          |+----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
+|                                  |                                       | Receive version deprecation / security warnings.                                          |
++----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | LogFilePath                      | /var/log/calico/felix.log             | The full path to the felix log. Set to "none" to disable file logging.                    |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdDriverLogFilePath            | /var/log/calico/felix-etcd.log        | Felix's etcd driver has its own log file. This parameter contains its full path.          |
