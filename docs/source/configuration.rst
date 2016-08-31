@@ -160,7 +160,7 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | number with at least 8 bits set, none of which clash with any other mark bits in use on   |
 |                                  |                                       | the system.                                                                               |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
-| PrometheusMetricsEnabled         | False                                 | Set to "true" to enable the experimental Prometheus metrics server in Felix.              |
+| PrometheusMetricsEnabled         | False                                 | Set to True to enable the experimental Prometheus metrics server in Felix.                |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | PrometheusMetricsPort            | 9091                                  | TCP port that the Prometheus metrics server should bind to.                               |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
