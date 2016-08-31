@@ -194,6 +194,20 @@ class TestFutils(unittest2.TestCase):
         m_popen.side_effect = OSError()
         self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
 
+    @mock.patch("calico.felix.futils.urllib3.disable_warnings", autospec=True)
+    @mock.patch("calico.felix.futils.urllib3.util.retry.Retry", autospec=True)
+    @mock.patch("calico.felix.futils.urllib3.PoolManager", autospec=True)
+    def test_report_usage_and_get_warnings(self, m_poolmanager, m_retry, m_disable):
+        status = mock.Mock()
+        status.status.side_effect = "200"
+        status.data.decode.side_effect = "the reply"
+        http = mock.Mock()
+        http.request.side_effect = status
+        m_poolmanager.return_value = http
+        m_disable.return_value = "hello"
+        m_retry.return_value = "Hello"
+        futils.report_usage_and_get_warnings("1.4.0", "calico01", "123", "100", "NA")
+
     @mock.patch("sys.exit")
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)

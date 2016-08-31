@@ -25,6 +25,7 @@ import json
 import logging
 import socket
 import subprocess
+import pkg_resources  # part of setuptools
 
 from etcd import EtcdException, EtcdKeyNotFound
 import gevent
@@ -54,7 +55,7 @@ from calico.etcdutils import (
 from calico.felix.actor import Actor, actor_message
 from calico.felix.futils import (
     logging_exceptions, iso_utc_timestamp, IPV4,
-    IPV6, StatCounter
+    IPV6, StatCounter, report_usage_and_get_warnings
 )
 from calico.monotonic import monotonic_time
 
@@ -334,6 +335,57 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self.last_rate_log_time = monotonic_time()
         # Register for events when values change.
         self._register_paths()
+        self._usage_report_greenlet = gevent.Greenlet(
+            self._periodically_usage_report
+        )
+
+    def estimated_host_count(self):
+        """
+        Thread safe for caller because calling len() on a dict is atomic in Python.
+
+        :return An aproximation to our Felix cluster count
+        """
+        return len(self.ipv4_by_hostname)
+
+    @logging_exceptions
+    def _periodically_usage_report(self):
+        """
+        Greenlet: periodically report the cluster existence to
+        projectcalico.org.  Period is about once per day.
+
+        :return: Does not return, unless USAGE_REPORT disabled.
+        """
+
+        interval = 86400   # Once every 24 hours minus 12 minute jitter
+        jitter = random.random() * 0.01 * interval
+        try:
+            calico_version = str(pkg_resources.require("calico")[0].version)
+        except ResolutionError:
+            calico_version = "NA"
+
+        _log.info("Started usage report thread.  Usage report interval: %s, pre-jitter: %s", interval, jitter)
+
+        # Pre-Jitter the reporting thread start by 1% of interval (about 12 minutes)
+        # Jitter prevents thundering herd for large clusters when the cluster first starts
+        # Do pre-jitter only for clusters greater than 25.
+        felix_count = self.estimated_host_count()
+        if (felix_count >= 25):
+            gevent.sleep(jitter)
+
+        while True:
+            config = self._config
+            felix_count = self.estimated_host_count()
+            cluster_type = "NA"
+
+            if self._config.USAGE_REPORT:
+                _log.info("usage report is enabled")
+                report_usage_and_get_warnings(calico_version, config.HOSTNAME, config.CLUSTER_GUID, felix_count, cluster_type)
+
+            # Jitter by 10% of interval (about 120 minutes)
+            jitter = random.random() * 0.1 * interval
+            sleep_time = interval - jitter
+            _log.info("Usage report interval: %s, sleep-time: %s", interval, sleep_time)
+            gevent.sleep(sleep_time)
 
     def _register_paths(self):
         """
@@ -549,6 +601,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             if self._config.REPORT_ENDPOINT_STATUS:
                 self._status_reporter.clean_up_endpoint_statuses(async=True)
             self._update_hosts_ipset()
+            if self._config.USAGE_REPORT:
+                self._usage_report_greenlet.start()
 
     def _start_driver(self):
         """
@@ -731,10 +785,6 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self.splitter.on_policy_selector_update(policy_id, None, None)
 
     def on_host_ip_set(self, response, hostname):
-        if not self._config.IP_IN_IP_ENABLED:
-            _log.debug("Ignoring update to %s because IP-in-IP is disabled",
-                       response.key)
-            return
         _stats.increment("Host IP created/updated")
         ip = parse_host_ip(hostname, response.value)
         if ip:
@@ -746,15 +796,14 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self._update_hosts_ipset()
 
     def on_host_ip_delete(self, response, hostname):
-        if not self._config.IP_IN_IP_ENABLED:
-            _log.debug("Ignoring update to %s because IP-in-IP is disabled",
-                       response.key)
-            return
         _stats.increment("Host IP deleted")
         if self.ipv4_by_hostname.pop(hostname, None):
             self._update_hosts_ipset()
 
     def _update_hosts_ipset(self):
+        if not self._config.IP_IN_IP_ENABLED:
+            _log.debug("Ignoring update to hosts ipset because IP-in-IP is disabled")
+            return          
         if not self._been_in_sync:
             _log.debug("Deferring update to hosts ipset until we're in-sync")
             return

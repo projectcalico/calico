@@ -721,6 +721,33 @@ class TestEtcdWatcher(BaseTestCase):
         m_response.value = value
         self.watcher.dispatcher.handle_event(m_response)
 
+    @patch("gevent.sleep", autospec=True)
+    def test_usage_report_disabled(self,m_sleep):
+        self.m_config.USAGE_REPORT = False
+        self.watcher._periodically_usage_report()
+
+    @patch("calico.felix.futils.report_usage_and_get_warnings", autospec=True)
+    @patch("pkg_resources.require", autospec=True)
+    @patch("random.random", autospec=True)
+    @patch("gevent.sleep", autospec=True)
+    def test_usage_report_enabled(self, m_sleep, m_random, m_pkg, m_report):
+
+        with patch.object(self.watcher, "estimated_host_count") as m_host_count:
+            m_host_count.side_effect = [RuntimeError]
+            m_host_count.return_value = 1
+
+            m_report.side_effect = RuntimeError
+            self.m_config.USAGE_REPORT = True
+            m_random.return_value = 0
+            require = Mock()
+            require.version = "1.4.0"
+            m_pkg.return_value = [require]
+
+
+    def test_usage_report_disabled(self):
+        self.m_config.USAGE_REPORT = 0
+        # self.m_periodically_usage_report()
+
 
 class TestEtcdReporting(BaseTestCase):
     def setUp(self):

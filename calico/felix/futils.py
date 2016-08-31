@@ -31,6 +31,7 @@ import re
 import sys
 import types
 import gc
+import urllib3
 from datetime import datetime
 import gevent.lock
 from gevent import subprocess
@@ -630,3 +631,42 @@ def find_longest_prefix(strs):
             else:
                 longest_prefix = longest_prefix[:shared_len]
     return longest_prefix
+
+
+def report_usage_and_get_warnings(calico_version, hostname, cluster_guid, cluster_size, cluster_type):
+    """Reports the cluster's guid, size and version to projectcalico.org.
+    Logs out of date calico versions, to the standard log file.
+    Logs warnings returned by the usage server. The warnings might including warning
+    if using a version of Calico that is no longer supported
+
+    :param calico_version: the calico version
+    :param hostname: the agent's hostname
+    :param cluster_guid: the unique cluster identifier
+    :param cluster_size: the number of felix instances
+    :cluster_type: the type of cluster
+    """
+    _log.info("report_usage_and_get_warnings calico_version=%s, hostname=%s, guid=%s, size=%s, cluster_type=%s", calico_version, hostname, cluster_guid, cluster_size, cluster_type)
+    try:
+        url = 'https://usage.projectcalico.org/UsageCheck/calicoVersionCheck'
+
+        urllib3.disable_warnings()
+        http = urllib3.PoolManager()
+        fields = {
+            'version': calico_version,
+            'hostname': hostname,
+            'guid': cluster_guid,
+            'size': cluster_size,
+            'cluster_type': cluster_type
+        }
+        # Exponential backoff retry
+        # http://urllib3.readthedocs.io/en/latest/reference/urllib3.util.html#module-urllib3.util.retry
+        # Note this retry is not required to prevent thundering herd, because the jitter takes care of that
+        # It is simply an additional retry in case of dropped or lost connections.
+        retries = urllib3.util.retry.Retry(connect=5, read=5, redirect=5, backoff_factor=1.0)
+
+        # Send the Usage Report to projectcalico.org
+        r = http.request('GET', url, fields=fields, retries=retries)
+        reply = r.data.decode('utf-8')
+        _log.info("usage_report status=%s, reply=%s", r.status, reply)
+    except Exception:
+        _log.info("Exception in usage_report")
