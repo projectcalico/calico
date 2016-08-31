@@ -99,12 +99,12 @@ For Kilo::
     priority=97
     EOF
 
-For Liberty (and future OpenStack releases)::
+For Liberty or later::
 
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm_stable/
+    baseurl=http://binaries.projectcalico.org/rpm_calico-1.4/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
