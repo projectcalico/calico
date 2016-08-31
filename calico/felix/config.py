@@ -248,6 +248,14 @@ class Config(object):
                            "spoofing their source IP.  (For example, "
                            "unprivileged containers.)",
                            False, value_is_bool=True)
+        self.add_parameter("ClusterGUID", "Unique cluster identifier",
+                           "baddecaf")
+        self.add_parameter("UsageReportingEnabled",
+                           "If set to true, periodically report cluster "
+                           "version, hostname, size and guid to "
+                           "projectcalico.org.  Receive version deprecation / "
+                           "security warnings.",
+                           True, value_is_bool=False)
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("EtcdDriverLogFilePath",
@@ -428,6 +436,8 @@ class Config(object):
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
+        self.CLUSTER_GUID = self.parameters["ClusterGUID"].value
+        self.USAGE_REPORT = self.parameters["UsageReportingEnabled"].value
 
         self._validate_cfg(final=final)
 

@@ -41,6 +41,7 @@ Depends:
  python-netaddr,
  python-gevent,
  python-posix-spawn,
+ python-setuptools,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}

@@ -76,6 +76,10 @@ The full list of parameters which can be set is as follows.
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | Setting                          | Default                               | Meaning                                                                                   |
 +==================================+=======================================+===========================================================================================+
+| EtcdEndpoints                    | <EtcdScheme>://<EtcdAddr>             | Comma separated list of etcd endpoints, of the form scheme://address:port.  For example,  |
+|                                  |                                       | "https://1.2.3.4:2379,https://1.2.3.5:2379".  This option overrides EtcdScheme and        |
+|                                  |                                       | EtcdAddr.                                                                                 |
++----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdAddr                         | localhost:4001                        | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect |
 |                                  |                                       | to.                                                                                       |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
@@ -119,6 +123,8 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | OpenStack deployments, this should be set to "tap".  Calico polices all traffic to/from   |
 |                                  |                                       | interfaces with this prefix.  Calico blocks traffic to/from such interfaces by default.   |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
+| UsageReportingEnabled            | "true"                                | Periodically report cluster version, hostname, size and guid to projectcalico.org.        |
+|                                  |                                       | Receive version deprecation / security warnings.                                          |+----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | LogFilePath                      | /var/log/calico/felix.log             | The full path to the felix log. Set to "none" to disable file logging.                    |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 | EtcdDriverLogFilePath            | /var/log/calico/felix-etcd.log        | Felix's etcd driver has its own log file. This parameter contains its full path.          |

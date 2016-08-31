@@ -9,3 +9,4 @@ msgpack-python>=0.3
 pyparsing>=2.0.0
 prometheus_client>=0.0.13
 urllib3>=1.7.1
+setuptools
