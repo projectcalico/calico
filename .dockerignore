@@ -1,3 +1,4 @@
 *
+!k8s-install/scripts/install-cni.sh
 !dist/calico
 !dist/calico-ipam
