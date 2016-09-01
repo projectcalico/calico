@@ -97,7 +97,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -
 The application will show its Calico IP when viewed using the Marathon UI, however it will be unreachable until Calico policy is configured to allow traffic.
 
 ## 3. Configuring Policy
-Calico-CNI v1.4.0+ supports label-based policy for Mesos v1.0.0+.
+Calico-CNI v1.4.1+ supports label-based policy for Mesos v1.0.0+.
 
 The above Marathon Application Definition has assigned the labels `app=frontend` and `group=production` to the task's NetworkInfo. Calico-CNI automatically reads these labels and assign them to the endpoint, allowing us to enforce policy based on them.
 
