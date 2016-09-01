@@ -1,0 +1,34 @@
+# This ConfigMap can be used to configure a self-hosted Calico installation.
+# See `calico-hosted.yaml` for an example of a Calico deployment which uses
+# the config in this ConfigMap.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: calico-config 
+  namespace: kube-system
+data:
+  # Configure this with the location of your etcd cluster.
+  # This must also be configured in the cni_network_config below.
+  etcd_endpoints: "http://127.0.0.1:2379"
+
+  # True enables BGP networking, false tells Calico to enforce
+  # policy only, using native networking.
+  enable_bgp: "true"
+
+  # The CNI network configuration to install on each node.
+  cni_network_config: |-
+    {
+        "name": "k8s-pod-network",
+        "type": "calico",
+        "etcd_endpoints": "http://127.0.0.1:2379",
+        "log_level": "info",
+        "ipam": {
+            "type": "calico-ipam"
+        },
+        "policy": {
+            "type": "k8s"
+        },
+        "kubernetes": {
+            "kubeconfig": "/etc/kubernetes/worker-kubeconfig.yaml"
+        }
+    }

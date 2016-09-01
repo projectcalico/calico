@@ -6,7 +6,7 @@
 > You are viewing the calico-containers documentation for release **release**.
 <!--- end of master only -->
 
-# Deploying Calico and Kubernetes on CoreOS using Vagrant and VirtualBox
+# Deploying Kubernetes on CoreOS using Vagrant and VirtualBox
 
 These instructions allow you to set up a Kubernetes cluster with [Calico networking][calico-networking] using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
 
@@ -82,51 +82,36 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## 2. Using your cluster
+## 2. Configuring the Cluster 
+### 2.1 Configure `kubectl`
+Let's configure `kubectl` so you can access the cluster from your local machine. Make sure you have `kubectl` installed locally.  The version you choose depends on your host OS.
 
-### 2.1 Deploying SkyDNS
-You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
-
-Log on to the master node.
+For Mac:
 ```
-vagrant ssh k8s-master 
-```
-
-Deploy the SkyDNS application using the provided Kubernetes manifest.
-```
-kubectl create -f skydns.yaml
+wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/darwin/amd64/kubectl
+chmod +x ./kubectl
 ```
 
-Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
+For Linux:
 ```
-kubectl get pods --namespace=kube-system
-```
-> Note: The kube-dns-v9 pod is deployed in the `kube-system` namespace.  As such, we we must include the `--namespace=kube-system` option when using kubectl.
-
->The output of the above command should resemble the following table.  Note the `Running` status:
-```
-NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
-kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
+wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kubectl
+chmod +x ./kubectl
 ```
 
-Check that the DNS pod has been networked using Calico.  You should see a Calico endpoint created for the DNS pod.
+Then, tell `kubectl` to use the Vagrant cluster we just created.
 ```
-calicoctl endpoint show --detailed
+kubectl config set-cluster vagrant-cluster --server=http://172.18.18.101:8080
+kubectl config set-context vagrant-system --cluster=vagrant-cluster
+kubectl config use-context vagrant-system
 ```
 
-### 2.2 Next Steps
-Try deploying an application to the cluster.
-- [Calico Policy Demo](stars-demo/README.md)
-- [Kubernetes guestbook](vagrant-coreos/guestbook.md)
-
-You can also take a look at the various Kubernetes [example applications][examples].
+## 3. Next Steps
+Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](../InstallAddons.md).
 
 [calico-networking]: https://github.com/projectcalico/calico-containers
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
-[using-coreos]: http://coreos.com/docs/using-coreos/
 [git]: http://git-scm.com/
-[examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/VagrantCoreOS.md?pixel)](https://github.com/igrigorik/ga-beacon)
