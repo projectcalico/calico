@@ -17,7 +17,7 @@ package client
 import (
 	goerrors "errors"
 	"fmt"
-	"math"
+	"math/big"
 	"math/rand"
 	"net"
 	"reflect"
@@ -286,7 +286,7 @@ func blockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	ip := cnet.IP{pool.IP}
 	return func() *cnet.IPNet {
 		returnIP := ip
-		ip = incrementIP(ip, blockSize)
+		ip = incrementIP(ip, big.NewInt(blockSize))
 		if pool.Contains(ip.IP) {
 			ipnet := net.IPNet{returnIP.IP, version.BlockPrefixMask}
 			cidr := cnet.IPNet{ipnet}
@@ -301,6 +301,7 @@ func blockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 // block from the given pool.  When there are no blocks left,
 // the it returns nil.
 func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
+
 	// Determine the IP type to use.
 	version := getIPVersion(cnet.IP{pool.IP})
 	baseIP := cnet.IP{pool.IP}
@@ -308,25 +309,51 @@ func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	// Determine the number of blocks within this pool.
 	ones, size := pool.Mask.Size()
 	prefixLen := size - ones
-	numBlocks := int(math.Exp2(float64(prefixLen))) / blockSize
+	numIP := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(prefixLen)), nil)
+	numBlocks := new(big.Int)
+	numBlocks.Div(numIP, big.NewInt(blockSize))
 
-	// Generate a randomly ordered slice of block indexes.
+	// Start at a random offset index
 	source := rand.NewSource(time.Now().UnixNano())
 	randm := rand.New(source)
-	idxs := randm.Perm(numBlocks)
-	i := 0
+
+	// initialIndex keeps track of the random starting point
+	initialIndex := new(big.Int)
+	initialIndex.Rand(randm, numBlocks)
+
+	// i keeps track of current index while walking the blocks in a pool
+	i := initialIndex
+
+	// numReturned keeps track of number of blocks returned
+	numReturned := big.NewInt(0)
+
+	// numDiff = numBlocks - i
+	numDiff := new(big.Int)
+
 	return func() *cnet.IPNet {
-		// Pop a block index off of the indexes slice.
-		if len(idxs) != 0 {
-			i, idxs = idxs[len(idxs)-1], idxs[:len(idxs)-1]
+		ip := incrementIP(baseIP, i.Mul(i, big.NewInt(blockSize)))
+		ipnet := net.IPNet{ip.IP, version.BlockPrefixMask}
+
+		numDiff.Sub(numBlocks, i)
+
+		if numDiff.Cmp(big.NewInt(1)) <= 0 {
+			// Index has reached end of the blocks;
+			// Loop back to beginning of pool rather than
+			// increment, because incrementing would put us outside of the pool.
+			i = big.NewInt(0)
 		} else {
+			// Increment to the next block
+			i.Add(i, big.NewInt(1))
+		}
+
+		if numReturned.Cmp(numBlocks) >= 0 {
+			// Index finished one full circle across the blocks
 			// Used all of the blocks in this pool.
 			return nil
 		}
+		numReturned.Add(numReturned, big.NewInt(1))
 
 		// Return the block from this pool that corresponds with the index.
-		ip := incrementIP(baseIP, i*blockSize)
-		ipnet := net.IPNet{ip.IP, version.BlockPrefixMask}
 		return &cnet.IPNet{ipnet}
 	}
 }

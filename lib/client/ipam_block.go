@@ -95,7 +95,7 @@ func (b *allocationBlock) autoAssign(
 	for _, o := range ordinals {
 		attrIndex := b.findOrAddAttribute(handleID, attrs)
 		b.Allocations[o] = &attrIndex
-		ips = append(ips, incrementIP(cnet.IP{b.CIDR.IP}, o))
+		ips = append(ips, incrementIP(cnet.IP{b.CIDR.IP}, big.NewInt(int64(o))))
 	}
 
 	glog.V(3).Infof("Block %s returned ips: %v", b.CIDR.String(), ips)
@@ -390,8 +390,8 @@ func intToIP(ipInt *big.Int) cnet.IP {
 	return ip
 }
 
-func incrementIP(ip cnet.IP, increment int) cnet.IP {
-	sum := big.NewInt(0).Add(ipToInt(ip), big.NewInt(int64(increment)))
+func incrementIP(ip cnet.IP, increment *big.Int) cnet.IP {
+	sum := big.NewInt(0).Add(ipToInt(ip), increment)
 	return intToIP(sum)
 }
 
