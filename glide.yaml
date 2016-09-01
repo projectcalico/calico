@@ -1,6 +1,7 @@
 package: github.com/projectcalico/calico-cni
 import:
 - package: github.com/containernetworking/cni
+  version: c5e39a87f702f757a1e98f701d873992bd4d37b1
   subpackages:
   - pkg/ip
   - pkg/ipam

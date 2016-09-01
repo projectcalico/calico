@@ -58,19 +58,32 @@ func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) 
 
 		// Handle IPv6
 		if res.IP6 != nil {
-			// No need to add a dummy next hop route as the device will already have an IPv6 LL address.
-			addresses, err := netlink.AddrList(contVeth, 6)
-			if err != nil {
+			// No need to add a dummy next hop route as the host veth device will already have an IPv6
+			// link local address that can be used as a next hop.
+			// Just fetch the address of the host end of the veth and use it as the next hop.
+			var hostIPv6Addr net.IP
+			if err := hostNS.Do(func(_ ns.NetNS) error {
+				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
+				if err != nil {
+					return err
+				}
+
+				if len(addresses) < 1 {
+					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+					// support IPv6. Since a IPv6 address has been allocated that can't be used,
+					// return an error.
+					return fmt.Errorf("Failed to get IPv6 addresses for container veth")
+				}
+
+				hostIPv6Addr = addresses[0].IP
+				return nil
+			}); err != nil {
 				return err
 			}
 
-			if len(addresses) < 1 {
-				return fmt.Errorf("Failed to get IPv6 addresses for container veth")
-			}
-
 			_, defNet, _ := net.ParseCIDR("::/0")
-			if err = ip.AddRoute(defNet, addresses[0].IP, contVeth); err != nil {
-				return fmt.Errorf("failed to add route %v", err)
+			if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
+				return fmt.Errorf("failed to add default gateway to %v %v", hostIPv6Addr, err)
 			}
 
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP6.IP}); err != nil {

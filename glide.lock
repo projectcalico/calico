@@ -1,5 +1,5 @@
-hash: 98b141197c52f9db771ba07deb3486ae15c6bb8de5c59bd2d5e03e720c933735
-updated: 2016-08-17T17:33:06.493014688-07:00
+hash: 86fe6e236ec272275e44c0c890f6b35ccc7e8ffab0569806e79163baa1426340
+updated: 2016-09-01T09:44:38.53590072-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -10,7 +10,7 @@ imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/containernetworking/cni
-  version: 9d5e6e60e79491207834ae8439e80c943db65a69
+  version: c5e39a87f702f757a1e98f701d873992bd4d37b1
   subpackages:
   - pkg/invoke
   - pkg/ip
@@ -43,13 +43,11 @@ imports:
 - name: github.com/coreos/go-systemd
   version: 2688e91251d9d8e404e86dd8f096e23b2f086958
   subpackages:
-  - activation
   - journal
 - name: github.com/coreos/pkg
   version: 7f080b6c11ac2d2347c3cd7521e810207ea1a041
   subpackages:
   - capnslog
-  - dlopen
   - health
   - httputil
   - timeutil
@@ -65,14 +63,7 @@ imports:
 - name: github.com/docker/docker
   version: 0f5c9d301b9b1cca66b3ea0f9dec3b5317d3686d
   subpackages:
-  - pkg/jsonmessage
   - pkg/mount
-  - pkg/stdcopy
-  - pkg/symlink
-  - pkg/term
-  - pkg/term/winconsole
-  - pkg/timeutils
-  - pkg/units
 - name: github.com/docker/go-units
   version: 0bbddae09c5a5419a8c6dcdd7ff90da3d450393b
 - name: github.com/emicklei/go-restful
@@ -85,30 +76,7 @@ imports:
 - name: github.com/gogo/protobuf
   version: 82d16f734d6d871204a3feb1a73cb220cc92574c
   subpackages:
-  - gogoproto
-  - plugin/defaultcheck
-  - plugin/description
-  - plugin/embedcheck
-  - plugin/enumstringer
-  - plugin/equal
-  - plugin/face
-  - plugin/gostring
-  - plugin/grpc
-  - plugin/marshalto
-  - plugin/oneofcheck
-  - plugin/populate
-  - plugin/size
-  - plugin/stringer
-  - plugin/testgen
-  - plugin/union
-  - plugin/unmarshal
   - proto
-  - protoc-gen-gogo/descriptor
-  - protoc-gen-gogo/generator
-  - protoc-gen-gogo/plugin
-  - sortkeys
-  - vanity
-  - vanity/command
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
@@ -118,46 +86,7 @@ imports:
 - name: github.com/google/cadvisor
   version: c2ea32971ae033041f0fb0f309b1dee94fd1d55f
   subpackages:
-  - api
-  - cache/memory
-  - collector
-  - container
-  - container/common
-  - container/docker
-  - container/libcontainer
-  - container/raw
-  - container/rkt
-  - container/systemd
-  - devicemapper
-  - events
-  - fs
-  - healthz
-  - http
-  - http/mux
   - info/v1
-  - info/v1/test
-  - info/v2
-  - machine
-  - manager
-  - manager/watcher
-  - manager/watcher/raw
-  - manager/watcher/rkt
-  - metrics
-  - pages
-  - pages/static
-  - storage
-  - summary
-  - utils
-  - utils/cloudinfo
-  - utils/cpuload
-  - utils/cpuload/netlink
-  - utils/docker
-  - utils/oomparser
-  - utils/sysfs
-  - utils/sysinfo
-  - utils/tail
-  - validate
-  - version
 - name: github.com/google/gofuzz
   version: bbcb9da2d746f8bdbd6a936686a0a6067ada0ec5
 - name: github.com/imdario/mergo
@@ -176,6 +105,7 @@ imports:
   version: 7f8ab55aaf3b86885aa55b762e803744d1674700
   subpackages:
   - config
+  - extensions/table
   - internal/codelocation
   - internal/containernode
   - internal/failer
@@ -208,21 +138,10 @@ imports:
 - name: github.com/opencontainers/runc
   version: 7ca2aa4873aea7cb4265b1726acb24b90d8726c6
   subpackages:
-  - libcontainer
-  - libcontainer/apparmor
   - libcontainer/cgroups
   - libcontainer/cgroups/fs
-  - libcontainer/cgroups/systemd
   - libcontainer/configs
-  - libcontainer/configs/validate
-  - libcontainer/criurpc
-  - libcontainer/label
-  - libcontainer/seccomp
-  - libcontainer/selinux
-  - libcontainer/stacktrace
   - libcontainer/system
-  - libcontainer/user
-  - libcontainer/utils
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/prometheus/client_golang
@@ -270,7 +189,6 @@ imports:
   version: f4485b318aadd133842532f841dc205a8e339d74
   subpackages:
   - codec
-  - codec/codecgen
 - name: github.com/vishvananda/netlink
   version: 9dee363ad4abbc3c9a4a24a9f1e33363e224b111
   subpackages:
@@ -282,14 +200,8 @@ imports:
   subpackages:
   - context
   - context/ctxhttp
-  - html
-  - html/atom
   - http2
   - http2/hpack
-  - internal/timeseries
-  - proxy
-  - trace
-  - websocket
 - name: golang.org/x/oauth2
   version: b5adcc2dcdf009d0391547edc6ecbaff889f5bb9
   subpackages:
@@ -323,7 +235,7 @@ imports:
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: k8s.io/kubernetes
-  version: a570a0fef12408f1c0a7214952055bad39c160d7
+  version: 0eaf484c0ac0007d66bf0c454cdfa02e7acafb51
   subpackages:
   - pkg/api
   - pkg/api/endpoints
