@@ -104,7 +104,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
-		blocks := blockGenerator(pool)
+		blocks := randomBlockGenerator(pool)
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			glog.V(4).Infof("Getting block: %s", subnet.String())
