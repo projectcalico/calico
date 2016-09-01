@@ -190,7 +190,7 @@ class Elector(object):
         # it if it looks like what we expect.
         match = re.match(r"^(?P<host>[^:]+):(?P<pid>\d+)$", master_id)
         if not match:
-            LOG.warn("Unable to parse master ID: %r.", master_id)
+            LOG.warning("Unable to parse master ID: %r.", master_id)
             return
         host = match.group("host")
         pid = int(match.group("pid"))
@@ -201,14 +201,14 @@ class Elector(object):
             if os.path.exists("/proc/%s" % pid):
                 LOG.debug("Master still running")
             else:
-                LOG.warn("Master was on this server but cannot find its "
-                         "PID in /proc.  Removing stale election key.")
+                LOG.warning("Master was on this server but cannot find its "
+                            "PID in /proc.  Removing stale election key.")
                 try:
                     self._etcd_client.delete(self._key,
                                              prevValue=master_id)
                 except etcd.EtcdException as e:
-                    LOG.warn("Failed to remove stale key from dead "
-                             "master: %r", e)
+                    LOG.warning("Failed to remove stale key from dead "
+                                "master: %r", e)
                 raise RestartElection()
 
     def _become_master(self):
