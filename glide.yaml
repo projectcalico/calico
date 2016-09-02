@@ -1,7 +1,6 @@
 package: github.com/projectcalico/calico-cni
 import:
 - package: github.com/containernetworking/cni
-  version: c5e39a87f702f757a1e98f701d873992bd4d37b1
   subpackages:
   - pkg/ip
   - pkg/ipam
@@ -16,9 +15,6 @@ import:
   subpackages:
   - gexec
 - package: github.com/tigera/libcalico-go
-  #  version: list-not-return-no-such-object
-  #repo: git@github.com:robbrockbank/libcalico-go.git
-  #vcs: git
 - package: github.com/vishvananda/netlink
 - package: github.com/Sirupsen/logrus
 - package: k8s.io/kubernetes

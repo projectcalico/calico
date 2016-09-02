@@ -1,5 +1,5 @@
-hash: 86fe6e236ec272275e44c0c890f6b35ccc7e8ffab0569806e79163baa1426340
-updated: 2016-09-01T09:44:38.53590072-07:00
+hash: 0ab8d31ae633258d3b69b4b60f605c60492a1ead172f929106ddad402c4c2b52
+updated: 2016-09-02T12:55:20.561027332-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -167,7 +167,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/tigera/libcalico-go
-  version: 060861a5d7dca26842967fb34ef00bc6d9b82f7f
+  version: bbde52b7468aebddf5a15e5f5b89e20354d0c49e
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -179,8 +179,10 @@ imports:
   - lib/client
   - lib/errors
   - lib/hash
+  - lib/hwm
   - lib/net
   - lib/numorstring
+  - lib/scope
   - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
@@ -234,6 +236,10 @@ imports:
   version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
+- name: gopkg.in/tchap/go-patricia.v2
+  version: 666120de432aea38ab06bd5c818f04f4129882c9
+  subpackages:
+  - patricia
 - name: k8s.io/kubernetes
   version: 0eaf484c0ac0007d66bf0c454cdfa02e7acafb51
   subpackages:
