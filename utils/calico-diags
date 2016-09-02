@@ -9,6 +9,7 @@ fi
 echo "Collecting diags"
 echo "This script attempts to collect a wide range of diagnostics, some of which may not be available on your system - don't worry if this script produces warning messages for these."
 
+ETCDCTL=${ETCDCTL:-etcdctl}
 ROUTE_FILE=route
 CALICO_CFG=/etc/calico
 CALICO_DIR=/var/log/calico
@@ -60,8 +61,8 @@ rabbitmqctl status rabbitmq_status 2>&1
 
 echo "  copying contents of etcd..."
 
-etcdctl ls --recursive -p > etcdctl_ls 2>&1
-etcdctl ls --recursive -p | grep -v '/$' | xargs -n1 -t etcdctl get > etcdctl_get
+${ETCDCTL} ls --recursive -p > etcdctl_ls 2>&1
+${ETCDCTL} ls --recursive -p | grep -v '/$' | xargs -n1 -t ${ETCDCTL} get > etcdctl_get
 
 echo "  copying config files..."
 
