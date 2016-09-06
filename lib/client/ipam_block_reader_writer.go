@@ -331,7 +331,9 @@ func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	numDiff := new(big.Int)
 
 	return func() *cnet.IPNet {
-		ip := incrementIP(baseIP, i.Mul(i, big.NewInt(blockSize)))
+		// The `big.NewInt(0)` part creates a temp variable and assigns the result of multiplication of `i` and `big.NewInt(blockSize)`
+		// Note: we are not using `i.Mul()` because that will assign the result of the multiplication to `i`, which will cause unexpected issues
+		ip := incrementIP(baseIP, big.NewInt(0).Mul(i, big.NewInt(blockSize)))
 		ipnet := net.IPNet{ip.IP, version.BlockPrefixMask}
 
 		numDiff.Sub(numBlocks, i)
