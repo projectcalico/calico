@@ -15,10 +15,12 @@
 import os
 import sys
 import socket
+import time
 
 import netaddr
 from netaddr import AddrFormatError, IPAddress
 from pycalico.datastore_datatypes import IPPool
+from pycalico.datastore_errors import DataStoreError
 from pycalico.ipam import IPAMClient
 from pycalico.util import get_host_ips, validate_asn
 
@@ -224,6 +226,23 @@ def warn_if_hostname_conflict(ip):
 
 
 def main():
+    # Check to see if etcd is available.  If not, wait until it is before
+    # continuing.  This is to avoid etcd / node startup race conditions.
+    print "Waiting for etcd connection..."
+    while os.getenv("WAIT_FOR_DATASTORE", "false") == "true":
+        try:
+            # Just try accessing etcd to see if we can reach it or not.
+            client.get_host_as(hostname)
+        except DataStoreError:
+            # Not connected to etcd yet, wait a bit.
+            time.sleep(1)
+            continue
+        else:
+            # Connected to etcd - break out of loop.
+            print "Connected to etcd"
+            break
+
+    # Start node.
     ip = os.getenv("IP")
     ip = ip or None
     if ip and not netaddr.valid_ipv4(ip):
