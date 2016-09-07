@@ -1,16 +1,21 @@
-hash: 0ab8d31ae633258d3b69b4b60f605c60492a1ead172f929106ddad402c4c2b52
-updated: 2016-09-02T12:55:20.561027332-07:00
+hash: 39e21aa8e1261d1633a4d0ff08f59297d1cd8428f18245e8338e42906439838e
+updated: 2016-09-07T15:11:47.819626141-07:00
 imports:
+- name: cloud.google.com/go
+  version: c9cd61f0befd24529e7c66de85234a9facf4bc0d
+  subpackages:
+  - compute/metadata
+  - internal
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/blang/semver
-  version: 31b736133b98f26d5e078ec9eb591666edfd091f
+  version: 60ec3488bfea7cca02b021d106d9911120d25fe9
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/containernetworking/cni
-  version: c5e39a87f702f757a1e98f701d873992bd4d37b1
+  version: 07a8a28637e97b22eb8dfe710eeae1344f69d16e
   subpackages:
   - pkg/invoke
   - pkg/ip
@@ -21,19 +26,20 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: 8b320e7c550067b1dfb37bd1682e8067023e0751
+  version: 0b6350227c2c9c8efa25593d0ec57447244162b8
   subpackages:
   - client
+  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
 - name: github.com/coreos/go-iptables
-  version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
+  version: 5463fbac3bcc6b990663941c2e12660d19f6b36d
   subpackages:
   - iptables
 - name: github.com/coreos/go-oidc
-  version: 5cf2aa52da8c574d3aa4458f471ad6ae2240fe6b
+  version: fe7346e2e6855bda769d5b3db7d917f159c5613c
   subpackages:
   - http
   - jose
@@ -41,68 +47,68 @@ imports:
   - oauth2
   - oidc
 - name: github.com/coreos/go-systemd
-  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
+  version: 2f344660b11f7285b0af86195c4456e92970f640
   subpackages:
   - journal
 - name: github.com/coreos/pkg
-  version: 7f080b6c11ac2d2347c3cd7521e810207ea1a041
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
   - capnslog
   - health
   - httputil
   - timeutil
 - name: github.com/davecgh/go-spew
-  version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
+  version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
   subpackages:
   - spew
 - name: github.com/docker/distribution
-  version: cd27f179f2c10c5d300e6d09025b538c475b0d51
+  version: 5e8d18f615031aeb79f3bdedcc954b08f86e9719
   subpackages:
   - digest
   - reference
 - name: github.com/docker/docker
-  version: 0f5c9d301b9b1cca66b3ea0f9dec3b5317d3686d
+  version: ce5eb34e68ec84505ede64efa9cfc9b8d177f086
   subpackages:
   - pkg/mount
 - name: github.com/docker/go-units
-  version: 0bbddae09c5a5419a8c6dcdd7ff90da3d450393b
+  version: 2c1805a1c750c4ea749899f49221e1d5f3e5ce42
 - name: github.com/emicklei/go-restful
-  version: 7c47e2558a0bbbaba9ecab06bc6681e73028a28a
+  version: bf50d2be18145391aa3d4339b07195807b25a427
   subpackages:
   - log
   - swagger
 - name: github.com/ghodss/yaml
   version: aa0c862057666179de291b67d9f093d12b5a8473
 - name: github.com/gogo/protobuf
-  version: 82d16f734d6d871204a3feb1a73cb220cc92574c
+  version: d7788ac7ca647999a3775cb756e449ab177dd138
   subpackages:
   - proto
 - name: github.com/golang/glog
-  version: 44145f04b68cf362d9c4df2182967c2275eaefed
+  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
 - name: github.com/golang/protobuf
-  version: b982704f8bb716bb608144408cff30e15fbde841
+  version: 1f49d83d9aa00e6ce4fc8258c71cc7786aec968a
   subpackages:
   - proto
 - name: github.com/google/cadvisor
-  version: c2ea32971ae033041f0fb0f309b1dee94fd1d55f
+  version: 2a94462f03e33809620aa712f6f63d9549a83c7f
   subpackages:
   - info/v1
 - name: github.com/google/gofuzz
-  version: bbcb9da2d746f8bdbd6a936686a0a6067ada0ec5
+  version: fd52762d25a41827db7ef64c43756fd4b9f7e382
 - name: github.com/imdario/mergo
-  version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
+  version: 50d4dbd4eb0e84778abe37cefef140271d96fade
 - name: github.com/jonboulle/clockwork
-  version: 3f831b65b61282ba6bece21b91beea2edc4c887a
+  version: bcac9884e7502bb2b474c0339d889cb981a2f27f
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 49e88841e458491c935563aac0eb7e871c3375f4
+  version: 1e291572dcb9ba673cdcdb15e0f422702415ebaf
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/onsi/ginkgo
-  version: 7f8ab55aaf3b86885aa55b762e803744d1674700
+  version: 7b6efc7d7b052568b49ac02d3141c9d7a5a494a4
   subpackages:
   - config
   - extensions/table
@@ -120,7 +126,7 @@ imports:
   - reporters/stenographer
   - types
 - name: github.com/onsi/gomega
-  version: 2152b45fa28a361beba9aab0885972323a444e28
+  version: b48c9a8b2644326d0a44eaaacc8d83e35174a05d
   subpackages:
   - format
   - gbytes
@@ -143,9 +149,9 @@ imports:
   - libcontainer/configs
   - libcontainer/system
 - name: github.com/pborman/uuid
-  version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+  version: b984ec7fa9ff9e428bd0cf0abf429384dfbe3e37
 - name: github.com/prometheus/client_golang
-  version: 3b78d7a77f51ccbc364d4bc170920153022cfd08
+  version: ea6e1db4cb8127eeb0b6954f7320363e5451820f
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
@@ -153,21 +159,21 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: a6ab08426bb262e2d190097751f5cfd1cfdfd17d
+  version: c25d279efa03dacfede108044f9506ce65c1992e
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: 490cc6eb5fa45bf8a8b7b73c8bc82a8160e8531d
+  version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/Sirupsen/logrus
-  version: 08a8a7c27e3d058a8989316a850daad1c10bf4ab
+  version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
 - name: github.com/spf13/pflag
-  version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
+  version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
 - name: github.com/tigera/libcalico-go
-  version: bbde52b7468aebddf5a15e5f5b89e20354d0c49e
+  version: 658ba00cbe61fa2a1a61bf3c85505b6ce28251f6
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -188,35 +194,36 @@ imports:
   - lib/selector/tokenizer
   - lib/validator
 - name: github.com/ugorji/go
-  version: f4485b318aadd133842532f841dc205a8e339d74
+  version: 5cd0f2b3b6cca8e3a0a4101821e41a73cb59bed6
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 9dee363ad4abbc3c9a4a24a9f1e33363e224b111
+  version: 63381f39fceb1c5c13503a90e1c2603caeafe3c5
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/net
-  version: 62685c2d7ca23c807425dca88b11a3e2323dab41
+  version: 9313baa13d9262e49d07b20ed57dceafcd7240cc
   subpackages:
   - context
   - context/ctxhttp
   - http2
   - http2/hpack
+  - lex/httplex
 - name: golang.org/x/oauth2
-  version: b5adcc2dcdf009d0391547edc6ecbaff889f5bb9
+  version: 3c3a985cb79f52a3190fbc056984415ca6763d01
   subpackages:
   - google
   - internal
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 076b546753157f758b316e59bcb51e6807c04057
+  version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
   subpackages:
   - unix
 - name: google.golang.org/appengine
-  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity
@@ -227,11 +234,6 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
-- name: google.golang.org/cloud
-  version: eb47ba841d53d93506cfbfbc03927daf9cc48f88
-  subpackages:
-  - compute/metadata
-  - internal
 - name: gopkg.in/go-playground/validator.v8
   version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
@@ -240,6 +242,8 @@ imports:
   version: 666120de432aea38ab06bd5c818f04f4129882c9
   subpackages:
   - patricia
+- name: gopkg.in/yaml.v2
+  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
 - name: k8s.io/kubernetes
   version: 0eaf484c0ac0007d66bf0c454cdfa02e7acafb51
   subpackages:

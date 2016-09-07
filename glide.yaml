@@ -23,3 +23,6 @@ import:
   - pkg/api
   - pkg/client/restclient
   - pkg/client/unversioned
+- package: github.com/opencontainers/runc
+  version: 7ca2aa4873aea7cb4265b1726acb24b90d8726c6
+
