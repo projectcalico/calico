@@ -537,7 +537,7 @@ def setup_logging():
 
     # FIXME(aroma-x) - move logging settings to configuration
     # file in future
-    log_file = '/var/log/calico/dhcp-agent.log'
+    log_file = '/var/log/neutron/dhcp-agent.log'
     log_format = ('%(asctime)s [%(thread)d] (%(levelname)s) '
                   '%(module)s: %(message)s')
     log_level = logging.DEBUG
