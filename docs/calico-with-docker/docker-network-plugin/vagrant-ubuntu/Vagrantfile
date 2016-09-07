@@ -71,7 +71,7 @@ Vagrant.configure(2) do |config|
       host.vm.provision :shell, inline: "systemctl restart docker.service"
 
       # download calicoctl.
-      host.vm.provision :shell, inline: "wget -qO /usr/local/bin/calicoctl #{calicoctl_url}", :privileged => true
+      host.vm.provision :shell, inline: "curl -L --silent #{calicoctl_url} -o /usr/local/bin/calicoctl"
 
       host.vm.provision :shell, inline: "chmod +x /usr/local/bin/calicoctl"
 
