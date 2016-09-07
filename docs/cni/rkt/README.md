@@ -168,7 +168,7 @@ either host, as long as they are created on the same network.
 
 e.g. On `calico-02` use wget to access the frontend service which is running on `calico-01`
 
-	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 1 192.168.0.0/etc/passwd 2>/dev/null
+	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 10 192.168.0.0/etc/passwd 2>/dev/null
 
 Expected output
 
@@ -183,7 +183,7 @@ You can repeat this command on calico-01 and check that access works the same fr
 ### 5.1 Checking network isolation
 Repeat the above command but try to access the backend from the frontend. Because we've not allowed access between these networks, the command will fail.
 
-	sudo rkt run --net=backend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 1 192.168.0.0/etc/passwd 2>/dev/null
+	sudo rkt run --net=backend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 2 192.168.0.0/etc/passwd 2>/dev/null
 
 Expected output
 
@@ -230,7 +230,7 @@ And we can now access our backend service from the frontend containers.
 
 On either host, run
 
-	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 1 192.168.0.64/etc/passwd 2>/dev/null
+	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 10 192.168.0.64/etc/passwd 2>/dev/null
 
 ### Open access to frontends
 We want to allow everyone to access our frontends, but only on port 80.
@@ -249,7 +249,7 @@ To produce the following output
 
 Now on either host, we can access the container directly
 
-	wget -T 1 192.168.0.0/etc/passwd
+	wget -T 10 192.168.0.0/etc/passwd
 
 ## 7. Resetting/Cleanup up
 If you want to start again from the beginning, then run the following commands on both hosts to ensure that all the rkt containers and systemd jobs are removed.
