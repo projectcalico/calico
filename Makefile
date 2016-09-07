@@ -7,8 +7,10 @@ default: all
 all: test
 test: ut
 
-update-vendor:
-	glide up
+# Use this to populate the vendor directory after checking out the repository.
+# To update upstream dependencies, delete the glide.lock file first.
+vendor:
+	glide install -strip-vendor -strip-vcs --cache
 
 ut: bin/calicoctl
 	./run-uts
@@ -17,20 +19,22 @@ ut: bin/calicoctl
 force:
 	true
 
-bin/calicoctl: force
+bin/calicoctl: vendor 
 	mkdir -p bin
 	go build -o "$@" "./calicoctl/calicoctl.go"
 
-release/calicoctl: force
+release/calicoctl: vendor force
 	mkdir -p release
 	cd build-calicoctl && docker build -t calicoctl-build .
 	docker run --rm -v `pwd`:/libcalico-go calicoctl-build /libcalico-go/build-calicoctl/build.sh
 
 # Build calicoctl in a container.
 build-containerized: $(BUILD_CONTAINER_MARKER)
+	mkdir -p dist
 	docker run -ti --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/tigera/libcalico-go:rw \
+	-v ${PWD}/dist:/go/src/github.com/tigera/libcalico-go/dist:rw \
 	$(BUILD_CONTAINER_NAME) make bin/calicoctl
 
 # Run the tests in a container. Useful for CI, Mac dev.
@@ -44,6 +48,15 @@ test-containerized: $(BUILD_CONTAINER_MARKER)
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
 	touch $@
+
+# Install or update the tools used by the build
+.PHONY: update-tools
+update-tools:
+	go get -u github.com/Masterminds/glide
+	go get -u github.com/kisielk/errcheck
+	go get -u golang.org/x/tools/cmd/goimports
+	go get -u github.com/golang/lint/golint
+	go get -u github.com/onsi/ginkgo/ginkgo
 
 # Etcd is used by the tests
 run-etcd:

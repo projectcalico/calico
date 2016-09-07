@@ -1,5 +1,5 @@
-hash: 1a696e4d1f4b30ceb1b1305d8baeb4201a10aa006f78ca8024b838896f6f2901
-updated: 2016-08-25T11:04:21.23689082+01:00
+hash: abc3f78df4214bd5d7c298a84b43f3aa4e58c5d5f36fca70568694076b158cbc
+updated: 2016-09-07T10:23:41.233428807-07:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -7,17 +7,15 @@ imports:
   version: c388b2f22f1285e0a686d0594c85a053016df010
   subpackages:
   - client
-  - pkg/transport
-  - pkg/pathutil
-  - pkg/types
   - pkg/fileutil
+  - pkg/pathutil
   - pkg/tlsutil
+  - pkg/transport
+  - pkg/types
 - name: github.com/coreos/go-systemd
   version: bfdc81d0d7e0fb19447b08571f63b774495251ce
   subpackages:
-  - daemon
   - journal
-  - util
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
@@ -25,32 +23,32 @@ imports:
 - name: github.com/docker/distribution
   version: 82609180a1744d5381cc6ba5c3286d0699c3dccd
   subpackages:
-  - reference
   - digest
+  - reference
 - name: github.com/docker/engine-api
   version: 8d8fffdf863b12d03c76abf6ca1377e6f8f4e549
   subpackages:
   - client
-  - types
   - client/transport
   - client/transport/cancellable
+  - types
+  - types/blkiodev
   - types/container
   - types/filters
+  - types/mount
   - types/network
   - types/reference
   - types/registry
+  - types/strslice
   - types/swarm
   - types/time
   - types/versions
-  - types/mount
-  - types/blkiodev
-  - types/strslice
 - name: github.com/docker/go-connections
   version: 0bad1a3951398f88ef4dd75fdb42af374430be89
   subpackages:
+  - nat
   - sockets
   - tlsconfig
-  - nat
 - name: github.com/docker/go-units
   version: eb879ae3e2b84e2a142af415b679ddeda47ec71c
 - name: github.com/docopt/docopt-go
@@ -61,12 +59,20 @@ imports:
   version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
 - name: github.com/kelseyhightower/envconfig
   version: 1e291572dcb9ba673cdcdb15e0f422702415ebaf
+- name: github.com/mattn/go-runewidth
+  version: d6bea18f789704b5f83375793155289da36a3c7f
+- name: github.com/Microsoft/go-winio
+  version: ce2922f643c8fd76b46cadc7f404a06282678b34
+- name: github.com/olekukonko/tablewriter
+  version: daf2955e742cf123959884fdff4685aa79b63135
+- name: github.com/opencontainers/runc
+  version: 7ca2aa4873aea7cb4265b1726acb24b90d8726c6
+  subpackages:
+  - libcontainer/user
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/Sirupsen/logrus
   version: 55eb11d21d2a31a3cc93838241d04800f52e823d
-  subpackages:
-  - formatters/logstash
 - name: github.com/ugorji/go
   version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
@@ -79,7 +85,6 @@ imports:
 - name: golang.org/x/sys
   version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
-  - unix
   - windows
 - name: gopkg.in/go-playground/validator.v8
   version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
@@ -87,4 +92,35 @@ imports:
   version: 666120de432aea38ab06bd5c818f04f4129882c9
   subpackages:
   - patricia
-testImports: []
+testImports:
+- name: github.com/onsi/ginkgo
+  version: 7f8ab55aaf3b86885aa55b762e803744d1674700
+  subpackages:
+  - config
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
+- name: github.com/onsi/gomega
+  version: 2152b45fa28a361beba9aab0885972323a444e28
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
