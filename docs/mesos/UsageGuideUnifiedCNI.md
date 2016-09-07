@@ -103,29 +103,33 @@ The above Marathon Application Definition has assigned the labels `app=frontend`
 
 The following YAML policy spec describes rules based on these labels:
 ```
-version: v1
+apiVersion: v1
 kind: policy
 metadata:
   name: frontend-policy
 spec:
   order: 50
   selector: app == 'frontend'
-  inbound_rules:
-  - protocol: tcp
-    dst_ports: [80]
-    action: allow
-  outbound_rules:
-  - protocol: tcp
-    dst_selector: app == 'database'
-    dst_ports: [6379]
-    action: allow
+  ingress:
+  - action: allow
+    protocol: tcp
+    destination:
+      ports:
+      - 80
+  egress:
+  - action: allow
+    protocol: tcp
+    selector: app == 'database'
+    destination:
+      ports:
+      - 6379
 ```
 
-[The new calicoctl](https://github.com/tigera/libcalico-go) can be used to register this policy spec:
+[This alpha version of calicoctl](https://github.com/tigera/libcalico-go/releases/tag/v1.0.0-alpha.1) can be used to register this policy spec:
 ```
 calicoctl create -f frontend-policy.yaml
 ```
-
+**Note: The above link to the new resource-based calicoctl is neither the permanent nor future home for the binary. Expect the golang source for calicoctl to move. The linked release may also be deleted.**
 
 [calico-slack]: https://slack.projectcalico.org/
 [marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/docs/ip-per-task.md
