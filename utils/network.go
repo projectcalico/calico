@@ -4,6 +4,11 @@ import (
 	"fmt"
 	"net"
 
+	"time"
+
+	"syscall"
+
+	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -12,7 +17,7 @@ import (
 )
 
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf NetConf, result *types.Result) (string, string, error) {
+func DoNetworking(args *skel.CmdArgs, conf NetConf, result *types.Result, logger *log.Entry) (string, string, error) {
 	hostVethName, contVethMac, err := setupContainerNetworking(args.Netns, args.IfName, conf.MTU, result)
 	if err != nil {
 		return "", "", err
@@ -20,7 +25,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *types.Result) (strin
 
 	// Select the first 11 characters of the containerID for the host veth
 	newHostVethName := "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
-	if err = setupHostNetworking(hostVethName, newHostVethName); err != nil {
+	if err = setupHostNetworking(hostVethName, newHostVethName, logger); err != nil {
 		return "", "", err
 	}
 	return newHostVethName, contVethMac, nil
@@ -107,25 +112,41 @@ func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) 
 	return hostVethName, contVethMAC, err
 }
 
-func setupHostNetworking(vethName, newVethName string) error {
+func setupHostNetworking(vethName, newVethName string, logger *log.Entry) error {
 	// The host side veth was originally created within the container netns and was subsequently moved to the host netns.
 	// The name will be the same, but the ifindex may have changed so we must re-query it.
 	veth, err := netlink.LinkByName(vethName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup %q: %v", vethName, err)
+		return fmt.Errorf("failed to lookup %s: %v", vethName, err)
 	}
 
 	if err := netlink.LinkSetDown(veth); err != nil {
-		return fmt.Errorf("failed to set %q DOWN: %v", vethName, err)
+		return fmt.Errorf("failed to set %s DOWN: %v", vethName, err)
 	}
 
-	if err := netlink.LinkSetName(veth, newVethName); err != nil {
-		return fmt.Errorf("failed to rename veth: %v to %v (%v)", vethName, newVethName, err)
+	// Sometimes renaming the veth can fail with a "busy" error. This is believed to be caused by other services
+	// setting the up/down status of the device soon after it's created.
+	for i := 0; i < 10; i++ {
+		if err := netlink.LinkSetName(veth, newVethName); err != nil {
+			switch err {
+			case syscall.EBUSY:
+				logger.WithField("vethName", vethName).Debug(
+					"Failed to rename veth because device is busy. Sleeping and retrying.")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			default:
+				return err
+			}
+		}
+
+		// No error was hit renaming the device, try setting the device back "UP"
+		if err := netlink.LinkSetUp(veth); err != nil {
+			return fmt.Errorf("failed to set %s UP: %v", vethName, err)
+		}
+
+		return nil
 	}
 
-	if err := netlink.LinkSetUp(veth); err != nil {
-		return fmt.Errorf("failed to set %q UP: %v", vethName, err)
-	}
-
-	return nil
+	// Fell out of the loop without returning. This means the devices failed to rename.
+	return fmt.Errorf("failed to rename device from %s to %s. Device Busy.", vethName, newVethName)
 }

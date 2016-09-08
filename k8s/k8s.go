@@ -135,7 +135,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	}
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
-	hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result)
+	hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result, logger)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
