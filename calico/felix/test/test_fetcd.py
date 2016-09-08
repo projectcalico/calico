@@ -104,6 +104,7 @@ class TestEtcdAPI(BaseTestCase):
         self.m_config.ETCD_KEY_FILE = None
         self.m_config.ETCD_CERT_FILE = None
         self.m_config.ETCD_CA_FILE = None
+        self.m_config.USAGE_REPORT = False
         self.m_hosts_ipset = Mock(spec=IpsetActor)
         with patch("calico.felix.fetcd._FelixEtcdWatcher",
                    autospec=True) as m_etcd_watcher:
@@ -202,6 +203,7 @@ class TestEtcdWatcher(BaseTestCase):
         self.m_config.ETCD_KEY_FILE = None
         self.m_config.ETCD_CERT_FILE = None
         self.m_config.ETCD_CA_FILE = None
+        self.m_config.USAGE_REPORT = False
         self.m_hosts_ipset = Mock(spec=IpsetActor)
         self.m_api = Mock(spec=EtcdAPI)
         self.m_status_rep = Mock(spec=EtcdStatusReporter)
@@ -759,6 +761,7 @@ class TestEtcdReporting(BaseTestCase):
         self.m_config.ETCD_KEY_FILE = None
         self.m_config.ETCD_CERT_FILE = None
         self.m_config.ETCD_CA_FILE = None
+        self.m_config.USAGE_REPORT = False
         self.m_config.HOSTNAME = "hostname"
         self.m_config.RESYNC_INTERVAL = 0
         self.m_config.REPORTING_INTERVAL_SECS = 1
@@ -836,6 +839,7 @@ class TestEtcdStatusReporter(BaseTestCase):
         self.m_config.ETCD_KEY_FILE = None
         self.m_config.ETCD_CERT_FILE = None
         self.m_config.ETCD_CA_FILE = None
+        self.m_config.USAGE_REPORT = False
         self.m_config.HOSTNAME = "foo"
         self.m_config.REPORT_ENDPOINT_STATUS = True
         self.m_config.ENDPOINT_REPORT_DELAY = 1
