@@ -1,32 +1,5 @@
 #cloud-config
 ---
-write_files:
-  - path: /etc/kubernetes/manifests/policy-controller.manifest
-    owner: root
-    permissions: 0755
-    content: |
-      apiVersion: v1
-      kind: Pod 
-      metadata:
-        name: policy-controller
-        namespace: kube-system 
-        labels:
-          version: "latest"
-          projectcalico.org/app: "policy-controller"
-      spec:
-        hostNetwork: true
-        containers:
-          # The Calico policy controller.
-          - name: policy-controller 
-            image: calico/kube-policy-controller:v0.3.0
-            env:
-              # Modify ETCD_ENDPOINTS to match your etcd cluster.
-              - name: ETCD_ENDPOINTS
-                value: "http://127.0.0.1:2379"
-              - name: K8S_API
-                value: "http://127.0.0.1:8080"
-              - name: LEADER_ELECTION 
-                value: "false"
 coreos:
   update:
     reboot-strategy: off
@@ -56,8 +29,8 @@ coreos:
         Requires=etcd2.service
         After=etcd2.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-apiserver
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kubectl
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kube-apiserver
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubectl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-apiserver
         ExecStart=/opt/bin/kube-apiserver \
@@ -65,6 +38,7 @@ coreos:
         --etcd-servers=http://$private_ipv4:2379 \
         --runtime-config=extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true \
         --insecure-bind-address=0.0.0.0 \
+        --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota \
         --advertise-address=$private_ipv4 \
         --service-cluster-ip-range=10.100.0.0/24 \
         --logtostderr=true
@@ -80,10 +54,12 @@ coreos:
         Requires=kube-apiserver.service
         After=kube-apiserver.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-controller-manager
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kube-controller-manager
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-controller-manager
         ExecStart=/opt/bin/kube-controller-manager \
         --master=$private_ipv4:8080 \
+        --service-account-private-key-file=/var/run/kubernetes/apiserver.key \
+        --root-ca-file=/var/run/kubernetes/apiserver.crt \
         --logtostderr=true
         Restart=always
         RestartSec=10
@@ -97,34 +73,11 @@ coreos:
         Requires=kube-apiserver.service
         After=kube-apiserver.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-scheduler
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kube-scheduler
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-scheduler
         ExecStart=/opt/bin/kube-scheduler --master=$private_ipv4:8080
         Restart=always
         RestartSec=10
-
-    - name: calico-node.service
-      runtime: true
-      command: start
-      content: |
-        [Unit]
-        Description=calicoctl node
-        After=docker.service
-        Requires=docker.service
-
-        [Service]
-        User=root
-        Environment="ETCD_AUTHORITY=127.0.0.1:2379"
-        PermissionsStartOnly=true
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-        ExecStartPre=/opt/bin/calicoctl pool add 192.168.0.0/16 --nat-outgoing
-        ExecStart=/opt/bin/calicoctl node --ip=$private_ipv4 --detach=false
-        Restart=always
-        RestartSec=10
-
-        [Install]
-        WantedBy=multi-user.target
 
     - name: kubelet.service
       runtime: true
@@ -137,16 +90,19 @@ coreos:
         Requires=docker.service
 
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStart=/opt/bin/kubelet \
-        --register-node=true \
-        --register-schedulable=false \
+        --address=0.0.0.0 \
         --allow-privileged=true \
-        --config=/etc/kubernetes/manifests \
+        --api-servers=http://127.0.0.1:8080 \
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
-        --logtostderr=true
+        --config=/etc/kubernetes/manifests \
+        --hostname-override=$private_ipv4 \
+        --logtostderr=true \
+        --register-node=true \
+        --register-schedulable=false
         Restart=always
         RestartSec=10
 
@@ -162,10 +118,11 @@ coreos:
         Requires=kubelet.service
         After=kubelet.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
         --master=http://$private_ipv4:8080 \
+        --cluster-cidr="192.168.0.0/16" \
         --proxy-mode=iptables \
         --logtostderr=true
         Restart=always

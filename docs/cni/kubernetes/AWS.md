@@ -231,14 +231,14 @@ Download `kubectl`
 > The linux kubectl binary can be fetched with a command like:
 
 ```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 > On an OS X workstation, replace linux in the URL above with darwin:
 
 ```
-wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/darwin/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/darwin/amd64/kubectl
 ```
 Save the public DNS name for the master in an environment variable. Replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name - you can find this in the AWS portal, or by running `aws ec2 describe-instances`.
 ```
@@ -259,63 +259,24 @@ Verify that you can access the Kubernetes API.  The following command should ret
 ```
 ./kubectl get nodes
 ```
+### 4.2 Configure Outbound NAT
 
-### 4.2 Deploying SkyDNS
-You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
-
-Deploy the SkyDNS application using the provided Kubernetes manifest.
-```
-./kubectl create -f manifests/skydns.yaml
-```
-
-Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
-```
-./kubectl get pods --namespace=kube-system
-```
-> Note: The kube-dns-v9 pod is deployed in the `kube-system` namespace.  As such, we we must include the `--namespace=kube-system` option when using kubectl.
-
->The output of the above command should resemble the following table.  Note the `Running` status:
-```
-NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
-kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
-```
-
-### 4.3 Deploying the guestbook application
-You're now ready to deploy applications on your Cluster.  The following steps describe how to deploy the Kubernetes [guestbook application][guestbook].
-
-Create the guestbook application pods and services using the provided manifest.
-```
-./kubectl create -f manifests/guestbook.yaml
-```
-
-Check that the redis-master, redis-slave, and frontend pods are running correctly.  After a few minutes, the following command should show all pods in `Running` state.
-```
-./kubectl get pods
-```
-> Note: The guestbook demo relies on a number of docker images which may take up to 5 minutes to download.
-
-The guestbook application uses a NodePort service to expose the frontend outside of the cluster.  You'll need to allow this port outside of the cluster with a firewall-rule.
-```
-aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
-  --protocol tcp --port 30001 --cidr 0.0.0.0/0
+To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 
 ```
-> In a production deployment, it is recommended to use an AWS [LoadBalancer][loadbalancers] service which automatically deploys an AWS load-balancer and configures a public IP address for the service.
+# Log into the master instance.
+ssh -i ~/mykey.pem core@$MASTER_DNS
 
-You should now be able to access the guestbook application from a browser at `http://<MASTER_DNS>:30001`.
+# Enable outgoing NAT on the Calico pool.
+docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --nat-outgoing
+```
 
-### 4.4 Next Steps
-
-Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
-
-You can also take a look at how you can use Calico network policy on Kubernetes by following the [stars demo](stars-demo/README.md).
+### 4.3 Next Steps
+Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](InstallAddons.md).
 
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html
 [calico-cni]: https://github.com/projectcalico/calico-cni
-[guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
-[loadbalancers]: http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer
-[examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/AWS.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -39,10 +39,19 @@ The `calico/kube-policy-controller` container runs as a pod on top of Kubernetes
 the NetworkPolicy API.  This component requires Kubernetes >= 1.3.0.
 
 ## Installing Calico Components
+There are currently two methods of installing the Calico components.
+
+1. [Manual installation](#manual-installation)
+2. [Kubernetes-hosted installation](#kubernetes-hosted-installation) (supported in Kubernetes >= v1.4.0)
+
+Manual Installation
+-------------------
+
 ### 1. Run `calico/node` and configure the node.
 The Kubernetes master and each Kubernetes node require the `calico/node` container.
-Each node must also be recorded in the Calico datastore. Running the container and
-storing the required information can be achieved using the `calicoctl` utility.
+Each node must also be recorded in the Calico datastore. 
+
+This can be done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
@@ -50,7 +59,7 @@ wget http://www.projectcalico.org/builds/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node
 ```
 
 See the [`calicoctl node` documentation](../../calicoctl/node.md#calicoctl-node)
@@ -66,7 +75,7 @@ Requires=docker.service
 
 [Service]
 User=root
-Environment=ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT>
+Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
 ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
 ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
@@ -99,7 +108,7 @@ $ cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
     "type": "calico",
-    "etcd_authority": "<ETCD_IP>:<ETCD_PORT>",
+    "etcd_endpoints": "http://<ETCD_IP>:<ETCD_PORT>",
     "log_level": "info",
     "ipam": {
         "type": "calico-ipam"
@@ -137,6 +146,32 @@ NAME                                     READY     STATUS    RESTARTS   AGE
 calico-policy-controller-172.18.18.101   2/2       Running   0          1m
 ```
 
+Kubernetes Hosted Installation
+------------------------------
+This method of installation uses Kubernetes to install Calico.  This method is only supported
+in Kubernetes >= v1.4.0, and is currently considered experimental.
+
+Since this method uses Kubernetes to install Calico, you must first deploy a standard Kubernetes cluster
+with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the 
+[desired configuration for installing Calico](#configuring-kubernetes).
+
+Then download [manifests/calico-configmap.yaml](manifests/calico-configmap.yaml) and [manifests/calico-hosted.yaml](manifests/calico-hosted.yaml).  
+These manifests include the Kubernetes objects to install Calico.
+
+```
+# Download the ConfigMap and Calico manifests.
+wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/docs/cni/kubernetes/manifests/calico-configmap.yaml
+wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/docs/cni/kubernetes/manifests/calico-hosted.yaml
+```
+
+Edit the provided ConfigMap in order to configure Calico for your deployment.  Then install the manifests using Kubernetes.
+
+```
+kubectl create -f calico-configmap.yaml -f calico-hosted.yaml
+```
+
+You should see the Calico services start in the `kube-system` Namespace.
+
 ## Configuring Kubernetes
 ### Configuring the Kubelet
 The Kubelet needs to be configured to use the Calico network plugin when starting pods.
@@ -157,7 +192,7 @@ After=calico-node.service
 Requires=calico-node.service
 
 [Service]
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
 ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
