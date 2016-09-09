@@ -27,10 +27,13 @@ func Node(args []string) error {
 	var err error
 	doc := `Usage: 
 	calicoctl node status 
-	
+	calicoctl node diags [--log-dir=<LOG_DIR>]
+
 Options:
     --help                  Show this screen.
     status                  Shows the status of the node.
+    diags                   Collects diagnostic information.
+    --log-dir=<LOG_DIR>     The directory for logs [default: /var/log/calico] 
 	
 Description:
   Node specific commands for calicoctl
@@ -45,11 +48,14 @@ Description:
 
 	// If `--help` or `-h` is passed, then arguments map will be empty
 	if len(arguments) > 0 {
+		logDir := append([]string{"diags"}, arguments["--log-dir"].(string))
 
 		// arguments["status"] is a bool and it's true when `calicoctl node status`
 		// is passed, false when status is not present
 		if arguments["status"].(bool) {
 			err = node.Status()
+		} else if arguments["diags"].(bool) {
+			err = node.Diags(logDir)
 		} else {
 			fmt.Printf("Invalid option.\n")
 			fmt.Println(doc)

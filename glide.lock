@@ -1,5 +1,5 @@
-hash: e7f3535241c3657f415d84ada8a57a279a25fc5beaf9efc47e8dd2ff4783c8c7
-updated: 2016-09-14T17:26:40.021904395+01:00
+hash: cffbeb3dc3d93c3c276e3c5193dd3c496e790ab9f4d1cea8c4881062e0c45b88
+updated: 2016-09-14T10:27:15.20956135-07:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -7,15 +7,17 @@ imports:
   version: e93ee6179c64cac4d8764870b8267f05c1618c40
   subpackages:
   - client
-  - pkg/fileutil
-  - pkg/pathutil
-  - pkg/tlsutil
   - pkg/transport
+  - pkg/pathutil
   - pkg/types
+  - pkg/fileutil
+  - pkg/tlsutil
 - name: github.com/coreos/go-systemd
   version: bfdc81d0d7e0fb19447b08571f63b774495251ce
   subpackages:
+  - daemon
   - journal
+  - util
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
@@ -23,31 +25,32 @@ imports:
 - name: github.com/docker/distribution
   version: 17fb0bb6b30838f3f80833c6522cb374549663ce
   subpackages:
-  - digest
   - reference
+  - digest
 - name: github.com/docker/engine-api
   version: 3d1601b9d2436a70b0dfc045a23f6503d19195df
   subpackages:
   - client
+  - types
   - client/transport
   - client/transport/cancellable
-  - types
-  - types/blkiodev
   - types/container
   - types/filters
   - types/network
   - types/reference
   - types/registry
-  - types/strslice
   - types/swarm
   - types/time
   - types/versions
+  - types/mount
+  - types/blkiodev
+  - types/strslice
 - name: github.com/docker/go-connections
   version: 988efe982fdecb46f01d53465878ff1f2ff411ce
   subpackages:
-  - nat
   - sockets
   - tlsconfig
+  - nat
 - name: github.com/docker/go-units
   version: f2145db703495b2e525c59662db69a7344b00bb8
 - name: github.com/docopt/docopt-go
@@ -66,10 +69,16 @@ imports:
   version: f516b5d0821f90515d38e79c4f5d4d221dc0c331
   subpackages:
   - libcontainer/user
+- name: github.com/qianlnk/compress
+  version: fe8f7113bb6c591311068f774a6c6764f3b9c82d
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  subpackages:
+  - formatters/logstash
+- name: github.com/termie/go-shutil
+  version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
   version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
@@ -96,31 +105,31 @@ testImports:
   subpackages:
   - config
   - internal/codelocation
-  - internal/containernode
   - internal/failer
-  - internal/leafnodes
   - internal/remote
-  - internal/spec
-  - internal/specrunner
   - internal/suite
   - internal/testingtproxy
   - internal/writer
   - reporters
   - reporters/stenographer
   - types
+  - internal/containernode
+  - internal/leafnodes
+  - internal/spec
+  - internal/specrunner
 - name: github.com/onsi/gomega
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
-  - format
   - internal/assertion
   - internal/asyncassertion
-  - internal/oraclematcher
   - internal/testingtsupport
   - matchers
+  - types
+  - internal/oraclematcher
+  - format
   - matchers/support/goraph/bipartitegraph
   - matchers/support/goraph/edge
   - matchers/support/goraph/node
   - matchers/support/goraph/util
-  - types
 - name: gopkg.in/yaml.v2
-  version: 31c299268d302dd0aa9a0dcf765a3d58971ac83f
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
