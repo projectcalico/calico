@@ -35,12 +35,12 @@ vendor:
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION)" calico.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go;
 
 # Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION)" ipam/calico-ipam.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go;
 
 .PHONY: test
 # Run the unit tests.
