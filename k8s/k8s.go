@@ -16,10 +16,11 @@ import (
 
 	"encoding/json"
 
+	"k8s.io/client-go/1.4/kubernetes"
+	"k8s.io/client-go/1.4/tools/clientcmd"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/client"
-	k8sclient "k8s.io/kubernetes/pkg/client/unversioned"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
@@ -60,7 +61,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		// If any labels changed whilst the container was being restarted, they will be picked up by the policy
 		// controller so there's no need to update the labels here.
 	} else {
-		client, err := newK8sClient(conf)
+		client, err := newK8sClient(conf, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +163,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	return result, nil
 }
 
-func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
+func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset, error) {
 	// Some config can be passed in a kubeconfig file
 	kubeconfig := conf.Kubernetes.Kubeconfig
 
@@ -205,10 +206,13 @@ func newK8sClient(conf utils.NetConf) (*k8sclient.Client, error) {
 		return nil, err
 	}
 
-	return k8sclient.New(config)
+	logger.Debugf("Kubernetes config %v", config)
+
+	// Create the clientset
+	return kubernetes.NewForConfig(config)
 }
 
-func getK8sLabels(client *k8sclient.Client, k8sargs utils.K8sArgs) (map[string]string, error) {
+func getK8sLabels(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, error) {
 	pods, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
 	if err != nil {
 		return nil, err
@@ -224,7 +228,7 @@ func getK8sLabels(client *k8sclient.Client, k8sargs utils.K8sArgs) (map[string]s
 	return labels, nil
 }
 
-func getPodCidr(client *k8sclient.Client, conf utils.NetConf, hostname string) (string, error) {
+func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, hostname string) (string, error) {
 	// Pull the node name out of the config if it's set. Defaults to hostname
 	nodeName := hostname
 	if conf.Kubernetes.NodeName != "" {

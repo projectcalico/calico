@@ -1,5 +1,6 @@
 package: github.com/projectcalico/calico-cni
 import:
+- package: github.com/Sirupsen/logrus
 - package: github.com/containernetworking/cni
   subpackages:
   - pkg/ip
@@ -7,22 +8,19 @@ import:
   - pkg/ns
   - pkg/skel
   - pkg/types
-- package: github.com/coreos/etcd
-  subpackages:
-  - client
+- package: github.com/golang/glog
 - package: github.com/onsi/ginkgo
 - package: github.com/onsi/gomega
   subpackages:
   - gexec
 - package: github.com/tigera/libcalico-go
-- package: github.com/vishvananda/netlink
-- package: github.com/Sirupsen/logrus
-- package: k8s.io/kubernetes
-  version: ~1.3.0
   subpackages:
-  - pkg/api
-  - pkg/client/restclient
-  - pkg/client/unversioned
-- package: github.com/opencontainers/runc
-  version: 7ca2aa4873aea7cb4265b1726acb24b90d8726c6
-
+  - lib/api
+  - lib/client
+  - lib/errors
+  - lib/net
+- package: github.com/vishvananda/netlink
+- package: k8s.io/client-go
+  subpackages:
+  - 1.4/kubernetes
+  - 1.4/tools/clientcmd
