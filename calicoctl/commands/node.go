@@ -25,30 +25,33 @@ import (
 // Node function is a switch to node related sub-commands
 func Node(args []string) error {
 	var err error
-	doc := `Usage: calicoctl node <command> [<args>...]
-
-    status          Shows the status of the node. 
-
+	doc := `Usage: 
+	calicoctl node status 
+	
+Options:
+    --help                  Show this screen.
+    status                  Shows the status of the node.
+	
 Description:
   Node specific commands for calicoctl
   
-  See 'calicoctl node --help' to read about a specific subcommand.`
+  See 'calicoctl node --help' to read about a specific subcommand.
+  `
 
 	arguments, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
 		return err
 	}
 
-	// If `--help` or `-h` is passed, then arguments[] will be nil
-	if arguments["<command>"] != nil {
-		command := arguments["<command>"].(string)
-		nodeArgs := append([]string{command}, arguments["<args>"].([]string)...)
+	// If `--help` or `-h` is passed, then arguments map will be empty
+	if len(arguments) > 0 {
 
-		switch command {
-		case "status":
-			err = node.Status(nodeArgs)
-		default:
-			fmt.Printf("Invalid option: %s\n", command)
+		// arguments["status"] is a bool and it's true when `calicoctl node status`
+		// is passed, false when status is not present
+		if arguments["status"].(bool) {
+			err = node.Status()
+		} else {
+			fmt.Printf("Invalid option.\n")
 			fmt.Println(doc)
 		}
 	}
