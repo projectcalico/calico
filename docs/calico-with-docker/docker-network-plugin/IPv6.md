@@ -33,11 +33,11 @@ have an IPv6 address assigned.
 
 On calico-01
 
-    sudo ip addr add fd80:24e2:f998:72d7::1/112 dev eth1
+    sudo ip addr add fd80:24e2:f998:72d7::1/112 dev enp0s8
 
 On calico-02
 
-    sudo ip addr add fd80:24e2:f998:72d7::2/112 dev eth1
+    sudo ip addr add fd80:24e2:f998:72d7::2/112 dev enp0s8
 
 Verify connectivity by pinging.
 
