@@ -8,12 +8,11 @@ RUN yum install -y \
 		make \
 		curl \
 		tar \
-		git \
 		wget
 
 # Install newer version of git, default version on Centos 6.6 hangs under
 # go get.
-RUN wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
+RUN wget http://repository.it4i.cz/mirrors/repoforge/redhat/el6/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
     yum install -y rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
     yum install -y --enablerepo=rpmforge-extras git
 
@@ -32,5 +31,3 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 
 RUN go get "github.com/Masterminds/glide"
-
-

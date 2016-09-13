@@ -20,7 +20,7 @@ import (
 	"github.com/docopt/docopt-go"
 )
 
-const VERSION = "0.1.0-go"
+var VERSION, BUILD_DATE, GIT_REVISION string
 
 func Version(args []string) error {
 	doc := `Usage:
@@ -34,7 +34,6 @@ Description:
 
 	fmt.Println("Version:     ", VERSION)
 	fmt.Println("Build date:  ", BUILD_DATE)
-	fmt.Println("Git tag ref: ", GIT_DESCRIPTION)
 	fmt.Println("Git commit:  ", GIT_REVISION)
 	return nil
 }
