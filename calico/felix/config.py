@@ -255,7 +255,7 @@ class Config(object):
                            "version, hostname, size and guid to "
                            "projectcalico.org.  Receive version deprecation / "
                            "security warnings.",
-                           True, value_is_bool=False)
+                           True, value_is_bool=True)
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("EtcdDriverLogFilePath",
