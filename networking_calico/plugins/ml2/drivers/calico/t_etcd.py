@@ -24,6 +24,7 @@ import json
 import netaddr
 import re
 import socket
+import uuid
 import weakref
 
 # OpenStack imports.
@@ -333,8 +334,29 @@ class CalicoTransportEtcd(object):
         """
         LOG.info("Providing Felix configuration")
 
-        # First read the config values, so as to avoid unnecessary
-        # writes.
+        # First create the ClusterGUID, if it is not already set.
+        cluster_guid_key = datamodel_v1.key_for_config('ClusterGUID')
+        try:
+            cluster_guid = self.client.read(cluster_guid_key).value
+            LOG.info('ClusterGUID is %s', cluster_guid)
+        except etcd.EtcdKeyNotFound:
+            # Generate and write a globally unique cluster GUID.  Write it
+            # idempotently into the datastore. The prevExist=False creates the
+            # value (safely with CaS) if it doesn't exist.
+            LOG.info('ClusterGUID not set yet (%s)', cluster_guid_key)
+            guid = uuid.uuid4()
+            guid_string = guid.get_hex()
+            try:
+                self.client.write(cluster_guid_key,
+                                  guid_string,
+                                  prevExist=False)
+            except etcd.EtcdAlreadyExist:
+                LOG.info('ClusterGUID is now set - another orchestrator or' +
+                         ' Neutron server instance must have just written it')
+                pass
+
+        # Read other config values that should exist.  We will write them only
+        # if they're not already (collectively) set as we want them.
         prefix = None
         reporting_enabled = None
         ready = None
@@ -352,7 +374,7 @@ class CalicoTransportEtcd(object):
             LOG.info('%s -> tap', iface_pfx_key)
             self.client.write(iface_pfx_key, 'tap')
         if reporting_enabled != "true":
-            LOG.info('%s -> true', reporting_enabled)
+            LOG.info('%s -> true', reporting_key)
             self.client.write(reporting_key, 'true')
         if ready != 'true':
             # TODO(nj) Set this flag only once we're really ready!

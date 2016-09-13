@@ -540,3 +540,19 @@ class Lib(object):
             raise Exception("port_query doesn't know how to handle kw=%r" % kw)
 
         return None
+
+
+class FixedUUID(object):
+
+    def __init__(self, uuid):
+        self.uuid = uuid
+        self.uuid4_p = mock.patch('uuid.uuid4')
+
+    def __enter__(self):
+        guid = mock.MagicMock()
+        guid.get_hex.return_value = self.uuid
+        uuid4 = self.uuid4_p.start()
+        uuid4.return_value = guid
+
+    def __exit__(self, type, value, traceback):
+        self.uuid4_p.stop()

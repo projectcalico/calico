@@ -199,11 +199,15 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """Startup with no ports or existing etcd data."""
         # Allow the etcd transport's resync thread to run. The last thing it
         # does is write the Felix config, so let it run three reads.
-        self.give_way()
-        self.simulated_time_advance(31)
+
+        with lib.FixedUUID('uuid-start-no-ports'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
         self.assertEtcdWrites({
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-start-no-ports',
             '/calico/v1/Ready': True,
             '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
@@ -235,11 +239,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.osdb_ports = [lib.port1, lib.port2]
 
         # Allow the etcd transport's resync thread to run.
-        self.give_way()
-        self.simulated_time_advance(31)
+        with lib.FixedUUID('uuid-start-two-ports'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
         expected_writes = {
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-start-two-ports',
             '/calico/v1/Ready': True,
             '/calico/v1/host/felix-host-1/workload/openstack/instance-1/'
             'endpoint/DEADBEEF-1234-5678':
@@ -733,11 +740,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         # Allow the etcd transport's resync thread to run.  Expect the usual
         # writes.
-        self.give_way()
-        self.simulated_time_advance(31)
+        with lib.FixedUUID('uuid-subnet-hooks'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
         self.assertEtcdWrites({
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-subnet-hooks',
             '/calico/v1/Ready': True,
             '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
@@ -820,9 +830,11 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         })
 
         # Do a resync where we simulate the etcd data having been lost.
-        self.give_way()
-        self.etcd_data = {}
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        with lib.FixedUUID('uuid-subnet-hooks-2'):
+            self.give_way()
+            self.etcd_data = {}
+            self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
                 'cidr': '10.28.0.0/24',
@@ -830,6 +842,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                 'host_routes': [],
                 'dns_servers': ['172.18.10.55']},
             '/calico/v1/Ready': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-subnet-hooks-2',
             '/calico/v1/config/EndpointReportingEnabled': True,
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
@@ -1032,6 +1045,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def test_profile_prefixing(self):
         """Startup with existing profile data from another orchestrator."""
+
         # Check that we don't delete the other orchestrator's profile data.
         self.etcd_data = {
             '/calico/v1/policy/profile/SGID-default/rules': {
@@ -1050,11 +1064,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
             '/calico/v1/policy/profile/SGID-default/tags':
             ["SGID-default"]
         }
-        self.give_way()
-        self.simulated_time_advance(31)
+        with lib.FixedUUID('uuid-profile-prefixing'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
         self.assertEtcdWrites({
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-profile-prefixing',
             '/calico/v1/Ready': True,
             '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
@@ -1076,6 +1093,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def test_old_openstack_data(self):
         """Startup with existing but old OpenStack profile data."""
+
         # Check that we clean it up.
         self.etcd_data = {
             '/calico/v1/policy/profile/openstack-sg-OLD/rules': {
@@ -1093,11 +1111,14 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
                                    "ip_version": 6}]},
             '/calico/v1/policy/profile/openstack-sg-OLD/tags': ["OLD"]
         }
-        self.give_way()
-        self.simulated_time_advance(31)
+        with lib.FixedUUID('uuid-old-data'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
         self.assertEtcdWrites({
             '/calico/v1/config/InterfacePrefix': 'tap',
             '/calico/v1/config/EndpointReportingEnabled': True,
+            '/calico/v1/config/ClusterGUID': 'uuid-old-data',
             '/calico/v1/Ready': True,
             '/calico/v1/policy/profile/openstack-sg-SGID-default/rules': {
                 "outbound_rules": [{"dst_ports": ["1:65535"],
