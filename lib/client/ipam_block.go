@@ -21,7 +21,7 @@ import (
 	"net"
 	"reflect"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	cnet "github.com/tigera/libcalico-go/lib/net"
 )
@@ -98,7 +98,7 @@ func (b *allocationBlock) autoAssign(
 		ips = append(ips, incrementIP(cnet.IP{b.CIDR.IP}, big.NewInt(int64(o))))
 	}
 
-	glog.V(3).Infof("Block %s returned ips: %v", b.CIDR.String(), ips)
+	log.Debugf("Block %s returned ips: %v", b.CIDR.String(), ips)
 	return ips, nil
 }
 
@@ -163,7 +163,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		// Check if allocated.
 		attrIdx := b.Allocations[ordinal]
 		if attrIdx == nil {
-			glog.V(4).Infof("Asked to release address that was not allocated")
+			log.Debugf("Asked to release address that was not allocated")
 			unallocated = append(unallocated, ip)
 			continue
 		}
@@ -199,7 +199,7 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 		}
 	}
 	if len(attrsToDelete) != 0 {
-		glog.V(2).Infof("Deleting attributes: %s", attrsToDelete)
+		log.Infof("Deleting attributes: %s", attrsToDelete)
 		b.deleteAttributes(attrsToDelete, ordinals)
 	}
 
@@ -219,7 +219,7 @@ func (b *allocationBlock) deleteAttributes(delIndexes, ordinals []int) {
 		if !intInSlice(x, delIndexes) {
 			// Attribute at x is not being deleted.  Build a mapping
 			// of old attribute index (x) to new attribute index (y).
-			glog.V(4).Infof("%d in %s", x, delIndexes)
+			log.Debugf("%d in %s", x, delIndexes)
 			newIndex := y
 			newIndexes[x] = &newIndex
 			y += 1
@@ -268,10 +268,10 @@ func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
 
 func (b *allocationBlock) releaseByHandle(handleID string) int {
 	attrIndexes := b.attributeIndexesByHandle(handleID)
-	glog.V(3).Infof("Attribute indexes to release: %v", attrIndexes)
+	log.Debugf("Attribute indexes to release: %v", attrIndexes)
 	if len(attrIndexes) == 0 {
 		// Nothing to release.
-		glog.V(3).Infof("No addresses assigned to handle '%s'", handleID)
+		log.Debugf("No addresses assigned to handle '%s'", handleID)
 		return 0
 	}
 
@@ -329,13 +329,13 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 	attr := model.AllocationAttribute{handleID, attrs}
 	for idx, existing := range b.Attributes {
 		if reflect.DeepEqual(attr, existing) {
-			glog.V(4).Infof("Attribute '%+v' already exists", attr)
+			log.Debugf("Attribute '%+v' already exists", attr)
 			return idx
 		}
 	}
 
 	// Does not exist - add it.
-	glog.V(2).Infof("New allocation attribute: %+v", attr)
+	log.Infof("New allocation attribute: %+v", attr)
 	attrIndex := len(b.Attributes)
 	b.Attributes = append(b.Attributes, attr)
 	return attrIndex
@@ -401,7 +401,7 @@ func ipToOrdinal(ip cnet.IP, b allocationBlock) int {
 	ord := big.NewInt(0).Sub(ip_int, base_int).Int64()
 	if ord < 0 || ord >= blockSize {
 		// IP address not in the given block.
-		glog.Fatalf("IP %s not in block %s", ip, b.CIDR)
+		log.Fatalf("IP %s not in block %s", ip, b.CIDR)
 	}
 	return int(ord)
 }

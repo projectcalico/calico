@@ -21,7 +21,7 @@ import (
 
 	"reflect"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/net"
 )
@@ -71,16 +71,16 @@ func (options PoolListOptions) defaultPathRoot() string {
 }
 
 func (options PoolListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get Pool key from %s", path)
+	log.Infof("Get Pool key from %s", path)
 	r := matchPool.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("%s didn't match regex", path)
+		log.Infof("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
 	if options.CIDR.IP != nil && reflect.DeepEqual(*cidr, options.CIDR) {
-		glog.V(2).Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
+		log.Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
 	}
 	return PoolKey{CIDR: *cidr}

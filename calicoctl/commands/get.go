@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 )
 
 func Get(args []string) error {
@@ -111,7 +111,7 @@ Options:
 	}
 
 	results := executeConfigCommand(parsedArgs, actionList)
-	glog.V(2).Infof("results: %+v", results)
+	log.Infof("results: %+v", results)
 
 	if results.err != nil {
 		fmt.Printf("Error getting resources: %v\n", results.err)

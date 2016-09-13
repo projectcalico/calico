@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/numorstring"
 	"github.com/tigera/libcalico-go/lib/scope"
@@ -83,28 +83,28 @@ func Validate(current interface{}) error {
 
 func validateAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	glog.V(2).Infof("Validate action: %s\n", s)
+	log.Infof("Validate action: %s", s)
 	return actionRegex.MatchString(s)
 }
 
 func validateBackendAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	glog.V(2).Infof("Validate action: %s\n", s)
+	log.Infof("Validate action: %s", s)
 	return backendActionRegex.MatchString(s)
 }
 
 func validateName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	glog.V(2).Infof("Validate name: %s\n", s)
+	log.Infof("Validate name: %s", s)
 	return nameRegex.MatchString(s)
 }
 
 func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	glog.V(2).Infof("Validate selector: %s\n", s)
+	log.Infof("Validate selector: %s", s)
 	_, err := selector.Parse(s)
 	if err != nil {
-		glog.V(2).Infof("Selector %#v was invalid: %v", s, err)
+		log.Infof("Selector %#v was invalid: %v", s, err)
 		return false
 	}
 	return true
@@ -112,13 +112,13 @@ func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStr
 
 func validateTag(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	glog.V(2).Infof("Validate tag: %s\n", s)
+	log.Infof("Validate tag: %s", s)
 	return nameRegex.MatchString(s)
 }
 
 func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	l := field.Interface().(map[string]string)
-	glog.V(2).Infof("Validate labels: %s\n", l)
+	log.Infof("Validate labels: %s", l)
 	for k, v := range l {
 		if !labelRegex.MatchString(k) || !labelRegex.MatchString(v) {
 			return false
@@ -129,32 +129,32 @@ func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStruc
 
 func validateInterface(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	b := []byte(field.String())
-	glog.V(2).Infof("Validate interface: %s\n", b)
+	log.Infof("Validate interface: %s", b)
 	return nameRegex.Match(b)
 }
 
 func validateOrder(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	f := field.Interface()
-	glog.V(2).Infof("Validate order: %v\n", f)
+	log.Infof("Validate order: %v", f)
 	return f != nil
 }
 
 func validateASNum(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	f := field.Interface().(int)
-	glog.V(2).Infof("Validate AS number: %v\n", f)
+	log.Infof("Validate AS number: %v", f)
 	return f >= 0 && f <= 4294967295
 }
 
 func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	f := field.Interface().(scope.Scope)
-	glog.V(2).Infof("Validate scope: %v\n", f)
+	log.Infof("Validate scope: %v", f)
 	return f == scope.Global || f == scope.Node
 }
 
 func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
-	glog.V(2).Infof("Validate protocol")
+	log.Infof("Validate protocol")
 	p := structLevel.CurrentStruct.Interface().(numorstring.Protocol)
-	glog.V(2).Infof("Validate protocol: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
+	log.Infof("Validate protocol: %v %s %v", p.Type, p.StrVal, p.NumVal)
 	if p.Type == numorstring.NumOrStringNum && ((p.NumVal < 1) || (p.NumVal > 255)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Protocol", "protocol", "protocol number invalid")
 	} else if p.Type == numorstring.NumOrStringString && !protocolRegex.MatchString(p.StrVal) {
@@ -163,9 +163,9 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 }
 
 func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
-	glog.V(2).Infof("Validate port")
+	log.Infof("Validate port")
 	p := structLevel.CurrentStruct.Interface().(numorstring.Port)
-	glog.V(2).Infof("Validate port: %v %s %v\n", p.Type, p.StrVal, p.NumVal)
+	log.Infof("Validate port: %v %s %v", p.Type, p.StrVal, p.NumVal)
 	if p.Type == numorstring.NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
 		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Port", "port", "port number invalid")
 		return
@@ -177,7 +177,7 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 		}
 		first := 0
 		for _, port := range ports {
-			glog.V(2).Infof("Validate range, checking port %s\n", port)
+			log.Infof("Validate range, checking port %s", port)
 			num, err := strconv.Atoi(port)
 			if err != nil {
 				structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")

@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/errors"
@@ -46,7 +46,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *cn
 			return []cnet.IPNet{}, nil
 
 		} else {
-			glog.Errorf("Error getting affine blocks: %s", err)
+			log.Errorf("Error getting affine blocks: %s", err)
 			return nil, err
 		}
 	}
@@ -80,7 +80,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 		// Default to all configured pools.
 		allPools, err := rw.client.Pools().List(api.PoolMetadata{})
 		if err != nil {
-			glog.Errorf("Error reading configured pools: %s", err)
+			log.Errorf("Error reading configured pools: %s", err)
 			return nil, err
 		}
 
@@ -100,24 +100,24 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	}
 
 	// Iterate through pools to find a new block.
-	glog.V(2).Infof("Claiming a new affine block for host '%s'", host)
+	log.Infof("Claiming a new affine block for host '%s'", host)
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
 		blocks := randomBlockGenerator(pool)
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
-			glog.V(4).Infof("Getting block: %s", subnet.String())
-			key := model.BlockKey{CIDR: subnet}
+			log.Debugf("Getting block: %s", subnet.String())
+			key := model.BlockKey{CIDR: *subnet}
 			_, err := rw.client.backend.Get(key)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 					// The block does not yet exist in etcd.  Try to grab it.
-					glog.V(3).Infof("Found free block: %+v", *subnet)
+					log.Debugf("Found free block: %+v", *subnet)
 					err = rw.claimBlockAffinity(*subnet, host, config)
 					return subnet, err
 				} else {
-					glog.Errorf("Error getting block: %s", err)
+					log.Errorf("Error getting block: %s", err)
 					return nil, err
 				}
 			}
@@ -128,7 +128,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 
 func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, config IPAMConfig) error {
 	// Claim the block affinity for this host.
-	glog.V(2).Infof("Host %s claiming block affinity for %s", host, subnet)
+	log.Infof("Host %s claiming block affinity for %s", host, subnet)
 	obj := model.KVPair{
 		Key:   model.BlockAffinityKey{Host: host, CIDR: subnet},
 		Value: model.BlockAffinity{},
@@ -149,10 +149,10 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceAlreadyExists); ok {
 			// Block already exists, check affinity.
-			glog.Warningf("Problem claiming block affinity:", err)
+			log.Warningf("Problem claiming block affinity:", err)
 			obj, err := rw.client.backend.Get(model.BlockKey{subnet})
 			if err != nil {
-				glog.Errorf("Error reading block:", err)
+				log.Errorf("Error reading block:", err)
 				return err
 			}
 
@@ -162,7 +162,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 			if b.HostAffinity != nil && *b.HostAffinity == host {
 				// Block has affinity to this host, meaning another
 				// process on this host claimed it.
-				glog.V(3).Infof("Block %s already claimed by us.  Success", subnet)
+				log.Debugf("Block %s already claimed by us.  Success", subnet)
 				return nil
 			}
 
@@ -171,7 +171,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 				Key: model.BlockAffinityKey{Host: host, CIDR: b.CIDR},
 			})
 			if err != nil {
-				glog.Errorf("Error cleaning up block affinity: %s", err)
+				log.Errorf("Error cleaning up block affinity: %s", err)
 				return err
 			}
 			return affinityClaimedError{Block: b}
@@ -189,14 +189,14 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 		// so that we can pass it back to the datastore on Update.
 		obj, err := rw.client.backend.Get(model.BlockKey{CIDR: blockCIDR})
 		if err != nil {
-			glog.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
+			log.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
 			return err
 		}
 		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 		// Check that the block affinity matches the given affinity.
 		if b.HostAffinity != nil && *b.HostAffinity != host {
-			glog.Errorf("Mismatched affinity: %s != %s", *b.HostAffinity, host)
+			log.Errorf("Mismatched affinity: %s != %s", *b.HostAffinity, host)
 			return affinityClaimedError{Block: b}
 		}
 
@@ -208,7 +208,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 			if err != nil {
 				// Return the error unless the block didn't exist.
 				if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-					glog.Errorf("Error deleting block: %s", err)
+					log.Errorf("Error deleting block: %s", err)
 					return err
 				}
 			}
@@ -241,7 +241,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 		if err != nil {
 			// Return the error unless the affinity didn't exist.
 			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-				glog.Errorf("Error deleting block affinity: %s", err)
+				log.Errorf("Error deleting block affinity: %s", err)
 				return err
 			}
 		}

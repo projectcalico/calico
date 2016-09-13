@@ -16,7 +16,7 @@ package model
 
 import (
 	"fmt"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"reflect"
 	"regexp"
@@ -66,15 +66,15 @@ func (options ActiveStatusReportListOptions) defaultPathRoot() string {
 }
 
 func (options ActiveStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get StatusReport key from %s", ekey)
+	log.Infof("Get StatusReport key from %s", ekey)
 	r := matchActiveStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Hostname != "" && name != options.Hostname {
-		glog.V(2).Infof("Didn't match name %s != %s", options.Hostname, name)
+		log.Infof("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
 	return ActiveStatusReportKey{Hostname: name}
@@ -118,15 +118,15 @@ func (options LastStatusReportListOptions) defaultPathRoot() string {
 }
 
 func (options LastStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get StatusReport key from %s", ekey)
+	log.Infof("Get StatusReport key from %s", ekey)
 	r := matchLastStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Hostname != "" && name != options.Hostname {
-		glog.V(2).Infof("Didn't match name %s != %s", options.Hostname, name)
+		log.Infof("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
 	return LastStatusReportKey{Hostname: name}

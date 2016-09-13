@@ -20,7 +20,7 @@ import (
 
 	"reflect"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/net"
 	"github.com/tigera/libcalico-go/lib/scope"
@@ -120,7 +120,7 @@ func (options BGPPeerListOptions) defaultPathRoot() string {
 }
 
 func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get BGPPeer key from %s", path)
+	log.Infof("Get BGPPeer key from %s", path)
 	hostname := ""
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
@@ -134,16 +134,16 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		_ = peerIP.UnmarshalText(r[0][2])
 		peerScope = scope.Node
 	} else {
-		glog.V(2).Infof("%s didn't match regex", path)
+		log.Infof("%s didn't match regex", path)
 		return nil
 	}
 
 	if options.PeerIP.IP != nil && !options.PeerIP.Equal(peerIP.IP) {
-		glog.V(2).Infof("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
+		log.Infof("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
 		return nil
 	}
 	if options.Hostname != "" && hostname != options.Hostname {
-		glog.V(2).Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	return BGPPeerKey{Scope: peerScope, PeerIP: peerIP, Hostname: hostname}

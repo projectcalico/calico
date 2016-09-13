@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
@@ -103,7 +103,7 @@ func LoadClientConfig(filename string) (*api.ClientConfig, error) {
 		if err := yaml.Unmarshal(b, &c); err != nil {
 			return nil, err
 		}
-		glog.V(1).Info("Datastore type: ", c.BackendType)
+		log.Info("Datastore type: ", c.BackendType)
 		c.BackendConfig = c.BackendType.NewConfig()
 		if c.BackendConfig == nil {
 			return nil, errors.New(fmt.Sprintf("Unknown datastore type: %v", c.BackendType))
@@ -116,12 +116,12 @@ func LoadClientConfig(filename string) (*api.ClientConfig, error) {
 	}
 
 	// Load client config from environment variables.
-	glog.V(1).Info("No config file specified, loading config from environment")
+	log.Info("No config file specified, loading config from environment")
 	if err := envconfig.Process("calico", &c); err != nil {
 		return nil, err
 	}
 	c.BackendConfig = c.BackendType.NewConfig()
-	glog.V(1).Info("Datastore type: ", c.BackendType)
+	log.Info("Datastore type: ", c.BackendType)
 	if c.BackendConfig == nil {
 		return nil, errors.New(fmt.Sprintf("Unknown datastore type: %v", c.BackendType))
 	}

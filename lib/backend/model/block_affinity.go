@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/net"
 )
@@ -70,10 +70,10 @@ func (options BlockAffinityListOptions) defaultPathRoot() string {
 }
 
 func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get Block affinity key from %s", path)
+	log.Infof("Get Block affinity key from %s", path)
 	r := matchBlockAffinity.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("%s didn't match regex", path)
+		log.Infof("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
@@ -81,11 +81,11 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 	host := r[0][1]
 
 	if options.Host != host {
-		glog.V(3).Infof("Didn't match hostname: %s != %s", options.Host, host)
+		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)
 		return nil
 	}
 	if options.IPVersion != cidr.Version() {
-		glog.V(3).Infof("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
+		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
 		return nil
 	}
 	return BlockAffinityKey{CIDR: *cidr, Host: host}

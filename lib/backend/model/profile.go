@@ -22,7 +22,7 @@ import (
 
 	"sort"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 )
 
@@ -126,16 +126,16 @@ func (options ProfileListOptions) defaultPathRoot() string {
 }
 
 func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get Profile key from %s", path)
+	log.Infof("Get Profile key from %s", path)
 	r := matchProfile.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	kind := r[0][2]
 	if options.Name != "" && name != options.Name {
-		glog.V(2).Infof("Didn't match name %s != %s", options.Name, name)
+		log.Infof("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	pk := ProfileKey{Name: name}
@@ -190,7 +190,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		// Get the KVPair for the profile, initialising if just created.
 		pd, ok := profiles[name]
 		if !ok {
-			glog.V(2).Infof("Initialise profile %v", name)
+			log.Infof("Initialise profile %v", name)
 			pd = &KVPair{
 				Value: Profile{},
 				Key:   ProfileKey{Name: name},
@@ -201,14 +201,14 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		p := pd.Value.(Profile)
 		switch t := d.Value.(type) {
 		case []string: // must be tags #TODO should type these
-			glog.V(2).Infof("Store tags %v", t)
+			log.Infof("Store tags %v", t)
 			p.Tags = t
 			pd.Revision = d.Revision
 		case map[string]string: // must be labels
-			glog.V(2).Infof("Store labels %v", t)
+			log.Infof("Store labels %v", t)
 			p.Labels = t
 		case ProfileRules: // must be rules
-			glog.V(2).Infof("Store rules %v", t)
+			log.Infof("Store rules %v", t)
 			p.Rules = t
 		default:
 			panic(fmt.Errorf("Unexpected type: %v", t))
@@ -216,7 +216,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		pd.Value = p
 	}
 
-	glog.V(2).Infof("Map of profiles: %v", profiles)
+	log.Infof("Map of profiles: %v", profiles)
 
 	// To store the keys in slice in sorted order
 	var keys []string
@@ -230,7 +230,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		out[i] = profiles[k]
 	}
 
-	glog.V(2).Infof("Sorted groups of profiles: %v", out)
+	log.Infof("Sorted groups of profiles: %v", out)
 
 	return out
 }

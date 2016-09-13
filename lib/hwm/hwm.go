@@ -16,7 +16,7 @@
 package hwm
 
 import (
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/tchap/go-patricia.v2/patricia"
 )
 
@@ -101,7 +101,7 @@ func (trie *HighWatermarkTracker) DeleteOldKeys(hwmLimit uint64) []string {
 	deletedPrefixes := make([]patricia.Prefix, 0)
 	deletedKeys := make([]string, 0)
 	trie.hwms.Visit(func(prefix patricia.Prefix, item patricia.Item) error {
-		glog.V(4).Infof("Deleted prefix: %v", prefix)
+		log.Debugf("Deleted prefix: %v", prefix)
 		if prefix == nil {
 			panic("nil prefix passed to visitor")
 		}
@@ -114,7 +114,7 @@ func (trie *HighWatermarkTracker) DeleteOldKeys(hwmLimit uint64) []string {
 		return nil
 	})
 	for ii, childPrefix := range deletedPrefixes {
-		glog.V(3).Infof("Key deleted, updating trie: %v", deletedKeys[ii])
+		log.Debugf("Key deleted, updating trie: %v", deletedKeys[ii])
 		trie.hwms.Delete(childPrefix)
 	}
 	return deletedKeys

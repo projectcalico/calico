@@ -18,13 +18,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	. "github.com/tigera/libcalico-go/lib/selector/tokenizer"
 )
 
+const parserDebug = false
+
 // Parse a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
-	glog.V(3).Infof("Parsing %#v", selector)
+	log.Debugf("Parsing %#v", selector)
 	tokens, err := Tokenize(selector)
 	if err != nil {
 		return
@@ -32,7 +34,7 @@ func Parse(selector string) (sel Selector, err error) {
 	if tokens[0].Kind == TokEof {
 		return selectorRoot{root: AllNode{}}, nil
 	}
-	glog.V(4).Infof("Tokens %v", tokens)
+	log.Debugf("Tokens %v", tokens)
 	// The "||" operator has the lowest precedence so we start with that.
 	node, remTokens, err := parseOrExpression(tokens)
 	if err != nil {
@@ -48,7 +50,9 @@ func Parse(selector string) (sel Selector, err error) {
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
 func parseOrExpression(tokens []Token) (sel node, remTokens []Token, err error) {
-	glog.V(5).Infof("Parsing ||s from %v", tokens)
+	if parserDebug {
+		log.Debugf("Parsing ||s from %v", tokens)
+	}
 	// Look for the first expression.
 	andNodes := make([]node, 0)
 	sel, remTokens, err = parseAndExpression(tokens)
@@ -80,7 +84,9 @@ func parseOrExpression(tokens []Token) (sel node, remTokens []Token, err error) 
 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
 func parseAndExpression(tokens []Token) (sel node, remTokens []Token, err error) {
-	glog.V(5).Infof("Parsing &&s from %v", tokens)
+	if parserDebug {
+		log.Debugf("Parsing &&s from %v", tokens)
+	}
 	// Look for the first operation.
 	opNodes := make([]node, 0)
 	sel, remTokens, err = parseOperation(tokens)
@@ -113,7 +119,9 @@ func parseAndExpression(tokens []Token) (sel node, remTokens []Token, err error)
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
 func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
-	glog.V(5).Infof("Parsing op from %v", tokens)
+	if parserDebug {
+		log.Debugf("Parsing op from %v", tokens)
+	}
 	if len(tokens) == 0 {
 		err = errors.New("Unexpected end of string looking for op")
 		return

@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
@@ -47,7 +47,7 @@ const (
 // different possible options to convert to a single slice of resources.
 func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
 	r := []unversioned.Resource{}
-	glog.V(2).Infof("Converting resource to slice: %v\n", loaded)
+	log.Infof("Converting resource to slice: %v", loaded)
 
 	switch reflect.TypeOf(loaded).Kind() {
 	case reflect.Slice:
@@ -86,7 +86,7 @@ func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
 			reflect.TypeOf(loaded).Kind())))
 	}
 
-	glog.V(2).Infof("Returning slice: %v\n", r)
+	log.Infof("Returning slice: %v", r)
 	return r
 }
 
@@ -192,7 +192,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	var err error
 	var resources []unversioned.Resource
 
-	glog.V(2).Info("Executing config command")
+	log.Info("Executing config command")
 
 	if filename := args["--filename"]; filename != nil {
 		// Filename is specified, load the resource from file and convert to a slice
@@ -218,13 +218,13 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 		return commandResults{err: errors.New("no resources specified")}
 	}
 
-	if glog.V(2) {
-		glog.Infof("Resources: %v\n", resources)
+	if log.GetLevel() >= log.DebugLevel {
+		log.Debugf("Resources: %v", resources)
 		d, err := yaml.Marshal(resources)
 		if err != nil {
 			return commandResults{err: err}
 		}
-		glog.Infof("Data: %s\n", string(d))
+		log.Debugf("Data: %s", string(d))
 	}
 
 	// Load the client config and connect.
@@ -233,7 +233,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	if err != nil {
 		return commandResults{err: err}
 	}
-	glog.V(2).Infof("Client: %v\n", client)
+	log.Infof("Client: %v", client)
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).

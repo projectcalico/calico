@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 )
 
@@ -86,15 +86,15 @@ func (options GlobalConfigListOptions) defaultPathRoot() string {
 }
 
 func (options GlobalConfigListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get GlobalConfig key from %s", path)
+	log.Infof("Get GlobalConfig key from %s", path)
 	r := matchGlobalConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Name != "" && name != options.Name {
-		glog.V(2).Infof("Didn't match name %s != %s", options.Name, name)
+		log.Infof("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	return GlobalConfigKey{Name: name}
@@ -148,20 +148,20 @@ func (options HostConfigListOptions) defaultPathRoot() string {
 }
 
 func (options HostConfigListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get HostConfig key from %s", path)
+	log.Infof("Get HostConfig key from %s", path)
 	r := matchHostConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
 	name := r[0][2]
 	if options.Hostname != "" && hostname != options.Hostname {
-		glog.V(2).Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.Name != "" && name != options.Name {
-		glog.V(2).Infof("Didn't match name %s != %s", options.Name, name)
+		log.Infof("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	return HostConfigKey{Hostname: hostname, Name: name}

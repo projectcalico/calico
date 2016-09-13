@@ -29,7 +29,7 @@ import (
 	"bytes"
 
 	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/client"
 	"github.com/tigera/libcalico-go/lib/validator"
 	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
@@ -123,7 +123,7 @@ func newResource(tm unversioned.TypeMetadata) (unversioned.Resource, error) {
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.APIVersion))
 	}
-	glog.V(2).Infof("Found resource helper: %s\t\n", rh)
+	log.Infof("Found resource helper: %s", rh)
 
 	// Create new resource and fill in the type metadata.
 	new := reflect.New(rh.resourceType)
@@ -166,7 +166,7 @@ func createResourcesFromBytes(b []byte) ([]unversioned.Resource, error) {
 // Return as a slice of Resource interfaces, containing a single element that is
 // the unmarshalled resource.
 func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
-	glog.V(2).Infof("Processing type %s\t\n", tm.Kind)
+	log.Infof("Processing type %s", tm.Kind)
 	unpacked, err := newResource(tm)
 	if err != nil {
 		return nil, err
@@ -176,12 +176,12 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 		return nil, err
 	}
 
-	glog.V(2).Infof("Type of unpacked data: %v\t\n", reflect.TypeOf(unpacked))
+	log.Infof("Type of unpacked data: %v", reflect.TypeOf(unpacked))
 	if err = validator.Validate(unpacked); err != nil {
 		return nil, err
 	}
 
-	glog.V(2).Infof("Unpacked: %+v\t\n", unpacked)
+	log.Infof("Unpacked: %+v", unpacked)
 
 	return []unversioned.Resource{unpacked}, nil
 }
@@ -192,10 +192,10 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 // Return as a slice of Resource interfaces, containing an element that is each of
 // the unmarshalled resources.
 func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unversioned.Resource, error) {
-	glog.V(2).Infof("Processing list of resources\t\n")
+	log.Infof("Processing list of resources")
 	unpacked := make([]unversioned.Resource, len(tml))
 	for i, tm := range tml {
-		glog.V(2).Infof("  - processing type %s\t\n", tm.Kind)
+		log.Infof("  - processing type %s", tm.Kind)
 		r, err := newResource(tm)
 		if err != nil {
 			return nil, err
@@ -215,7 +215,7 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 		}
 	}
 
-	glog.V(2).Infof("Unpacked: %+v\t\n", unpacked)
+	log.Infof("Unpacked: %+v", unpacked)
 
 	return unpacked, nil
 }

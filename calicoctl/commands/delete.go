@@ -19,7 +19,7 @@ import (
 
 	"fmt"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 )
 
 func Delete(args []string) error {
@@ -62,7 +62,7 @@ Options:
 	}
 
 	results := executeConfigCommand(parsedArgs, actionDelete)
-	glog.V(2).Infof("results: %+v", results)
+	log.Infof("results: %+v", results)
 
 	if results.fileInvalid {
 		fmt.Printf("Error processing input file: %v\n", results.err)

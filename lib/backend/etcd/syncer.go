@@ -17,7 +17,7 @@ package etcd
 import (
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/api"
 	"github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/hwm"
@@ -42,12 +42,12 @@ func (syn *etcdSyncer) Start() {
 	// Start a background thread to read events from etcd.  It will
 	// queue events onto the etcdEvents channel.  If it drops out of sync,
 	// it will signal on the resyncIndex channel.
-	glog.Info("Starting etcd Syncer")
+	log.Info("Starting etcd Syncer")
 	etcdEvents := make(chan event, 20000)
 	triggerResync := make(chan uint64, 5)
 	initialSnapshotIndex := make(chan uint64)
 	if !syn.OneShot {
-		glog.Info("Syncer not in one-shot mode, starting watcher thread")
+		log.Info("Syncer not in one-shot mode, starting watcher thread")
 		go syn.watchEtcd(etcdEvents, triggerResync, initialSnapshotIndex)
 	}
 
@@ -77,7 +77,7 @@ type event struct {
 }
 
 func (syn *etcdSyncer) readSnapshotsFromEtcd(snapshotUpdates chan<- event, triggerResync <-chan uint64, initialSnapshotIndex chan<- uint64) {
-	glog.Info("Syncer snapshot-reading thread started")
+	log.Info("Syncer snapshot-reading thread started")
 	getOpts := client.GetOptions{
 		Recursive: true,
 		Sort:      false,
@@ -95,12 +95,12 @@ func (syn *etcdSyncer) readSnapshotsFromEtcd(snapshotUpdates chan<- event, trigg
 			// server, it's possible, if unlikely, for us to read
 			// a stale snapshot.)
 			minIndex = <-triggerResync
-			glog.Infof("Asked for snapshot > %v; last snapshot was %v",
+			log.Infof("Asked for snapshot > %v; last snapshot was %v",
 				minIndex, highestSnapshotIndex)
 			if highestSnapshotIndex >= minIndex {
 				// We've already read a newer snapshot, no
 				// need to re-read.
-				glog.Info("Snapshot already new enough")
+				log.Info("Snapshot already new enough")
 				continue
 			}
 		}
@@ -113,15 +113,15 @@ func (syn *etcdSyncer) readSnapshotsFromEtcd(snapshotUpdates chan<- event, trigg
 				if syn.OneShot {
 					// One-shot mode is used to grab a snapshot and then
 					// stop.  We don't want to go into a retry loop.
-					glog.Fatal("Failed to read snapshot from etcd: ", err)
+					log.Fatal("Failed to read snapshot from etcd: ", err)
 				}
-				glog.Warning("Error getting snapshot, retrying...", err)
+				log.Warning("Error getting snapshot, retrying...", err)
 				time.Sleep(1 * time.Second)
 				continue readRetryLoop
 			}
 
 			if resp.Index < minIndex {
-				glog.Info("Retrieved stale snapshot, rereading...")
+				log.Info("Retrieved stale snapshot, rereading...")
 				continue readRetryLoop
 			}
 
@@ -177,7 +177,7 @@ func (syn *etcdSyncer) watchEtcd(etcdEvents chan<- event, triggerResync chan<- u
 				errCode := err.Code
 				if errCode == client.ErrorCodeWatcherCleared ||
 					errCode == client.ErrorCodeEventIndexCleared {
-					glog.Warning("Lost sync with etcd, restarting watcher")
+					log.Warning("Lost sync with etcd, restarting watcher")
 					watcherOpts.AfterIndex = 0
 					watcher = syn.keysAPI.Watcher("/calico/v1",
 						&watcherOpts)
@@ -185,11 +185,11 @@ func (syn *etcdSyncer) watchEtcd(etcdEvents chan<- event, triggerResync chan<- u
 					// FIXME, we'll only trigger a resync after the next event
 					continue
 				} else {
-					glog.Error("Error from etcd", err)
+					log.Error("Error from etcd", err)
 					time.Sleep(1 * time.Second)
 				}
 			case *client.ClusterError:
-				glog.Error("Cluster error from etcd", err)
+				log.Error("Cluster error from etcd", err)
 				time.Sleep(1 * time.Second)
 			default:
 				panic(err)
@@ -215,7 +215,7 @@ func (syn *etcdSyncer) watchEtcd(etcdEvents chan<- event, triggerResync chan<- u
 				// new snapshot.  The snapshot needs to be
 				// from our index or one lower.
 				snapIdx := node.ModifiedIndex - 1
-				glog.V(1).Infof("Asking for snapshot @ %v",
+				log.Infof("Asking for snapshot @ %v",
 					snapIdx)
 				triggerResync <- snapIdx
 				inSync = true
@@ -240,14 +240,14 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 	for {
 		select {
 		case e = <-snapshotUpdates:
-			glog.V(4).Infof("Snapshot update %v @ %v\n", e.key, e.modifiedIndex)
+			log.Debugf("Snapshot update %v @ %v", e.key, e.modifiedIndex)
 		case e = <-watcherUpdates:
-			glog.V(4).Infof("Watcher update %v @ %v\n", e.key, e.modifiedIndex)
+			log.Debugf("Watcher update %v @ %v", e.key, e.modifiedIndex)
 		}
 		if e.snapshotStarting {
 			// Watcher lost sync, need to track deletions until
 			// we get a snapshot from after this index.
-			glog.V(1).Infof("Watcher out-of-sync, starting to track deletions")
+			log.Infof("Watcher out-of-sync, starting to track deletions")
 			minSnapshotIndex = e.modifiedIndex
 			syn.callbacks.OnStatusUpdated(api.ResyncInProgress)
 		}
@@ -265,7 +265,7 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 				indexToStore = e.modifiedIndex
 			}
 			oldIdx := hwms.StoreUpdate(e.key, indexToStore)
-			//glog.V(2).Infof("%v update %v -> %v\n",
+			//log.Infof("%v update %v -> %v",
 			//	e.key, oldIdx, e.modifiedIndex)
 			if oldIdx < e.modifiedIndex {
 				// Event is newer than value for that key.
@@ -275,7 +275,7 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 		case actionDel:
 			deletedKeys := hwms.StoreDeletion(e.key,
 				e.modifiedIndex)
-			glog.V(3).Infof("Prefix %v deleted; %v keys",
+			log.Debugf("Prefix %v deleted; %v keys",
 				e.key, len(deletedKeys))
 			syn.sendDeletions(deletedKeys, e.modifiedIndex)
 		case actionSnapFinished:
@@ -283,8 +283,8 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 				// Now in sync.
 				hwms.StopTrackingDeletions()
 				deletedKeys := hwms.DeleteOldKeys(e.snapshotIndex)
-				glog.Infof("Snapshot finished at index %v; "+
-					"%v keys deleted in cleanup.\n",
+				log.Infof("Snapshot finished at index %v; "+
+					"%v keys deleted in cleanup.",
 					e.snapshotIndex, len(deletedKeys))
 				syn.sendDeletions(deletedKeys, e.snapshotIndex)
 			}
@@ -294,25 +294,25 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 }
 
 func (syn *etcdSyncer) sendUpdate(key string, value *string, revision uint64) {
-	glog.V(4).Infof("Parsing etcd key %#v", key)
+	log.Debugf("Parsing etcd key %#v", key)
 	parsedKey := model.KeyFromDefaultPath(key)
 	if parsedKey == nil {
-		glog.V(3).Infof("Failed to parse key %v", key)
+		log.Debugf("Failed to parse key %v", key)
 		if cb, ok := syn.callbacks.(api.SyncerParseFailCallbacks); ok {
 			cb.ParseFailed(key, value)
 		}
 		return
 	}
-	glog.V(4).Infof("Parsed etcd key: %v", parsedKey)
+	log.Debugf("Parsed etcd key: %v", parsedKey)
 
 	var parsedValue interface{}
 	var err error
 	if value != nil {
 		parsedValue, err = model.ParseValue(parsedKey, []byte(*value))
 		if err != nil {
-			glog.Warningf("Failed to parse value for %v: %#v", key, *value)
+			log.Warningf("Failed to parse value for %v: %#v", key, *value)
 		}
-		glog.V(4).Infof("Parsed value: %#v", parsedValue)
+		log.Debugf("Parsed value: %#v", parsedValue)
 	}
 	updates := []model.KVPair{
 		{Key: parsedKey, Value: parsedValue, Revision: revision},
@@ -325,7 +325,7 @@ func (syn *etcdSyncer) sendDeletions(deletedKeys []string, revision uint64) {
 	for _, key := range deletedKeys {
 		parsedKey := model.KeyFromDefaultPath(key)
 		if parsedKey == nil {
-			glog.V(3).Infof("Failed to parse key %v", key)
+			log.Debugf("Failed to parse key %v", key)
 			if cb, ok := syn.callbacks.(api.SyncerParseFailCallbacks); ok {
 				cb.ParseFailed(key, nil)
 			}

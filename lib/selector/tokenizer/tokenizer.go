@@ -19,7 +19,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 )
 
 type tokenKind uint8
@@ -43,6 +43,8 @@ const (
 	TokOr
 	TokEof
 )
+
+const tokenizerDebug = false
 
 var whitespace = " \t"
 
@@ -69,7 +71,9 @@ var (
 
 func Tokenize(input string) (tokens []Token, err error) {
 	for {
-		glog.V(5).Info("Remaining input: ", input)
+		if tokenizerDebug {
+			log.Debug("Remaining input: ", input)
+		}
 		startLen := len(input)
 		input = strings.TrimLeft(input, whitespace)
 		if len(input) == 0 {
@@ -166,7 +170,7 @@ func Tokenize(input string) (tokens []Token, err error) {
 				// Found "label"
 				endIndex := idxs[1]
 				identifier := input[:endIndex]
-				glog.V(4).Info("Identifier ", identifier)
+				log.Debug("Identifier ", identifier)
 				tokens = append(tokens, Token{TokLabel, identifier})
 				input = input[endIndex:]
 			} else {

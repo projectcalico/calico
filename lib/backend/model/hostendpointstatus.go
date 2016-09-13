@@ -21,7 +21,7 @@ import (
 
 	"reflect"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 )
 
@@ -78,20 +78,20 @@ func (options HostEndpointStatusListOptions) defaultPathRoot() string {
 }
 
 func (options HostEndpointStatusListOptions) KeyFromDefaultPath(ekey string) Key {
-	glog.V(2).Infof("Get HostEndpointStatus key from %s", ekey)
+	log.Infof("Get HostEndpointStatus key from %s", ekey)
 	r := matchHostEndpointStatus.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
 	endpointID := r[0][2]
 	if options.Hostname != "" && hostname != options.Hostname {
-		glog.V(2).Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.EndpointID != "" && endpointID != options.EndpointID {
-		glog.V(2).Infof("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
+		log.Infof("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
 	return HostEndpointStatusKey{Hostname: hostname, EndpointID: endpointID}

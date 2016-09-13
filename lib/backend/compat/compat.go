@@ -15,7 +15,7 @@
 package compat
 
 import (
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
@@ -155,11 +155,11 @@ func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
 	// expect a null value in the JSON, so we fix up to make Labels an empty map
 	// and tags an empty slice.
 	if p.Labels == nil {
-		glog.V(1).Info("Labels is nil - convert to empty map for backend")
+		log.Info("Labels is nil - convert to empty map for backend")
 		l.Value = map[string]string{}
 	}
 	if p.Tags == nil {
-		glog.V(1).Info("Tags is nil - convert to empty map for backend")
+		log.Info("Tags is nil - convert to empty map for backend")
 		t.Value = []string{}
 	}
 

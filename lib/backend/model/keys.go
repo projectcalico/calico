@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/net"
 	"time"
 )
@@ -102,9 +102,8 @@ func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
 // of our <Type>Key structs.  Returns nil if the string doesn't match one of
 // our key types.
 func KeyFromDefaultPath(path string) Key {
-	glog.V(4).Infof("Parsing key %v", path)
 	if m := matchWorkloadEndpoint.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Workload endpoint")
+		log.Debugf("Path is a workload endpoint: %v", path)
 		return WorkloadEndpointKey{
 			Hostname:       m[1],
 			OrchestratorID: m[2],
@@ -112,36 +111,36 @@ func KeyFromDefaultPath(path string) Key {
 			EndpointID:     m[4],
 		}
 	} else if m := matchHostEndpoint.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Host endpoint")
+		log.Debugf("Path is a host endpoint: %v", path)
 		return HostEndpointKey{
 			Hostname:   m[1],
 			EndpointID: m[2],
 		}
 	} else if m := matchPolicy.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Policy")
+		log.Debugf("Path is a policy: %v", path)
 		return PolicyKey{
 			Name: m[2],
 		}
 	} else if m := matchProfile.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Profile %v", m)
+		log.Debugf("Path is a profile: %v (%v)", path, m[2])
 		pk := ProfileKey{m[1]}
 		switch m[2] {
 		case "tags":
-			glog.V(5).Infof("Profile tags")
+			log.Debugf("Profile tags")
 			return ProfileTagsKey{ProfileKey: pk}
 		case "rules":
-			glog.V(5).Infof("Profile rules")
+			log.Debugf("Profile rules")
 			return ProfileRulesKey{ProfileKey: pk}
 		case "labels":
-			glog.V(5).Infof("Profile labels")
+			log.Debugf("Profile labels")
 			return ProfileLabelsKey{ProfileKey: pk}
 		}
 		return nil
 	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Host ID")
+		log.Debugf("Path is a host ID: %v", path)
 		return HostIPKey{Hostname: m[1]}
 	} else if m := matchPool.FindStringSubmatch(path); m != nil {
-		glog.V(5).Infof("Pool")
+		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
 		_, c, err := net.ParseCIDR(cidr)
@@ -150,11 +149,16 @@ func KeyFromDefaultPath(path string) Key {
 		}
 		return PoolKey{CIDR: *c}
 	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
+		log.Debugf("Path is a global config: %v", path)
 		return GlobalConfigKey{Name: m[1]}
 	} else if m := matchHostConfig.FindStringSubmatch(path); m != nil {
+		log.Debugf("Path is a host config: %v", path)
 		return HostConfigKey{Hostname: m[1], Name: m[2]}
 	} else if matchReadyFlag.MatchString(path) {
+		log.Debugf("Path is a ready flag: %v", path)
 		return ReadyFlagKey{}
+	} else {
+		log.Debugf("Path is unknown: %v", path)
 	}
 	// Not a key we know about.
 	return nil
@@ -182,7 +186,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	iface := value.Interface()
 	err := json.Unmarshal(rawData, iface)
 	if err != nil {
-		glog.V(0).Infof("Failed to unmarshal %#v into value %#v",
+		log.Warningf("Failed to unmarshal %#v into value %#v",
 			string(rawData), value)
 		return nil, err
 	}

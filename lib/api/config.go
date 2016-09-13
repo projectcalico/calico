@@ -15,7 +15,7 @@
 package api
 
 import (
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/etcd"
 )
 
@@ -31,7 +31,7 @@ func (b BackendType) NewConfig() interface{} {
 	case EtcdV2:
 		return &etcd.EtcdConfig{}
 	default:
-		glog.Errorf("Unknown backend type: %v", b)
+		log.Errorf("Unknown backend type: %v", b)
 		return nil
 	}
 }

@@ -15,17 +15,17 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 
 	"os"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	"github.com/tigera/libcalico-go/calicoctl/commands"
 )
 
 func main() {
-	usage := `Usage: calicoctl <command> [<args>...]
+	usage := `Usage: calicoctl [options] <command> [<args>...]
 
     create         Create a resource by filename or stdin.
     replace        Replace a resource by filename or stdin.
@@ -36,17 +36,26 @@ func main() {
     version        Display the version of calicoctl.
     node           Node related commands.
 
-See 'calicoctl <command> --help' to read about a specific subcommand.`
+Options:
+  -h --help  Show this screen.
+  -l --log-level=<level>  Set the log level (one of panic, fatal, error,
+                         warn, info, debug) [default: panic]`
 	var err error
 	doc := commands.EtcdIntro + usage
 
-	if os.Getenv("GLOG") != "" {
-		flag.Parse()
-		flag.Lookup("logtostderr").Value.Set("true")
-		flag.Lookup("v").Value.Set("10")
-	}
-
 	arguments, _ := docopt.Parse(doc, nil, true, "calicoctl", true, false)
+
+	if logLevel := arguments["--log-level"]; logLevel != nil {
+		parsedLogLevel, err := log.ParseLevel(logLevel.(string))
+		if err != nil {
+			fmt.Printf("Unknown log level: %s, expected one of: \n" +
+				"panic, fatal, error, warn, info, debug.\n", logLevel)
+			os.Exit(1)
+		} else {
+			log.SetLevel(parsedLogLevel)
+			log.Infof("Log level set to %v", parsedLogLevel)
+		}
+	}
 
 	if arguments["<command>"] != nil {
 		command := arguments["<command>"].(string)

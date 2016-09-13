@@ -21,7 +21,7 @@ import (
 
 	"reflect"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/errors"
 	"github.com/tigera/libcalico-go/lib/net"
 )
@@ -110,10 +110,10 @@ func (options WorkloadEndpointListOptions) defaultPathRoot() string {
 }
 
 func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
-	glog.V(2).Infof("Get WorkloadEndpoint key from %s", path)
+	log.Infof("Get WorkloadEndpoint key from %s", path)
 	r := matchWorkloadEndpoint.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		glog.V(2).Infof("Didn't match regex")
+		log.Infof("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
@@ -121,19 +121,19 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 	workload := r[0][3]
 	endpointID := r[0][4]
 	if options.Hostname != "" && hostname != options.Hostname {
-		glog.V(2).Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.OrchestratorID != "" && orch != options.OrchestratorID {
-		glog.V(2).Infof("Didn't match orchestrator %s != %s", options.OrchestratorID, orch)
+		log.Infof("Didn't match orchestrator %s != %s", options.OrchestratorID, orch)
 		return nil
 	}
 	if options.WorkloadID != "" && workload != options.WorkloadID {
-		glog.V(2).Infof("Didn't match workload %s != %s", options.WorkloadID, workload)
+		log.Infof("Didn't match workload %s != %s", options.WorkloadID, workload)
 		return nil
 	}
 	if options.EndpointID != "" && endpointID != options.EndpointID {
-		glog.V(2).Infof("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
+		log.Infof("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
 	return WorkloadEndpointKey{

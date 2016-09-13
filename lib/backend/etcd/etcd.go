@@ -25,7 +25,7 @@ import (
 
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/api"
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 	"github.com/tigera/libcalico-go/lib/errors"
@@ -140,7 +140,7 @@ func (c *EtcdClient) Delete(d *KVPair) error {
 	if d.Revision != nil {
 		etcdDeleteOpts.PrevIndex = d.Revision.(uint64)
 	}
-	glog.V(2).Infof("Delete Key: %s\n", key)
+	log.Infof("Delete Key: %s", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
 	return convertEtcdError(err, d.Key)
 }
@@ -151,7 +151,7 @@ func (c *EtcdClient) Get(k Key) (*KVPair, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(2).Infof("Get Key: %s\n", key)
+	log.Infof("Get Key: %s", key)
 	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
 		return nil, convertEtcdError(err, k)
 	} else if object, err := ParseValue(k, []byte(results.Node.Value)); err != nil {
@@ -168,7 +168,7 @@ func (c *EtcdClient) List(l ListInterface) ([]*KVPair, error) {
 	// To list entries, we enumerate from the common root based on the supplied
 	// IDs, and then filter the results.
 	key := ListOptionsToDefaultPathRoot(l)
-	glog.V(2).Infof("List Key: %s\n", key)
+	log.Infof("List Key: %s", key)
 	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListOpts); err != nil {
 		// If the root key does not exist - that's fine, return no list entries.
 		err = convertEtcdError(err, nil)
@@ -203,17 +203,17 @@ func (c *EtcdClient) set(d *KVPair, options *etcd.SetOptions) (*KVPair, error) {
 
 	value := string(bytes)
 
-	glog.V(2).Infof("Key: %#v\n", key)
-	glog.V(2).Infof("Value: %s\n", value)
+	log.Infof("Key: %#v", key)
+	log.Infof("Value: %s", value)
 	if d.TTL != 0 {
-		glog.V(2).Infof("TTL: %v", d.TTL)
+		log.Infof("TTL: %v", d.TTL)
 		// Take a copy of the default options so we can set the TTL for
 		// this request only.
 		optionsCopy := *options
 		optionsCopy.TTL = d.TTL
 		options = &optionsCopy
 	}
-	glog.V(2).Infof("Options: %+v\n", options)
+	log.Infof("Options: %+v", options)
 	result, err := c.etcdKeysAPI.Set(context.Background(), key, value, options)
 	if err != nil {
 		return nil, convertEtcdError(err, d.Key)
@@ -242,13 +242,13 @@ func filterEtcdList(n *etcd.Node, l ListInterface) []*KVPair {
 			dos = append(dos, do)
 		}
 	}
-	glog.V(2).Infof("Returning: %v", dos)
-	return dos
+	log.Infof("Returning: %#v", kvs)
+	return kvs
 }
 
 func convertEtcdError(err error, key Key) error {
 	if err == nil {
-		glog.V(2).Info("Command completed without error")
+		log.Info("Command completed without error")
 		return nil
 	}
 
@@ -256,23 +256,23 @@ func convertEtcdError(err error, key Key) error {
 	case etcd.Error:
 		switch err.(etcd.Error).Code {
 		case etcd.ErrorCodeTestFailed:
-			glog.V(2).Info("Test failed error")
+			log.Info("Test failed error")
 			return errors.ErrorResourceUpdateConflict{Identifier: key}
 		case etcd.ErrorCodeNodeExist:
-			glog.V(2).Info("Node exists error")
+			log.Info("Node exists error")
 			return errors.ErrorResourceAlreadyExists{Err: err, Identifier: key}
 		case etcd.ErrorCodeKeyNotFound:
-			glog.V(2).Info("Key not found error")
+			log.Info("Key not found error")
 			return errors.ErrorResourceDoesNotExist{Err: err, Identifier: key}
 		case etcd.ErrorCodeUnauthorized:
-			glog.V(2).Info("Unauthorized error")
+			log.Info("Unauthorized error")
 			return errors.ErrorConnectionUnauthorized{Err: err}
 		default:
-			glog.V(2).Infof("Generic etcd error error: %v", err)
+			log.Infof("Generic etcd error error: %v", err)
 			return errors.ErrorDatastoreError{Err: err, Identifier: key}
 		}
 	default:
-		glog.V(2).Infof("Unhandled error: %v", err)
+		log.Infof("Unhandled error: %v", err)
 		return errors.ErrorDatastoreError{Err: err, Identifier: key}
 	}
 }
