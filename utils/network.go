@@ -4,10 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	"time"
-
-	"syscall"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
@@ -17,30 +13,45 @@ import (
 )
 
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf NetConf, result *types.Result, logger *log.Entry) (string, string, error) {
-	hostVethName, contVethMac, err := setupContainerNetworking(args.Netns, args.IfName, conf.MTU, result)
-	if err != nil {
-		return "", "", err
-	}
-
+func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *log.Entry) (hostVethName, contVethMAC string, err error) {
 	// Select the first 11 characters of the containerID for the host veth
-	newHostVethName := "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
-	if err = setupHostNetworking(hostVethName, newHostVethName, logger); err != nil {
-		return "", "", err
-	}
-	return newHostVethName, contVethMac, nil
-}
+	hostVethName = "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
+	contVethName := args.IfName
 
-func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) (string, string, error) {
-	var hostVethName, contVethMAC string
-	err := ns.WithNetNSPath(netns, func(hostNS ns.NetNS) error {
-		hostVeth, contVeth, err := ip.SetupVeth(ifName, mtu, hostNS)
+	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
+		veth := &netlink.Veth{
+			LinkAttrs: netlink.LinkAttrs{
+				Name:  contVethName,
+				Flags: net.FlagUp,
+				MTU:   conf.MTU,
+			},
+			PeerName: hostVethName,
+		}
 
-		if err != nil {
+		if err := netlink.LinkAdd(veth); err != nil {
 			return err
 		}
 
-		// Handle IPv4
+		hostVeth, err := netlink.LinkByName(hostVethName)
+		if err != nil {
+			err = fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
+			return err
+		}
+
+		contVeth, err := netlink.LinkByName(contVethName)
+		if err != nil {
+			err = fmt.Errorf("failed to lookup %q: %v", contVethName, err)
+			return err
+		}
+
+		// Fetch the MAC from the container Veth. This is needed by Calico.
+		contVethMAC = contVeth.Attrs().HardwareAddr.String()
+		logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
+
+		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
+		// Both ends of the veth are still in the container's network namespace.
+
+		// Before returning, create the routes inside the namespace, first for IPv4 then IPv6.
 		if res.IP4 != nil {
 			// Add a connected route to a dummy next hop so that a default route can be set
 			gw := net.IPv4(169, 254, 1, 1)
@@ -57,11 +68,11 @@ func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) 
 			}
 
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP4.IP}); err != nil {
-				return fmt.Errorf("failed to add IP addr to %q: %v", ifName, err)
+				return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
 			}
 		}
 
-		// Handle IPv6
+		// Handle IPv6 routes
 		if res.IP6 != nil {
 			// No need to add a dummy next hop route as the host veth device will already have an IPv6
 			// link local address that can be used as a next hop.
@@ -92,61 +103,33 @@ func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) 
 			}
 
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP6.IP}); err != nil {
-				return fmt.Errorf("failed to add IP addr to %q: %v", ifName, err)
+				return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
 			}
 		}
 
-		// Retrieve the details required by the Calico data model - the host veth name and the container MAC.
-		contVeth, err = netlink.LinkByName(ifName)
-		if err != nil {
-			err = fmt.Errorf("failed to lookup %q: %v", ifName, err)
-			return err
+		// Now that the everything has been successfully set up in the container, move the "host" end of the
+		// veth into the host namespace.
+		if err = netlink.LinkSetNsFd(hostVeth, int(hostNS.Fd())); err != nil {
+			return fmt.Errorf("failed to move veth to host netns: %v", err)
 		}
-
-		contVethMAC = contVeth.Attrs().HardwareAddr.String()
-		hostVethName = hostVeth.Attrs().Name
 
 		return nil
 	})
 
-	return hostVethName, contVethMAC, err
-}
-
-func setupHostNetworking(vethName, newVethName string, logger *log.Entry) error {
-	// The host side veth was originally created within the container netns and was subsequently moved to the host netns.
-	// The name will be the same, but the ifindex may have changed so we must re-query it.
-	veth, err := netlink.LinkByName(vethName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup %s: %v", vethName, err)
+		return "", "", err
 	}
 
-	if err := netlink.LinkSetDown(veth); err != nil {
-		return fmt.Errorf("failed to set %s DOWN: %v", vethName, err)
+	// Moving a veth between namespaces always leaves it in the "DOWN" state. Set it back to "UP" now that we're
+	// back in the host namespace.
+	hostVeth, err := netlink.LinkByName(hostVethName)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
 	}
 
-	// Sometimes renaming the veth can fail with a "busy" error. This is believed to be caused by other services
-	// setting the up/down status of the device soon after it's created.
-	for i := 0; i < 10; i++ {
-		if err := netlink.LinkSetName(veth, newVethName); err != nil {
-			switch err {
-			case syscall.EBUSY:
-				logger.WithField("vethName", vethName).Debug(
-					"Failed to rename veth because device is busy. Sleeping and retrying.")
-				time.Sleep(100 * time.Millisecond)
-				continue
-			default:
-				return err
-			}
-		}
-
-		// No error was hit renaming the device, try setting the device back "UP"
-		if err := netlink.LinkSetUp(veth); err != nil {
-			return fmt.Errorf("failed to set %s UP: %v", vethName, err)
-		}
-
-		return nil
+	if err = netlink.LinkSetUp(hostVeth); err != nil {
+		return "", "", fmt.Errorf("failed to set %q up: %v", hostVethName, err)
 	}
 
-	// Fell out of the loop without returning. This means the devices failed to rename.
-	return fmt.Errorf("failed to rename device from %s to %s. Device Busy.", vethName, newVethName)
+	return hostVethName, contVethMAC, err
 }

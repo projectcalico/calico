@@ -76,7 +76,8 @@ var _ = Describe("CalicoCni", func() {
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging
-				hostVeth, _ := netlink.LinkByName("cali" + containerID)
+				hostVeth, err := netlink.LinkByName("cali" + containerID)
+				Expect(err).ToNot(HaveOccurred())
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 				Expect(hostVeth.Attrs().MTU).Should(Equal(1500))
 
