@@ -17,7 +17,7 @@ package commands
 import (
 	"os"
 
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/client"
 )
 
@@ -26,7 +26,7 @@ import (
 // parameter not loaded from file.
 func newClient(cf string) (*client.Client, error) {
 	if _, err := os.Stat(cf); err != nil {
-		glog.V(2).Infof("Config file cannot be read - reading config from environment")
+		log.Infof("Config file cannot be read - reading config from environment")
 		cf = ""
 	}
 
@@ -34,7 +34,7 @@ func newClient(cf string) (*client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(2).Infof("Loaded client config: type=%v %#v", cfg.BackendType, cfg.BackendConfig)
+	log.Infof("Loaded client config: type=%v %#v", cfg.BackendType, cfg.BackendConfig)
 
 	c, err := client.New(*cfg)
 	if err != nil {

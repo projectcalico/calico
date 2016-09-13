@@ -27,7 +27,7 @@ import (
 	"text/template"
 
 	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
+	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 )
@@ -86,7 +86,7 @@ type resourcePrinterTable struct {
 }
 
 func (r resourcePrinterTable) print(resources []unversioned.Resource) error {
-	glog.V(2).Infof("Output in table format (wide=%v)", r.wide)
+	log.Infof("Output in table format (wide=%v)", r.wide)
 	for _, resource := range resources {
 		// Get the resource manager for the resource type.
 		rm := resourcemgr.GetResourceManager(resource)
