@@ -130,7 +130,7 @@ We specify the Calico networking driver (`calico`) when creating the network,
 and optionally specify the Calico IPAM driver (`calico`) if you chose to use
 Calico IPAM.
 
-For this worked example, we explicitly choose an CIDR for each network
+For this worked example, we explicitly choose a CIDR for each network
 rather than using default selections - this is to avoid potential conflicts
 with the default NAT IP assignment used by VirtualBox.  Depending on your
 specific environment, you may need to choose different CIDRs.
