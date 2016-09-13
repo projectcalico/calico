@@ -44,6 +44,8 @@ Examples:
 
 ```
 $ calicoctl version
-0.8.0
+Version:      v0.0.1-alpha
+Build date:   2016-09-13T23:26:03+0000
+Git commit:   ffa65e3
 ```
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/commands/version.md?pixel)](https://github.com/igrigorik/ga-beacon)

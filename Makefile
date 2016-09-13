@@ -5,6 +5,14 @@ BUILD_CONTAINER_MARKER=calicoctl_build_container.created
 
 GO_FILES:=$(shell find calicoctl lib vendor -name '*.go')
 
+CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
+CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
+CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
+
+LDFLAGS=-ldflags "-X github.com/tigera/libcalico-go/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
+	-X github.com/tigera/libcalico-go/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
+	-X github.com/tigera/libcalico-go/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
+
 default: all
 all: test
 test: ut
@@ -24,12 +32,20 @@ force:
 
 bin/calicoctl: vendor $(GO_FILES) glide.*
 	mkdir -p bin
-	go build -o "$@" "./calicoctl/calicoctl.go"
+	go build -o "$@" $(LDFLAGS) "./calicoctl/calicoctl.go"
 
-release/calicoctl: vendor force
-	mkdir -p release
-	cd build-calicoctl && docker build -t calicoctl-build .
-	docker run --rm -v `pwd`:/libcalico-go calicoctl-build /libcalico-go/build-calicoctl/build.sh
+release/calicoctl: clean force
+	mkdir -p bin release
+	docker build -t calicoctl-build .
+	docker run --rm --privileged --net=host \
+	-v ${PWD}:/go/src/github.com/tigera/libcalico-go:rw \
+	-v ${PWD}/bin:/go/src/github.com/tigera/libcalico-go/bin:rw \
+	-w /go/src/github.com/tigera/libcalico-go \
+	calicoctl-build make bin/calicoctl
+	mv bin/calicoctl release/calicoctl
+	rm -rf bin
+	mv release/calicoctl release/calicoctl-$(CALICOCTL_VERSION)
+	cd release && ln -sf calicoctl-$(CALICOCTL_VERSION) calicoctl
 
 # Build calicoctl in a container.
 build-containerized: $(BUILD_CONTAINER_MARKER)
@@ -69,3 +85,6 @@ run-etcd:
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+clean:
+	rm -rf bin release
