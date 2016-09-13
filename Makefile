@@ -3,14 +3,17 @@
 BUILD_CONTAINER_NAME=calico/calicoctl_build_container
 BUILD_CONTAINER_MARKER=calicoctl_build_container.created
 
+GO_FILES:=$(shell find calicoctl lib vendor -name '*.go')
+
 default: all
 all: test
 test: ut
 
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
-vendor:
+vendor: glide.lock
 	glide install -strip-vendor -strip-vcs --cache
+	touch vendor
 
 ut: bin/calicoctl
 	./run-uts
@@ -19,7 +22,7 @@ ut: bin/calicoctl
 force:
 	true
 
-bin/calicoctl: vendor 
+bin/calicoctl: vendor $(GO_FILES) glide.*
 	mkdir -p bin
 	go build -o "$@" "./calicoctl/calicoctl.go"
 
