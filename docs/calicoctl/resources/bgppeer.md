@@ -19,7 +19,6 @@ A BGP peer can also be added at the `node` scope, meaning only a single specifie
 apiVersion: v1
 kind: bgppeer
 metadata:
-  name: rack001-tor
   scope: node
   hostname: rack1-host1
   peerIP: 192.168.1.1
@@ -31,7 +30,6 @@ spec:
 #### Metadata
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
-| name     | The name of this peer resource.                           |                                                                                  | string |
 | scope    | The scope of this peer.                                   | Accepted values: `global` or `node`                                              | string |
 | hostname | The hostname of the node that should peer with this peer. | Must be specified if scope is `node`, and must be omitted when scope is `global` | string |
 | peerIP   | The IP address of this peer.                              | Valid IPv4 or IPv6 address.                                                      | string |

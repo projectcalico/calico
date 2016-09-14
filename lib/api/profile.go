@@ -15,37 +15,74 @@
 package api
 
 import (
-	. "github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/tigera/libcalico-go/lib/api/unversioned"
 )
 
-type ProfileMetadata struct {
-	ObjectMetadata
-	Name   string            `json:"name,omitempty" validate:"omitempty,name"`
-	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
-}
-
-type ProfileSpec struct {
-	IngressRules []Rule   `json:"ingress,omitempty" validate:"omitempty,dive"`
-	EgressRules  []Rule   `json:"egress,omitempty" validate:"omitempty,dive"`
-	Tags         []string `json:"tags,omitempty" validate:"omitempty,dive,tag"`
-}
-
+// Profile contains the details a security profile resource.  A profile is set of security rules
+// to apply on an endpoint.  An endpoint (either a host endpoint or an endpoint on a workload) can
+// reference zero or more profiles.  The profile rules are applied directly to the endpoint *after*
+// the label-based security policy has been applied, and in the order the profiles are declared on the
+// endpoint.
 type Profile struct {
-	TypeMetadata
+	unversioned.TypeMetadata
 	Metadata ProfileMetadata `json:"metadata,omitempty"`
 	Spec     ProfileSpec     `json:"spec,omitempty"`
 }
 
+// ProfileMetadata contains the metadata for a security Profile resource.
+type ProfileMetadata struct {
+	unversioned.ObjectMetadata
+
+	// The name of the endpoint.
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
+
+	// The labels to apply to each endpoint that references this profile.  It is expected
+	// that many endpoints share the same labels. For example, they could be used to label all
+	// “production” workloads with “deployment=prod” so that security policy can be applied
+	// to production workloads.
+	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
+}
+
+// ProfileSpec contains the specification for a security Profile resource.
+type ProfileSpec struct {
+	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
+	// a corresponding action to apply.
+	IngressRules []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
+
+	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
+	// a corresponding action to apply.
+	EgressRules []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
+
+	// A list of tags that are applied to each endpoint that references this profile.
+	Tags []string `json:"tags,omitempty" validate:"omitempty,dive,tag"`
+}
+
+// NewProfile creates a new (zeroed) Profile struct with the TypeMetadata initialised to the current
+// version.
 func NewProfile() *Profile {
-	return &Profile{TypeMetadata: TypeMetadata{Kind: "profile", APIVersion: "v1"}}
+	return &Profile{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind:       "profile",
+			APIVersion: unversioned.VersionCurrent,
+		},
+	}
 }
 
+// A ProfileList contains a list of security Profile resources.  List types are returned from List()
+// enumerations on the client interface.
 type ProfileList struct {
-	TypeMetadata
-	Metadata ListMetadata `json:"metadata,omitempty"`
-	Items    []Profile    `json:"items" validate:"dive,omitempty"`
+	unversioned.TypeMetadata
+	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Items    []Profile                `json:"items" validate:"dive,omitempty"`
 }
 
+// NewProfile creates a new (zeroed) Profile struct with the TypeMetadata initialised to the current
+// version.
 func NewProfileList() *ProfileList {
-	return &ProfileList{TypeMetadata: TypeMetadata{Kind: "profileList", APIVersion: "v1"}}
+	return &ProfileList{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind:       "profileList",
+			APIVersion: unversioned.VersionCurrent,
+		},
+	}
 }

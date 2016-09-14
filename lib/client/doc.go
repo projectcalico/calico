@@ -14,5 +14,99 @@
 
 /*
 Package client implements the northbound client used to manage Calico configuration.
+
+This client is the main entry point for applications that are managing or querying
+Calico configuration.
+
+This client provides a typed interface for managing different resource types.  The
+definitions for each resource type are defined in the following package:
+	github.com/tigera/libcalico-go/lib/api
+
+The client has a number of methods that return interfaces for managing:
+	-  Policy resources
+	-  IP Pool resources
+	-  Host endpoint resources
+	-  Workload resources
+	-  Profile resources
+	-  IP Address Management
+
+See interface definitions for details about the set of management commands for each
+resource type.
+
+The resource management interfaces have a common set of commands to create, delete,
+update and retrieve resource instances.  For example, an application using this
+client to manage host endpoint resources would create an instance of this client, create a
+new HostEndpoints interface and call the appropriate methods on that interface.  For example:
+
+	// ClientConfig defaults to access an etcd backend datastore at
+	// localhost:2379.  For alternative access details, set the appropriate
+	// fields in the ClientConfig structure.
+	config := api.ClientConfig{}
+	client := New(&config)
+
+	// Obtain the interface for managing host endpoint resources.
+	hostendpoints := client.HostEndpoints()
+
+	// Create a new host endpoint.  All Create() methods return an error of type
+	// common.ErrorResourceAlreadyExists if the resource specified by its
+	// unique identifiers already exists.
+	hostEndpoint, err := hostEndpoints.Create(&api.HostEndpoint{
+		Metadata: api.HostEndpointMetadata{
+			Name: "endpoint1",
+			Hostname: "hostname1",
+		},
+		Spec: api.HostEndpointSpec{
+			InterfaceName: "eth0"
+		},
+	}
+
+	// Update an existing host endpoint.  All Update() methods return an error of type
+	// common.ErrorResourceDoesNotExist if the resource specified by its
+	// unique identifiers does not exist.
+	hostEndpoint, err = hostEndpoints.Update(&api.HostEndpoint{
+		Metadata: api.HostEndpointMetadata{
+			Name: "endpoint1",
+			Hostname: "hostname1",
+		},
+		Spec: api.HostEndpointSpec{
+			InterfaceName: "eth0",
+			Profiles: []string{"profile1"},
+		},
+	}
+
+	// Apply (update or create) a hostEndpoint.  All Apply() methods will update a resource
+	// if it already exists, and will create a new resource if it does not.
+	hostEndpoint, err = hostEndpoints.Apply(&api.HostEndpoint{
+		Metadata: api.HostEndpointMetadata{
+			Name: "endpoint1",
+			Hostname: "hostname1",
+		},
+		Spec: api.HostEndpointSpec{
+			InterfaceName: "eth1",
+			Profiles: []string{"profile1"},
+		},
+	}
+
+	// Delete a hostEndpoint.  All Delete() methods return an error of type
+	// common.ErrorResourceDoesNotExist if the resource specified by its
+	// unique identifiers does not exist.
+	hostEndpoint, err = hostEndpoints.Delete(api.HostEndpointMetadata{
+		Name: "endpoint1",
+		Hostname: "hostname1",
+	})
+
+	// Get a hostEndpoint.  All Get() methods return an error of type
+	// common.ErrorResourceDoesNotExist if the resource specified by its
+	// unique identifiers does not exist.
+	hostEndpoint, err = hostEndpoints.Get(api.HostEndpointMetadata{
+		Name: "endpoint1",
+		Hostname: "hostname1",
+	})
+
+	// List all hostEndpoints.  All List() methods take a (sub-)set of the resource
+	// identifiers and return the corresponding list resource type that has an
+	// Items field containing a list of resources that match the supplied
+	// identifiers.
+	hostEndpointList, err := hostEndpoints.List(api.HostEndpointMetadata{})
 */
 package client

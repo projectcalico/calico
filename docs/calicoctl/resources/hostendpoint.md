@@ -22,14 +22,15 @@ spec:
 
 ### Definitions
 #### Metadata
-| name     | description  | requirements                  | schema |
-|----------|--------------|-------------------------------|--------|
-| name     | The name of this hostEndpoint.               | string |
+| name     | description                                               | requirements                             | schema |
+|----------|-----------------------------------------------------------|------------------------------------------|--------|
+| name     | The name of this hostEndpoint.                            |                                          | string |
 | hostname | The hostname of the host where this hostEndpoint resides. | Required for `create`/`update`/`delete`. | string |
+| labels   | A set of labels to apply to this endpoint.                |      | Dictionary with key and values as strings. |
 
 #### Spec
 | name         | description                                              | requirements                | schema          |
 |--------------|----------------------------------------------------------|-----------------------------|-----------------|
-| interface    | The name of the interface to apply policy to.            |                             | string          |
+| interfaceName    | The name of the interface to apply policy to.            |                             | string          |
 | expectedIPs  | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address. | list of strings |
 | profiles     | The list of profiles to apply to the endpoint.           |                             | list of strings |

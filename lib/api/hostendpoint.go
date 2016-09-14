@@ -15,39 +15,84 @@
 package api
 
 import (
-	. "github.com/tigera/libcalico-go/lib/api/unversioned"
-	. "github.com/tigera/libcalico-go/lib/net"
+	"github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
-type HostEndpointMetadata struct {
-	ObjectMetadata
-	Name     string            `json:"name,omitempty" validate:"omitempty,name"`
-	Hostname string            `json:"hostname,omitempty" validate:"omitempty,name"`
-	Labels   map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
-}
-
-type HostEndpointSpec struct {
-	InterfaceName string   `json:"interfaceName,omitempty" validate:"omitempty,interface"`
-	ExpectedIPs   []IP     `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
-	Profiles      []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
-}
-
+// HostEndpoint contains information about a “bare-metal” interfaces attached to the host that is
+// running Calico’s agent, Felix. By default, Calico doesn’t apply any policy to such interfaces.
 type HostEndpoint struct {
-	TypeMetadata
+	unversioned.TypeMetadata
 	Metadata HostEndpointMetadata `json:"metadata,omitempty"`
 	Spec     HostEndpointSpec     `json:"spec,omitempty"`
 }
 
-func NewHostEndpoint() *HostEndpoint {
-	return &HostEndpoint{TypeMetadata: TypeMetadata{Kind: "hostEndpoint", APIVersion: "v1"}}
+// HostEndpointMetadata contains the Metadata for a HostEndpoint resource.
+type HostEndpointMetadata struct {
+	unversioned.ObjectMetadata
+
+	// The name of the endpoint.
+	Name     string            `json:"name,omitempty" validate:"omitempty,name"`
+
+	// The hostname of the compute server.
+	Hostname string            `json:"hostname,omitempty" validate:"omitempty,name"`
+
+	// The labels applied to the host endpoint.  It is expected that many endpoints share
+	// the same labels. For example, they could be used to label all “production” workloads
+	// with “deployment=prod” so that security policy can be applied to production workloads.
+	Labels   map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 }
 
+// HostEndpointSpec contains the specification for a HostEndpoint resource.
+type HostEndpointSpec struct {
+	// The name of the linux interface to apply policy to; for example “eth0”.
+	// If "InterfaceName" is not present then at least one expected IP must be specified.
+	InterfaceName string   `json:"interfaceName,omitempty" validate:"omitempty,interface"`
+
+	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
+	// If "InterfaceName" is not present, Calico will look for an interface matching any
+	// of the IPs in the list and apply policy to that.
+	//
+	// Note:
+	// 	When using the selector|tag match criteria in an ingress or egress security Policy
+	// 	or Profile, Calico converts the selector into a set of IP addresses. For host
+	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
+	// 	name is specified, Calico does not learn the IPs of the interface for use in match
+	// 	criteria.)
+	ExpectedIPs   []net.IP     `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
+
+	// A list of identifiers of security Profile objects that apply to this endpoint. Each
+	// profile is applied in the order that they appear in this list.  Profile rules are applied
+	// after the label-based security policy.
+	Profiles      []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+}
+
+// NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current
+// version.
+func NewHostEndpoint() *HostEndpoint {
+	return &HostEndpoint{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind: "hostEndpoint",
+			APIVersion: unversioned.VersionCurrent,
+		},
+	}
+}
+
+// HostEndpointList contains a list of Host Endpoint resources.  List types are returned from List()
+// enumerations in the client interface.
 type HostEndpointList struct {
-	TypeMetadata
-	Metadata ListMetadata   `json:"metadata,omitempty"`
+	unversioned.TypeMetadata
+	Metadata unversioned.ListMetadata   `json:"metadata,omitempty"`
 	Items    []HostEndpoint `json:"items" validate:"dive"`
 }
 
+// NewHostEndpoint creates a new (zeroed) HostEndpointList struct with the TypeMetadata initialised to the current
+// version.
 func NewHostEndpointList() *HostEndpointList {
-	return &HostEndpointList{TypeMetadata: TypeMetadata{Kind: "hostEndpointList", APIVersion: "v1"}}
+	return &HostEndpointList{
+		TypeMetadata: unversioned.TypeMetadata{
+			Kind: "hostEndpointList",
+			APIVersion: unversioned.VersionCurrent,
+		},
+	}
 }

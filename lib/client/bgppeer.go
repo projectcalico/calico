@@ -30,7 +30,7 @@ type BGPPeerInterface interface {
 	Delete(api.BGPPeerMetadata) error
 }
 
-// peers implements BGPPeerInterface
+// bgpPeers implements BGPPeerInterface
 type bgpPeers struct {
 	c *Client
 }
