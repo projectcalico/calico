@@ -24,6 +24,8 @@ import (
 func Create(args []string) error {
 	doc := EtcdIntro + `Create a resource by filename or stdin.
 
+Valid resource kinds are bgpPeer, hostEndpoint, policy, pool, and profile.
+
 Usage:
   calicoctl create --filename=<FILENAME> [--skip-exists] [--config=<CONFIG>]
 
