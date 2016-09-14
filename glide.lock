@@ -1,5 +1,5 @@
-hash: 079407bbb449696061bf6942e5323cf727fbded043b3667f4a4da281b7e102c6
-updated: 2016-09-13T18:30:49.94025376+01:00
+hash: e7f3535241c3657f415d84ada8a57a279a25fc5beaf9efc47e8dd2ff4783c8c7
+updated: 2016-09-14T17:26:40.021904395+01:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -26,7 +26,7 @@ imports:
   - digest
   - reference
 - name: github.com/docker/engine-api
-  version: 4290f40c056686fcaa5c9caf02eac1dde9315adf
+  version: 3d1601b9d2436a70b0dfc045a23f6503d19195df
   subpackages:
   - client
   - client/transport
@@ -35,7 +35,6 @@ imports:
   - types/blkiodev
   - types/container
   - types/filters
-  - types/mount
   - types/network
   - types/reference
   - types/registry
