@@ -102,6 +102,8 @@ There is a single supported policy type, `k8s` which uses the Kubernetes Network
 }
 ```
 
+When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
+
 Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
 
 ### Deprecated ways of specifying Kubernetes API access details
@@ -134,5 +136,7 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
     }
 }
 ```
+
+When making use of the `usePodCidr` option, the Calico CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/configuration.md?pixel)](https://github.com/igrigorik/ga-beacon)
