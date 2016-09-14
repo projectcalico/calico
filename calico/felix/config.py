@@ -328,9 +328,9 @@ class Config(object):
                            "2379,2380,4001 and 7001.",
                            [2379,2380,4001,7001], value_is_int_list=True)
         self.add_parameter("Ipv6Support",
-                           "Whether IPv6 support is enabled.  If 'on', Felix "
+                           "Whether IPv6 support is enabled.  If 'true', Felix "
                            "will program ip6tables rules and any IPv6 routes; "
-                           "if 'off', Felix will not provide any IPv6 "
+                           "if 'false', Felix will not provide any IPv6 "
                            "function.  If set to 'auto', Felix will attempt "
                            "to detect whether the system supports IPv6 and "
                            "use if it it does.",
@@ -782,7 +782,7 @@ class Config(object):
                     raise ConfigException("Out-of-range port %s" % p,
                                           self.parameters[name])
 
-        if self.IPV6_SUPPORT not in ("on", "off", "auto"):
+        if self.IPV6_SUPPORT not in ("true", "false", "auto"):
             raise ConfigException(
                 "Invalid field value",
                 self.parameters["Ipv6Support"]
