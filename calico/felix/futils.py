@@ -541,6 +541,13 @@ def detect_ipv6_supported():
         return False, ("ip6tables not installed; Calico IPv6 support requires "
                        "Linux kernel v3.3 or above and ip6tables v1.4.14 or "
                        "above.")
+
+    # Check for the existence of the IPv6 NAT table.
+    try:
+        check_call(["ip6tables-save", "--table", "nat"])
+    except FailedSystemCall:
+        return False, "Failed to load IPv6 NAT table"
+
     try:
         # Use -C, which checks for a particular rule.  We don't expect the rule
         # to exist but iptables will give us a distinctive error if the
