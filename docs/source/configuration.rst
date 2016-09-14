@@ -175,6 +175,11 @@ The full list of parameters which can be set is as follows.
 |                                  |                                       | cutting off a host with incorrect configuration.  The default value opens etcd's standard |
 |                                  |                                       | ports to ensure that Felix does not get cut off from etcd.                                |
 +----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
+| Ipv6Support                      | auto                                  | Whether IPv6 support is enabled.  If 'true', Felix will program ip6tables rules           |
+|                                  |                                       | and any IPv6 routes; if 'false', Felix will not provide any IPv6 function.  If set        |
+|                                  |                                       | to 'auto', Felix will attempt to detect whether the system supports                       |
+|                                  |                                       | IPv6 and use if it it does.                                                               |
++----------------------------------+---------------------------------------+-------------------------------------------------------------------------------------------+
 
 
 Environment variables
