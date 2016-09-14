@@ -3,7 +3,7 @@
 BUILD_CONTAINER_NAME=calico/calicoctl_build_container
 BUILD_CONTAINER_MARKER=calicoctl_build_container.created
 
-GO_FILES:=$(shell find calicoctl lib vendor -name '*.go')
+GO_FILES:=$(shell find calicoctl lib -name '*.go')
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
@@ -19,22 +19,20 @@ test: ut
 
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
-vendor: glide.lock
+vendor vendor/.up-to-date: glide.lock
+	rm -f vendor/.up-to-date
 	glide install -strip-vendor -strip-vcs --cache
-	touch vendor
+	touch vendor/.up-to-date
 
 ut: bin/calicoctl
 	./run-uts
 
-.PHONEY: force
-force:
-	true
-
-bin/calicoctl: vendor $(GO_FILES) glide.*
+bin/calicoctl: vendor/.up-to-date $(GO_FILES)
 	mkdir -p bin
 	go build -o "$@" $(LDFLAGS) "./calicoctl/calicoctl.go"
 
-release/calicoctl: clean force
+.PHONY: release/calicoctl
+release/calicoctl: clean vendor/.up-to-date
 	mkdir -p bin release
 	docker build -t calicoctl-build .
 	docker run --rm --privileged --net=host \
@@ -86,5 +84,9 @@ run-etcd:
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
+.PHONY: clean
 clean:
-	rm -rf bin release
+	find -name '*.coverprofile' -type f -delete
+	rm -rf bin \
+	       release \
+	       vendor
