@@ -136,7 +136,14 @@ def _main_greenlet(config):
             v4_fip_manager,
         ]
 
-        v6_enabled, ipv6_reason = futils.ipv6_supported()
+        v6_enabled = (config.IPV6_SUPPORT == ")
+        if config.IPV6_SUPPORT == "on":
+            v6_enabled = True
+        elif config.IPV6_SUPPORT == "auto":
+            v6_enabled, ipv6_reason = futils.detect_ipv6_supported()
+        else:
+            v6_enabled = False
+            ipv6_reason =
         if v6_enabled:
             v6_raw_updater = IptablesUpdater("raw", ip_version=6, config=config)
             v6_filter_updater = IptablesUpdater("filter", ip_version=6,

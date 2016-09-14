@@ -528,7 +528,7 @@ def find_set_bits(mask):
         mask = next_mask
 
 
-def ipv6_supported():
+def detect_ipv6_supported():
     """Checks whether we can support IPv6 on this host.
 
     :returns tuple[bool,str]: supported, reason for lack of support or None.
