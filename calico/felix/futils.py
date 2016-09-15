@@ -669,4 +669,4 @@ def report_usage_and_get_warnings(calico_version, hostname, cluster_guid, cluste
         reply = r.data.decode('utf-8')
         _log.info("usage_report status=%s, reply=%s", r.status, reply)
     except Exception:
-        _log.info("Exception in usage_report")
+        _log.exception("Exception in usage_report")
