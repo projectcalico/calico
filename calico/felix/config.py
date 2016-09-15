@@ -333,7 +333,7 @@ class Config(object):
                            "if 'false', Felix will not provide any IPv6 "
                            "function.  If set to 'auto', Felix will attempt "
                            "to detect whether the system supports IPv6 and "
-                           "use if it it does.",
+                           "use it if it does.",
                            "auto")
 
         # The following setting determines which flavour of Iptables Generator
@@ -783,10 +783,9 @@ class Config(object):
                                           self.parameters[name])
 
         if self.IPV6_SUPPORT not in ("true", "false", "auto"):
-            raise ConfigException(
-                "Invalid field value",
-                self.parameters["Ipv6Support"]
-            )
+            log.warning("Unrecognized value for Ipv6Support (%s), "
+                        "defaulting to 'auto'", self.IPV6_SUPPORT)
+            self.IPV6_SUPPORT = "auto"
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

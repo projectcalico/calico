@@ -194,6 +194,13 @@ class TestFutils(unittest2.TestCase):
         m_popen.side_effect = OSError()
         self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
 
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_missing_nat_table(self, m_check_call, m_exists):
+        m_exists.return_value = True
+        m_check_call.side_effect = iter([None, futils.FailedSystemCall()])
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
+
     @mock.patch("calico.felix.futils.urllib3.disable_warnings", autospec=True)
     @mock.patch("calico.felix.futils.urllib3.util.retry.Retry", autospec=True)
     @mock.patch("calico.felix.futils.urllib3.PoolManager", autospec=True)

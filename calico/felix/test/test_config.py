@@ -96,6 +96,7 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(config.REPORTING_TTL_SECS, 90)
             self.assertEqual(config.IPTABLES_MARK_MASK, 0xff000000)
             self.assertEqual(config.IPTABLES_MARK_ACCEPT, "0x1000000")
+            self.assertEqual(config.IPV6_SUPPORT, "auto")
 
     def test_bad_plugin_name(self):
         env_dict = {"FELIX_IPTABLESGENERATORPLUGIN": "unknown"}
@@ -104,6 +105,11 @@ class TestConfig(unittest.TestCase):
                                      'registered for entrypoint '
                                      '"calico.felix.iptables_generator".'):
             config = load_config("felix_default.cfg", env_dict=env_dict)
+
+    def test_bad_ipv6_support_value(self):
+        env_dict = {"FELIX_IPV6SUPPORT": "badvalue"}
+        config = load_config("felix_default.cfg", env_dict=env_dict)
+        self.assertEqual(config.IPV6_SUPPORT, "auto")
 
     def test_invalid_port(self):
         data = { "felix_invalid_port.cfg": "Invalid port in field",
