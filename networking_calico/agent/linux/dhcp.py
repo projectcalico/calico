@@ -49,6 +49,17 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         # Add '--enable-ra'.
         cmd.append('--enable-ra')
 
+        # Enumerate precisely the TAP interfaces to listen on.
+        cmd.remove('--interface=tap*')
+        cmd.remove('--bridge-interface=%s,tap*' % self.interface_name)
+        bridge_option = '--bridge-interface=%s' % self.interface_name
+        for port in self.network.ports:
+            if port.device_id.startswith('tap'):
+                LOG.debug('Listen on %s', port.device_id)
+                cmd.append('--interface=%s' % port.device_id)
+                bridge_option = bridge_option + ',' + port.device_id
+        cmd.append(bridge_option)
+
         return cmd
 
     def _destroy_namespace_and_port(self):

@@ -767,14 +767,16 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         })
 
         # Define two subnets.
-        subnet1 = {'enable_dhcp': True,
+        subnet1 = {'network_id': 'net-id-1',
+                   'enable_dhcp': True,
                    'id': 'subnet-id-10.65.0--24',
                    'cidr': '10.65.0/24',
                    'gateway_ip': '10.65.0.1',
                    'host_routes': [{'destination': '11.11.0.0/16',
                                     'nexthop': '10.65.0.1'}],
                    'dns_nameservers': []}
-        subnet2 = {'enable_dhcp': False,
+        subnet2 = {'network_id': 'net-id-2',
+                   'enable_dhcp': False,
                    'id': 'subnet-id-10.28.0--24',
                    'cidr': '10.28.0/24',
                    'gateway_ip': '10.28.0.1',
@@ -788,6 +790,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.driver.create_subnet_postcommit(context)
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'network_id': 'net-id-1',
                 'cidr': '10.65.0.0/24',
                 'gateway_ip': '10.65.0.1',
                 'host_routes': [{'destination': '11.11.0.0/16',
@@ -822,6 +825,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.driver.update_subnet_postcommit(context)
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
+                'network_id': 'net-id-2',
                 'cidr': '10.28.0.0/24',
                 'gateway_ip': '10.28.0.1',
                 'host_routes': [],
@@ -837,6 +841,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.28.0--24': {
+                'network_id': 'net-id-2',
                 'cidr': '10.28.0.0/24',
                 'gateway_ip': '10.28.0.1',
                 'host_routes': [],
@@ -872,6 +877,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'network_id': 'net-id-1',
                 'cidr': '10.65.0.0/24',
                 'gateway_ip': '10.65.0.1',
                 'host_routes': [{'destination': '11.11.0.0/16',
@@ -888,6 +894,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({
             '/calico/dhcp/v1/subnet/subnet-id-10.65.0--24': {
+                'network_id': 'net-id-1',
                 'cidr': '10.65.0.0/24',
                 'gateway_ip': '10.65.0.2',
                 'host_routes': [{'destination': '11.11.0.0/16',

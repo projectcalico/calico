@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
+# Copyright 2016 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -27,7 +28,6 @@ from oslo_config import cfg
 
 from neutron.agent.common import config
 from neutron.agent.dhcp.agent import DhcpAgent
-from neutron.agent.dhcp.agent import NetworkCache
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
@@ -46,6 +46,11 @@ from networking_calico.common import config as calico_config
 LOG = logging.getLogger(__name__)
 
 NETWORK_ID = 'calico'
+
+
+class ValidationFailed(Exception):
+    """Class used for data validation exceptions."""
+    pass
 
 
 class FakePlugin(object):
@@ -80,7 +85,7 @@ class FakePlugin(object):
         dhcp_port = self.plugin.create_dhcp_port({'port': port_dict})
         """
         LOG.debug("create_dhcp_port: %s", port)
-        port['port']['id'] = 'dhcp'
+        port['port']['id'] = port['port']['network_id']
 
         # The following MAC address will be assigned to the Linux dummy
         # interface that
@@ -104,12 +109,22 @@ class FakePlugin(object):
         LOG.debug("release_dhcp_port: %s %s", network_id, device_id)
 
 
-def empty_network():
+def empty_network(network_id=NETWORK_ID):
     """Construct and return an empty network model."""
-    return make_net_model({"id": NETWORK_ID,
+    return make_net_model({"id": network_id,
                            "subnets": [],
                            "ports": [],
+                           "tenant_id": "calico",
                            "mtu": constants.DEFAULT_NETWORK_MTU})
+
+
+def copy_network(source_net):
+    """Construct and return a copy of an existing network model."""
+    return make_net_model({"id": source_net.id,
+                           "subnets": source_net.subnets,
+                           "ports": source_net.ports,
+                           "tenant_id": source_net.tenant_id,
+                           "mtu": source_net.mtu})
 
 
 def make_net_model(net_spec):
@@ -140,30 +155,13 @@ def get_etcd_connection_settings():
 
 class CalicoEtcdWatcher(EtcdWatcher):
 
-    NETWORK_ID = 'calico'
-    """
-    Calico network ID.
-
-    Although there can in general be multiple networks and multiple
-    subnets per network that need DHCP on a particular compute host,
-    there's actually nothing that depends on how the subnets are
-    partitioned across networks, and a single instance of Dnsmasq is
-    quite capable of providing DHCP for many subnets.
-
-    Therefore we model the DHCP requirement using a single network
-    with ID 'calico', and many subnets within that network.
-    """
-
     def __init__(self, agent):
         watcher_kwargs = get_etcd_connection_settings()
         watcher_kwargs['key_to_poll'] = \
             dir_for_host(socket.gethostname()) + "/workload"
         super(CalicoEtcdWatcher, self).__init__(**watcher_kwargs)
         self.agent = agent
-        self.suppress_on_ports_changed = False
-
-        # Create empty Calico network object in the cache.
-        self.agent.cache.put(empty_network())
+        self.suppress_dnsmasq_updates = False
 
         # Register the etcd paths that we need to watch.
         self.register_path(
@@ -190,6 +188,12 @@ class CalicoEtcdWatcher(EtcdWatcher):
             "/calico/v1/host/<hostname>/workload",
             on_del=self.on_dir_delete
         )
+
+        # Networks for which Dnsmasq needs updating.
+        self.dirty_networks = set()
+
+        # Subnets that have changed in etcd since when we last read them.
+        self.dirty_subnets = set()
 
         # Also watch the etcd subnet tree.  When something in that subtree
         # changes, the subnet watcher will tell _this_ watcher to resync.
@@ -232,7 +236,8 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
         Subnet properties are:
 
-        { 'enable_dhcp': True,
+        { 'network_id': <network ID>,
+          'enable_dhcp': True,
           'ip_version': 4 or 6,
           'cidr': '10.28.0.0/24',
           'dns_nameservers': [],
@@ -275,7 +280,6 @@ class CalicoEtcdWatcher(EtcdWatcher):
                                             'ip_address': ip_addr,
                                             'fqdn': fqdn})
         port = {'id': endpoint_id,
-                'network_id': NETWORK_ID,
                 'device_owner': 'calico',
                 'device_id': endpoint['name'],
                 'fixed_ips': fixed_ips,
@@ -284,45 +288,184 @@ class CalicoEtcdWatcher(EtcdWatcher):
         if fqdn:
             port['dns_assignment'] = dns_assignments
 
+        # Ensure that the cache includes the network and subnets for this port,
+        # and set the port's network ID correctly.
+        try:
+            port['network_id'] = self._ensure_net_and_subnets(port)
+        except etcd.EtcdKeyNotFound:
+            LOG.warning("Missing data for one of port's subnets")
+            return
+        except ValidationFailed:
+            LOG.warning("Invalid data for one of port's subnets")
+            return
+
         # Add this port into the NetModel.
         LOG.debug("new port: %s", port)
         self.agent.cache.put_port(dhcp.DictModel(port))
 
-        # Now check for impact on subnets and DHCP driver.
-        self.on_ports_changed()
+        # Schedule updating Dnsmasq.
+        self._update_dnsmasq(port['network_id'])
 
-    def on_ports_changed(self):
+    def _ensure_net_and_subnets(self, port):
+        """Ensure that the cache has a NetModel and subnets for PORT."""
+
+        # Gather the subnet IDs that we need for this port, and get the
+        # NetModel if we already have it in the cache.
+        needed_subnet_ids = set()
+        net = None
+        for fixed_ip in port['fixed_ips']:
+            subnet_id = fixed_ip.get('subnet_id')
+            if subnet_id:
+                needed_subnet_ids.add(subnet_id)
+                if not net:
+                    net = self.agent.cache.get_network_by_subnet_id(subnet_id)
+        LOG.debug("Needed subnet IDs: %s", needed_subnet_ids)
+        LOG.debug("Existing network model by subnet ID: %s", net)
+
+        # Get a mapping from subnet ID to data for all the subnets that we
+        # already have for the right network ID.
+        cached_subnets = {}
+        if net:
+            for subnet in net.subnets:
+                cached_subnets[subnet.id] = subnet
+
+        # For each subnet that we don't already have, or that we know has
+        # changed, read its data from etcd and hold for adding into the cache.
+        new_subnets = {}
+        for subnet_id in needed_subnet_ids:
+            if (subnet_id in self.dirty_subnets or
+                    subnet_id not in cached_subnets):
+                try:
+                    # Read data for this subnet from etcd.
+                    subnet = self._get_subnet(subnet_id)
+
+                    # Remember this as a new subnet that we'll need to add into
+                    # the cache.
+                    new_subnets[subnet_id] = subnet
+                except etcd.EtcdKeyNotFound:
+                    LOG.warning("No data for subnet %s", subnet_id)
+                    raise
+                except ValidationFailed:
+                    LOG.warning("Invalid data for subnet %s", subnet_id)
+                    raise
+
+        if not net:
+            # We don't already have a NetModel, so look for a cached NetModel
+            # with the right network ID.  (In this case we must have new
+            # subnets to add into the cache, and the cached NetModel must have
+            # subnets other than the ones that we're adding in this iteration;
+            # otherwise we would have already found it when searching by
+            # subnet_id above.)
+            assert new_subnets
+            network_id = new_subnets.values()[0]['network_id']
+            net = self.agent.cache.get_network_by_id(network_id)
+            LOG.debug("Existing network model by network ID: %s", net)
+
+        if not net:
+            # We still have no NetModel for the relevant network ID, so create
+            # a new one.  In this case we _must_ be adding new subnets.
+            assert new_subnets
+            net = empty_network(network_id)
+            LOG.debug("New network %s", net)
+        elif new_subnets:
+            # We have a NetModel that was already in the cache and are about to
+            # modify it.  Cache replacement only works if the new NetModel is a
+            # distinct object from the existing one, so make a copy here.
+            net = copy_network(net)
+            LOG.debug("Copied network %s", net)
+
+        if new_subnets:
+            # Add the new subnets into the NetModel.
+            assert net
+            net.subnets = [s for s in net.subnets
+                           if s.id not in new_subnets] + new_subnets.values()
+
+            # Add (or update) the NetModel in the cache.
+            LOG.debug("Net: %s", net)
+            self._fix_network_cache_port_lookup(net.id)
+            self.agent.cache.put(net)
+
+        return net.id
+
+    def _fix_network_cache_port_lookup(self, network_id):
+        """Fix NetworkCache before removing or replacing a network.
+
+        neutron.agent.dhcp.agent is bugged in that it adds the DHCP port into
+        the cache without updating the cache's port_lookup dict, but then
+        NetworkCache.remove() barfs if there is a port in network.ports but not
+        in that dict...
+
+        NetworkCache.put() implicitly does a remove() first if there is already
+        a NetModel in the cache with the same ID.  So a put() to update or
+        replace a network also hits this problem.
+
+        This method avoids that problem by ensuring that all of a network's
+        ports are in the port_lookup dict.  A caller should call this
+        immediately before a remove() or a put().
+        """
+
+        # If there is an existing NetModel for this network ID, ensure that all
+        # its ports are in the port_lookup dict.
+        if network_id in self.agent.cache.cache:
+            for port in self.agent.cache.cache[network_id].ports:
+                self.agent.cache.port_lookup[port.id] = network_id
+
+    def _get_subnet(self, subnet_id):
+        # Read data for subnet SUBNET_ID from etcd and translate it to the dict
+        # form expected for insertion into a Neutron NetModel.
+        LOG.debug("Read subnet %s from etcd", subnet_id)
+        self.dirty_subnets.discard(subnet_id)
+
+        subnet_key = key_for_subnet(subnet_id)
+        response = self.client.read(subnet_key, consistent=True)
+        data = safe_decode_json(response.value, 'subnet')
+        LOG.debug("Subnet data: %s", data)
+
+        if not (isinstance(data, dict) and
+                'cidr' in data and
+                'gateway_ip' in data):
+            # Subnet data was invalid.
+            LOG.warning("Invalid subnet data: %s => %s", response.value, data)
+            raise ValidationFailed("Invalid subnet data")
+
+        # Convert to form expected by NetModel.
+        ip_version = 6 if ':' in data['cidr'] else 4
+        subnet = {'enable_dhcp': True,
+                  'ip_version': ip_version,
+                  'cidr': data['cidr'],
+                  'dns_nameservers': data.get('dns_servers') or [],
+                  'id': subnet_id,
+                  'gateway_ip': data['gateway_ip'],
+                  'host_routes': data.get('host_routes', []),
+                  'network_id': data.get('network_id', NETWORK_ID)}
+        if ip_version == 6:
+            subnet['ipv6_address_mode'] = constants.DHCPV6_STATEFUL
+            subnet['ipv6_ra_mode'] = constants.DHCPV6_STATEFUL
+
+        return dhcp.DictModel(subnet)
+
+    def _update_dnsmasq(self, network_id):
+        """Start/stop/restart Dnsmasq for NETWORK_ID."""
+
         # Check whether we should really do the following processing.
-        if self.suppress_on_ports_changed:
-            LOG.debug("Don't recalculate subnets yet;"
+        if self.suppress_dnsmasq_updates:
+            LOG.debug("Don't update dnsmasq yet;"
                       " must be processing a snapshot")
+            self.dirty_networks.add(network_id)
             return
 
-        # Get current NetModel description of the Calico network.
-        net = self.agent.cache.get_network_by_id(NETWORK_ID)
-        LOG.debug("net: %s %s %s", net.id, net.subnets, net.ports)
+        # Get NetModel for that network ID.
+        net = self.agent.cache.get_network_by_id(network_id)
+        LOG.debug("Net: %s", net)
 
-        # See if we need to update the subnets in the NetModel.
-        new_subnets = self.calculate_new_subnets(net.ports, net.subnets)
-        if new_subnets is None:
-            # No change to subnets, so just need 'reload_allocations' to tell
-            # Dnsmasq about the new port.
-            self.agent.call_driver('reload_allocations', net)
-        else:
-            # Subnets changed, so need to 'restart' the DHCP driver.
-            net = make_net_model({"id": net.id,
-                                  "subnets": new_subnets,
-                                  "ports": net.ports,
-                                  "tenant_id": "calico",
-                                  "mtu": constants.DEFAULT_NETWORK_MTU})
-            LOG.debug("new net: %s %s %s", net.id, net.subnets, net.ports)
-
-            # Next line - i.e. just discarding the existing cache - is to work
-            # around Neutron bug that the DHCP port is not entered into the
-            # cache's port_lookup dict.
-            self.agent.cache = NetworkCache()
-            self.agent.cache.put(net)
+        # Start, restart or stop Dnsmasq for that network ID.
+        if [port for port in net.ports if port.device_id.startswith('tap')]:
             self.agent.call_driver('restart', net)
+        else:
+            # No ports left, so also remove this network from the cache.
+            self._fix_network_cache_port_lookup(net.id)
+            self.agent.cache.remove(net)
+            self.agent.call_driver('disable', net)
 
     def on_endpoint_delete(self, response, hostname, orchestrator,
                            workload_id, endpoint_id):
@@ -332,90 +475,26 @@ class CalicoEtcdWatcher(EtcdWatcher):
         if port:
             LOG.debug("deleted port: %s", port)
             self.agent.cache.remove_port(port)
-            self.on_ports_changed()
-
-    def calculate_new_subnets(self, ports, current_subnets):
-        """Calculate and return subnets needed for PORTS.
-
-        Given a current set of PORTS that we need to provide DHCP for,
-        calculate all the subnets that we need for those, and get their data
-        either from CURRENT_SUBNETS or from reading etcd.
-
-        If the new set of subnets is equivalent to what we already had in
-        CURRENT_SUBNETS, return None.  Otherwise return the new set of
-        subnets.
-        """
-
-        # Gather required subnet IDs.
-        subnet_ids = set()
-        for port in ports:
-            for fixed_ip in port['fixed_ips']:
-                subnet_ids.add(fixed_ip['subnet_id'])
-        LOG.debug("Needed subnet IDs: %s", subnet_ids)
-
-        # Compare against the existing set of IDs.
-        existing_ids = set([s.id for s in current_subnets])
-        LOG.debug("Existing subnet IDs: %s", existing_ids)
-        if subnet_ids == existing_ids:
-            LOG.debug("Subnets unchanged")
-            return None
-
-        # Prepare required new subnet data.
-        new_subnets = []
-        for subnet_id in subnet_ids:
-            # Check if we already have this subnet.
-            existing = [s for s in current_subnets if s.id == subnet_id]
-            if existing:
-                # We do.  Assume subnet data hasn't changed.
-                new_subnets.extend(existing)
-            else:
-                LOG.debug("Read subnet %s from etcd", subnet_id)
-
-                # Read the data for this subnet.
-                subnet_key = key_for_subnet(subnet_id)
-                try:
-                    response = self.client.read(subnet_key, consistent=True)
-                    data = safe_decode_json(response.value, 'subnet')
-                    LOG.debug("Subnet data: %s", data)
-                    if not (isinstance(data, dict) and
-                            'cidr' in data and
-                            'gateway_ip' in data):
-                        # Subnet data was invalid.
-                        LOG.warning("Invalid subnet data: %s => %s",
-                                    response.value, data)
-                        raise etcd.EtcdKeyNotFound()
-
-                    # Convert to form expected by NetModel.
-                    ip_version = 6 if ':' in data['cidr'] else 4
-                    subnet = {'enable_dhcp': True,
-                              'ip_version': ip_version,
-                              'cidr': data['cidr'],
-                              'dns_nameservers': data.get('dns_servers') or [],
-                              'id': subnet_id,
-                              'gateway_ip': data['gateway_ip'],
-                              'host_routes': data.get('host_routes', [])}
-                    if ip_version == 6:
-                        subnet['ipv6_address_mode'] = constants.DHCPV6_STATEFUL
-                        subnet['ipv6_ra_mode'] = constants.DHCPV6_STATEFUL
-
-                    # Add this to the set to be returned.
-                    new_subnets.append(subnet)
-                except etcd.EtcdKeyNotFound:
-                    LOG.warning("No data for subnet %s", subnet_id)
-
-        return new_subnets
+            self._update_dnsmasq(port.network_id)
 
     def _on_snapshot_loaded(self, etcd_snapshot_response):
         """Called whenever a snapshot is loaded from etcd."""
 
-        # Reset the cache.
+        # Add all current networks to the dirty set, so that we will stop their
+        # Dnsmasqs if no longer needed.  Also remove all port and subnet
+        # information.
         LOG.debug("Reset cache for new snapshot")
-        self.agent.cache = NetworkCache()
-        self.agent.cache.put(empty_network())
+        for network_id in self.agent.cache.get_network_ids():
+            self.dirty_networks.add(network_id)
+            self._fix_network_cache_port_lookup(network_id)
+            self.agent.cache.put(empty_network(network_id))
 
-        # Suppress the processing inside on_ports_changed, until we've
-        # processed the whole snapshot.
-        self.suppress_on_ports_changed = True
+        # We're going to reread all required subnet data anyway, so we don't
+        # need any historical list of dirty subnet IDs.
+        self.dirty_subnets = set()
+
+        # Suppress Dnsmasq updates until we've processed the whole snapshot.
+        self.suppress_dnsmasq_updates = True
 
         # Now pass each snapshot node through the dispatcher, which
         # means that on_endpoint_set will be called for each endpoint.
@@ -425,9 +504,11 @@ class CalicoEtcdWatcher(EtcdWatcher):
 
         LOG.debug("End of new snapshot")
 
-        # Now check for impact on subnets and DHCP driver.
-        self.suppress_on_ports_changed = False
-        self.on_ports_changed()
+        # Now do Dnsmasq updates.
+        self.suppress_dnsmasq_updates = False
+        for network_id in self.dirty_networks:
+            self._update_dnsmasq(network_id)
+        self.dirty_networks = set()
 
     def on_dir_delete(self, response, *args, **kwargs):
         """Called if an endpoint parent directory is deleted from etcd."""
@@ -435,6 +516,24 @@ class CalicoEtcdWatcher(EtcdWatcher):
                     " resync; %s %s %s", response, args, kwargs)
 
         # Handle by doing a resync.
+        self.resync_after_current_poll = True
+
+    def on_subnet_set(self, response, subnet_id):
+        """Handler for subnet creations and updates.
+
+        Note: this is called from the SubnetWatcher's eventlet thread.
+        """
+        LOG.info("Subnet %s created or updated", subnet_id)
+
+        # Note this as a dirty subnet ID, so that we reread the subnet data
+        # immediately if an endpoint is created or updated that uses this
+        # subnet.
+        self.dirty_subnets.add(subnet_id)
+
+        # Also schedule a resync so that the handling for existing endpoints is
+        # updated.  (Although it's unlikely that an endpoint's subnet will
+        # change between when the endpoint was created and when it DHCPs, or
+        # that the endpoint will DHCP again later on... but hey.)
         self.resync_after_current_poll = True
 
 
@@ -448,16 +547,8 @@ class SubnetWatcher(EtcdWatcher):
         self.endpoint_watcher = endpoint_watcher
         self.register_path(
             SUBNET_DIR + "/<subnet_id>",
-            on_set=self.on_subnet_set
+            on_set=self.endpoint_watcher.on_subnet_set
         )
-
-    def on_subnet_set(self, response, subnet_id):
-        """Handler for subnet creations and updates.
-
-        We handle this by telling the main watcher to do a resync.
-        """
-        LOG.info("Subnet %s created or updated", subnet_id)
-        self.endpoint_watcher.resync_after_current_poll = True
 
     def loop(self):
         # Catch and report any exceptions that escape here.
@@ -500,7 +591,7 @@ class CalicoDhcpAgent(DhcpAgent):
             # DHCP agent code being hardcoded to assume that it should always
             # _use_ a namespace - which unfortunately is wrong for Calico
             # usage.  We compensate for this through a combination of the
-            # _make_net_model code above, and subclassing and overriding
+            # make_net_model code above, and subclassing and overriding
             # particular DHCP agent methods so that they don't do
             # namespace-specific actions.
             pass
