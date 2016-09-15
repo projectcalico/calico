@@ -90,6 +90,8 @@ if [ -n "$TEST_GERRIT_CHANGE" ]; then
     git checkout FETCH_HEAD
     git checkout -b devstack-test
     git checkout master
+    git config user.name "someone"
+    git config user.email "someone@someplace.com"
     git merge --no-edit devstack-test
 fi
 
