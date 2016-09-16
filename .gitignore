@@ -1,5 +1,4 @@
 dist
-cni_container.created
 kubeconfig
 .idea
 *~
@@ -8,3 +7,4 @@ net.d
 addstats
 delstats
 *.pyc
+*.created
