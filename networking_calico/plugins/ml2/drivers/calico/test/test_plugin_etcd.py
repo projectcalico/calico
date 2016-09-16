@@ -129,12 +129,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def assertEtcdWrites(self, expected):
         if self.assert_etcd_writes_deletes:
-            self.assertEqual(self.recent_writes, expected)
+            self.assertEqual(expected, self.recent_writes)
         self.recent_writes = {}
 
     def assertEtcdDeletes(self, expected):
         if self.assert_etcd_writes_deletes:
-            self.assertEqual(self.recent_deletes, expected)
+            self.assertEqual(expected, self.recent_deletes)
         self.recent_deletes = set()
 
     def etcd_read(self, key, wait=False, waitIndex=None, recursive=False,
@@ -1004,12 +1004,13 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = "key-file"
         self.driver._init_state()
-        self.assertEqual(lib.m_etcd.Client.mock_calls,
-                         [mock.call(ca_cert='ca-cert-file',
+        self.assertEqual([mock.call(ca_cert='ca-cert-file',
                                     cert=('cert-file', 'key-file'),
                                     host='localhost',
                                     port=4001,
-                                    protocol='https')])
+                                    protocol='https')],
+                         lib.m_etcd.Client.mock_calls
+                         )
 
     def test_not_master_does_not_poll(self):
         """Test that a driver that is not master does not poll.
@@ -1032,7 +1033,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = t_etcd._neutron_rule_to_etcd_rule(neutron_rule)
-        self.assertEqual(etcd_rule, exp_etcd_rule)
+        self.assertEqual(exp_etcd_rule, etcd_rule)
 
         # Check felix is happy with generated rule.
         if neutron_rule["direction"] == "ingress":
@@ -1154,23 +1155,23 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
     def test_felix_agent_state(self):
         self.assertEqual(
-            mech_calico.felix_agent_state("host", True),
             {
                 "agent_type": "Calico per-host agent (felix)",
                 "binary": "calico-felix",
                 "host": "host",
                 "start_flag": True,
                 'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
-            }
+            },
+            mech_calico.felix_agent_state("host", True)
         )
         self.assertEqual(
-            mech_calico.felix_agent_state("host2", False),
             {
                 "agent_type": "Calico per-host agent (felix)",
                 "binary": "calico-felix",
                 "host": "host2",
                 'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
-            }
+            },
+            mech_calico.felix_agent_state("host2", False)
         )
 
     def test_status_thread_epoch(self):
@@ -1202,14 +1203,14 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 self.driver._status_updating_thread(0)
         m_watcher = m_CalicoEtcdWatcher.return_value
         self.assertEqual(
-            [c for c in m_spawn.mock_calls if c[0] == ""],
             [
                 mock.call(m_watcher.loop),
                 mock.call(m_watcher.loop),
-            ]
+            ],
+            [c for c in m_spawn.mock_calls if c[0] == ""]
         )
-        self.assertEqual(len(m_watcher.stop.mock_calls), 2)
-        self.assertEqual(self.driver._etcd_watcher, None)
+        self.assertEqual(2, len(m_watcher.stop.mock_calls))
+        self.assertEqual(None, self.driver._etcd_watcher)
 
     def test_on_felix_alive(self):
         self.driver._get_db()
@@ -1217,7 +1218,6 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch.object(self.driver, "state_report_rpc") as m_rpc:
             self.driver.on_felix_alive("hostfoo", True)
         self.assertEqual(
-            m_rpc.report_state.mock_calls,
             [
                 mock.call(
                     self.driver._agent_update_context,
@@ -1230,7 +1230,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                     },
                     use_call=False
                 )
-            ]
+            ],
+            m_rpc.report_state.mock_calls
         )
 
     def test_on_port_status_changed(self):
@@ -1240,37 +1241,38 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.driver.on_port_status_changed("host", "port_id",
                                                {"status": "up"})
             self.assertEqual(
-                self.driver._port_status_cache[("host", "port_id")],
-                "up"
+                "up",
+                self.driver._port_status_cache[("host", "port_id")]
+
             )
-            self.assertEqual(m_queue.put.mock_calls,
-                             [mock.call(("host", "port_id"))])
+            self.assertEqual([mock.call(("host", "port_id"))],
+                             m_queue.put.mock_calls)
             m_queue.put.reset_mock()
             # Send a duplicate change.
             self.driver.on_port_status_changed("host", "port_id",
                                                {"status": "up"})
             # Should have no effect on the cache.
             self.assertEqual(
-                self.driver._port_status_cache[("host", "port_id")],
-                "up"
+                "up",
+                self.driver._port_status_cache[("host", "port_id")]
             )
             # And the queue update should be skipped.
-            self.assertEqual(m_queue.put.mock_calls, [])
+            self.assertEqual([], m_queue.put.mock_calls)
             m_queue.put.reset_mock()
             # Deletion takes a different code path.
             self.driver.on_port_status_changed("host", "port_id", None)
-            self.assertEqual(self.driver._port_status_cache, {})
+            self.assertEqual({}, self.driver._port_status_cache)
             # Unknown value should be treated as deletion.
             self.driver.on_port_status_changed("host", "port_id",
                                                {"status": "unknown"})
-            self.assertEqual(self.driver._port_status_cache, {})
+            self.assertEqual({}, self.driver._port_status_cache)
             # One queue put for each deletion.
             self.assertEqual(
-                m_queue.put.mock_calls,
                 [
                     mock.call(("host", "port_id")),
                     mock.call(("host", "port_id")),
-                ]
+                ],
+                m_queue.put.mock_calls
             )
 
     def test_loop_writing_port_statuses(self):
@@ -1282,10 +1284,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                                   self.driver._loop_writing_port_statuses,
                                   self.driver._epoch)
         self.assertEqual(
-            m_try_upd.mock_calls,
             [
                 mock.call(mock.ANY, ("host", "port")),
-            ]
+            ],
+            m_try_upd.mock_calls
         )
 
     def test_try_to_update_port_status(self):
@@ -1304,10 +1306,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
-        self.assertEqual(mock_calls,
-                         [mock.call(context, "p1",
-                                    lib.m_constants.PORT_STATUS_ERROR)])
-        self.assertEqual(m_spawn.mock_calls, [])  # No retry on success
+        self.assertEqual([mock.call(context, "p1",
+                                    lib.m_constants.PORT_STATUS_ERROR)],
+                         mock_calls)
+        self.assertEqual([], m_spawn.mock_calls)  # No retry on success
 
     def test_try_to_update_port_status_fail(self):
         # New OpenStack releases have a host parameter.
@@ -1327,22 +1329,21 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         context = mock.Mock()
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
-        self.assertEqual(mock_calls,
-                         [mock.call(context, "p1",
+        self.assertEqual([mock.call(context, "p1",
                                     lib.m_constants.PORT_STATUS_ACTIVE,
-                                    host="host")])
+                                    host="host")],
+                         mock_calls)
         self.assertEqual(
-            m_spawn.mock_calls,
             [
                 mock.call(5, self.driver._retry_port_status_update,
                           ("host", "p1"))
-            ]
-        )
+            ],
+            m_spawn.mock_calls)
 
     def test_retry_port_status_update(self):
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             self.driver._retry_port_status_update(("host", "port"))
-        self.assertEqual(m_queue.put.mock_calls, [mock.call(("host", "port"))])
+        self.assertEqual([mock.call(("host", "port"))], m_queue.put.mock_calls)
 
 
 class TestCalicoEtcdWatcher(unittest.TestCase):
@@ -1362,13 +1363,13 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = "key-file"
         self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
-        self.assertEqual(lib.m_etcd.Client.mock_calls,
-                         [mock.call(ca_cert='ca-cert-file',
+        self.assertEqual([mock.call(ca_cert='ca-cert-file',
                                     cert=('cert-file', 'key-file'),
                                     host='localhost',
                                     port=4001,
                                     protocol='https',
-                                    expected_cluster_id=None)])
+                                    expected_cluster_id=None)],
+                         lib.m_etcd.Client.mock_calls)
 
     def test_snapshot(self):
         m_response = mock.Mock()
@@ -1403,12 +1404,11 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.driver.on_felix_alive.assert_called_once_with("hostname",
                                                            new=True)
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", {"status": "up"}),
                 mock.call("unknown", "ep2", None),
-            ]
-        )
+            ],
+            self.driver.on_port_status_changed.mock_calls)
 
         # Snapshot 2: should figure out that an endpoint has been removed.
         m_response.leaves = [
@@ -1418,11 +1418,10 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.driver.on_port_status_changed.reset_mock()
         self.watcher._on_snapshot_loaded(m_response)
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", None),
-            ]
-        )
+            ],
+            self.driver.on_port_status_changed.mock_calls)
 
     def test_endpoint_status_add_delete(self):
         m_port_status_node = self._add_test_endpoint()
@@ -1431,13 +1430,12 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
                                    "hostname", "wlid", "ep1")
 
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", {"status": "up"}),
                 mock.call("hostname", "ep1", None),
-            ]
-        )
-        self.assertEqual(self.watcher._endpoints_by_host, {})
+            ],
+            self.driver.on_port_status_changed.mock_calls)
+        self.assertEqual({}, self.watcher._endpoints_by_host)
 
     def test_endpoint_status_add_bad_json(self):
         m_port_status_node = mock.Mock()
@@ -1447,19 +1445,18 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
 
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", None),
-            ]
-        )
-        self.assertEqual(self.watcher._endpoints_by_host, {})
+            ],
+            self.driver.on_port_status_changed.mock_calls)
+        self.assertEqual({}, self.watcher._endpoints_by_host)
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
                                  "openstack/wlid/endpoint"
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
-        self.assertEqual(self.watcher._endpoints_by_host, {})
+        self.assertEqual({}, self.watcher._endpoints_by_host)
 
     def test_on_per_host_dir_delete(self):
         self._add_test_endpoint()
@@ -1468,14 +1465,13 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname")
         # And one we didn't know about
         self.watcher._on_per_host_dir_delete(mock.Mock(), "other")
-        self.assertEqual(self.watcher._endpoints_by_host, {})
+        self.assertEqual({}, self.watcher._endpoints_by_host)
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", {"status": "up"}),
                 mock.call("hostname", "ep1", None),
-            ]
-        )
+            ],
+            self.driver.on_port_status_changed.mock_calls)
 
     def test_on_per_workload_dir_delete(self):
         self._add_test_endpoint()
@@ -1484,14 +1480,13 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.watcher._on_per_host_dir_delete(mock.Mock(), "hostname", "wlid")
         # And one we didn't know about
         self.watcher._on_per_host_dir_delete(mock.Mock(), "other", "wlid")
-        self.assertEqual(self.watcher._endpoints_by_host, {})
+        self.assertEqual({}, self.watcher._endpoints_by_host)
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "ep1", {"status": "up"}),
                 mock.call("hostname", "ep1", None),
-            ]
-        )
+            ],
+            self.driver.on_port_status_changed.mock_calls)
 
     def _add_test_endpoint(self):
         # Add a workload to be deleted
@@ -1502,8 +1497,8 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack",
                                              "wlid", "ep1")
-        self.assertEqual(self.watcher._endpoints_by_host,
-                         {"hostname": set([ep_id])})
+        self.assertEqual({"hostname": set([ep_id])},
+                         self.watcher._endpoints_by_host)
         return m_port_status_node
 
     def test_status_bad_json(self):
@@ -1528,12 +1523,11 @@ class TestCalicoEtcdWatcher(unittest.TestCase):
         self.watcher._on_status_del(m_response, "hostname")
 
         self.assertEqual(
-            self.driver.on_port_status_changed.mock_calls,
             [
                 mock.call("hostname", "epid", {"status": "up"}),
                 mock.call("hostname", "epid", None),
-            ]
-        )
+            ],
+            self.driver.on_port_status_changed.mock_calls)
 
     def test_force_resync(self):
         m_response = mock.Mock()

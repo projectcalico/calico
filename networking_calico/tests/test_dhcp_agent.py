@@ -45,11 +45,11 @@ class TestFakePlugin(base.BaseTestCase):
 
     def test_create(self):
         port = self.plugin.create_dhcp_port({'port': {}})
-        self.assertEqual(port, {
+        self.assertEqual({
             'device_owner': 'network:dhcp',
             'id': 'dhcp',
-            'mac_address': '02:00:00:00:00:00'
-        })
+            'mac_address': '02:00:00:00:00:00'},
+            port)
 
     def test_release(self):
         self.plugin.release_dhcp_port('calico', 'dhcp')
@@ -85,8 +85,8 @@ class TestDhcpAgent(base.BaseTestCase):
         def etcd_client_read(key, **kwargs):
             LOG.info('etcd_client_read %s %s', key, kwargs)
             if 'v4subnet-1' in key:
-                self.assertEqual(key,
-                                 '/calico/dhcp/v1/subnet/v4subnet-1')
+                self.assertEqual('/calico/dhcp/v1/subnet/v4subnet-1',
+                                 key)
                 return EtcdResponse(value=json.dumps({
                     'cidr': '10.28.0.0/24',
                     'gateway_ip': '10.28.0.1',
@@ -555,7 +555,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
         cmdline = DnsmasqRouted(cfg.CONF,
                                 network,
                                 None)._build_cmdline_callback('/run/pid_file')
-        self.assertEqual(cmdline, [
+        self.assertEqual([
             'dnsmasq',
             '--no-hosts',
             '--no-resolv',
@@ -576,5 +576,5 @@ class TestDnsmasqRouted(base.BaseTestCase):
             '--conf-file=',
             '--domain=openstacklocal',
             '--dhcp-range=set:tag1,2001:db8:1::,static,off-link,80,86400s',
-            '--enable-ra'
-        ])
+            '--enable-ra'],
+            cmdline)
