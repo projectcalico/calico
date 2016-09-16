@@ -320,13 +320,21 @@ class Config(object):
                            "default value opens the ssh port, 22.",
                            [22], value_is_int_list=True)
         self.add_parameter("FailsafeOutboundHostPorts",
-                           "Comma-separated list of numeric TCP ports to allow"
-                           "traffic to from all host endpoints.  Useful to "
-                           "avoid accidentally cutting off, for example, "
+                           "Comma-separated list of numeric TCP ports to "
+                           "allow traffic to from all host endpoints.  Useful "
+                           "to avoid accidentally cutting off, for example, "
                            "access to etcd.  The default value allows "
                            "connectivity to etcd's default ports "
                            "2379,2380,4001 and 7001.",
                            [2379,2380,4001,7001], value_is_int_list=True)
+        self.add_parameter("Ipv6Support",
+                           "Whether IPv6 support is enabled.  If 'true', Felix "
+                           "will program ip6tables rules and any IPv6 routes; "
+                           "if 'false', Felix will not provide any IPv6 "
+                           "function.  If set to 'auto', Felix will attempt "
+                           "to detect whether the system supports IPv6 and "
+                           "use it if it does.",
+                           "auto")
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -438,6 +446,7 @@ class Config(object):
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
         self.CLUSTER_GUID = self.parameters["ClusterGUID"].value
         self.USAGE_REPORT = self.parameters["UsageReportingEnabled"].value
+        self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
 
         self._validate_cfg(final=final)
 
@@ -772,6 +781,11 @@ class Config(object):
                 if not 0 < p < 65536:
                     raise ConfigException("Out-of-range port %s" % p,
                                           self.parameters[name])
+
+        if self.IPV6_SUPPORT not in ("true", "false", "auto"):
+            log.warning("Unrecognized value for Ipv6Support (%s), "
+                        "defaulting to 'auto'", self.IPV6_SUPPORT)
+            self.IPV6_SUPPORT = "auto"
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

@@ -137,7 +137,7 @@ class TestFutils(unittest2.TestCase):
         self.assertEqual(result, expected,
                          "Expected %r to be truncated as %r but got %r" %
                          (s, expected, result))
-        
+
     def test_longest_prefix(self):
         self.assertEqual(futils.find_longest_prefix([]), None)
         self.assertEqual(futils.find_longest_prefix(["a"]), "a")
@@ -152,10 +152,10 @@ class TestFutils(unittest2.TestCase):
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
     @mock.patch("calico.felix.futils.Popen", autospec=True)
-    def test_ipv6_supported(self, m_popen, m_check_call, m_exists):
+    def test_detect_ipv6_supported(self, m_popen, m_check_call, m_exists):
         m_popen.return_value.communicate.return_value = "", ""
         m_exists.return_value = True
-        self.assertEqual(futils.ipv6_supported(), (True, None))
+        self.assertEqual(futils.detect_ipv6_supported(), (True, None))
 
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
@@ -163,7 +163,7 @@ class TestFutils(unittest2.TestCase):
     def test_ipv6_compiled_out(self, m_popen, m_check_call, m_exists):
         m_popen.return_value.communicate.return_value = "", ""
         m_exists.return_value = False
-        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
 
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
@@ -172,7 +172,7 @@ class TestFutils(unittest2.TestCase):
         m_popen.return_value.communicate.return_value = "", ""
         m_exists.return_value = True
         m_check_call.side_effect = futils.FailedSystemCall()
-        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
 
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
@@ -184,7 +184,7 @@ class TestFutils(unittest2.TestCase):
             "ip6tables vA.B.C: Couldn't load match `rpfilter':No such file or "
             "directory"
         )
-        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
 
     @mock.patch("os.path.exists", autospec=True)
     @mock.patch("calico.felix.futils.check_call", autospec=True)
@@ -192,7 +192,14 @@ class TestFutils(unittest2.TestCase):
     def test_ipv6_missing_rpfilter_error(self, m_popen, m_check_call, m_exists):
         m_exists.return_value = True
         m_popen.side_effect = OSError()
-        self.assertEqual(futils.ipv6_supported(), (False, mock.ANY))
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
+
+    @mock.patch("os.path.exists", autospec=True)
+    @mock.patch("calico.felix.futils.check_call", autospec=True)
+    def test_ipv6_missing_nat_table(self, m_check_call, m_exists):
+        m_exists.return_value = True
+        m_check_call.side_effect = iter([None, futils.FailedSystemCall()])
+        self.assertEqual(futils.detect_ipv6_supported(), (False, mock.ANY))
 
     @mock.patch("calico.felix.futils.urllib3.disable_warnings", autospec=True)
     @mock.patch("calico.felix.futils.urllib3.util.retry.Retry", autospec=True)
