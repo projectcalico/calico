@@ -197,7 +197,7 @@ class TestEtcdWatcher(BaseTestCase):
         super(TestEtcdWatcher, self).setUp()
         self.m_config = Mock()
         self.m_config.HOSTNAME = "hostname"
-        self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.IFACE_PREFIX = ["tap"]
         self.m_config.ETCD_ADDRS = [ETCD_ADDRESS]
         self.m_config.ETCD_SCHEME = "http"
         self.m_config.ETCD_KEY_FILE = None
@@ -755,7 +755,7 @@ class TestEtcdReporting(BaseTestCase):
     def setUp(self):
         super(TestEtcdReporting, self).setUp()
         self.m_config = Mock()
-        self.m_config.IFACE_PREFIX = "tap"
+        self.m_config.IFACE_PREFIX = ["tap"]
         self.m_config.ETCD_ADDRS = ["localhost:4001"]
         self.m_config.ETCD_SCHEME = "http"
         self.m_config.ETCD_KEY_FILE = None

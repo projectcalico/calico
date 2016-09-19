@@ -338,10 +338,11 @@ def validate_endpoint(config, combined_id, endpoint):
         issues.append("Missing 'name' field.")
     elif (isinstance(endpoint['name'], StringTypes)
             and combined_id.host == config.HOSTNAME
-            and not endpoint["name"].startswith(config.IFACE_PREFIX)):
+            and not any(endpoint["name"].startswith(prefix)
+                        for prefix in config.IFACE_PREFIX)):
         # Only test the interface for local endpoints - remote hosts may have
         # a different interface prefix.
-        issues.append("Interface %r does not start with %r." %
+        issues.append("Interface %r does not start with any of %r." %
                       (endpoint["name"], config.IFACE_PREFIX))
     if "state" not in endpoint:
         issues.append("Missing 'state' field.")

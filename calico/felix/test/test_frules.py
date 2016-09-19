@@ -116,7 +116,9 @@ class TestRules(BaseTestCase):
             'felix-INPUT': [
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
+                '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-INPUT --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
@@ -125,7 +127,9 @@ class TestRules(BaseTestCase):
             'felix-OUTPUT': [
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
+                '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -306,7 +310,9 @@ class TestRules(BaseTestCase):
             'felix-INPUT': [
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
+                '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-INPUT --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
@@ -315,7 +321,9 @@ class TestRules(BaseTestCase):
             'felix-OUTPUT': [
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
+                '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -418,7 +426,9 @@ class TestRules(BaseTestCase):
             'felix-INPUT': [
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-INPUT --goto felix-FROM-HOST-IF ! --in-interface tap+',
+                '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-INPUT --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-INPUT --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000',
                 '--append felix-INPUT --protocol tcp --destination 123.0.0.1 --dport 1234 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --sport 68 --dport 67 --jump ACCEPT',
                 '--append felix-INPUT --protocol udp --dport 53 --jump ACCEPT',
@@ -427,7 +437,9 @@ class TestRules(BaseTestCase):
             'felix-OUTPUT': [
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-OUTPUT --goto felix-TO-HOST-IF ! --out-interface tap+',
+                '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
+                '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
@@ -457,7 +469,7 @@ class TestRules(BaseTestCase):
 
     def test_install_global_rules_retries_ipip(self):
         m_config = Mock()
-        m_config.IFACE_PREFIX = "tap"
+        m_config.IFACE_PREFIX = ["tap"]
         m_config.IP_IN_IP_ENABLED = True
         with patch("calico.felix.frules._configure_ipip_device") as m_ipip:
             m_ipip.side_effect = FailedSystemCall("", [], 1, "", "")
@@ -490,3 +502,33 @@ class TestRules(BaseTestCase):
         m_call.assert_called_once_with(
             ["conntrack", "-L", "-s", "169.254.45.169"]
         )
+
+    def test_interface_to_chain_suffix(self):
+        config = Mock()
+
+        config.IFACE_PREFIX = ['tap']
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'tap0123456'),
+            '0123456')
+
+        config.IFACE_PREFIX = ['tap', 'cali']
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'tap0123456'),
+            '0123456')
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'cali0123456'),
+            '0123456')
+
+        config.IFACE_PREFIX = ['tap', 'tab', 'tabq', 't']
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'tap0123456'),
+            '0123456')
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'tab0123456'),
+            '0123456')
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 'tabq0123456'),
+            '0123456')
+        self.assertEqual(
+            frules.interface_to_chain_suffix(config, 't0123456'),
+            '0123456')

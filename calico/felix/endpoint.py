@@ -412,11 +412,13 @@ class EndpointManager(ReferenceManager):
         :return:
         """
         # We only care about host interfaces, not workload ones.
-        exclude_prefix = self.config.IFACE_PREFIX
+        exclude_prefixes = self.config.IFACE_PREFIX
         # Get the IPs for each interface.
         ips_by_iface = devices.list_ips_by_iface(self.ip_type)
         for iface, ips in ips_by_iface.items():
-            if iface.startswith(exclude_prefix):
+            ignore_iface = any(iface.startswith(prefix)
+                             for prefix in exclude_prefixes)
+            if ignore_iface:
                 # Ignore non-host interfaces.
                 ips_by_iface.pop(iface)
             else:

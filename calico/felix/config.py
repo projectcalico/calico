@@ -89,7 +89,8 @@ class ConfigParameter(object):
     """
     def __init__(self, name, description, default,
                  sources=DEFAULT_SOURCES, value_is_int=False,
-                 value_is_bool=False, value_is_int_list=False):
+                 value_is_bool=False, value_is_int_list=False,
+                 value_is_str_list=False):
         """
         Create a configuration parameter.
         :param str description: Description for logging
@@ -105,6 +106,7 @@ class ConfigParameter(object):
         self.value_is_int = value_is_int
         self.value_is_bool = value_is_bool
         self.value_is_int_list = value_is_int_list
+        self.value_is_str_list = value_is_str_list
 
     def set(self, value, source):
         """
@@ -157,6 +159,9 @@ class ConfigParameter(object):
                     else:
                         raise ConfigException("Invalid list of ints", self)
                 self.value = ints
+            elif self.value_is_str_list:
+                splits = str(value).split(',')
+                self.value = [s.strip() for s in splits]
             else:
                 # Calling str in principle can throw an exception, but it's
                 # hard to see how in practice, so don't catch and wrap.
@@ -226,7 +231,8 @@ class Config(object):
                            "127.0.0.1")
         self.add_parameter("MetadataPort", "Metadata Port",
                            8775, value_is_int=True)
-        self.add_parameter("InterfacePrefix", "Interface name prefix", "cali")
+        self.add_parameter("InterfacePrefix", "Interface name prefix",
+                           ["cali"], value_is_str_list=True)
         self.add_parameter("DefaultEndpointToHostAction",
                            "Action to take for packets that arrive from"
                            "an endpoint to the host.", "DROP")
@@ -460,6 +466,7 @@ class Config(object):
         set_bits = find_set_bits(mark_mask)
         self.IPTABLES_MARK_ACCEPT = "0x%x" % next(set_bits)
         self.IPTABLES_MARK_NEXT_TIER = "0x%x" % next(set_bits)
+        self.IPTABLES_MARK_ENDPOINTS = "0x%x" % next(set_bits)
 
         for plugin in self.plugins.itervalues():
             # Plugins don't get loaded and registered until we've read config
