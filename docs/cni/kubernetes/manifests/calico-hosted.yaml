@@ -99,8 +99,8 @@ spec:
 
 # This manifest deploys the Calico policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
-apiVersion: v1
-kind: ReplicationController
+apiVersion: extensions/v1beta1
+kind: ReplicaSet 
 metadata:
   name: calico-policy-controller
   namespace: kube-system
