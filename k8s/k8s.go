@@ -101,6 +101,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID
+		endpoint.Metadata.Labels = make(map[string]string)
 
 		// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network
 		// name (which is the normal behavior) otherwise use one based on the Kubernetes pod's Mamespace.
