@@ -32,6 +32,9 @@ from calico.datamodel_v1 import READY_KEY
 
 _log = logging.getLogger(__name__)
 
+# Since this module does long-polling, we expect read timeouts from etcd but
+# urllib3 logs timeouts at warning level.  Disable that to avoid log spam.
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 # Map etcd event actions to the effects we care about.
 ACTION_MAPPING = {
