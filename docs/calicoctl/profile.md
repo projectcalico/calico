@@ -359,7 +359,7 @@ the `calicoctl profile <PROFILE> rule add` command above.
 Removing rules from a profile may be necessary to provide the 
 desired policy on your Calico nodes.  For example, you may have 
 multiple web applications using profile WEB where each web app 
-serves a different purpose.  You may want these web apps to 
+serves a different purpose.  You may not want these web apps to 
 interact with each other, so you would want to remove the default 
 profile rule that allows traffic from workloads on same profile. 
 See the example code below to understand how to do this.
