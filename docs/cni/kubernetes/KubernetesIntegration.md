@@ -93,8 +93,8 @@ The Kubernetes `kubelet` calls out to the `calico` and `calico-ipam` plugins.
 
 Download the binaries and make sure they're executable
 ```
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 It's recommended that this is done as part of job that manages the `kubelet` process (see below)
@@ -121,7 +121,7 @@ EOF
 ```
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
-For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.3.1/configuration.md)
+For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
 
 ### 3. Deploy the Calico network policy controller
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API.  It is recommended that you run it as a static pod
@@ -194,9 +194,9 @@ Requires=calico-node.service
 [Service]
 ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico-ipam
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico-ipam
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \
