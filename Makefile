@@ -86,7 +86,7 @@ run-etcd:
 
 .PHONY: clean
 clean:
-	find -name '*.coverprofile' -type f -delete
+	find . -name '*.coverprofile' -type f -delete
 	rm -rf bin \
 	       release \
 	       vendor
