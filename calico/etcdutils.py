@@ -32,6 +32,9 @@ from calico.datamodel_v1 import READY_KEY
 
 _log = logging.getLogger(__name__)
 
+# Since this module does long-polling, we expect read timeouts from etcd but
+# urllib3 logs timeouts at warning level.  Disable that to avoid log spam.
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 # Map etcd event actions to the effects we care about.
 ACTION_MAPPING = {
@@ -211,12 +214,16 @@ class EtcdWatcher(EtcdClientOwner):
                  etcd_scheme="http",
                  etcd_key=None,
                  etcd_cert=None,
-                 etcd_ca=None):
+                 etcd_ca=None,
+                 poll_timeout=10,
+                 connect_timeout=5):
         super(EtcdWatcher, self).__init__(etcd_addrs,
                                           etcd_scheme=etcd_scheme,
                                           etcd_key=etcd_key,
                                           etcd_cert=etcd_cert,
                                           etcd_ca=etcd_ca)
+        self.etcd_timeout = Timeout(connect=connect_timeout,
+                                    read=poll_timeout)
         self.key_to_poll = key_to_poll
         self.next_etcd_index = None
 
@@ -346,8 +353,7 @@ class EtcdWatcher(EtcdClientOwner):
                                             wait=True,
                                             waitIndex=self.next_etcd_index,
                                             recursive=True,
-                                            timeout=Timeout(connect=10,
-                                                            read=90))
+                                            timeout=self.etcd_timeout)
                 _log.debug("etcd response: %r", response)
             except etcd.EtcdConnectionFailed as e:
                 if isinstance(e.cause, (ReadTimeoutError, SocketTimeout)):
