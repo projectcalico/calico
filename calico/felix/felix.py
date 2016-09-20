@@ -20,7 +20,21 @@ felix.felix
 
 The main logic for Felix.
 """
-# Monkey-patch before we do anything else...
+# CentOS/RHEL 7 has a Python that thinks it is 2.7.5, but is actually heavily
+# patched with various backports, and in particular with SSL-related changes
+# for PEP 466, which in the mainline were introduced in Python 2.7.9.  gevent
+# (>= 1.0.2) has support for modifying its monkey-patching accordingly, but
+# that is conditional on whether it thinks the Python version is >= 2.7.9.
+# Happily gevent has a global variable for that, so here we set that global
+# variable to indicate that we are effectively - so far as the SSL-related
+# things that gevent patches are concerned - running on 2.7.9.
+try:
+    from gevent import hub
+    hub.PYGTE279 = True
+except (ImportError, AttributeError):
+    pass
+
+# Now monkey-patch before we do anything else...
 from gevent import monkey
 monkey.patch_all()
 
