@@ -16,50 +16,31 @@
 	<title>Calico - {{ title }}</title>
 </head>
 <body>
-<div id="cellophane" onclick="kub.toggleMenu()"></div>
 <header>
-	<a href="{{base}}/" class="logo"></a>
-	<div class="nav-buttons" data-auto-burger="primary">
-		<a href="{{base}}/docs/calico" class="button" id="viewDocs" data-auto-burger-exclude>View Documentation</a>
-		<a href="{{base}}/docs/getting-started/calico-integrations" class="button" id="tryCalico" data-auto-burger-exclude>Get Started</a>
-		<button id="hamburger" onclick="kub.toggleMenu()" data-auto-burger-exclude><div></div></button>
+	<a href="https://projectcalico.org" class="logo"></a>
+	<div class="nav-buttons">
+		<a href="{{base}}" class="button topnav">Documentation</a>
+		<a href="http://www.projectcalico.org/community" class="button topnav">Support</a>
+		<a href="http://www.projectcalico.org/blog" class="button topnav">Blog</a>
 	</div>
-
 	<nav id="mainNav">
-		<main data-auto-burger="primary">
+		<main>
 			<div class="nav-box">
-				<h3><a href="{{base}}/docs/getting-started/calico-integrations">Get Started</a></h3>
-				<p>Looking to try Calico with one our Kubernetes, Mesos, Docker, OpenStack or Bare Metal integration?</p>
+				<h3><a href="">Learn</a></h3>
+				<p>Learn about Project Calico.</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="{{base}}/docs/calico">Documentation</a></h3>
+				<h3><a href="{{base}}/"></a></h3>
 				<p>Learn more about Calico in our documentation.</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="{{base}}/docs/community/community-overview">Community</a></h3>
+				<h3><a href="">Support</a></h3>
 				<p>Join the Calico community and chat with other Calico users and the project authos.</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="http://www.projectcalico.org/blog">Blog</a></h3>
+				<h3><a href="">Blog</a></h3>
 				<p>See what the Calico team are up in our latest blog posts.</p>
 			</div>
-		</main>
-		<main data-auto-burger="primary">
-			<div class="left">
-				<h5 class="github-invite">Interested in contributing to Calico?</h5>
-				<a href="https://github.com/projectcalico/calico" class="button" data-auto-burger-exclude>View On Github</a>
-			</div>
-
-			<div class="right">
-				<h5 class="github-invite">Explore the community</h5>
-				<div class="social">
-					<a href="https://twitter.com/projectalico" class="twitter"><span>Twitter</span></a>
-					<a href="https://github.com/projectcalico/calico" class="github"><span>Github</span></a>
-					<a href="http://slack.projectcalico.org/" class="slack"><span>Slack</span></a>
-					<a href="http://stackoverflow.com/questions/tagged/calico" class="stack-overflow"><span>Stack Overflow</span></a>
-				</div>
-			</div>
-			<div class="clear" style="clear: both"></div>
 		</main>
 	</nav>
 </header>

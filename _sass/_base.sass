@@ -99,7 +99,7 @@ p
 
 // HEADER
 header
-	position: fixed
+	position: absolute
 	top: 0
 	left: 0
 	width: 100%
@@ -162,10 +162,9 @@ header
 .nav-buttons
 	float: right
 
-#viewDocs, #tryCalico
-	display: none
 
-#viewDocs
+
+.topnav
 	border: 2px solid white
 	background-color: transparent
 	transition: 0.3s
@@ -173,17 +172,6 @@ header
 	&:hover
 		background-color: white
 		color: $dark-grey
-
-#tryCalico
-	width: 0
-	padding: 0 0
-	border: 1px solid transparent
-	background-color: transparent
-	text-align: center
-	white-space: nowrap
-	vertical-align: middle
-	overflow: hidden
-	transition: 0.3s
 
 #hamburger
 	display: inline-block
@@ -234,10 +222,10 @@ header
 			color: $orange
 			text-decoration: none
 
-// FLIP NAV
-.flip-nav
-	header
-		background-color: white
+
+#cellophane
+	display: block
+	z-index: 9998
 
 
 // OPEN NAV
@@ -245,9 +233,6 @@ header
 	body
 		overflow: hidden
 
-	#cellophane
-		display: block
-		z-index: 9998
 
 	header
 		background-color: #e8e8e8
@@ -266,30 +251,6 @@ header
 
 		&:after
 			transform: rotate(-45deg)
-
-.open-nav, .y-enough
-	#tryCalico
-		width: 150px
-		background-color: $orange
-		border-color: $orange
-
-
-.flip-nav, .open-nav
-	header
-		box-shadow: 0 1px 2px $medium-grey
-
-	#viewDocs
-		border-color: $dark-grey
-		color: $dark-grey
-
-		&:hover
-			border-color: $orange
-			background-color: $orange
-			color: white
-
-	#hamburger:hover
-		div, &:before, &:after
-			background-color: $dark-grey
 
 
 
@@ -425,9 +386,6 @@ a.calendar
 
 	&:hover
 		background-position: -250px 100%
-
-#viewDocs
-	display: none
 
 section
 	background-color: white

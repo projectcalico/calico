@@ -7,3 +7,5 @@ toc:
   path: /docs/calico
 - title: Earlier versions
   path: /docs/old-docs
+- title: Documentation for Previous Releases
+  path: /docs/reference/previous-releases
