@@ -67,36 +67,8 @@ h2, h3, h4 {
     max-height: 50px;
 }
 </style>
-
-This documentation is for Calico version {{ page.version }} - for earlier versions, see [here]({{base}}/docs/version).
-
-Calico version {{ page.version }} supports integrations with Kubernetes, Docker, Mesos (including DC/OS) and OpenStack.  See [here]({{base}}/docs/reference/supported-platforms) for information on the versions supported by this release.
-<p></p>
-<div class="colContainer">
-  <div class="col3rd">
-    <h3>Docker</h3>
-    <a href="{{base}}/" class="button">Find out more</a>
-  </div>
-  <div class="col3rd">
-    <h3>Kubernetes</h3>
-    <a href="{{base}}/docs/getting-started/calico-integrations" class="button">Get Started</a>
-  </div>
-  <div class="col3rd">
-    <h3>Mesos</h3>
-    <a href="https://slack.projectcalico.org" class="button">Join our Slack</a>
-  </div>
-</div>
-<div class="colContainer">
-  <div class="col3rd">
-  <h3>OpenStack</h3>
-  <a href="{{base}}/community/contribute" class="button">Contribute to Calico</a>
-  </div>
-  <div class="col3rd">
-  <h3>rkt</h3>
-  <a href="{{base}}/docs/using-calico/troubleshooting/Troubleshooting" class="button">Troubleshooting</a>
-  </div>
-  <div class="col3rd">
-  <h3>Host Protection</h3>
-  <a href="{{base}}/docs/using-calico/troubleshooting/Troubleshooting" class="button">Troubleshooting</a>
-  </div>
+<div>
+  <p>Documentation is for Calico version {{ page.version }} - for earlier versions, see [here]({{base}}/docs/version).</p>
+  <p>Calico version {{ page.version }} supports integrations with Kubernetes, Docker, Mesos (including DC/OS) and OpenStack.  See [here]({{base}}/docs/reference/supported-platforms) for information on the versions supported by this release.</p>
+  <p><b>Please use the Navigation panel to the left to get started.</b></p>
 </div>

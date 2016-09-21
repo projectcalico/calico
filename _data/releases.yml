@@ -3,9 +3,9 @@ abstract: "Choose a different version of the Calico docs"
 toc:
 - title: Calico Version
   path: /docs/other-releases
-- title: Latest - 1.4
+- title: Latest (1.4)
   path: /docs/calico
-- title: Earlier versions
-  path: /docs/old-docs
-- title: Documentation for Previous Releases
+- title: Previous Releases
   path: /docs/reference/previous-releases
+- title: Pre-1.4
+  path: /docs/old-docs
