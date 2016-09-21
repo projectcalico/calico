@@ -8,3 +8,7 @@ Calico can enforce NetworkPolicy on top of:
 - [GCE native cloud-provider networking](http://kubernetes.io/docs/getting-started-guides/gce/)
 
 See the documentation on [network policy in Kubernetes](http://kubernetes.io/docs/user-guide/networkpolicies/) for more information on how to use NetworkPolicy. 
+
+### Resources
+
+* [Configuration guide](configuration.md)
