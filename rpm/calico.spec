@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.0
+Version:        1.4.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -147,6 +147,23 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+
+* Wed Sep 21 2016 Neil Jerram <neil@tigera.io> 1.4.2-1
+  - Calico version 1.4.2
+    - Add CircleCI config
+    - Fix for baremetal issue (#1071)
+    - Allow {inbound,outbound}_rules to be omitted, and handle as []
+    - Add IgnoreLooseRPF config parameter
+    - Handle interface renaming
+    - Documentation improvements:
+      - Add EtcdEndpoints to Felix configuration reference.
+      - Improve overview documentation about Calico security.
+      - Update recommended RPM repo for Calico with Liberty or later
+    - Add Usage Reporting to Felix
+    - Allow customization of 'etcdctl' for calico-diags
+    - Add config option to disable IPv6
+    - Reduce EtcdWatcher timeout to 10s
+    - Increase urllib3 log severity to avoid log spam from EtcdWatcher
 
 * Fri Jul 22 2016 Neil Jerram <neil@tigera.io> 1.4.0-1
   - Calico version 1.4.0 release
