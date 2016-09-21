@@ -369,10 +369,15 @@ class CalicoTransportEtcd(object):
         except etcd.EtcdKeyNotFound:
             LOG.info('%s values are missing', datamodel_v1.CONFIG_DIR)
 
+        prefixes = prefix.split(',') if prefix else []
+        if 'tap' not in prefixes:
+            prefixes.append('tap')
+        prefix_new = ','.join(prefixes)
+
         # Now write the values that need writing.
-        if prefix != 'tap':
-            LOG.info('%s -> tap', iface_pfx_key)
-            self.client.write(iface_pfx_key, 'tap')
+        if prefix != prefix_new:
+            LOG.info('%s -> %s', iface_pfx_key, prefix_new)
+            self.client.write(iface_pfx_key, prefix_new)
         if reporting_enabled != "true":
             LOG.info('%s -> true', reporting_key)
             self.client.write(reporting_key, 'true')
