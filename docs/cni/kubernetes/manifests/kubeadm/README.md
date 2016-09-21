@@ -18,5 +18,6 @@ node on the Kubernetes master.  Note that in a production cluster, it is recomme
 
 ### Requirements / Limitations
 
-* This manifest requires the ability to schedule pods on the master.  As such, make sure you initialize your master with `kubeadm init --schedule-workload`
+* This install does not configure etcd TLS
+* This install expects that your Kubernetes master node has been labeled with `kubeadm.alpha.kubernetes.io/role: master`
 
