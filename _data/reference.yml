@@ -2,7 +2,7 @@ bigheader: "Reference"
 abstract: "Reference Information for Calico"
 toc:
 - title: Reference
-  path: /docs/coming-soon
+  path: /docs/reference/reference
 - title: Supported Platforms
   path: /docs/reference/supported-platforms
 - title: Calicoctl
@@ -34,17 +34,17 @@ toc:
 - title: Deploying on Public Cloud
   section:
     - title: Overview
-      path: /docs/coming-soon
+      path: /docs/reference/public-cloud/overview
 - title: Deploying on Prem
   section:
     - title: Overview
-      path: /docs/coming-soon
+      path: /docs/reference/on-prem/overview
     - title: Calico Over Ethernet Fabrics
       path: /docs/what-is-calico/connectivity/l2-interconnectFabric
     - title:  IP Interconnect Fabrics in Calico
       path: /docs/what-is-calico/connectivity/l3-interconnectFabric
     - title: Troubleshooting
-      path: /docs/coming-soon
+      path: /docs/reference/on-prem/troubleshooting
 - title: Data Model
   section:
     - title: Overview
@@ -67,3 +67,17 @@ toc:
   path: /docs/what-is-calico/connectivity/addressing
 - title: Calico Integrations
   path: /docs/getting-started/calico-integrations
+- title: Calico for CNI
+  path: /docs/getting-started/cni/calico-cni
+- title: Advanced
+  section:
+  - title: Calico without Docker networking (--net=none)
+    section:
+    - title: Overview
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/CalicoWithoutDockerNetworking
+    - title: Calico without Docker-Libnetwork
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/ManualSetup
+    - title: Calico IPv6 Networking
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/IPv6
+  - title: Calico's use of the Neutron API
+    path: /docs/using-calico/advanced/calico-neutron-api

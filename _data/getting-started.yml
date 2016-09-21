@@ -27,7 +27,7 @@ toc:
   - title: Troubleshooting
     path: /docs/getting-started/kubernetes/Troubleshooting-Calico-Kubernetes
   - title: Upgrade
-    path: /docs/coming-soon
+    path: /docs/getting-started/kubernetes/upgrade
 
 - title: Mesos
   section:
@@ -62,14 +62,14 @@ toc:
     - title: Quickstart with Docker-Compose - Calico for Mesos CNI
       path: /docs/getting-started/mesos/cni-compose-demo/quickstart-compose-mesos-cni
   - title: Troubleshooting
-    path: /docs/coming-soon
+    path: /docs/getting-started/mesos/troubleshooting
   - title: Upgrade
-    path: /docs/coming-soon
+    path: /docs/getting-started/mesos/upgrade
 
 - title: Docker
   section:
   - title: Overview
-    path: /docs/coming-soon
+    path: /docs/getting-started/calico-with-docker/overview
   - title: Installation
     section:
     - title:  Introduction
@@ -95,9 +95,9 @@ toc:
     - title: Docker Swarm
       path: /docs/getting-started/calico-with-docker/docker-network-plugin/CalicoSwarm
   - title: Troubleshooting
-    path: /docs/coming-soon
+    path: /docs/getting-started/calico-with-docker/troubleshooting
   - title: Upgrade
-    path: /docs/coming-soon
+    path: /docs/getting-started/calico-with-docker/upgrade
 
 - title: OpenStack
   section:
@@ -131,11 +131,11 @@ toc:
   - title: Installation
     path: /docs/getting-started/rkt/systemd/calico-node-systemd
   - title: Tutorials
-    path: /docs/coming-soon
+    path: /docs/getting-started/rkt/tutorials
   - title: Troubleshooting
-    path: /docs/coming-soon
+    path: /docs/getting-started/rkt/troubleshooting
   - title: Upgrade
-    path: /docs/coming-soon
+    path: /docs/getting-started/rkt/upgrade
 
 - title: Host Protection
   section:
@@ -146,8 +146,8 @@ toc:
     - title: Alternative Felix Install with PyInstaller Bundle
       path: /docs/getting-started/bare-metal/pyi-bare-metal-install
   - title: Tutorials
-    path: /docs/coming-soon
+    path: /docs/getting-started/bare-metal/tutorials
   - title: Troubleshooting
-    path: /docs/coming-soon
+    path: /docs/getting-started/bare-metal/troubleshooting
   - title: Upgrade
-    path: /docs/coming-soon
+    path: /docs/getting-started/bare-metal/upgrade
