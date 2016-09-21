@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.2.2
+Version:        1.3.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,18 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Sep 21 2016 Neil Jerram <neil@tigera.io> 1:1.3.0-1
+  - networking-calico version 1.3.0 release
+    - Host routes support
+    - Enable DeprecationWarning in test environments
+    - Avoid 'No handlers found' warnings in test run output
+    - Support providing custom etcd connection parameters for DHCP agent
+    - Fix order of arguments in assertEqual
+    - DHCP agent log to /var/log/neutron instead of .../calico
+    - Enable usage reporting for Calico/OpenStack deployments
+    - DevStack bootstrap: Provide Git user name/email config
+    - Fix IPv6 router advertisements with multiple networks
+
 * Thu Jul 28 2016 Neil Jerram <neil@tigera.io> 1:1.2.2-1
   - networking-calico version 1.2.2 release
     - Ensure that DHCP agent log file directory exists

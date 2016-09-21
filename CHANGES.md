@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0
+
+- Host routes support
+- Enable DeprecationWarning in test environments
+- Avoid 'No handlers found' warnings in test run output
+- Support providing custom etcd connection parameters for DHCP agent
+- Fix order of arguments in assertEqual
+- DHCP agent log to /var/log/neutron instead of .../calico
+- Enable usage reporting for Calico/OpenStack deployments
+- DevStack bootstrap: Provide Git user name/email config
+- Fix IPv6 router advertisements with multiple networks
+
 ## 1.2.2
 
 - Ensure that DHCP agent log file directory exists
