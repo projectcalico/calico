@@ -9,40 +9,40 @@
 var body;
 
 //helper functions
-function copyCode(elem){		
- 	if (document.getElementById(elem)) {		
- 		// create hidden text element, if it doesn't already exist		
- 		var targetId = "_hiddenCopyText_";		
- 			// must use a temporary form element for the selection and copy		
- 			target = document.getElementById(targetId);		
- 			if (!target) {		
- 				var target = document.createElement("textarea");		
- 				target.style.position = "absolute";		
- 				target.style.left = "-9999px";		
- 				target.style.top = "0";		
- 				target.id = targetId;		
- 				document.body.appendChild(target);		
- 			}		
- 			target.value = document.getElementById(elem).innerText;		
- 		// select the content		
- 		target.setSelectionRange(0, target.value.length);		
- 				
- 		// copy the selection		
- 		var succeed;		
- 		try {		
- 			succeed = document.execCommand("copy");		
- 		} catch(e) {		
- 			sweetAlert("Oh, no...","Sorry, your browser doesn't support document.execCommand('copy'), so we can't copy this code to your clipboard.");		
- 			succeed = false;		
- 		}		
- 		if (succeed) sweetAlert("Copied to clipboard:",target.value);		
- 		return succeed;		
- 	} else {		
- 		sweetAlert("Oops!",elem + " not found when trying to copy code");		
- 		return false;		
- 	}		
+function copyCode(elem){
+ 	if (document.getElementById(elem)) {
+ 		// create hidden text element, if it doesn't already exist
+ 		var targetId = "_hiddenCopyText_";
+ 			// must use a temporary form element for the selection and copy
+ 			target = document.getElementById(targetId);
+ 			if (!target) {
+ 				var target = document.createElement("textarea");
+ 				target.style.position = "absolute";
+ 				target.style.left = "-9999px";
+ 				target.style.top = "0";
+ 				target.id = targetId;
+ 				document.body.appendChild(target);
+ 			}
+ 			target.value = document.getElementById(elem).innerText;
+ 		// select the content
+ 		target.setSelectionRange(0, target.value.length);
+
+ 		// copy the selection
+ 		var succeed;
+ 		try {
+ 			succeed = document.execCommand("copy");
+ 		} catch(e) {
+ 			sweetAlert("Oh, no...","Sorry, your browser doesn't support document.execCommand('copy'), so we can't copy this code to your clipboard.");
+ 			succeed = false;
+ 		}
+ 		if (succeed) sweetAlert("Copied to clipboard:",target.value);
+ 		return succeed;
+ 	} else {
+ 		sweetAlert("Oops!",elem + " not found when trying to copy code");
+ 		return false;
+ 	}
  }
- 
+
 function booleanAttributeValue(element, attribute, defaultValue){
 	// returns true if an attribute is present with no value
 	// e.g. booleanAttributeValue(element, 'data-modal', false);
@@ -155,7 +155,7 @@ var kub = (function () {
 			toggleToc();
 		}
 
-		classOnCondition(html, 'flip-nav', window.pageYOffset > 0);
+		// classOnCondition(html, 'flip-nav', window.pageYOffset > 0);
 
 		if (html[0].id == 'home') {
 			setHomeHeaderStyles();

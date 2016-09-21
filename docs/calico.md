@@ -74,35 +74,29 @@ Calico version {{ page.version }} supports integrations with Kubernetes, Docker,
 <p></p>
 <div class="colContainer">
   <div class="col3rd">
-    <h3>What is Calico?</h3>
-    <p>Calico is an open source solution for networking and securing cloud-native applications running in containers, virtual machines or even bare-metal workloads.  Calico is built from the ground up with the pillars of simplicity, security and scalability. Calico is based on the same scalable IP networking principles as the internet and can be deployed without encapsulation or overlats to provide high performance at massive scales.</p>
-    <a href="{{base}}/docs/what-is-calico/what-is-calico" class="button">Find out more</a>
+    <h3>Docker</h3>
+    <a href="{{base}}/" class="button">Find out more</a>
   </div>
   <div class="col3rd">
-    <h3>Installation guides</h3>
-    <p>Calico is integrated with various environments include Kubernetes, Mesos, Docker and OpenStack.  These guides will help you get started in each of these environments.</p>
+    <h3>Kubernetes</h3>
     <a href="{{base}}/docs/getting-started/calico-integrations" class="button">Get Started</a>
   </div>
   <div class="col3rd">
-    <h3>Join our Slack community</h3>
-    <p>Calico has a enthusiastic user community on Slack, which is the best place to ask for help, get in touch with the team or simply chat about Calico.</p>
+    <h3>Mesos</h3>
     <a href="https://slack.projectcalico.org" class="button">Join our Slack</a>
   </div>
 </div>
-
-Use the links above and to the left to navigate around the Calico Docs.
-<p>
-</p>
-
 <div class="colContainer">
-  <div class="col2nd">
-  <h3>Contribute to Calico</h3>
-  <p>Calico is an open source project, and we're always happy to take contributions (both to the code and to these docs).  Look at our contribution guidelines to see how you can help shape the project.</p>
+  <div class="col3rd">
+  <h3>OpenStack</h3>
   <a href="{{base}}/community/contribute" class="button">Contribute to Calico</a>
   </div>
-  <div class="col2nd">
-  <h3>Need Help?</h3>
-  <p>Try consulting our <a href="{{base}}/docs/using-calico/troubleshooting/Troubleshooting">troubleshooting guides</a> or join our community of users and contributors in <a href="https://slack.projectcalico.org>">our Slack community</a>.</p>
+  <div class="col3rd">
+  <h3>rkt</h3>
+  <a href="{{base}}/docs/using-calico/troubleshooting/Troubleshooting" class="button">Troubleshooting</a>
+  </div>
+  <div class="col3rd">
+  <h3>Host Protection</h3>
   <a href="{{base}}/docs/using-calico/troubleshooting/Troubleshooting" class="button">Troubleshooting</a>
   </div>
 </div>

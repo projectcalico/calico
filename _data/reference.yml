@@ -1,46 +1,83 @@
-bigheader: "Reference Documentation"
-abstract: "Reference information about Calico"
+bigheader: "Reference"
+abstract: "Reference Information for Calico"
 toc:
-- title: Reference Documentation
+- title: Reference
   path: /docs/reference/reference
-- title: Supported platforms
+- title: Supported Platforms
   path: /docs/reference/supported-platforms
-- title: Earlier releases of Calico
-  path: /docs/reference/previous-releases
-
 - title: Calicoctl
   section:
-  - title: Calicoctl overview
+  - title: Overview
     path: /docs/reference/calicoctl/calicoctl
-  - title: Command reference
-    section:
-    - title: calicoctl status
-      path: /docs/reference/calicoctl/status
-    - title: calicoctl node
-      path: /docs/reference/calicoctl/node
-    - title: calicoctl container
-      path: /docs/reference/calicoctl/container
-    - title: calicoctl profile
-      path: /docs/reference/calicoctl/profile
-    - title: calicoctl pool
-      path: /docs/reference/calicoctl/pool
-    - title: calicoctl bgp
-      path: /docs/reference/calicoctl/bgp
-    - title: calicoctl ipam
-      path: /docs/reference/calicoctl/ipam
-    - title: calicoctl checksystem
-      path: /docs/reference/calicoctl/checksystem
-    - title: calicoctl diags
-      path: /docs/reference/calicoctl/diags
-    - title: calicoctl version
-      path: /docs/reference/calicoctl/version
-    - title: calicoctl config
-      path: /docs/reference/calicoctl/config
-
-- title: etcd
+  - title: status
+    path: /docs/reference/calicoctl/status
+  - title: node
+    path: /docs/reference/calicoctl/node
+  - title: container
+    path: /docs/reference/calicoctl/container
+  - title: profile
+    path: /docs/reference/calicoctl/profile
+  - title: pool
+    path: /docs/reference/calicoctl/pool
+  - title: bgp
+    path: /docs/reference/calicoctl/bgp
+  - title: ipam
+    path: /docs/reference/calicoctl/ipam
+  - title: checksystem
+    path: /docs/reference/calicoctl/checksystem
+  - title: diags
+    path: /docs/reference/calicoctl/diags
+  - title: version
+    path: /docs/reference/calicoctl/version
+  - title: config
+    path: /docs/reference/calicoctl/config
+- title: Deploying on Public Cloud
   section:
-  - title: Data Model
-    path: /docs/reference/etcd/etcd-data-model
-  - title: Structure
-    path: /docs/reference/etcd/etcdStructure
-
+    - title: Overview
+      path: /docs/reference/public-cloud/overview
+- title: Deploying on Prem
+  section:
+    - title: Overview
+      path: /docs/reference/on-prem/overview
+    - title: Calico Over Ethernet Fabrics
+      path: /docs/what-is-calico/connectivity/l2-interconnectFabric
+    - title:  IP Interconnect Fabrics in Calico
+      path: /docs/what-is-calico/connectivity/l3-interconnectFabric
+    - title: Troubleshooting
+      path: /docs/reference/on-prem/troubleshooting
+- title: Data Model
+  section:
+    - title: Overview
+      path: /docs/reference/etcd/etcd-data-model
+    - title: Structure
+      path: /docs/reference/etcd/etcdStructure
+- title: Architecture
+  section:
+  - title: Introduction
+    path: /docs/what-is-calico/architecture
+  - title: calico/node
+    path: /docs/what-is-calico/more-info/Components
+  - title: Data Path
+    path: /docs/what-is-calico/connectivity/datapath
+  - title: Lifecycle of a container (Calico without Docker networking)
+    path: /docs/what-is-calico/more-info/DockerContainerLifecycle
+- title: Calico Security Model
+  path: /docs/using-calico/configuration/security-model
+- title: Addressing and Connectivity Overview
+  path: /docs/what-is-calico/connectivity/addressing
+- title: Calico Integrations
+  path: /docs/getting-started/calico-integrations
+- title: Calico for CNI
+  path: /docs/getting-started/cni/calico-cni
+- title: Advanced
+  section:
+  - title: Calico without Docker networking (--net=none)
+    section:
+    - title: Overview
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/CalicoWithoutDockerNetworking
+    - title: Calico without Docker-Libnetwork
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/ManualSetup
+    - title: Calico IPv6 Networking
+      path: /docs/getting-started/calico-with-docker/without-docker-networking/IPv6
+  - title: Calico's use of the Neutron API
+    path: /docs/using-calico/advanced/calico-neutron-api

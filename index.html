@@ -1,74 +1,14 @@
 ---
 title: Project Calico
 description: Home
+layout: docwithnav
 ---
+<p>Calico is a new approach to virtual networking, based on the same IP networking principles as the Internet. It targets data where most of the workloads (VMs, containers or bare metal) only require IP connectivity, and provides that using standard IP routing. Isolation between workloads - whether according to tenant ownership, or any finer grained policy - is achieved by iptables programming at the servers hosting the source and destination workloads.</p>
 
-<!Doctype html>
-<html id="home">
-
-{% include base.html %}
-{% include head-header.html %}
-
-<!--  HERO  -->
-<section id="hero" class="light-text">
-    <main>
-        <div id="headlineWrapper">
-            <h1>Cloud Networks, Secured</h1>
-            <h5>A Pure Layer 3 Approach to Virtual Networking for Highly Scalable Data Centers</h5>
-        </div>
-        <a href="{{base}}/docs/getting-started/calico-integrations" id="quickstartButton" class="button">Get Started</a>
-    </main>
-</section>
-<!--  OCEAN NODES  -->
-<section id="oceanNodes">
-    <main>
-        <div class="image-wrapper"><img src="images/felix.png"></div>
-        <div class="content">
-            <h3><a href="https://www.projectcalico.org/learn/">Project Calico</a> is an open-source Networking project for cloud-native applications</h3>
-            <p>Calico enables secure IP communication between containers, virtual machines or bare metal workloads.</p>
-        </div>
-    </main>
-    <main>
-        <div class="image-wrapper"><img src="images/secure-white.png"></div>
-        <div class="content">
-            <h4>Secure</h4>
-            <p>Designed from the ground up to support rich, flexible and secure network policy.</p>
-        </div>
-    </main>    <main>
-        <div class="image-wrapper"><img src="images/scalable-white.png"></div>
-        <div class="content">
-            <h4>Scalable</h4>
-            <p>Calico scales to tens of thousands of servers and millions of workloads.</p>
-        </div>
-    </main>
-    <main>
-        <div class="image-wrapper"><img src="images/simple-white.png"></div>
-        <div class="content">
-            <h4>Simple</h4>
-            <p>Easy to deploy, easy to operate, easy to diagnose.</p>
-        </div>
-    </main>
-    <main>
-        <div class="image-wrapper"><img src="images/github-white.png"></div>
-        <div class="content">
-            <h4>Open</h4>
-            <p>Open source and open standards.</p>
-        </div>
-    </main>
-    <main>
-        <div class="image-wrapper"><img src="images/workload-white.png"></div>
-        <div class="content">
-            <h4>Any Workload</h4>
-            <p>Supports container, VM and bare metal workloads.</p>
-        </div>
-    </main>
-    <main>
-        <div class="image-wrapper"><img src="images/ipv6-white.png"></div>
-        <div class="content">
-            <h4>IPv6 Enabled</h4>
-            <p>Supports IPv4 and IPv6</p>
-        </div>
-    </main>
-</section>
-
-{% include footer.html %}
+<p>In comparison with the common solutions that provide simulated layer 2 networks, Calico is a lot simpler, specifically in the following ways.</p>
+<ul>
+  <li>Packets flowing through a Calico network do not require additional encapsulation and decapsulation anywhere. In contrast, layer 2 solutions typically require packets to be encapsulated in a tunneling protocol when travelling between host servers.</li>
+  <li>Where permitted by policy, Calico packets can be routed between different tenants' workloads, or out to or in from the Internet, in exactly the same way as between the workloads of a single tenant. There is no need for on-and off-ramps as in overlay solutions, and hence for passing through special 'networking' or 'router' nodes that provide those ramps.</li>
+  <li>As a consequence of those two points, Calico networks are easier to understand and to troubleshoot. Standard tools like ping and traceroute work for probing connectivity, and tcpdump and Wireshark for looking at flows -because Calico packets are just IP packets, and the same throughout the network.</li>
+  <li>Security policy is specified (using ACLs) and implemented (iptables) in a single uniform way - making it more likely that it will actually be correct and robust. In contrast, in layer 2 solutions, effective security policy is a more complex (but also less expressive) product of the networks and security groups that are defined for each tenant, and of any virtual 'routers' that have been defined to allow passage between tenant networks.</li>
+</ul>
