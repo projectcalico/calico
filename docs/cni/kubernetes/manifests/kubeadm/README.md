@@ -1,6 +1,6 @@
 # Install for Kubeadm
 
-This directory contains a single packaged manfest for installing Calico on kubeadm managed Kubernetes clusters.  It is a specific case of the 
+This directory contains a single packaged manifest for installing Calico on kubeadm managed Kubernetes clusters.  It is a specific case of the 
 more general manifests provided [here](../README.md)
 
 To install this manifest, make sure you've created a cluster using the kubeadm tool.
