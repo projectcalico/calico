@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.2
+
+- Add CircleCI config
+- Fix for baremetal issue (#1071)
+- Allow {inbound,outbound}_rules to be omitted, and handle as []
+- Add IgnoreLooseRPF config parameter
+- Handle interface renaming
+- Documentation improvements:
+  - Add EtcdEndpoints to Felix configuration reference.
+  - Improve overview documentation about Calico security.
+  - Update recommended RPM repo for Calico with Liberty or later
+- Add Usage Reporting to Felix
+- Allow customization of 'etcdctl' for calico-diags
+- Add config option to disable IPv6
+- Reduce EtcdWatcher timeout to 10s
+- Increase urllib3 log severity to avoid log spam from EtcdWatcher
+
 ## 1.4.0
 
 - Fix example policy in bare metal docs to be valid json
