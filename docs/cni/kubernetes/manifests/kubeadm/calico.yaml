@@ -250,7 +250,6 @@ metadata:
   name: configure-calico
   namespace: kube-system
   labels:
-    kubernetes.io/cluster-service: "true"
     k8s-app: calico 
 spec:
   template:
