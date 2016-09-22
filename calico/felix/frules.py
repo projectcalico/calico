@@ -248,10 +248,6 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
     - applies any changes required.
     """
 
-    # The interface matching string; for example, if interfaces start "tap"
-    # then this string is "tap+".
-    iface_match = config.IFACE_PREFIX + "+"
-
     # If enabled, create the IP-in-IP device, but only for IPv4
     if ip_version == 4:
         if config.IP_IN_IP_ENABLED:
@@ -294,11 +290,15 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
                                    {CHAIN_PREROUTING: raw_prerouting_deps},
                                    async=False)
 
-        raw_updater.ensure_rule_inserted(
-            "PREROUTING --in-interface %s --match rpfilter --invert "
-            "--jump %s" %
-            (iface_match, CHAIN_PREROUTING),
-            async=False)
+        for iface_prefix in config.IFACE_PREFIX:
+            # The interface matching string; for example,
+            # if interfaces start "tap" then this string is "tap+".
+            iface_match = iface_prefix + '+'
+            raw_updater.ensure_rule_inserted(
+                "PREROUTING --in-interface %s --match rpfilter --invert "
+                "--jump %s" %
+                (iface_match, CHAIN_PREROUTING),
+                async=False)
 
     # Both IPV4 and IPV6 nat tables need felix-PREROUTING and
     # felix-POSTROUTING, along with the dependent DNAT and SNAT tables
@@ -409,7 +409,9 @@ def interface_to_chain_suffix(config, iface_name):
     :param iface_name: The interface name
     :returns string: the suffix (shortened if necessary)
     """
-    suffix = iface_name.replace(config.IFACE_PREFIX, "", 1)
-    # The suffix is surely not very long, but make sure.
-    suffix = futils.uniquely_shorten(suffix, 16)
-    return suffix
+    for prefix in sorted(config.IFACE_PREFIX, reverse=True):
+        if iface_name.startswith(prefix):
+            iface_name = iface_name[len(prefix):]
+            break
+    iface_name = futils.uniquely_shorten(iface_name, 16)
+    return iface_name

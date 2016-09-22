@@ -498,7 +498,7 @@ class TestEndpointManager(BaseTestCase):
 
     def test_poll_interfaces(self):
         known_interfaces = {}
-        self.mgr.config.IFACE_PREFIX = "tap"
+        self.mgr.config.IFACE_PREFIX = ["tap"]
 
         with mock.patch("calico.felix.devices.list_ips_by_iface",
                         autospec=True) as m_list_ips, \
@@ -1361,7 +1361,7 @@ class TestHostEndpoint(BaseTestCase):
     def setUp(self):
         super(TestHostEndpoint, self).setUp()
         self.config = mock.Mock()
-        self.config.IFACE_PREFIX = "tap"
+        self.config.IFACE_PREFIX = ["tap"]
         self.m_ipt_gen = Mock(spec=FelixIptablesGenerator)
         self.config.plugins = {"iptables_generator": self.m_ipt_gen}
         self.updates = ({"chain": ["rule"]}, {"chain": set(["deps"])})

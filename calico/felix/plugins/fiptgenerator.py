@@ -81,6 +81,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.METADATA_PORT = None
         self.IPTABLES_MARK_ACCEPT = None
         self.IPTABLES_MARK_NEXT_TIER = None
+        self.IPTABLES_MARK_ENDPOINTS = None
         self.FAILSAFE_INBOUND_PORTS = None
         self.FAILSAFE_OUTBOUND_PORTS = None
         self.ACTION_ON_DROP = None
@@ -92,12 +93,13 @@ class FelixIptablesGenerator(FelixPlugin):
         super(FelixIptablesGenerator, self).store_and_validate_config(config)
 
         self.IFACE_PREFIX = config.IFACE_PREFIX
-        self.IFACE_MATCH = self.IFACE_PREFIX + "+"
+        self.IFACE_MATCH = [prefix + "+" for prefix in self.IFACE_PREFIX]
         self.METADATA_IP = config.METADATA_IP
         self.METADATA_PORT = config.METADATA_PORT
         self.DEFAULT_INPUT_CHAIN_ACTION = config.DEFAULT_INPUT_CHAIN_ACTION
         self.IPTABLES_MARK_ACCEPT = config.IPTABLES_MARK_ACCEPT
         self.IPTABLES_MARK_NEXT_TIER = config.IPTABLES_MARK_NEXT_TIER
+        self.IPTABLES_MARK_ENDPOINTS = config.IPTABLES_MARK_ENDPOINTS
         self.FAILSAFE_INBOUND_PORTS = config.FAILSAFE_INBOUND_PORTS
         self.FAILSAFE_OUTBOUND_PORTS = config.FAILSAFE_OUTBOUND_PORTS
         self.ACTION_ON_DROP = config.ACTION_ON_DROP
@@ -231,11 +233,23 @@ class FelixIptablesGenerator(FelixPlugin):
         chain.append("--append %s --match conntrack "
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_INPUT)
-
+        chain.append(
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_INPUT, mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+        for iface_match in self.IFACE_MATCH:
+            chain.append(
+                "--append {chain} --in-interface {iface} "
+                "--jump MARK --set-mark {mark}/{mark}".format(
+                    chain=CHAIN_INPUT, iface=iface_match,
+                    mark=self.IPTABLES_MARK_ENDPOINTS)
+            )
         # Incoming traffic on host endpoints.
         chain.append(
-            "--append %s --goto %s ! --in-interface %s" %
-            (CHAIN_INPUT, CHAIN_FROM_IFACE, self.IFACE_MATCH)
+            "--append {chain} --goto {goto} --match mark "
+            "--mark 0/{mark}".format(
+                chain=CHAIN_INPUT, goto=CHAIN_FROM_IFACE,
+                mark=self.IPTABLES_MARK_ENDPOINTS)
         )
         deps.add(CHAIN_FROM_IFACE)
 
@@ -337,11 +351,23 @@ class FelixIptablesGenerator(FelixPlugin):
         chain.append("--append %s --match conntrack "
                      "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                      CHAIN_OUTPUT)
-
-        # Outgoing traffic on host endpoints.
         chain.append(
-            "--append %s --goto %s ! --out-interface %s" %
-            (CHAIN_OUTPUT, CHAIN_TO_IFACE, self.IFACE_MATCH)
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_OUTPUT, mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+        # Outgoing traffic on host endpoints.
+        for iface_match in self.IFACE_MATCH:
+            chain.append(
+                "--append {chain} --out-interface {iface} "
+                "--jump MARK --set-mark {mark}/{mark}".format(
+                    chain=CHAIN_OUTPUT, iface=iface_match,
+                    mark=self.IPTABLES_MARK_ENDPOINTS)
+            )
+        chain.append(
+            "--append {chain} --goto {goto} --match mark "
+            "--mark 0/{mark}".format(
+                chain=CHAIN_OUTPUT, goto=CHAIN_TO_IFACE,
+                mark=self.IPTABLES_MARK_ENDPOINTS)
         )
         deps.add(CHAIN_TO_IFACE)
 
@@ -361,50 +387,49 @@ class FelixIptablesGenerator(FelixPlugin):
         :param ip_version.  Whether this is the IPv4 or IPv6 FILTER table.
         :returns Tuple: list of rules, set of deps.
         """
-        forward_chain = (
-            self.drop_rules(ip_version,
-                            CHAIN_FORWARD,
-                            "--in-interface %s --match conntrack --ctstate "
-                            "INVALID" % self.IFACE_MATCH,
-                            None) +
-            self.drop_rules(ip_version,
-                            CHAIN_FORWARD,
-                            "--out-interface %s --match conntrack --ctstate "
-                            "INVALID" % self.IFACE_MATCH,
-                            None) +
-            [
+        forward_chain = []
+        for iface_match in self.IFACE_MATCH:
+            forward_chain.extend(self.drop_rules(
+                ip_version, CHAIN_FORWARD,
+                "--in-interface %s --match conntrack --ctstate "
+                "INVALID" % iface_match, None))
+            forward_chain.extend(
+                self.drop_rules(
+                    ip_version, CHAIN_FORWARD,
+                    "--out-interface %s --match conntrack --ctstate "
+                    "INVALID" % iface_match, None))
+            forward_chain.extend([
                 # First, a pair of conntrack rules, which accept established
                 # flows to/from workload interfaces.
                 "--append %s --in-interface %s --match conntrack "
                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, self.IFACE_MATCH),
+                (CHAIN_FORWARD, iface_match),
                 "--append %s --out-interface %s --match conntrack "
                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, self.IFACE_MATCH),
+                (CHAIN_FORWARD, iface_match),
 
                 # Then, for traffic from a workload interface, jump to the
                 # from endpoint chain.  It will either DROP the packet or,
                 # if policy allows, return it to this chain for further
                 # processing.
                 "--append %s --jump %s --in-interface %s" %
-                (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, self.IFACE_MATCH),
+                (CHAIN_FORWARD, CHAIN_FROM_ENDPOINT, iface_match),
 
                 # Then, for traffic to a workload interface, jump to the
                 # "to endpoint" chain.  Note: a packet that's going from one
                 # endpoint to another on the same host will go through both
                 # the "from" and "to" chains.
                 "--append %s --jump %s --out-interface %s" %
-                (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, self.IFACE_MATCH),
+                (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
 
                 # Finally, if the packet is from/to a workload and it passes
                 # both the "from" and "to" chains without being dropped, it
                 # must be allowed by policy; ACCEPT it.
                 "--append %s --jump ACCEPT --in-interface %s" %
-                (CHAIN_FORWARD, self.IFACE_MATCH),
+                (CHAIN_FORWARD, iface_match),
                 "--append %s --jump ACCEPT --out-interface %s" %
-                (CHAIN_FORWARD, self.IFACE_MATCH),
-            ]
-        )
+                (CHAIN_FORWARD, iface_match),
+            ])
         return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
 
     def endpoint_chain_names(self, endpoint_suffix):
