@@ -19,10 +19,10 @@ import (
 	"reflect"
 	"strings"
 
-	"time"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	net2 "net"
+	"time"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
@@ -221,6 +221,13 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 	}
 	if valueType == rawBoolType {
 		return string(rawData) == "true", nil
+	}
+	if valueType == reflect.TypeOf(net.IP{}) {
+		ip := net2.ParseIP(string(rawData))
+		if ip == nil {
+			return nil, nil
+		}
+		return &net.IP{ip}, nil
 	}
 	value := reflect.New(valueType)
 	elem := value.Elem()
