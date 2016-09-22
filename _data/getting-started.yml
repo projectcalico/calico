@@ -20,12 +20,10 @@ toc:
       path: /docs/getting-started/kubernetes/VagrantCoreOS
   - title: Tutorials
     section:
-    - title: Demonstrating Network Policy
+    - title: Demonstrating Calico Policy
       path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
     - title: Deploying the guestbook application
       path: /docs/getting-started/kubernetes/vagrant-coreos/guestbook
-    - title: Demonstrating Calico Policy
-      path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
     - title: Simple Policy Demo
       path: /docs/getting-started/kubernetes/simple-policy-demo
   - title: Troubleshooting

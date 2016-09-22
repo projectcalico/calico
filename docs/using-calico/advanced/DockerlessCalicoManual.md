@@ -10,7 +10,7 @@ Some `calicoctl` commands rely on a running `calico-node` container, and expect 
 
 1. `calicoctl node status`
 2. `calicoctl checksystem`
-3. All `calicoctl container ...` commands. 
+3. All `calicoctl container ...` commands.
 
 Please raise any encountered issues, or message us on [calico-slack](https://slack.projectcalico.org/).
 
@@ -20,7 +20,7 @@ Please raise any encountered issues, or message us on [calico-slack](https://sla
     ```shell
     setenforce permissive
     ```
-    
+
 2. Edit `/etc/selinux/config` and change the `SELINUX=` line to the following:
 
     ```shell
@@ -42,19 +42,19 @@ Please raise any encountered issues, or message us on [calico-slack](https://sla
     EOF
     ```
 
-4. Calico depends on a few EPEL packages, so be sure you have added the EPEL repos: 
+4. Calico depends on a few EPEL packages, so be sure you have added the EPEL repos:
 
     ```shell
     yum install -y epel-release
     ```
 
-5. Then install calico-felix: 
+5. Then install calico-felix:
 
     ```shell
     yum install -y calico-felix
     ```
 
-6. Until calico-felix 0.3.0 is released, you'll also have to manually install a few runtime deps: 
+6. Until calico-felix 0.3.0 is released, you'll also have to manually install a few runtime deps:
 
     ```shell
     yum install -y posix-spawn python-gevent python-eventlet python-etcd
@@ -66,11 +66,11 @@ Please raise any encountered issues, or message us on [calico-slack](https://sla
     # calicoctl
     curl -L http://www.projectcalico.org/builds/calicoctl -o /usr/local/bin/calicoctl
     chmod +x /usr/local/bin/calicoctl
-    
+
     # bird
     curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird -o /usr/local/bin/bird
     chmod +x /usr/local/bin/bird
-    
+
     # confd
     curl -L https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static -o /usr/local/bin/confd
     chmod +x /usr/local/bin/confd
@@ -101,7 +101,7 @@ Please raise any encountered issues, or message us on [calico-slack](https://sla
     ```shell
     ETCD_AUTHORITY=<EtcdIP:Port>
 
-    # Set the IP that calico should run on. This will be used by confd during 
+    # Set the IP that calico should run on. This will be used by confd during
     # the generation of bird configuration files.
     IP=<LocalIP>
     ```

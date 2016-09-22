@@ -19,7 +19,7 @@ toc:
 - title: Route Reflector
   path: /docs/using-calico/advanced/bird-rr-config
 - title: IPv6
-  path: /docs/using-calico/advanced/IPv6
+  path: /docs/using-calico/advanced/ipv6
 - title: Dockerless Calico
   path: /docs/using-calico/advanced/DockerlessCalicoManual
 - title: Calico External Connectivity
