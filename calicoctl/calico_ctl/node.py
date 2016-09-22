@@ -843,12 +843,19 @@ def _attach_and_stream(container, startup_only):
     exit_code = 1
 
     output = docker_client.attach(container, stream=True)
+    line_buf = ""
     try:
         for raw_data in output:
             sys.stdout.write(raw_data)
-            if "Calico node started successfully" in raw_data and startup_only:
-                stop_container_on_exit = False
-                break
+            if startup_only:
+                # We've been asked to exit after the container has started,
+                # look for the successful startup message.  We buffer one line
+                # of output in case we get a split line from the output stream.
+                line_buf += raw_data
+                if "Calico node started successfully" in line_buf:
+                    stop_container_on_exit = False
+                    break
+                line_buf = line_buf.rsplit('\n')[-1]
     except KeyboardInterrupt:
         # Mainline. Someone pressed Ctrl-C.
         print "Stopping Calico node..."
