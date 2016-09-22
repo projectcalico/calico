@@ -35,16 +35,16 @@ toc:
   section:
     - title: Overview
       path: /docs/reference/public-cloud/overview
-- title: Deploying on Prem
+- title: Deploying on Private Cloud
   section:
     - title: Overview
-      path: /docs/reference/on-prem/overview
+      path: /docs/reference/private-cloud/overview
     - title: Calico Over Ethernet Fabrics
       path: /docs/what-is-calico/connectivity/l2-interconnectFabric
     - title:  IP Interconnect Fabrics in Calico
       path: /docs/what-is-calico/connectivity/l3-interconnectFabric
     - title: Troubleshooting
-      path: /docs/reference/on-prem/troubleshooting
+      path: /docs/reference/private-cloud/troubleshooting
 - title: Data Model
   section:
     - title: Overview
