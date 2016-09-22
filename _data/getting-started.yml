@@ -24,10 +24,18 @@ toc:
       path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
     - title: Deploying the guestbook application
       path: /docs/getting-started/kubernetes/vagrant-coreos/guestbook
+    - title: Demonstrating Calico Policy
+      path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
+    - title: Simple Policy Demo
+      path: /docs/getting-started/kubernetes/simple-policy-demo
   - title: Troubleshooting
     path: /docs/getting-started/kubernetes/Troubleshooting-Calico-Kubernetes
   - title: Upgrade
     path: /docs/getting-started/kubernetes/upgrade
+  - title: Advanced
+    section:
+    - title: Calico as Addon
+      path: /docs/getting-started/kubernetes/InstallAddons
 
 - title: Mesos
   section:
@@ -73,6 +81,8 @@ toc:
   - title: Installation
     section:
     - title:  Introduction
+      path: /docs/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin
+    - title: Manual
       path: /docs/getting-started/calico-with-docker/docker-network-plugin/ManualSetup
     - title: AWS
       path: /docs/getting-started/calico-with-docker/AWS

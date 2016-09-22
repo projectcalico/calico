@@ -68,7 +68,9 @@ toc:
 - title: Calico Integrations
   path: /docs/getting-started/calico-integrations
 - title: Calico for CNI
-  path: /docs/getting-started/cni/calico-cni
+  section:
+  - title: Overview
+    path: /docs/getting-started/cni/calico-cni
 - title: Advanced
   section:
   - title: Calico without Docker networking (--net=none)
@@ -81,3 +83,5 @@ toc:
       path: /docs/getting-started/calico-with-docker/without-docker-networking/IPv6
   - title: Calico's use of the Neutron API
     path: /docs/using-calico/advanced/calico-neutron-api
+  - title: Repo Structure
+    path: /docs/reference/RepoStructure
