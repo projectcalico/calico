@@ -8,7 +8,7 @@ This repositiory contains Calico's Go components:
 
 ## Common set-up
 
-Assuming you have already installed **go v1.6+**, perform the following simple steps to get building:
+Assuming you have already installed **go version 1.7.1+**, perform the following simple steps to get building:
 
 - [Install Glide](https://github.com/Masterminds/glide#install)
 
