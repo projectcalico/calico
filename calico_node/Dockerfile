@@ -31,6 +31,8 @@ RUN apk add --update curl && \
 ADD build.sh /build.sh
 RUN /build.sh
 
+ADD bin/calico-bgp-daemon /sbin/
+
 # Copy in our custom configuration files etc. We do this last to speed up
 # builds for developer, as it's the thing they're most likely to change.
 ADD start_runit /sbin/

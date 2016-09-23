@@ -4,41 +4,67 @@ python startup.py || exit 1
 . startup.env
 
 if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
-	rm -r /etc/service/bird/log
-	rm -r /etc/service/bird6/log
-	rm -r /etc/service/confd/log
-	rm -r /etc/service/felix/log
+	rm -r /etc/service/available/bird/log
+	rm -r /etc/service/available/bird6/log
+	rm -r /etc/service/available/confd/log
+	rm -r /etc/service/available/felix/log
+	rm -r /etc/service/available/calico-bgp-daemon/log
 fi
 
-if [ "$CALICO_NETWORKING" == "false" ]; then
+# Create a directly to put enabled service files
+mkdir /etc/service/enabled
+
+# Felix is always enabled
+mv /etc/service/available/felix /etc/service/enabled/
+
+if [ -n "$CALICO_NETWORKING" ]; then
+    echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
+    if [ "$CALICO_NETWORKING" == "false" ]; then
+        export CALICO_NETWORKING_BACKEND=none
+    else
+        export CALICO_NETWORKING_BACKEND=bird
+    fi
+fi
+
+case "$CALICO_NETWORKING_BACKEND" in
+    "none" )
 	# If running in policy only mode, we don't need to run BIRD / Confd.
-	echo "CALICO_NETWORKING is false - disable BIRD and Confd"
-	rm -r /etc/service/bird
-	rm -r /etc/service/bird6
-	rm -r /etc/service/confd
-else
-    # Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
-    # felix to start.  Don't fail startup if this confd execution fails.
-    #
-    # First generate the BIRD aggregation TOML file from the template by
-    # switching out the hostname.
-    sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
-    sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird6_aggr.toml.template > /etc/calico/confd/conf.d/bird6_aggr.toml
+	echo "CALICO_NETWORKING_BACKEND is none - no BGP daemon running"
+	;;
+    "gobgp" )
+	# Run calico-bgp-daemon instead of BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
+	mv /etc/service/available/calico-bgp-daemon /etc/service/enabled/
+	;;
+    * )
+	# Run BIRD / Confd.
+	mv /etc/service/available/bird  /etc/service/enabled/
+	mv /etc/service/available/bird6 /etc/service/enabled/
+	mv /etc/service/available/confd /etc/service/enabled/
 
-    # Run confd twice.  Our confd TOML files are also generated from confd, so
-    # running twice ensures our starting configuration is correct.
-    # Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
-    ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
+	# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
+	# felix to start.  Don't fail startup if this confd execution fails.
+	#
+	# First generate the BIRD aggregation TOML file from the template by
+	# switching out the hostname.
+	sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
+	sed "s/HOSTNAME/$HOSTNAME/" /etc/calico/confd/templates/bird6_aggr.toml.template > /etc/calico/confd/conf.d/bird6_aggr.toml
 
-    # confd needs a "-node" arguments for each etcd endpoint.
-    ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
+	# Run confd twice.  Our confd TOML files are also generated from confd, so
+	# running twice ensures our starting configuration is correct.
+	# Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
+	ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
 
-    confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
-          -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-          -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
-    confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
-          -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-          -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
-fi
+	# confd needs a "-node" arguments for each etcd endpoint.
+	ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
+
+	confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
+	      -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
+	      -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
+	confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
+	      -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
+	      -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
+	;;
+esac
 
 echo "Calico node started successfully"

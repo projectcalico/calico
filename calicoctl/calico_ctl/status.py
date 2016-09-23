@@ -13,19 +13,25 @@
 # limitations under the License.
 """
 Usage:
-  calicoctl status [--runtime=<RUNTIME>]
+  calicoctl status [--runtime=<RUNTIME>] [--backend=<BACKEND>]
 
 Description:
   Print current status information regarding calico-node container
-  and the BIRD routing daemon.
+  and the BIRD/GoBGP routing daemon.
 
 Options:
   --runtime=<RUNTIME>       Specify the runtime used to run the calico/node
                             container, either "docker" or "rkt".
                             [default: docker]
+  --backend=<BACKEND>       Specify the networking backend used in calico/node
+                            container. "bird", "gobgp" or "none".
 """
 import re
 import sys
+import os
+import json
+import time
+import datetime
 
 import subprocess32
 from prettytable import PrettyTable
@@ -35,6 +41,7 @@ from subprocess32 import Popen, PIPE
 
 from connectors import docker_client, client
 from utils import hostname, RKT_CONTAINER_RE, enforce_root
+from node import get_networking_backend
 
 
 def status(arguments):
@@ -50,6 +57,12 @@ def status(arguments):
     runtime = arguments.get("--runtime")
     if not runtime in ["docker", "rkt"]:
         print "Invalid runtime specified: '%s'" % runtime
+        sys.exit(1)
+
+    # Check backend
+    backend = arguments.get("--backend")
+    if not backend in [None, "bird", "gobgp", "none"]:
+        print "Invalid backend specified: '%s'" % backend
         sys.exit(1)
 
     # Start by locating the calico-node container and querying the package
@@ -81,14 +94,14 @@ def status(arguments):
     print "\nIPv4 BGP status"
     if bgp_ipv4:
         print "IP: %s    AS Number: %s" % (bgp_ipv4, bgp_as)
-        pprint_bird_protocols(4)
+        pprint_bgp_protocols(4, backend)
     else:
         print "No IPv4 address configured.\n"
 
     print "IPv6 BGP status"
     if bgp_ipv6:
         print "IP: %s    AS Number: %s" % (bgp_ipv6, bgp_as)
-        pprint_bird_protocols(6)
+        pprint_bgp_protocols(6, backend)
     else:
         print "No IPv6 address configured.\n"
 
@@ -151,6 +164,14 @@ def check_container_status_rkt():
         # Print status.  If it at least one is running, this will display
         # "running" status.
         print "calico-node container status: %s" % status
+
+
+def pprint_bgp_protocols(version, backend):
+    backend = get_networking_backend(backend)
+    if backend == "gobgp":
+        pprint_gobgp_protocols(version)
+    elif backend == "bird":
+        pprint_bird_protocols(version)
 
 
 def pprint_bird_protocols(version):
@@ -252,3 +273,42 @@ def pprint_bird_protocols(version):
         print str(x) + "\n"
     else:
         print results + "\n"
+
+
+def _gobgp(cmd):
+    if getattr(sys, 'frozen', False):
+        gobgp = sys._MEIPASS + "/gobgp"
+    else:
+        gobgp = "gobgp"
+    results = subprocess32.check_output([gobgp, "-j"] + cmd.split(" "))
+    return json.loads(results)
+
+
+def pprint_gobgp_protocols(version):
+    x = PrettyTable(["Peer address", "Peer type", "State", "Since", "Info"])
+
+    now = int(time.mktime(datetime.datetime.now().timetuple()))
+    try:
+        neighbors = _gobgp("neighbor -t ipv%d" % version)
+    except subprocess32.CalledProcessError:
+        print "Couldn't connect to gobgp."
+        return
+
+    print >> sys.stderr, "WARNING: gobgp mode only supports node-to-node mesh type"
+    for neighbor in neighbors:
+        ptype = "node-to-node mesh"
+        name = neighbor["conf"]["remote_ip"]
+        state  = "up" if neighbor["info"]["admin_state"] == "ADMIN_STATE_UP" else "down"
+        info = neighbor["info"]["bgp_state"].split("_")[-1].capitalize()
+        uptime = neighbor["timers"]["state"].get("uptime", 0)
+        since = "never"
+        if uptime > 0:
+            if info == "Established":
+                delta = datetime.timedelta(seconds=now - uptime)
+            else:
+                downtime = neighbor["timers"]["state"].get("downtime", 0)
+                delta = datetime.timedelta(seconds=now - downtime)
+            since = str(delta)
+        x.add_row([name, ptype, state, since, info])
+
+    print str(x) + "\n"

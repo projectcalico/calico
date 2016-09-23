@@ -25,7 +25,7 @@ together.
 > Note that the `calico/node` may be run in *policy only mode* in which Felix
 > runs, but both BIRD and confd are removed.  This provides policy management
 > without route distribution between hosts.  This mode can be enabled by
-> setting the environment variable `CALICO_NETWORKING=false` before starting
+> setting the environment variable `CALICO_NETWORKING_BACKEND=none` before starting
 > the node with `calicoctl node`.
 
 #### Calico Felix agent

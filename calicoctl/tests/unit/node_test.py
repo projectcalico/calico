@@ -31,8 +31,7 @@ from pycalico.datastore import (ETCD_AUTHORITY_DEFAULT, ETCD_SCHEME_DEFAULT,
                                 ETCD_AUTHORITY_ENV, ETCD_ENDPOINTS_ENV)
 
 from calico_ctl import node
-from calico_ctl.node import (ETCD_CA_CERT_NODE_FILE, ETCD_CERT_NODE_FILE,
-                             ETCD_KEY_NODE_FILE, CALICO_NETWORKING_DEFAULT)
+from calico_ctl.node import (ETCD_CA_CERT_NODE_FILE, ETCD_CERT_NODE_FILE, ETCD_KEY_NODE_FILE)
 import calico_ctl
 from pycalico.datastore_datatypes import IPPool
 
@@ -217,10 +216,11 @@ class TestNode(unittest.TestCase):
         detach = True
         libnetwork = False
         no_pull = False
+        backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork, no_pull)
+                        libnetwork, no_pull, backend)
 
         # Assert
         m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
@@ -287,17 +287,18 @@ class TestNode(unittest.TestCase):
         libnetwork = False
         # Don't pull the node image
         no_pull = True
+        backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork, no_pull)
+                        libnetwork, no_pull, backend)
 
         # Set up variables used in assertion statements
         environment = [
             "HOSTNAME=%s" % node.hostname,
             "IP=%s" % ip_2,
             "IP6=%s" % ip6,
-            "CALICO_NETWORKING=%s" % node.CALICO_NETWORKING_DEFAULT,
+            "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
@@ -390,7 +391,6 @@ class TestNode(unittest.TestCase):
         etcd_key_path = "/path/to/key.pem"
         etcd_endpoints = "https://1.2.3.4:2379"
         env = {"NO_DEFAULT_POOLS": "",
-               "CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
                ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
@@ -398,7 +398,7 @@ class TestNode(unittest.TestCase):
                ETCD_CERT_FILE_ENV: etcd_cert_path,
                ETCD_KEY_FILE_ENV: etcd_key_path}
         def m_getenv(env_var, *args, **kwargs):
-            return env[env_var]
+            return env.get(env_var)
         m_os_getenv.side_effect = m_getenv
 
         # Assume log and run directories already exist to test exception path.
@@ -415,17 +415,18 @@ class TestNode(unittest.TestCase):
         detach = False
         libnetwork_image = 'libnetwork_image'
         no_pull = False
+        backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull)
+                        libnetwork_image, no_pull, backend)
 
         # Set up variables used in assertion statements
         environment_node = [
             "HOSTNAME=%s" % node.hostname,
             "IP=%s" % ip_2,
             "IP6=%s" % ip6,
-            "CALICO_NETWORKING=%s" % CALICO_NETWORKING_DEFAULT,
+            "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
@@ -544,7 +545,6 @@ class TestNode(unittest.TestCase):
         etcd_ca_path = "/path/to/ca.crt"
         etcd_endpoints = "https://1.2.3.4:2379"
         env = {"NO_DEFAULT_POOLS": "",
-               "CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
                ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
@@ -564,17 +564,18 @@ class TestNode(unittest.TestCase):
         detach = False
         libnetwork_image = 'libnetwork_image'
         no_pull = False
+        backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull)
+                        libnetwork_image, no_pull, backend)
 
         # Set up variables used in assertion statements
         environment_node = [
             "HOSTNAME=%s" % node.hostname,
             "IP=%s" % ip_2,
             "IP6=%s" % ip6,
-            "CALICO_NETWORKING=%s" % CALICO_NETWORKING_DEFAULT,
+            "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
@@ -683,7 +684,6 @@ class TestNode(unittest.TestCase):
         etcd_key_path = "/path/to/key.pem"
         etcd_endpoints = "https://1.2.3.4:2379"
         env = {"NO_DEFAULT_POOLS": "",
-               "CALICO_NETWORKING": CALICO_NETWORKING_DEFAULT,
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
                ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
@@ -704,17 +704,18 @@ class TestNode(unittest.TestCase):
         detach = False
         libnetwork_image = 'libnetwork_image'
         no_pull = False
+        backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull)
+                        libnetwork_image, no_pull, backend)
 
         # Set up variables used in assertion statements
         environment_node = [
             "HOSTNAME=%s" % node.hostname,
             "IP=%s" % ip_2,
             "IP6=%s" % ip6,
-            "CALICO_NETWORKING=%s" % CALICO_NETWORKING_DEFAULT,
+            "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
@@ -823,11 +824,12 @@ class TestNode(unittest.TestCase):
         detach = False
         libnetwork = False
         no_pull = False
+        backend = "bird"
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull)
+                          libnetwork, no_pull, backend)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
@@ -856,12 +858,13 @@ class TestNode(unittest.TestCase):
         detach = False
         libnetwork = False
         no_pull = False
+        backend = "bird"
 
         # Return False for etcd status (failure)
         m_check_system.return_value = [True, True, False]
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull)
+                          libnetwork, no_pull, backend)
 
         # Return False for Docker status (failure)
         m_check_system.return_value = [True, False, True]
@@ -869,7 +872,7 @@ class TestNode(unittest.TestCase):
         # Testing expecting APIError exception
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull)
+                          libnetwork, no_pull, backend)
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
