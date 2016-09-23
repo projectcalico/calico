@@ -1,14 +1,14 @@
 ---
 title: Addressing and Connectivity Overview
 ---
-{% include base.html %}
+
 
 This diagram shows elements of a Calico network in a simplified way that
 allows us to focus on how IP addresses are assigned to workloads, and
 whether and how workloads have connectivity to and from the Internet (as
 well as to other workloads within the data center).
 
-![]({{base}}/images/calico-connectivity.png)
+![]({{site.url}}/images/calico-connectivity.png)
 
 Network provisioning and IP addresses
 =====================================

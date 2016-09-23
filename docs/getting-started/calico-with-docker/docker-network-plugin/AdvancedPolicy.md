@@ -1,7 +1,7 @@
 ---
 title: Accessing Calico policy with Calico as a network plugin
 ---
-{% include base.html %}
+
 
 ## Background
 
@@ -136,5 +136,5 @@ display the valid profile commands.
 ## Further reading
 
 For more details about advanced policy options read the 
-[Advanced Network Policy tutorial]({{base}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{site.url}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
 

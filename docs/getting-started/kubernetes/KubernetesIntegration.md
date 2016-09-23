@@ -1,7 +1,7 @@
 ---
 title: Adding Calico to an Existing Kubernetes Cluster
 ---
-{% include base.html %}
+
 
 This document describes the steps required to install Calico on an existing
 Kubernetes cluster.

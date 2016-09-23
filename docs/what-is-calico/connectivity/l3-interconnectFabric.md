@@ -2,7 +2,7 @@
 title: IP Interconnect Fabrics in Calico
 lead_text: 'Where large-scale IP networks and hardware collide'
 ---
-{% include base.html %}
+
 
 Calico provides an end-to-end IP network that interconnects the
 endpoints [^1] in a scale-out or cloud environment. To do that, it needs
@@ -209,12 +209,12 @@ set of Ethernet planes interconnecting the ToR switches, and the other
 where the core planes are also routers. The following diagrams may be
 useful for the discussion.
 
-![]({{base}}/images/l3-fabric-diagrams-as-rack-l2-spine.png)
+![]({{site.url}}/images/l3-fabric-diagrams-as-rack-l2-spine.png)
 
 > This diagram shows the *AS per rack model* where the ToR switches are
 > physically meshed via a set of Ethernet switching planes.
 
-![]({{base}}/images/l3-fabric-diagrams-as-rack-l3-spine.png)
+![]({{site.url}}/images/l3-fabric-diagrams-as-rack-l3-spine.png)
 
 > This diagram shows the *AS per rack model* where the ToR switches are
 > physically meshed via a set of discrete BGP spine routers, each in
@@ -282,12 +282,12 @@ Therefore, if we follow the architecture of the draft, the compute
 server, not the ToR should be the AS boundary. The differences can be
 seen in the following two diagrams.
 
-![]({{base}}/images/l3-fabric-diagrams-as-server-l2-spine.png)
+![]({{site.url}}/images/l3-fabric-diagrams-as-server-l2-spine.png)
 
 > This diagram shows the *AS per compute server model* where the ToR
 > switches are physically meshed via a set of Ethernet switching planes.
 
-![]({{base}}/images/l3-fabric-diagrams-as-server-l3-spine.png)
+![]({{site.url}}/images/l3-fabric-diagrams-as-server-l3-spine.png)
 
 > This diagram shows the *AS per compute server model* where the ToR
 > switches are physically connected to a set of independent routing
@@ -335,7 +335,7 @@ same AS).
 
 The following diagram will show the AS relationships in this model.
 
-![]({{base}}/images/l3-fabric-downward-default.png)
+![]({{site.url}}/images/l3-fabric-downward-default.png)
 
 > In this diagram, we are showing that all Calico nodes share the same
 > AS number, as do all ToR switches. However, those ASs are different

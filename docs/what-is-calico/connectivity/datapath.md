@@ -1,7 +1,7 @@
 ---
 title: 'The Calico Data Path: IP Routing and iptables'
 ---
-{% include base.html %}
+
 
 One of Calico’s key features is how packets flow between workloads in a
 data center, or between a workload and the Internet, without additional
@@ -15,7 +15,7 @@ of whatever routing the workload itself might configure. For packets
 addressed to a workload, the last IP hop is that from the destination
 workload’s host to the workload itself.
 
-![]({{base}}/images/calico-datapath.png)
+![]({{site.url}}/images/calico-datapath.png)
 
 Suppose that IPv4 addresses for the workloads are allocated from a
 datacenter-private subnet of 10.65/16, and that the hosts have IP

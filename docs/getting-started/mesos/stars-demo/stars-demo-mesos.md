@@ -1,7 +1,7 @@
 ---
 title: Stars demo with the Mesos Docker Containerizer
 ---
-{% include base.html %}
+
 
 This demo uses the stars network visualizer to simulate a frontend and backend service,
 as well as a client service and UI, all running on Mesos. It then configures network
@@ -11,14 +11,14 @@ The goal of this demo is to provide a meaningful visualization of how Calico
 manages security between services in a Mesos cluster.
 
 For a deeper look at how to configure Calico with the Docker containerizer,
-check out [Calico's Docker Containerizer guide]({{base}}/docs/getting-started/mesos/UsageGuideDockerContainerizer).
+check out [Calico's Docker Containerizer guide]({{site.url}}/docs/getting-started/mesos/UsageGuideDockerContainerizer).
 
 ## Prerequisites
 This demo requires a Mesos cluster with Calico-libnetwork running,
 along with a few additional components.
 
 To simplify the setup, we have created a Vagrant file to quickly
-deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{base}}/docs/getting-started/mesos/Vagrant)
+deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{site.url}}/docs/getting-started/mesos/Vagrant)
 to get started.
 
 Your cluster should contain the following components.

@@ -1,7 +1,7 @@
 ---
 title: Calico as a Docker network plugin
 ---
-{% include base.html %}
+
 
 This tutorial describes how to set up a Calico cluster in a Docker environment
 using Docker's native networking framework (built around libnetwork) with
@@ -32,11 +32,11 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for _Calico as a Docker network plugin_.
 
-- [Vagrant install with CoreOS]({{base}}/docs/getting-started/calico-with-docker/VagrantCoreOS)
-- [Vagrant install with Ubuntu]({{base}}/docs/getting-started/calico-with-docker/VagrantUbuntu)
-- [Amazon Web Services (AWS)]({{base}}/docs/getting-started/calico-with-docker/AWS)
-- [Google Compute Engine (GCE)]({{base}}/docs/getting-started/calico-with-docker/GCE)
-- [DigitalOcean]({{base}}/docs/getting-started/calico-with-docker/DigitalOcean)
+- [Vagrant install with CoreOS]({{site.url}}/docs/getting-started/calico-with-docker/VagrantCoreOS)
+- [Vagrant install with Ubuntu]({{site.url}}/docs/getting-started/calico-with-docker/VagrantUbuntu)
+- [Amazon Web Services (AWS)]({{site.url}}/docs/getting-started/calico-with-docker/AWS)
+- [Google Compute Engine (GCE)]({{site.url}}/docs/getting-started/calico-with-docker/GCE)
+- [DigitalOcean]({{site.url}}/docs/getting-started/calico-with-docker/DigitalOcean)
 
 Altenatively, you can manually configure your hosts.
 - [Manual setup](ManualSetup)
@@ -111,7 +111,7 @@ Docker's port mapping feature.  However, it is important to note that using
 Docker's port-mapping feature is not secured by Calico policy since the packets
 are routed via the Docker bridge, rather than through the Calico interfaces.
 (For more information on port-forwarding with Calico, check out the [Expose
-Ports to Internet guide]({{base}}/docs/using-calico/advanced/ExposePortsToInternet).)
+Ports to Internet guide]({{site.url}}/docs/using-calico/advanced/ExposePortsToInternet).)
 
 When running in a cloud environment we need to also set `ipip` and
 `nat-outgoing` options. If using the default IPAM driver, `ipip` and
@@ -293,6 +293,6 @@ For more details, read
 
 ## Make a container reachable from the Host-Interface (Internet)
 If you're interested in using port-forwarding, we have a working example on how
-to [expose a container port to the internet]({{base}}/docs/using-calico/advanced/ExposePortsToInternet)
+to [expose a container port to the internet]({{site.url}}/docs/using-calico/advanced/ExposePortsToInternet)
 when using Calico.
 

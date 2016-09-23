@@ -1,7 +1,7 @@
 ---
 title: calicoctl bgp
 ---
-{% include base.html %}
+
 
 # User reference for 'calicoctl bgp' commands
 
@@ -17,7 +17,7 @@ Calico node-specific BGP configuration, such as having BGP peers specific to a
 particular Calico node, is configured using the `calicoctl node` commands. You 
 can read about these commands in the [`calicoctl node` guide](node).
 
-For an overview of BGP configuration, read the [BGP tutorial]({{base}}/docs/using-calico/configuration/bgp), which
+For an overview of BGP configuration, read the [BGP tutorial]({{site.url}}/docs/using-calico/configuration/bgp), which
 covers in more detail all available BGP related commands, including use cases.
 
 Read the [calicoctl command line interface user reference](calicoctl) 

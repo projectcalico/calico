@@ -1,7 +1,7 @@
 ---
 title: Lifecycle of a container (Calico without Docker networking)
 ---
-{% include base.html %}
+
 
 This page provides low-level details about what happens within Calico when 
 Docker containers are networked with Calico when Docker is not providing any
@@ -170,7 +170,7 @@ on the container endpoints.
 > containers with a single interface managed using calicoctl, we treat a 
 > container and endpoint as the same thing.  For more complicated scenarios, 
 > calicoctl provides commands for managing actual endpoints (see the 
-> [`calicoctl endpoint` reference guide]({{base}}/docs/reference/calicoctl/endpoint) for usage and 
+> [`calicoctl endpoint` reference guide]({{site.url}}/docs/reference/calicoctl/endpoint) for usage and 
 > examples).
 
 ### System Response
@@ -193,5 +193,5 @@ remote routes are programmed.  Connectivity has been achieved between
 endpoints!  The containers are now able to send any kind of traffic to each
 other.
 
-![calicoctl container set profile]({{base}}/images/lifecycle/set_profile.png)
+![calicoctl container set profile]({{site.url}}/images/lifecycle/set_profile.png)
 

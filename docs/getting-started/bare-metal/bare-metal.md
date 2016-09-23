@@ -1,7 +1,7 @@
 ---
 title: Using Calico to Secure Host Interfaces
 ---
-{% include base.html %}
+
 
 This guide describes how to use Calico to secure the network interfaces
 of the host itself (as opposed to those of any container/VM workloads
@@ -40,7 +40,7 @@ to/from other interfaces is left alone.
 >     would need to be very broad to allow all traffic destined for any
 >     possible workload.
 >
-> ![]({{base}}/images/bare-metal-packet-flows.png)
+> ![]({{site.url}}/images/bare-metal-packet-flows.png)
 
 Overview
 ========

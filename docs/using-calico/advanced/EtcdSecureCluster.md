@@ -1,7 +1,7 @@
 ---
 title: Using Calico with a secure etcd cluster
 ---
-{% include base.html %}
+
 
 Calico supports insecure and TLS/certificate-enabled etcd clusters.
 
@@ -83,7 +83,7 @@ Here's a list of commands that must be run as root:
 - `calicoctl container ip add`
 - `calicoctl container ip remove`
 
-See the [calicoctl reference guide]({{base}}/docs/reference/calicoctl/calicoctl) for details on specific 
+See the [calicoctl reference guide]({{site.url}}/docs/reference/calicoctl/calicoctl) for details on specific 
 calicoctl commands.
 
 ### Calico as a Docker network plugin

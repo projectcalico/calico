@@ -1,7 +1,7 @@
 ---
 title: Frequently Asked Questions
 ---
-{% include base.html %}
+
 
 This page contains answers to some frequently-asked questions about Calico on Docker.
 
@@ -17,7 +17,7 @@ would be unable to enforce security rules between workloads on the same host;
 all containers on the bridge would be able to communicate with one other.
 
 You can securely configure port mapping by following our [guide on Exposing
-Container Ports to the Internet]({{base}}/docs/using-calico/advanced/ExposePortsToInternet).
+Container Ports to the Internet]({{site.url}}/docs/using-calico/advanced/ExposePortsToInternet).
 
 ## Can Calico containers use any IP address within a pool, even subnet network/broadcast addresses?
 
@@ -61,7 +61,7 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the
 internet as well. You can read about how to configure security profiles in the
-[Advanced Network Policy tutorial]({{base}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{site.url}}/docs/using-calico/configuration/AdvancedNetworkPolicy).
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that

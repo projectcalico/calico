@@ -1,7 +1,7 @@
 ---
 tile: Installing Calico in DC/OS
 ---
-{% include base.html %}
+
 
 This guide provides instructions for installing Calico and its
 prerequisites on a [Mesos DC/OS](https://dcos.io/) cluster.
@@ -66,7 +66,7 @@ tab. To start the install:
  - Click the **Install** button then choose **Advanced
    Installation** in the pop-up window.
 
-![alt tag]({{base}}/images/mesos/dcos-calico-package-install.png)
+![alt tag]({{site.url}}/images/mesos/dcos-calico-package-install.png)
 
 ##### At this point you have a few options:
 
@@ -80,7 +80,7 @@ modifying `mem-limit-framework`, `mem-limit-install`,
 `mem-limit-etcd-proxy`, `mem-limit-node`, and
 `mem-limit-libnetwork`.
 
-![alt tag]({{base}}/images/mesos/dcos-calico-config-changes.png)
+![alt tag]({{site.url}}/images/mesos/dcos-calico-config-changes.png)
 
 You could also speed up the install by increasing
 `max-concurrent-restarts`, allowing Calico to restart
@@ -117,11 +117,11 @@ by visiting Calico's status web interface:
    square pop-out icon next to the service name to
    open the Calico status page in a new tab.
 
-![alt tag]({{base}}/images/mesos/dcos-calico-open-status.png)
+![alt tag]({{site.url}}/images/mesos/dcos-calico-open-status.png)
 
 You should see a page that looks like the following:
 
-![alt tag]({{base}}/images/mesos/dcos-calico-status.png)
+![alt tag]({{site.url}}/images/mesos/dcos-calico-status.png)
 
 The webpage may fail to load initially since the Calico
 service restarts the Docker and Mesos agent services, which
