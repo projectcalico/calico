@@ -23,14 +23,14 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the `Namespac
 kubectl run --namespace=policy-demo nginx --replicas=2 --image=nginx
 
 # Create the Service.
-kubectl expose --namespace=policy-demo deployment nginx --port=80
+kubectl expose --namespace=policy-demo deployment nginx --port=80 
 ```
 
-2) Ensure the nginx service is accessible.
+2) Ensure the nginx service is accessible. 
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh 
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 Hit enter for command prompt
@@ -52,7 +52,7 @@ This will prevent all access to the nginx Service.  We can see the effect by try
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh 
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 Hit enter for command prompt
@@ -66,10 +66,10 @@ The request should time out after 5 seconds.  Be enabling isolation on the Names
 
 ### Allow Access using a NetworkPolicy
 
-Now, let's enable access to the nginx Service using a NetworkPolicy.  This will allow incoming connections from our `access` Pod, but not
+Now, let's enable access to the nginx Service using a NetworkPolicy.  This will allow incoming connections from our `access` Pod, but not 
 from anywhere else.
 
-Create a file called `nginx-policy.yaml` with the following contents:
+Create a file called `nginx-policy.yaml` with the following contents: 
 
 ```yaml
 kind: NetworkPolicy
@@ -85,7 +85,7 @@ spec:
     - from:
       - podSelector:
           matchLabels:
-            run: access
+            run: access 
 ```
 > Notice the NetworkPolicy allows traffic from Pods with the label `run: access` to Pods with the label
 `run: nginx`.  These are the labels automatically added to Pods started via `kubectl run` based on the name of the `Deployment`.
@@ -98,7 +98,7 @@ kubectl create -f nginx-policy.yaml
 We should now be able to access the Service from the `access` Pod.
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh 
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 Hit enter for command prompt
@@ -109,7 +109,7 @@ Hit enter for command prompt
 However, we still cannot access the Service from a Pod without the label `run: access`:
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh
+$ kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh 
 Waiting for pod policy-demo/cant-access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 Hit enter for command prompt
@@ -129,5 +129,3 @@ This was just a simple example of the Kubernetes NetworkPolicy API and how Calic
 information on network policy in Kubernetes, see the [Kubernetes user-guide](http://kubernetes.io/docs/user-guide/networkpolicies/).
 
 For a slightly more detailed demonstration of Policy, check out the [stars demo](../stars-demo/README.md).
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/simple-policy-demo/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

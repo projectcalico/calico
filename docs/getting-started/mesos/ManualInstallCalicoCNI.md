@@ -5,7 +5,7 @@ title: Installing Calico-CNI for the Unified Containerizer
 This guide details how to add Calico networking to a Mesos Agent with CNI enabled.
 
 - If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide](./ManualInstallCalicoDockerContainerizer)
-- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each](./README.md).
+- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each](CalicoOnMesos).
 
 ### Prerequisites
 - **A Running Mesos v1.0.0+ cluster**  [with CNI enabled on each agent](https://github.com/apache/mesos/blob/master/docs/cni.md#configuring-cni-networks).

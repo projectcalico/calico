@@ -83,7 +83,7 @@ the current etcd version if etcd is available.
 ## Continue with the worked example
 
 With the environment set up, you can run through the remainder of the worked
-example in the [Calico without Docker networking tutorial](README.md).
+example in the [Calico without Docker networking tutorial](CalicoWithoutDockerNetworking).
 
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/

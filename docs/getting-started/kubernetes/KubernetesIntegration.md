@@ -34,27 +34,35 @@ The `calico/kube-policy-controller` container runs as a pod on top of Kubernetes
 the NetworkPolicy API.  This component requires Kubernetes >= 1.3.0.
 
 ## Installing Calico Components
+There are currently two methods of installing the Calico components.
+
+1. [Manual installation](#manual-installation)
+2. [Kubernetes-hosted installation](#kubernetes-hosted-installation) (supported in Kubernetes >= v1.4.0)
+
+Manual Installation
+-------------------
+
 ### 1. Run `calico/node` and configure the node.
 The Kubernetes master and each Kubernetes node require the `calico/node` container.
-Each node must also be recorded in the Calico datastore. Running the container and
-storing the required information can be achieved using the `calicoctl` utility.
+Each node must also be recorded in the Calico datastore. 
 
-```shell
+This can be done using the `calicoctl` utility.
+
+```
 # Download and install `calicoctl`
 wget http://www.projectcalico.org/builds/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT> ./calicoctl node
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node
 ```
 
-See the [`calicoctl node` documentation]({{base}}/docs/reference/calicoctl/node.md#calicoctl-node)
+See the [`calicoctl node` documentation](../../calicoctl/node.md#calicoctl-node)
 for more information.
 
 #### Example systemd unit file (calico-node.service)
 If you're using systemd as your init system then the following service file can be used.
-
-```shell
+```
 [Unit]
 Description=calicoctl node
 After=docker.service
@@ -62,7 +70,7 @@ Requires=docker.service
 
 [Service]
 User=root
-Environment=ETCD_AUTHORITY=<ETCD_IP>:<ETCD_PORT>
+Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
 ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
 ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
@@ -73,17 +81,15 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 ```
-
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 ### 2. Download and configure the Calico CNI plugins
 The Kubernetes `kubelet` calls out to the `calico` and `calico-ipam` plugins.
 
 Download the binaries and make sure they're executable
-
-```shell
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+```
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 It's recommended that this is done as part of job that manages the `kubelet` process (see below)
@@ -91,13 +97,13 @@ It's recommended that this is done as part of job that manages the `kubelet` pro
 The Calico CNI plugins require a standard CNI config file.  The `policy` section is only required when
 deploying the `calico/kube-policy-controller` for NetworkPolicy.
 
-```shell
+```
 mkdir -p /etc/cni/net.d
 $ cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
     "type": "calico",
-    "etcd_authority": "<ETCD_IP>:<ETCD_PORT>",
+    "etcd_endpoints": "http://<ETCD_IP>:<ETCD_PORT>",
     "log_level": "info",
     "ipam": {
         "type": "calico-ipam"
@@ -108,10 +114,9 @@ $ cat >/etc/cni/net.d/10-calico.conf <<EOF
 }
 EOF
 ```
-
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
-For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.3.1/configuration.md)
+For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
 
 ### 3. Deploy the Calico network policy controller
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API.  It is recommended that you run it as a static pod
@@ -121,7 +126,7 @@ To install the policy controller:
 
 - Create the calico-system namespace:
 
-```shell
+```
 kubectl create ns calico-system
 ```
 
@@ -130,11 +135,37 @@ directory (usually `/etc/kubernetes/manifests`)
 
 After a few moments, you should see the policy controller enter `Running` state:
 
-```shell
+```
 $ kubectl get pods --namespace=calico-system
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-policy-controller-172.18.18.101   2/2       Running   0          1m
 ```
+
+Kubernetes Hosted Installation
+------------------------------
+This method of installation uses Kubernetes to install Calico.  This method is only supported
+in Kubernetes >= v1.4.0, and is currently considered experimental.
+
+Since this method uses Kubernetes to install Calico, you must first deploy a standard Kubernetes cluster
+with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the 
+[desired configuration for installing Calico](#configuring-kubernetes).
+
+Then download [manifests/calico-configmap.yaml](manifests/calico-configmap.yaml) and [manifests/calico-hosted.yaml](manifests/calico-hosted.yaml).  
+These manifests include the Kubernetes objects to install Calico.
+
+```
+# Download the ConfigMap and Calico manifests.
+wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/docs/cni/kubernetes/manifests/calico-configmap.yaml
+wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/docs/cni/kubernetes/manifests/calico-hosted.yaml
+```
+
+Edit the provided ConfigMap in order to configure Calico for your deployment.  Then install the manifests using Kubernetes.
+
+```
+kubectl create -f calico-configmap.yaml -f calico-hosted.yaml
+```
+
+You should see the Calico services start in the `kube-system` Namespace.
 
 ## Configuring Kubernetes
 ### Configuring the Kubelet
@@ -148,8 +179,7 @@ See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
 for more details.
 
 #### Example systemd unit file (kubelet.service)
-
-```shell
+```
 [Unit]
 Description=Kubernetes Kubelet
 Documentation=https://github.com/kubernetes/kubernetes
@@ -157,11 +187,11 @@ After=calico-node.service
 Requires=calico-node.service
 
 [Service]
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubelet
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico-ipam
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico-ipam
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \

@@ -9,8 +9,8 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
 
 ### 1.1 Install dependencies
 
-* [VirtualBox][virtualbox] 5.0.0 or greater.
-* [Vagrant][vagrant] 1.7.4 or greater.
+* [VirtualBox][virtualbox] 5.0.22 or greater.
+* [Vagrant][vagrant] 1.8.4 or greater.
 * [Git][git]
 
 ### 1.2 Clone this project
@@ -24,13 +24,13 @@ plugin, or Calico without Docker networking.  Select the networking option
 by changing into the appropriate directory.
 
 For Calico as a Docker network plugin
-  
+
     cd calico-containers/docs/calico-with-docker/docker-network-plugin/vagrant-ubuntu
 
 For Calico without Docker networking
-  
+
     cd calico-containers/docs/calico-with-docker/without-docker-networking/vagrant-ubuntu
-        
+
 Use vagrant to create and boot your VMs.
 
     vagrant up
@@ -56,8 +56,8 @@ From calico-2
 
     ping 172.17.8.101
 
-If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should 
-check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also 
+If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should
+check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also
 help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
@@ -73,7 +73,7 @@ And finally check that Docker is running on both hosts by running
 Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico networking.
 
 There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on 
+plugin, or Calico without Docker networking.  Select the instructions based on
 the networking option that you chose in step (1.3).
 
 - [Calico as a Docker network plugin walkthrough](docker-network-plugin/index) 

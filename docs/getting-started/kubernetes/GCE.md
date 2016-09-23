@@ -12,28 +12,23 @@ These instructions describe how to set up two CoreOS hosts on GCE.  For more gen
 If you already have the `gcloud` utility installed, and a GCE project configured, you may skip this step.
 
 Download and install GCE, then restart your terminal:
-
-```shell
+```
 curl https://sdk.cloud.google.com | bash
 ```
 For more information, see Google's [gcloud install instructions][gcloud-instructions].
 
 Log into your account:
-
-```shell
+```
 gcloud auth login
 ```
 
 In the GCE web console, create a project and enable the Compute Engine API.
 Set the project as the default for gcloud:
-
-```shell
+```
 gcloud config set project PROJECT_ID
 ```
-
 And set a default zone
-
-```shell
+```
 gcloud config set compute/zone us-central1-a
 ```
 
@@ -41,44 +36,43 @@ gcloud config set compute/zone us-central1-a
 GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between
 containers on different hosts (where the source-ranges parameter assumes you have created your project with the
 default GCE network parameters - modify the address range if yours is different):
-
-```shell
+```
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.128.0.0/9"
 ```
-
 You can verify the rule with this command:
-
-```shell
+```
 gcloud compute firewall-rules list
 ```
 
+<!--- master only -->
 ### 1.3 Clone this project
 
-```shell
-git clone https://github.com/projectcalico/calico-containers.git
-```
+    git clone https://github.com/projectcalico/calico-containers.git
+<!--- else
+### 1.3 Clone this project, and checkout the **release** release
+
+    git clone https://github.com/projectcalico/calico-containers.git
+    git checkout tags/**release**
+<!--- end of master only -->
 
 ## 2. Deploy the VMs
 Change into the directory for this guide.
-
-```shell
+```
 cd calico-containers/docs/cni/kubernetes/
 ```
 
 Deploy the Kubernetes master node using the following command:
-
-```shell
+```
 gcloud compute instances create \
   kubernetes-master \
   --image-project coreos-cloud \
   --image coreos-stable-1010-6-0-v20160628 \
   --machine-type n1-standard-1 \
-  --metadata-from-file user-data=cloud-config/master-config-ipip.yaml
+  --metadata-from-file user-data=cloud-config/master-config.yaml
 ```
 
 Deploy at least one worker node using the following command:
-
-```shell
+```
 gcloud compute instances create \
   kubernetes-node-1 \
   --image-project coreos-cloud \
@@ -88,105 +82,52 @@ gcloud compute instances create \
 ```
 
 You should have SSH access to your machines using the following command:
-
-```shell
+```
 gcloud compute ssh <INSTANCE NAME>
 ```
 
-## 3. Using your cluster
-### 3.1 Configuring kubectl
+## Configure the Cluster
+### 3.1 Configure Outbound NAT and IP-in-IP 
+
+To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
+
+```
+# Log into the master instance.
+gcloud compute ssh kubernetes-master
+
+# Enable outgoing NAT and ipip on the Calico pool.
+docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --ipip --nat-outgoing
+```
+
+### 3.2 Configure kubectl
 The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
-
-```shell
-wget https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
-chmod +x ./kubectl
+```
+sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/linux/amd64/kubectl
+sudo chmod +x /usr/local/bin/kubectl
 ```
 
 The following command sets up SSH forwarding of port 8080 to your master node so that you can run `kubectl` commands on your local machine.
-
-```shell
+```
 gcloud compute ssh kubernetes-master --quiet --ssh-flag="-nNT" --ssh-flag="-L 8080:localhost:8080" &
 ```
 
 Verify that you can access the Kubernetes API.  The following command should return a list of Kubernetes nodes.
-
-```shell
-./kubectl get nodes
+```
+kubectl get nodes
 ```
 
->If successful, the above command shoud output something like this:
-
-```shell
-NAME       LABELS                            STATUS AGE
-10.240.0.3 kubernetes.io/hostname=10.240.0.3 Ready  14m
+>If successful, the above command should output something like this:
+```
+NAME          STATUS                     AGE
+10.240.0.25   Ready,SchedulingDisabled   6m
+10.240.0.26   Ready                      6m
 ```
 
-### 3.2 Deploying SkyDNS
-You now have a basic Kubernetes cluster deployed using Calico networking.  Most Kubernetes deployments use SkyDNS for Kubernetes service discovery.  The following steps configure the SkyDNS service.
-
-Deploy the SkyDNS application using the provided Kubernetes manifest.
-
-```shell
-./kubectl create -f manifests/skydns.yaml
-```
-
-Check that the DNS pod is running. It may take up to two minutes for the pod to start, after which the following command should show the `kube-dns-v9-xxxx` pod in `Running` state.
-
-```shell
-./kubectl get pods --namespace=kube-system
-```
-
-> Note: The kube-dns-v9 pod is deployed in the `kube-system` namespace.  As such, we we must include the `--namespace=kube-system` option when using kubectl.
-
->The output of the above command should resemble the following table.  Note the `Running` status:
-
-```shell
-NAMESPACE     NAME                READY     STATUS    RESTARTS   AGE
-kube-system   kube-dns-v9-3o2rw   4/4       Running   0          2m
-```
-
-### 3.3 Deploying the guestbook application
-You're now ready to deploy applications on your Cluster.  The following steps describe how to deploy the Kubernetes [guestbook application][guestbook].
-
-Create the guestbook application pods and services using the provided manifest.
-
-```shell
-./kubectl create -f manifests/guestbook.yaml
-```
-
-Check that the redis-master, redis-slave, and frontend pods are running correctly.  After a few minutes, the following command should show all pods in `Running` state.
-
-```shell
-./kubectl get pods
-```
-
-> Note: The guestbook demo relies on a number of docker images which may take up to 5 minutes to download.
-
-The guestbook application uses a NodePort service to expose the frontend outside of the cluster.  You'll need to allow this port outside of the cluster with a firewall-rule.
-
-```shell
-gcloud compute firewall-rules create allow-kubectl --allow tcp:30001
-```
-> In a production deployment, it is recommended to use a GCE [LoadBalancer][loadbalancers] service which automatically deploys a GCE load-balancer and configures a public IP address for the service.
-
-You can find your master's public IP with the following command:
-
-```shell
-gcloud compute instances describe kubernetes-master | grep natIP
-```
-
-You should now be able to access the guestbook application from a browser at `http://<MASTER_IP>:30001`.
-
-### 3.4 Next Steps
-
-Now that you have a verified working Kubernetes cluster with Calico, you can continue [deploying applications on Kubernetes][examples].
-
+### 3.3 Next Steps
+Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](InstallAddons).
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [coreos-gce]: https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/
 [gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/
-[guestbook]: https://github.com/kubernetes/kubernetes/blob/master/examples/guestbook/README.md
-[loadbalancers]: http://kubernetes.io/v1.0/docs/user-guide/services.html#type-loadbalancer
-[examples]: https://github.com/kubernetes/kubernetes/tree/master/examples
