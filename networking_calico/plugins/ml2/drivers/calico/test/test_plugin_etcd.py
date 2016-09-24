@@ -1217,7 +1217,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             [c for c in m_spawn.mock_calls if c[0] == ""]
         )
         self.assertEqual(2, len(m_watcher.stop.mock_calls))
-        self.assertEqual(None, self.driver._etcd_watcher)
+        self.assertIsNone(self.driver._etcd_watcher)
 
     def test_on_felix_alive(self):
         self.driver._get_db()
