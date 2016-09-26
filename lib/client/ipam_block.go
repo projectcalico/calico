@@ -314,13 +314,13 @@ func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) 
 	// Convert to an ordinal.
 	ordinal := ipToOrdinal(ip, b)
 	if (ordinal < 0) || (ordinal > blockSize) {
-		return nil, errors.New("IP address not in block")
+		return nil, errors.New(fmt.Sprintf("IP %s not in block %s", ip, b.AllocationBlock.CIDR))
 	}
 
 	// Check if allocated.
 	attrIndex := b.Allocations[ordinal]
 	if attrIndex == nil {
-		return nil, errors.New("IP address is not assigned in block")
+		return nil, errors.New(fmt.Sprintf("IP %s is not currently assigned in block", ip))
 	}
 	return b.Attributes[*attrIndex].AttrSecondary, nil
 }
