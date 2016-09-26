@@ -37,12 +37,12 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02 
+You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02
 and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
 
 At this point, it's worth checking that your servers can ping each other.
 
-From k8s-master 
+From k8s-master
 
     ping 172.18.18.102
     ping 172.18.18.103
@@ -69,7 +69,7 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## 2. Configuring the Cluster 
+## 2. Configuring the Cluster
 ### 2.1 Configure `kubectl`
 Let's configure `kubectl` so you can access the cluster from your local machine. Make sure you have `kubectl` installed locally.  The version you choose depends on your host OS.
 
@@ -92,12 +92,13 @@ kubectl config set-context vagrant-system --cluster=vagrant-cluster
 kubectl config use-context vagrant-system
 ```
 
-## 3. Next Steps
-Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](../InstallAddons).
+## 4. Install Addons
+
+{% include install-k8s-addons.md %}
+
 
 [calico-networking]: https://github.com/projectcalico/calico-containers
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
-

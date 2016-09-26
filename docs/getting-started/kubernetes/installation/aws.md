@@ -265,11 +265,11 @@ ssh -i ~/mykey.pem core@$MASTER_DNS
 docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --nat-outgoing
 ```
 
-### 4.3 Next Steps
-Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](InstallAddons).
+## 5. Install Addons
+
+{% include install-k8s-addons.md %}
 
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html
 [calico-cni]: https://github.com/projectcalico/calico-cni
-

@@ -87,7 +87,7 @@ gcloud compute ssh <INSTANCE NAME>
 ```
 
 ## Configure the Cluster
-### 3.1 Configure Outbound NAT and IP-in-IP 
+### 3.1 Configure Outbound NAT and IP-in-IP
 
 To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 
@@ -125,8 +125,9 @@ NAME          STATUS                     AGE
 10.240.0.26   Ready                      6m
 ```
 
-### 3.3 Next Steps
-Now that you have a cluster with `kubectl` configured, you can [install Calico and other cluster addons](InstallAddons).
+## 4. Install Addons
+
+{% include install-k8s-addons.md %}
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [coreos-gce]: https://coreos.com/docs/running-coreos/cloud-providers/google-compute-engine/

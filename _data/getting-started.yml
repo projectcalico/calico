@@ -2,71 +2,69 @@ bigheader: "Getting Started"
 abstract: "All you need to know, to get started with Calico"
 toc:
 - title: Getting Started with Calico
-  path: /docs/calico
+  path: /docs/getting-started/
 
 - title: Kubernetes
   section:
   - title: Overview
-    path: /docs/getting-started/kubernetes/calico-kubernetes-overview
+    path: /docs/getting-started/kubernetes/
   - title: Installation
     section:
-    - title: Introduction
-      path: /docs/getting-started/kubernetes/KubernetesIntegration
+    - title: Overview
+      path: /docs/getting-started/kubernetes/installation/
+    - title: Manual
+      path: /docs/getting-started/kubernetes/installation/manual
+    - title: Hosted
+      path: /docs/getting-started/kubernetes/installation/hosted/
+    - title: Kubeadm
+      path: /docs/getting-started/kubernetes/installation/hosted/kubeadm/
     - title: AWS
-      path: /docs/getting-started/kubernetes/AWS
+      path: /docs/getting-started/kubernetes/installation/aws
     - title: GCE
-      path: /docs/getting-started/kubernetes/GCE
+      path: /docs/getting-started/kubernetes/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /docs/getting-started/kubernetes/VagrantCoreOS
+      path: /docs/getting-started/kubernetes/installation/vagrant-coreos
   - title: Tutorials
     section:
     - title: Demonstrating Calico Policy
-      path: /docs/getting-started/kubernetes/stars-demo/demonstrating-policy-kubernetes
-    - title: Deploying the guestbook application
-      path: /docs/getting-started/kubernetes/vagrant-coreos/guestbook
+      path: /docs/getting-started/kubernetes/tutorials/stars-policy/
     - title: Simple Policy Demo
-      path: /docs/getting-started/kubernetes/simple-policy-demo
+      path: /docs/getting-started/kubernetes/tutorials/simple-policy
   - title: Troubleshooting
-    path: /docs/getting-started/kubernetes/Troubleshooting-Calico-Kubernetes
+    path: /docs/getting-started/kubernetes/troubleshooting
   - title: Upgrade
     path: /docs/getting-started/kubernetes/upgrade
-  - title: Advanced
-    section:
-    - title: Calico as Addon
-      path: /docs/getting-started/kubernetes/InstallAddons
 
 - title: Mesos
   section:
   - title: Overview
-    path: /docs/getting-started/mesos/CalicoOnMesos
+    path: /docs/getting-started/mesos/
   - title: Installation
     section:
     - title: Prerequisites
-      path: /docs/getting-started/mesos/MesosClusterPreparation
-    - title: Unified Containerizer
-      path: /docs/getting-started/mesos/ManualInstallCalicoCNI
+      path: /docs/getting-started/mesos/installation/prerequisites
+    - title: 'Unified Containerizer: CNI'
+      path: /docs/getting-started/mesos/installation/unified-cni
     - title: Docker Containerizer
-      path: /docs/getting-started/mesos/ManualInstallCalicoDockerContainerizer
+      path: /docs/getting-started/mesos/installation/docker
     - title: DC/OS
-      path: /docs/getting-started/mesos/DCOS
-    - title: Net-modules [deprecated]
-      path: /docs/getting-started/mesos/ManualInstallCalicoUnifiedContainerizer
+      path: /docs/getting-started/mesos/installation/dc-os
+    - title: 'Unified Containerizer: net-modules [deprecated]'
+      path: /docs/getting-started/mesos/installation/unified-net-modules
   - title: Tutorials
     section:
     - title: Docker Containerizer
-      path: /docs/getting-started/mesos/UsageGuideDockerContainerizer
+      path: /docs/getting-started/mesos/tutorials/docker
     - title: Unified Containerizer
-      path: /docs/getting-started/mesos/UsageGuideUnifiedCNI
+      path: /docs/getting-started/mesos/tutorials/unified-cni
     - title: Net-modules [deprecated]
-      path: /docs/getting-started/mesos/UsageGuideUnifiedContainerizer
+      path: /docs/getting-started/mesos/tutorials/unified-net-modules
   - title: Demos
     section:
-    - title: Vagrant Deployed Mesos Cluster with Calico
+    - title: Vagrant Quickstart - Docker Containerizer
       path: /docs/getting-started/mesos/Vagrant
-    - title: Stars demo with the Mesos Docker Containerizer
-      path: /docs/getting-started/mesos/stars-demo/stars-demo-mesos
-    - title: Quickstart with Docker-Compose - Calico for Mesos CNI
-      path: /docs/getting-started/mesos/cni-compose-demo/quickstart-compose-mesos-cni
+    - title: Stars Demo - Docker Containerizer
+      path: /docs/getting-started/mesos/demos/docker/
   - title: Troubleshooting
     path: /docs/getting-started/mesos/troubleshooting
   - title: Upgrade
@@ -75,69 +73,69 @@ toc:
 - title: Docker
   section:
   - title: Overview
-    path: /docs/getting-started/calico-with-docker/overview
+    path: /docs/getting-started/docker/
   - title: Installation
     section:
     - title:  Introduction
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin
+      path: /docs/getting-started/docker/installation/
     - title: Manual
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/ManualSetup
+      path: /docs/getting-started/docker/installation/manual
     - title: AWS
-      path: /docs/getting-started/calico-with-docker/AWS
+      path: /docs/getting-started/docker/installation/aws
     - title: DigitalOcean
-      path: /docs/getting-started/calico-with-docker/DigitalOcean
+      path: /docs/getting-started/docker/installation/digital-ocean
     - title: GCE
-      path: /docs/getting-started/calico-with-docker/GCE
+      path: /docs/getting-started/docker/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /docs/getting-started/calico-with-docker/VagrantCoreOS
+      path: /docs/getting-started/docker/installation/vagrant-coreos
     - title: 'Vagrant/VirtualBox: Ubuntu'
-      path: /docs/getting-started/calico-with-docker/VagrantUbuntu
+      path: /docs/getting-started/docker/installation/vagrant-ubuntu
   - title: Tutorials
     section:
     - title: Basic Walkthrough
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/
+      path: /docs/getting-started/docker/tutorials/
     - title: Configuring Policy
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/AdvancedPolicy
+      path: /docs/getting-started/docker/tutorials/advanced-policy
     - title: Using IPv6
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/IPv6
+      path: /docs/getting-started/docker/tutorials/ipv6
     - title: Docker Swarm
-      path: /docs/getting-started/calico-with-docker/docker-network-plugin/CalicoSwarm
+      path: /docs/getting-started/docker/tutorials/docker-swarm
   - title: Troubleshooting
-    path: /docs/getting-started/calico-with-docker/troubleshooting
+    path: /docs/getting-started/docker/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/calico-with-docker/upgrade
+    path: /docs/getting-started/docker/upgrade
 
 - title: OpenStack
   section:
   - title: Overview
-    path: /docs/getting-started/openstack/opens-external-conn
+    path: /docs/getting-started/openstack/
   - title: Installation
     section:
-    - title: Introduction
-      path: /docs/getting-started/openstack/openstack
+    - title: Overview
+      path: /docs/getting-started/openstack/installation/
     - title: Fuel
-      path: /docs/getting-started/openstack/fuel-integration
+      path: /docs/getting-started/openstack/installation/fuel
     - title: Juju charms
-      path: /docs/getting-started/openstack/juju-opens-install
+      path: /docs/getting-started/openstack/installation/juju
     - title: Chef
-      path: /docs/getting-started/openstack/opens-chef-install
+      path: /docs/getting-started/openstack/installation/chef
     - title: Red Hat Enterprise Linux 7
-      path: /docs/getting-started/openstack/redhat-opens-install
+      path: /docs/getting-started/openstack/installation/redhat
     - title: Ubuntu 14.04
-      path: /docs/getting-started/openstack/ubuntu-opens-install
+      path: /docs/getting-started/openstack/installation/ubuntu
   - title: Tutorials
-    path: /docs/getting-started/openstack/worked-examples-openstack
+    path: /docs/getting-started/openstack/tutorials
   - title: Upgrade
-    path: /docs/getting-started/openstack/opens-upgrade
+    path: /docs/getting-started/openstack/upgrade
   - title: Troubleshooting
     path: /docs/getting-started/openstack/verification
 
 - title: rkt
   section:
   - title: Overview
-    path: /docs/getting-started/rkt/calico-rkt
+    path: /docs/getting-started/rkt/
   - title: Installation
-    path: /docs/getting-started/rkt/systemd/calico-node-systemd
+    path: /docs/getting-started/rkt/installation
   - title: Tutorials
     path: /docs/getting-started/rkt/tutorials
   - title: Troubleshooting

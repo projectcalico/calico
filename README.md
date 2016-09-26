@@ -7,7 +7,7 @@
 
 First install Jekyll - see [here](https://jekyllrb.com/)
 
-Once installed, from the root of this repo you should be able to run 
+Once installed, from the root of this repo you should be able to run
 
 ```
 jekyll serve
@@ -45,7 +45,7 @@ To modify the navigation (e.g. when adding a new file), you should change the ym
 
 ## Relative and absolute links
 
-You can use relative links in doc pages.  However, if you want to make absolute links (for example, to /images) you should 
+You can use relative links in doc pages.  However, if you want to make absolute links (for example, to /images) you should
 
 - include the base.html fie at the top of your markdown
 
@@ -62,3 +62,7 @@ Most of the theming of this site is based on the Kubernetes documentation.  The 
 
 At least some of this work is based on the basic Jekyll theme from scotch.io - see the license below.
 
+## Developer Notes
+- Links to documents in yml sidebar:
+  - Must end in `/` if its an `index.md` directory file.
+  - Must not end in `/` if its a regular named doc.

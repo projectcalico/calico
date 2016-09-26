@@ -1,5 +1,6 @@
-# Calico Kubernetes Hosted Install
-
+---
+title: Calico Kubernetes Hosted Install
+---
 This directory contains Kubernetes manifests to deploy Calico on top of Kubernetes.
 
 - `calico-configmap.yaml`: Contains a Kubernetes ConfigMap for configuring the deployment.  Make sure the values
@@ -28,16 +29,16 @@ the following configuration parameters:
 
 The location of your etcd cluster.  The default in the provided manifest assumes that an etcd proxy is running on each node.
 
-### enable_bgp 
+### enable_bgp
 
 Whether or not to run Calico BGP.  If false, then BGP will be disabled and Calico will enforce policy only.
 
 ### cni_network_config
 
-The CNI network configuration to install on each node.  This field supports the following template fields, which will 
+The CNI network configuration to install on each node.  This field supports the following template fields, which will
 be filled in automatically by the `calico/cni` container:
 
-- `__KUBERNETES_SERVICE_HOST__`: This will be replaced with the Kubernetes Service clusterIP. e.g 10.0.0.1 
+- `__KUBERNETES_SERVICE_HOST__`: This will be replaced with the Kubernetes Service clusterIP. e.g 10.0.0.1
 - `__KUBERNETES_SERVICE_PORT__`: This will be replaced with the Kubernetes Service port. e.g 443
 - `__SERVICEACCOUNT_TOKEN__`: This will be replaced with the serviceaccount token for the namespace.  Requires that Kubernetes be configured to create serviceaccount tokens.
 - `__ETCD_ENDPOINTS__`: This will be replaced with the etcd cluster specified in the ETCD_ENDPOINTS environment variable. e.g http://127.0.0.1:2379
