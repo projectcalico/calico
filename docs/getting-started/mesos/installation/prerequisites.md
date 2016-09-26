@@ -3,12 +3,14 @@ title: Installing Calico-Mesos Prerequisites
 ---
 
 This guide details a minimal install of the external services required by a Calico-Mesos Agent.
+
 - **A Note on Clustered Services**: In general, a production-ready
 mesos cluster should run each of these services across multiple
 highly available hosts with a quorum. However, for demo and
 development purposes, **this guide will cover launching only one
 of each service on a single centos7 host.** Consult the appropriate
 documentation for each service:
+
     - [etcd clustering](https://coreos.com/etcd/docs/latest/clustering.html)
     - [zookeeper multi-server setup](https://zookeeper.apache.org/doc/r3.3.2/zookeeperAdmin.html#sc_zkMulitServerSetup)
     - [mesos high-availability mode](http://mesos.apache.org/documentation/latest/high-availability/)
@@ -87,4 +89,3 @@ the [Docker Containerizer](UsageGuideDockerContainerizer)
 to see how to launch tasks networked with Calico.
 
 [slack]: https://slack.projectcalico.og
-

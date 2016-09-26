@@ -90,7 +90,7 @@ have a separate job for handling the Calico libnetwork driver.
 You can start the `calico/node-libnetwork` image directly with the `docker run`
 command:
 
-```shell 
+```shell
 $ docker run --privileged --net=host \
     -v /run/docker/plugins:/run/docker/plugins \
     --name=calico-libnetwork -e ETCD_AUTHORITY=localhost:2379
@@ -137,6 +137,7 @@ WantedBy=multi-user.target
 ```
 
 This Systemd service does the following on start:
+
   - Confirm docker is installed under the `[Unit]` section
   - Get environment variables from the environment file above
   - Remove existing `calico-libnetwork` container (if it exists)
@@ -148,4 +149,3 @@ The script will also stop the calico-libnetwork container when the service is st
 the `[Unit]` section may be different (such `docker-engine.service`) depending
 on how you've installed Docker.
 Be sure to check this before starting the service.
-

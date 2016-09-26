@@ -6,12 +6,12 @@ title: calicoctl status
 
 This sections describes the `calicoctl status` commands.
 
-Read the [calicoctl command line interface user reference](calicoctl) 
+Read the [calicoctl command line interface user reference](calicoctl)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl status' commands
 
-Run `calicoctl status --help` to display the following help menu for the 
+Run `calicoctl status --help` to display the following help menu for the
 calicoctl status commands.
 
 ```
@@ -29,16 +29,17 @@ Description:
 
 
 ### calicoctl status
-This command allows you to view state information about the `calico/node` and 
+This command allows you to view state information about the `calico/node` and
 the BGP peers of the Calico node.
 
 This command shows:
+
  - State and uptime of `calico/node` container
  - BGP State for IPv4 and IPv6 peers
    - Peer address: Host address used as BGP peer IP to route to Calico workloads
-   - Peer type: How the two BGP peers are connected, such as through a 
-   `node-to-node mesh`, a direct peer between two nodes as `node-specific`, 
-   or as a `global` BGP peer (See the [`calicoctl bgp` reference](bgp) for 
+   - Peer type: How the two BGP peers are connected, such as through a
+   `node-to-node mesh`, a direct peer between two nodes as `node-specific`,
+   or as a `global` BGP peer (See the [`calicoctl bgp` reference](bgp) for
    more info)
    - State: Peer instance state, `up` or `down`
    - Since: How long the peer has been up

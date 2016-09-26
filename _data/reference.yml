@@ -8,7 +8,7 @@ toc:
 - title: Calicoctl
   section:
   - title: Overview
-    path: /docs/reference/calicoctl/calicoctl
+    path: /docs/reference/calicoctl/
   - title: status
     path: /docs/reference/calicoctl/status
   - title: node
@@ -40,56 +40,52 @@ toc:
 - title: Deploying on Private Cloud
   section:
     - title: Overview
-      path: /docs/reference/private-cloud/overview
+      path: /docs/reference/private-cloud/
     - title: Calico Over Ethernet Fabrics
-      path: /docs/what-is-calico/connectivity/l2-interconnectFabric
+      path: /docs/reference/private-cloud/l2-interconnect-fabric
     - title:  IP Interconnect Fabrics in Calico
-      path: /docs/what-is-calico/connectivity/l3-interconnectFabric
+      path: /docs/reference/private-cloud/l3-interconnect-fabric
     - title: Troubleshooting
       path: /docs/reference/private-cloud/troubleshooting
 - title: Data Model
   section:
     - title: Overview
-      path: /docs/reference/etcd/etcd-data-model
+      path: /docs/reference/etcd/data-model
     - title: Structure
-      path: /docs/reference/etcd/etcdStructure
+      path: /docs/reference/etcd/structure
 - title: Architecture
   section:
   - title: Introduction
-    path: /docs/what-is-calico/architecture
+    path: /docs/reference/architecture/
   - title: calico/node
-    path: /docs/what-is-calico/more-info/Components
+    path: /docs/reference/architecture/components
   - title: Data Path
-    path: /docs/what-is-calico/connectivity/datapath
+    path: /docs/reference/architecture/data-path
   - title: Lifecycle of a container (Calico without Docker networking)
-    path: /docs/what-is-calico/more-info/DockerContainerLifecycle
+    path: /docs/reference/architecture/docker-container-lifecycle
 - title: Calico Security Model
-  path: /docs/using-calico/configuration/security-model
+  path: /docs/reference/security-model
 - title: Addressing and Connectivity Overview
-  path: /docs/what-is-calico/connectivity/addressing
-- title: Calico Integrations
-  path: /docs/getting-started/calico-integrations
-- title: Calico for CNI
-  section:
-  - title: Overview
-    path: /docs/getting-started/cni/calico-cni
+  path: /docs/reference/addressing
 - title: Advanced
   section:
+  - title: Calico for CNI
+    path: /docs/reference/advanced/calico-cni
   - title: Calico without Docker networking (--net=none)
     section:
     - title: Overview
-      path: /docs/getting-started/calico-with-docker/without-docker-networking/CalicoWithoutDockerNetworking
+      path: /docs/reference/without-docker-networking/
     - title: Calico without Docker-Libnetwork
-      path: /docs/getting-started/calico-with-docker/without-docker-networking/ManualSetup
+      path: /docs/reference/without-docker-networking/manual-setup
     - title: Calico IPv6 Networking
-      path: /docs/getting-started/calico-with-docker/without-docker-networking/IPv6
+      path: /docs/reference/without-docker-networking/ipv6
   - title: Calico's use of the Neutron API
-    path: /docs/using-calico/advanced/calico-neutron-api
-  - title: Repo Structure
-    path: /docs/community/RepoStructure
-  - title: Contribute
-    path: /docs/community/contribute
-  - title: Involved
-    path: /docs/community/involved
-  - title: License
-    path: /docs/license
+    path: /docs/reference/advanced/calico-neutron-api
+- title: Repo Structure
+  path: /docs/reference/repo-structure
+- title: Contribute
+  path: /docs/reference/contribute
+- title: Involved
+  path: /docs/reference/involved
+- title: License
+  path: /docs/reference/license

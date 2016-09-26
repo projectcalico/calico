@@ -29,6 +29,7 @@ Run
 > *Note*: This will deploy a Kubernetes master and a single Kubernetes node.  To run more nodes, modify the value `num_instances` in the Vagrantfile before running `vagrant up`.
 
 To connect to your servers
+
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows

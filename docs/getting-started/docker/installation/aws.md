@@ -13,7 +13,8 @@ These instructions describe how to set up two CoreOS hosts on AWS.  For more gen
 [the CoreOS on AWS EC2 documentation](https://coreos.com/docs/running-coreos/cloud-providers/ec2/).
 
 Download and install AWS Command Line Interface:
-```
+
+```shell
 curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
 unzip awscli-bundle.zip
 sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
@@ -21,7 +22,8 @@ sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 For more information, see Amazon's [Installing the AWS Command Line Interface][install-aws-cli].
 
 Run the AWS configure command, which will prompt you to set your User keys.
-```
+
+```shell
 aws configure
 #>  AWS Access Key ID: <User Access Key>
 #>  AWS Secret Access Key: <User Secret Access Key>
@@ -44,7 +46,7 @@ automatically attach to when they are created.
 
 To check if you have a default VPC, run the following command, then save VPC ID as an environment variable to use later.
 
-```
+```shell
 aws ec2 describe-vpcs --filters "Name=isDefault,Values=true"
 
 # Save VpcId from output as environment variable (without quotes)
@@ -63,41 +65,48 @@ For SSH purposes on AWS, you will need to configure a Subnet, Internet Gateway, 
 
 Create the VPC to use as the network for your hosts.  Set a `VPC_ID` environment variable to
 make things a bit easier, replacing `<VpcId>` with the `VpcId` value returned from the command:
-```
+
+```shell
 aws ec2 create-vpc --cidr-block 172.35.0.0/24
 VPC_ID=<VpcId>
 ```
 
 Create a subnet for your hosts, then save a `SUBNET_ID` environment variable, replacing `<SubnetId>` with the `SubnetId` output value of the command.
-```
+
+```shell
 aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block 172.35.0.0/24
 SUBNET_ID=<SubnetId>
 ```
 
 Modify the Subnet to auto-assign public ip addresses:
-```
+
+```shell
 aws ec2 modify-subnet-attribute --subnet-id $SUBNET_ID --map-public-ip-on-launch
 ```
 
 Create an Internet Gateway.  Save the `InternetGatewayId` value as an environment variable.
-```
+
+```shell
 aws ec2 create-internet-gateway
 GATEWAY_ID=<InternetGatewayId>
 ```
 
 Attach the gateway to the VPC.
-```
+
+```shell
 aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway $GATEWAY_ID
 ```
 
 Create a Route Table on the VPC. Save the `RouteTableId` as an environment variable.
-```
+
+```shell
 aws ec2 create-route-table --vpc-id $VPC_ID
 ROUTE_TABLE_ID=<RouteTableId>
 ```
 
 Associate the route table with the Subnet and add a route to the Internet.
-```
+
+```shell
 aws ec2 associate-route-table --subnet-id $SUBNET_ID --route-table-id $ROUTE_TABLE_ID
 aws ec2 create-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0.0.0.0/0 \
   --gateway-id $GATEWAY_ID
@@ -105,18 +114,21 @@ aws ec2 create-route --route-table-id $ROUTE_TABLE_ID --destination-cidr-block 0
 
 ### 2.2 Configuring Key Pair and Security Group
 Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
-```
+
+```shell
 aws ec2 create-key-pair --key-name mykey --output text
 ```
 
 Copy the output into a new file called mykey.pem.  The file should include ```-----BEGIN RSA PRIVATE KEY-----```,
 ```-----END RSA PRIVATE KEY-----```, and everything in between.  Then, set appropriate permissions for your key file.
-```
+
+```shell
 chmod 400 mykey.pem
 ```
 
 A Security Group is required on the instances to control allowed traffic.  Save the `GroupId` output from the first command as an environment variable.
-```
+
+```shell
 # Create Security Group
 aws ec2 create-security-group --group-name MySG \
   --description MySecurityGroup --vpc-id $VPC_ID
@@ -126,7 +138,8 @@ SECURITY_GROUP_ID=<GroupId>
 ```
 
 Allow SSH from the internet and allow all traffic between instances within the group.
-```
+
+```shell
 # Allow SSH access
 aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
   --protocol tcp --port 22 --cidr 0.0.0.0/0
@@ -163,7 +176,7 @@ Use `aws ec2 describe-availability-zones` to display your region if you do not r
 
 For the first server run:
 
-```
+```shell
 aws ec2 run-instances \
   --image-id ami-2b7d914b \
   --instance-type t2.micro \
@@ -183,7 +196,8 @@ Find the PrivateIpAddress value of the first server by checking the output of th
 Open your `user-data-others` file and replace the instances of `172.17.8.101` with this private IP address.
 
 After making this change, for the second server run:
-```
+
+```shell
 aws ec2 run-instances \
   --image-id ami-99bfada9 \
   --instance-type t2.micro \
@@ -198,7 +212,8 @@ INSTANCE_ID_2=<InstanceId>
 ```
 
 Finally, disable `Source/Dest. Check` to allow containers to talk between hosts.  You can disable this with the CLI, or right click the instance in the EC2 console, and `Change Source/Dest. Check` from the `Networking` submenu.
-```
+
+```shell
 aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID_1 --source-dest-check "{\"Value\": false}"
 aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID_2 --source-dest-check "{\"Value\": false}"
 ```

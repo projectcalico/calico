@@ -3,11 +3,11 @@ title: # External Connectivity - Hosts on their own Layer 2 segment
 ---
 
 
-Calico creates a routed network on which your containers look like normal IP 
-speakers.  You can connect to them from a host in your cluster (assuming the 
+Calico creates a routed network on which your containers look like normal IP
+speakers.  You can connect to them from a host in your cluster (assuming the
 network policy you've assigned allows this) using their IP address.
 
-In order to access your containers from locations other than your cluster of 
+In order to access your containers from locations other than your cluster of
 hosts, you will need to configure IP routing.
 
 A common scenario is for your container hosts to be on their own isolated layer
@@ -15,7 +15,7 @@ A common scenario is for your container hosts to be on their own isolated layer
 that network is via a router, which also is the default router for all the
 container hosts.
 
-![hosts-on-layer-2-network](images/hosts-on-layer-2-network.png)
+![hosts-on-layer-2-network]({{site.url}}/images/hosts-on-layer-2-network.png)
 
 If this describes your infrastructure, you'll need to configure that router to
 communicate with the Calico-enabled hosts over BGP.  If you have a small number
@@ -23,9 +23,9 @@ of hosts, you can configure BGP sessions between your router and each
 Calico-enabled host.
 
 The Calico network defaults to AS number 64511, which is in the private range,
-and therefore will not conflict with anything else on the public internet. 
+and therefore will not conflict with anything else on the public internet.
 However, if your organization is already using AS number 64511, you should
-change the Calico cluster to use a different private AS number.  See the 
+change the Calico cluster to use a different private AS number.  See the
 [BGP Configuration tutorial]({{site.url}}/docs/using-calico/configuration/bgp) for how to do this.
 
 Then, on one of your Calico-enabled hosts, configure the session to your
@@ -46,7 +46,7 @@ configuration guide for the exact steps, but generally speaking, you'll need to
  3. announce the range of IP addresses used by your containers to the rest of your network
 
 If you have a L3 routed fabric or some other scenario not covered by the above,
-detailed datacenter networking recommendations are given in the main 
+detailed datacenter networking recommendations are given in the main
 [Project Calico documentation]({{site.url}}/docs/what-is-calico/connectivity/l3-interconnectFabric).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.

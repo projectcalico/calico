@@ -22,7 +22,7 @@ There are three components of a Calico / Kubernetes integration.
 - The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
 - The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
  - This is the combination of two binary executables and a configuration file.
-- When using Kubernetes NetworkPolicy, the Calico policy controller is also required. 
+- When using Kubernetes NetworkPolicy, the Calico policy controller is also required.
 
 The `calico/node` docker container must be run on the Kubernetes master and each
 Kubernetes node in your cluster, as it contains the BGP agent necessary for Calico routing to occur.
@@ -44,7 +44,7 @@ Manual Installation
 
 ### 1. Run `calico/node` and configure the node.
 The Kubernetes master and each Kubernetes node require the `calico/node` container.
-Each node must also be recorded in the Calico datastore. 
+Each node must also be recorded in the Calico datastore.
 
 This can be done using the `calicoctl` utility.
 
@@ -61,8 +61,10 @@ See the [`calicoctl node` documentation](../../calicoctl/node.md#calicoctl-node)
 for more information.
 
 #### Example systemd unit file (calico-node.service)
+
 If you're using systemd as your init system then the following service file can be used.
-```
+
+```bash
 [Unit]
 Description=calicoctl node
 After=docker.service
@@ -87,19 +89,21 @@ WantedBy=multi-user.target
 The Kubernetes `kubelet` calls out to the `calico` and `calico-ipam` plugins.
 
 Download the binaries and make sure they're executable
-```
+
+```bash
 wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico
 wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.1/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
+
 It's recommended that this is done as part of job that manages the `kubelet` process (see below)
 
 The Calico CNI plugins require a standard CNI config file.  The `policy` section is only required when
 deploying the `calico/kube-policy-controller` for NetworkPolicy.
 
-```
+```bash
 mkdir -p /etc/cni/net.d
-$ cat >/etc/cni/net.d/10-calico.conf <<EOF
+cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
     "type": "calico",
@@ -147,7 +151,7 @@ This method of installation uses Kubernetes to install Calico.  This method is o
 in Kubernetes >= v1.4.0, and is currently considered experimental.
 
 Since this method uses Kubernetes to install Calico, you must first deploy a standard Kubernetes cluster
-with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the 
+with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the
 [desired configuration for installing Calico](#configuring-kubernetes).
 
 Then download [manifests/calico-configmap.yaml](manifests/calico-configmap.yaml) and [manifests/calico-hosted.yaml](manifests/calico-hosted.yaml).  
@@ -221,10 +225,9 @@ in Kubernetes v1.2.0.
 
 We highly recommend using the latest stable Kubernetes release, but if you're using an older release
 there are two ways to enable this behavior.
+
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
-- Option 2: Annotate the Kubernetes Node API object with
-`net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
+- Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
 
 See the [kube-proxy documentation](http://kubernetes.io/docs/admin/kube-proxy/)
 for more details.
-

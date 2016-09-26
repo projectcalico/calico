@@ -2,7 +2,7 @@
 Title: Calico IPv6 networking as a Docker network plugin (Optional)
 ---
 
-This tutorial is a continuation of the main 
+This tutorial is a continuation of the main
 [Calico as a Docker network plugin tutorial](index).
 
 The worked example below focuses on a non-cloud environment.
@@ -22,7 +22,7 @@ Adjust the instructions accordingly.
 
 ## 2. Add IPv6 addresses to your host
 
-To connect your containers with IPv6, first make sure your Docker hosts each 
+To connect your containers with IPv6, first make sure your Docker hosts each
 have an IPv6 address assigned.
 
 On calico-01
@@ -41,7 +41,7 @@ On calico-01
 
 ## 3. Restart Calico services with IPv6
 
-Then restart your calico-node processes with the `--ip6` parameter to enable 
+Then restart your calico-node processes with the `--ip6` parameter to enable
 IPv6 routing.
 
 On calico-01
@@ -59,9 +59,9 @@ the `docker network create` command which specifies which CIDR the IP addresses
 in this network may be allocated from.  You may specify IPv4 and IPv6 CIDRs
 individually.
 
-> Note that the current network handling in Docker does not 
+> Note that the current network handling in Docker does not
 > allow an IPv6-only network:  if no IPv4 CIDR is specified, then IPv4 addresses
-> are assigned from any available IPv4 pool and will fail if there are no 
+> are assigned from any available IPv4 pool and will fail if there are no
 > available pools;  if no IPv6 CIDR is specified, then no IPv6 addresses will
 > be assigned, even if there are IPv6 pools configured.
 >
@@ -72,21 +72,21 @@ Start by creating an IPv4 and IPv6 pool:
 
     calicoctl pool add 192.168.0.0/16
     calicoctl pool add fd80:24e2:f998:72d6::/64
-    
+
 To create the networks passing in an IPv6 subnet that exactly matches one of
 the configured IPv6 pools (we only created one):
 
     docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net10 --ipv6
     docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net11 --ipv6
     docker network create --driver calico --ipam-driver calico --subnet fd80:24e2:f998:72d6::/64 net12 --ipv6
-    
+
 > Note that a particular IP Pool does not have to be confined for use by a single
 > network, multiple networks may all reference the same IP Pool.
 > The Calico IPAM driver selects unique IPs across all Calico networks and
 > containers.  It breaks these larger IP pool CIDRs into smaller ranges that are
 > preferentially used on a particular host.
-    
-## 4. Create the workloads in the networks
+
+## 5. Create the workloads in the networks
 
 On calico-01
 
@@ -99,13 +99,13 @@ On calico-02
     docker run --net net10 --name workload-Y -tid busybox
     docker run --net net12 --name workload-Z -tid busybox
 
-By default, networks are configured so that their members can communicate with 
+By default, networks are configured so that their members can communicate with
 one another, but workloads in other networks cannot reach them.  V, X and Y are
-all in the same network so should be able to ping each other.  W and Z are in 
+all in the same network so should be able to ping each other.  W and Z are in
 their own networks so shouldn't be able to ping anyone else.
 
-## 5. Validation
-    
+## 6. Validation
+
 On calico-01 check that V can ping X and Y.  It is not possible to ping by
 hostname for IPv6, so we need to do a docker inspect to pull out the IPv6
 address for a container.
@@ -115,34 +115,34 @@ On calico-01:
 
     docker exec workload-V ping6 -c 4 `docker inspect --format "{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}" workload-X`
 
-To test connectivity to Y, first obtain the IPv6 address using 
+To test connectivity to Y, first obtain the IPv6 address using
 `docker inspect` on the host for Y.  On calico-02:
-  
+
     docker inspect --format "{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}" workload-Y
-    
+
 And then run the ping using the inspected IPv6 address.  On calico-01:
 
     docker exec workload-V ping6 -c 4 <IPv6 address of workload-Y>
-    
+
 replacing the `<...>` with the appropriate IPv6 address of Y.
-    
+
 Also check that V cannot ping W or Z.
 
 Again, since V and W are on the same host, we can run a single command that
 inspects the IPv6 address and issues the ping.  On calico-01
 
     docker exec workload-V ping6 -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net11.GlobalIPv6Address }}" workload-W`
-    
+
 These pings will fail.
 
 To test connectivity between V and Z which are on different hosts, run the
-`docker inspect` command on the host for Z and then run the ping command on 
+`docker inspect` command on the host for Z and then run the ping command on
 the host for V.
-    
+
 On calico-02
 
     docker inspect --format "{{ .NetworkSettings.Networks.net12.GlobalIPv6Address }}" workload-Z
-    
+
 This returns the IP address of workload-Z.
 
 On calico-01

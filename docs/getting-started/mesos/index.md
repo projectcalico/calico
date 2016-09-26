@@ -52,6 +52,7 @@ using the same net-group.  Fine grained policy for each net-group can be
 modified using the `calicoctl profile` commands.
 
 To get started, you'll need a Agent with net-modules compiled.
+
 - [Quickstart with Docker-Compose: Calico for Mesos Tasks in Mesos using net-modules](https://github.com/mesosphere/net-modules)
 - [Manual Install: Calico for Unified Containerizer (net-modules)](ManualInstallCalicoUnifiedContainerizer)
 - [Usage Guide: Launching Mesos Tasks with Calico using net-modules with the Unified Containerizer](UsageGuideUnifiedContainerizer)
@@ -62,4 +63,3 @@ add Calico to Mesos.
 Calico's DC/OS package installs and configures everything you need to use Calico
 with the Docker Containerizer and the Unified Containerizer (using CNI).
 See the [Calico for DC/OS 1.8 Install Guide](./DCOS.md) for more information.
-

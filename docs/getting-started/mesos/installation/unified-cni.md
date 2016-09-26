@@ -20,12 +20,12 @@ Run the following steps on **each agent**.
 
 1. Download the Calico CNI plugin to the `$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos:
 
-    ```shell
-    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
-        https://github.com/projectcalico/calico-cni/releases/download/v1.3.0/calico
-    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
-    ln -s $NETWORK_CNI_PLUGINS_DIR/calico $NETWORK_CNI_PLUGINS_DIR/calico-ipam
-    ```
+```shell
+curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
+    https://github.com/projectcalico/calico-cni/releases/download/v1.3.0/calico
+chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
+ln -s $NETWORK_CNI_PLUGINS_DIR/calico $NETWORK_CNI_PLUGINS_DIR/calico-ipam
+```
 
 2. Run `calico/node`, a Docker container with calico's core routing processes.
 The `calico/node` container can easily be launched using
@@ -33,13 +33,12 @@ The `calico/node` container can easily be launched using
 we must provide the location of the running etcd instance
 by setting the `ECTD_AUTHORITY` environment variable.
 
-    ```shell
-    curl -L -o ./calicoctl \
-        https://github.com/projectcalico/calico-containers/releases/download/v0.18.0/calicoctl
-    chmod +x calicoctl
-    sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
-    ```
+```shell
+curl -L -O \
+    https://github.com/projectcalico/calico-containers/releases/download/v0.18.0/calicoctl
+chmod +x ./calicoctl
+sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
+```
 
 ## Next Steps
 Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide](UsageGuideUnifiedCNI).
-

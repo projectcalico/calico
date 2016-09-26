@@ -87,9 +87,9 @@ toc:
     - title: GCE
       path: /docs/getting-started/docker/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /docs/getting-started/docker/installation/vagrant-coreos
+      path: /docs/getting-started/docker/installation/vagrant-coreos/
     - title: 'Vagrant/VirtualBox: Ubuntu'
-      path: /docs/getting-started/docker/installation/vagrant-ubuntu
+      path: /docs/getting-started/docker/installation/vagrant-ubuntu/
   - title: Tutorials
     section:
     - title: Basic Walkthrough

@@ -12,23 +12,27 @@ These instructions describe how to set up two CoreOS hosts on GCE.  For more gen
 If you already have the `gcloud` utility installed, and a GCE project configured, you may skip this step.
 
 Download and install GCE, then restart your terminal:
-```
+
+```shell
 curl https://sdk.cloud.google.com | bash
 ```
 For more information, see Google's [gcloud install instructions][gcloud-instructions].
 
 Log into your account:
-```
+
+```shell
 gcloud auth login
 ```
 
 In the GCE web console, create a project and enable the Compute Engine API.
 Set the project as the default for gcloud:
-```
+
+```shell
 gcloud config set project PROJECT_ID
 ```
 And set a default zone
-```
+
+```shell
 gcloud config set compute/zone us-central1-a
 ```
 
@@ -36,19 +40,23 @@ gcloud config set compute/zone us-central1-a
 GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between
 containers on different hosts (where the source-ranges parameter assumes you have created your project with the
 default GCE network parameters - modify the address range if yours is different):
-```
+
+```shell
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.128.0.0/9"
 ```
 You can verify the rule with this command:
-```
+
+```shell
 gcloud compute firewall-rules list
 ```
 
 <!--- master only -->
+
 ### 1.3 Clone this project
 
     git clone https://github.com/projectcalico/calico-containers.git
 <!--- else
+
 ### 1.3 Clone this project, and checkout the **release** release
 
     git clone https://github.com/projectcalico/calico-containers.git
@@ -57,12 +65,14 @@ gcloud compute firewall-rules list
 
 ## 2. Deploy the VMs
 Change into the directory for this guide.
-```
+
+```shell
 cd calico-containers/docs/cni/kubernetes/
 ```
 
 Deploy the Kubernetes master node using the following command:
-```
+
+```shell
 gcloud compute instances create \
   kubernetes-master \
   --image-project coreos-cloud \
@@ -103,23 +113,27 @@ docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --ipip --nat-outgo
 The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
-```
+
+```shell
 sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/linux/amd64/kubectl
 sudo chmod +x /usr/local/bin/kubectl
 ```
 
 The following command sets up SSH forwarding of port 8080 to your master node so that you can run `kubectl` commands on your local machine.
-```
+
+```shell
 gcloud compute ssh kubernetes-master --quiet --ssh-flag="-nNT" --ssh-flag="-L 8080:localhost:8080" &
 ```
 
 Verify that you can access the Kubernetes API.  The following command should return a list of Kubernetes nodes.
-```
+
+```shell
 kubectl get nodes
 ```
 
 >If successful, the above command should output something like this:
-```
+
+```shell
 NAME          STATUS                     AGE
 10.240.0.25   Ready,SchedulingDisabled   6m
 10.240.0.26   Ready                      6m

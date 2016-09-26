@@ -29,6 +29,7 @@ Run
     vagrant up
 
 To connect to your servers
+
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows
@@ -91,7 +92,8 @@ To define a rkt network for Calico, create a configuration file in `/etc/rkt/net
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
 
 This worked example creates two rkt networks. Run these commands on both `calico-01` and `calico-02`
-```
+
+```shell
 cat >/etc/rkt/net.d/10-calico-backend.conf <<EOF
 {
     "name": "backend",

@@ -6,18 +6,17 @@ title: calicoctl config
 
 This sections describes the `calicoctl config` commands.
 
-The `calicoctl config` command allows users to view or modify 
+The `calicoctl config` command allows users to view or modify
 low-level component configurations for Felix and BGP.
 
 Read the [calicoctl command line interface user reference](calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl config' commands
 
-Run `calicoctl config --help` to display the following help menu for the 
+Run `calicoctl config --help` to display the following help menu for the
 calicoctl config commands.
 
-```
-
+```shell
 Usage:
   calicoctl config felix <NAME> [<VALUE>|--remove] [--force]
   calicoctl config bgp <NAME> [<VALUE>|--remove] [--force]
@@ -50,24 +49,25 @@ Warnings:
 ## calicoctl config commands
 
 
-### calicoctl config felix \<NAME\> 
-This command allows you to show or modify key values for configuration 
+### calicoctl config felix \<NAME\>
+This command allows you to show or modify key values for configuration
 associated with the Felix process.
 
 Currently, you can modify the following:
-```
+
+```shell
   Command         | <NAME>   | <VALUE>s
 ------------------+----------+-----------------------------------------
   config felix    | loglevel | none debug info warning error critical
 ```
 
-`loglevel` represents the logging level of messages sent to the Felix log file. 
-All messages with a lower priority than the `loglevel` value will be filtered 
-out. All Calico logs can be found `/var/log/calico`, unless a different log 
+`loglevel` represents the logging level of messages sent to the Felix log file.
+All messages with a lower priority than the `loglevel` value will be filtered
+out. All Calico logs can be found `/var/log/calico`, unless a different log
 directory was specified in the [`calicoctl node`](node) command.
 
 
-This command can be run on any Calico node and affects every Felix in the 
+This command can be run on any Calico node and affects every Felix in the
 cluster.
 
 Command syntax:
@@ -81,12 +81,12 @@ calicoctl config felix <NAME> [<VALUE>|--remove] [--force]
     --remove: Remove the config key value.
     --force: Force update of config, even if key or value are unknown.
 ```
-The `--remove` flag allows you to completely remove the value from the etcd 
+The `--remove` flag allows you to completely remove the value from the etcd
 datastore.  Felix will instead read a value from the Felix config file.
 
-The `--force` flag is used to configure a value on the config key that the 
-`calicoctl config` command does not recognize.  A warning message appears if an 
-unrecognized value is passed into the command.  This flag allows you to 
+The `--force` flag is used to configure a value on the config key that the
+`calicoctl config` command does not recognize.  A warning message appears if an
+unrecognized value is passed into the command.  This flag allows you to
 override the warning message use a value that is not in the recognized list.
 
 Examples:
@@ -101,23 +101,24 @@ $ calicoctl config felix loglevel --remove
 Value removed
 ```
 
-### calicoctl config bgp \<NAME\> 
-This command allows you to show or modify key values for configuration 
+### calicoctl config bgp \<NAME\>
+This command allows you to show or modify key values for configuration
 associated with the BGP process.
 
 Currently, you can modify the following:
-```
+
+```shell
   Command         | <NAME>   | <VALUE>s
 ------------------+----------+----------------
   config bgp      | loglevel | none debug info
 ```
 
-`loglevel` represents the logging level of messages sent to the BIRD BGP daemon 
-log file. All messages with a lower priority than the `loglevel` value will be 
-filtered out. All Calico logs can be found `/var/log/calico`, unless a different log 
+`loglevel` represents the logging level of messages sent to the BIRD BGP daemon
+log file. All messages with a lower priority than the `loglevel` value will be
+filtered out. All Calico logs can be found `/var/log/calico`, unless a different log
 directory was specified in the [`calicoctl node`](./node) command.
 
-This command can be run on any Calico node and affects all of the BIRD processes 
+This command can be run on any Calico node and affects all of the BIRD processes
 in the cluster.
 
 Command syntax:
@@ -131,13 +132,13 @@ calicoctl config bgp <NAME> [<VALUE>|--remove] [--force]
     --remove: Remove the config key value.
     --force: Force update of config, even if key or value are unknown.
 ```
-The `--remove` flag allows you to completely remove the value from the etcd 
-datastore.  The process reading the value then determines a value to use 
+The `--remove` flag allows you to completely remove the value from the etcd
+datastore.  The process reading the value then determines a value to use
 internally.
 
-The `--force` flag is used to configure a value on the config key that the 
-`calicoctl config` command does not recognize.  A warning message appears if an 
-unrecognized value is passed into the command.  This flag allows you to 
+The `--force` flag is used to configure a value on the config key that the
+`calicoctl config` command does not recognize.  A warning message appears if an
+unrecognized value is passed into the command.  This flag allows you to
 override the warning message use a value that is not in the recognized list.
 
 Examples:
@@ -153,8 +154,8 @@ $ calicoctl config bgp loglevel --remove
 Value removed
 ```
 
-### calicoctl config node bgp \<NAME\> 
-This command allows you to show or modify key values for configuration 
+### calicoctl config node bgp \<NAME\>
+This command allows you to show or modify key values for configuration
 associated with the BGP process on individual nodes.
 
 Currently, you can modify the following:
@@ -164,9 +165,9 @@ Currently, you can modify the following:
   config node bgp | loglevel | none debug info
 ```
 
-`loglevel` represents the logging level of messages sent to the BIRD BGP daemon 
-log file. All messages with a lower priority than the `loglevel` value will be 
-filtered out. All Calico logs can be found `/var/log/calico`, unless a different log 
+`loglevel` represents the logging level of messages sent to the BIRD BGP daemon
+log file. All messages with a lower priority than the `loglevel` value will be
+filtered out. All Calico logs can be found `/var/log/calico`, unless a different log
 directory was specified in the [`calicoctl node`](./node) command.
 
 This command must be run on the specific Calico node that you want to configure.
@@ -182,13 +183,13 @@ calicoctl config node bgp <NAME> [<VALUE>|--remove] [--force]
     --remove: Remove the config key value.
     --force: Force update of config, even if key or value are unknown.
 ```
-The `--remove` flag allows you to completely remove the value from the etcd 
-datastore.  The process reading the value then determines a value to use 
+The `--remove` flag allows you to completely remove the value from the etcd
+datastore.  The process reading the value then determines a value to use
 internally.
 
-The `--force` flag is used to configure a value on the config key that the 
-`calicoctl config` command does not recognize.  A warning message appears if an 
-unrecognized value is passed into the command.  This flag allows you to 
+The `--force` flag is used to configure a value on the config key that the
+`calicoctl config` command does not recognize.  A warning message appears if an
+unrecognized value is passed into the command.  This flag allows you to
 override the warning message to use a value that is not in the recognized list.
 
 Examples:

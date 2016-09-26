@@ -210,7 +210,7 @@ Once you have such a policy in place, you may want to disable the
 >
 > :   inbound and outbound rules to allow BGP, for example:
 >
-> {"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}
+> `{"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}`
 
 Calico's tiered policy data is described in detail in
 [Tiered security policy](etcd-data-model#secuirity-policy-data).

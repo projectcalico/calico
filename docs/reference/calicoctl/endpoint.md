@@ -6,25 +6,25 @@ title: calicoctl endpoint
 
 This sections describes the `calicoctl endpoint` commands.
 
-In Calico an endpoint is a virtual interface from a workload (container or 
-virtual machine) into the Calico network, and workloads may have more than one 
+In Calico an endpoint is a virtual interface from a workload (container or
+virtual machine) into the Calico network, and workloads may have more than one
 endpoint. Calico applies network policy to endpoints.
 
 Read the [calicoctl command line interface user reference](calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl endpoint' commands
 
-Run `calicoctl endpoint --help` to display the following help menu for the 
+Run `calicoctl endpoint --help` to display the following help menu for the
 calicoctl endpoint commands.
 
 ```
 
 Usage:
-  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] 
+  calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>]
     [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
-  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] 
+  calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>]
     [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
-  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] 
+  calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>]
     [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
 
 Description:
@@ -53,7 +53,7 @@ Examples:
 ## calicoctl endpoint commands
 
 
-### calicoctl endpoint show 
+### calicoctl endpoint show
 This command allows the user to view information about Calico endpoints.
 
 This command can be run on any Calico node.
@@ -61,7 +61,7 @@ This command can be run on any Calico node.
 Command syntax:
 
 ```
-calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>] 
+calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>]
   [--workload=<WORKLOAD_ID>] [--endpoint=<ENDPOINT_ID>] [--detailed]
 
     <HOSTNAME>: Filter endpoint info on a specific host.
@@ -72,15 +72,17 @@ calicoctl endpoint show [--host=<HOSTNAME>] [--orchestrator=<ORCHESTRATOR_ID>]
     --detailed: Show additional data about each individual endpoint.
 ```
 
-This command prints information about endpoints with a single row for each 
+This command prints information about endpoints with a single row for each
 Calico host.  The output includes:
+
  - Hostname: Host that owns the endpoint(s) in the row.
  - Orchestrator ID: Orchestrator running the workloads.
  - Number of Workloads: Total number workloads on the host.
  - Number of Endpoints: Total number of endpoints on the host.
 
-When the `--detailed` is included, the output contains one row for each Calico 
+When the `--detailed` is included, the output contains one row for each Calico
 endpoint in use.  The output includes:
+
  - Hostname: Host that owns the endpoint in the row.
  - Orchestrator ID: Orchestrator running the workloads.
  - Workload ID: ID of the workload containing the endpoint.
@@ -121,34 +123,34 @@ $ calicoctl endpoint show --endpoint=d79123c4784511e5bd1a080027f532f6 --detailed
 ```
 
 ### calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set)
-> NOTE: This command should NOT be used when running Calico with the Docker 
-> libnetwork driver.  The libnetwork driver manages the security profiles for 
-> containers. 
+> NOTE: This command should NOT be used when running Calico with the Docker
+> libnetwork driver.  The libnetwork driver manages the security profiles for
+> containers.
 
-This command is used to manage policy profiles associated with endpoints. 
+This command is used to manage policy profiles associated with endpoints.
 
 The command allows you to:
- - append profiles to the end point by adding any passed in profiles to the 
+ - append profiles to the end point by adding any passed in profiles to the
  list of profiles already associated with the endpoint
  - remove profiles from the endpoint's list of profiles
- - set a list of profiles that replaces the current list of profiles associated 
+ - set a list of profiles that replaces the current list of profiles associated
  with the endpoint.
 
-If you are controlling Calico network policy for Docker containers using the 
+If you are controlling Calico network policy for Docker containers using the
 default networking (i.e. not libnetwork) it is more common to use the  
-`calicoctl container <CONTAINER> profile (set|append|remove) <PROFILES>` 
-command, which can be found in the 
+`calicoctl container <CONTAINER> profile (set|append|remove) <PROFILES>`
+command, which can be found in the
 [`calicoctl container` reference documentation](./container).
 
-For more information about policy profiles, check out the section on 
+For more information about policy profiles, check out the section on
 [security profile data in the etcd data model documentation](http://docs.projectcalico.org/en/latest/etcd-data-model.html#security-profile-data).
 
 This command can be run on any Calico node.
 
 Command syntax:
 
-```
-calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>] 
+```shell
+calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>]
   [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]  [<PROFILES>...]
 
     <ENDPOINT_ID>: Endpoint whose profiles you'd like to modify.
@@ -158,9 +160,9 @@ calicoctl endpoint <ENDPOINT_ID> profile (append|remove|set) [--host=<HOSTNAME>]
     <PROFILES>: One or more profiles to append, remove, or set on the endpoint.
 ```
 
-The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not 
-necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and 
-`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced 
+The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not
+necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and
+`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced
 load on the etcd datastore when all of the identifiers are specified together.
 
 Examples:
@@ -177,7 +179,7 @@ Profile(s) WEB,PROF removed.
 
 ```
 
-### calicoctl endpoint <ENDPOINT_ID> profile show 
+### calicoctl endpoint <ENDPOINT_ID> profile show
 This command prints the list of the profiles associated with an endpoint.
 
 This command can be run on any Calico node.
@@ -185,7 +187,7 @@ This command can be run on any Calico node.
 Command syntax:
 
 ```
-calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>] 
+calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>]
   [--orchestrator=<ORCHESTRATOR_ID>] [--workload=<WORKLOAD_ID>]
 
     <ENDPOINT_ID>: Endpoint whose profiles you'd like to modify.
@@ -194,9 +196,9 @@ calicoctl endpoint <ENDPOINT_ID> profile show [--host=<HOSTNAME>]
     <WORKLOAD_ID>: ID of workload that contains the endpoint.
 ```
 
-The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not 
-necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and 
-`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced 
+The `<ENDPOINT_ID>` uniquely identifies the endpoint.  Although it is not
+necessary to include the optional `<HOSTNAME>`, `<ORCHESTRATOR_ID>` and
+`<WORKLOAD_ID>` identifiers, this command executes faster and with reduced
 load on the etcd datastore when all of the identifiers are specified together.
 
 Examples:

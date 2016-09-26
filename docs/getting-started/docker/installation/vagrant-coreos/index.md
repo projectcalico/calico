@@ -2,7 +2,7 @@
 title: Running the Calico tutorials on CoreOS using Vagrant and VirtualBox
 ---
 
-These instructions allow you to set up a CoreOS cluster ready to network Docker containers with 
+These instructions allow you to set up a CoreOS cluster ready to network Docker containers with
 [Calico Docker networking][calico-networking] using Vagrant.
 
 ## 1. Streamlined setup of the VMs
@@ -16,7 +16,7 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 ### 1.2 Clone this project
 
     git clone https://github.com/projectcalico/calico-containers.git
-    
+
 ### 1.4 Startup and SSH
 
 There are two worked examples you can follow: Calico as a Docker network
@@ -24,18 +24,19 @@ plugin, or Calico without Docker networking.  Select the networking option
 by changing into the appropriate directory.
 
 For Calico as a Docker network plugin
-  
+
     cd calico-containers/docs/calico-with-docker/docker-network-plugin/vagrant-coreos
 
 For Calico without Docker networking
-  
+
     cd calico-containers/docs/calico-with-docker/without-docker-networking/vagrant-coreos
-       
+
 Run
 
     vagrant up
 
 To connect to your servers
+
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows
@@ -44,7 +45,7 @@ To connect to your servers
 
 ### 1.5 Verify environment
 
-You should now have two CoreOS servers, each running etcd in a cluster. The servers are named calico-01 and calico-02 
+You should now have two CoreOS servers, each running etcd in a cluster. The servers are named calico-01 and calico-02
 and IP addresses 172.17.8.101 and 172.17.8.102.
 
 At this point, it's worth checking that your servers can ping each other.
@@ -57,8 +58,8 @@ From calico-02
 
     ping 172.17.8.101
 
-If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should 
-check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also 
+If you see ping failures, the likely culprit is a problem with the VirtualBox network between the VMs.  You should
+check that each host is connected to the same virtual network adapter in VirtualBox and rebooting the host may also
 help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
@@ -68,15 +69,15 @@ You should also verify each host can access etcd.  The following will return an 
 And finally check that Docker is running on both hosts by running
 
     docker ps
-    
+
 ## 2. Try out Calico networking
 Now you have a basic two node CoreOS cluster setup and you are ready to try Calico networking.
 
 There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on 
+plugin, or Calico without Docker networking.  Select the instructions based on
 the networking option that you chose in step (3).
 
-- [Calico as a Docker network plugin walkthrough](docker-network-plugin/index) 
+- [Calico as a Docker network plugin walkthrough](docker-network-plugin/index)
 - [Calico without Docker networking walkthrough](without-docker-networking/index)  
 
 

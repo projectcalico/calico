@@ -30,6 +30,7 @@ Advanced Install options.
 
 You can quickly spin up an etcd cluster using ths DCOS Universe
 package as follows (Calico is configured to use the default service discovery URL in this install, so you won't need to edit this URL in the Calico config):
+
  - Go to the **Universe** tab in your DC/OS UI.
  - Find the **etcd** package
  - Click the **Install** button
@@ -48,6 +49,7 @@ tab. You can install Calico once etcd appears with a status
 of **`Healthy`** (note that this could take a few minutes).
 
 ### Mesos-DNS
+
 Calico is compatible with Mesos-DNS, but requires a minor configuration change to preferentially resolve to a container's IP address instead of resolving to its host's. Follow these steps on each master in your cluster to allow containers to be resolvable via their containerized IP:
 
 1. Open `/opt/mesosphere/etc/mesos-dns.json` with any text editor.
@@ -56,11 +58,14 @@ Calico is compatible with Mesos-DNS, but requires a minor configuration change t
 4. Restart mesos-dns with: `sudo systemctl restart dcos-mesos-dns`
 
 ## Install Calico
+
 You can easily install Calico from within the DCOS UI.
 
 ### Install Calico Package
+
 You can now install the Calico package from the **Universe**
 tab. To start the install:
+
  - Go to the **Universe** tab
  - Find the Calico package
  - Click the **Install** button then choose **Advanced
@@ -141,4 +146,3 @@ the [Docker Containerizer](UsageGuideDockerContainerizer)
 or the [Unified Containerizer](UsageGuideUnifiedContainerizer),
 or to learn more about the differences between the
 two containerizers, check out our [Mesos README](index).
-

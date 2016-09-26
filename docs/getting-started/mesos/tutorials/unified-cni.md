@@ -9,8 +9,10 @@ CNI enabled, and Calico services and binaries are installed. See [Adding Calico-
 ## Getting started
 
 #### 1. Configure a Calico CNI Network
+
 Before we can start launching tasks, we must first define our CNI network definition in the configured  `--network_cni_config_dir`:
-```
+
+```shell
 cat <<EOF > $NETWORK_CNI_CONFIG_DIR/calico-net-1.conf
 {
     "name": "calico-net-1",
@@ -22,6 +24,7 @@ cat <<EOF > $NETWORK_CNI_CONFIG_DIR/calico-net-1.conf
 }
 EOF
 ```
+
 > Note: If you have used the Docker-Compose demo to launch a cluster, this network configuration has already been created for you.
 
 Mesos-Agent loads these network configurations into memory at launch, so you will need to restart the Agent process for your new configuration to take effect.
@@ -31,18 +34,21 @@ With your CNI network configured, you are now ready to launch tasks on it. There
 
 #### a.) Using Mesos-Execute
 To quickly test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
-```
+
+```shell
 mesos-execute --containerizer=mesos \
               --name=calico-cni-base-test \
               --master=172.17.0.4:5050 \
               --networks=calico-net-1 \
               --command="ifconfig"
 ```
+
 The task will have been successfully networked by Calico if its return code is `0`. Additionally, the task's `stdout` log should show an IP address from the default Calico pool: `192.168.0.0/16`
 
 #### b.) Using Marathon
 In Marathon v1.2.0+, set the task's `ipAddress.networkName` to the name of the CNI network:
-```
+
+```shell
 curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -d '
 {
     "id": "calico-cni-marathon-test",
@@ -59,6 +65,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -
 }'
 ```
 Again, this task should show a Calico IP in the Marathon UI.
+
 #### c.) Using Marathon - Unified Containerizer
 
 With the release of Mesos-1.0, the Unified Containerizer can now launch Docker Images using the Mesos Containerizer. Calico can perform networking for these tasks.
@@ -66,7 +73,8 @@ With the release of Mesos-1.0, the Unified Containerizer can now launch Docker I
 > To make use of this feature, ensure you are using Mesos 1.0.0+ with agents [configured to use the Unified Containerizer](http://mesos.apache.org/documentation/latest/container-image/). Also ensure you are using Marathon v1.3.0+.
 
 Our `app.json` looks similar to the one above, but with a few extra settings (and some more practical use):
-```
+
+```shell
 curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -d '
 {
     "id": "frontend",
@@ -91,12 +99,14 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8080/v2/apps -
 The application will show its Calico IP when viewed using the Marathon UI, however it will be unreachable until Calico policy is configured to allow traffic.
 
 ## 3. Configuring Policy
+
 Calico-CNI v1.4.1+ supports label-based policy for Mesos v1.0.0+.
 
 The above Marathon Application Definition has assigned the labels `app=frontend` and `group=production` to the task's NetworkInfo. Calico-CNI automatically reads these labels and assign them to the endpoint, allowing us to enforce policy based on them.
 
 The following YAML policy spec describes rules based on these labels:
-```
+
+```shell
 apiVersion: v1
 kind: policy
 metadata:
@@ -120,9 +130,11 @@ spec:
 ```
 
 [This alpha version of calicoctl](https://github.com/tigera/libcalico-go/releases/tag/v1.0.0-alpha.1) can be used to register this policy spec:
-```
+
+```shell
 calicoctl create -f frontend-policy.yaml
 ```
+
 **Note: The above link to the new resource-based calicoctl is neither the permanent nor future home for the binary. Expect the golang source for calicoctl to move. The linked release may also be deleted.**
 
 [calico-slack]: https://slack.projectcalico.org/
