@@ -14,7 +14,7 @@ RUN ./build-prereqs.sh
 
 # Install Calico pre-reqs.
 ENV LD_LIBRARY_PATH=/usr/local/lib
-RUN yum install -y iptables-ipv6 ipset iptables libffi-devel libffi yajl
+RUN yum install -y libffi-devel libffi yajl
 ADD felix_requirements.txt felix_requirements.txt
 RUN pip install -U -r felix_requirements.txt
 

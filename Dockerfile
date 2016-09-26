@@ -1,26 +1,21 @@
-# edge is required to get the fix for https://bugs.alpinelinux.org/issues/4451
-FROM alpine:edge
+FROM alpine:3.4
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-# The final container is slightly bloated by having the source code
-# But it's only a couple of MB (kept down using .dockerignore)
-ADD . /code
+# Download and install glibc in one layer
+RUN apk --no-cache add wget ca-certificates && \
+    wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub && \
+    wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-2.23-r3.apk && \
+    apk add glibc-2.23-r3.apk && \
+    apk del wget ca-certificates && \
+    rm -f glibc-2.23-r3.apk
+
+RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools 
+
+ADD dist/calico-felix /code
 WORKDIR /code
 
-# Metadata
-ARG VCS_URL 
-ARG VCS_REF
-ARG BUILD_DATE
-LABEL org.label-schema.vcs-url=$VCS_URL \
-	  org.label-schema.vcs-ref=$VCS_REF \
-	  org.label-schema.build-date=$BUILD_DATE \
-	  org.label-schema.url="http://projectcalico.org" \
-	  org.label-schema.name="Project Calico" \
-	  org.label-schema.license="Apache-2.0"
-
-RUN apk -U add python py-setuptools libffi ip6tables ipset iputils yajl && \
-    apk add --virtual temp python-dev libffi-dev py-pip alpine-sdk && \
-    pip install -e . && \
-    apk del temp && rm -rf /var/cache/apk/*
+# Minimal dummy config
 RUN mkdir /etc/calico && echo -e "[global]\nMetadataAddr = None\nLogFilePath = None\nLogSeverityFile = None" >/etc/calico/felix.cfg
-CMD ["calico-felix"]
+
+# Run felix by default
+CMD ["./calico-felix"]
