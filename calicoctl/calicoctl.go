@@ -37,6 +37,7 @@ func main() {
     get            Get a resource identified by file, stdin or resource type and name.
     version        Display the version of calicoctl.
     node           Node related commands.
+    ipam           Configure IP address management.
 
 Options:
   -h --help  Show this screen.
@@ -78,6 +79,8 @@ Options:
 			err = commands.Version(args)
 		case "node":
 			err = commands.Node(args)
+		case "ipam":
+			err = commands.IPAM(args)
 		default:
 			fmt.Println(usage)
 		}
