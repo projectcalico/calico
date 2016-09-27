@@ -19,6 +19,7 @@ for annotation-based policy can still be found in [an older release](https://git
 ## About the Calico Components
 
 There are three components of a Calico / Kubernetes integration.
+
 - The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
 - The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
  - This is the combination of two binary executables and a configuration file.
