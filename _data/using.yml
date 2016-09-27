@@ -2,31 +2,31 @@ bigheader: "Usage"
 abstract: "How to configure and troubleshoot Calico system"
 toc:
 - title: Using Calico
-  path: /docs/using-calico/using-calico
+  path: /using-calico/using-calico
 
 - title: Configuration
-  path: /docs/using-calico/configuration/configuration
+  path: /using-calico/configuration/configuration
 - title: Advanced Network Policy
-  path: /docs/using-calico/configuration/advanced-network-policy
+  path: /using-calico/configuration/advanced-network-policy
 - title: Calico and Systemd
-  path: /docs/using-calico/configuration/as-service
+  path: /using-calico/configuration/as-service
 - title: BGP Peering
-  path: /docs/using-calico/configuration/bgp
+  path: /using-calico/configuration/bgp
 - title: Securing Calico
-  path: /docs/using-calico/configuration/securing-calico
+  path: /using-calico/configuration/securing-calico
 - title: Securing Etcd
-  path: /docs/using-calico/advanced/etcd-secure
+  path: /using-calico/advanced/etcd-secure
 - title: Route Reflector
-  path: /docs/using-calico/advanced/bird-rr-config
+  path: /using-calico/advanced/bird-rr-config
 - title: IPv6
-  path: /docs/using-calico/advanced/ipv6
+  path: /using-calico/advanced/ipv6
 - title: Dockerless Calico
-  path: /docs/using-calico/advanced/dockerless-calico
+  path: /using-calico/advanced/dockerless-calico
 - title: Calico External Connectivity
-  path: /docs/using-calico/advanced/external-connectivity
+  path: /using-calico/advanced/external-connectivity
 - title: Troubleshooting
-  path: /docs/using-calico/troubleshooting/troubleshooting
+  path: /using-calico/troubleshooting/troubleshooting
 - title: Logging
-  path: /docs/using-calico/troubleshooting/logging
+  path: /using-calico/troubleshooting/logging
 - title: FAQ
-  path: /docs/using-calico/troubleshooting/faq
+  path: /using-calico/troubleshooting/faq

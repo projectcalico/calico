@@ -48,14 +48,9 @@ defaults:
     scope:
       path: ""
     values:
-      version: 1.4
-  -
-    scope:
-      path: "docs"
-    values:
       layout: docwithnav
       version: 1.4
-
+  
 # Markdown Processors
 rdiscount:
   extensions: []

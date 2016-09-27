@@ -53,7 +53,7 @@ You can use relative links in doc pages.  However, if you want to make absolute 
 { % include base.html % }
 ```
 
-- prepend the link or reference with `{{base}}`.  For example `<a href="{{base}}/images"` or `[link]({{base}}/docs/page)`.  The base variable is calculated for each page when served and converts absolute paths to relative (which allows us to not worry about where github pages may host the site, for example).
+- prepend the link or reference with `{{base}}`.  For example `<a href="{{base}}/images"` or `[link]({{base}}/page)`.  The base variable is calculated for each page when served and converts absolute paths to relative (which allows us to not worry about where github pages may host the site, for example).
 
 For reasons related to getting the TOCs working properly with a changing "base" URL, note you shouldn't use "index.md" pages with implicit links to the owning directory as this screws up the calculation of the relative path.
 

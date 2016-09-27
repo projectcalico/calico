@@ -2,90 +2,90 @@ bigheader: "Reference"
 abstract: "Reference Information for Calico"
 toc:
 - title: Reference
-  path: /docs/reference/reference
+  path: /reference/reference
 - title: Supported Platforms
-  path: /docs/reference/supported-platforms
+  path: /reference/supported-platforms
 - title: Calicoctl
   section:
   - title: Overview
-    path: /docs/reference/calicoctl/
+    path: /reference/calicoctl/
   - title: status
-    path: /docs/reference/calicoctl/status
+    path: /reference/calicoctl/status
   - title: node
-    path: /docs/reference/calicoctl/node
+    path: /reference/calicoctl/node
   - title: container
-    path: /docs/reference/calicoctl/container
+    path: /reference/calicoctl/container
   - title: endpoint
-    path: /docs/reference/calicoctl/endpoint
+    path: /reference/calicoctl/endpoint
   - title: profile
-    path: /docs/reference/calicoctl/profile
+    path: /reference/calicoctl/profile
   - title: pool
-    path: /docs/reference/calicoctl/pool
+    path: /reference/calicoctl/pool
   - title: bgp
-    path: /docs/reference/calicoctl/bgp
+    path: /reference/calicoctl/bgp
   - title: ipam
-    path: /docs/reference/calicoctl/ipam
+    path: /reference/calicoctl/ipam
   - title: checksystem
-    path: /docs/reference/calicoctl/checksystem
+    path: /reference/calicoctl/checksystem
   - title: diags
-    path: /docs/reference/calicoctl/diags
+    path: /reference/calicoctl/diags
   - title: version
-    path: /docs/reference/calicoctl/version
+    path: /reference/calicoctl/version
   - title: config
-    path: /docs/reference/calicoctl/config
+    path: /reference/calicoctl/config
 - title: Deploying on Public Cloud
   section:
     - title: Overview
-      path: /docs/reference/public-cloud/overview
+      path: /reference/public-cloud/overview
 - title: Deploying on Private Cloud
   section:
     - title: Overview
-      path: /docs/reference/private-cloud/
+      path: /reference/private-cloud/
     - title: Calico Over Ethernet Fabrics
-      path: /docs/reference/private-cloud/l2-interconnect-fabric
+      path: /reference/private-cloud/l2-interconnect-fabric
     - title:  IP Interconnect Fabrics in Calico
-      path: /docs/reference/private-cloud/l3-interconnect-fabric
+      path: /reference/private-cloud/l3-interconnect-fabric
     - title: Troubleshooting
-      path: /docs/reference/private-cloud/troubleshooting
+      path: /reference/private-cloud/troubleshooting
 - title: Data Model
   section:
     - title: Overview
-      path: /docs/reference/etcd/data-model
+      path: /reference/etcd/data-model
     - title: Structure
-      path: /docs/reference/etcd/structure
+      path: /reference/etcd/structure
 - title: Architecture
   section:
   - title: Introduction
-    path: /docs/reference/architecture/
+    path: /reference/architecture/
   - title: calico/node
-    path: /docs/reference/architecture/components
+    path: /reference/architecture/components
   - title: Data Path
-    path: /docs/reference/architecture/data-path
+    path: /reference/architecture/data-path
   - title: Lifecycle of a container (Calico without Docker networking)
-    path: /docs/reference/architecture/docker-container-lifecycle
+    path: /reference/architecture/docker-container-lifecycle
 - title: Calico Security Model
-  path: /docs/reference/security-model
+  path: /reference/security-model
 - title: Addressing and Connectivity Overview
-  path: /docs/reference/addressing
+  path: /reference/addressing
 - title: Advanced
   section:
   - title: Calico for CNI
-    path: /docs/reference/advanced/calico-cni
+    path: /reference/advanced/calico-cni
   - title: Calico without Docker networking (--net=none)
     section:
     - title: Overview
-      path: /docs/reference/without-docker-networking/
+      path: /reference/without-docker-networking/
     - title: Calico without Docker-Libnetwork
-      path: /docs/reference/without-docker-networking/manual-setup
+      path: /reference/without-docker-networking/manual-setup
     - title: Calico IPv6 Networking
-      path: /docs/reference/without-docker-networking/ipv6
+      path: /reference/without-docker-networking/ipv6
   - title: Calico's use of the Neutron API
-    path: /docs/reference/advanced/calico-neutron-api
+    path: /reference/advanced/calico-neutron-api
 - title: Repo Structure
-  path: /docs/reference/repo-structure
+  path: /reference/repo-structure
 - title: Contribute
-  path: /docs/reference/contribute
+  path: /reference/contribute
 - title: Involved
-  path: /docs/reference/involved
+  path: /reference/involved
 - title: License
-  path: /docs/reference/license
+  path: /reference/license

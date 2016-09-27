@@ -2,158 +2,157 @@ bigheader: "Getting Started"
 abstract: "All you need to know, to get started with Calico"
 toc:
 - title: Getting Started with Calico
-  path: /docs/getting-started/
-
+  path: /getting-started/
 - title: Kubernetes
   section:
   - title: Overview
-    path: /docs/getting-started/kubernetes/
+    path: /getting-started/kubernetes/
   - title: Installation
     section:
     - title: Overview
-      path: /docs/getting-started/kubernetes/installation/
+      path: /getting-started/kubernetes/installation/
     - title: Manual
-      path: /docs/getting-started/kubernetes/installation/manual
+      path: /getting-started/kubernetes/installation/manual
     - title: Hosted
-      path: /docs/getting-started/kubernetes/installation/hosted/
+      path: /getting-started/kubernetes/installation/hosted/
     - title: Kubeadm
-      path: /docs/getting-started/kubernetes/installation/hosted/kubeadm/
+      path: /getting-started/kubernetes/installation/hosted/kubeadm/
     - title: AWS
-      path: /docs/getting-started/kubernetes/installation/aws
+      path: /getting-started/kubernetes/installation/aws
     - title: GCE
-      path: /docs/getting-started/kubernetes/installation/gce
+      path: /getting-started/kubernetes/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /docs/getting-started/kubernetes/installation/vagrant-coreos
+      path: /getting-started/kubernetes/installation/vagrant-coreos
   - title: Tutorials
     section:
     - title: Demonstrating Calico Policy
-      path: /docs/getting-started/kubernetes/tutorials/stars-policy/
+      path: /getting-started/kubernetes/tutorials/stars-policy/
     - title: Simple Policy Demo
-      path: /docs/getting-started/kubernetes/tutorials/simple-policy
+      path: /getting-started/kubernetes/tutorials/simple-policy
   - title: Troubleshooting
-    path: /docs/getting-started/kubernetes/troubleshooting
+    path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/kubernetes/upgrade
+    path: /getting-started/kubernetes/upgrade
 
 - title: Mesos
   section:
   - title: Overview
-    path: /docs/getting-started/mesos/
+    path: /getting-started/mesos/
   - title: Installation
     section:
     - title: Prerequisites
-      path: /docs/getting-started/mesos/installation/prerequisites
+      path: /getting-started/mesos/installation/prerequisites
     - title: 'Unified Containerizer: CNI'
-      path: /docs/getting-started/mesos/installation/unified-cni
+      path: /getting-started/mesos/installation/unified-cni
     - title: Docker Containerizer
-      path: /docs/getting-started/mesos/installation/docker
+      path: /getting-started/mesos/installation/docker
     - title: DC/OS
-      path: /docs/getting-started/mesos/installation/dc-os
+      path: /getting-started/mesos/installation/dc-os
     - title: 'Unified Containerizer: net-modules [deprecated]'
-      path: /docs/getting-started/mesos/installation/unified-net-modules
+      path: /getting-started/mesos/installation/unified-net-modules
   - title: Tutorials
     section:
     - title: Docker Containerizer
-      path: /docs/getting-started/mesos/tutorials/docker
+      path: /getting-started/mesos/tutorials/docker
     - title: Unified Containerizer
-      path: /docs/getting-started/mesos/tutorials/unified-cni
+      path: /getting-started/mesos/tutorials/unified-cni
     - title: Net-modules [deprecated]
-      path: /docs/getting-started/mesos/tutorials/unified-net-modules
+      path: /getting-started/mesos/tutorials/unified-net-modules
   - title: Demos
     section:
     - title: Vagrant Quickstart - Docker Containerizer
-      path: /docs/getting-started/mesos/Vagrant
+      path: /getting-started/mesos/Vagrant
     - title: Stars Demo - Docker Containerizer
-      path: /docs/getting-started/mesos/demos/docker/
+      path: /getting-started/mesos/demos/docker/
   - title: Troubleshooting
-    path: /docs/getting-started/mesos/troubleshooting
+    path: /getting-started/mesos/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/mesos/upgrade
+    path: /getting-started/mesos/upgrade
 
 - title: Docker
   section:
   - title: Overview
-    path: /docs/getting-started/docker/
+    path: /getting-started/docker/
   - title: Installation
     section:
     - title:  Introduction
-      path: /docs/getting-started/docker/installation/
+      path: /getting-started/docker/installation/
     - title: Manual
-      path: /docs/getting-started/docker/installation/manual
+      path: /getting-started/docker/installation/manual
     - title: AWS
-      path: /docs/getting-started/docker/installation/aws
+      path: /getting-started/docker/installation/aws
     - title: DigitalOcean
-      path: /docs/getting-started/docker/installation/digital-ocean
+      path: /getting-started/docker/installation/digital-ocean
     - title: GCE
-      path: /docs/getting-started/docker/installation/gce
+      path: /getting-started/docker/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /docs/getting-started/docker/installation/vagrant-coreos/
+      path: /getting-started/docker/installation/vagrant-coreos/
     - title: 'Vagrant/VirtualBox: Ubuntu'
-      path: /docs/getting-started/docker/installation/vagrant-ubuntu/
+      path: /getting-started/docker/installation/vagrant-ubuntu/
   - title: Tutorials
     section:
     - title: Basic Walkthrough
-      path: /docs/getting-started/docker/tutorials/
+      path: /getting-started/docker/tutorials/
     - title: Configuring Policy
-      path: /docs/getting-started/docker/tutorials/advanced-policy
+      path: /getting-started/docker/tutorials/advanced-policy
     - title: Using IPv6
-      path: /docs/getting-started/docker/tutorials/ipv6
+      path: /getting-started/docker/tutorials/ipv6
     - title: Docker Swarm
-      path: /docs/getting-started/docker/tutorials/docker-swarm
+      path: /getting-started/docker/tutorials/docker-swarm
   - title: Troubleshooting
-    path: /docs/getting-started/docker/troubleshooting
+    path: /getting-started/docker/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/docker/upgrade
+    path: /getting-started/docker/upgrade
 
 - title: OpenStack
   section:
   - title: Overview
-    path: /docs/getting-started/openstack/
+    path: /getting-started/openstack/
   - title: Installation
     section:
     - title: Overview
-      path: /docs/getting-started/openstack/installation/
+      path: /getting-started/openstack/installation/
     - title: Fuel
-      path: /docs/getting-started/openstack/installation/fuel
+      path: /getting-started/openstack/installation/fuel
     - title: Juju charms
-      path: /docs/getting-started/openstack/installation/juju
+      path: /getting-started/openstack/installation/juju
     - title: Chef
-      path: /docs/getting-started/openstack/installation/chef
+      path: /getting-started/openstack/installation/chef
     - title: Red Hat Enterprise Linux 7
-      path: /docs/getting-started/openstack/installation/redhat
+      path: /getting-started/openstack/installation/redhat
     - title: Ubuntu 14.04
-      path: /docs/getting-started/openstack/installation/ubuntu
+      path: /getting-started/openstack/installation/ubuntu
   - title: Tutorials
-    path: /docs/getting-started/openstack/tutorials
+    path: /getting-started/openstack/tutorials
   - title: Upgrade
-    path: /docs/getting-started/openstack/upgrade
+    path: /getting-started/openstack/upgrade
   - title: Troubleshooting
-    path: /docs/getting-started/openstack/verification
+    path: /getting-started/openstack/verification
 
 - title: rkt
   section:
   - title: Overview
-    path: /docs/getting-started/rkt/
+    path: /getting-started/rkt/
   - title: Installation
-    path: /docs/getting-started/rkt/installation
+    path: /getting-started/rkt/installation
   - title: Tutorials
-    path: /docs/getting-started/rkt/tutorials
+    path: /getting-started/rkt/tutorials
   - title: Troubleshooting
-    path: /docs/getting-started/rkt/troubleshooting
+    path: /getting-started/rkt/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/rkt/upgrade
+    path: /getting-started/rkt/upgrade
 
 - title: Host Protection
   section:
   - title: Overview
-    path: /docs/getting-started/bare-metal/bare-metal
+    path: /getting-started/bare-metal/bare-metal
   - title: Installation
     section:
     - title: Alternative Felix Install with PyInstaller Bundle
-      path: /docs/getting-started/bare-metal/pyi-bare-metal-install
+      path: /getting-started/bare-metal/pyi-bare-metal-install
   - title: Tutorials
-    path: /docs/getting-started/bare-metal/tutorials
+    path: /getting-started/bare-metal/tutorials
   - title: Troubleshooting
-    path: /docs/getting-started/bare-metal/troubleshooting
+    path: /getting-started/bare-metal/troubleshooting
   - title: Upgrade
-    path: /docs/getting-started/bare-metal/upgrade
+    path: /getting-started/bare-metal/upgrade
