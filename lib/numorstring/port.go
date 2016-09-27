@@ -33,3 +33,10 @@ func PortFromRange(from, to int32) Port {
 		StrVal: fmt.Sprintf("%v:%v", from, to),
 	}}
 }
+
+func PortFromString(p string) Port {
+	return Port{Int32OrString{
+		Type:   NumOrStringString,
+		StrVal: p,
+	}}
+}

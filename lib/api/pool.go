@@ -17,8 +17,6 @@ package api
 import (
 	"github.com/tigera/libcalico-go/lib/api/unversioned"
 	"github.com/tigera/libcalico-go/lib/net"
-	cvalidator "github.com/tigera/libcalico-go/lib/validator"
-	"gopkg.in/go-playground/validator.v8"
 )
 
 // Pool contains the details of a Calico IP pool resource.
@@ -88,15 +86,4 @@ func NewPoolList() *PoolList {
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}
-}
-
-// Register v1 structure validators to validate cross-field dependencies in any of the
-// required structures.
-func init() {
-	cvalidator.RegisterStructValidator(validatePool, Pool{})
-}
-
-func validatePool(v *validator.Validate, structLevel *validator.StructLevel) {
-	// pool := structLevel.CurrentStruct.Interface().(Pool)
-	// TODO: Ensure that the size of the pool is valid?
 }

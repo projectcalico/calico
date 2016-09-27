@@ -19,9 +19,10 @@ import (
 	"reflect"
 	"strings"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/net"
-	"time"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string

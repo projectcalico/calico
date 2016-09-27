@@ -16,7 +16,6 @@ package numorstring
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 )
 
@@ -34,7 +33,20 @@ type Int32OrString struct {
 func (i *Int32OrString) UnmarshalJSON(b []byte) error {
 	if b[0] == '"' {
 		i.Type = NumOrStringString
-		return json.Unmarshal(b, &i.StrVal)
+		err := json.Unmarshal(b, &i.StrVal)
+		if err != nil {
+			return err
+		}
+
+		// If this string is actually a number then tweak to return
+		// a number type.
+		num, err := i.NumValue()
+		if err == nil {
+			i.Type = NumOrStringNum
+			i.NumVal = num
+		}
+
+		return nil
 	}
 	i.Type = NumOrStringNum
 	return json.Unmarshal(b, &i.NumVal)
@@ -50,21 +62,20 @@ func (i *Int32OrString) String() string {
 
 // NumValue returns the NumVal if type Int, or if
 // it is a String, will attempt a conversion to int.
-func (i *Int32OrString) NumValue() (int, error) {
+func (i *Int32OrString) NumValue() (int32, error) {
 	if i.Type == NumOrStringString {
-		return strconv.Atoi(i.StrVal)
+		num, err := strconv.ParseInt(i.StrVal, 10, 32)
+		return int32(num), err
 	}
-	return int(i.NumVal), nil
+	return i.NumVal, nil
 }
 
 // MarshalJSON implements the json.Marshaller interface.
 func (i Int32OrString) MarshalJSON() ([]byte, error) {
-	switch i.Type {
-	case NumOrStringNum:
-		return json.Marshal(i.NumVal)
-	case NumOrStringString:
+	num, err := i.NumValue()
+	if err != nil {
+		return json.Marshal(num)
+	} else {
 		return json.Marshal(i.StrVal)
-	default:
-		return []byte{}, fmt.Errorf("impossible Int32OrString.Type")
 	}
 }

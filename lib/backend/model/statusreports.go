@@ -16,10 +16,11 @@ package model
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/errors"
 	"reflect"
 	"regexp"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/tigera/libcalico-go/lib/errors"
 )
 
 var (

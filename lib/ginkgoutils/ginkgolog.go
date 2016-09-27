@@ -11,23 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-package validator_test
+package ginkgoutils
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"testing"
-
-	"github.com/tigera/libcalico-go/lib/ginkgoutils"
+	"github.com/Sirupsen/logrus"
+	"github.com/onsi/ginkgo"
 )
 
-func init() {
-	ginkgoutils.HookLogrusForGinkgo()
-}
-
-func TestValidator(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Validator Suite")
+func HookLogrusForGinkgo() {
+	logrus.SetOutput(ginkgo.GinkgoWriter)
+	logrus.SetLevel(logrus.DebugLevel)
 }

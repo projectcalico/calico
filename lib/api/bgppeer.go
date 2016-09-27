@@ -53,7 +53,7 @@ type BGPPeerMetadata struct {
 // BGPPeerSpec contains the specification for a BGPPeer resource.
 type BGPPeerSpec struct {
 	// The AS Number of the peer.
-	ASNumber int `json:"asNumber" validate:"required,asn"`
+	ASNumber int `json:"asNumber" validate:"asn"`
 }
 
 // NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current
@@ -61,7 +61,7 @@ type BGPPeerSpec struct {
 func NewBGPPeer() *BGPPeer {
 	return &BGPPeer{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind: "bgpPeer",
+			Kind:       "bgpPeer",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}
@@ -72,7 +72,7 @@ func NewBGPPeer() *BGPPeer {
 type BGPPeerList struct {
 	unversioned.TypeMetadata
 	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
-	Items    []BGPPeer    `json:"items" validate:"dive"`
+	Items    []BGPPeer                `json:"items" validate:"dive"`
 }
 
 // NewBGPPeerList creates a new (zeroed) BGPPeerList struct with the TypeMetadata initialised to the current
@@ -80,7 +80,7 @@ type BGPPeerList struct {
 func NewBGPPeerList() *BGPPeerList {
 	return &BGPPeerList{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind: "bgpPeerList",
+			Kind:       "bgpPeerList",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}

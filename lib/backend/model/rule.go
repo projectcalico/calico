@@ -26,8 +26,7 @@ import (
 type Rule struct {
 	Action string `json:"action,omitempty" validate:"backendaction"`
 
-	// BUG(smc) Validate 4 or 6
-	IPVersion *int `json:"ip_version,omitempty" validate:"omitempty"`
+	IPVersion *int `json:"ip_version,omitempty" validate:"omitempty,ipversion"`
 
 	Protocol    *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 	NotProtocol *numorstring.Protocol `json:"!protocol,omitempty" validate:"omitempty"`

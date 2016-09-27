@@ -21,7 +21,6 @@ type Resource interface {
 
 // Define available versions.
 var (
-
 	// `apiVersion` in the config yaml files
 	VersionV1      = "v1"
 	VersionCurrent = VersionV1

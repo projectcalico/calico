@@ -32,22 +32,22 @@ type HostEndpointMetadata struct {
 	unversioned.ObjectMetadata
 
 	// The name of the endpoint.
-	Name     string            `json:"name,omitempty" validate:"omitempty,name"`
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// The hostname of the compute server.
-	Hostname string            `json:"hostname,omitempty" validate:"omitempty,name"`
+	Hostname string `json:"hostname,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the host endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
 	// with “deployment=prod” so that security policy can be applied to production workloads.
-	Labels   map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
+	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.
 type HostEndpointSpec struct {
 	// The name of the linux interface to apply policy to; for example “eth0”.
 	// If "InterfaceName" is not present then at least one expected IP must be specified.
-	InterfaceName string   `json:"interfaceName,omitempty" validate:"omitempty,interface"`
+	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
 
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
 	// If "InterfaceName" is not present, Calico will look for an interface matching any
@@ -59,12 +59,12 @@ type HostEndpointSpec struct {
 	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match
 	// 	criteria.)
-	ExpectedIPs   []net.IP     `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
+	ExpectedIPs []net.IP `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
 
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the label-based security policy.
-	Profiles      []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current
@@ -72,7 +72,7 @@ type HostEndpointSpec struct {
 func NewHostEndpoint() *HostEndpoint {
 	return &HostEndpoint{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind: "hostEndpoint",
+			Kind:       "hostEndpoint",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}
@@ -82,8 +82,8 @@ func NewHostEndpoint() *HostEndpoint {
 // enumerations in the client interface.
 type HostEndpointList struct {
 	unversioned.TypeMetadata
-	Metadata unversioned.ListMetadata   `json:"metadata,omitempty"`
-	Items    []HostEndpoint `json:"items" validate:"dive"`
+	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
+	Items    []HostEndpoint           `json:"items" validate:"dive"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpointList struct with the TypeMetadata initialised to the current
@@ -91,7 +91,7 @@ type HostEndpointList struct {
 func NewHostEndpointList() *HostEndpointList {
 	return &HostEndpointList{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind: "hostEndpointList",
+			Kind:       "hostEndpointList",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}

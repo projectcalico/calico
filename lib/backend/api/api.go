@@ -16,6 +16,7 @@ package api
 
 import (
 	"fmt"
+
 	. "github.com/tigera/libcalico-go/lib/backend/model"
 )
 

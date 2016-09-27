@@ -29,3 +29,14 @@ func ProtocolFromString(p string) Protocol {
 		Int32OrString{Type: NumOrStringString, StrVal: p},
 	}
 }
+
+// SupportsPorts returns whether this protocol supports ports.  This returns true if
+// the numerical or string verion of the protocol indicates TCP (6) or UDP (17).
+func (p Protocol) SupportsPorts() bool {
+	num, err := p.NumValue()
+	if err == nil {
+		return num == 6 || num == 17
+	} else {
+		return p.StrVal == "tcp" || p.StrVal == "udp"
+	}
+}

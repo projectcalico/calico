@@ -64,7 +64,7 @@ spec:
 #### RuleSpec
 | name        | description                                | requirements | schema |
 |-------------|--------------------------------------------|----------------|--------|
-| action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny` |  | string |
+| action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
 | protocol    | Positive protocol match.  | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
 | icmp        | ICMP match criteria.     | | [ICMPSpec](#icmpspec) |
 | "!protocol" | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
