@@ -9,7 +9,7 @@ This section describes the `calicoctl ipam` commands.
 This command allows an interface into Calico's IP address management to release 
 IP addresses from endpoints and view additional information about assigned IPs.
 
-Read the [calicoctl command line interface user reference](calicoctl) for a full list of calicoctl commands.
+Read the [calicoctl command line interface user reference]({{site.url}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam' commands
 

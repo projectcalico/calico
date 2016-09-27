@@ -49,7 +49,7 @@ ETCD_AUTHORITY value to point at the correct instance of Etcd.
 > here are standard values for a non-SSL version of Etcd, but you can use this
 > template to define your SSL values if desired.  For more details about running
 > Calico with Etcd using SSL/TLS, check out the
-> [Etcd Secure Cluster guide](EtcdSecureCluster).
+> [Etcd Secure Cluster guide]({{site.url}}/reference/advanced/etcd-secure).
 
 ### Systemd Service Example
 

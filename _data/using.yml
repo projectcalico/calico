@@ -5,27 +5,25 @@ toc:
   path: /using-calico/using-calico
 
 - title: Configuration
-  path: /using-calico/configuration/configuration
+  path: /using-calico/configuration/
 - title: Advanced Network Policy
   path: /using-calico/configuration/advanced-network-policy
 - title: Calico and Systemd
   path: /using-calico/configuration/as-service
 - title: BGP Peering
   path: /using-calico/configuration/bgp
+- title: Route Reflector
+  path: /using-calico/bird-rr-config
 - title: Securing Calico
   path: /using-calico/configuration/securing-calico
-- title: Securing Etcd
-  path: /using-calico/advanced/etcd-secure
-- title: Route Reflector
-  path: /using-calico/advanced/bird-rr-config
 - title: IPv6
-  path: /using-calico/advanced/ipv6
+  path: /using-calico/ipv6
 - title: Dockerless Calico
-  path: /using-calico/advanced/dockerless-calico
+  path: /using-calico/dockerless-calico
 - title: Calico External Connectivity
-  path: /using-calico/advanced/external-connectivity
+  path: /using-calico/external-connectivity
 - title: Troubleshooting
-  path: /using-calico/troubleshooting/troubleshooting
+  path: /using-calico/troubleshooting/
 - title: Logging
   path: /using-calico/troubleshooting/logging
 - title: FAQ

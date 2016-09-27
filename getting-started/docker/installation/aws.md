@@ -10,7 +10,7 @@ model on AWS.
 
 ## 1. Getting started with AWS
 These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see
-[the CoreOS on AWS EC2 documentation](https://coreos.com/running-coreos/cloud-providers/ec2/).
+[the CoreOS on AWS EC2 documentation](https://coreos.com/os/docs/latest/booting-on-ec2.html).
 
 Download and install AWS Command Line Interface:
 

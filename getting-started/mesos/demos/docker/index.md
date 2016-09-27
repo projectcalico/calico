@@ -11,14 +11,14 @@ The goal of this demo is to provide a meaningful visualization of how Calico
 manages security between services in a Mesos cluster.
 
 For a deeper look at how to configure Calico with the Docker containerizer,
-check out [Calico's Docker Containerizer guide]({{site.url}}/getting-started/mesos/UsageGuideDockerContainerizer).
+check out [Calico's Docker Containerizer guide]({{site.url}}/getting-started/mesos/installation/docker).
 
 ## Prerequisites
 This demo requires a Mesos cluster with Calico-libnetwork running,
 along with a few additional components.
 
 To simplify the setup, we have created a Vagrant file to quickly
-deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{site.url}}/getting-started/mesos/Vagrant)
+deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{site.url}}/getting-started/mesos/vagrant)
 to get started.
 
 Your cluster should contain the following components.
@@ -244,4 +244,3 @@ http://my.marathon.app
 
 Hooray! You've configured policy with Calico to allow specific networks to accept
 traffic from other networks in your cluster!
-

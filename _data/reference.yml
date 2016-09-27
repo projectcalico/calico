@@ -81,6 +81,8 @@ toc:
       path: /reference/without-docker-networking/ipv6
   - title: Calico's use of the Neutron API
     path: /reference/advanced/calico-neutron-api
+  - title: Secure etcd
+    path: /reference/advanced/etcd-secure
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute

@@ -95,7 +95,7 @@ workloads to each other, and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, Calico has discussed how both a layer 2 (see
-[here](l2-interconnectFabric)) or a layer 3 (see [here](l3-interconnectFabric)) fabric
+[here]({{site.url}}/reference/private-cloud/l2-interconnect-fabric)) or a layer 3 (see [here]({{site.url}}/reference/private-cloud/l3-interconnect-fabric)) fabric
 could be integrated with Calico. This is one of the great strengths of
 the Calico model: it allows the infrastructure to be decoupled from what
 we show to the tenant applications and workloads.
@@ -118,7 +118,7 @@ stateless variant of RFC 6877 (464-XLAT). For more detail, see
 "How do I control policy/connectivity without virtual/physical firewalls?"
 ==========================================================================
 
-Calico provides an extremely rich security policy model, detailed [here](security-model). This model applies the policy at the first and last hop
+Calico provides an extremely rich security policy model, detailed [here]({{site.url}}/reference/security-model). This model applies the policy at the first and last hop
 of the routed traffic within the Calico network (the source and
 destination compute hosts).
 

@@ -3,14 +3,14 @@ title: Calico for CNI
 ---
 
 
-# Calico for CNI 
+# Calico for CNI
 Calico provides a CNI plugin for integration with orchestrators which use the [containernetworking/cni][containernetworking-repo] interface.
 
 ### Supported Orchestrators
 We've confirmed that the Calico CNI plugin is compatible with the following orchestrators that use CNI:
 
-- Kubernetes - [documentation]({{site.url}}/getting-started/kubernetes/calico-kubernetes-overview)
-- rkt - [documentation]({{site.url}}/getting-started/rkt/calico-rkt)
+- Kubernetes - [documentation]({{site.url}}/getting-started/kubernetes/)
+- rkt - [documentation]({{site.url}}/getting-started/rkt/)
 
 ### Supported IPAM plugins
 We've confirmed that the Calico CNI plugin is compatible with the following IPAM plugins:
@@ -20,4 +20,3 @@ We've confirmed that the Calico CNI plugin is compatible with the following IPAM
 The Calico CNI plugin should be compatible with any CNI IPAM plugin which returns an IPv4 and IPv6 address.  If you've used the Calico CNI plugin with another IPAM plugin, please do let us know so we can update this list.
 
 [containernetworking-repo]: https://github.com/containernetworking/cni
-

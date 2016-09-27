@@ -3,15 +3,15 @@ title: Lifecycle of a container (Calico without Docker networking)
 ---
 
 
-This page provides low-level details about what happens within Calico when 
+This page provides low-level details about what happens within Calico when
 Docker containers are networked with Calico when Docker is not providing any
 networking.
 
-> The main features covered in this document also apply to the situation 
+> The main features covered in this document also apply to the situation
 > when Calico is implemented as a Docker network plugin, however, in this case
 > many steps are handled automatically by Dockers networking framework and the
 > Calico plugin - this will be covered in a future document.
- 
+
 We will start with two hosts and end up with containers on each host that have
 connectivity between them.
 
@@ -29,10 +29,10 @@ user action:
 
 ## 1. Start Calico on two hosts
 
-User launches the Calico service by running 
+User launches the Calico service by running
 
     calicoctl node
-    
+
 on both hosts (Host1 and Host2).
 
 ### System response
@@ -46,18 +46,18 @@ The calicoctl utility:
    This includes:
    -  The default AS number to use for BGP
    -  Initialising the BGP node-to-node mesh option
--  Configures two default IP Pools (`192.168.0.0/16` and 
+-  Configures two default IP Pools (`192.168.0.0/16` and
   `fd80:24e2:f998:72d6::/64`)
-   
+
 Inside the calico-node container:
 
--  Four key processes are started:  `felix`, `confd` and `bird` and `bird6` 
-   (see [calico/node container components](Components) for more details on 
+-  Four key processes are started:  `felix`, `confd` and `bird` and `bird6`
+   (see [calico/node container components]({{site.url}}/reference/architecture) for more details on
    these).  Since we are not using IPv6, bird6 is not mentioned any further.
 -  `felix` is waiting for endpoint data to be configured in etcd.
 -  `confd` is monitoring the BGP data in etcd.
     -  On Host1, confd spots the new BGP address for hostB and, writes out a
-       configuration file for Bird.  This file contains the configuration 
+       configuration file for Bird.  This file contains the configuration
        necessary for a full mesh between all of the BGP peers (in this case
        it is just peering with Host2).  Once the configuration is updated,
        confd signals to BIRD to reload its configuration.
@@ -68,7 +68,7 @@ Inside the calico-node container:
    bird is largely idle.  _bird has used the default global AS number
    which was initialized by calicoctl to set up the peering._
 
-![calicoctl node](images/lifecycle/calicoctl_node.png)
+![calicoctl node]({{site.url}}/images/lifecycle/calicoctl_node.png)
 
 ## 2. Create containers on Host
 
@@ -76,20 +76,20 @@ User creates a Docker container on each host using the `docker run`  command:
 
     # Host1
     docker run --net=none --name=workload_A -tid ubuntu
-    
+
     # Host2
     docker run --net=none --name=workload_B -tid ubuntu
 
 ### System response
 
-Two ubuntu workloads have been created, one on each host.  The `--net=none` 
-flag means that the containers are not networked through Docker bridged 
-networking, so the containers are completely independent and cannot access or 
+Two ubuntu workloads have been created, one on each host.  The `--net=none`
+flag means that the containers are not networked through Docker bridged
+networking, so the containers are completely independent and cannot access or
 be accessed by outside sources.
 
 There are no changes to any component within the calico-node service.
 
-![docker run](images/lifecycle/docker_run.png)
+![docker run]({{site.url}}/images/lifecycle/docker_run.png)
 
 ## 3. Add the containers to Calico Networking
 
@@ -99,15 +99,15 @@ IPv4 IP Pool.
 
     # Host1
     calicoctl container add workload_A 192.168.1.1
-    
+
     # Host2
     calicoctl container add workload_B 192.168.1.2
 
 ### System Response
 
 The calicoctl utility:
--  Checks the IP Pools configured in etcd to confirm that the container IP 
-   value supplied is within a configured pool 
+-  Checks the IP Pools configured in etcd to confirm that the container IP
+   value supplied is within a configured pool
 -  Creates a veth pair on the host that will be used for the new endpoint (the
    container interface).  It leaves one end in the host's network namespace and
    moves the other end into the container namespace and renames the interface
@@ -115,10 +115,10 @@ The calicoctl utility:
 -  Configures the IP address of the interface in the container
 -  Sets up a default route over the interface in the container via the host IP
    (the same IP used for the BGP client)
--  Configures the endpoint information in etcd (see below for etcd data format) 
+-  Configures the endpoint information in etcd (see below for etcd data format)
 
 Felix spots new endpoint information:
--  Felix programs ACLs into the host's Linux kernel ip tables that drop all 
+-  Felix programs ACLs into the host's Linux kernel ip tables that drop all
    traffic to the container.  
 -  Felix adds routing table entries to route to the local container via
    the host-side veth for the container.
@@ -126,19 +126,19 @@ Felix spots new endpoint information:
 The BIRD client on each host:
 -  Spots that new routes have been added to the host's routing table.
 -  BIRD distributes these routes (standard BGP) to all of its BGP peers so
-   that each host can then route to containers on the other hosts.  For 
+   that each host can then route to containers on the other hosts.  For
    example, host 1 learns about the container on host 2 and programs a route
    to that container via host 2.
 
 
-![calicoctl container add](images/lifecycle/container_add.png)
+![calicoctl container add]({{site.url}}/images/lifecycle/container_add.png)
 
 ## 4. Create a Profile
 
 User creates a profile using calicoctl
 
     calicoctl profile add PROF_A_B
-    
+
 This can be run on either host.
 
 ### System Response
@@ -153,7 +153,7 @@ fine grained policy.  In this example, we are using the default configuration
 which specifies that any containers that references the profile has full
 connectivity to containers also referencing the profile.  
 
-![calicoctl profile add](images/lifecycle/profile_add.png)
+![calicoctl profile add]({{site.url}}/images/lifecycle/profile_add.png)
 
 ## 5. Update Containers to use the Profile
 
@@ -162,15 +162,15 @@ on the container endpoints.
 
     # Host1
     calicoctl container workload_A profile set PROF_A_B
-    
+
     # On Host2
     calicoctl container workload_B profile set PROF_A_B
 
 > **NOTE**: Felix deals with endpoints rather than containers, but for simple
-> containers with a single interface managed using calicoctl, we treat a 
-> container and endpoint as the same thing.  For more complicated scenarios, 
-> calicoctl provides commands for managing actual endpoints (see the 
-> [`calicoctl endpoint` reference guide]({{site.url}}/reference/calicoctl/endpoint) for usage and 
+> containers with a single interface managed using calicoctl, we treat a
+> container and endpoint as the same thing.  For more complicated scenarios,
+> calicoctl provides commands for managing actual endpoints (see the
+> [`calicoctl endpoint` reference guide]({{site.url}}/reference/calicoctl/endpoint) for usage and
 > examples).
 
 ### System Response
@@ -194,4 +194,3 @@ endpoints!  The containers are now able to send any kind of traffic to each
 other.
 
 ![calicoctl container set profile]({{site.url}}/images/lifecycle/set_profile.png)
-

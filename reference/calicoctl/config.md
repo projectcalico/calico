@@ -9,7 +9,7 @@ This sections describes the `calicoctl config` commands.
 The `calicoctl config` command allows users to view or modify
 low-level component configurations for Felix and BGP.
 
-Read the [calicoctl command line interface user reference](calicoctl) for a full list of calicoctl commands.
+Read the [calicoctl command line interface user reference]({{site.url}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl config' commands
 

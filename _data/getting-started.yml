@@ -41,7 +41,7 @@ toc:
     - title: Prerequisites
       path: /getting-started/mesos/installation/prerequisites
     - title: 'Unified Containerizer: CNI'
-      path: /getting-started/mesos/installation/unified-cni
+      path: /getting-started/mesos/installation/unified
     - title: Docker Containerizer
       path: /getting-started/mesos/installation/docker
     - title: DC/OS
@@ -51,7 +51,7 @@ toc:
     - title: Docker Containerizer
       path: /getting-started/mesos/tutorials/docker
     - title: Unified Containerizer
-      path: /getting-started/mesos/tutorials/unified-cni
+      path: /getting-started/mesos/tutorials/unified
   - title: Demos
     section:
     - title: Vagrant Quickstart - Docker Containerizer

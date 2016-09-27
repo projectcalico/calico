@@ -56,7 +56,7 @@ For Windows, see https://github.com/nickryand/vagrant-multi-putty.
 
 ## 5. Next Steps
 With your cluster deployed, you can follow the
-[Docker Containerizer Usage Guide](UsageGuideDockerContainerizer).
+[Docker Containerizer Usage Guide]({{site.url}}/getting-started/mesos/tutorials/docker).
 to learn how to launch your own Calico-networked tasks.
 
 [virtualbox]: https://www.virtualbox.org/

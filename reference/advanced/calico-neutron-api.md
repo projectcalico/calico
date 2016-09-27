@@ -5,7 +5,7 @@ title: How Calico Interprets Neutron API Calls
 When running in an OpenStack deployment, Calico receives and interprets
 certain Neutron API actions, in order to program those actions down into
 the network. However, because Calico is substantially simpler than much
-of what Neutron generally allows (see [External Connectivity](opens-external-conn)) and because it's a purely layer 3 model (see [The Calico Datapath](datapath)), not all Neutron API calls will have the same effect as they would with other backends.
+of what Neutron generally allows (see [External Connectivity]({{site.url}}/getting-started/openstack)) and because it's a purely layer 3 model (see [The Calico Datapath]({{site.url}}/reference/architecture/data-path), not all Neutron API calls will have the same effect as they would with other backends.
 
 This document will go into detail on the full range of Neutron API
 calls, and will discuss the effect they have on the network. It uses the
@@ -38,7 +38,7 @@ In Calico, because all traffic is L3 and routed, the role of Neutron
 network as L2 connectivity domain is not helpful. Therefore, in Calico,
 Neutron networks are simply containers for subnets. Best practices for
 operators configuring Neutron networks in Calico deployments can be
-found in [this document](opens-external-conn#opens-external-conn-setup).
+found in [this document]({{site.url}}/getting-started/openstack#opens-external-conn-setup).
 
 It is not useful for non-administrator tenants to create their own
 Neutron networks. Although Calico will allow non-administrator tenants
@@ -54,7 +54,7 @@ Extended Attributes: Provider Networks
 
 Neutron Provider networks are not used in Calico deployments. Setting
 provider network extended attributes will have no effect. See
-[this document](opens-external-conn) to understand why Neutron provider networks are not
+[this document]({{site.url}}/getting-started/openstack) to understand why Neutron provider networks are not
 needed.
 
 Subnets
@@ -68,7 +68,7 @@ subnets associated with it. Each Neutron subnet represents either an
 IPv4 or IPv6 block of addresses.
 
 Best practices for configuring Neutron subnets in Calico deployments can
-be found [here](opens-external-conn#opens-external-conn-setup).
+be found [here]({{site.url}}/getting-started/openstack#opens-external-conn-setup).
 
 In Calico, these roles for the Neutron subnet are preserved in their
 entirety. All properties associated with these Neutron subnets are
@@ -118,7 +118,7 @@ Quotas
 Neutron quotas function unchanged.
 
 In most deployments we recommend setting non-administrator tenant quotas
-for almost all Neutron objects to zero. For more information, see [here](opens-external-conn#opens-external-conn-setup).
+for almost all Neutron objects to zero. For more information, see [here]({{site.url}}/getting-started/openstack#opens-external-conn-setup).
 
 Security Groups
 ===============
@@ -130,7 +130,7 @@ issue.
 In Calico, security groups have all the same function. Additionally,
 they serve to provide the connectivity-limiting function that in vanilla
 OpenStack is provided by Neutron networks. For more information, see
-[this document](security-model).
+[this document]({{site.url}}/reference/security-model).
 
 All the attributes of security groups remain unchanged in Calico.
 
@@ -141,7 +141,7 @@ Layer 3 Routing: Routers and Floating IPs
 
 Layer 3 routing objects are divided into two categories: routers and
 floating IPs. Neither of these objects are supported by Calico: they
-simply aren't required. For more information, see [this document](opens-external-conn).
+simply aren't required. For more information, see [this document]({{site.url}}/getting-started/openstack).
 
 Any attempt to create these objects will fail, as Calico does not set up
 any Neutron L3 Agents.
@@ -178,7 +178,7 @@ When launching instances, remember that security groups are used to
 determine reachability, not networks. Choose networks based on whether
 you need an external or an internal IP address, and choose security
 groups based on the machines you'd like to talk to in the cloud. See
-[here](opens-external-conn-setup) for more.
+[here]({{site.url}}/getting-started/openstack-setup) for more.
 
 ### Tab: Compute -&gt; Access & Security
 
@@ -208,7 +208,7 @@ Section: Admin
 In the course of general operation administrators are not expected to
 make changes to their networking configuration. However, for initial
 network setup, this panel may be used to make changes. See
-[this document](opens-external-conn) for details on how to achieve this setup.
+[this document]({{site.url}}/getting-started/openstack) for details on how to achieve this setup.
 
 ### Tab: System Panel -&gt; Routers
 

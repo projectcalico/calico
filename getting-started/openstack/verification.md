@@ -155,7 +155,7 @@ routed between VMs that do not allow inbound traffic from each other.
 Assuming that the security group configuration is correct, confirm that
 the machines hosting each of the VMs (potentially the same machine) have
 routes to both VMs. If they do not, check out the troubleshooting
-section [above](routes-are-missing-in-the-fib).
+section [above](#routes-are-missing-in-the-fib).
 
 Web UI Shows Error Boxes Saying "Error: Unable to get quota info" and/or "Error: Unable to get volume limit"
 ------------------------------------------------------------------------------------------------------------

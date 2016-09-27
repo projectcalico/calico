@@ -6,7 +6,7 @@ This document discusses the various pieces of the Calico etcd-based
 architecture, with a focus on what specific role each component plays in
 the Calico network. This does not discuss the Calico etcd data model,
 which also acts as the primary API into the Calico network: for more on
-that, see [this document](etcd-data-model).
+that, see [this document]({{site.url}}/reference/etcd/data-model).
 
 Components
 ==========
@@ -65,7 +65,7 @@ Felix is also responsible for programming ACLs into the Linux kernel.
 These ACLs are used to ensure that only valid traffic can be sent
 between endpoints, and ensure that endpoints are not capable of
 circumventing Calico's security measures. For more on this, see
-the [security model description](security-model).
+the [security model description]({{site.url}}/reference/security-model).
 
 State Reporting
 ---------------
@@ -97,7 +97,7 @@ API Translation
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
-APIs into the Calico etcd data model (see the [data model](etcd-data-model) to allow
+APIs into the Calico etcd data model (see the [data model]({{site.url}}/reference/etcd/data-model) to allow
 Calico to perform the appropriate network programming.
 
 Some of this translation will be very simple, other bits may be more
@@ -139,7 +139,7 @@ node (which would typically be co-located with the
 state to etcd from the OpenStack database.
 
 In larger deployments the core cluster can be scaled up, as per the
-[etcd admin guide](https://coreos.com/etcd/latest/admin_guide.html#optimal-cluster-size).
+[etcd admin guide](https://coreos.com/etcd/docs/latest/admin_guide.html#optimal-cluster-size).
 
 Additionally, on each machine that hosts either a [Felix](#felix)
 or a [plugin](#orchestrator-plugin), we run an etcd proxy. This reduces load

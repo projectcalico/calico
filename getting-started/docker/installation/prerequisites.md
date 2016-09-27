@@ -99,9 +99,9 @@ the current etcd version if etcd is available.
 ## Continue with the worked example
 
 With the environment set up, you can run through the remainder of the worked
-example in the [Calico as a Docker network plugin tutorial](index).
+example in the [Calico as a Docker network plugin tutorial]({{site.url}}/getting-started/docker/installation/manual).
 
-[etcd]: https://coreos.com/etcd/latest/
+[etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/
 [docker]: https://docs.docker.com/installation/
 [daemon-config-file]: https://docs.docker.com/engine/reference/commandline/dockerd/#/daemon-configuration-file

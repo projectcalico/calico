@@ -280,7 +280,7 @@ For example:
 
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
 
-See the [IPv6 tutorial](IPv6) for a worked example.
+See the [IPv6 tutorial]({{site.url}}/getting-started/docker/tutorials/ipv6) for a worked example.
 
 
 ## Advanced network policy
@@ -289,7 +289,7 @@ If you are using both the Calico network driver and the Calico IPAM driver
 it is possible to apply advanced policy to the network.
 
 For more details, read
-[Accessing Calico policy with Calico as a network plugin](AdvancedPolicy).
+[Accessing Calico policy with Calico as a network plugin]({{site.url}}/getting-started/docker/tutorials/advanced-policy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 If you're interested in using port-forwarding, we have a working example on how

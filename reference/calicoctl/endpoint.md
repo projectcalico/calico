@@ -10,7 +10,7 @@ In Calico an endpoint is a virtual interface from a workload (container or
 virtual machine) into the Calico network, and workloads may have more than one
 endpoint. Calico applies network policy to endpoints.
 
-Read the [calicoctl command line interface user reference](calicoctl) for a full list of calicoctl commands.
+Read the [calicoctl command line interface user reference]({{site.url}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl endpoint' commands
 

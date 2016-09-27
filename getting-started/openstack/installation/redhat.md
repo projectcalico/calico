@@ -3,7 +3,7 @@ title: Red Hat Enterprise Linux 7 Packaged Install Instructions
 ---
 
 These instructions will take you through a first-time install of Calico.
-If you are upgrading an existing system, please see the [Calico on OpenStack upgrade](opens-upgrade) document instead for upgrade instructions.
+If you are upgrading an existing system, please see the [Calico on OpenStack upgrade]({{site.url}}/getting-started/openstack/upgrade) document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
 control nodes to use Calico, and upgrading compute nodes to use Calico.
@@ -241,26 +241,26 @@ isn't running the etcd database itself (both control and compute nodes).
         cd etcd-v2.0.11-linux-amd64
         mv etcd* /usr/local/bin/
     ```
-    
+
     > **WARNING**
     >
     > We've seen certificate errors downloading etcd - you may need
     > to add `--insecure` to the curl command to ignore this.
     >
-    
+
     -   Create an etcd user:
-    
+
     ```
            adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
            chmod 700 /var/lib/etcd/
     ```
 
     -   Get etcd running by providing an init file.
-    
+
         Place the following in `/etc/sysconfig/etcd`, replacing
         `<etcd_hostname>` and `<etcd_ip>` with the values you used in
         the [etcd install](#etcd-install) section.
-    
+
     ```
             ETCD_PROXY=on
             ETCD_DATA_DIR=/var/lib/etcd
@@ -268,19 +268,19 @@ isn't running the etcd database itself (both control and compute nodes).
     ```
 
         You then need to add the following file to `/usr/lib/systemd/system/etcd.service`
-    
+
     ```
             [Unit]
             Description=Etcd
             After=syslog.target network.target
-    
+
             [Service]
             User=root
             ExecStart=/usr/local/bin/etcd
             EnvironmentFile=-/etc/sysconfig/etcd
             KillMode=process
             Restart=always
-    
+
             [Install]
             WantedBy=multi-user.target    
     ```
@@ -546,7 +546,7 @@ On each compute node, perform the following steps:
     Note that you'll also need to configure your route reflector to
     allow connections from the compute node as a route reflector client.
     If you are using BIRD as a route reflector, follow the instructions
-    in [this document](bird-rr-config). If you are using another route reflector, refer
+    in [this document]({{site.url}}/using-calico/bird-rr-config). If you are using another route reflector, refer
     to the appropriate instructions to configure a client connection.
 
     If you *are* configuring a full BGP mesh you'll need to handle the
@@ -576,7 +576,7 @@ On each compute node, perform the following steps:
 
 12. Create the `/etc/calico/felix.cfg` file by copying
     `/etc/calico/felix.cfg.example`. Ordinarily the default values
-    should be used, but see [Configuration](configuration) for more details.
+    should be used, but see [Configuration]({{site.url}}/getting-started/openstack/) for more details.
 
 13. Restart the Felix service:
 

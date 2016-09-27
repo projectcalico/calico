@@ -81,7 +81,7 @@ upcoming etcd release to improve this dramatically. However, until that
 work is done, we recommend blocking access to etcd from all but the IP
 range(s) used by the compute nodes and plugin.
 
-Calico's host endpoint support (see [this document](bare-metal)) can be used to
+Calico's host endpoint support (see [this document]({{site.url}}/getting-started/bare-metal/bare-metal)) can be used to
 enforce such policy.
 
 Using TLS to encrypt and authenticate communication with etcd
@@ -111,7 +111,7 @@ the etcd cluster.
 To enable TLS support:
 
 -   Follow the instructions in the [etcd security
-    guide](https://coreos.com/etcd/latest/security.html) to create
+    guide](https://coreos.com/etcd/docs/latest/security.html) to create
     a certificate authority and enable TLS in etcd. We recommend
     enabling both client and peer authentication. This will enable
     security between Calico and etcd as well as between different nodes
@@ -170,7 +170,7 @@ To enable TLS support:
     > In systems that use `calicoctl node` (such as Docker, Kubernetes
     > and other container orchestrators), you should use the
     > `calicoctl` tool to configure TLS. See the [Etcd Secure
-    >  Cluster](../EtcdSecureCluster)
+    >  Cluster]({{site.url}}/reference/advanced/etcd-secure)
     >  document for details.
     >
 
@@ -223,4 +223,4 @@ the host running Felix. The filter rules are based entirely on ports so
 they are fairly broad.
 
 This behaviour can be configured or disabled via configuration
-parameters; see [here](configuration).
+parameters; see [here]({{site.url}}/using-calico/configuration).

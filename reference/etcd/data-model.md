@@ -12,7 +12,7 @@ data store and structure acts as Calico's primary external and internal
 API, granting developers exceptional control over what Calico does. This
 document does not describe the components that read and write this data
 to provide the connectivity that endpoints in a Calico network want: for
-more on that, see [Architecture](architecture).
+more on that, see [Architecture]({{site.url}}/reference/architecture).
 
 Objects
 =======
@@ -31,7 +31,7 @@ security profiles
 
 :   A security profile encapsulates a specific set of security rules to
     apply to an endpoint. Each endpoint can reference one or more
-    [security profiles](#security-profiles). 
+    [security profiles](#security-profiles).
 
 security policies
 
@@ -102,7 +102,7 @@ The parameters in the paths have the following meanings:
 For workload endpoints, the object stored is a JSON blob with the
 following structure:
 
-``` 
+```
 {
   "state": "active|inactive",
   "name": "<name of linux interface>",
@@ -151,7 +151,7 @@ The various properties in this object have the following meanings:
 
 `profile_ids`
 
-:   a list of identifiers of [security profiles](#tiered-security-profile) objects 
+:   a list of identifiers of [security profiles](#tiered-security-profile) objects
     that apply to this endpoint. Each profile is applied to packets in the order that
     they appear in this list.
 
@@ -251,7 +251,7 @@ The various properties in this object have the following meanings:
 
 `profile_ids`
 
-:   a list of identifiers of [security profile](#tiered-security-profile) 
+:   a list of identifiers of [security profile](#tiered-security-profile)
     objects that apply to this endpoint. Each profile is applied to packets
     in the order that they appear in this list.
 
@@ -536,7 +536,7 @@ requiring the protocol to be specified):
 `dst_selector`
 
 :   if present, contains a selector expression as described
-    in [Tiered security policy](#tiered-security-policy). Only traffic 
+    in [Tiered security policy](#tiered-security-policy). Only traffic
     that is destined for endpoints matching the selector will be matched.
 
     > **WARNING**

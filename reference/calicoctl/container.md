@@ -12,7 +12,7 @@ This sections describes the `calicoctl container` commands.
 
 These commands can be used to manage Calico networking for Docker containers.
 
-Read the [calicoctl command line interface user reference](calicoctl) for a 
+Read the [calicoctl command line interface user reference]({{site.url}}/reference/calicoctl) for a 
 full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl container' commands

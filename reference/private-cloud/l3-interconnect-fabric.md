@@ -12,7 +12,7 @@ which Calico operates [^2].
 While Calico is designed to work with any underlying interconnect fabric
 that can support IP traffic, the fabric that has the least
 considerations attached to its implementation is an Ethernet fabric as
-discussed in our earlier [technical note](l2-interconnectFabric).
+discussed in our earlier [technical note]({{site.url}}/reference/private-cloud/l2-interconnect-fabric).
 
 In most cases, the Ethernet fabric is the appropriate choice, but there
 are infrastructures where L3 (an IP fabric) has already been deployed,
@@ -392,7 +392,7 @@ team recommends the [Downward Default](#downward-default) model.
 If there are concerns about both the spine and ToR switch route table
 capacity, or there is a desire to run a very simple L2 fabric to connect
 the Calico nodes, then the user should consider the Ethernet fabric as
-detailed in [this post](l2-interconnectFabric).
+detailed in [this post]({{site.url}}/reference/private-cloud/l2-interconnect-fabric).
 
 If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
@@ -405,7 +405,7 @@ Other Options
 -------------
 
 The way the physical and logical connectivity is laid out in this note,
-and the [Ethernet fabric note](l2-interconnectFabric),
+and the [Ethernet fabric note]({{site.url}}/reference/private-cloud/l2-interconnect-fabric),
 The next hop router for a given route is always directly connected to
 the router receiving that route. This makes the need for another
 protocol to distribute the next hop routes unnecessary.
@@ -471,7 +471,7 @@ peer will not know how to reach the next hop route, and then will
 substitute its own address in the next hop field. This is often referred
 to as *next hop self*.
 
-In the Calico [Ethernet fabric](l2-interconnectFabric)
+In the Calico [Ethernet fabric]({{site.url}}/reference/private-cloud/l2-interconnect-fabric)
 model, all of the compute servers (the routers in a Calico network) are
 directly connected over one or more Ethernet network(s) and therefore
 are directly reachable. In this case, a router in the Calico network
@@ -518,7 +518,7 @@ the scope of this document.
 ### Endpoints
 
 The final consideration is the number of endpoints in a Calico network.
-In the [Ethernet fabric](l2-interconnectFabric)
+In the [Ethernet fabric]({{site.url}}/reference/private-cloud/l2-interconnect-fabric)
 case the number of endpoints is not constrained by the interconnect
 fabric, as the interconnect fabric does not *see* the actual endpoints,
 it only *sees* the actual vRouters, or compute servers. This is not the

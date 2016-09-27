@@ -21,7 +21,7 @@ underlying network fabric.
 
 Calico distinguishes workload endpoints from host endpoints by a
 configurable prefix controlled by the `InterfacePrefix` configuration
-value, (see: [Calico Configuration](configuration)). Interfaces that start with the value of
+value, (see: [Calico Configuration]({{site.url}}/using-calico/configuration)). Interfaces that start with the value of
 `InterfacePrefix` are assumed to be workload interfaces. Others are
 treated as host interfaces.
 
@@ -71,8 +71,8 @@ the most recent bugfix release. Then follow the instructions on that
 page to unpack and run the etcd binary.
 
 To create a production cluster, you should follow the guidance in the
-[etcd manual](https://coreos.com/etcd/latest/). In particular, the
-[clustering guide](https://coreos.com/etcd/latest/).
+[etcd manual](https://coreos.com/etcd/docs/latest/). In particular, the
+[clustering guide](https://coreos.com/etcd/docs/latest/).
 
 Installing Felix
 ================
@@ -213,7 +213,7 @@ Once you have such a policy in place, you may want to disable the
 > `{"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}`
 
 Calico's tiered policy data is described in detail in
-[Tiered security policy](etcd-data-model#secuirity-policy-data).
+[Tiered security policy]({{site.url}}/reference/etcd/data-model).
 
 Creating host endpoint objects
 ==============================
@@ -265,7 +265,7 @@ Where `<list of profile IDs>` is an optional list of security profiles
 to apply to the endpoint and labels contains a set of arbitrary
 key/value pairs that can be used in selector expressions. For more
 information on profile IDs, labels, and selector expressions please see
-[Calico Data Model](etcd-data-model).
+[Calico Data Model]({{site.url}}/reference/etcd/data-model).
 
 > **Warning**
 >
@@ -288,7 +288,7 @@ of the interface:
       }
     }
 
-The format of a host endpoint object is described in detail in [Calico Data Model](etcd-data-model).
+The format of a host endpoint object is described in detail in [Calico Data Model]({{site.url}}/reference/etcd/data-model).
 
 After you create host endpoint objects, Felix will start policing
 traffic to/from that interface. If you have no policy or profiles in
@@ -346,7 +346,7 @@ inbound traffic from the network to endpoints labeled with role
          }'
 
 Calico's tiered policy data is described in detail in
-[Tiered security policy](etcd-data-model#secuirity-policy-data).
+[Tiered security policy]({{site.url}}/reference/etcd/data-model).
 
 Failsafe rules
 ==============
@@ -360,7 +360,7 @@ which allows access to ssh; as well as outbound communication to ports
 2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration
-parameters described in [Calico Configuration](configuration). They can be disabled by setting each configuration value to an empty string.
+parameters described in [Calico Configuration]({{site.url}}/using-calico/configuration). They can be disabled by setting each configuration value to an empty string.
 
 > **WARNING**
 >

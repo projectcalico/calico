@@ -8,12 +8,12 @@ concerned with deploying it correctly and successfully.
 
 You can install Calico via any of the following methods:
 
--   the packaged install for Ubuntu 14.04 - see [here](ubuntu-opens-install).
--   an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see [here](redhat-opens-install).
+-   the packaged install for Ubuntu 14.04 - see [here]({{site.url}}/getting-started/openstack/installation/ubuntu).
+-   an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see [here]({{site.url}}/getting-started/openstack/installation/redhat).
 -   our integration of Calico with Mirantis Fuel 6.1 or 7.0 - see
-    [here](fuel-integration).
+    [here]({{site.url}}/getting-started/openstack/installation/fuel).
 -   our integration with Canonical's Juju Charms - see
-    [here](juju-opens-install).
+    [here]({{site.url}}/getting-started/openstack/installation/juju).
 
 > **WARNING**
 >

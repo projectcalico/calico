@@ -19,7 +19,7 @@ manage or interfere with new interfaces or related config (for example routes,
 iptables, ipsets or interface state), as that is likely to conflict with
 Calico's programming and lead to loss of endpoint connectivity.  We recommend
 using 'server' OS installs rather than 'desktop'.  (For NetworkManager in
-particular, please see also [Troubleshooting]({{site.url}}/using-calico/troubleshooting/Troubleshooting).)
+particular, please see also [Troubleshooting]({{site.url}}/using-calico/troubleshooting).)
 
 The hosts must have different hostnames.  We recommend `calico-01` and
 `calico-02`, and the tutorial will use those names.
@@ -85,6 +85,6 @@ the current etcd version if etcd is available.
 With the environment set up, you can run through the remainder of the worked
 example in the [Calico without Docker networking tutorial](CalicoWithoutDockerNetworking).
 
-[etcd]: https://coreos.com/etcd/latest/
+[etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/
 [docker]: http://www.docker.com
