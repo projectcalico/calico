@@ -67,11 +67,9 @@ toc:
   section:
   - title: Overview
     path: /getting-started/docker/
-  - title: Installation
+  - title: Environment Setup
     section:
-    - title: Prerequisites
-      path: /getting-started/docker/installation/prerequisites
-    - title:  Manual
+    - title: Manual
       path: /getting-started/docker/installation/manual
     - title: AWS
       path: /getting-started/docker/installation/aws
@@ -85,8 +83,8 @@ toc:
       path: /getting-started/docker/installation/vagrant-ubuntu/
   - title: Tutorials
     section:
-    - title: Basic Walkthrough
-      path: /getting-started/docker/tutorials/
+    - title: Installation & Basic Use
+      path: /getting-started/docker/tutorials/basic
     - title: Configuring Policy
       path: /getting-started/docker/tutorials/advanced-policy
     - title: Using IPv6
