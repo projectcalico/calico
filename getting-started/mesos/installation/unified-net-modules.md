@@ -6,8 +6,8 @@ title: Calico with the Unified Containerizer - Manual Install Guide
 Specifically, we will add the Calico plugin to perform networking
 for the Unified Containerizer.
 
->- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide](ManualInstallCalicoDockerContainerizer)
-- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each](index).
+>- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide]({{site.url}}/getting-started/mesos/installation/docker)
+- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each]({{site.url}}/getting-started/mesos/).
 
 
 ## Prerequisites
@@ -25,7 +25,7 @@ for information on how to get Docker installed.
 
 ### Etcd
 To run Calico, you'll need a running etcd store.
-See the [Cluser Preparation guide](MesosClusterPreparation#etcd)
+See the [Cluser Preparation guide]({{site.url}}/getting-started/mesos/installation/prerequisites)
 for information on how to quickly get one running.
 
 ## Install Calico-Mesos Components
@@ -82,5 +82,5 @@ systemctl status mesos-slave
 ```
 
 ## Next steps
-To test your cluster, follow our guide on [Using Calico-Mesos Unified Containerizer](UsageGuideUnifiedContainerizer) and start launching
+To test your cluster, follow our guide on [Using Calico-Mesos Unified Containerizer]({{site.url}}/getting-started/mesos/tutorials/unified-net-modules) and start launching
 tasks networked with Calico.

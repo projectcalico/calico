@@ -49,8 +49,8 @@ defaults:
       path: ""
     values:
       layout: docwithnav
-      version: 1.4
-  
+      version: 0.1
+
 # Markdown Processors
 rdiscount:
   extensions: []

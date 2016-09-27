@@ -11,7 +11,7 @@ development purposes, **this guide will cover launching only one
 of each service on a single centos7 host.** Consult the appropriate
 documentation for each service:
 
-    - [etcd clustering](https://coreos.com/etcd/latest/clustering.html)
+    - [etcd clustering](https://coreos.com/os/docs/latest/cluster-architectures.html)
     - [zookeeper multi-server setup](https://zookeeper.apache.org/doc/r3.3.2/zookeeperAdmin.html#sc_zkMulitServerSetup)
     - [mesos high-availability mode](http://mesos.apache.org/documentation/latest/high-availability/)
 

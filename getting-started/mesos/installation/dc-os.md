@@ -142,7 +142,7 @@ running, you can start launching tasks with your
 Mesos cluster.
 
 Get started by checking out our user guides for
-the [Docker Containerizer](UsageGuideDockerContainerizer)
-or the [Unified Containerizer](UsageGuideUnifiedContainerizer),
+the [Docker Containerizer]({{site.url}}/getting-started/mesos/tutorials/docker)
+or the [Unified Containerizer]({{site.url}}/getting-started/mesos/tutorials/unified-cni),
 or to learn more about the differences between the
-two containerizers, check out our [Mesos README](index).
+two containerizers, check out our [Mesos README]({{site.url}}/getting-started/mesos/).

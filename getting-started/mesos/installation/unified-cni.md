@@ -4,16 +4,16 @@ title: Installing Calico-CNI for the Unified Containerizer
 
 This guide details how to add Calico networking to a Mesos Agent with CNI enabled.
 
-- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide](./ManualInstallCalicoDockerContainerizer)
-- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each](CalicoOnMesos).
+- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide]({{site.url}}/getting-started/mesos/installation/docker)
+- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each]({{site.url}}/getting-started/mesos/).
 
 ### Prerequisites
-- **A Running Mesos v1.0.0+ cluster**  [with CNI enabled on each agent](https://github.com/apache/mesos/blob/master/cni.md#configuring-cni-networks).
+- **A Running Mesos v1.0.0+ cluster**  [with CNI enabled on each agent](http://mesos.apache.org/documentation/latest/cni/#usage).
 
   When enabling CNI in Mesos, you will have specified a `network_cni_config_dir` and `network_cni_plugins_dir`. We'll refer to these going forward as `$NETWORK_CNI_CONFIG_DIR` and `$NETWORK_CNI_PLUGINS_DIR`, respectively.
 
 - **Docker** must be installed and running on each agent in order to run `calico/node`. Follow the relevant [docker installation guide](https://docs.docker.com/engine/installation/).
-- **etcd** is used by Calico to store network configurations. See [etcd's docker standalone guide](https://coreos.com/etcd/latest/docker_guide.html) for information on how to quickly get an instance running.
+- **etcd** is used by Calico to store network configurations. See [etcd's docker standalone guide](https://coreos.com/etcd/docs/latest/docker_guide.html) for information on how to quickly get an instance running.
 
 ## Installation
 Run the following steps on **each agent**.
@@ -41,4 +41,4 @@ sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
 ```
 
 ## Next Steps
-Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide](UsageGuideUnifiedCNI).
+Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide]({{site.url}}/getting-started/mesos/tutorials/unified-cni/).

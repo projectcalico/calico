@@ -22,7 +22,7 @@ Your cluster must have the following components installed:
 
 You can start a cluster in one of the following ways:
 
-- [Vagrant](./Vagrant) - easily set up a cluster with all base requirements.
+- [Vagrant]() - easily set up a cluster with all base requirements.
 - Manual Install:
 	- [Mesos Cluster Preparation guide](MesosClusterPreparation) - install
 	  required components for a Calico-Mesos Cluster.

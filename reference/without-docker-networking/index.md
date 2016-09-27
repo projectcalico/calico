@@ -20,14 +20,14 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for using _Calico without Docker networking_.
 
-- [Vagrant install with CoreOS]({{site.url}}/getting-started/calico-with-docker/VagrantCoreOS)
-- [Vagrant install with Ubuntu]({{site.url}}/getting-started/calico-with-docker//VagrantUbuntu)
-- [Amazon Web Services (AWS)]({{site.url}}/getting-started/calico-with-docker//AWS)
-- [Google Compute Engine (GCE)]({{site.url}}/getting-started/calico-with-docker//GCE)
-- [DigitalOcean]({{site.url}}/getting-started/calico-with-docker//DigitalOcean)
+- [Vagrant install with CoreOS]({{site.url}}/getting-started/docker/installation/vagrant-coreos/)
+- [Vagrant install with Ubuntu]({{site.url}}/getting-started/docker/installation/vagrant-ubuntu)
+- [Amazon Web Services (AWS)]({{site.url}}/getting-started/docker/installation/aws)
+- [Google Compute Engine (GCE)]({{site.url}}/getting-started/docker/installation/gce)
+- [DigitalOcean]({{site.url}}/getting-started/docker/installation/digital-ocean)
 
 Altenatively, you can manually configure your hosts.
-- [Manual setup](ManualSetup)
+- [Manual setup]({{site.url}}/getting-started/docker/installation/manual)
 
 If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
@@ -178,4 +178,3 @@ For details about advanced policy options read the
 ## Make a container reachable from the Host-Interface (Internet)
 
 You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet](../../ExposePortsToInternet.md)
-
