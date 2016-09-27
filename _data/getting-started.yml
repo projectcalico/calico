@@ -46,16 +46,12 @@ toc:
       path: /getting-started/mesos/installation/docker
     - title: DC/OS
       path: /getting-started/mesos/installation/dc-os
-    - title: 'Unified Containerizer: net-modules [deprecated]'
-      path: /getting-started/mesos/installation/unified-net-modules
   - title: Tutorials
     section:
     - title: Docker Containerizer
       path: /getting-started/mesos/tutorials/docker
     - title: Unified Containerizer
       path: /getting-started/mesos/tutorials/unified-cni
-    - title: Net-modules [deprecated]
-      path: /getting-started/mesos/tutorials/unified-net-modules
   - title: Demos
     section:
     - title: Vagrant Quickstart - Docker Containerizer
