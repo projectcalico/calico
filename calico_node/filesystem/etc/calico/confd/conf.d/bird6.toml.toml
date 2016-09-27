@@ -5,4 +5,4 @@ prefix = "/calico/bgp/v1/global"
 keys = [
     "/node_mesh"
 ]
-reload_cmd = "/usr/local/bin/restart-calico-confd"
+reload_cmd = "restart-calico-confd"

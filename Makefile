@@ -1,30 +1,84 @@
-.PHONY: all binary node_image test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl create-dind help
-
-# These variables can be overridden by setting an environment variable.
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
-ST_TO_RUN?=tests/st/
-UT_TO_RUN?=tests/unit/
-# Can exclude the slower tests with "-a '!slow'"
-ST_OPTIONS?=
-HOST_CHECKOUT_DIR?=$(shell pwd)
-
-CALICOCTL_DIR=calicoctl
-CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py) calicoctl.spec
-
-NODE_CONTAINER_DIR=calico_node
-NODE_CONTAINER_FILES=$(shell find calico_node/ -type f ! -name '*.created')
-
-WHEEL_VERSION=0.0.0
-
+.PHONY: all binary calico/node test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl help clean_calico_node
 default: help
 all: test                ## Run all the tests
 binary: dist/calicoctl   ## Create the calicoctl binary
-node_image: calico_node/.calico_node.created ## Create the calico/node image
+calico/node: calico_node/.calico_node.created ## Create the calico/node image
+node_image: calico/node
 test: st ut              ## Run all the tests
 ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
+###############################################################################
+# calico/node build. Contains the following areas
+# - Populate the calico_node/filesystem
+# - Build the container itself
+###############################################################################
+NODE_CONTAINER_DIR=calico_node
+NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem/{etc,sbin} -type f)
+NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
+NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
+NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd
+
+calico-node.tar: $(NODE_CONTAINER_CREATED)
+	docker save --output $@ calico/node:latest
+
+# Build ACI (the APPC image file format) of calico/node.
+# Requires docker2aci installed on host: https://github.com/appc/docker2aci
+calico-node-latest.aci: calico-node.tar
+	docker2aci $<
+
+# Build calico/node docker image
+$(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
+	docker build -t calico/node:latest calico_node
+	touch $@
+
+$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon: $(NODE_CONTAINER_DIR)/calico-bgp-daemon/main.go
+	docker run \
+	-v `pwd`/calico_node/calico-bgp-daemon:/go/src/github.com/projectcalico/calico-bgp-daemon \
+	-v `pwd`/$(NODE_CONTAINER_DIR):/$(NODE_CONTAINER_DIR) \
+	golang:1.7 sh -c \
+	'cd /go/src/github.com/projectcalico/calico-bgp-daemon/ && go get -v . && go build -o /$@ . && chown $(shell id -u):$(shell id -g) -R /$(@D)'
+
+# Build binary from python files, e.g. startup.py or allocate-ipip-addr.py
+$(NODE_CONTAINER_BIN_DIR)/%: calico_node/%.py
+	-docker run -v `pwd`:/code --rm \
+	 calico/build:latest \
+	 sh -c 'pyinstaller -ayF --distpath $(@D) $< && chown $(shell id -u):$(shell id -g) -R $(@D)'
+
+# Get felix binaries
+$(NODE_CONTAINER_BIN_DIR)/calico-felix:
+	-docker rm -f calico-felix
+	# Latest felix binaries are stored in automated builds of calico/felix.
+	# To get them, we pull that image, then copy the binaries out to our host
+	docker create --name calico-felix calico/felix:latest
+	docker cp calico-felix:/code/. $(@D)
+
+# Get the confd binary
+$(NODE_CONTAINER_BIN_DIR)/confd:
+	curl -L https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static -o $@
+	chmod +x $@
+
+# Get bird binaries
+$(NODE_CONTAINER_BIN_DIR)/bird:
+	# This make target actually downloads the bird6 and birdcl binaries too
+	# Copy patched BIRD daemon with tunnel support.
+	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird -o $@
+	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird6 -o $(@D)/bird6
+	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl -o $(@D)/birdcl
+	chmod +x $(@D)/*
+
+clean_calico_node:
+	rm -rf $(NODE_CONTAINER_BIN_DIR)
+
+###############################################################################
+# calicoctl build
+# - Building the calicoctl binary in a container
+# - Building the calicoctl binary outside a container ("simple-binary")
+###############################################################################
+CALICOCTL_DIR=calicoctl
+CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py) calicoctl.spec
+
 dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
-	# Ignore errors on docker command. CircleCI throws an benign error
+	# Ignore errors on docker command. CircleCI throws a benign error
 	# from the use of the --rm flag
     #
     # We create two versions of calicoctl built using wheezy and jessie based
@@ -38,22 +92,41 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
 	 calico/build:latest \
 	 pyinstaller calicoctl.spec -ayF
 
-simple-binary:
+birdcl:
+	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+	chmod +x birdcl
+
+gobgp:
+	docker pull osrg/gobgp
+	docker run \
+	-v `pwd`:/code \
+	--entrypoint=sh \
+	osrg/gobgp \
+	-c 'cp /go/bin/gobgp /code'
+
+simple-binary: $(CALICOCTL_FILE) birdcl gobgp
 	pip install git+https://github.com/projectcalico/libcalico.git@master
 	pip install -r https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements.txt
 	pyinstaller calicoctl/calicoctl.py -ayF --clean
 
-calico_node/.calico_node.created: $(NODE_CONTAINER_FILES) calico_node/bin/calico-bgp-daemon
-	cd calico_node && docker build -t calico/node:latest .
-	touch calico_node/.calico_node.created
+setup-env:
+	virtualenv venv
+	venv/bin/pip install --upgrade -r calicoctl/requirements.txt
+	@echo "run\n. venv/bin/activate"
 
-calico_node/bin/calico-bgp-daemon:
-	-mkdir -p calico_node/bin/
-	docker run \
-	-v `pwd`/calico_node/calico-bgp-daemon:/go/src/github.com/projectcalico/calico-bgp-daemon \
-	-v `pwd`/calico_node/bin:/calico_node/bin \
-	golang:1.7 sh -c \
-	'cd /go/src/github.com/projectcalico/calico-bgp-daemon/ && go get -v . && go build -o /calico_node/bin/calico-bgp-daemon .'
+###############################################################################
+# Tests
+# - Support for running etcd (both securely and insecurely)
+# - Running UTs and STs
+###############################################################################
+# These variables can be overridden by setting an environment variable.
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+ST_TO_RUN?=tests/st/
+UT_TO_RUN?=tests/unit/
+
+# Can exclude the slower tests with "-a '!slow'"
+ST_OPTIONS?=
+HOST_CHECKOUT_DIR?=$(shell pwd)
 
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
@@ -77,13 +150,6 @@ certs/.certificates.created:
 
 	touch certs/.certificates.created
 
-calico-node.tar: calico_node/.calico_node.created
-	docker save --output calico-node.tar calico/node:latest
-
-# Get docker2aci from https://github.com/appc/docker2aci
-calico-node-latest.aci: calico-node.tar
-	docker2aci calico-node.tar
-
 busybox.tar:
 	docker pull busybox:latest
 	docker save --output busybox.tar busybox:latest
@@ -92,24 +158,12 @@ routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output routereflector.tar calico/routereflector:latest
 
-birdcl:
-	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
-	chmod +x birdcl
-
-gobgp:
-	docker pull osrg/gobgp
-	docker run \
-	-v `pwd`:/code \
-	--entrypoint=sh \
-	osrg/gobgp \
-	-c 'cp /go/bin/gobgp /code'
-
 ## Run the UTs in a container.
 ut:
 	docker run --rm -v `pwd`/calicoctl:/code calico/test \
 		nosetests $(UT_TO_RUN) -c nose.cfg
 	docker run --rm -v `pwd`/calico_node:/code calico/test \
-		nosetests filesystem/tests --with-coverage --cover-package=filesystem
+		nosetests tests --with-coverage --cover-package=startup
 
 ut-circle: dist/calicoctl
 	# Test this locally using CIRCLE_TEST_REPORTS=/tmp COVERALLS_REPO_TOKEN=bad make ut-circle
@@ -125,8 +179,8 @@ ut-circle: dist/calicoctl
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
-	docker run -v `pwd`/calico_node:/code calico/test \
-		nosetests filesystem/tests --with-coverage --cover-package=filesystem
+	docker run --rm -v `pwd`/calico_node:/code calico/test \
+		nosetests tests --with-coverage --cover-package=startup
 
 ## Run etcd in a container. Used by the STs and generally useful.
 run-etcd:
@@ -216,20 +270,10 @@ semaphore:
 	ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
 
 
-## Run a Docker in Docker (DinD) container.
-create-dind: docker
-	@echo "You may want to load calico-node with"
-	@echo "docker load --input /code/calico-node.tar"
-	@ID=$$(docker run --privileged -v `pwd`:/code -v `pwd`/docker:/usr/local/bin/docker \
-	-tid calico/dind:latest) ;\
-	docker exec -ti $$ID bash;\
-	docker rm -f $$ID
-
 ## Clean everything (including stray volumes)
-clean:
+clean: clean_calico_node
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
-	-rm -f docker
 	-rm -rf dist
 	-rm -rf build
 	-rm -rf certs
@@ -254,8 +298,3 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                             \
 	width=$$(grep -o '^[a-zA-Z_0-9]\+:' $(MAKEFILE_LIST) | wc -L)  \
 	$(MAKEFILE_LIST)
-
-setup-env:
-	virtualenv venv
-	venv/bin/pip install --upgrade -r calicoctl/requirements.txt
-	@echo "run\n. venv/bin/activate"

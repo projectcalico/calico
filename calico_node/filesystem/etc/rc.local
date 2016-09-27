@@ -1,4 +1,4 @@
-python startup.py || exit 1
+startup || exit 1
 
 # Source any additional environment that was added by the startup script
 . startup.env

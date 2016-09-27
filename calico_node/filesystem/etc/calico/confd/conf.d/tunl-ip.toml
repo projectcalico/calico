@@ -5,4 +5,4 @@ prefix = "/calico/v1/ipam/v4"
 keys = [
     "/pool",
 ]
-reload_cmd = "python /allocate-ipip-addr.py"
+reload_cmd = "allocate-ipip-addr"

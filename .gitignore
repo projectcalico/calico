@@ -1,5 +1,7 @@
 calico_node/filesystem/startup
 startup.spec
+allocate-ipip-addr.spec
+calico_node/filesystem/bin
 build
 dist
 venv

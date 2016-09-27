@@ -14,29 +14,23 @@
 FROM gliderlabs/alpine:3.4
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-ENV GLIBC_VERSION 2.23-r1
+# Download and install glibc for use by non-static binaries that require it.
+RUN apk --no-cache add wget ca-certificates libgcc && \
+    wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub && \
+    wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-2.23-r3.apk && \
+    wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-bin-2.23-r3.apk && \
+    apk add glibc-2.23-r3.apk glibc-bin-2.23-r3.apk && \
+    /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc/usr/lib && \
+    apk del wget ca-certificates && \
+    rm -f glibc-2.23-r3.apk glibc-bin-2.23-r3.apk
 
-# Download and install glibc for use by the startup script
-RUN apk add --update curl && \
-  curl -o glibc.apk -L "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk" && \
-  apk add --allow-untrusted glibc.apk && \
-  curl -o glibc-bin.apk -L "https://github.com/andyshinn/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-bin-${GLIBC_VERSION}.apk" && \
-  apk add --allow-untrusted glibc-bin.apk && \
-  /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc/usr/lib && \
-  echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-  apk del curl && \
-  rm -f glibc.apk glibc-bin.apk && \
-  rm -rf /var/cache/apk/*
+# Install runit from the community repository, as its not yet available in global
+RUN apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edge/community" runit
 
-ADD build.sh /build.sh
-RUN /build.sh
+# Install remaining runtime deps required for felix from the global repository
+RUN apk add --update-cache ip6tables ipset iputils iproute2 conntrack-tools
 
-ADD bin/calico-bgp-daemon /sbin/
-
-# Copy in our custom configuration files etc. We do this last to speed up
-# builds for developer, as it's the thing they're most likely to change.
-ADD start_runit /sbin/
+# Copy in the filesystem - this contains felix, bird, gobgp etc...
 COPY filesystem /
-COPY restart-calico-confd /usr/local/bin/
 
-CMD ["/sbin/start_runit"]
+CMD ["start_runit"]

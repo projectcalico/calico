@@ -18,11 +18,11 @@ from nose.tools import *
 from pycalico.datastore_datatypes import IPPool
 import unittest
 
-from filesystem import startup
+import startup
 
 class TestStartup(unittest.TestCase):
 
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     @patch("sys.exit", autospec=True)
     def test_error_if_bgp_ipv4_conflict_no_conflict(self, m_exit, m_client):
         """
@@ -33,7 +33,7 @@ class TestStartup(unittest.TestCase):
         startup.error_if_bgp_ip_conflict("10.0.0.1", "abcd::beef")
         self.assertFalse(m_exit.called)
 
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     @patch("sys.exit", autospec=True)
     def test_error_if_ip_conflict_ipv6_key_error(self, m_exit,
                                                  m_client):
@@ -46,7 +46,7 @@ class TestStartup(unittest.TestCase):
         startup.error_if_bgp_ip_conflict("10.0.0.1", "abcd::beef")
         self.assertFalse(m_exit.called)
 
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_error_when_bgp_ipv4_conflict(self, m_client):
         """
         Test that function exits when another node already uses ipv4 addr.
@@ -57,7 +57,7 @@ class TestStartup(unittest.TestCase):
         self.assertRaises(SystemExit, startup.error_if_bgp_ip_conflict,
                           "10.0.0.1", None)
 
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_error_when_bgp_ipv6_conflict(self, m_client):
         """
         Test that function exits when another node already uses ipv6 addr.
@@ -68,9 +68,9 @@ class TestStartup(unittest.TestCase):
         self.assertRaises(SystemExit, startup.error_if_bgp_ip_conflict,
                           None, "abcd::beef")
 
-    @patch("filesystem.startup._get_host_tunnel_ip", autospec=True)
-    @patch("filesystem.startup._assign_host_tunnel_addr", autospec=True)
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup._get_host_tunnel_ip", autospec=True)
+    @patch("startup._assign_host_tunnel_addr", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_ensure_host_tunnel_addr_no_ip(self, m_client,
                                            m_assign_host_tunnel_addr,
                                            m_get_tunnel_host_ip):
@@ -81,9 +81,9 @@ class TestStartup(unittest.TestCase):
         startup._ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
         assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
 
-    @patch("filesystem.startup._get_host_tunnel_ip", autospec=True)
-    @patch("filesystem.startup._assign_host_tunnel_addr", autospec=True)
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup._get_host_tunnel_ip", autospec=True)
+    @patch("startup._assign_host_tunnel_addr", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_ensure_host_tunnel_addr_non_ipip(self, m_client,
                                               m_assign_host_tunnel_addr,
                                               m_get_tunnel_host_ip):
@@ -96,9 +96,9 @@ class TestStartup(unittest.TestCase):
                      [call({IPAddress("10.0.0.1")})])
         assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
 
-    @patch("filesystem.startup._get_host_tunnel_ip", autospec=True)
-    @patch("filesystem.startup._assign_host_tunnel_addr", autospec=True)
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup._get_host_tunnel_ip", autospec=True)
+    @patch("startup._assign_host_tunnel_addr", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_ensure_host_tunnel_addr_bad_ip(self, m_client,
                                             m_assign_host_tunnel_addr,
                                             m_get_tunnel_host_ip):
@@ -109,7 +109,7 @@ class TestStartup(unittest.TestCase):
         startup._ensure_host_tunnel_addr(ipv4_pools, ipip_pools)
         assert_equal(m_assign_host_tunnel_addr.mock_calls, [call(ipip_pools)])
 
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_assign_host_tunnel_addr(self, m_client):
         startup.hostname = "host"
         # First pool full, IP allocated from second pool.
@@ -126,7 +126,7 @@ class TestStartup(unittest.TestCase):
         )
 
     @patch("sys.exit", autospec=True)
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_assign_host_tunnel_addr_none_available(self,
                                                     m_client, m_exit):
         # First pool full, IP allocated from second pool.
@@ -141,8 +141,8 @@ class TestStartup(unittest.TestCase):
                       ipip_pools)
         assert_equal(m_exit.mock_calls, [call(1)])
 
-    @patch("filesystem.startup._get_host_tunnel_ip", autospec=True)
-    @patch("filesystem.startup.client", autospec=True)
+    @patch("startup._get_host_tunnel_ip", autospec=True)
+    @patch("startup.client", autospec=True)
     def test_remove_host_tunnel_addr(self, m_client, m_get_ip):
         startup.hostname = "host"
         ip_address = IPAddress("10.0.0.1")
