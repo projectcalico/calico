@@ -110,7 +110,7 @@ func (options WorkloadEndpointStatusListOptions) defaultPathRoot() string {
 
 func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string) Key {
 	log.Infof("Get WorkloadEndpoint key from %s", ekey)
-	r := matchWorkloadEndpoint.FindAllStringSubmatch(ekey, -1)
+	r := matchWorkloadEndpointStatus.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
 		log.Infof("Didn't match regex")
 		return nil
