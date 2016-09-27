@@ -35,6 +35,7 @@ func main() {
     get            Get a resource identified by file, stdin or resource type and name.
     version        Display the version of calicoctl.
     node           Node related commands.
+    checksystem    Check for compatibility with the host system.
 
 Options:
   -h --help  Show this screen.
@@ -48,7 +49,7 @@ Options:
 	if logLevel := arguments["--log-level"]; logLevel != nil {
 		parsedLogLevel, err := log.ParseLevel(logLevel.(string))
 		if err != nil {
-			fmt.Printf("Unknown log level: %s, expected one of: \n" +
+			fmt.Printf("Unknown log level: %s, expected one of: \n"+
 				"panic, fatal, error, warn, info, debug.\n", logLevel)
 			os.Exit(1)
 		} else {

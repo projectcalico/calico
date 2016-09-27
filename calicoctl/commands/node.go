@@ -28,12 +28,14 @@ func Node(args []string) error {
 	doc := `Usage: 
 	calicoctl node status 
 	calicoctl node diags [--log-dir=<LOG_DIR>]
+	calicoctl node checksystem
 
 Options:
     --help                  Show this screen.
     status                  Shows the status of the node.
     diags                   Collects diagnostic information.
-    --log-dir=<LOG_DIR>     The directory for logs [default: /var/log/calico] 
+    --log-dir=<LOG_DIR>     The directory for logs [default: /var/log/calico]
+    checksystem             Check for compatibility with the host system.
 	
 Description:
   Node specific commands for calicoctl
@@ -56,6 +58,8 @@ Description:
 			err = node.Status()
 		} else if arguments["diags"].(bool) {
 			err = node.Diags(logDir)
+		} else if arguments["checksystem"].(bool) {
+			err = node.Checksystem()
 		} else {
 			fmt.Printf("Invalid option.\n")
 			fmt.Println(doc)
