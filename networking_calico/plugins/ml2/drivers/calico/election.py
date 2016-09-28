@@ -25,6 +25,12 @@ import random
 import re
 from urllib3 import Timeout
 
+# Fix urllib3 unvendoring error so that python-etcd can catch exceptions raised
+# by urllib3.  See networking_calico/agent/__init__.py for the full
+# explanation.
+import sys
+if sys.modules["urllib3"].exceptions is not sys.modules["urllib3.exceptions"]:
+    sys.modules["urllib3"].exceptions = sys.modules["urllib3.exceptions"]
 
 try:  # Icehouse, Juno
     from neutron.openstack.common import log
@@ -101,6 +107,14 @@ class Elector(object):
         except BaseException as e:
             # Election greenlet failed. Log but reraise.
             LOG.exception("Election greenlet exiting: %r", e)
+            # Kill (and so restart) the Neutron server as a whole.
+            # This is an unhandled situation, so we don't know what
+            # the situation is - but it is certain that the Calico
+            # driver does not function correctly once this leader
+            # election thread has died.  Hence our best option is to
+            # restart the whole Neutron server.
+            sys.exit(1)
+            # Just in case we're still here - reraise the exception.
             raise
         finally:
             self._attempt_step_down()
