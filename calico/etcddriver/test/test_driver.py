@@ -30,7 +30,7 @@ from unittest import TestCase
 import sys
 
 import time
-from mock import Mock, patch, call
+from mock import Mock, patch, call, mock_open
 from urllib3 import HTTPConnectionPool
 from urllib3.exceptions import TimeoutError, HTTPError, ReadTimeoutError
 from calico.datamodel_v1 import READY_KEY, CONFIG_DIR, VERSION_DIR
@@ -960,16 +960,14 @@ class TestDriver(TestCase):
                           m_resp, Mock())
 
     def test_parse_snapshot_bad_data(self):
-        m_resp = Mock()
+        m_resp = mock_open(read_data="[]")()
         m_resp.status = 200
-        m_resp.read.return_value = "[]"
         self.assertRaises(ResyncRequired, driver.parse_snapshot,
                           m_resp, Mock())
 
     def test_parse_snapshot_garbage_data(self):
-        m_resp = Mock()
+        m_resp = mock_open(read_data="garbage")()
         m_resp.status = 200
-        m_resp.read.return_value = "garbage"
         self.assertRaises(ResyncRequired, driver.parse_snapshot,
                           m_resp, Mock())
 
