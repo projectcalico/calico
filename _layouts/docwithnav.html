@@ -1,5 +1,15 @@
-{% for thistoc in site.data.globals.tocs %}{% if foundTOC %}{% break %}{% else %}{% assign tree = site.data[thistoc].toc %}{% include tocsearch.html %}{% endif %}{% endfor %}
-{% for override in site.data.overrides.overrides %}{% if page.path contains override.path %}{% assign notitle = "true" %}{% endif %}{% endfor %}
+<!-- Set this_pages_navbar to current page  -->
+{% for navbars in site.data[page.version].navbars %}
+	{% for navbar in navbars %}
+		{% if page.url contains navbar.path %}
+			{% assign this_pages_navbar = navbar %}
+		{% endif %}
+	{% endfor %}
+{% endfor %}
+
+<!-- for backwards compatability: -->
+{% assign tree = this_pages_navbar.toc %}
+
 <!Doctype html>
 <html id="docs" class="{{site.data[foundTOC].bigheader}}">
 
@@ -15,11 +25,11 @@
 	<div style="clear: both;"></div>
 	<div id="vendorStrip" class="dark-text">
 		<ul>
-			<li><a href="{{base}}/" {% if site.data[foundTOC].bigheader == "Introduction" %}class="YAH"{% endif %}>INTRODUCTION</a></li>
-			<li><a href="{{base}}/getting-started" {% if site.data[foundTOC].bigheader == "Getting Started" %}class="YAH"{% endif %}>GETTING STARTED</a></li>
-			<li><a href="{{base}}/using-calico/using-calico" {% if site.data[foundTOC].bigheader == "Usage" %}class="YAH"{% endif %}>USAGE</a></li>
-			<li><a href="{{base}}/reference/supported-platforms" {% if site.data[foundTOC].bigheader == "Reference" %}class="YAH"{% endif %}>REFERENCE</a></li>
-			<li><a href="{{base}}/other-releases" {% if site.data[foundTOC].bigheader == "Other Releases" %}class="YAH"{% endif %}>PREVIOUS DOCS</a></li>
+			{% for navbars in site.data[page.version].navbars %}
+				{% for navbar in navbars %}
+					<li><a href="{{base}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
+				{% endfor %}
+			{% endfor %}
 		</ul>
 	</div>
 </section>
@@ -27,7 +37,7 @@
 <section id="encyclopedia">
 	<div id="docsToc">
         <div class="pi-accordion">
-        {% assign tree = site.data[foundTOC].toc %}{% include tree.html %}
+				{% include sidebar.html sidebar=this_pages_navbar.toc %}
         </div> <!-- /pi-accordion -->
 		<button class="push-menu-close-button" onclick="kub.toggleToc()"></button>
 	</div> <!-- /docsToc -->

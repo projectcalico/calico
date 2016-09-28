@@ -1,6 +1,0 @@
-main:
-    - { url: '/getting_started', text: 'Getting Started' }
-    - { url: '/using_calico', text: 'Using Calico' }
-    - { url: '/', text: 'Why Calico' }
-    - { url: '/reference/supported-platforms', text: 'Reference' }
-    - { url: '/community', text: 'Support'}

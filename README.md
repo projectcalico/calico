@@ -66,4 +66,4 @@ At least some of this work is based on the basic Jekyll theme from scotch.io - s
 - Links to documents in yml sidebar:
   - Must end in `/` if its an `index.md` directory file.
   - Must not end in `/` if its a regular named doc.
-- All hyperlinks in documents should be the *full URL*. Do not use relative links ever. i.e. `{{site.url}}/getting-started/...`. This makes it much easier to fix broken links when files are moved.
+- All hyperlinks in documents should be the *full URL*. Do not use relative links ever. i.e. `{{site.url}}/{{page.version}}/getting-started/...`. This makes it much easier to fix broken links when files are moved.

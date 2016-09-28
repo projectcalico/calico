@@ -1,1 +1,0 @@
-{% for item in tree %}{% if item.section %}{% assign tree = item.section %}{% include tocsearch.html %}{% else %}{% if item.path == page.url %}{% assign foundTOC = thistoc %}{% assign title = item.title %}{% break %}{% endif %}{% endif %}{% endfor %}

@@ -1,0 +1,17 @@
+
+{% for item in include.sidebar %}
+  {% if item.section %}
+    <div class="item" data-title="{{ item.title }}">
+      <div class="container">{% include sidebar.html sidebar=item.section %}
+      </div>
+    </div>
+  {% else %}
+    {% assign prefix = item.path | slice: 0, 4 %}
+    {% if prefix == "http" %}
+      {% assign target=" target='_blank'" %}
+    {% else %}
+      {% assign target="" %}
+    {% endif %}
+    <a class="item" data-title="{{ item.title }}" href="/{{base}}{{ page.version }}{{ item.path }}"{{ target }}></a>
+  {% endif %}
+{% endfor %}

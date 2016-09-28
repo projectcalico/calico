@@ -11,9 +11,9 @@
         <link rel="stylesheet" href="{{site.url}}/css/sweetalert.css">
 	<script src="{{site.url}}/js/jquery-2.2.0.min.js"></script>
         <script src="{{site.url}}/js/jquery-ui.min.js"></script>
-	<script src="{{site.url}}/js/script.js"></script>
+				<script src="{{site.url}}/js/script.js"></script>
         <script src="{{site.url}}/js/sweetalert.min.js"></script>
-	<title>Calico - {{ title }}</title>
+	<title>Calico - {{ title | json }}</title>
 </head>
 <body>
 <header>
@@ -30,7 +30,7 @@
 				<p>Learn about Project Calico.</p>
 			</div>
 			<div class="nav-box">
-				<h3><a href="{{site.url}}/"></a></h3>
+				<h3><a href="{{site.url}}/{{page.version}}/"></a></h3>
 				<p>Learn more about Calico in our documentation.</p>
 			</div>
 			<div class="nav-box">
