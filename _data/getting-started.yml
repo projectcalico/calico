@@ -9,18 +9,18 @@ toc:
     path: /getting-started/kubernetes/
   - title: Installation
     section:
-    - title: Manual
+    - title: Introduction
       path: /getting-started/kubernetes/installation/
     - title: Hosted
       path: /getting-started/kubernetes/installation/hosted/
-    - title: Kubeadm
-      path: /getting-started/kubernetes/installation/hosted/kubeadm/
     - title: AWS
       path: /getting-started/kubernetes/installation/aws
     - title: GCE
       path: /getting-started/kubernetes/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/kubernetes/installation/vagrant-coreos
+    - title: Kubeadm
+      path: /getting-started/kubernetes/installation/hosted/kubeadm/
   - title: Tutorials
     section:
     - title: Demonstrating Calico Policy
