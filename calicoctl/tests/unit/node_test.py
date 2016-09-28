@@ -214,18 +214,18 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = True
-        libnetwork = False
+        libnetwork_enabled = False
         no_pull = False
         backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork, no_pull, backend)
+                        libnetwork_enabled, no_pull, backend)
 
         # Assert
         m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
-                                               libnetwork=libnetwork,
+                                               libnetwork=libnetwork_enabled,
                                                check_docker=False,
                                                check_modules=True
                                                )
@@ -284,14 +284,21 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork = False
+        libnetwork_enabled = False
         # Don't pull the node image
         no_pull = True
         backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork, no_pull, backend)
+                        libnetwork_enabled, no_pull, backend)
+
+        # This is to convert libnetwork_enabled (bool) into a string to pass it as an ENV var value
+        if libnetwork_enabled:
+            libnetwork_flag_str = "true"
+        else:
+            libnetwork_flag_str = "false"
+                    
 
         # Set up variables used in assertion statements
         environment = [
@@ -301,6 +308,7 @@ class TestNode(unittest.TestCase):
             "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
+            "CALICO_LIBNETWORK_ENABLED=%s" % libnetwork_flag_str,
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % ETCD_SCHEME_DEFAULT,
         ]
@@ -325,7 +333,7 @@ class TestNode(unittest.TestCase):
         # Assert
         m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
-                                               libnetwork=libnetwork,
+                                               libnetwork=libnetwork_enabled,
                                                check_docker=True,
                                                check_modules=True)
         m_setup_ip.assert_called_once_with()
@@ -396,7 +404,8 @@ class TestNode(unittest.TestCase):
                ETCD_SCHEME_ENV: "https",
                ETCD_CA_CERT_FILE_ENV: etcd_ca_path,
                ETCD_CERT_FILE_ENV: etcd_cert_path,
-               ETCD_KEY_FILE_ENV: etcd_key_path}
+               ETCD_KEY_FILE_ENV: etcd_key_path,
+               "CALICO_LIBNETWORK_ENABLED": "true"}
         def m_getenv(env_var, *args, **kwargs):
             return env.get(env_var)
         m_os_getenv.side_effect = m_getenv
@@ -413,13 +422,19 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork_image = 'libnetwork_image'
+        libnetwork_enabled = True
         no_pull = False
         backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull, backend)
+                        libnetwork_enabled, no_pull, backend)
+
+        # This is to convert libnetwork_enabled (bool) into a string to pass it as an ENV var value
+        if libnetwork_enabled:
+            libnetwork_flag_str = "true"
+        else:
+            libnetwork_flag_str = "false"
 
         # Set up variables used in assertion statements
         environment_node = [
@@ -429,6 +444,7 @@ class TestNode(unittest.TestCase):
             "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
+            "CALICO_LIBNETWORK_ENABLED=%s" % libnetwork_flag_str,
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
             "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
@@ -436,15 +452,7 @@ class TestNode(unittest.TestCase):
             "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
             "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,
         ]
-        environment_libnetwork = [
-            "HOSTNAME=%s" % node.hostname,
-            "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
-            "ETCD_SCHEME=%s" % "https",
-            "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
-            "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,
-            "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
-            "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,
-        ]
+
         binds_node = {
             log_dir: {"bind": "/var/log/calico", "ro": False},
             "/var/run/calico": {"bind": "/var/run/calico", "ro": False},
@@ -453,58 +461,47 @@ class TestNode(unittest.TestCase):
             etcd_cert_path: {"bind": ETCD_CERT_NODE_FILE, "ro": True},
             etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True}
         }
-        binds_libnetwork = {
-            etcd_ca_path: {"bind": ETCD_CA_CERT_NODE_FILE, "ro": True},
-            etcd_cert_path: {"bind": ETCD_CERT_NODE_FILE, "ro": True},
-            etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True},
-            docker_plugin: {'bind': docker_plugin, 'ro': False}
-        }
+
+        # Additional rw bind (/run/docker/plugins) necessory when libnetwork is enabled 
+        if libnetwork_enabled:
+            binds_node[docker_plugin] = {'bind': docker_plugin, 'ro': False}
+
         volumes_node = ['/var/log/calico', "/var/run/calico", "/lib/modules",
                         ETCD_CA_CERT_NODE_FILE, ETCD_KEY_NODE_FILE,
                         ETCD_CERT_NODE_FILE]
-        volumes_libnetwork= [docker_plugin, ETCD_CA_CERT_NODE_FILE,
-                             ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
+
+        # Add /run/docker/plugins to the list of volumes to be mounted when libnetwork is enabled
+        if libnetwork_enabled:
+            volumes_node.append(docker_plugin)
+
 
         # Assert
         m_os_makedirs.assert_has_calls([call(log_dir), call("/var/run/calico")])
         m_check_system.assert_called_once_with(quit_if_error=False,
-                                               libnetwork=libnetwork_image,
+                                               libnetwork=libnetwork_enabled,
                                                check_docker=True,
                                                check_modules=True)
         m_setup_ip.assert_called_once_with()
 
         m_docker_client.remove_container.assert_has_calls([
-            call('calico-node', force=True),
-            call('calico-libnetwork', force=True)
+            call('calico-node', force=True)
         ])
         m_docker_client.create_host_config.assert_has_calls([
             call(privileged=True,
                  restart_policy={"Name": "always"},
                  network_mode="host",
-                 binds=binds_node),
-            call(privileged=True,
-                 restart_policy={"Name": "always"},
-                 network_mode="host",
-                 binds=binds_libnetwork)
+                 binds=binds_node)
         ])
-        m_find_or_pull_node_image.assert_has_calls([call('node_image'),
-                                                    call('libnetwork_image')])
+        m_find_or_pull_node_image.assert_has_calls([call('node_image')])
         m_docker_client.create_container.assert_has_calls([
             call(node_image,
                  name='calico-node',
                  detach=True,
                  environment=environment_node,
                  host_config='host_config',
-                 volumes=volumes_node),
-            call(libnetwork_image,
-                 name='calico-libnetwork',
-                 detach=True,
-                 environment=environment_libnetwork,
-                 host_config='host_config',
-                 volumes=volumes_libnetwork)
+                 volumes=volumes_node)
         ])
-        m_docker_client.start.assert_has_calls([call(container1),
-                                                call(container2)])
+        m_docker_client.start.assert_has_calls([call(container1)])
         m_attach_and_stream.assert_called_once_with(container1, False)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
@@ -548,7 +545,8 @@ class TestNode(unittest.TestCase):
                ETCD_AUTHORITY_ENV: ETCD_AUTHORITY_DEFAULT,
                ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
-               ETCD_CA_CERT_FILE_ENV: etcd_ca_path}
+               ETCD_CA_CERT_FILE_ENV: etcd_ca_path,
+               "CALICO_LIBNETWORK_ENABLED": "true"}
         def m_getenv(env_var, *args, **kwargs):
             return env.get(env_var)
         m_os_getenv.side_effect = m_getenv
@@ -562,13 +560,19 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork_image = 'libnetwork_image'
+        libnetwork_enabled = True
         no_pull = False
         backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull, backend)
+                        libnetwork_enabled, no_pull, backend)
+
+        # This is to convert libnetwork_enabled (bool) into a string to pass it as an ENV var value
+        if libnetwork_enabled:
+            libnetwork_flag_str = "true"
+        else:
+            libnetwork_flag_str = "false"
 
         # Set up variables used in assertion statements
         environment_node = [
@@ -578,71 +582,58 @@ class TestNode(unittest.TestCase):
             "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
+            "CALICO_LIBNETWORK_ENABLED=%s" % libnetwork_flag_str,
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
             "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
             "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,
         ]
-        environment_libnetwork = [
-            "HOSTNAME=%s" % node.hostname,
-            "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
-            "ETCD_SCHEME=%s" % "https",
-            "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
-            "ETCD_CA_CERT_FILE=%s" % ETCD_CA_CERT_NODE_FILE,
-        ]
+
         binds_node = {
             log_dir: {"bind": "/var/log/calico", "ro": False},
             "/var/run/calico": {"bind": "/var/run/calico", "ro": False},
             "/lib/modules": {"bind": "/lib/modules", "ro": False},
             etcd_ca_path: {"bind": ETCD_CA_CERT_NODE_FILE, "ro": True},
         }
-        binds_libnetwork = {
-            etcd_ca_path: {"bind": ETCD_CA_CERT_NODE_FILE, "ro": True},
-            docker_plugin: {'bind': docker_plugin, 'ro': False}
-        }
+
+        # Additional rw bind (/run/docker/plugins) necessory when libnetwork is enabled 
+        if libnetwork_enabled:
+            binds_node[docker_plugin] = {'bind': docker_plugin, 'ro': False}
+
         volumes_node = ['/var/log/calico', "/var/run/calico", "/lib/modules",
                         ETCD_CA_CERT_NODE_FILE]
-        volumes_libnetwork= [docker_plugin, ETCD_CA_CERT_NODE_FILE]
+
+        # Add /run/docker/plugins to the list of volumes to be mounted when libnetwork is enabled
+        if libnetwork_enabled:
+            volumes_node.append(docker_plugin)
+
 
         # Assert
         m_check_system.assert_called_once_with(quit_if_error=False,
-                                               libnetwork=libnetwork_image,
+                                               libnetwork=libnetwork_enabled,
                                                check_docker=True,
                                                check_modules=True)
         m_setup_ip.assert_called_once_with()
 
         m_docker_client.remove_container.assert_has_calls([
-            call('calico-node', force=True),
-            call('calico-libnetwork', force=True)
+            call('calico-node', force=True)
         ])
         m_docker_client.create_host_config.assert_has_calls([
             call(privileged=True,
                  restart_policy={"Name": "always"},
                  network_mode="host",
-                 binds=binds_node),
-            call(privileged=True,
-                 restart_policy={"Name": "always"},
-                 network_mode="host",
-                 binds=binds_libnetwork)
+                 binds=binds_node)
         ])
-        m_find_or_pull_node_image.assert_has_calls([call('node_image'),
-                                                    call('libnetwork_image')])
-        m_docker_client.create_container.assert_has_calls([
+        m_find_or_pull_node_image.assert_has_calls([call('node_image')])
+        m_docker_client.create_container.assert_has_calls(
             call(node_image,
                  name='calico-node',
                  detach=True,
                  environment=environment_node,
                  host_config='host_config',
-                 volumes=volumes_node),
-            call(libnetwork_image,
-                 name='calico-libnetwork',
-                 detach=True,
-                 environment=environment_libnetwork,
-                 host_config='host_config',
-                 volumes=volumes_libnetwork)
-        ])
-        m_docker_client.start.assert_has_calls([call(container1),
-                                                call(container2)])
+                 volumes=volumes_node)
+        )
+        m_docker_client.start.assert_has_calls([call(container1)])
         m_attach_and_stream.assert_called_once_with(container1, False)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
@@ -688,7 +679,8 @@ class TestNode(unittest.TestCase):
                ETCD_ENDPOINTS_ENV: etcd_endpoints,
                ETCD_SCHEME_ENV: "https",
                ETCD_CERT_FILE_ENV: etcd_cert_path,
-               ETCD_KEY_FILE_ENV: etcd_key_path}
+               ETCD_KEY_FILE_ENV: etcd_key_path,
+               "CALICO_LIBNETWORK_ENABLED": "true"}
         def m_getenv(env_var, *args, **kwargs):
             return env.get(env_var)
         m_os_getenv.side_effect = m_getenv
@@ -702,13 +694,19 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork_image = 'libnetwork_image'
+        libnetwork_enabled = True
         no_pull = False
         backend = "bird"
 
         # Call method under test
         node.node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                        libnetwork_image, no_pull, backend)
+                        libnetwork_enabled, no_pull, backend)
+
+        # This is to convert libnetwork_enabled (bool) into a string to pass it as an ENV var value
+        if libnetwork_enabled:
+            libnetwork_flag_str = "true"
+        else:
+            libnetwork_flag_str = "false"
 
         # Set up variables used in assertion statements
         environment_node = [
@@ -718,20 +716,14 @@ class TestNode(unittest.TestCase):
             "CALICO_NETWORKING_BACKEND=%s" % backend,
             "AS=",
             "NO_DEFAULT_POOLS=",
+            "CALICO_LIBNETWORK_ENABLED=%s" % libnetwork_flag_str,
             "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
             "ETCD_SCHEME=%s" % "https",
             "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
             "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
             "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,
         ]
-        environment_libnetwork = [
-            "HOSTNAME=%s" % node.hostname,
-            "ETCD_AUTHORITY=%s" % ETCD_AUTHORITY_DEFAULT,  # etcd host:port
-            "ETCD_SCHEME=%s" % "https",
-            "ETCD_ENDPOINTS=%s" % etcd_endpoints,  # https://host:port
-            "ETCD_KEY_FILE=%s" % ETCD_KEY_NODE_FILE,
-            "ETCD_CERT_FILE=%s" % ETCD_CERT_NODE_FILE,
-        ]
+
         binds_node = {
             log_dir: {"bind": "/var/log/calico", "ro": False},
             "/var/run/calico": {"bind": "/var/run/calico", "ro": False},
@@ -739,54 +731,44 @@ class TestNode(unittest.TestCase):
             etcd_cert_path: {"bind": ETCD_CERT_NODE_FILE, "ro": True},
             etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True}
         }
-        binds_libnetwork = {
-            etcd_cert_path: {"bind": ETCD_CERT_NODE_FILE, "ro": True},
-            etcd_key_path: {"bind": ETCD_KEY_NODE_FILE, "ro": True},
-            docker_plugin: {'bind': docker_plugin, 'ro': False}
-        }
+
+        # Additional rw bind (/run/docker/plugins) necessory when libnetwork is enabled 
+        if libnetwork_enabled:
+            binds_node[docker_plugin] = {'bind': docker_plugin, 'ro': False}
+
         volumes_node = ['/var/log/calico', "/var/run/calico", "/lib/modules",
                         ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
-        volumes_libnetwork= [docker_plugin, ETCD_KEY_NODE_FILE, ETCD_CERT_NODE_FILE]
+
+        # Add /run/docker/plugins to the list of volumes to be mounted when libnetwork is enabled
+        if libnetwork_enabled:
+            volumes_node.append(docker_plugin)
 
         # Assert
         m_check_system.assert_called_once_with(quit_if_error=False,
-                                               libnetwork=libnetwork_image,
+                                               libnetwork=libnetwork_enabled,
                                                check_docker=True,
                                                check_modules=True)
         m_setup_ip.assert_called_once_with()
 
         m_docker_client.remove_container.assert_has_calls([
-            call('calico-node', force=True),
-            call('calico-libnetwork', force=True)
+            call('calico-node', force=True)
         ])
         m_docker_client.create_host_config.assert_has_calls([
             call(privileged=True,
                  restart_policy={"Name": "always"},
                  network_mode="host",
-                 binds=binds_node),
-            call(privileged=True,
-                 restart_policy={"Name": "always"},
-                 network_mode="host",
-                 binds=binds_libnetwork)
+                 binds=binds_node)
         ])
-        m_find_or_pull_node_image.assert_has_calls([call('node_image'),
-                                                    call('libnetwork_image')])
+        m_find_or_pull_node_image.assert_has_calls([call('node_image')])
         m_docker_client.create_container.assert_has_calls([
             call(node_image,
                  name='calico-node',
                  detach=True,
                  environment=environment_node,
                  host_config='host_config',
-                 volumes=volumes_node),
-            call(libnetwork_image,
-                 name='calico-libnetwork',
-                 detach=True,
-                 environment=environment_libnetwork,
-                 host_config='host_config',
-                 volumes=volumes_libnetwork)
+                 volumes=volumes_node)
         ])
-        m_docker_client.start.assert_has_calls([call(container1),
-                                                call(container2)])
+        m_docker_client.start.assert_has_calls([call(container1)])
         m_attach_and_stream.assert_called_once_with(container1, False)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
@@ -822,14 +804,14 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork = False
+        libnetwork_enabled = False
         no_pull = False
         backend = "bird"
 
         # Testing expecting APIError exception
         self.assertRaises(APIError, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull, backend)
+                          libnetwork_enabled, no_pull, backend)
 
     @patch('calico_ctl.node.ipv6_enabled', autospec=True, return_value=True)
     @patch('os.path.exists', autospec=True)
@@ -856,7 +838,7 @@ class TestNode(unittest.TestCase):
         ip6 = 'aa:bb::zz'
         as_num = ''
         detach = False
-        libnetwork = False
+        libnetwork_enabled = False
         no_pull = False
         backend = "bird"
 
@@ -864,7 +846,7 @@ class TestNode(unittest.TestCase):
         m_check_system.return_value = [True, True, False]
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull, backend)
+                          libnetwork_enabled, no_pull, backend)
 
         # Return False for Docker status (failure)
         m_check_system.return_value = [True, False, True]
@@ -872,7 +854,7 @@ class TestNode(unittest.TestCase):
         # Testing expecting APIError exception
         self.assertRaises(SystemExit, node.node_start,
                           node_image, runtime, log_dir, ip, ip6, as_num, detach,
-                          libnetwork, no_pull, backend)
+                          libnetwork_enabled, no_pull, backend)
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -889,8 +871,7 @@ class TestNode(unittest.TestCase):
 
         # Assert
         m_client.get_endpoints.assert_called_once_with(hostname=node.hostname)
-        m_docker_client.stop.assert_has_calls([call('calico-node'),
-                                               call('calico-libnetwork')])
+        m_docker_client.stop.assert_has_calls([call('calico-node')])
 
     @patch('calico_ctl.node.client', autospec=True)
     @patch('calico_ctl.node.docker_client', autospec=True)
@@ -954,7 +935,7 @@ class TestNode(unittest.TestCase):
                                                       IPAddress("aa:bb::cc")})
         m_client.remove_ipam_host.assert_called_once_with(node.hostname)
         m_veth.assert_has_calls([call("vethname1"), call("vethname2")])
-        m_cont_running.assert_has_calls([call("calico-node"), call("calico-libnetwork")])
+        m_cont_running.assert_has_calls([call("calico-node")])
         m_client.remove_host.assert_called_once_with(node.hostname)
 
     @patch('calico_ctl.node.remove_veth', autospec=True)
