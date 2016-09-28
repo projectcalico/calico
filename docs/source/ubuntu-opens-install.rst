@@ -414,8 +414,10 @@ perform the following steps:
          kill -9 $PID
          end script
 
-9. Create the ``/etc/calico/felix.cfg`` file by taking a copy of the
-   supplied sample config at ``/etc/calico/felix.cfg.example``.
+9. Optionally, create the ``/etc/calico/felix.cfg`` file by copying
+   ``/etc/calico/felix.cfg.example``.  See :doc:`configuration` for what can be
+   configured here; if Felix's defaults are all good for you, you don't need a
+   ``/etc/calico/felix.cfg`` file.
 
 10. Restart the Felix service with ``service calico-felix restart``.
 

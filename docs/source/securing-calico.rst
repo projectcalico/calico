@@ -183,8 +183,8 @@ To enable TLS support:
               certificate.  The certificate encodes the IP address or
               hostname of the owner.
 
-  * Modify Felix's configuration file ``/etc/calico/felix.cfg`` to tell it
-    where to find the key and certificates::
+  * Modify (or create) Felix's configuration file ``/etc/calico/felix.cfg`` to
+    tell it where to find the key and certificates::
 
       [global]
       EtcdScheme = https

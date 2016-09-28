@@ -529,9 +529,10 @@ On each compute node, perform the following steps:
          chkconfig bird on
          chkconfig bird6 on
 
-12. Create the ``/etc/calico/felix.cfg`` file by copying
-    ``/etc/calico/felix.cfg.example``.  Ordinarily the default values should be
-    used, but see :doc:`configuration` for more details.
+12. Optionally, create the ``/etc/calico/felix.cfg`` file by copying
+    ``/etc/calico/felix.cfg.example``.  See :doc:`configuration` for what can
+    be configured here; if Felix's defaults are all good for you, you don't
+    need a ``/etc/calico/felix.cfg`` file.
 
 13. Restart the Felix service:
 
