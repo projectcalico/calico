@@ -21,16 +21,18 @@ type Resource interface {
 
 // Define available versions.
 var (
-	Version_1_0 = "1.0"
-	VersionCurrent = Version_1_0
+
+	// `apiVersion` in the config yaml files
+	VersionV1      = "v1"
+	VersionCurrent = VersionV1
 )
 
 // ---- Type metadata ----
 //
 // All resource and resource lists embed a TypeMetadata as an anonymous field.
 type TypeMetadata struct {
-	Kind       string  `json:"kind" validate:"required"`
-	APIVersion string  `json:"apiVersion" validate:"required"`
+	Kind       string `json:"kind" validate:"required"`
+	APIVersion string `json:"apiVersion" validate:"required"`
 }
 
 func (md TypeMetadata) GetTypeMetadata() TypeMetadata {
