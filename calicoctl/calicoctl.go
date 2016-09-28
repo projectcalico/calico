@@ -35,7 +35,6 @@ func main() {
     get            Get a resource identified by file, stdin or resource type and name.
     version        Display the version of calicoctl.
     node           Node related commands.
-    checksystem    Check for compatibility with the host system.
 
 Options:
   -h --help  Show this screen.

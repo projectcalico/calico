@@ -38,7 +38,7 @@ var requiredModules = []string{"xt_set", "ip6_tables"}
 // Checksystem checks host system for compatible versions
 func Checksystem() error {
 	doc := `Usage: 
-    calicoctl checksystem
+    calicoctl node checksystem
 
 Description:
     Check for compatibility with the host system
