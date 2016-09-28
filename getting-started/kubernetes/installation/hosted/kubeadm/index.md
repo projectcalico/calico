@@ -1,8 +1,8 @@
 ---
 title: Install for Kubeadm
 ---
-This directory contains a single packaged manifest for installing Calico on kubeadm managed Kubernetes clusters.  It is a specific case of the
-more general manifests provided [here](../README.md)
+[This directory](https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/installation/hosted/kubeadm) contains a single packaged manifest for installing Calico on kubeadm managed Kubernetes clusters.  It is a specific case of the
+more general manifests provided [here](https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/installation/hosted)
 
 To install this manifest, make sure you've created a cluster using the kubeadm tool.
 
@@ -14,7 +14,7 @@ kubectl create -f calico.yaml
 
 ## About
 
-This manifest deploys the standard Calico components described [here](../README.md#how-it-works) as well as a dedicated Calico etcd
+This manifest deploys the standard Calico components described [here]({{site.url}}/getting-started/kubernetes/installation/hosted) as well as a dedicated Calico etcd
 node on the Kubernetes master.  Note that in a production cluster, it is recommended you use a secure, replicated etcd cluster.
 
 ### Requirements / Limitations

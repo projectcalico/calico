@@ -1,12 +1,12 @@
 ---
 title: Calico Kubernetes Hosted Install
 ---
-This directory contains Kubernetes manifests to deploy Calico on top of Kubernetes.
+[This directory](https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/installation/hosted) contains Kubernetes manifests to deploy Calico on top of Kubernetes.
 
-- `calico-configmap.yaml`: Contains a Kubernetes ConfigMap for configuring the deployment.  Make sure the values
+- [`calico-configmap.yaml`](https://github.com/tigera/calico-docs/blob/master/getting-started/kubernetes/installation/hosted/calico-configmap.yaml): Contains a Kubernetes ConfigMap for configuring the deployment.  Make sure the values
 in this file match your desired configuration.
 
-- `calico-hosted.yaml`: Contains a Kubernetes DaemonSet which installs and runs Calico on each Kubernetes master and node.
+- [`calico-hosted.yaml`](https://github.com/tigera/calico-docs/blob/master/getting-started/kubernetes/installation/hosted/calico-hosted.yaml): Contains a Kubernetes DaemonSet which installs and runs Calico on each Kubernetes master and node.
 This also includes a ReplicaSet which deploys the Calico Kubernetes policy controller.
 
 Note that the Kubernetes hosted installation method is experimental and subject to change.

@@ -1,7 +1,7 @@
 ---
 title: Quickstart with Docker-Compose - Calico for Mesos CNI
 ---
-This directory includes files for running a docker-compose demo of Calico for Mesos CNI.
+[This directory](https://github.com/tigera/calico-docs/tree/master/getting-started/mesos/demos/cni) includes files for running a docker-compose demo of Calico for Mesos CNI.
 
 Once running, this demo will run `etcd`, `mesos-master`, `marathon`, and `zookeeper`
 in their own separate containers. It will also run a `agent` with its own

@@ -155,7 +155,7 @@ Since this method uses Kubernetes to install Calico, you must first deploy a sta
 with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the
 [desired configuration for installing Calico](#configuring-kubernetes).
 
-Then download [manifests/calico-configmap.yaml](https://raw.githubusercontent.com/projectcalico/calico-containers/master/cni/kubernetes/manifests/calico-configmap.yaml) and [manifests/calico-hosted.yaml](https://raw.githubusercontent.com/projectcalico/calico-containers/master/cni/kubernetes/manifests/calico-hosted.yaml).  
+Then download [manifests/calico-configmap.yaml]({{site.url}}/getting-started/kubernetes/installation/hosted/calico-configmap.yaml) and [manifests/calico-hosted.yaml]({{site.url}}/getting-started/kubernetes/installation/hosted/calico-hosted.yaml).  
 These manifests include the Kubernetes objects to install Calico.
 
 ```
