@@ -11,23 +11,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-package validator_test
+package testutils
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	gonet "net"
 
-	"testing"
-
-	"github.com/tigera/libcalico-go/lib/testutils"
+	"github.com/tigera/libcalico-go/lib/net"
 )
 
-func init() {
-	testutils.HookLogrusForGinkgo()
+func MustParseCIDR(c string) net.IPNet {
+	_, cidr, err := gonet.ParseCIDR(c)
+	if err != nil {
+		panic(err)
+	}
+	return net.IPNet{*cidr}
 }
 
-func TestValidator(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Validator Suite")
+func MustParseIP(i string) net.IP {
+	var ip net.IP
+	err := ip.UnmarshalText([]byte(i))
+	if err != nil {
+		panic(err)
+	}
+	return ip
 }

@@ -85,7 +85,7 @@ func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type Policy struct {
-	Order         *float32 `json:"order,omitempty" validate:"omitempty"`
+	Order         *float64 `json:"order,omitempty" validate:"omitempty"`
 	InboundRules  []Rule   `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules []Rule   `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 	Selector      string   `json:"selector" validate:"selector"`

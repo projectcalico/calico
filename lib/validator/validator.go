@@ -33,6 +33,7 @@ var validate *validator.Validate
 
 var (
 	nameRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]+$")
+	interfaceRegex     = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
 	labelRegex         = regexp.MustCompile("^[a-zA-Z_./-][a-zA-Z0-9_./-]*$")
 	actionRegex        = regexp.MustCompile("^(allow|deny|log)$")
 	backendActionRegex = regexp.MustCompile("^(allow|deny|log|)$")
@@ -46,12 +47,12 @@ func init() {
 
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
+	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("backendaction", validateBackendAction)
 	registerFieldValidator("name", validateName)
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("tag", validateTag)
 	registerFieldValidator("labels", validateLabels)
-	registerFieldValidator("interface", validateInterface)
 	registerFieldValidator("asn", validateASNum)
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
@@ -93,6 +94,12 @@ func validateAction(v *validator.Validate, topStruct reflect.Value, currentStruc
 	s := field.String()
 	log.Debugf("Validate action: %s", s)
 	return actionRegex.MatchString(s)
+}
+
+func validateInterface(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate interface: %s", s)
+	return interfaceRegex.MatchString(s)
 }
 
 func validateBackendAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
@@ -141,12 +148,6 @@ func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStruc
 		}
 	}
 	return true
-}
-
-func validateInterface(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	b := []byte(field.String())
-	log.Debugf("Validate interface: %s", b)
-	return nameRegex.Match(b)
 }
 
 func validateASNum(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
@@ -228,33 +229,29 @@ func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.
 	w := structLevel.CurrentStruct.Interface().(api.WorkloadEndpointSpec)
 
 	// The configured networks only support /32 (for IPv4) and /128 (for IPv6) at present.
-	if w.IPNetworks != nil {
-		for _, netw := range w.IPNetworks {
-			ones, bits := netw.Mask.Size()
-			if bits != ones {
-				structLevel.ReportError(reflect.ValueOf(w.IPNetworks), "IPNetworks", "ipNetworks", "IP network contains multiple addresses")
-			}
+	for _, netw := range w.IPNetworks {
+		ones, bits := netw.Mask.Size()
+		if bits != ones {
+			structLevel.ReportError(reflect.ValueOf(w.IPNetworks), "IPNetworks", "ipNetworks", "IP network contains multiple addresses")
 		}
 	}
 
 	// If NATs have been specified, then they should each be within the configured networks of
 	// the endpoint.
-	if w.IPNATs != nil {
+	if len(w.IPNATs) > 0 {
+		// Check each NAT to ensure it is within the configured networks.  If any
+		// are not then exit without further checks.
 		valid := false
-		if w.IPNetworks != nil {
-			// Check each NAT to ensure it is within the configured networks.  If any
-			// are not then exit without further checks.
-			for _, nat := range w.IPNATs {
-				valid = false
-				for _, nw := range w.IPNetworks {
-					if nw.Contains(nat.InternalIP.IP) {
-						valid = true
-						break
-					}
-				}
-				if !valid {
+		for _, nat := range w.IPNATs {
+			valid = false
+			for _, nw := range w.IPNetworks {
+				if nw.Contains(nat.InternalIP.IP) {
+					valid = true
 					break
 				}
+			}
+			if !valid {
+				break
 			}
 		}
 
@@ -268,7 +265,7 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	h := structLevel.CurrentStruct.Interface().(api.HostEndpointSpec)
 
 	// A host endpoint must have an interface name and/or some expected IPs specified.
-	if h.InterfaceName == "" && (h.ExpectedIPs == nil || len(h.ExpectedIPs) == 0) {
+	if h.InterfaceName == "" && len(h.ExpectedIPs) == 0 {
 		structLevel.ReportError(reflect.ValueOf(h.InterfaceName), "InterfaceName", "InterfaceName", "no interface or expected IPs have been specified")
 	}
 }
@@ -302,17 +299,17 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
 	// been specified.
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
-		if rule.Source.Ports != nil && len(rule.Source.Ports) > 0 {
+		if len(rule.Source.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports), "source.Ports", "source ports", "port is not valid for protocol")
 		}
-		if rule.Source.NotPorts != nil && len(rule.Source.NotPorts) > 0 {
+		if len(rule.Source.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts), "Source.NotPorts", "source !ports", "port is not valid for protocol")
 		}
 
-		if rule.Destination.Ports != nil && len(rule.Destination.Ports) > 0 {
+		if len(rule.Destination.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports), "Destination.Ports", "destination ports", "port is not valid for protocol")
 		}
-		if rule.Destination.NotPorts != nil && len(rule.Destination.NotPorts) > 0 {
+		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts), "Destination.NotPorts", "destination !ports", "port is not valid for protocol")
 		}
 	}

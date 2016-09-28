@@ -15,8 +15,6 @@
 package validator_test
 
 import (
-	gonet "net"
-
 	. "github.com/tigera/libcalico-go/lib/validator"
 
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -26,13 +24,10 @@ import (
 	"github.com/tigera/libcalico-go/lib/net"
 	"github.com/tigera/libcalico-go/lib/numorstring"
 	"github.com/tigera/libcalico-go/lib/scope"
+	"github.com/tigera/libcalico-go/lib/testutils"
 )
 
 func init() {
-	var cidr *gonet.IPNet
-	var ipv4_1, ipv4_2, ipv6_1, ipv6_2 net.IP
-	var netv4_1, netv4_2, netv4_3, netv4_4, netv4_5, netv6_1, netv6_2, netv6_3, netv6_4 net.IPNet
-
 	// We need some pointers to ints, so just define as values here.
 	var V0 = 0
 	var V4 = 4
@@ -43,33 +38,24 @@ func init() {
 	var V256 = 256
 
 	// Set up some values we use in various tests.
-	_ = ipv4_1.UnmarshalText([]byte("1.2.3.4"))
-	_ = ipv4_2.UnmarshalText([]byte("100.200.0.0"))
-	_ = ipv6_1.UnmarshalText([]byte("aabb:aabb::ffff"))
-	_ = ipv6_2.UnmarshalText([]byte("aabb::abcd"))
-	_, cidr, _ = gonet.ParseCIDR("1.2.3.4/32")
-	netv4_1 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("1.2.0.0/32")
-	netv4_2 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("1.2.3.0/26")
-	netv4_3 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("1.2.3.4/10")
-	netv4_4 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("1.2.3.4/27")
-	netv4_5 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("aabb:aabb::ffff/128")
-	netv6_1 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("aabb:aabb::/128")
-	netv6_2 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("aabb:aabb::ffff/122")
-	netv6_3 = net.IPNet{*cidr}
-	_, cidr, _ = gonet.ParseCIDR("aabb:aabb::ffff/10")
-	netv6_4 = net.IPNet{*cidr}
+	ipv4_1 := testutils.MustParseIP("1.2.3.4")
+	ipv4_2 := testutils.MustParseIP("100.200.0.0")
+	ipv6_1 := testutils.MustParseIP("aabb:aabb::ffff")
+	ipv6_2 := testutils.MustParseIP("aabb::abcd")
+	netv4_1 := testutils.MustParseCIDR("1.2.3.4/32")
+	netv4_2 := testutils.MustParseCIDR("1.2.0.0/32")
+	netv4_3 := testutils.MustParseCIDR("1.2.3.0/26")
+	netv4_4 := testutils.MustParseCIDR("1.2.3.4/10")
+	netv4_5 := testutils.MustParseCIDR("1.2.3.4/27")
+	netv6_1 := testutils.MustParseCIDR("aabb:aabb::ffff/128")
+	netv6_2 := testutils.MustParseCIDR("aabb:aabb::/128")
+	netv6_3 := testutils.MustParseCIDR("aabb:aabb::ffff/122")
+	netv6_4 := testutils.MustParseCIDR("aabb:aabb::ffff/10")
 
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
-	var _ = DescribeTable("Validator",
+	DescribeTable("Validator",
 		func(input interface{}, valid bool) {
 			if valid {
 				Expect(Validate(input)).To(BeNil(),
@@ -130,9 +116,12 @@ func init() {
 		Entry("should reject label value with !", api.HostEndpointMetadata{Labels: map[string]string{"rank": "gold!"}}, false),
 
 		// (API) Interface.
-		Entry("should accept a valid interface", api.ProfileSpec{Tags: []string{".My-valid-tag_190"}}, true),
-		Entry("should reject & in an interface", api.ProfileSpec{Tags: []string{"my&nvalid-ifce"}}, false),
-		Entry("should reject # in an interface", api.ProfileSpec{Tags: []string{"my-invalid-ifce#"}}, false),
+		Entry("should accept a valid interface", api.WorkloadEndpointSpec{InterfaceName: "ValidIntface0-9"}, true),
+		Entry("should reject an interface that is too long", api.WorkloadEndpointSpec{InterfaceName: "interfaceTooLong"}, false),
+		Entry("should reject & in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid&Intface"}, false),
+		Entry("should reject # in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid#Intface"}, false),
+		Entry("should reject . in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid.Intface"}, false),
+		Entry("should reject : in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
 		// (API) AS number.
 		Entry("should accept the min value AS number", api.BGPPeerSpec{ASNumber: 0}, true),
@@ -204,50 +193,63 @@ func init() {
 			}, false),
 
 		// (API) WorkloadEndpointSpec
-		Entry("should accept workload endpoint with no config", api.WorkloadEndpointSpec{}, true),
+		Entry("should accept workload endpoint with interface only",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali012371237",
+			}, true),
 		Entry("should accept workload endpoint with networks and no nats",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv4_1, netv4_2, netv6_1, netv6_2},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv4_1, netv4_2, netv6_1, netv6_2},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 NAT covered by network",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv4_1},
-				IPNATs:     []api.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv4_1},
+				IPNATs:        []api.IPNAT{{InternalIP: ipv4_1, ExternalIP: ipv4_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv6 NAT covered by network",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv6_1},
-				IPNATs:     []api.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv6_1},
+				IPNATs:        []api.IPNAT{{InternalIP: ipv6_1, ExternalIP: ipv6_2}},
 			}, true),
 		Entry("should accept workload endpoint with IPv4 and IPv6 NAT covered by network",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv4_1, netv6_1},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv4_1, netv6_1},
 				IPNATs: []api.IPNAT{
 					{InternalIP: ipv4_1, ExternalIP: ipv4_2},
 					{InternalIP: ipv6_1, ExternalIP: ipv6_2},
 				},
 			}, true),
+		Entry("should reject workload endpoint with no config", api.WorkloadEndpointSpec{}, false),
 		Entry("should reject workload endpoint with IPv4 networks that contain >1 address",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv4_3},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv4_3},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 networks that contain >1 address",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv6_3},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv6_3},
 			}, false),
 		Entry("should reject workload endpoint with nats and no networks",
 			api.WorkloadEndpointSpec{
-				IPNATs: []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				InterfaceName: "cali012371237",
+				IPNATs:        []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv4 NAT not covered by network",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv4_1},
-				IPNATs:     []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv4_1},
+				IPNATs:        []api.IPNAT{{InternalIP: ipv4_2, ExternalIP: ipv4_1}},
 			}, false),
 		Entry("should reject workload endpoint with IPv6 NAT not covered by network",
 			api.WorkloadEndpointSpec{
-				IPNetworks: []net.IPNet{netv6_1},
-				IPNATs:     []api.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
+				InterfaceName: "cali012371237",
+				IPNetworks:    []net.IPNet{netv6_1},
+				IPNATs:        []api.IPNAT{{InternalIP: ipv6_2, ExternalIP: ipv6_1}},
 			}, false),
 
 		// (API) HostEndpointSpec

@@ -57,7 +57,7 @@ type PolicySpec struct {
 	// order.  If the order is omitted, it may be considered to be "infinite" - i.e. the
 	// policy will be applied last.  Policies with identical order will be applied in
 	// alphanumerical order based on the Policy "Name".
-	Order *float32 `json:"order,omitempty"`
+	Order *float64 `json:"order,omitempty"`
 
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
