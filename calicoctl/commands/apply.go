@@ -25,7 +25,7 @@ func Apply(args []string) error {
 	doc := EtcdIntro + `Apply a resource by filename or stdin.  This creates a resource
 if it does not exist, and replaces a resource if it does exist.
 
-Valid resource kinds are bgpPeer, hostEndpoint, policy, pool, and profile.
+Valid resource kinds are bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and  profile.
 
 Usage:
   calicoctl apply --filename=<FILENAME> [--config=<CONFIG>]

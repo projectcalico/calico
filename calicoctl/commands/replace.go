@@ -25,7 +25,7 @@ import (
 func Replace(args []string) error {
 	doc := EtcdIntro + `Replace a resource by filename or stdin.
 
-Valid resource kinds are bgpPeer, hostEndpoint, policy, pool, and profile.
+Valid resource kinds are bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and profile.
 
 If replacing an existing resource, the complete resource spec must be provided. This can be obtained by
 $ calicoctl get -o yaml <TYPE> <NAME>
