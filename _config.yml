@@ -57,11 +57,6 @@ defaults:
       version: master
   -
     scope:
-      path: "releases"
-    values:
-      version: "master"
-  -
-    scope:
       path: "0.1"
     values:
       version: 0.1

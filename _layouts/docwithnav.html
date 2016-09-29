@@ -1,25 +1,22 @@
+<!-- Set this_pages_navbar  -->
+{% for navbars_hashmap in site.data[page.version].navbars %}
+	{% assign navbar = navbars_hashmap[1] %}
+	{% if page.url contains navbar.path %}
+		{% assign this_pages_navbar = navbar %}
+	{% endif %}
+{% endfor %}
+
+<!Doctype html>
+<html id="docs" class="{{this_pages_navbar.bigheader}}">
+
+{% include head-header.html %}
+
 <script type="text/javascript">
 function redirect(version) {
 	window.location = "{{site.url}}/" + version
 }
 </script>
 
-<!-- Set this_pages_navbar  -->
-{% for navbars in site.data[page.version].navbars %}
-	{% for navbar in navbars %}
-		{% if page.url contains navbar.path %}
-			{% assign this_pages_navbar = navbar %}
-		{% endif %}
-	{% endfor %}
-{% endfor %}
-
-<!-- for backwards compatability: -->
-{% assign tree = this_pages_navbar.toc %}
-
-<!Doctype html>
-<html id="docs" class="{{this_pages_navbar.bigheader}}">
-
-{% include head-header.html %}
 
 <!--  HERO  -->
 <section id="hero" class="dark-text">
@@ -29,21 +26,21 @@ function redirect(version) {
 			For now, we'll just print the current version -->
 	<div style="float: right;">
 		<h5>Viewing Version: <b>{{ page.version }}</b></h5>
-		<div class="dropdown">
-			View other release:
+		<span>View other release:</span>
+		<span class="dropdown">
 			<select onchange="redirect(this.value)">
 				<option value="0.1" {% if page.version == "0.1" %}{{"selected"}}{% endif %}>0.1</option>
 				<option value="master" {% if page.version == "master" %}{{"selected"}}{% endif %}>master</option>
 			</select>
+		</span>
 		</div>
 	</div>
 	<div style="clear: both;"></div>
 	<div id="vendorStrip" class="dark-text">
 		<ul>
-			{% for navbars in site.data[page.version].navbars %}
-				{% for navbar in navbars %}
-					<li><a href="{{base}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
-				{% endfor %}
+			{% for navbar_hashmap in site.data[page.version].navbars %}
+				{% assign navbar = navbar_hashmap[1] %}
+				<li><a href="{{base}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
 			{% endfor %}
 		</ul>
 	</div>
