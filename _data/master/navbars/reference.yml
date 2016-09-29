@@ -1,8 +1,9 @@
 bigheader: "Reference"
 abstract: "Reference Information for Calico"
+path: /reference/
 toc:
 - title: Reference
-  path: /reference/reference
+  path: /reference/
 - title: Supported Platforms
   path: /reference/supported-platforms
 - title: Calicoctl
