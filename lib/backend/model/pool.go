@@ -48,6 +48,10 @@ func (key PoolKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key PoolKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key PoolKey) valueType() reflect.Type {
 	return typePool
 }

@@ -41,6 +41,10 @@ func (key IPAMHostKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key IPAMHostKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key IPAMHostKey) valueType() reflect.Type {
 	return typeIPAMHost
 }

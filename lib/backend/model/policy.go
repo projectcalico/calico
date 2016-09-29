@@ -48,6 +48,10 @@ func (key PolicyKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key PolicyKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key PolicyKey) valueType() reflect.Type {
 	return typePolicy
 }

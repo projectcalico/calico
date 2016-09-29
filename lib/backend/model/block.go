@@ -47,6 +47,10 @@ func (key BlockKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key BlockKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key BlockKey) valueType() reflect.Type {
 	return typeBlock
 }

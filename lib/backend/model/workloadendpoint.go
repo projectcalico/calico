@@ -48,28 +48,30 @@ func (key WorkloadEndpointKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	if key.EndpointID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "endpointID"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
 func (key WorkloadEndpointKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
+}
+
+func (key WorkloadEndpointKey) defaultDeleteParentPaths() ([]string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
 	if key.OrchestratorID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
 	if key.WorkloadID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
-	if key.EndpointID == "" {
-		return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/",
-			key.Hostname, key.OrchestratorID, key.WorkloadID), nil
-	}
-	return fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
+	workload := fmt.Sprintf("/calico/v1/host/%s/workload/%s/%s",
+		key.Hostname, key.OrchestratorID, key.WorkloadID)
+	endpoints := workload + "/endpoint"
+	return []string{endpoints, workload}, nil
 }
 
 func (key WorkloadEndpointKey) valueType() reflect.Type {
@@ -146,11 +148,25 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 
 type WorkloadEndpoint struct {
 	// TODO: Validation for workload endpoint.
-	State      string            `json:"state"`
-	Name       string            `json:"name"`
-	Mac        net.MAC           `json:"mac"`
-	ProfileIDs []string          `json:"profile_ids"`
-	IPv4Nets   []net.IPNet       `json:"ipv4_nets"`
-	IPv6Nets   []net.IPNet       `json:"ipv6_nets"`
-	Labels     map[string]string `json:"labels"`
+	State       string            `json:"state"`
+	Name        string            `json:"name"`
+	Mac         net.MAC           `json:"mac"`
+	ProfileIDs  []string          `json:"profile_ids"`
+	IPv4Nets    []net.IPNet       `json:"ipv4_nets"`
+	IPv6Nets    []net.IPNet       `json:"ipv6_nets"`
+	IPv4NAT     []IPNAT           `json:"ipv4_nat"`
+	IPv6NAT     []IPNAT           `json:"ipv6_nat"`
+	Labels      map[string]string `json:"labels"`
+	IPv4Gateway net.IP            `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv6Gateway net.IP            `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
+}
+
+// IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
+type IPNAT struct {
+	// The internal IP address which must be associated with the owning endpoint via the
+	// configured IPNetworks for the endpoint.
+	IntIP net.IP `json:"int_ip" validate:"ip"`
+
+	// The external IP address.
+	ExtIP net.IP `json:"ext_ip" validate:"ip"`
 }

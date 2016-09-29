@@ -80,6 +80,11 @@ type Client interface {
 	// revision is still current.
 	//
 	// Some keys are hierarchical, and Delete is a recursive operation.
+	//
+	// Any objects that were implicitly added by a Create operation should
+	// also be removed when deleting the objects that implicitly created it.
+	// For example, deleting the last WorkloadEndpoint in a Workload will
+	// also remove the Workload.
 	Delete(object *model.KVPair) error
 
 	// Get returns the object identified by the given key as a KVPair with

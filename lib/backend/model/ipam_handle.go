@@ -44,6 +44,10 @@ func (key IPAMHandleKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key IPAMHandleKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key IPAMHandleKey) valueType() reflect.Type {
 	return typeHandle
 }

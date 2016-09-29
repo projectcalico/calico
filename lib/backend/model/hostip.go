@@ -39,6 +39,10 @@ func (key HostIPKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key HostIPKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key HostIPKey) valueType() reflect.Type {
 	return typeHostIp
 }

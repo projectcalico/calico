@@ -43,6 +43,10 @@ func (key ReadyFlagKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key ReadyFlagKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key ReadyFlagKey) valueType() reflect.Type {
 	return typeReadyFlag
 }
@@ -62,6 +66,10 @@ func (key GlobalConfigKey) defaultDeletePath() (string, error) {
 	}
 	e := fmt.Sprintf("/calico/v1/config/%s", key.Name)
 	return e, nil
+}
+
+func (key GlobalConfigKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
 }
 
 func (key GlobalConfigKey) valueType() reflect.Type {
@@ -119,6 +127,10 @@ func (key HostConfigKey) defaultDeletePath() (string, error) {
 	}
 	e := fmt.Sprintf("/calico/v1/host/%s/config/%s", key.Hostname, key.Name)
 	return e, nil
+}
+
+func (key HostConfigKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
 }
 
 func (key HostConfigKey) valueType() reflect.Type {

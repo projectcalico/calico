@@ -34,7 +34,8 @@ type ActiveStatusReportKey struct {
 }
 
 func (key ActiveStatusReportKey) defaultPath() (string, error) {
-	return key.defaultDeletePath()
+	k, err := key.defaultDeletePath()
+	return k + "/metadata", err
 }
 
 func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
@@ -43,6 +44,10 @@ func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
 	}
 	e := fmt.Sprintf("/calico/felix/v1/host/%s/status", key.Hostname)
 	return e, nil
+}
+
+func (key ActiveStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
 }
 
 func (key ActiveStatusReportKey) valueType() reflect.Type {
@@ -86,7 +91,8 @@ type LastStatusReportKey struct {
 }
 
 func (key LastStatusReportKey) defaultPath() (string, error) {
-	return key.defaultDeletePath()
+	k, err := key.defaultDeletePath()
+	return k + "/metadata", err
 }
 
 func (key LastStatusReportKey) defaultDeletePath() (string, error) {
@@ -95,6 +101,10 @@ func (key LastStatusReportKey) defaultDeletePath() (string, error) {
 	}
 	e := fmt.Sprintf("/calico/felix/v1/host/%s/last_reported_status", key.Hostname)
 	return e, nil
+}
+
+func (key LastStatusReportKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
 }
 
 func (key LastStatusReportKey) valueType() reflect.Type {

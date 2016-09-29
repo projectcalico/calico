@@ -48,6 +48,10 @@ func (key BlockAffinityKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key BlockAffinityKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key BlockAffinityKey) valueType() reflect.Type {
 	return typeBlockAff
 }

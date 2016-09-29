@@ -47,28 +47,30 @@ func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	if key.EndpointID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "endpointID"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "endpoint"}
 	}
 	return fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s/endpoint/%s",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
 }
 
 func (key WorkloadEndpointStatusKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
+}
+
+func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
 	if key.OrchestratorID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "orchestrator"}
 	}
 	if key.WorkloadID == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "workload"}
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
-	if key.EndpointID == "" {
-		return fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s/",
-			key.Hostname, key.OrchestratorID, key.WorkloadID), nil
-	}
-	return fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
+	workload := fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s",
+		key.Hostname, key.OrchestratorID, key.WorkloadID)
+	endpoints := workload + "/endpoint"
+	return []string{endpoints, workload}, nil
 }
 
 func (key WorkloadEndpointStatusKey) valueType() reflect.Type {

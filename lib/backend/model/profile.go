@@ -50,6 +50,10 @@ func (key ProfileKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key ProfileKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key ProfileKey) valueType() reflect.Type {
 	return typeProfile // FIXME is this required?
 }

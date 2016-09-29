@@ -68,6 +68,10 @@ func (key BGPPeerKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key BGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key BGPPeerKey) valueType() reflect.Type {
 	return typeBGPPeer
 }

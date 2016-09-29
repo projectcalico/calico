@@ -59,3 +59,11 @@ func ParseCIDR(c string) (*IP, *IPNet, error) {
 	}
 	return &IP{netIP}, &IPNet{*netIPNet}, e
 }
+
+// String returns a friendly name for the network.  The standard net package
+// implements String() on the pointer, which means it will not be invoked on a
+// struct type, so we re-implement on the struct type.
+func (i IPNet) String() string {
+	ip := &i.IPNet
+	return ip.String()
+}

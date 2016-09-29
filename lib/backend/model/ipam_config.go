@@ -14,11 +14,7 @@
 
 package model
 
-import (
-	"reflect"
-
-	"github.com/projectcalico/libcalico-go/lib/errors"
-)
+import "reflect"
 
 var (
 	typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
@@ -32,7 +28,11 @@ func (key IPAMConfigKey) defaultPath() (string, error) {
 }
 
 func (key IPAMConfigKey) defaultDeletePath() (string, error) {
-	return "", errors.ErrorResourceUpdateConflict{"Cannot delete IPAMConfig"}
+	return key.defaultPath()
+}
+
+func (key IPAMConfigKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
 }
 
 func (key IPAMConfigKey) valueType() reflect.Type {

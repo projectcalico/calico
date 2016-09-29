@@ -15,6 +15,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -29,7 +31,8 @@ type WorkloadEndpoint struct {
 type WorkloadEndpointMetadata struct {
 	unversioned.ObjectMetadata
 
-	// The name of the endpoint.
+	// The name of the endpoint.  This may be omitted on a create, in which case an endpoint
+	// ID will be automatically created, and the endpoint ID will be included in the response.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// The name of the workload.
@@ -60,10 +63,10 @@ type WorkloadEndpointSpec struct {
 	// internal IP will not have their source address changed, except when an endpoint attempts
 	// to connect one of its own external IPs. Each internal IP must be associated with the same
 	// endpoint via the configured IPNetworks.
-	IPNATs []IPNAT `json:"ipNAT,omitempty" validate:"omitempty,dive"`
+	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
 
 	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
-	IPv4Gateway net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv4Gateway net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
 
 	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
 	IPv6Gateway net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
@@ -88,6 +91,11 @@ type IPNAT struct {
 
 	// The external IP address.
 	ExternalIP net.IP `json:"externalIP" validate:"ip"`
+}
+
+// String returns a friendly form of an IPNAT.
+func (i IPNAT) String() string {
+	return fmt.Sprintf("%s<>%s", i.InternalIP, i.ExternalIP)
 }
 
 // NewWorkloadEndpoint creates a new (zeroed) WorkloadEndpoint struct with the TypeMetadata

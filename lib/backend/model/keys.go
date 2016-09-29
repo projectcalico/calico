@@ -34,8 +34,26 @@ var rawBoolType = reflect.TypeOf(rawBool(true))
 
 // Key represents a parsed datastore key.
 type Key interface {
+	// defaultPath() returns a common path representation of the object used by
+	// etcdv2 and other datastores.
 	defaultPath() (string, error)
+
+	// defaultDeletePath() returns a common path representation used by etcdv2
+	// and other datastores to delete the object.
 	defaultDeletePath() (string, error)
+
+	// defaultDeleteParentPaths() returns an ordered slice of paths that should
+	// be removed after deleting the primary path (given by defaultDeletePath),
+	// provided there are no child entries associated with those paths.  This is
+	// only used by directory based KV stores (such as etcdv2).  With a directory
+	// based KV store, creation of a resource may also create parent directory entries
+	// that could be shared by multiple resources, and therefore the parent directories
+	// can only be removed when there are no more resources under them.  The list of
+	// parent paths is ordered, and directories should be removed in the order supplied
+	// in the slice and only if the directory is empty.
+	defaultDeleteParentPaths() ([]string, error)
+
+	// valueType returns the object type associated with this key.
 	valueType() reflect.Type
 }
 
@@ -90,6 +108,33 @@ func KeyToDefaultPath(key Key) (string, error) {
 // object itself and any children it has.
 func KeyToDefaultDeletePath(key Key) (string, error) {
 	return key.defaultDeletePath()
+}
+
+// KeyToDefaultDeleteParentPaths returns a slice of '/'-delimited
+// paths which are used to delete parent entries that may be auto-created
+// by directory-based KV stores (e.g. etcd v2).  These paths should also be
+// removed provided they have no more child entries.
+//
+// The list of parent paths is ordered, and directories should be removed
+// in the order supplied in the slice and only if the directory is empty.
+//
+// For example,
+// 	KeyToDefaultDeletePaths(WorkloadEndpointKey{
+//		Hostname: "h",
+//		OrchestratorID: "o",
+//		WorkloadID: "w",
+//		EndpointID: "e",
+//	})
+// returns
+//
+// ["/calico/v1/host/h/workload/o/w/endpoint",
+//  "/calico/v1/host/h/workload/o/w"]
+//
+// indicating that these paths should also be deleted when they are empty.
+// In this example it is equivalent to deleting the workload when there are
+// no more endpoints in the workload.
+func KeyToDefaultDeleteParentPaths(key Key) ([]string, error) {
+	return key.defaultDeleteParentPaths()
 }
 
 // ListOptionsToDefaultPathRoot converts list options struct into a

@@ -52,6 +52,10 @@ func (key HostEndpointKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
+func (key HostEndpointKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
 func (key HostEndpointKey) valueType() reflect.Type {
 	return typeHostEndpoint
 }
