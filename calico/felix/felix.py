@@ -227,7 +227,7 @@ def _main_greenlet(config):
         # Try to ensure that the nf_conntrack_netlink kernel module is present.
         # This works around an issue[1] where the first call to the "conntrack"
         # command fails while waiting for the module to load.
-        # [1] https://github.com/projectcalico/calico/issues/986
+        # [1] https://github.com/projectcalico/felix/issues/986
         load_nf_conntrack()
 
         # Install the global rules before we start polling for updates.

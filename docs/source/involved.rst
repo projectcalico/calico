@@ -47,10 +47,8 @@ Read the Source, Luke!
 All Calico's code is on `GitHub <https://github.com/projectcalico>`__, in the
 following repositories, separated by function.
 
-- `calico <https://github.com/projectcalico/calico>`__ - All of the core Calico
-  code except for that specific to Docker/container environments: the Felix
-  agent, the OpenStack plugin; testing for all of those; and
-  the source for Calico's documentation.
+- `felix <https://github.com/projectcalico/felix>`__ - Calico's per-host
+  daemon, Felix.  Felix runs on each host, applying routes and security policy.
 
 - `calico-containers <https://github.com/projectcalico/calico-containers>`__ - Calico
   code and components specific to Docker/container environments: the lightweight

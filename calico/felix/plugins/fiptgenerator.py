@@ -1006,7 +1006,7 @@ class FelixIptablesGenerator(FelixPlugin):
                            "detailed code", icmp_type)
                 if icmp_type == 255:
                     # Temporary work-around for this issue:
-                    # https://github.com/projectcalico/calico/issues/451
+                    # https://github.com/projectcalico/felix/issues/451
                     # This exception will be caught by the caller, which will
                     # replace this rule with a DROP rule.  That's arguably
                     # better than forbidding this case in the validation

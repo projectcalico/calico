@@ -18,7 +18,7 @@ Welcome to Calico
 Calico is an open source solution for virtual networking in
 cloud data centers, developed by `Tigera, Inc. <http://www.tigera.io/>`__
 and released under the `Apache 2.0
-License <https://github.com/projectcalico/calico/blob/master/LICENSE>`__.
+License <https://github.com/projectcalico/felix/blob/master/LICENSE>`__.
 You can find high level information about it on `our
 website <http://www.projectcalico.org/>`__, and more detailed documentation
 here.

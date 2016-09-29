@@ -1,6 +1,6 @@
 Format: http://dep.debian.net/deps/dep5
 Upstream-Name: calico
-Source: http://github.com/projectcalico/calico
+Source: http://github.com/projectcalico/felix
 
 Files: *
 Copyright: 2014-2016 Tigera, Inc

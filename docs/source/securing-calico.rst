@@ -116,7 +116,7 @@ Calico supports etcd's TLS-based security model, which supports the encryption
 
              For more details of the restrictions, see `this GitHub issue`_
 
-.. _this GitHub issue: https://github.com/projectcalico/calico/issues/933
+.. _this GitHub issue: https://github.com/projectcalico/felix/issues/933
 
 To enable TLS support:
 
