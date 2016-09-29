@@ -352,7 +352,7 @@ For each container on your host, enter the namespace of the container,
 replacing `<container_id>` with the name or ID of the container.
 
 ```shell
-$ sudo nsenter -n -t $(sudo docker inspect --format '{{ .State.Pid }}' <container_id>) /bin/bash
+$ sudo nsenter -n -t $(sudo docker inspect --format {% raw %}'{{ .State.Pid }}'{% endraw %}' <container_id>) /bin/bash
 ```
 
 Finally, modify the MTU of the Calico interface on the container. If you

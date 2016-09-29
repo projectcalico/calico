@@ -222,7 +222,7 @@ B and D.
 Since A and B are on the same host, we can run a single command that inspects
 the IP address and issues the ping.  On calico-01
 
-    docker exec workload-A ping -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
+    docker exec workload-A ping -c 4  `docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net2.IPAddress }}{% endraw %}" workload-B`
 
 These pings will fail.
 
@@ -232,7 +232,7 @@ and then run the ping command on the host for A (calico-01).
 
 On calico-02
 
-    docker inspect --format "{{ .NetworkSettings.Networks.net3.IPAddress }}" workload-D
+    docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net3.IPAddress }}{% endraw %}" workload-D
 
 This returns the IP address of workload-D.
 

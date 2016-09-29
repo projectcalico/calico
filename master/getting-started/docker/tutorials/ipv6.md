@@ -113,12 +113,12 @@ address for a container.
 Since V and X are on the same host we can do this as a single command.
 On calico-01:
 
-    docker exec workload-V ping6 -c 4 `docker inspect --format "{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}" workload-X`
+    docker exec workload-V ping6 -c 4 `docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}{% endraw %}" workload-X`
 
 To test connectivity to Y, first obtain the IPv6 address using
 `docker inspect` on the host for Y.  On calico-02:
 
-    docker inspect --format "{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}" workload-Y
+    docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net10.GlobalIPv6Address }}{% endraw %}" workload-Y
 
 And then run the ping using the inspected IPv6 address.  On calico-01:
 
@@ -131,7 +131,7 @@ Also check that V cannot ping W or Z.
 Again, since V and W are on the same host, we can run a single command that
 inspects the IPv6 address and issues the ping.  On calico-01
 
-    docker exec workload-V ping6 -c 4  `docker inspect --format "{{ .NetworkSettings.Networks.net11.GlobalIPv6Address }}" workload-W`
+    docker exec workload-V ping6 -c 4  `docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net11.GlobalIPv6Address }}{% endraw %}" workload-W`
 
 These pings will fail.
 
@@ -141,7 +141,7 @@ the host for V.
 
 On calico-02
 
-    docker inspect --format "{{ .NetworkSettings.Networks.net12.GlobalIPv6Address }}" workload-Z
+    docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net12.GlobalIPv6Address }}{% endraw %}" workload-Z
 
 This returns the IP address of workload-Z.
 

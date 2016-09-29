@@ -156,5 +156,5 @@ To find the IP address of workload B, we can run the `docker inspect` command.
 Then, use the returned IP address to test connectivity between workloads A and
 B. These pings should fail.
 
-    $ export WORKLOADB_IP=`docker -H $MANAGER_IP:$SWARM_PORT inspect --format "{{ .NetworkSettings.Networks.net2.IPAddress }}" workload-B`
+    $ export WORKLOADB_IP=`docker -H $MANAGER_IP:$SWARM_PORT inspect --format "{% raw %}{{ .NetworkSettings.Networks.net2.IPAddress }}{% endraw %}" workload-B`
     $ docker -H $MANAGER_IP:$SWARM_PORT exec workload-A ping -c 4 $WORKLOADB_IP
