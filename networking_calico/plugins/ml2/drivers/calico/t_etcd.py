@@ -39,11 +39,11 @@ except ImportError:  # Kilo
     from oslo_log import log
 
 # Calico imports.
-from calico import datamodel_v1
-from calico import etcdutils
 import etcd
 from eventlet.semaphore import Semaphore
 from networking_calico.common import config as calico_config
+from networking_calico import datamodel_v1
+from networking_calico import etcdutils
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 
 

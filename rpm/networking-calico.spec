@@ -27,9 +27,9 @@ those workloads.
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
 %if 0%{?el6}
-Requires:       calico-common, calico-felix, networking-calico, openstack-neutron, iptables, python-argparse
+Requires:       calico-felix, networking-calico, openstack-neutron, iptables, python-argparse
 %else
-Requires:       calico-common, calico-felix, networking-calico, openstack-neutron, iptables
+Requires:       calico-felix, networking-calico, openstack-neutron, iptables
 %endif
 
 
@@ -78,7 +78,7 @@ fi
 %package -n calico-dhcp-agent
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
-Requires:       calico-common, networking-calico
+Requires:       networking-calico
 
 %description -n calico-dhcp-agent
 This package provides the Calico DHCP agent.
@@ -119,7 +119,7 @@ fi
 %package -n calico-control
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron
-Requires:       calico-common, networking-calico
+Requires:       networking-calico
 
 %description -n calico-control
 This package provides the pieces needed on a controller node.

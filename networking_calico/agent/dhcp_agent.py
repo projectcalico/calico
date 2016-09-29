@@ -33,12 +33,12 @@ from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
 from neutron.common import constants
 
-from calico.common import mkdir_p
-from calico.datamodel_v1 import dir_for_host
-from calico.datamodel_v1 import key_for_subnet
-from calico.datamodel_v1 import SUBNET_DIR
-from calico.etcdutils import EtcdWatcher
-from calico.etcdutils import safe_decode_json
+from networking_calico.common import mkdir_p
+from networking_calico.datamodel_v1 import dir_for_host
+from networking_calico.datamodel_v1 import key_for_subnet
+from networking_calico.datamodel_v1 import SUBNET_DIR
+from networking_calico.etcdutils import EtcdWatcher
+from networking_calico.etcdutils import safe_decode_json
 
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config

@@ -92,10 +92,10 @@ if is_service_enabled calico; then
 		    # Install posix-spawn.
 		    pip_install git+https://github.com/projectcalico/python-posix-spawn.git@1f74fbedb569d4e45f11e9e32d3dca74623f432c#egg=posix-spawn
 
-		    # Install the core Calico code.
-		    CALICO_DIR=${DEST}/calico
-		    git_clone ${CALICO_REPO:-https://github.com/projectcalico/calico.git} $CALICO_DIR ${CALICO_BRANCH:-master}
-		    cd $CALICO_DIR
+		    # Install the Calico agent (Felix).
+		    FELIX_DIR=${DEST}/felix
+		    git_clone ${FELIX_REPO:-https://github.com/projectcalico/felix.git} $FELIX_DIR ${FELIX_BRANCH:-master}
+		    cd $FELIX_DIR
 		    pip_install .
 
 		    # Install networking-calico.
@@ -149,7 +149,7 @@ EOF
 		    echo Calico plugin: extra
 
 		    # Run Felix and tail its log file.
-		    run_process calico "sudo /usr/local/bin/calico-felix"
+		    run_process calico-felix "sudo /usr/local/bin/calico-felix"
 		    tail_log calico-log "/var/log/calico/felix.log"
 
 		    # Run script to automatically generate and

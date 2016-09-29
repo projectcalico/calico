@@ -28,10 +28,10 @@ import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 
-from calico import common
-from calico import datamodel_v1
-from calico.etcdutils import ResyncRequired
-from calico.monotonic import monotonic_time
+from networking_calico import common
+from networking_calico import datamodel_v1
+from networking_calico.etcdutils import ResyncRequired
+from networking_calico.monotonic import monotonic_time
 import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
 import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
 

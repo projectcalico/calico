@@ -79,10 +79,10 @@ except ImportError:
     from oslo_concurrency import lockutils
 
 # Calico imports.
-from calico import datamodel_v1
-from calico.logutils import logging_exceptions
-from calico.monotonic import monotonic_time
 import etcd
+from networking_calico import datamodel_v1
+from networking_calico.logutils import logging_exceptions
+from networking_calico.monotonic import monotonic_time
 
 from networking_calico.plugins.ml2.drivers.calico import t_etcd
 

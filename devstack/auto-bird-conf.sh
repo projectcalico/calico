@@ -54,10 +54,10 @@ while true; do
     done
 
     # Regenerate BIRD config, and restart BIRD.
-    export TEMPLATE_DIR=/opt/stack/calico/etc/bird
-    sudo -n -E /opt/stack/calico/etc/calico-gen-bird-mesh-conf.sh $HOST_IP 65411 $peer_ips
+    export TEMPLATE_DIR=/opt/stack/felix/etc/bird
+    sudo -n -E /opt/stack/felix/etc/calico-gen-bird-mesh-conf.sh $HOST_IP 65411 $peer_ips
     if test -n "$HOST_IPV6"; then
-        sudo -n -E /opt/stack/calico/etc/calico-gen-bird6-mesh-conf.sh $HOST_IP $HOST_IPV6 65411 $peer_ipv6s
+        sudo -n -E /opt/stack/felix/etc/calico-gen-bird6-mesh-conf.sh $HOST_IP $HOST_IPV6 65411 $peer_ipv6s
     fi
 
     # Wait for the next change.

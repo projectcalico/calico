@@ -62,7 +62,6 @@ Description: Project Calico networking for OpenStack/Neutron.
 Package: networking-calico
 Architecture: all
 Depends:
- calico-common (>= 1.4), calico-common (<< 1.5),
  ${misc:Depends},
  ${python:Depends}
 Description: Project Calico networking for OpenStack/Neutron.
