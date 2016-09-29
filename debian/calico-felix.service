@@ -1,12 +1,11 @@
 [Unit]
 Description=Calico Felix agent
 After=syslog.target network.target
-ConditionFileNotEmpty=/etc/calico/felix.cfg
 
 [Service]
 User=root
 ExecStartPre=/bin/mkdir -p /var/run/calico
-ExecStart=/usr/bin/calico-felix --config-file=/etc/calico/felix.cfg
+ExecStart=/usr/bin/calico-felix
 KillMode=process
 Restart=on-failure
 LimitNOFILE=32000
