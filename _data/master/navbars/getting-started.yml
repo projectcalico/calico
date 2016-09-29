@@ -68,7 +68,7 @@ toc:
   section:
   - title: Overview
     path: /getting-started/docker/
-  - title: Environment Setup
+  - title: Installation
     section:
     - title: Manual
       path: /getting-started/docker/installation/manual
