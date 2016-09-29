@@ -67,3 +67,22 @@ At least some of this work is based on the basic Jekyll theme from scotch.io - s
   - Must end in `/` if its an `index.md` directory file.
   - Must not end in `/` if its a regular named doc.
 - All hyperlinks in documents should be the *full URL*. Do not use relative links ever. i.e. `{{site.url}}/{{page.version}}/getting-started/...`. This makes it much easier to fix broken links when files are moved.
+
+
+## Release Process
+
+First, modify `_config.yaml` and add a new section to defaults specifiying what the version of the new subdirectory will be:
+```
+-
+  scope:
+    path: "X.Y"
+  values:
+    version: X.Y
+```
+
+Then create the new docs:
+```
+cp -R ./master X.Y
+cp -R ./_includes/master ./_includes/X.Y
+cp -R ./_data/master ./_data/X.Y
+```
