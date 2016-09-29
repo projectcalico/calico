@@ -1,6 +1,7 @@
 bigheader: "Reference"
 abstract: "Reference Information for Calico"
 path: /reference/
+order: 3
 toc:
 - title: Reference
   path: /reference/

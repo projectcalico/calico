@@ -1,6 +1,7 @@
 bigheader: "Getting Started"
 abstract: "All you need to know, to get started with Calico"
 path: /getting-started/
+order: 1
 toc:
 - title: Getting Started with Calico
   path: /getting-started/

@@ -1,6 +1,7 @@
 bigheader: "Usage"
 abstract: "How to configure and troubleshoot Calico system"
 path: /using-calico
+order: 2
 toc:
 - title: Using Calico
   path: /using-calico/

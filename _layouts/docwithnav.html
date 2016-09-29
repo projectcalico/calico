@@ -1,10 +1,30 @@
 <!-- Set this_pages_navbar  -->
+{% comment %}
+Here, we loop through site.data for the current view
+to set two variables:
+	1. this_pages_navbar - a object containing this page's navbar
+	2. navbars - a list of this site's toplevel navbars sorted by navbar.order
+
+The code is a little roundabout for a few reasons:
+	- liquid doesn't provide a simple way to create an empty array,
+	so we just split an empty string.
+	- liquid stores the navbars (in site.data[version].navbars) as
+	a list keyed by the filename. We don't really care about the filename
+	here, so we just need the data field. But, liquid doesn't provide a
+	simple way to 'iteritems', so we have to manually loop through and access
+	the	2nd item.
+{% endcomment %}
+
+{% assign unsorted_navbars = "" | split:"|" %}
 {% for navbars_hashmap in site.data[page.version].navbars %}
 	{% assign navbar = navbars_hashmap[1] %}
+	{% assign unsorted_navbars = unsorted_navbars | push: navbar %}
 	{% if page.url contains navbar.path %}
 		{% assign this_pages_navbar = navbar %}
 	{% endif %}
 {% endfor %}
+{% assign navbars = unsorted_navbars | sort:"order" %}
+
 
 <!Doctype html>
 <html id="docs" class="{{this_pages_navbar.bigheader}}">
@@ -16,8 +36,6 @@ function redirect(version) {
 	window.location = "{{site.baseurl}}/" + version
 }
 </script>
-
-
 <!--  HERO  -->
 <section id="hero" class="dark-text">
 	<h1>{{ this_pages_navbar.bigheader }}</h1>
@@ -37,8 +55,7 @@ function redirect(version) {
 	<div style="clear: both;"></div>
 	<div id="vendorStrip" class="dark-text">
 		<ul>
-			{% for navbar_hashmap in site.data[page.version].navbars %}
-				{% assign navbar = navbar_hashmap[1] %}
+			{% for navbar in navbars %}
 				<li><a href="{{base}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
 			{% endfor %}
 		</ul>
