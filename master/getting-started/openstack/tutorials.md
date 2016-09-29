@@ -22,7 +22,7 @@ single security group, `default`, that contains the following rules:
     group
 -   allow all outbound traffic to anywhere
 
-Per the instructions in [this document]({{site.url}}/{{page.version}}/getting-started/openstack), this user cannot create
+Per the instructions in [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack), this user cannot create
 Neutron networks or subnets, but they do have access to the networks
 created by the administrator: `external` and `internal`.
 

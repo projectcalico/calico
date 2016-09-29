@@ -52,7 +52,7 @@ The calicoctl utility:
 Inside the calico-node container:
 
 -  Four key processes are started:  `felix`, `confd` and `bird` and `bird6`
-   (see [calico/node container components]({{site.url}}/{{page.version}}/reference/architecture) for more details on
+   (see [calico/node container components]({{site.baseurl}}/{{page.version}}/reference/architecture) for more details on
    these).  Since we are not using IPv6, bird6 is not mentioned any further.
 -  `felix` is waiting for endpoint data to be configured in etcd.
 -  `confd` is monitoring the BGP data in etcd.
@@ -68,7 +68,7 @@ Inside the calico-node container:
    bird is largely idle.  _bird has used the default global AS number
    which was initialized by calicoctl to set up the peering._
 
-![calicoctl node]({{site.url}}/images/lifecycle/calicoctl_node.png)
+![calicoctl node]({{site.baseurl}}/images/lifecycle/calicoctl_node.png)
 
 ## 2. Create containers on Host
 
@@ -89,7 +89,7 @@ be accessed by outside sources.
 
 There are no changes to any component within the calico-node service.
 
-![docker run]({{site.url}}/images/lifecycle/docker_run.png)
+![docker run]({{site.baseurl}}/images/lifecycle/docker_run.png)
 
 ## 3. Add the containers to Calico Networking
 
@@ -131,7 +131,7 @@ The BIRD client on each host:
    to that container via host 2.
 
 
-![calicoctl container add]({{site.url}}/images/lifecycle/container_add.png)
+![calicoctl container add]({{site.baseurl}}/images/lifecycle/container_add.png)
 
 ## 4. Create a Profile
 
@@ -153,7 +153,7 @@ fine grained policy.  In this example, we are using the default configuration
 which specifies that any containers that references the profile has full
 connectivity to containers also referencing the profile.  
 
-![calicoctl profile add]({{site.url}}/images/lifecycle/profile_add.png)
+![calicoctl profile add]({{site.baseurl}}/images/lifecycle/profile_add.png)
 
 ## 5. Update Containers to use the Profile
 
@@ -170,7 +170,7 @@ on the container endpoints.
 > containers with a single interface managed using calicoctl, we treat a
 > container and endpoint as the same thing.  For more complicated scenarios,
 > calicoctl provides commands for managing actual endpoints (see the
-> [`calicoctl endpoint` reference guide]({{site.url}}/{{page.version}}/reference/calicoctl/endpoint) for usage and
+> [`calicoctl endpoint` reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl/endpoint) for usage and
 > examples).
 
 ### System Response
@@ -193,4 +193,4 @@ remote routes are programmed.  Connectivity has been achieved between
 endpoints!  The containers are now able to send any kind of traffic to each
 other.
 
-![calicoctl container set profile]({{site.url}}/images/lifecycle/set_profile.png)
+![calicoctl container set profile]({{site.baseurl}}/images/lifecycle/set_profile.png)

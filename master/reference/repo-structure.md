@@ -8,12 +8,12 @@ This respository contains the following:
 
 - `calico/node`: the Docker image used to run the Calico Felix agent
   (responsible for IP routing and ACL programming) and a BIRD BGP agent (for
-  distributing routes between hosts).  See [`calico_node` directory]({{site.url}}/{{page.version}}/reference/architecture)
+  distributing routes between hosts).  See [`calico_node` directory]({{site.baseurl}}/{{page.version}}/reference/architecture)
   for details.
 - `calicoctl`: the command line tool used for starting a `calico/node`
   container, configuring Calico policy, adding and removing containers in a
   Calico network via orchestration tools, and managing certain network and
-  diagnostic administration.  See [`calicoctl` directory]({{site.url}}/{{page.version}}/reference/calicoctl) for
+  diagnostic administration.  See [`calicoctl` directory]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for
   implementation of calicoctl.  This directory also contains a `calico/build`
   Docker image which is used to build the `calicoctl` binary.
 - UTs testing calicoctl, STs testing single host and multihost systems

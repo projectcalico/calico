@@ -171,7 +171,7 @@ below.
 
 ![A diagram showing the Ethernet spine planes. Each color represents a
 distinct Ethernet network, transporting a unique IP
-network.]({{site.url}}/images/l2-spine-planes.png)
+network.]({{site.baseurl}}/images/l2-spine-planes.png)
 
 I am not showing the end points in this diagram, and the end points
 would be unaware of anything in the fabric (as noted above).
@@ -210,7 +210,7 @@ meshed. However, the route reflectors in each spine plane are not meshed
 together (*e.g.* the *blue* route reflectors are not peered or meshed
 with the *red* route reflectors. The route reflectors themselves could
 be daemons running on the actual compute servers or on other dedicated
-or networking hardware.]({{site.url}}/images/l2-rr-spine-planes.png)
+or networking hardware.]({{site.baseurl}}/images/l2-rr-spine-planes.png)
 
 These route reflectors could be dedicated hardware connected to the
 spine switches (or the spine switches themselves), or physical or

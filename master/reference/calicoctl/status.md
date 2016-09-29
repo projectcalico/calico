@@ -6,7 +6,7 @@ title: calicoctl status
 
 This sections describes the `calicoctl status` commands.
 
-Read the [calicoctl command line interface user reference]({{site.url}}/{{page.version}}/reference/calicoctl)
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl status' commands

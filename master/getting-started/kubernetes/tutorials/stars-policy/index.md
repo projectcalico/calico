@@ -6,7 +6,7 @@ title: Demonstrating Calico Policy
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.
 
-To create a Kubernetes cluster which supports the Kubernetes v1alpha1 network policy API, follow our [Vagrant CoreOS guide]({{site.url}}/getting-started/kubernetes/installation/vagrant-coreos).  
+To create a Kubernetes cluster which supports the Kubernetes v1alpha1 network policy API, follow our [Vagrant CoreOS guide]({{site.baseurl}}/getting-started/kubernetes/installation/vagrant-coreos).  
 This guide includes the [files necessary for this example](https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/cloud-config).
 
 # Running the stars example

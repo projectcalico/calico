@@ -9,8 +9,8 @@ Calico provides a CNI plugin for integration with orchestrators which use the [c
 ### Supported Orchestrators
 We've confirmed that the Calico CNI plugin is compatible with the following orchestrators that use CNI:
 
-- Kubernetes - [documentation]({{site.url}}/{{page.version}}/getting-started/kubernetes/)
-- rkt - [documentation]({{site.url}}/{{page.version}}/getting-started/rkt/)
+- Kubernetes - [documentation]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/)
+- rkt - [documentation]({{site.baseurl}}/{{page.version}}/getting-started/rkt/)
 
 ### Supported IPAM plugins
 We've confirmed that the Calico CNI plugin is compatible with the following IPAM plugins:

@@ -14,7 +14,7 @@ kubectl create -f calico.yaml
 
 ## About
 
-This manifest deploys the standard Calico components described [here]({{site.url}}/getting-started/kubernetes/installation/hosted) as well as a dedicated Calico etcd
+This manifest deploys the standard Calico components described [here]({{site.baseurl}}/getting-started/kubernetes/installation/hosted) as well as a dedicated Calico etcd
 node on the Kubernetes master.  Note that in a production cluster, it is recommended you use a secure, replicated etcd cluster.
 
 ### Requirements / Limitations

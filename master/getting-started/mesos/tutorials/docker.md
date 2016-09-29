@@ -19,9 +19,9 @@ This guide assumes you have a running Mesos Cluster that meets the following spe
   - Docker 1.9+ installed with a configured cluster store
   - calico-node and calico-libnetwork services running
 
-To quickly generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.url}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
+To quickly generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
 
-For info on upgrading an Agent to meet the above requirements and be ready for Calico, see the [Manual Install Docker Containerizer Guide]({{site.url}}/{{page.version}}/getting-started/mesos/installation/docker)
+For info on upgrading an Agent to meet the above requirements and be ready for Calico, see the [Manual Install Docker Containerizer Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
 
 
 ## Creating a Docker network and managing network policy
@@ -65,7 +65,7 @@ traffic only from containers attached the "my-calico-net" network.
 > Note that when managing profiles created by the Calico network driver, the
 > profile tag and network name can be regarded as the same thing.
 
-For more information no how to configure your Calico profiles, see [Configuring Advanced Network Policy Guide]({{site.url}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy#configuring-the-network-policy).
+For more information no how to configure your Calico profiles, see [Configuring Advanced Network Policy Guide]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy#configuring-the-network-policy).
 
 ## Launching Containers
 With your networks configured, it is trivial to launch a calico-networked Docker container using the standard Marathon API.

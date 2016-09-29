@@ -71,7 +71,7 @@ tab. To start the install:
  - Click the **Install** button then choose **Advanced
    Installation** in the pop-up window.
 
-![alt tag]({{site.url}}/images/mesos/dcos-calico-package-install.png)
+![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-package-install.png)
 
 ##### At this point you have a few options:
 
@@ -85,7 +85,7 @@ modifying `mem-limit-framework`, `mem-limit-install`,
 `mem-limit-etcd-proxy`, `mem-limit-node`, and
 `mem-limit-libnetwork`.
 
-![alt tag]({{site.url}}/images/mesos/dcos-calico-config-changes.png)
+![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-config-changes.png)
 
 You could also speed up the install by increasing
 `max-concurrent-restarts`, allowing Calico to restart
@@ -122,11 +122,11 @@ by visiting Calico's status web interface:
    square pop-out icon next to the service name to
    open the Calico status page in a new tab.
 
-![alt tag]({{site.url}}/images/mesos/dcos-calico-open-status.png)
+![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-open-status.png)
 
 You should see a page that looks like the following:
 
-![alt tag]({{site.url}}/images/mesos/dcos-calico-status.png)
+![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-status.png)
 
 The webpage may fail to load initially since the Calico
 service restarts the Docker and Mesos agent services, which
@@ -142,7 +142,7 @@ running, you can start launching tasks with your
 Mesos cluster.
 
 Get started by checking out our user guides for
-the [Docker Containerizer]({{site.url}}/{{page.version}}/getting-started/mesos/tutorials/docker)
-or the [Unified Containerizer]({{site.url}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni),
+the [Docker Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
+or the [Unified Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni),
 or to learn more about the differences between the
-two containerizers, check out our [Mesos README]({{site.url}}/{{page.version}}/getting-started/mesos/).
+two containerizers, check out our [Mesos README]({{site.baseurl}}/{{page.version}}/getting-started/mesos/).

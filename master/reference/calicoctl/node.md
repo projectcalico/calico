@@ -14,10 +14,10 @@ Calico networking.
 
 The `calicoctl node bgp` commands can be used to configure BGP peering for the
 node.  For an overview of BGP configuration, read the
-[BGP tutorial]({{site.url}}/{{page.version}}/using-calico/configuration/bgp), which covers in more detail all available BGP
+[BGP tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp), which covers in more detail all available BGP
 related commands, including use cases.
 
-Read the [calicoctl command line interface user reference]({{site.url}}/{{page.version}}/reference/calicoctl) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node' commands
@@ -190,7 +190,7 @@ docker network create -d calico net1
 docker network create -d calico --ipam-driver calico net2
 ```
 
-Read our [Calico as a Docker network plugin tutorial]({{site.url}}/{{page.version}}/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin)
+Read our [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin)
 for more details.
 
 ### calicoctl node stop 

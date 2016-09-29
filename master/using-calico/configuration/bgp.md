@@ -31,7 +31,7 @@ deployment where all of the Calico nodes are on the same L2 network and are
 each peering with the same Route Reflector (or set of Route Reflectors).
 
 At scale, different network topologies come in to play.  For example, in the
-[AS Per Rack model]({{site.url}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)
+[AS Per Rack model]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)
 discussed in the main Project Calico documentation, each Calico node peers with
 a Route Reflector in the Top of Rack (ToR) switch.  In this case the BGP
 peerings are configured on a per-node basis (i.e. these are node-specific
@@ -153,9 +153,9 @@ a Calico nodes.  We refer to these as node specific peers.
 Configuring node specific peers is necessary when the BGP topology is more
 complicated and requires different peerings on different nodes.  For example,
 the
-[AS per rack model]({{site.url}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)
+[AS per rack model]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)
 or
-[AS per Compute Server model]({{site.url}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)
+[AS per Compute Server model]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)
 described in the Project Calico documentation.
 
 #### Example

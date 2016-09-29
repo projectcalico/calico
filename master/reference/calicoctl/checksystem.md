@@ -9,7 +9,7 @@ This section describes the `calicoctl checksystem` commands.
 The `calicoctl checksystem` command allows users to check for 
 incompatibilities between Calico and the host system.
 
-Read the [calicoctl command line interface user reference]({{site.url}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl checksystem' commands
 

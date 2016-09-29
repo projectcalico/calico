@@ -32,14 +32,14 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for _Calico as a Docker network plugin_.
 
-- [Vagrant install with CoreOS]({{site.url}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
-- [Vagrant install with Ubuntu]({{site.url}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
-- [Amazon Web Services (AWS)]({{site.url}}/{{page.version}}/getting-started/docker/installation/aws)
-- [Google Compute Engine (GCE)]({{site.url}}/{{page.version}}/getting-started/docker/installation/gce)
-- [DigitalOcean]({{site.url}}/{{page.version}}/getting-started/docker/installation/digital-ocean)
+- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
+- [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
+- [Amazon Web Services (AWS)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/aws)
+- [Google Compute Engine (GCE)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/gce)
+- [DigitalOcean]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/digital-ocean)
 
 Altenatively, you can manually configure your hosts.
-- [Manual setup]({{site.url}}/{{page.version}}/getting-started/docker/installation/manual)
+- [Manual setup]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual)
 
 If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
@@ -111,7 +111,7 @@ Docker's port mapping feature.  However, it is important to note that using
 Docker's port-mapping feature is not secured by Calico policy since the packets
 are routed via the Docker bridge, rather than through the Calico interfaces.
 (For more information on port-forwarding with Calico, check out the [Expose
-Ports to Internet guide]({{site.url}}/{{page.version}}/using-calico/advanced/ExposePortsToInternet).)
+Ports to Internet guide]({{site.baseurl}}/{{page.version}}/using-calico/advanced/ExposePortsToInternet).)
 
 When running in a cloud environment we need to also set `ipip` and
 `nat-outgoing` options. If using the default IPAM driver, `ipip` and
@@ -280,7 +280,7 @@ For example:
 
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1 --libnetwork
 
-See the [IPv6 tutorial]({{site.url}}/{{page.version}}/getting-started/docker/tutorials/ipv6) for a worked example.
+See the [IPv6 tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/ipv6) for a worked example.
 
 
 ## Advanced network policy
@@ -289,9 +289,9 @@ If you are using both the Calico network driver and the Calico IPAM driver
 it is possible to apply advanced policy to the network.
 
 For more details, read
-[Accessing Calico policy with Calico as a network plugin]({{site.url}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy).
+[Accessing Calico policy with Calico as a network plugin]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 If you're interested in using port-forwarding, we have a working example on how
-to [expose a container port to the internet]({{site.url}}/{{page.version}}/using-calico/advanced/ExposePortsToInternet)
+to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/using-calico/advanced/ExposePortsToInternet)
 when using Calico.

@@ -3,7 +3,7 @@ title: Red Hat Enterprise Linux 7 Packaged Install Instructions
 ---
 
 These instructions will take you through a first-time install of Calico.
-If you are upgrading an existing system, please see the [Calico on OpenStack upgrade]({{site.url}}/{{page.version}}/getting-started/openstack/upgrade) document instead for upgrade instructions.
+If you are upgrading an existing system, please see the [Calico on OpenStack upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade) document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
 control nodes to use Calico, and upgrading compute nodes to use Calico.
@@ -546,7 +546,7 @@ On each compute node, perform the following steps:
     Note that you'll also need to configure your route reflector to
     allow connections from the compute node as a route reflector client.
     If you are using BIRD as a route reflector, follow the instructions
-    in [this document]({{site.url}}/{{page.version}}/using-calico/bird-rr-config). If you are using another route reflector, refer
+    in [this document]({{site.baseurl}}/{{page.version}}/using-calico/bird-rr-config). If you are using another route reflector, refer
     to the appropriate instructions to configure a client connection.
 
     If you *are* configuring a full BGP mesh you'll need to handle the
@@ -576,7 +576,7 @@ On each compute node, perform the following steps:
 
 12. Create the `/etc/calico/felix.cfg` file by copying
     `/etc/calico/felix.cfg.example`. Ordinarily the default values
-    should be used, but see [Configuration]({{site.url}}/{{page.version}}/getting-started/openstack/) for more details.
+    should be used, but see [Configuration]({{site.baseurl}}/{{page.version}}/getting-started/openstack/) for more details.
 
 13. Restart the Felix service:
 

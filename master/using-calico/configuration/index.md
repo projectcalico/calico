@@ -16,7 +16,7 @@ extended as that happens.
 This page aims to be a complete Calico configuration reference, and
 hence to describe all the possible fields, files etc. For a more
 task-based approach, when installing Calico with OpenStack on Ubuntu or
-Red Hat, please see our [Ubuntu]({{site.url}}/{{page.version}}/getting-started/openstack/installation/ubuntu) or [Red Hat]({{site.url}}/{{page.version}}/getting-started/openstack/installation/redhat)  installation guides.
+Red Hat, please see our [Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu) or [Red Hat]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/redhat)  installation guides.
 
 System configuration
 ====================
@@ -35,7 +35,7 @@ table size. To do so, run the following commands:
 Felix configuration
 ===================
 
-The core Calico component is Felix. (Please see [this document]({{site.url}}/{{page.version}}/reference/architecture) for more on  the Calico architecture.)
+The core Calico component is Felix. (Please see [this document]({{site.baseurl}}/{{page.version}}/reference/architecture) for more on  the Calico architecture.)
 
 Configuration for Felix is read from one of four possible locations, in
 order, as follows.

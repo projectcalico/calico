@@ -35,7 +35,7 @@ chmod a+x calicoctl
 
 For production deployments, we recommend running the two
 containers as services. Visit our guide on [running Calico
-as a Service]({{site.url}}/{{page.version}}/using-calico/configuration/as-service) to learn how to do this.
+as a Service]({{site.baseurl}}/{{page.version}}/using-calico/configuration/as-service) to learn how to do this.
 
 For test environments that you would like to get up and running
 quickly, you can launch the container with `calicoctl`:
@@ -66,5 +66,5 @@ systemctl restart mesos-slave.service
 ```
 
 That's it! You're ready to launch Calico-networked tasks. Visit
-our [Docker Containerizer Usage Guide]({{site.url}}/{{page.version}}/getting-started/mesos/tutorials/docker)
+our [Docker Containerizer Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
 to get started.

@@ -4,8 +4,8 @@ title: Installing Calico-CNI for the Unified Containerizer
 
 This guide details how to add Calico networking to a Mesos Agent with CNI enabled.
 
-- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide]({{site.url}}/{{page.version}}/getting-started/mesos/installation/docker)
-- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each]({{site.url}}/{{page.version}}/getting-started/mesos/).
+- If you're looking for information on installing Calico with the Docker Containerizer, see [Docker Containerizer Manual Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
+- If you're not sure the difference between the Unified and Docker Containerizers, see  [Mesos' information on Containerizers](http://mesos.apache.org/documentation/latest/containerizer/) and [Our Readme on Calico's integration for each]({{site.baseurl}}/{{page.version}}/getting-started/mesos/).
 
 ### Prerequisites
 - **A Running Mesos v1.0.0+ cluster**  [with CNI enabled on each agent](http://mesos.apache.org/documentation/latest/cni/#usage).
@@ -41,4 +41,4 @@ sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
 ```
 
 ## Next Steps
-Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide]({{site.url}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni/).
+Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni/).

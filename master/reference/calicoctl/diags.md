@@ -6,7 +6,7 @@ title: calicoctl diags
 
 This section describes the `calicoctl diags` commands.
 
-Read the [calicoctl command line interface user reference]({{site.url}}/{{page.version}}/reference/calicoctl) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl diags' commands

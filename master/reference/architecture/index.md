@@ -6,7 +6,7 @@ This document discusses the various pieces of the Calico etcd-based
 architecture, with a focus on what specific role each component plays in
 the Calico network. This does not discuss the Calico etcd data model,
 which also acts as the primary API into the Calico network: for more on
-that, see [this document]({{site.url}}/{{page.version}}/reference/etcd/data-model).
+that, see [this document]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
 
 Components
 ==========
@@ -65,7 +65,7 @@ Felix is also responsible for programming ACLs into the Linux kernel.
 These ACLs are used to ensure that only valid traffic can be sent
 between endpoints, and ensure that endpoints are not capable of
 circumventing Calico's security measures. For more on this, see
-the [security model description]({{site.url}}/{{page.version}}/reference/security-model).
+the [security model description]({{site.baseurl}}/{{page.version}}/reference/security-model).
 
 State Reporting
 ---------------
@@ -97,7 +97,7 @@ API Translation
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
-APIs into the Calico etcd data model (see the [data model]({{site.url}}/{{page.version}}/reference/etcd/data-model) to allow
+APIs into the Calico etcd data model (see the [data model]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model) to allow
 Calico to perform the appropriate network programming.
 
 Some of this translation will be very simple, other bits may be more

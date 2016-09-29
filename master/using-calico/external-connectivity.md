@@ -15,7 +15,7 @@ A common scenario is for your container hosts to be on their own isolated layer
 that network is via a router, which also is the default router for all the
 container hosts.
 
-![hosts-on-layer-2-network]({{site.url}}/images/hosts-on-layer-2-network.png)
+![hosts-on-layer-2-network]({{site.baseurl}}/images/hosts-on-layer-2-network.png)
 
 If this describes your infrastructure, you'll need to configure that router to
 communicate with the Calico-enabled hosts over BGP.  If you have a small number
@@ -26,7 +26,7 @@ The Calico network defaults to AS number 64511, which is in the private range,
 and therefore will not conflict with anything else on the public internet.
 However, if your organization is already using AS number 64511, you should
 change the Calico cluster to use a different private AS number.  See the
-[BGP Configuration tutorial]({{site.url}}/{{page.version}}/using-calico/configuration/bgp) for how to do this.
+[BGP Configuration tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp) for how to do this.
 
 Then, on one of your Calico-enabled hosts, configure the session to your
 router.  Let's say your router's IP address is 192.20.30.40 and it is in AS
@@ -36,7 +36,7 @@ number 64567:
 
 You only need to do this on one Calico-enabled host; you have configured a
 global BGP peer and every host in your cluster will attempt to peer with it
-(see the [BGP Configuration tutorial]({{site.url}}/{{page.version}}/using-calico/configuration/bgp) for more detail).
+(see the [BGP Configuration tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp) for more detail).
 
 Lastly, you'll need to configure your router.  Consult your router's
 configuration guide for the exact steps, but generally speaking, you'll need to
@@ -47,6 +47,6 @@ configuration guide for the exact steps, but generally speaking, you'll need to
 
 If you have a L3 routed fabric or some other scenario not covered by the above,
 detailed datacenter networking recommendations are given in the main
-[Project Calico documentation]({{site.url}}/{{page.version}}/what-is-calico/connectivity/l3-interconnectFabric).
+[Project Calico documentation]({{site.baseurl}}/{{page.version}}/what-is-calico/connectivity/l3-interconnectFabric).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.

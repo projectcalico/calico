@@ -77,8 +77,8 @@ There are two worked examples you can follow: Calico as a Docker network
 plugin, or Calico without Docker networking.  Select the instructions based on
 the networking option that you chose in step (3).
 
-- [Calico as a Docker network plugin walkthrough]({{site.url}}/{{page.version}}/getting-started/docker/installation)
-- [Calico without Docker networking walkthrough]({{site.url}}/{{page.version}}/reference/without-docker-networking/)  
+- [Calico as a Docker network plugin walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation)
+- [Calico without Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/)  
 
 
 [calico-networking]: https://github.com/projectcalico/calico-containers

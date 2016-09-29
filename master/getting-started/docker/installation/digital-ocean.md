@@ -17,7 +17,7 @@ From the DigitalOcean Web Console, select the "Create Droplet" button in the top
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this
 demo), and choose a region.  You should see something similar to the following:
 
-![alt tag]({{site.url}}/images/Create_Droplet_1.png)
+![alt tag]({{site.baseurl}}/images/Create_Droplet_1.png)
 
 You will be creating two droplets.  We recommend you call the first calico-01 and the second
 calico-02.
@@ -28,7 +28,7 @@ Data box under Available Settings.  Add your SSH public key to be able to log in
 
 You should now see something similar to the following:
 
-![alt tag]({{site.url}}/images/Create_Droplet_2.png)
+![alt tag]({{site.baseurl}}/images/Create_Droplet_2.png)
 
 
 Before selecting "Create Droplet", you will need to specify the User Data.  

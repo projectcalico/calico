@@ -20,14 +20,14 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for using _Calico without Docker networking_.
 
-- [Vagrant install with CoreOS]({{site.url}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
-- [Vagrant install with Ubuntu]({{site.url}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
-- [Amazon Web Services (AWS)]({{site.url}}/{{page.version}}/getting-started/docker/installation/aws)
-- [Google Compute Engine (GCE)]({{site.url}}/{{page.version}}/getting-started/docker/installation/gce)
-- [DigitalOcean]({{site.url}}/{{page.version}}/getting-started/docker/installation/digital-ocean)
+- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
+- [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
+- [Amazon Web Services (AWS)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/aws)
+- [Google Compute Engine (GCE)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/gce)
+- [DigitalOcean]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/digital-ocean)
 
 Altenatively, you can manually configure your hosts.
-- [Manual setup]({{site.url}}/{{page.version}}/getting-started/docker/installation/manual)
+- [Manual setup]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual)
 
 If you have everything set up properly you should have `calicoctl` in your
 `$PATH`, and two hosts called `calico-01` and `calico-02`.
@@ -173,7 +173,7 @@ See the [IPv6 worked example](IPv6) for a worked example.
 ## Advanced network policy
 
 For details about advanced policy options read the
-[Advanced Network Policy tutorial]({{site.url}}/{{page.version}}/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/AdvancedNetworkPolicy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 
