@@ -15,11 +15,15 @@ The code is a little roundabout for a few reasons:
 	the	2nd item.
 {% endcomment %}
 
+{% assign current_page = page.path | replace_first: page.version,"" | split: "/" %}
+{% assign current_page = current_page[1] | prepend: "/" %}
+
 {% assign unsorted_navbars = "" | split:"|" %}
 {% for navbars_hashmap in site.data[page.version].navbars %}
 	{% assign navbar = navbars_hashmap[1] %}
 	{% assign unsorted_navbars = unsorted_navbars | push: navbar %}
-	{% if page.url contains navbar.path %}
+	{% assign navbar_size = navbar.path | size %}
+	{% if current_page == navbar.path %}
 		{% assign this_pages_navbar = navbar %}
 	{% endif %}
 {% endfor %}
@@ -56,7 +60,7 @@ function redirect(version) {
 	<div id="vendorStrip" class="dark-text">
 		<ul>
 			{% for navbar in navbars %}
-				<li><a href="{{base}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
+				<li><a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
 			{% endfor %}
 		</ul>
 	</div>

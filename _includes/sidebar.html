@@ -12,6 +12,6 @@
     {% else %}
       {% assign target="" %}
     {% endif %}
-    <a class="item" data-title="{{ item.title }}" href="/{{base}}{{ page.version }}{{ item.path }}"{{ target }}></a>
+    <a class="item" data-title="{{ item.title }}" href="{{ site.baseurl }}/{{ page.version }}{{ item.path }}"{{ target }}></a>
   {% endif %}
 {% endfor %}
