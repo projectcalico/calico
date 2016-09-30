@@ -1,88 +1,88 @@
 ---
 ---
-# Calico documentation
-[Click Here for Demo Site of Master](https://tigera.github.io/calico-docs/)
+# calico-docs Developer Documentation
 
-## Building the docs
+[Click Here for Live Preview Site](https://tigera.github.io/calico-docs/)
 
-First install Jekyll - see [here](https://jekyllrb.com/)
+## Building
 
-Once installed, from the root of this repo you should be able to run
+The docs require jekyll, a ruby gem.
 
 ```
+gem install jekyll
 jekyll serve
 ```
 
-## Changing the version number
+Alternatively, you can easily volume mount the source files into the official jekyll docker image via using a simple makefile step:
 
-The version number of the docs is stored in the default frontmatter build by _config.yml.  When you want to build a new version (or you're rebuilding an old version), change this in the config file - it'll then be reproduced on each page of the docs.
+```
+make serve
+```
 
-## Building older versions
+As the output states, docs should then be viewable at http://localhost:4000/ .
 
-To build older versions of the docs:
+## Navigation & Sidebar
 
--  Check out the branch you want to build.
--  Update _config.yml with the correct version number (probably not necessary as it should be part of the branch!)
--  run `jekyll build` to build the docs
+The docs (currently) are split into 4 sections:
 
-
-Having done this, you need to copy the resulting `_site` directory to an appropriate location for hosting.  
-
-One easy way to do this is to copy the _site/* to, say v1_3/* in the master docs.  When you rebuild/serve the master jekyll site, jekyll will just serve up the entire v1_3/ directory as well.
-
-Once you've worked out where you're going to host the docs, though, you'll need to fix up the docs/other_releases pages so that the links to the appropriate versions are correct (both in the old docs you've just built and in the latest docs).
-
-## TOCs and Navigation
-The docs are split into 5 sections, with the navigation controlled by _data/globals.yml and an individual yml file for each of the following sections:
-
+- what
 - getting-started
 - using
-- what
 - reference
-- community
 
-To modify the navigation (e.g. when adding a new file), you should change the yml file for the appropriate section.  The format is, hopefully, pretty obvious.
+#### How It Works
 
-## Relative and absolute links
+The naming and layout of these navbars are stored in `_data/$VERSION/navbars/*`. Jekyll automatically stores information from the `_data` dir in an accessible variable called `site.data`. The toplevel layout (`_layout/docwithnav.html`) will iterate through all the files in `site.data[version].navbars` to construct the sidebar based on which version is being viewed.
 
-You can use relative links in doc pages.  However, if you want to make absolute links (for example, to /images) you should
+> Note: Sidebar paths to index files (see next section) should end in a `/` in the yaml file. Sidebar paths to actual files should not end in a `/` in the yaml file.
 
-- include the base.html fie at the top of your markdown
+## Pathing
 
-```
-{ % include base.html % }
-```
+URL structure is important. In order to create a toplevel splash page for a URL path, simply name the file `index.md`. See the following example:
 
-- prepend the link or reference with `{{base}}`.  For example `<a href="{{base}}/images"` or `[link]({{base}}/page)`.  The base variable is calculated for each page when served and converts absolute paths to relative (which allows us to not worry about where github pages may host the site, for example).
 
-For reasons related to getting the TOCs working properly with a changing "base" URL, note you shouldn't use "index.md" pages with implicit links to the owning directory as this screws up the calculation of the relative path.
+| URL                                           | Filepath                                         |
+|-----------------------------------------------|--------------------------------------------------|
+| `/getting-started/kubernetes/`                | `/getting-started/kubernetes/index.md`           |
+| `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md` |
 
+
+## Linking Content
+
+All links should be absolute links. To link to versioned content, prefix all links with: `{{site.baseurl}}/{{page.version}}/`
+
+> Tip: `page.version` will be inherited from the default set in `_config.yml` for the current page's directory.
+
+## Releases
+
+The following steps detail how to cut a new release:
+
+1. Save off master as a release:
+
+  ```
+  cp -R ./master X_Y
+  cp -R ./_includes/master ./_includes/X_Y
+  cp -R ./_data/master ./_data/X_Y
+  ```
+
+2. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
+
+  ```
+  -
+    scope:
+      path: "X_Y"
+    values:
+      version: "X_Y"
+  ```
+
+3. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html`. (This step should be replaced by automation ASAP.)
+
+## Testing
+
+Print all broken links: `make htmlproofer`
+
+## License
 
 Most of the theming of this site is based on the Kubernetes documentation.  The original Kubernetes Apache license in in [LICENSE](LICENSE).
 
-At least some of this work is based on the basic Jekyll theme from scotch.io - see the license below.
-
-## Developer Notes
-- Links to documents in yml sidebar:
-  - Must end in `/` if its an `index.md` directory file.
-  - Must not end in `/` if its a regular named doc.
-- All hyperlinks in documents should be the *full URL*. Do not use relative links ever. i.e. `{{site.baseurl}}/{{page.version}}/getting-started/...`. This makes it much easier to fix broken links when files are moved.
-
-
-## Release Process
-
-First, modify `_config.yaml` and add a new section to defaults specifiying what the version of the new subdirectory will be:
-```
--
-  scope:
-    path: "X.Y"
-  values:
-    version: X.Y
-```
-
-Then create the new docs:
-```
-cp -R ./master X.Y
-cp -R ./_includes/master ./_includes/X.Y
-cp -R ./_data/master ./_data/X.Y
-```
+At least some of this work is based on the basic Jekyll theme from scotch.io - see [scotch.io.github.io license](https://github.com/scotch-io/scotch-io.github.io#mit-license).
