@@ -173,7 +173,7 @@ See the [IPv6 worked example](IPv6) for a worked example.
 ## Advanced network policy
 
 For details about advanced policy options read the
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 

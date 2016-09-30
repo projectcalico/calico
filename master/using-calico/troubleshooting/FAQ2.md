@@ -61,7 +61,7 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the
 internet as well. You can read about how to configure security profiles in the
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/AdvancedNetworkPolicy).
+[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy).
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that
