@@ -10,5 +10,5 @@ clean:
 	
 
 htmlproofer: _site
-	docker run --rm -v $$PWD:/site 18fgsa/html-proofer /site/_site --assume-extension --check-html --disable-external --empty-alt-ignore
-	docker run --rm -v $$PWD:/site 18fgsa/html-proofer /site/_site --external-only
+	docker run --rm -v $$PWD:/site 18fgsa/html-proofer /site/_site --assume-extension --check-html --disable-external --empty-alt-ignore --url-swap \/calico-docs:
+	docker run --rm -v $$PWD:/site 18fgsa/html-proofer /site/_site --external-only --url-swap \/calico-docs:
