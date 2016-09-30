@@ -1,5 +1,3 @@
----
----
 # calico-docs Developer Documentation
 
 [Click Here for Live Preview Site](https://tigera.github.io/calico-docs/)
