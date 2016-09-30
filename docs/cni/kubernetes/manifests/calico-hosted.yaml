@@ -40,6 +40,24 @@ spec:
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_cert
             # Auto-detect the BGP IP address.
             - name: IP
               value: ""
@@ -52,6 +70,8 @@ spec:
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
+            - mountPath: /calico-secrets
+              name: etcd-certs
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -76,6 +96,8 @@ spec:
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
+            - mountPath: /calico-secrets
+              name: etcd-certs
       volumes:
         # Used by calico/node.
         - name: lib-modules
@@ -91,6 +113,10 @@ spec:
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
+        # Mount in the etcd TLS secrets.
+        - name: etcd-certs
+          secret:
+            secretName: calico-etcd-secrets
 
 ---
 
@@ -126,6 +152,24 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_cert
             # The location of the Kubernetes API.  Use the default Kubernetes
             # service for API access.
             - name: K8S_API
@@ -135,3 +179,12 @@ spec:
             # kubernetes.default to the correct service clusterIP.
             - name: CONFIGURE_ETC_HOSTS
               value: "true"
+          volumeMounts:
+            # Mount in the etcd TLS secrets.
+            - mountPath: /calico-secrets
+              name: etcd-certs
+      volumes:
+        # Mount in the etcd TLS secrets.
+        - name: etcd-certs
+          secret:
+            secretName: calico-etcd-secrets

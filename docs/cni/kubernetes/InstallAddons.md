@@ -17,7 +17,7 @@ The Calico self-hosted installation consists of three objects in the `kube-syste
 
 To intall these components:
 ```
-kubectl create -f manifests/calico-configmap.yaml
+kubectl create -f manifests/calico-config.yaml
 kubectl create -f manifests/calico-hosted.yaml
 ```
 
