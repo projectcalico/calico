@@ -50,8 +50,12 @@ class TestElection(unittest.TestCase):
         self.print_exc_patch = mock.patch("traceback.print_exception",
                                           autospec=True)
         self.print_exc_patch.start()
+        # Mock calls to sys.exit.
+        self.sys_exit_p = mock.patch("sys.exit")
+        self.sys_exit_p.start()
 
     def tearDown(self):
+        self.sys_exit_p.stop()
         self.print_exc_patch.stop()
         election.etcd = self._real_etcd
         eventlet.sleep = self._real_sleep

@@ -194,6 +194,10 @@ class Lib(object):
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
 
+        # Mock calls to sys.exit.
+        self.sys_exit_p = mock.patch("sys.exit")
+        self.sys_exit_p.start()
+
         # Hook eventlet.
         self.setUp_eventlet()
 
@@ -402,6 +406,9 @@ class Lib(object):
 
         # Stop hooking eventlet.
         self.tearDown_eventlet()
+
+        # Stop mocking sys.exit.
+        self.sys_exit_p.stop()
 
     def tearDown_eventlet(self):
 
