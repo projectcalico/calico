@@ -83,7 +83,7 @@ Options:
 		}
 
 		if err != nil {
-			fmt.Println("Error executing command. Invalid option: 'calicoctl", strings.Join(args, " "), "'. See 'calicoctl --help' to read about a specific subcommand.")
+			fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 			os.Exit(1)
 		}
 	}
