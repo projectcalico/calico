@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"os"
 
@@ -25,7 +26,8 @@ import (
 )
 
 func main() {
-	usage := `Usage: calicoctl [options] <command> [<args>...]
+	usage := `Usage:
+    calicoctl [options] <command> [<args>...]
 
     create         Create a resource by filename or stdin.
     replace        Replace a resource by filename or stdin.
@@ -79,10 +81,11 @@ Options:
 		default:
 			fmt.Println(usage)
 		}
+
+		if err != nil {
+			fmt.Println("Error executing command. Invalid option: 'calicoctl", strings.Join(args, " "), "'. See 'calicoctl --help' to read about a specific subcommand.")
+			os.Exit(1)
+		}
 	}
 
-	if err != nil {
-		fmt.Printf("Error executing command: %s\n", err)
-		os.Exit(1)
-	}
 }
