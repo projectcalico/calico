@@ -19,6 +19,7 @@ We recommend configuring the hosts with the hostname `calico-01` and
 `calico-02`.  The worked example will refer to these hostnames.
 
 They must have the following software installed:
+
 - Docker 1.9 or greater (details below)
 - `ip_set`, `iptables`, and `ip6tables` kernel modules.
 -  The `calicoctl` binary in your path (see below)
@@ -99,7 +100,7 @@ the current etcd version if etcd is available.
 ## Continue with the worked example
 
 With the environment set up, you can run through the remainder of the worked
-example in the [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual).
+example in the [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic).
 
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/

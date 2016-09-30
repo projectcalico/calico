@@ -1,4 +1,6 @@
-{% if page.title %}{% assign title=page.title %}{% endif %}
+{% if page.title %}
+	{% assign title=page.title %}
+{% endif %}
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,28 +21,8 @@
 <header>
 	<a href="https://projectcalico.org" class="logo"></a>
 	<div class="nav-buttons">
-		<a href="{{site.baseurl}}" class="button topnav">Documentation</a>
+		<a href="{{site.baseurl}}/{{page.version}}{{navbars[0].path}}" class="button topnav">Documentation</a>
 		<a href="http://www.projectcalico.org/community" class="button topnav">Support</a>
 		<a href="http://www.projectcalico.org/blog" class="button topnav">Blog</a>
 	</div>
-	<nav id="mainNav">
-		<main>
-			<div class="nav-box">
-				<h3><a href="">Learn</a></h3>
-				<p>Learn about Project Calico.</p>
-			</div>
-			<div class="nav-box">
-				<h3><a href="{{site.baseurl}}/{{page.version}}/"></a></h3>
-				<p>Learn more about Calico in our documentation.</p>
-			</div>
-			<div class="nav-box">
-				<h3><a href="">Support</a></h3>
-				<p>Join the Calico community and chat with other Calico users and the project authos.</p>
-			</div>
-			<div class="nav-box">
-				<h3><a href="">Blog</a></h3>
-				<p>See what the Calico team are up in our latest blog posts.</p>
-			</div>
-		</main>
-	</nav>
 </header>
