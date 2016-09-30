@@ -607,13 +607,13 @@ class TestDevices(unittest.TestCase):
             "unexpected error"
         )
         devices.remove_conntrack_flows(set(["10.0.0.1"]), 4)
-        self.assertEqual(m_check_call.mock_calls, [
-            mock.call(["conntrack", "--family", "ipv4", "--delete",
-                       "--orig-src", "10.0.0.1"]),
-            mock.call(["conntrack", "--family", "ipv4", "--delete",
-                       "--orig-dst", "10.0.0.1"]),
-            mock.call(["conntrack", "--family", "ipv4", "--delete",
-                       "--reply-src", "10.0.0.1"]),
-            mock.call(["conntrack", "--family", "ipv4", "--delete",
-                       "--reply-dst", "10.0.0.1"]),
-        ])
+        # Each call is retried 3 times.
+        self.assertEqual(m_check_call.mock_calls,
+            [mock.call(["conntrack", "--family", "ipv4", "--delete",
+                        "--orig-src", "10.0.0.1"])] * 3 +
+            [mock.call(["conntrack", "--family", "ipv4", "--delete",
+                        "--orig-dst", "10.0.0.1"])] * 3 +
+            [mock.call(["conntrack", "--family", "ipv4", "--delete",
+                        "--reply-src", "10.0.0.1"])] * 3 +
+            [mock.call(["conntrack", "--family", "ipv4", "--delete",
+                        "--reply-dst", "10.0.0.1"])] * 3)
