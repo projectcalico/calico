@@ -17,7 +17,7 @@ package compat
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/tigera/libcalico-go/lib/backend/api"
-	. "github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 type ModelAdaptor struct {
@@ -31,8 +31,8 @@ func NewAdaptor(c api.Client) *ModelAdaptor {
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
-func (c *ModelAdaptor) Create(d *KVPair) (*KVPair, error) {
-	if _, ok := d.Key.(ProfileKey); ok {
+func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
+	if _, ok := d.Key.(model.ProfileKey); ok {
 		t, l, r := toTagsLabelsRules(d)
 		if t, err := c.client.Create(t); err != nil {
 			return nil, err
@@ -50,8 +50,8 @@ func (c *ModelAdaptor) Create(d *KVPair) (*KVPair, error) {
 
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
-func (c *ModelAdaptor) Update(d *KVPair) (*KVPair, error) {
-	if _, ok := d.Key.(ProfileKey); ok {
+func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
+	if _, ok := d.Key.(model.ProfileKey); ok {
 		t, l, r := toTagsLabelsRules(d)
 		if t, err := c.client.Update(t); err != nil {
 			return nil, err
@@ -69,8 +69,8 @@ func (c *ModelAdaptor) Update(d *KVPair) (*KVPair, error) {
 
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
-func (c *ModelAdaptor) Apply(d *KVPair) (*KVPair, error) {
-	if _, ok := d.Key.(ProfileKey); ok {
+func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
+	if _, ok := d.Key.(model.ProfileKey); ok {
 		t, l, r := toTagsLabelsRules(d)
 		if t, err := c.client.Apply(t); err != nil {
 			return nil, err
@@ -87,33 +87,33 @@ func (c *ModelAdaptor) Apply(d *KVPair) (*KVPair, error) {
 }
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
-func (c *ModelAdaptor) Delete(d *KVPair) error {
+func (c *ModelAdaptor) Delete(d *model.KVPair) error {
 	return c.client.Delete(d)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *ModelAdaptor) Get(k Key) (*KVPair, error) {
-	if _, ok := k.(ProfileKey); ok {
-		var t, l, r *KVPair
+func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
+	if _, ok := k.(model.ProfileKey); ok {
+		var t, l, r *model.KVPair
 		var err error
-		pk := k.(ProfileKey)
+		pk := k.(model.ProfileKey)
 
-		if t, err = c.client.Get(ProfileTagsKey{pk}); err != nil {
+		if t, err = c.client.Get(model.ProfileTagsKey{pk}); err != nil {
 			return nil, err
 		}
-		d := KVPair{
+		d := model.KVPair{
 			Key: k,
-			Value: Profile{
+			Value: model.Profile{
 				Tags: t.Value.([]string),
 			},
 			Revision: t.Revision,
 		}
-		p := d.Value.(Profile)
-		if l, err = c.client.Get(ProfileLabelsKey{pk}); err == nil {
+		p := d.Value.(model.Profile)
+		if l, err = c.client.Get(model.ProfileLabelsKey{pk}); err == nil {
 			p.Labels = l.Value.(map[string]string)
 		}
-		if r, err = c.client.Get(ProfileRulesKey{pk}); err == nil {
-			p.Rules = r.Value.(ProfileRules)
+		if r, err = c.client.Get(model.ProfileRulesKey{pk}); err == nil {
+			p.Rules = r.Value.(model.ProfileRules)
 		}
 		return &d, nil
 	}
@@ -122,7 +122,7 @@ func (c *ModelAdaptor) Get(k Key) (*KVPair, error) {
 
 // List entries in the datastore.  This may return an empty list of there are
 // no entries matching the request in the ListInterface.
-func (c *ModelAdaptor) List(l ListInterface) ([]*KVPair, error) {
+func (c *ModelAdaptor) List(l model.ListInterface) ([]*model.KVPair, error) {
 	return c.client.List(l)
 }
 
@@ -133,21 +133,21 @@ func (c *ModelAdaptor) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 // Convert a Profile KVPair to separate KVPair types for Keys, Labels and Rules.
 // These separate KVPairs are used to write three separate objects that make up
 // a single profile.
-func toTagsLabelsRules(d *KVPair) (t, l, r *KVPair) {
-	p := d.Value.(Profile)
-	pk := d.Key.(ProfileKey)
+func toTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
+	p := d.Value.(model.Profile)
+	pk := d.Key.(model.ProfileKey)
 
-	t = &KVPair{
-		Key:      ProfileTagsKey{pk},
+	t = &model.KVPair{
+		Key:      model.ProfileTagsKey{pk},
 		Value:    p.Tags,
 		Revision: d.Revision,
 	}
-	l = &KVPair{
-		Key:   ProfileLabelsKey{pk},
+	l = &model.KVPair{
+		Key:   model.ProfileLabelsKey{pk},
 		Value: p.Labels,
 	}
-	r = &KVPair{
-		Key:   ProfileRulesKey{pk},
+	r = &model.KVPair{
+		Key:   model.ProfileRulesKey{pk},
 		Value: p.Rules,
 	}
 

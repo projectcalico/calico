@@ -15,7 +15,7 @@
 package validator_test
 
 import (
-	. "github.com/tigera/libcalico-go/lib/validator"
+	"github.com/tigera/libcalico-go/lib/validator"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -58,10 +58,10 @@ func init() {
 	DescribeTable("Validator",
 		func(input interface{}, valid bool) {
 			if valid {
-				Expect(Validate(input)).To(BeNil(),
+				Expect(validator.Validate(input)).To(BeNil(),
 					"expected value to be valid")
 			} else {
-				Expect(Validate(input)).ToNot(BeNil(),
+				Expect(validator.Validate(input)).ToNot(BeNil(),
 					"expected value to be invalid")
 			}
 		},

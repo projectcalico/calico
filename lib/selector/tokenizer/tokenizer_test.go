@@ -15,7 +15,7 @@
 package tokenizer_test
 
 import (
-	. "github.com/tigera/libcalico-go/lib/selector/tokenizer"
+	"github.com/tigera/libcalico-go/lib/selector/tokenizer"
 
 	"fmt"
 
@@ -25,90 +25,90 @@ import (
 
 var tokenTests = []struct {
 	input    string
-	expected []Token
+	expected []tokenizer.Token
 }{
-	{`a=="b"`, []Token{
-		{TokLabel, "a"},
-		{TokEq, nil},
-		{TokStringLiteral, "b"},
-		{TokEof, nil},
+	{`a=="b"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokEq, nil},
+		{tokenizer.TokStringLiteral, "b"},
+		{tokenizer.TokEof, nil},
 	}},
 
-	{`a=="b"`, []Token{
-		{TokLabel, "a"},
-		{TokEq, nil},
-		{TokStringLiteral, "b"},
-		{TokEof, nil},
+	{`a=="b"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokEq, nil},
+		{tokenizer.TokStringLiteral, "b"},
+		{tokenizer.TokEof, nil},
 	}},
-	{`label == "value"`, []Token{
-		{TokLabel, "label"},
-		{TokEq, nil},
-		{TokStringLiteral, "value"},
-		{TokEof, nil},
+	{`label == "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokEq, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a not in "bar" && !has(foo) || b in c`, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokStringLiteral, "bar"},
-		{TokAnd, nil},
-		{TokNot, nil},
-		{TokHas, "foo"},
-		{TokOr, nil},
-		{TokLabel, "b"},
-		{TokIn, nil},
-		{TokLabel, "c"},
-		{TokEof, nil},
+	{`a not in "bar" && !has(foo) || b in c`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokStringLiteral, "bar"},
+		{tokenizer.TokAnd, nil},
+		{tokenizer.TokNot, nil},
+		{tokenizer.TokHas, "foo"},
+		{tokenizer.TokOr, nil},
+		{tokenizer.TokLabel, "b"},
+		{tokenizer.TokIn, nil},
+		{tokenizer.TokLabel, "c"},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a  not  in  "bar"  &&  ! has( foo )  ||  b  in  c `, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokStringLiteral, "bar"},
-		{TokAnd, nil},
-		{TokNot, nil},
-		{TokHas, "foo"},
-		{TokOr, nil},
-		{TokLabel, "b"},
-		{TokIn, nil},
-		{TokLabel, "c"},
-		{TokEof, nil},
+	{`a  not  in  "bar"  &&  ! has( foo )  ||  b  in  c `, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokStringLiteral, "bar"},
+		{tokenizer.TokAnd, nil},
+		{tokenizer.TokNot, nil},
+		{tokenizer.TokHas, "foo"},
+		{tokenizer.TokOr, nil},
+		{tokenizer.TokLabel, "b"},
+		{tokenizer.TokIn, nil},
+		{tokenizer.TokLabel, "c"},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a notin"bar"&&!has(foo)||b in"c"`, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokStringLiteral, "bar"},
-		{TokAnd, nil},
-		{TokNot, nil},
-		{TokHas, "foo"},
-		{TokOr, nil},
-		{TokLabel, "b"},
-		{TokIn, nil},
-		{TokStringLiteral, "c"},
-		{TokEof, nil},
+	{`a notin"bar"&&!has(foo)||b in"c"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokStringLiteral, "bar"},
+		{tokenizer.TokAnd, nil},
+		{tokenizer.TokNot, nil},
+		{tokenizer.TokHas, "foo"},
+		{tokenizer.TokOr, nil},
+		{tokenizer.TokLabel, "b"},
+		{tokenizer.TokIn, nil},
+		{tokenizer.TokStringLiteral, "c"},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a not in {}`, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokLBrace, nil},
-		{TokRBrace, nil},
-		{TokEof, nil},
+	{`a not in {}`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokLBrace, nil},
+		{tokenizer.TokRBrace, nil},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a not in {"a"}`, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokLBrace, nil},
-		{TokStringLiteral, "a"},
-		{TokRBrace, nil},
-		{TokEof, nil},
+	{`a not in {"a"}`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokLBrace, nil},
+		{tokenizer.TokStringLiteral, "a"},
+		{tokenizer.TokRBrace, nil},
+		{tokenizer.TokEof, nil},
 	}},
-	{`a not in {"a","B"}`, []Token{
-		{TokLabel, "a"},
-		{TokNotIn, nil},
-		{TokLBrace, nil},
-		{TokStringLiteral, "a"},
-		{TokComma, nil},
-		{TokStringLiteral, "B"},
-		{TokRBrace, nil},
-		{TokEof, nil},
+	{`a not in {"a","B"}`, []tokenizer.Token{
+		{tokenizer.TokLabel, "a"},
+		{tokenizer.TokNotIn, nil},
+		{tokenizer.TokLBrace, nil},
+		{tokenizer.TokStringLiteral, "a"},
+		{tokenizer.TokComma, nil},
+		{tokenizer.TokStringLiteral, "B"},
+		{tokenizer.TokRBrace, nil},
+		{tokenizer.TokEof, nil},
 	}},
 }
 
@@ -117,7 +117,7 @@ var _ = Describe("Token", func() {
 	for _, test := range tokenTests {
 		test := test // Take copy for closure
 		It(fmt.Sprintf("should tokenize %#v as %v", test.input, test.expected), func() {
-			Expect(Tokenize(test.input)).To(Equal(test.expected))
+			Expect(tokenizer.Tokenize(test.input)).To(Equal(test.expected))
 		})
 	}
 })

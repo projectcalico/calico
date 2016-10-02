@@ -15,7 +15,7 @@
 package parser_test
 
 import (
-	. "github.com/tigera/libcalico-go/lib/selector/parser"
+	"github.com/tigera/libcalico-go/lib/selector/parser"
 
 	"fmt"
 
@@ -180,10 +180,10 @@ var _ = Describe("Parser", func() {
 	for _, test := range selectorTests {
 		var test = test // Take copy of variable for the closure.
 		Context(fmt.Sprintf("selector %#v", test.sel), func() {
-			var sel Selector
+			var sel parser.Selector
 			var err error
 			BeforeEach(func() {
-				sel, err = Parse(test.sel)
+				sel, err = parser.Parse(test.sel)
 				Expect(err).To(BeNil())
 			})
 			It("should match", func() {
@@ -200,7 +200,7 @@ var _ = Describe("Parser", func() {
 			})
 			It("should match after canonicalising", func() {
 				for _, labels := range test.expMatches {
-					sel2, err := Parse(sel.String())
+					sel2, err := parser.Parse(sel.String())
 					Expect(err).To(BeNil())
 					By(fmt.Sprintf("%#v matching %v", test.sel, labels))
 					Expect(sel2.Evaluate(labels)).To(BeTrue())
@@ -208,7 +208,7 @@ var _ = Describe("Parser", func() {
 			})
 			It("should not match after canonicalising", func() {
 				for _, labels := range test.expNonMatches {
-					sel2, err := Parse(sel.String())
+					sel2, err := parser.Parse(sel.String())
 					Expect(err).To(BeNil())
 					By(fmt.Sprintf("%#v not matching %v", test.sel, labels))
 					Expect(sel2.Evaluate(labels)).To(BeFalse())
@@ -220,7 +220,7 @@ var _ = Describe("Parser", func() {
 	It("Should reject bad selector", func() {
 		for _, sel := range badSelectors {
 			By(fmt.Sprint("Rejecting ", sel))
-			_, err := Parse(sel)
+			_, err := parser.Parse(sel)
 			Expect(err).ToNot(BeNil())
 		}
 	})
@@ -229,11 +229,11 @@ var _ = Describe("Parser", func() {
 		test := test
 		It(fmt.Sprintf("should canonicalise %v as %v with UID %v and round-trip",
 			test.input, test.expected, test.expectedUid), func() {
-			sel, err := Parse(test.input)
+			sel, err := parser.Parse(test.input)
 			Expect(err).To(BeNil())
 			canon := sel.String()
 			Expect(canon).To(Equal(test.expected))
-			roundTripped, err := Parse(canon)
+			roundTripped, err := parser.Parse(canon)
 			Expect(err).To(BeNil())
 			Expect(roundTripped.String()).To(Equal(canon))
 			uid := sel.UniqueId()
@@ -247,7 +247,7 @@ var _ = Describe("Parser", func() {
 			continue
 		}
 		It(fmt.Sprintf("should calculate the correct UID for %s", test.input), func() {
-			sel, err := Parse(test.input)
+			sel, err := parser.Parse(test.input)
 			Expect(err).To(BeNil())
 			Expect(sel.UniqueId()).To(Equal(test.expectedUid),
 				"incorrect UID for "+test.input)

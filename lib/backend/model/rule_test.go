@@ -15,7 +15,7 @@
 package model_test
 
 import (
-	. "github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 
 	"fmt"
 
@@ -26,7 +26,7 @@ import (
 )
 
 type ruleTest struct {
-	rule           Rule
+	rule           model.Rule
 	expectedOutput string
 }
 
@@ -46,47 +46,47 @@ var _, cidr, _ = net.ParseCIDR("10.0.0.0/16")
 
 var ruleStringTests = []ruleTest{
 	// Empty
-	{Rule{}, "allow"},
+	{model.Rule{}, "allow"},
 
 	// Int/string handling.
-	{Rule{Protocol: &intProto}, "allow 123"},
-	{Rule{Protocol: &tcpProto}, "allow tcp"},
+	{model.Rule{Protocol: &intProto}, "allow 123"},
+	{model.Rule{Protocol: &tcpProto}, "allow tcp"},
 
 	// Explicit actions, packet-wide matches.
-	{Rule{Action: "allow", Protocol: &tcpProto}, "allow tcp"},
-	{Rule{Action: "deny", Protocol: &icmpProto, ICMPType: &icmpType},
+	{model.Rule{Action: "allow", Protocol: &tcpProto}, "allow tcp"},
+	{model.Rule{Action: "deny", Protocol: &icmpProto, ICMPType: &icmpType},
 		"deny icmp type 10"},
-	{Rule{Protocol: &icmpProto, ICMPType: &icmpType, ICMPCode: &icmpCode},
+	{model.Rule{Protocol: &icmpProto, ICMPType: &icmpType, ICMPCode: &icmpCode},
 		"allow icmp type 10 code 6"},
 	// And negations of packet-wide matches.
-	{Rule{Action: "allow", NotProtocol: &tcpProto}, "allow !tcp"},
-	{Rule{Action: "deny", Protocol: &icmpProto, NotICMPType: &icmpType},
+	{model.Rule{Action: "allow", NotProtocol: &tcpProto}, "allow !tcp"},
+	{model.Rule{Action: "deny", Protocol: &icmpProto, NotICMPType: &icmpType},
 		"deny icmp !type 10"},
-	{Rule{Protocol: &icmpProto, NotICMPType: &icmpType, NotICMPCode: &icmpCode},
+	{model.Rule{Protocol: &icmpProto, NotICMPType: &icmpType, NotICMPCode: &icmpCode},
 		"allow icmp !type 10 !code 6"},
 
 	// From rules.
-	{Rule{SrcPorts: ports}, "allow from ports 1234,10:20"},
-	{Rule{SrcTag: "foo"}, "allow from tag foo"},
-	{Rule{SrcSelector: "bar"}, "allow from selector \"bar\""},
-	{Rule{SrcNet: cidr}, "allow from cidr 10.0.0.0/16"},
-	{Rule{NotSrcPorts: ports}, "allow from !ports 1234,10:20"},
-	{Rule{NotSrcTag: "foo"}, "allow from !tag foo"},
-	{Rule{NotSrcSelector: "bar"}, "allow from !selector \"bar\""},
-	{Rule{NotSrcNet: cidr}, "allow from !cidr 10.0.0.0/16"},
+	{model.Rule{SrcPorts: ports}, "allow from ports 1234,10:20"},
+	{model.Rule{SrcTag: "foo"}, "allow from tag foo"},
+	{model.Rule{SrcSelector: "bar"}, "allow from selector \"bar\""},
+	{model.Rule{SrcNet: cidr}, "allow from cidr 10.0.0.0/16"},
+	{model.Rule{NotSrcPorts: ports}, "allow from !ports 1234,10:20"},
+	{model.Rule{NotSrcTag: "foo"}, "allow from !tag foo"},
+	{model.Rule{NotSrcSelector: "bar"}, "allow from !selector \"bar\""},
+	{model.Rule{NotSrcNet: cidr}, "allow from !cidr 10.0.0.0/16"},
 
 	// To rules.
-	{Rule{DstPorts: ports}, "allow to ports 1234,10:20"},
-	{Rule{DstTag: "foo"}, "allow to tag foo"},
-	{Rule{DstSelector: "bar"}, "allow to selector \"bar\""},
-	{Rule{DstNet: cidr}, "allow to cidr 10.0.0.0/16"},
-	{Rule{NotDstPorts: ports}, "allow to !ports 1234,10:20"},
-	{Rule{NotDstTag: "foo"}, "allow to !tag foo"},
-	{Rule{NotDstSelector: "bar"}, "allow to !selector \"bar\""},
-	{Rule{NotDstNet: cidr}, "allow to !cidr 10.0.0.0/16"},
+	{model.Rule{DstPorts: ports}, "allow to ports 1234,10:20"},
+	{model.Rule{DstTag: "foo"}, "allow to tag foo"},
+	{model.Rule{DstSelector: "bar"}, "allow to selector \"bar\""},
+	{model.Rule{DstNet: cidr}, "allow to cidr 10.0.0.0/16"},
+	{model.Rule{NotDstPorts: ports}, "allow to !ports 1234,10:20"},
+	{model.Rule{NotDstTag: "foo"}, "allow to !tag foo"},
+	{model.Rule{NotDstSelector: "bar"}, "allow to !selector \"bar\""},
+	{model.Rule{NotDstNet: cidr}, "allow to !cidr 10.0.0.0/16"},
 
 	// Complex rule.
-	{Rule{Protocol: &tcpProto,
+	{model.Rule{Protocol: &tcpProto,
 		SrcPorts:       ports,
 		SrcTag:         "srcTag",
 		DstTag:         "dstTag",

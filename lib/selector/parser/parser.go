@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
-	. "github.com/tigera/libcalico-go/lib/selector/tokenizer"
+	"github.com/tigera/libcalico-go/lib/selector/tokenizer"
 )
 
 const parserDebug = false
@@ -27,11 +27,11 @@ const parserDebug = false
 // Parse a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
 	log.Debugf("Parsing %#v", selector)
-	tokens, err := Tokenize(selector)
+	tokens, err := tokenizer.Tokenize(selector)
 	if err != nil {
 		return
 	}
-	if tokens[0].Kind == TokEof {
+	if tokens[0].Kind == tokenizer.TokEof {
 		return selectorRoot{root: AllNode{}}, nil
 	}
 	log.Debugf("Tokens %v", tokens)
@@ -49,7 +49,7 @@ func Parse(selector string) (sel Selector, err error) {
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func parseOrExpression(tokens []Token) (sel node, remTokens []Token, err error) {
+func parseOrExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
@@ -64,7 +64,7 @@ func parseOrExpression(tokens []Token) (sel node, remTokens []Token, err error) 
 	// Then loop looking for "||" followed by an <expression>
 	for {
 		switch remTokens[0].Kind {
-		case TokOr:
+		case tokenizer.TokOr:
 			remTokens = remTokens[1:]
 			sel, remTokens, err = parseAndExpression(remTokens)
 			if err != nil {
@@ -83,7 +83,7 @@ func parseOrExpression(tokens []Token) (sel node, remTokens []Token, err error) 
 }
 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
-func parseAndExpression(tokens []Token) (sel node, remTokens []Token, err error) {
+func parseAndExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing &&s from %v", tokens)
 	}
@@ -98,7 +98,7 @@ func parseAndExpression(tokens []Token) (sel node, remTokens []Token, err error)
 	// Then loop looking for "&&" followed by another operation.
 	for {
 		switch remTokens[0].Kind {
-		case TokAnd:
+		case tokenizer.TokAnd:
 			remTokens = remTokens[1:]
 			sel, remTokens, err = parseOperation(remTokens)
 			if err != nil {
@@ -118,7 +118,7 @@ func parseAndExpression(tokens []Token) (sel node, remTokens []Token, err error)
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
+func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
@@ -130,7 +130,7 @@ func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
 	// First, collapse any leading "!" operators to a single boolean.
 	negated := false
 	for {
-		if tokens[0].Kind == TokNot {
+		if tokens[0].Kind == tokenizer.TokNot {
 			negated = !negated
 			tokens = tokens[1:]
 		} else {
@@ -140,42 +140,42 @@ func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
 
 	// Then, look for the various types of operator.
 	switch tokens[0].Kind {
-	case TokHas:
+	case tokenizer.TokHas:
 		sel = HasNode{tokens[0].Value.(string)}
 		remTokens = tokens[1:]
-	case TokAll:
+	case tokenizer.TokAll:
 		sel = AllNode{}
 		remTokens = tokens[1:]
-	case TokLabel:
+	case tokenizer.TokLabel:
 		// should have an operator and a literal.
 		if len(tokens) < 3 {
 			err = errors.New(fmt.Sprint("Unexpected end of string in middle of op", tokens))
 			return
 		}
 		switch tokens[1].Kind {
-		case TokEq:
-			if tokens[2].Kind == TokStringLiteral {
+		case tokenizer.TokEq:
+			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				sel = LabelEqValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
 				remTokens = tokens[3:]
 			} else {
 				err = errors.New("Expected string")
 			}
-		case TokNe:
-			if tokens[2].Kind == TokStringLiteral {
+		case tokenizer.TokNe:
+			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				sel = LabelNeValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
 				remTokens = tokens[3:]
 			} else {
 				err = errors.New("Expected string")
 			}
-		case TokIn, TokNotIn:
-			if tokens[2].Kind == TokLBrace {
+		case tokenizer.TokIn, tokenizer.TokNotIn:
+			if tokens[2].Kind == tokenizer.TokLBrace {
 				remTokens = tokens[3:]
 				set := make(map[string]bool)
 				for {
-					if remTokens[0].Kind == TokStringLiteral {
+					if remTokens[0].Kind == tokenizer.TokStringLiteral {
 						set[remTokens[0].Value.(string)] = true
 						remTokens = remTokens[1:]
-						if remTokens[0].Kind == TokComma {
+						if remTokens[0].Kind == tokenizer.TokComma {
 							remTokens = remTokens[1:]
 						} else {
 							break
@@ -184,13 +184,13 @@ func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
 						break
 					}
 				}
-				if remTokens[0].Kind != TokRBrace {
+				if remTokens[0].Kind != tokenizer.TokRBrace {
 					err = errors.New("Expected }")
 				} else {
 					// Skip over the }
 					remTokens = remTokens[1:]
 
-					if tokens[1].Kind == TokIn {
+					if tokens[1].Kind == tokenizer.TokIn {
 						sel = LabelInSetNode{tokens[0].Value.(string), set}
 					} else {
 						sel = LabelNotInSetNode{tokens[0].Value.(string), set}
@@ -203,7 +203,7 @@ func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
 			err = errors.New(fmt.Sprint("Expected == or != not ", tokens[1]))
 			return
 		}
-	case TokLParen:
+	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
 		sel, remTokens, err = parseOrExpression(tokens[1:])
 		if err != nil {
@@ -211,7 +211,7 @@ func parseOperation(tokens []Token) (sel node, remTokens []Token, err error) {
 		}
 		// After parsing the nested expression, there should be
 		// a matching paren.
-		if len(remTokens) < 1 || remTokens[0].Kind != TokRParen {
+		if len(remTokens) < 1 || remTokens[0].Kind != tokenizer.TokRParen {
 			err = errors.New("Expected )")
 			return
 		}

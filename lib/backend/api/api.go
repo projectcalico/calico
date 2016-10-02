@@ -17,7 +17,7 @@ package api
 import (
 	"fmt"
 
-	. "github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/tigera/libcalico-go/lib/backend/model"
 )
 
 // SyncStatus represents the overall state of the datastore.
@@ -59,37 +59,37 @@ type Client interface {
 	// Create creates the object specified in the KVPair, which must not
 	// already exist. On success, returns a KVPair for the object with
 	// revision  information filled-in.
-	Create(object *KVPair) (*KVPair, error)
+	Create(object *model.KVPair) (*model.KVPair, error)
 
 	// Update modifies the existing object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
 	// information filled-in.  If the input KVPair has revision
 	// information then the update only succeeds if the revision is still
 	// current.
-	Update(object *KVPair) (*KVPair, error)
+	Update(object *model.KVPair) (*model.KVPair, error)
 
 	// Apply updates or creates the object specified in the KVPair.
 	// On success, returns a KVPair for the object with revision
 	// information filled-in.  If the input KVPair has revision
 	// information then the update only succeeds if the revision is still
 	// current.
-	Apply(object *KVPair) (*KVPair, error)
+	Apply(object *model.KVPair) (*model.KVPair, error)
 
 	// Delete removes the object specified by the KVPair.  If the KVPair
 	// contains revision information, the delete only succeeds if the
 	// revision is still current.
 	//
 	// Some keys are hierarchical, and Delete is a recursive operation.
-	Delete(object *KVPair) error
+	Delete(object *model.KVPair) error
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.
-	Get(key Key) (*KVPair, error)
+	Get(key model.Key) (*model.KVPair, error)
 
 	// List returns a slice of KVPairs matching the input list options.
 	// list should be passed one of the model.<Type>ListOptions structs.
 	// Non-zero fields in the struct are used as filters.
-	List(list ListInterface) ([]*KVPair, error)
+	List(list model.ListInterface) ([]*model.KVPair, error)
 
 	// Syncer creates an object that generates a series of KVPair updates,
 	// which paint an eventually-consistent picture of the full state of
@@ -116,7 +116,7 @@ type SyncerCallbacks interface {
 	//
 	// When a recursive delete is made, deleting many leaf keys, the Syncer
 	// generates deletion updates for all the leaf keys.
-	OnUpdates(updates []KVPair)
+	OnUpdates(updates []model.KVPair)
 }
 
 // SyncerParseFailCallbacks is an optional interface that can be implemented
