@@ -1,3 +1,25 @@
+networking-calico (1:1.3.1-xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit f93201f).
+    - Allow Calico with OpenStack to coexist with other orchestrators using Calico.
+    - Import utility code from core Calico repo, so that networking-calico becomes
+      independent of that repo.
+    - Fix Neutron driver to correctly handle etcd connection being temporarily
+      stopped or unavailable.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 03 Oct 2016 10:03:20 +0100
+
+networking-calico (1:1.3.1-trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit f93201f).
+    - Allow Calico with OpenStack to coexist with other orchestrators using Calico.
+    - Import utility code from core Calico repo, so that networking-calico becomes
+      independent of that repo.
+    - Fix Neutron driver to correctly handle etcd connection being temporarily
+      stopped or unavailable.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 03 Oct 2016 10:03:20 +0100
+
 networking-calico (1:1.3.0-xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit 23c0f71).

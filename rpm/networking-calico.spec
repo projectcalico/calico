@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.3.0
+Version:        1.3.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 03 2016 Neil Jerram <neil@tigera.io> 1:1.3.1-1
+  - networking-calico version 1.3.1 release
+    - Allow Calico with OpenStack to coexist with other orchestrators using Calico.
+    - Import utility code from core Calico repo, so that networking-calico becomes
+      independent of that repo.
+    - Fix Neutron driver to correctly handle etcd connection being temporarily
+      stopped or unavailable.
+
 * Wed Sep 21 2016 Neil Jerram <neil@tigera.io> 1:1.3.0-1
   - networking-calico version 1.3.0 release
     - Host routes support

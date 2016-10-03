@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1
+
+- Allow Calico with OpenStack to coexist with other orchestrators using Calico.
+- Import utility code from core Calico repo, so that networking-calico becomes
+  independent of that repo.
+- Fix Neutron driver to correctly handle etcd connection being temporarily
+  stopped or unavailable.
+
 ## 1.3.0
 
 - Host routes support
