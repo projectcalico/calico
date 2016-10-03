@@ -67,9 +67,9 @@ copyright = u'%s, Tigera, Inc.' % year
 # built documents.
 #
 # The short X.Y version.
-version = '1.4.2'
+version = '1.4.3'
 # The full version, including alpha/beta/rc tags.
-release = '1.4.2'
+release = '1.4.3'
 
 if release != version:
     # Pre-release, add banner to all files:
