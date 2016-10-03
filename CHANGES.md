@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.3
+
+- Support InterfacePrefix having multiple values, to allow hybrid Calico use by
+  OpenStack and Kubernetes/Docker/Mesos at the same time.
+- Use PyInstaller-based Felix in calico/felix container build.
+- Update Debian and RPM packaging to stop requiring /etc/calico/felix.cfg, as
+  Felix itself no longer requires this file to exist.
+- Update URLs for the renaming of this repository from 'calico' to 'felix'.
+
 ## 1.4.2
 
 - Add CircleCI config

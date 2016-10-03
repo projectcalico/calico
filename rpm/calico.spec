@@ -2,7 +2,7 @@
 
 Name:           calico
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.2
+Version:        1.4.3
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -147,6 +147,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 03 2016 Neil Jerram <neil@tigera.io> 1.4.3-1
+  - calico version 1.4.3 release
+    - Support InterfacePrefix having multiple values, to allow hybrid Calico use by
+      OpenStack and Kubernetes/Docker/Mesos at the same time.
+    - Use PyInstaller-based Felix in calico/felix container build.
+    - Update Debian and RPM packaging to stop requiring /etc/calico/felix.cfg, as
+      Felix itself no longer requires this file to exist.
+    - Update URLs for the renaming of this repository from 'calico' to 'felix'.
 
 * Wed Sep 21 2016 Neil Jerram <neil@tigera.io> 1.4.2-1
   - Calico version 1.4.2
