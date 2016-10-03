@@ -48,7 +48,7 @@ function install_configure_etcd {
 mode=$1				# stack, unstack or clean
 phase=$2			# pre-install, install, post-config or extra
 
-if is_service_enabled calico; then
+if is_service_enabled calico-felix; then
     case $mode in
 
 	stack)

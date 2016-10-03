@@ -47,11 +47,11 @@ fi
 # When Neutron is enabled, Devstack does agent-related installations,
 # configurations and service startups as directed by the value of
 # Q_AGENT.  Devstack doesn't actually include any code for the
-# 'calico' value, but the point here is that we want to avoid running
-# code for any of the agents that Devstack _does_ have code for, such
-# as openvswitch and linuxbridge.  So all we're doing here is setting
-# a value that Devstack will not recognize.
-Q_AGENT=calico
+# 'calico-felix' value, but the point here is that we want to avoid
+# running code for any of the agents that Devstack _does_ have code for,
+# such as openvswitch and linuxbridge.  So all we're doing here is
+# setting a value that Devstack will not recognize.
+Q_AGENT=calico-felix
 
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
