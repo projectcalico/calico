@@ -22,7 +22,7 @@ toc:
   path: /using-calico/ipv6
 - title: Dockerless Calico
   path: /using-calico/dockerless-calico
-- title: Calico External Connectivity
+- title: External Connectivity
   path: /using-calico/external-connectivity
 - title: Troubleshooting
   path: /using-calico/troubleshooting/
