@@ -1,6 +1,6 @@
-calico (1.4.3-xenial) xenial; urgency=low
+calico (1.4.3-1-xenial) xenial; urgency=low
 
-  * calico release (from Git commit 2932d8c).
+  * calico release (from Git commit 2a477e9).
     - Support InterfacePrefix having multiple values, to allow hybrid Calico use by
       OpenStack and Kubernetes/Docker/Mesos at the same time.
     - Use PyInstaller-based Felix in calico/felix container build.
@@ -8,11 +8,11 @@ calico (1.4.3-xenial) xenial; urgency=low
       Felix itself no longer requires this file to exist.
     - Update URLs for the renaming of this repository from 'calico' to 'felix'.
 
- -- Neil Jerram <neil@tigera.io>  Mon, 03 Oct 2016 10:20:23 +0100
+ -- Neil Jerram <neil@tigera.io>  Tue, 04 Oct 2016 10:52:24 +0100
 
-calico (1.4.3-trusty) trusty; urgency=low
+calico (1.4.3-1-trusty) trusty; urgency=low
 
-  * calico release (from Git commit 2932d8c).
+  * calico release (from Git commit 2a477e9).
     - Support InterfacePrefix having multiple values, to allow hybrid Calico use by
       OpenStack and Kubernetes/Docker/Mesos at the same time.
     - Use PyInstaller-based Felix in calico/felix container build.
@@ -20,7 +20,7 @@ calico (1.4.3-trusty) trusty; urgency=low
       Felix itself no longer requires this file to exist.
     - Update URLs for the renaming of this repository from 'calico' to 'felix'.
 
- -- Neil Jerram <neil@tigera.io>  Mon, 03 Oct 2016 10:20:23 +0100
+ -- Neil Jerram <neil@tigera.io>  Tue, 04 Oct 2016 10:52:24 +0100
 
 calico (1.4.2-xenial) xenial; urgency=low
 
