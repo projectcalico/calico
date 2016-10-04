@@ -43,7 +43,7 @@ the order shown.
 This step should be run on every machine in your deployment that runs
 any Calico code, and also on the machine running the etcd cluster.
 
-### Ubuntu 14.04
+### Ubuntu
 
 Use apt-get to obtain the more recent version:
 
@@ -82,7 +82,7 @@ If present, uninstall any pip-installed networking-calico package:
 (networking-calico function is now installed as a Debian or RPM package
 instead.)
 
-### Ubuntu 14.04
+### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each compute
 host upgrade the Calico packages, as follows:
@@ -201,7 +201,7 @@ Or if you are using an earlier OpenStack release:
 On each machine running the Calico control software (every machine
 running neutron-server), run the following upgrade steps.
 
-### Ubuntu 14.04
+### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each control
 host you can upgrade only the Calico packages, as follows:

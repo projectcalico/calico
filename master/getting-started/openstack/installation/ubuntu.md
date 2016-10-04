@@ -1,12 +1,12 @@
 ---
-title: 'Ubuntu 14.04 Packaged Install Instructions'
+title: 'Ubuntu Packaged Install Instructions'
 ---
 
-These instructions will take you through a first-time install of Calico
-using the latest packages on a system running Ubuntu 14.04 with either
-OpenStack Icehouse, Juno, Kilo or Liberty. If you are upgrading an
-existing system, please see [this document](opens-upgrade) instead for
-upgrade instructions.
+These instructions will take you through a first-time install of Calico using
+the latest packages on a system running Ubuntu 14.04 (Trusty) or 16.04
+(Xenial), with OpenStack Icehouse, Juno, Kilo, Liberty or Mitaka. If you are
+upgrading an existing system, please see [this document](opens-upgrade) instead
+for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
 control nodes to use Calico, and upgrading compute nodes to use Calico.
@@ -18,7 +18,7 @@ Prerequisites
 
 Before starting this you will need the following:
 
--   One or more machines running Ubuntu 14.04 (these will be installed
+-   One or more machines running Ubuntu (these will be installed
     as your OpenStack compute or control nodes).
 -   SSH access to these machines.
 
@@ -33,35 +33,36 @@ Install OpenStack
 
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
-found here
---[Icehouse](http://docs.openstack.org/icehouse/install-guide/install/apt/content/index.html)
-/
-[Juno](http://docs.openstack.org/juno/install-guide/install/apt/content/index.html)
-/
-[Kilo](http://docs.openstack.org/kilo/install-guide/install/apt/content/index.html)
-/ [Liberty](http://docs.openstack.org/liberty/install-guide-ubuntu/).
+found at <http://docs.openstack.org>.
 
 Configuring the APT software sources
 ------------------------------------
 
-The machines need to be configured such that APT can get access to the
-Calico packages. This step depends on the OpenStack release you're
-using.
+The latest version of Calico for OpenStack is 1.4, and we recommend using it
+with OpenStack Liberty or later.  Other possible combinations are shown by the
+following table.
 
-Add the Calico PPA.
+| OpenStack release     | Calico version | Ubuntu versions | PPAs             |
+|-----------------------+----------------+-----------------+------------------|
+| Mitaka                |            1.4 | Xenial, Trusty  | calico-1.4       |
+| Liberty               |            1.4 | Xenial, Trusty  | calico-1.4       |
+| Kilo                  |            1.4 | Trusty          | calico-1.4, kilo |
+| (deprecated) Kilo     |            1.3 | Trusty          | kilo             |
+| (deprecated) Juno     |            1.3 | Trusty          | juno             |
+| (deprecated) Icehouse |            1.3 | Trusty          | icehouse         |
+
+For your chosen combination, you need to configure APT to use the corresponding
+PPA(s).  For example, for Calico 1.4 with Liberty or later:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/<release>
+    $ sudo apt-add-repository ppa:project-calico/calico-1.4
 ```
 
-
-Where `<release>` is icehouse, juno, kilo or stable (choose stable for
-Liberty onwards, because we no longer require patches to OpenStack).
-
+Before OpenStack Liberty, Calico needed patched versions of Nova and Neutron.
 If you're using a version of OpenStack prior to Liberty, edit
-`/etc/apt/preferences` to add the following lines, whose effect is to
-prefer Calico-provided packages for Nova and Neutron even if later
-versions of those packages are released by Ubuntu.
+`/etc/apt/preferences` to add the following lines, whose effect is to prefer
+Calico-provided packages for Nova and Neutron even if later versions of those
+packages are released by Ubuntu.
 
 ```
     Package: *
@@ -72,8 +73,8 @@ versions of those packages are released by Ubuntu.
 ### Common
 
 You will also need to add the official [BIRD](http://bird.network.cz/)
-PPA. This PPA contains fixes to BIRD that are not yet available in
-Ubuntu 14.04. To add the PPA, run:
+PPA. This PPA contains fixes to BIRD that are not yet available in Ubuntu. To
+add the PPA, run:
 
 ```shell
     $ sudo add-apt-repository ppa:cz.nic-labs/bird
@@ -97,7 +98,7 @@ cluster, please get in touch with us and we'll be happy to help you
 through the process.
 
 1.  Install the `etcd` packages:
-    
+
     ```shell
         $ sudo apt-get install etcd python-etcd
     ```
@@ -326,7 +327,7 @@ perform the following steps:
     > of the standard Ubuntu Kilo repository, but at the time of
     > writing needs to be installed as follows:
     >
-    > 
+    >
     >   ```shell
     >      $ sudo add-apt-repository cloud-archive:kilo-proposed
     >      $ sudo apt-get update
@@ -417,4 +418,3 @@ perform the following steps:
 9.  Create the `/etc/calico/felix.cfg` file by taking a copy of the
     supplied sample config at `/etc/calico/felix.cfg.example`.
 10. Restart the Felix service with `service calico-felix restart`.
-

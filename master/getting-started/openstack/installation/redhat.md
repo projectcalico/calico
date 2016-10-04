@@ -25,8 +25,8 @@ Prerequisites
 
 Before starting this you will need the following:
 
--   One or more machines running RHEL 7, with OpenStack Juno, Kilo or
-    Liberty installed.
+-   One or more machines running RHEL 7, with OpenStack Juno, Kilo,
+    Liberty or Mitaka installed.
 -   SSH access to these machines.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
@@ -54,6 +54,17 @@ can use PackStack instead: <https://www.rdoproject.org/QuickStart>.
 Configure YUM repositories
 --------------------------
 
+The latest version of Calico for OpenStack is 1.4, and we recommend using it
+with OpenStack Liberty or later.  Other possible combinations are shown by the
+following table.
+
+| OpenStack release | Calico version | Repository     |
+|-------------------+----------------+----------------|
+| Mitaka            |            1.4 | rpm/calico-1.4 |
+| Liberty           |            1.4 | rpm/calico-1.4 |
+| (deprecated) Kilo |            1.3 | rpm_kilo       |
+| (deprecated) Juno |            1.3 | rpm_juno       |
+
 If you're using CentOS with Juno or Kilo, check the yum priorities
 plugin is installed:
 
@@ -64,59 +75,25 @@ plugin is installed:
 Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
 You may have already added this to install OpenStack.
 
-Configure the repository for Calico.
-
-For Juno:
-
-```
-    cat > /etc/yum.repos.d/calico.repo <<EOF
-    [calico]
-    name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm_juno/
-    enabled=1
-    skip_if_unavailable=0
-    gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/key
-    priority=97
-    EOF
-```
-
-For Kilo:
+Configure the Calico repository as indicated above for your chosen OpenStack
+release.  For example, for Mitaka:
 
 ```
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm_kilo/
+    baseurl=http://binaries.projectcalico.org/rpm/calico-1.4/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/key
+    gpgkey=http://binaries.projectcalico.org/rpm/calico-1.4/key
     priority=97
     EOF
 ```
 
-For Liberty (and future OpenStack releases):
-
-```
-    cat > /etc/yum.repos.d/calico.repo <<EOF
-    [calico]
-    name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm_stable/
-    enabled=1
-    skip_if_unavailable=0
-    gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/key
-    priority=97
-    EOF
-```
-
-> **NOTE**
->
-> The priority setting in `calico.repo` is needed so that the
-> Calico repository can install Calico-enhanced versions of some of
-> the OpenStack Nova and Neutron packages.
->
+**NOTE**: With OpenStack Juno or Kilo, the priority setting in `calico.repo` is
+needed so that the Calico repository can install Calico-enhanced versions of
+some of the OpenStack Nova and Neutron packages.
 
 Etcd Install
 ============
@@ -282,7 +259,7 @@ isn't running the etcd database itself (both control and compute nodes).
             Restart=always
 
             [Install]
-            WantedBy=multi-user.target    
+            WantedBy=multi-user.target
     ```
 
 2.  Launch etcd and set it to restart after a reboot:
