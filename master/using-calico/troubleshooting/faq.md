@@ -3,11 +3,10 @@ title: Frequently Asked Questions
 ---
 
 This page contains answers to several frequently asked technical
-questions about Calico. It is updated on a regular basis: please check
-back for more information.
+questions about Calico on Openstack. It is updated on a regular basis: 
+please check back for more information.
 
-"Why use Calico?"
-=================
+## "Why use Calico?"
 
 The problem Calico tries to solve is the networking of workloads (VMs,
 containers, etc) in a high scale environment. Existing L2 based methods
@@ -16,17 +15,15 @@ we think Calico is more scalable, simpler and more flexible. We think
 you should look into it if you have more than a handful of nodes on a
 single site.
 
-For a more detailed discussion of this topic, see our blog post at [Why
-Calico?](http://www.projectcalico.org/why-calico/).
+For a more detailed discussion of this topic, see our blog post at 
+[Why Calico?](http://www.projectcalico.org/why-calico/).
 
-"Does Calico work with IPv6?"
-=============================
+## "Does Calico work with IPv6?"
 
 Yes! We have demonstrated IPv6 with Calico on OpenStack and
 Docker/Powerstrip.
 
-"Is Calico compliant with PCI/DSS requirements?"
-================================================
+## "Is Calico compliant with PCI/DSS requirements?"
 
 PCI certification applies to the whole end-to-end system, of which
 Calico would be a part. We understand that most current solutions use
@@ -34,8 +31,7 @@ VLANs, but after studying the PCI requirements documents, we believe
 that Calico does meet those requirements and that nothing in the
 documents *mandates* the use of VLANs.
 
-"How does Calico maintain saved state?"
-=======================================
+## "How does Calico maintain saved state?"
 
 State is saved in a few places in a Calico deployment, depending on
 whether it's global or local state.
@@ -80,8 +76,7 @@ state. All of our components can be shutdown and restarted without risk,
 because they resynchronize state as necessary. This makes modelling
 their behaviour extremely simple, reducing the complexity of bugs.
 
-"I heard Calico is suggesting layer 2: I thought you were layer 3! What's happening?"
-=====================================================================================
+## "I heard Calico is suggesting layer 2: I thought you were layer 3! What's happening?"
 
 It's important to distinguish what Calico provides to the workloads
 hosted in a data center (a purely layer 3 network) with what the Calico
@@ -95,7 +90,10 @@ workloads to each other, and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, Calico has discussed how both a layer 2 (see
-[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)) or a layer 3 (see [here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)) fabric
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)) 
+or a layer 3 (see 
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)) 
+fabric
 could be integrated with Calico. This is one of the great strengths of
 the Calico model: it allows the infrastructure to be decoupled from what
 we show to the tenant applications and workloads.
@@ -108,17 +106,17 @@ that we're recommending layer 2 for tenant applications. In all cases we
 forward on IP packets, no matter what architecture is used to build the
 fabric.
 
-"I need to use hard-coded private IP addresses: how do I do that?"
-==================================================================
+## "I need to use hard-coded private IP addresses: how do I do that?"
 
 While this isn't supported today, this is on our roadmap using a
 stateless variant of RFC 6877 (464-XLAT). For more detail, see
-[this document](overlap-ips).
+[this document]({{site.baseurl}}/{{page.version}}/reference/advanced/overlap-ips).
 
-"How do I control policy/connectivity without virtual/physical firewalls?"
-==========================================================================
+## "How do I control policy/connectivity without virtual/physical firewalls?"
 
-Calico provides an extremely rich security policy model, detailed [here]({{site.baseurl}}/{{page.version}}/reference/security-model). This model applies the policy at the first and last hop
+Calico provides an extremely rich security policy model, detailed 
+[here]({{site.baseurl}}/{{page.version}}/reference/security-model). 
+This model applies the policy at the first and last hop
 of the routed traffic within the Calico network (the source and
 destination compute hosts).
 
@@ -146,8 +144,8 @@ update policy: the reachability information does not change. If later
 they should be denied the ability to communicate, the policy is updated
 again, and again the reachability doesn’t have to change.
 
-"How does Calico interact with the Neutron API?"
-================================================
+## "How does Calico interact with the Neutron API?"
 
-[This document](calico-neutron-api) document goes into extensive detail about how
+[This document]({{site.baseurl}}/{{page.version}}/reference/advanced/calico-neutron-api) 
+document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.
