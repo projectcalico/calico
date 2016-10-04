@@ -8,8 +8,42 @@
 # Ensure all variables are defined.
 set -u
 
-# Clean up any existing binaries. 
+# The directory on the host where CNI networks are installed. Defaults to 
+# /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
+# for populating absolute paths in the CNI network config to assets
+# which are installed in the CNI network config directory.
+HOST_CNI_NET_DIR=${CNI_NET_DIR:-/etc/cni/net.d}
+HOST_SECRETS_DIR=${HOST_CNI_NET_DIR}/calico-tls
+
+# Directory where we expect that TLS assets will be mounted into 
+# the calico/cni container.
+SECRETS_MOUNT_DIR=${TLS_ASSETS_DIR:-/calico-secrets}
+
+# Clean up any existing binaries / config / assets.
 rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
+rm -f /host/etc/cni/net.d/calico-tls/*
+
+# Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
+echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
+mkdir -p /host/etc/cni/net.d/calico-tls
+cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+
+# If the TLS assets actually exist, update the variables to populate into the
+# CNI network config.  Otherwise, we'll just fill that in with blanks.
+if [ -e "/host/etc/cni/net.d/calico-tls/etcd-ca" ];
+then
+	CNI_CONF_ETCD_CA=${HOST_SECRETS_DIR}/etcd-ca
+fi
+
+if [ -e "/host/etc/cni/net.d/calico-tls/etcd-key" ];
+then
+	CNI_CONF_ETCD_KEY=${HOST_SECRETS_DIR}/etcd-key
+fi
+
+if [ -e "/host/etc/cni/net.d/calico-tls/etcd-cert" ];
+then
+	CNI_CONF_ETCD_CERT=${HOST_SECRETS_DIR}/etcd-cert
+fi
 
 # Place the new binaries.
 cp /opt/cni/bin/calico /host/opt/cni/bin/calico
@@ -51,17 +85,30 @@ sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT:-}/g calico.conf.
 sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g calico.conf.tmp
 sed -i s/__KUBECONFIG_FILENAME__/calico-kubeconfig/g calico.conf.tmp
 
-# Use alternative command character "~", since ETCD_ENDPOINTS includes a "/".
+# Use alternative command character "~", since these include a "/".
+sed -i s~__KUBECONFIG_FILEPATH__~${HOST_CNI_NET_DIR}/calico-kubeconfig~g calico.conf.tmp
+sed -i s~__ETCD_CERT_FILE__~${CNI_CONF_ETCD_CERT:-}~g calico.conf.tmp
+sed -i s~__ETCD_KEY_FILE__~${CNI_CONF_ETCD_KEY:-}~g calico.conf.tmp
+sed -i s~__ETCD_CA_CERT_FILE__~${CNI_CONF_ETCD_CA:-}~g calico.conf.tmp
 sed -i s~__ETCD_ENDPOINTS__~${ETCD_ENDPOINTS:-}~g calico.conf.tmp
 
 # Move the temporary CNI config into place.
-mv calico.conf.tmp /host/etc/cni/net.d/${CNI_CONF_NAME:-10-calico.conf}
-echo "Wrote CNI config: $(cat /host/etc/cni/net.d/10-calico.conf)"
+FILENAME=${CNI_CONF_NAME:-10-calico.conf}
+mv calico.conf.tmp /host/etc/cni/net.d/${FILENAME}
+echo "Wrote CNI config: $(cat /host/etc/cni/net.d/${FILENAME})"
 
 # Unless told otherwise, sleep forever.
 # This prevents Kubernetes from restarting the pod repeatedly.
 should_sleep=${SLEEP:-"true"}
 echo "Done configuring CNI.  Sleep=$should_sleep"
 while [ "$should_sleep" == "true"  ]; do
-	sleep 1;
+	# Kubernetes Secrets can be updated.  If so, we need to install the updated
+	# version to the host. Just check the timestamp on the certificate to see if it 
+	# has been updated.  A bit hokey, but likely good enough.
+	stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
+	sleep 10;
+	if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
+		echo "Updating installed secrets at: $(date)"
+		cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+	fi	
 done
