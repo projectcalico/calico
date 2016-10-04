@@ -87,7 +87,7 @@ map onto the Calico data model.
 Networks and Routers
 --------------------
 
-As discussed [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack), networks and routers are not used
+As discussed [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity), networks and routers are not used
 in Calico for connectivity purposes. Similarly, they serve no security
 purpose in a Calico environment.
 
