@@ -85,6 +85,8 @@ toc:
     path: /reference/advanced/calico-neutron-api
   - title: Secure etcd
     path: /reference/advanced/etcd-secure
+  - title: Overlap IPs
+    path: /reference/advanced/overlap-ips
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute

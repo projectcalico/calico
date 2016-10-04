@@ -3,3 +3,4 @@ _site
 .sass-cache
 .DS_Store
 *.swp
+.idea
