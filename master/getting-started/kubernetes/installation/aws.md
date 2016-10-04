@@ -5,6 +5,7 @@ title: Deploying Calico and Kubernetes on AWS
 These instructions allow you to set up a Kubernetes cluster with Calico networking on AWS using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with AWS
+
 These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see
 [the CoreOS on AWS EC2 documentation](https://coreos.com/os/docs/latest/booting-on-ec2.html).
 
@@ -15,6 +16,7 @@ curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
 unzip awscli-bundle.zip
 sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 ```
+
 For more information, see Amazon's [Installing the AWS Command Line Interface][install-aws-cli].
 
 Run the AWS configure command, which will prompt you to set your User keys.
@@ -26,6 +28,7 @@ aws configure
 #>  Default region name: <Region Name, eg. us-west-2>
 #>  Default output format: <json, text, or table>
 ```
+
 Note: Your `<Region Name>` can be found on the front page of the EC2 dashboard under the "Service Health" text.
 
 Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2
@@ -34,6 +37,7 @@ For more information on configuration and keys, see Amazon's
 [Configuring the AWS Command Line Interface][configure-aws-cli].
 
 ## 2. Setting up AWS networking
+
 You'll need to configure AWS to allow your hosts to talk to each other.
 
 A Virtual Private Cloud (VPC) is required on AWS in order to configure Calico networking on EC2. Your AWS account should have a default VPC that instances
@@ -52,6 +56,7 @@ If you do not have a default VPC or you would like to create a VPC specifically 
 the instructions below.
 
 ### 2.1 Creating an AWS VPC
+
 > NOTE: This step is only required if you do not have a default VPC or if you would like
 > to create a new VPC explicitly for your Calico hosts.  Skip to Configuring Key Pair and
 > Security Group if this does not apply to you.
@@ -87,6 +92,7 @@ export GATEWAY_ID=<InternetGatewayId>
 ```
 
 Attach the gateway to the VPC.
+
 ```
 aws ec2 attach-internet-gateway --vpc-id $VPC_ID --internet-gateway $GATEWAY_ID
 ```
@@ -113,6 +119,7 @@ aws ec2 modify-vpc-attribute --vpc-id=$VPC_ID --enable-dns-support
 ```
 
 ### 2.2 Configuring Key Pair and Security Group
+
 Create a Key Pair to use for ssh access to the instances. The following command will generate a key for you.
 
 ```shell
@@ -138,7 +145,8 @@ export SECURITY_GROUP_ID=<GroupId>
 ```
 
 Allow SSH from the internet and allow all traffic between instances within the group.
-```
+
+```shell
 # Allow SSH access
 aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
   --protocol tcp --port 22 --cidr 0.0.0.0/0
@@ -149,30 +157,24 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 ```
 
 ## 3. Spinning up the VMs
+
 Create the Kubernetes master and at least one Kubernetes nodes by passing in appropriate `cloud-config` files.
 
-<!--- master only -->
-To get the necessary 'cloud-config' files, clone this project:
+To get the necessary 'cloud-config' files, clone the project:
 
-    git clone https://github.com/projectcalico/calico-containers.git
-<!--- else
-To get the necessary 'cloud-config' files, clone this project and checkout the **release** release:
-
-    git clone https://github.com/projectcalico/calico-containers.git
-    git checkout tags/**release**
-<!--- end of master only -->
+    git clone https://github.com/projectcalico/calico.git
 
 Then, change into the directory for this guide.
-```
-cd calico-containers/cni/kubernetes/
-```
+
+    cd calico/{{page.version}}/getting-started/kubernetes/installation
 
 Find your CoreOS stable HVM image for your region and store it as an environment variable.  You can find the
-full list of available images on [the CoreOS website](https://coreos.com/os/latest/booting-on-ec2.html).
+full list of available images on [the CoreOS website](https://coreos.com/os/docs/latest/booting-on-ec2.html).
 
 ```shell
 export IMAGE_ID=<ami-########>
 ```
+
 > Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
 
 Deploy the Kubernetes master node using the following command:
@@ -204,6 +206,7 @@ Now, deploy at least one worker node.
 First, edit `cloud-config/node-config.yaml` and replace all instances of `kubernetes-master` with your Master's private
 DNS name.  This can be found in the output of the previous command, or the AWS portal. You can do this with a `sed`
 command, replacing `<MASTER_PRIVATE_DNS>` with your master's private DNS name:
+
 ```
 sed -i 's/kubernetes-master/<MASTER_PRIVATE_DNS>/g' cloud-config/node-config.yaml
 ```
@@ -242,15 +245,16 @@ Download `kubectl`
 > The linux kubectl binary can be fetched with a command like:
 
 ```shell
-wget https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/linux/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 > On an OS X workstation, replace linux in the URL above with darwin:
 
 ```shell
-wget https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/darwin/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/darwin/amd64/kubectl
 ```
+
 Save the public DNS name for the master in an environment variable. Replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name - you can find this in the AWS portal, or by running `aws ec2 describe-instances`.
 
 ```shell

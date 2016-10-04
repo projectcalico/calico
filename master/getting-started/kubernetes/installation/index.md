@@ -8,7 +8,7 @@ Kubernetes cluster.
 
 This document explains an installation of Calico that includes Kubernetes NetworkPolicy support.  Older versions
 of Calico include annotation-based policy support.  While this is no longer recommended, the documentation
-for annotation-based policy can still be found in [an older release](https://github.com/projectcalico/calico-containers/blob/v0.20.0/cni/kubernetes/AnnotationPolicy.md).
+for annotation-based policy can still be found in [an older release](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md)
 
 ## Requirements
 - An existing Kubernetes cluster running Kubernetes >= v1.1.  To use NetworkPolicy, Kubernetes >= v1.3.0 is required.
@@ -20,9 +20,9 @@ for annotation-based policy can still be found in [an older release](https://git
 
 There are three components of a Calico / Kubernetes integration.
 
-- The Calico per-node docker container, [`calico/node`](https://hub.docker.com/r/calico/node/)
+- The Calico per-node docker container, [calico/node](https://hub.docker.com/r/calico/node/)
 - The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
- - This is the combination of two binary executables and a configuration file.
+  - This is the combination of two binary executables and a configuration file.
 - When using Kubernetes NetworkPolicy, the Calico policy controller is also required.
 
 The `calico/node` docker container must be run on the Kubernetes master and each
@@ -119,7 +119,8 @@ cat >/etc/cni/net.d/10-calico.conf <<EOF
 }
 EOF
 ```
-> Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
+
+Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
 
@@ -127,23 +128,18 @@ For more information on configuring the Calico CNI plugins, see the [configurati
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API.  It is recommended that you run it as a static pod
 on each Kubernetes master.
 
-To install the policy controller:
+- Download [this manifest](https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/policy-controller.yaml) and install it using `kubectl`
 
-- Create the calico-system namespace:
-
+```shell
+$ kubectl create -f policy-controller.yaml
 ```
-kubectl create ns calico-system
-```
-
-- Place [this manifest](https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/policy-controller.yaml) in the kubelet's config
-directory (usually `/etc/kubernetes/manifests`)
 
 After a few moments, you should see the policy controller enter `Running` state:
 
-```
+```shell
 $ kubectl get pods --namespace=calico-system
 NAME                                     READY     STATUS    RESTARTS   AGE
-calico-policy-controller-172.18.18.101   2/2       Running   0          1m
+calico-policy-controller                 2/2       Running   0          1m
 ```
 
 Kubernetes Hosted Installation
@@ -155,22 +151,18 @@ Since this method uses Kubernetes to install Calico, you must first deploy a sta
 with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the
 [desired configuration for installing Calico](#configuring-kubernetes).
 
-Then download [manifests/calico-configmap.yaml]({{site.baseurl}}/getting-started/kubernetes/installation/hosted/calico-configmap.yaml) and [manifests/calico-hosted.yaml]({{site.baseurl}}/getting-started/kubernetes/installation/hosted/calico-hosted.yaml).  
-These manifests include the Kubernetes objects to install Calico.
+Download the Calico self-hosted manifest, [`calico.yaml`](hosted/calico.yaml).
+
+Edit the provided ConfigMap at the top of the file in order to configure Calico 
+for your deployment.  Then install the manifests using Kubernetes.
 
 ```
-# Download the ConfigMap and Calico manifests.
-wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/cni/kubernetes/manifests/calico-configmap.yaml
-wget https://raw.githubusercontent.com/projectcalico/calico-containers/master/cni/kubernetes/manifests/calico-hosted.yaml
-```
-
-Edit the provided ConfigMap in order to configure Calico for your deployment.  Then install the manifests using Kubernetes.
-
-```
-kubectl create -f calico-configmap.yaml -f calico-hosted.yaml
+kubectl create -f calico.yaml
 ```
 
 You should see the Calico services start in the `kube-system` Namespace.
+
+For more information, see the Calico [self-hosted documentation](hosted).
 
 ## Configuring Kubernetes
 

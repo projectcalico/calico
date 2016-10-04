@@ -2,15 +2,14 @@
 title: Troubleshooting Calico for Kubernetes
 ---
 
-This article contains Kubernetes specific troubleshooting advice for Calico.  See also the [main Calico troubleshooting](docs/troubleshooting) pages.
+This article contains Kubernetes specific troubleshooting advice for Calico.  
+See also the [main Calico troubleshooting](../../using-calico/troubleshooting) pages.
 
 ## Viewing Logs
-The Calico CNI plugin emits logs to the `/var/log/calico/cni/` directory.  All CNI plugin logs for a node will be emitted to
-that directory.  Searching for logs with "ERROR" or "WARN" level is a good place to start if you are having trouble. 
+
+The Calico CNI plugin emots logs to stderr, which are then logged out by the kubelet.  Where these logs end up 
+depend on how your kubelet is configured.  For deployments using `systemd`, you can do this via `journalctl`.
 
 The log level can be configured via the CNI network configuration file, by changing the value of the key `log_level`.
 By default, the plugin will only emit "info" level and higher.  Valid log levels are `debug`, `info`, `warn`, and
 `error`.
-
-It may also be useful in some situations to check the kubelet logs for a given node.  For deployments using `systemd`,
-you can do this via `journalctl`.

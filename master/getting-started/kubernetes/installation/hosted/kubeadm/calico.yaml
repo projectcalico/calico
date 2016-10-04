@@ -1,6 +1,4 @@
-# This ConfigMap can be used to configure a self-hosted Calico installation.
-# See `calico-hosted.yaml` for an example of a Calico deployment which uses
-# the config in this ConfigMap.
+# This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
 apiVersion: v1
 metadata:
