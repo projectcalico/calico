@@ -20,7 +20,6 @@ The `calico.yaml` file contains all the necessary resources for installing Calic
 
 It does the following things:
 
-- The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `calico/node` container on each host using a DaemonSet.
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
 - Runs the `calico/kube-policy-controller` pod as a ReplicaSet.
