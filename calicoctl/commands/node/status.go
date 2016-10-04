@@ -23,10 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/docker/engine-api/client"
-	"github.com/docker/engine-api/types"
 	"github.com/docopt/docopt-go"
-	"golang.org/x/net/context"
+	gops "github.com/mitchellh/go-ps"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -48,47 +46,53 @@ Description:
 	// printed for this option
 	_, _ = docopt.Parse(doc, nil, true, "calicoctl", false, false)
 
-	ctx := context.Background()
-
-	if os.Getenv("DOCKER_API_VERSION") == "" {
-		err := os.Setenv("DOCKER_API_VERSION", "1.16")
-		if err != nil {
-			log.Fatalf("Error setting DOCKER_API_VERSION: %v", err)
-		}
-	}
-
-	dockerClient, err := client.NewEnvClient()
+	processes, err := gops.Processes()
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 
-	options := types.ContainerListOptions{All: true}
-	containers, err := dockerClient.ContainerList(ctx, options)
-	if err != nil {
-		log.Fatalf("Error getting the container list: %v", err)
+	// Go through running processes and check if `calico-felix` processes is not running
+	if !psContains("calico-felix", processes) {
+		// Return and print message if calico-node is not running
+		fmt.Printf("Calico process is not running.\n")
+		os.Exit(1)
 	}
 
-	for _, c := range containers {
-		if strings.Contains(c.Names[0], "calico-node") && c.State == "running" {
+	fmt.Printf("Calico process is running.\n")
 
-			fmt.Printf("calico-node container is running. Status: %s\n", c.Status)
-
-			if os.Getuid() != 0 {
-				fmt.Println("This command must be run as root.")
-				os.Exit(1)
-			}
-
-			printBGPPeers("4")
-			printBGPPeers("6")
-
-			fmt.Println()
-			return nil
-		}
+	// Must run this command as root to be able to connect to BIRD sockets
+	if os.Getuid() != 0 {
+		fmt.Println("This command must be run as root.")
+		os.Exit(1)
 	}
 
-	// Return and print message if calico-node is not running
-	fmt.Println("calico-node container not running")
+	// Check if birdv4 process is running, print the BGP peer table if it is, else print a warning
+	if psContains("bird", processes) {
+		printBGPPeers("4")
+	} else {
+		fmt.Printf("\nINFO: BIRDv4 process: 'bird' is not running.\n")
+	}
+
+	// Check if birdv6 process is running, print the BGP peer table if it is, else print a warning
+	if psContains("bird6", processes) {
+		printBGPPeers("6")
+	} else {
+		fmt.Printf("\nINFO: BIRDv6 process: 'bird6' is not running.\n")
+	}
+
+	// Have to manually enter an empty line because the table print
+	// library prints the last line, so can't insert a '\n' there
+	fmt.Println()
 	return nil
+}
+
+func psContains(proc string, procList []gops.Process) bool {
+	for _, p := range procList {
+		if p.Executable() == proc {
+			return true
+		}
+	}
+	return false
 }
 
 func printBGPPeers(ipv string) {
@@ -101,11 +105,17 @@ func printBGPPeers(ipv string) {
 
 	fmt.Printf("\nIPv%s BGP status", ipv)
 
-	// Connect to the bird socket and get the data
+	// Try connecting to the bird socket in `/var/run/calico/` first to get the data
 	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
 	if err != nil {
-		log.Printf("Error connecting to BIRDv%s socket: %v", ipv, err)
-		return
+
+		// If that fails, try connecting to bird socket in `/var/run/bird` (which is the
+		// default socket location for bird install) for non-containerized installs
+		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
+		if err != nil {
+			log.Printf("Error connecting to BIRDv%s socket: %v", ipv, err)
+			return
+		}
 	}
 	defer c.Close()
 
@@ -146,7 +156,7 @@ func printBGPPeers(ipv string) {
 			copy(fields, f[0:3])
 
 			if len(f) > 3 {
-				// We are appending all the extra fields to the last element in the slice
+				// We are appending all the extra fields to the last element in the slice.
 				// This is to include the extra info when the "Info" field is other than "Established"
 				for _, e := range f[3:] {
 					fields[2] = fields[2] + " " + e

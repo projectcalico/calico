@@ -1,5 +1,5 @@
-hash: c9f3a209b33c96447bb17bbb4398ae37921fa059859b731cf27c3987eb380d9e
-updated: 2016-09-23T12:23:37.240445907-07:00
+hash: f7d523998964cfa7e5002ad7038de8226a6d14ca40be50659136f26d2d2ecd67
+updated: 2016-09-27T13:20:15.990078148-07:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -7,11 +7,11 @@ imports:
   version: e93ee6179c64cac4d8764870b8267f05c1618c40
   subpackages:
   - client
-  - pkg/transport
-  - pkg/pathutil
-  - pkg/types
   - pkg/fileutil
+  - pkg/pathutil
   - pkg/tlsutil
+  - pkg/transport
+  - pkg/types
 - name: github.com/coreos/go-systemd
   version: bfdc81d0d7e0fb19447b08571f63b774495251ce
   subpackages:
@@ -22,37 +22,8 @@ imports:
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
   - capnslog
-- name: github.com/docker/distribution
-  version: 17fb0bb6b30838f3f80833c6522cb374549663ce
-  subpackages:
-  - reference
-  - digest
 - name: github.com/docker/engine-api
   version: 3d1601b9d2436a70b0dfc045a23f6503d19195df
-  subpackages:
-  - client
-  - types
-  - client/transport
-  - client/transport/cancellable
-  - types/container
-  - types/filters
-  - types/network
-  - types/reference
-  - types/registry
-  - types/swarm
-  - types/time
-  - types/versions
-  - types/mount
-  - types/blkiodev
-  - types/strslice
-- name: github.com/docker/go-connections
-  version: 988efe982fdecb46f01d53465878ff1f2ff411ce
-  subpackages:
-  - sockets
-  - tlsconfig
-  - nat
-- name: github.com/docker/go-units
-  version: f2145db703495b2e525c59662db69a7344b00bb8
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/ghodss/yaml
@@ -61,24 +32,18 @@ imports:
   version: 1e291572dcb9ba673cdcdb15e0f422702415ebaf
 - name: github.com/mattn/go-runewidth
   version: d6bea18f789704b5f83375793155289da36a3c7f
+- name: github.com/mitchellh/go-ps
+  version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
 - name: github.com/mcuadros/go-version
   version: d52711f8d6bea8dc01efafdb68ad95a4e2606630
 - name: github.com/Microsoft/go-winio
   version: ce2922f643c8fd76b46cadc7f404a06282678b34
 - name: github.com/olekukonko/tablewriter
   version: daf2955e742cf123959884fdff4685aa79b63135
-- name: github.com/opencontainers/runc
-  version: f516b5d0821f90515d38e79c4f5d4d221dc0c331
-  subpackages:
-  - libcontainer/user
-- name: github.com/qianlnk/compress
-  version: fe8f7113bb6c591311068f774a6c6764f3b9c82d
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/Sirupsen/logrus
   version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
-  subpackages:
-  - formatters/logstash
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
@@ -89,12 +54,10 @@ imports:
   version: 6acef71eb69611914f7a30939ea9f6e194c78172
   subpackages:
   - context
-  - proxy
 - name: golang.org/x/sys
   version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
-  - windows
 - name: gopkg.in/go-playground/validator.v8
   version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/tchap/go-patricia.v2
@@ -108,31 +71,31 @@ testImports:
   - config
   - extensions/table
   - internal/codelocation
+  - internal/containernode
   - internal/failer
+  - internal/leafnodes
   - internal/remote
+  - internal/spec
+  - internal/specrunner
   - internal/suite
   - internal/testingtproxy
   - internal/writer
   - reporters
   - reporters/stenographer
   - types
-  - internal/containernode
-  - internal/leafnodes
-  - internal/spec
-  - internal/specrunner
 - name: github.com/onsi/gomega
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
+  - format
   - internal/assertion
   - internal/asyncassertion
+  - internal/oraclematcher
   - internal/testingtsupport
   - matchers
-  - types
-  - internal/oraclematcher
-  - format
   - matchers/support/goraph/bipartitegraph
   - matchers/support/goraph/edge
   - matchers/support/goraph/node
   - matchers/support/goraph/util
+  - types
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
