@@ -8,20 +8,18 @@ concerned with deploying it correctly and successfully.
 
 You can install Calico via any of the following methods:
 
--   the packaged install for Ubuntu 14.04 - see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu).
+-   packaged install for Ubuntu 14.04 (Trusty) or 16.04 (Xenial) - see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu).
 -   an RPM install for Red Hat Enterprise Linux 7 (RHEL 7) - see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/redhat).
--   our integration of Calico with Mirantis Fuel 6.1 or 7.0 - see
-    [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/fuel).
--   our integration with Canonical's Juju Charms - see
+-   Canonical's Juju Charms - see
     [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/juju).
+-   Mirantis Fuel - see
+    [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/fuel).
 
-> **WARNING**
->
-> The opens-chef-install, which we used to recommend,
-> is now very old and it only supports Icehouse. For now, we
-> recommend using one of the above integrations.
->
+The [Chef
+installation]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/chef),
+which we used to recommend, is now very old and only supports Icehouse. We now
+recommend using one of the above methods instead.
 
-In all cases, you just need at least two to three servers to get going
-(one OpenStack controller, one OpenStack compute node and, for Mirantis
-Fuel, a third node to serve as the Fuel master).
+In all cases, you will need at least two or three servers to get going: one
+OpenStack controller, one OpenStack compute node and, for Mirantis Fuel, a
+third node to serve as the Fuel master.

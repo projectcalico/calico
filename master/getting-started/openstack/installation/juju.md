@@ -2,13 +2,12 @@
 title: Juju Install
 ---
 
-If you're in a position to use Ubuntu's [Juju Charms](https://jujucharms.com/) deployment tool, you can quickly get a
-Calico-based OpenStack deployment up and running. All you need to do is
-download one of our bundles, and then deploy it to your Juju environment
-using [any of the standard methods](https://jujucharms.com/1.20/charms-bundles). This will get
-you a simple OpenStack deployment with two compute nodes, which you can
-then easily scale out by adding more instances of the `nova-compute`
-charm.
+You can use Ubuntu's [Juju Charms](https://jujucharms.com/) to quickly deploy a
+Calico/OpenStack cluster.  All you need to do is download one of our bundles,
+then deploy it to your Juju environment using [any of the standard
+methods](https://jujucharms.com/docs/stable/charms-bundles). This will get you a
+simple OpenStack deployment with two compute nodes, which you can then easily
+scale out by adding more instances of the `nova-compute` charm.
 
 Bundles
 =======
@@ -21,6 +20,9 @@ Juno:
 
 Kilo:
 <https://raw.githubusercontent.com/projectcalico/calico/master/source/_static/juju/kilo.yaml>
+
+Mitaka:
+<https://jujucharms.com/u/project-calico/calico-mitaka-juju2>
 
 The default admin password for the deployment is "openstack" - you may
 wish to update this in the bundle (search for the keystone
