@@ -30,6 +30,14 @@ RUN apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edg
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --update-cache ip6tables ipset iputils iproute2 conntrack-tools
 
+# Install Python so libnetwork-plugin can run
+RUN apk --no-cache add python py-setuptools
+
+# Actually install libnetwork-plugin. A python dev environment (and git) is installed so libnetwork-plugin can be pip installed.
+# Finally the dev environment is removed. Doing this in one image layer minimized the final image size.
+RUN apk --no-cache add --virtual temp py-pip git gcc python-dev musl-dev && pip install git+https://github.com/projectcalico/libnetwork-plugin.git && \
+    pip install git+https://github.com/projectcalico/libcalico.git && apk del --purge temp
+
 # Copy in the filesystem - this contains felix, bird, gobgp etc...
 COPY filesystem /
 

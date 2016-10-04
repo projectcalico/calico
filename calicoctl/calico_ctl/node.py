@@ -68,9 +68,8 @@ Options:
   --ip6=<IP6>               The local IPv6 management address to use.
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
-  --libnetwork              Use the libnetwork plugin.
-  --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
-                            Calico's libnetwork driver.
+  --libnetwork              (Deprecated) Use the libnetwork plugin.
+  --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    (Deprecated) This flag will be ignored.
                             [default: calico/node-libnetwork:latest]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --no-pull                 Prevent from pulling the Calico node Docker images.
@@ -233,8 +232,9 @@ def node(arguments):
         assert arguments.get("--detach") in ["true", "false"]
         detach = arguments.get("--detach") == "true"
 
-        libnetwork_image = None if not arguments.get("--libnetwork") \
-                                else arguments.get("--libnetwork-image")
+        # Set libnetwork_enabled to False if --libnetwork flag is not passed 
+        libnetwork_enabled = False if not arguments.get("--libnetwork") else True
+
         node_start(ip=arguments.get("--ip"),
                    node_image=arguments.get('--node-image'),
                    runtime=arguments.get("--runtime"),
@@ -242,13 +242,13 @@ def node(arguments):
                    ip6=arguments.get("--ip6"),
                    as_num=as_num,
                    detach=detach,
-                   libnetwork_image=libnetwork_image,
+                   libnetwork_enabled=libnetwork_enabled,
                    no_pull=arguments.get("--no-pull"),
                    backend=backend)
 
 
 def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
-               libnetwork_image, no_pull, backend):
+               libnetwork_enabled, no_pull, backend):
     """
     Create the calico-node container and establish Calico networking on this
     host.
@@ -260,8 +260,7 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
     the global default value will be used.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
-    :param libnetwork_image: The name of the Calico libnetwork driver image to
-    use.  None, if not using libnetwork.
+    :param libnetwork_enabled: True to run libnetwork plugin inside calico-node.
     :param no_pull: Boolean, True to prevent function from pulling the Calico
     node Docker images.
     :param backend: String, backend choice. Should be "bird", "none", or "gobgp".
@@ -292,7 +291,7 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
             using_docker = False
 
         (_, docker_ok, etcd_ok) = \
-            check_system(quit_if_error=False, libnetwork=libnetwork_image,
+            check_system(quit_if_error=False, libnetwork=libnetwork_enabled,
                          check_docker=using_docker,
                          check_modules=not running_in_container())
 
@@ -348,17 +347,15 @@ def node_start(node_image, runtime, log_dir, ip, ip6, as_num, detach,
 
     if runtime == 'docker':
         _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach,
-                                     etcd_envs, etcd_volumes, etcd_binds, no_pull, backend)
-        if libnetwork_image:
-            _start_libnetwork_container(libnetwork_image, etcd_envs,
-                                        etcd_volumes, etcd_binds, no_pull)
+                                     etcd_envs, etcd_volumes, etcd_binds, libnetwork_enabled, no_pull, backend)
+
     if runtime == 'rkt':
         _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
                                   etcd_volumes, etcd_binds, backend)
 
 
 def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, etcd_envs,
-                                 etcd_volumes, etcd_binds, no_pull, backend):
+                                 etcd_volumes, etcd_binds, libnetwork_enabled, no_pull, backend):
     """
     Start the main Calico node container.
 
@@ -366,7 +363,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     :param ip6:  The IPv6 address of the host (or None if not configured)
     :param as_num: The AS number for the host
     :param log_dir:  The log directory to use.
-    :param node_image:  The calico-node image to use.
+    :param libnetwork_enabled: True to run libnetwork plugin inside calico-node.
     :param detach: True to run in Docker's "detached" mode, False to run
     attached.
     :param etcd_envs: Etcd environment variables to pass into the container
@@ -391,13 +388,20 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         if err.response.status_code != 404:
             raise
 
+    # This is to convert libnetwork_enabled (bool) into a string to pass it as an ENV var value
+    if libnetwork_enabled:
+       libnetwork_flag_str = "true"
+    else:
+       libnetwork_flag_str = "false"
+
     environment = [
         "HOSTNAME=%s" % hostname,
         "IP=%s" % (ip or ""),
         "IP6=%s" % (ip6 or ""),
         "CALICO_NETWORKING_BACKEND=%s" % backend,
         "AS=%s" % (as_num or ""),
-        "NO_DEFAULT_POOLS=%s" % (no_default_pools or "")
+        "NO_DEFAULT_POOLS=%s" % (no_default_pools or ""),
+        "CALICO_LIBNETWORK_ENABLED=%s" % libnetwork_flag_str
     ] + etcd_envs
 
     binds = {
@@ -417,6 +421,14 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
                 "ro": False
             }
     }
+
+    # Additional rw bind (/run/docker/plugins) necessory when libnetwork is enabled 
+    if libnetwork_enabled:
+        binds["/run/docker/plugins"] = {
+            "bind": "/run/docker/plugins",
+            "ro": False
+            }
+
     binds.update(etcd_binds)
 
     host_config = docker_client.create_host_config(
@@ -426,6 +438,10 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
         binds=binds)
 
     volumes = ["/var/log/calico", "/var/run/calico", "/lib/modules"] + etcd_volumes
+
+    # Add /run/docker/plugins to the list of volumes to be mounted when libnetwork is enabled
+    if libnetwork_enabled:
+        volumes.append("/run/docker/plugins")
 
     container = docker_client.create_container(
         node_image,
@@ -451,6 +467,11 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
           (detach_string, env_string, vol_string, node_image)
     docker_client.start(container)
     print "Calico node is running with id: %s" % cid
+
+    # Print a message to indicate libnetwork plugin is running when libnetwork is enabled
+    if libnetwork_enabled:
+        print "Calico node running with libnetwork plugin enabled"
+
     print "Waiting for successful startup"
     _attach_and_stream(container, detach)
 
@@ -519,65 +540,6 @@ def _start_node_container_rkt(ip, ip6, as_num, node_image, etcd_envs,
 
     print " ".join(rkt_command)
     call(rkt_command)
-
-
-def _start_libnetwork_container(libnetwork_image, etcd_envs, etcd_volumes,
-                                etcd_binds, no_pull):
-    """
-    Start the libnetwork driver container.
-
-    :param etcd_envs: Etcd environment variables to pass into the container
-    :param libnetwork_image: The name of the Calico libnetwork driver image to
-    use.  None, if not using libnetwork.
-    :param etcd_volumes: List of mount_paths for etcd files to mount on the
-    container
-    :param etcd_binds: Dictionary of host file and mount file pairs for etcd
-    files to mount on the container
-    :param no_pull: Boolean, True to prevent function from pulling the Calico
-    node libnetwork Docker image.
-    :return:  None
-    """
-    if not no_pull:
-        # Make sure the required image is pulled before removing the old one.
-        # This minimizes downtime during upgrade.
-        _find_or_pull_node_image(libnetwork_image)
-
-    try:
-        docker_client.remove_container("calico-libnetwork", force=True)
-    except docker.errors.APIError as err:
-        if err.response.status_code != 404:
-            raise
-
-    environment = ["HOSTNAME=%s" % hostname] + etcd_envs
-
-    binds = {
-        "/run/docker/plugins":
-            {
-                "bind": "/run/docker/plugins",
-                "ro": False
-            }
-    }
-    binds.update(etcd_binds)
-
-    host_config = docker_client.create_host_config(
-        privileged=True, # Needed since the plugin does "ip link" commands.
-        restart_policy={"Name": "always"},
-        network_mode="host",
-        binds=binds)
-
-    volumes = ["/run/docker/plugins"] + etcd_volumes
-    container = docker_client.create_container(
-        libnetwork_image,
-        name="calico-libnetwork",
-        detach=True,
-        environment=environment,
-        host_config=host_config,
-        volumes=volumes)
-    cid = container["Id"]
-
-    docker_client.start(container)
-    print "Calico libnetwork driver is running with id: %s" % cid
-
 
 def _setup_ip_forwarding():
     """
