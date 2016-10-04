@@ -45,6 +45,6 @@ configuration guide for the exact steps, but generally speaking, you'll need to
 
 If you have a L3 routed fabric or some other scenario not covered by the above,
 detailed datacenter networking recommendations are given in the main
-[Project Calico documentation]({{site.baseurl}}/{{page.version}}/what-is-calico/connectivity/l3-interconnectFabric).
+[Project Calico documentation]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
