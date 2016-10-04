@@ -32,3 +32,7 @@ recommended you use a secure, replicated etcd cluster.
 
 * This install does not configure etcd TLS
 * This install expects that your Kubernetes master node has been labeled with `kubeadm.alpha.kubernetes.io/role: master`
+
+
+[containers]: https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/installation/hosted/kubeadm
+
