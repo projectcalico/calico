@@ -23,7 +23,6 @@ package client_test
 import (
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 
 	. "github.com/onsi/ginkgo"
@@ -101,13 +100,11 @@ func setupEnv() {
 	argsRun := []string{"run", "--detach", "-p", "2379:2379", "--name", "calico-etcd", "quay.io/coreos/etcd:v2.3.6", "--advertise-client-urls", "http://127.0.0.1:2379,http://127.0.0.1:4001", "--listen-client-urls", "http://0.0.0.0:2379,http://0.0.0.0:4001"}
 	if err := exec.Command(cmd, argsRun...).Run(); err != nil {
 		log.Println(err)
-		os.Exit(1)
 	}
 
 	argsPool := []string{"create", "-f", "../../test/pool1.yaml"}
 	if err := commands.Create(argsPool); err != nil {
 		log.Println(err)
-		os.Exit(1)
 	}
 }
 
