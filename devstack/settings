@@ -33,6 +33,12 @@ else
     enable_service calico-dhcp
     enable_service n-api-meta
 
+    # Disable Neutron services that we don't want.
+    disable_service q-agt
+    disable_service q-dhcp
+    disable_service q-l3
+    disable_service q-meta
+
     # When we later launch Felix (Calico's agent), we do that as a
     # service named 'calico-felix', and that only works if Devstack
     # thinks that 'calico-felix' is enabled.  So do that here.
