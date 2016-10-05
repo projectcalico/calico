@@ -184,4 +184,4 @@ $ curl http://<host public ip>:80
 ```
 
 [coreos-gce]: https://coreos.com/running-coreos/cloud-providers/google-compute-engine/
-[gcloud-instructions]: https://cloud.google.com/compute/gcloud-compute/
+[gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/
