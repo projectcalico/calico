@@ -103,9 +103,6 @@ if is_service_enabled calico-felix; then
 		    pip_install .
 		    popd
 
-		    # Also install python-etcd from the Calico project's GitHub.
-		    pip_install -I git+git://github.com/projectcalico/python-etcd.git
-
 		    ;;
 
 		post-config)
