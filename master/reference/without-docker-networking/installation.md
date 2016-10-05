@@ -20,11 +20,11 @@ Follow the instructions in one of the tutorials below to set up a virtualized
 environment using Vagrant or a cloud service - be sure to follow the
 appropriate instructions for using _Calico without Docker networking_.
 
-- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
-- [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
-- [Amazon Web Services (AWS)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/aws)
-- [Google Compute Engine (GCE)]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/gce)
-- [DigitalOcean]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/digital-ocean)
+- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/vagrant-coreos/)
+- [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/vagrant-ubuntu)
+- [Amazon Web Services (AWS)]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/aws)
+- [Google Compute Engine (GCE)]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/gce)
+- [DigitalOcean]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/digital-ocean)
 
 Altenatively, you can manually configure your hosts.
 - [Manual setup]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual)
