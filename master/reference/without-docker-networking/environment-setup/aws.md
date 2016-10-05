@@ -153,8 +153,9 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 Create the two Calico Docker hosts by passing in a `cloud-config` file.
 
 A different file is used for the two servers.
-- For the first server, use [`user-data-first`]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/cloud-config/user-data-first)
-- For the second server, use the [`user-data-others`]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/cloud-config/user-data-others)
+
+- For the first server, use [`user-data-first`]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/cloud-config/user-data-first)
+- For the second server, use the [`user-data-others`]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/cloud-config/user-data-others)
 
 Copy these files onto your machine.
 
@@ -221,7 +222,7 @@ of your instances can be found on your AWS EC2 dashboard.
 ssh -i mykey.pem core@<PUBLIC IP>
 ```
 
-Then, follow the [Calico without Docker networking walkthrough](without-docker-networking) to get going.
+Then, follow the [Calico without Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/installation) to get going.
 
 In the worked example, be sure to follow the additional instructions for
 configuring `nat-outgoing`.

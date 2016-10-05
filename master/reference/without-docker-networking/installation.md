@@ -17,8 +17,7 @@ To run through the worked example in this tutorial you will to set up two hosts
 with a number of installation dependencies.
 
 Follow the instructions in one of the tutorials below to set up a virtualized
-environment using Vagrant or a cloud service - be sure to follow the
-appropriate instructions for using _Calico without Docker networking_.
+environment using Vagrant or a cloud service:
 
 - [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/vagrant-coreos/)
 - [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/vagrant-ubuntu)
@@ -168,7 +167,7 @@ For example:
 
     calicoctl node --ip=172.17.8.101 --ip6=fd80:24e2:f998:72d7::1
 
-See the [IPv6 worked example](IPv6) for a worked example.
+See the [IPv6 worked example]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/ipv6) for a worked example.
 
 ## Advanced network policy
 
