@@ -8,6 +8,15 @@ test: st ut              ## Run all the tests
 ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
 ###############################################################################
+# URL for Calico binaries
+# confd binary
+CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static
+# bird binaries
+BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird
+BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird6
+BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+
+###############################################################################
 # calico/node build. Contains the following areas
 # - Populate the calico_node/filesystem
 # - Build the container itself
@@ -54,16 +63,16 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix:
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
-	curl -L https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static -o $@
+	curl -L $(CONFD_URL) -o $@
 	chmod +x $@
 
 # Get bird binaries
 $(NODE_CONTAINER_BIN_DIR)/bird:
 	# This make target actually downloads the bird6 and birdcl binaries too
 	# Copy patched BIRD daemon with tunnel support.
-	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird -o $@
-	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird6 -o $(@D)/bird6
-	curl -L https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl -o $(@D)/birdcl
+	curl -L $(BIRD_URL) -o $@
+	curl -L $(BIRD6_URL) -o $(@D)/bird6
+	curl -L $(BIRDCL_URL) -o $(@D)/birdcl
 	chmod +x $(@D)/*
 
 clean_calico_node:
@@ -93,7 +102,7 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
 	 pyinstaller calicoctl.spec -ayF
 
 birdcl:
-	wget -N https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+	wget -N $(BIRDCL_URL)
 	chmod +x birdcl
 
 gobgp:
