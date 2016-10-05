@@ -1,8 +1,19 @@
 ---
-title: Documentation for older releases of Calico (pre v1.4)
+title: Releases
 ---
 
-Documentation for older versions of Calico can be found on our old documentation sites.
+The following table shows component versioning for Calico  **{{ page.version }}**.
 
--  For Calico on OpenStack, see [docs.projectcalico.org](http://docs.projectcalico.org)
--  For Calico on Containers, start at [github.com/projectcalico/calico-containers/README.md](https://github.com/projectcalico/calico-containers/blob/v0.21.0/README.md)
+Use the version selector at the top-right of this page to view a different release.
+
+## master
+
+| Component              | Version |
+|------------------------|---------|
+| felix                  | latest  |
+| calicoctl              | latest  |
+| calico/node            | latest  |
+| calico/node-libnetwork | latest  |
+| calico/cni             | latest  |
+| libcalico              | latest  |
+| calico-bird            | latest  |
