@@ -40,7 +40,7 @@ Basic Calico architecture overview
 ----------------------------------
 
 A description of the Calico architecture can be found in our
-[architectural overview](architecture).
+[architectural overview]({{site.baseurl}}/{{page.version}}/reference/architecture).
 However, a brief discussion of the routing and data paths is useful for
 the discussion.
 

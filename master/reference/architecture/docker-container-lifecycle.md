@@ -118,7 +118,7 @@ The calicoctl utility:
 -  Configures the endpoint information in etcd (see below for etcd data format)
 
 Felix spots new endpoint information:
--  Felix programs ACLs into the host's Linux kernel ip tables that drop all
+-  Felix programs ACLs into the host's Linux kernel iptables that drop all
    traffic to the container.  
 -  Felix adds routing table entries to route to the local container via
    the host-side veth for the container.
