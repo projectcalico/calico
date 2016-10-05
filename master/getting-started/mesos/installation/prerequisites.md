@@ -1,5 +1,5 @@
 ---
-title: Installing Calico-Mesos Prerequisites
+title: Prerequisites for Calico with Mesos
 ---
 
 This guide details a minimal install of the external services required by a Calico-Mesos Agent.
@@ -84,8 +84,8 @@ sudo systemctl restart firewalld
 
 ## Next steps
 Check out one of our guides on using Calico-Mesos with the
-[Unified Containerizer](UsageGuideUnifiedContainerizer) or
-the [Docker Containerizer](UsageGuideDockerContainerizer)
+[Unified Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified) or
+the [Docker Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
 to see how to launch tasks networked with Calico.
 
-[slack]: https://slack.projectcalico.og
+[slack]: https://slack.projectcalico.org

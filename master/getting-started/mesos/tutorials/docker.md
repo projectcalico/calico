@@ -73,59 +73,57 @@ With your networks configured, it is trivial to launch a calico-networked Docker
 #### Marathon v1.2.0+
 In your Marathon application definition, set `container.docker.network` to `USER`, and specify which network the task should join in `ipAddress.networkName`:
 
-```shell
+```json
 {
-    "id": "my-docker-task",
-    "cpus": 0.1,
-    "mem": 64.0,
-    "container": {
-        "type": "DOCKER",
-        "docker": {
-            "network": "USER",
-            "image": "nginx"
-        }
-    },
-		"ipAddress": {
-			  "networkName": "my-calico-net"
-		},
-    "healthChecks": [{
-        "protocol": "HTTP",
-        "path": "/",
-        "port": 80,
-        "gracePeriodSeconds": 300,
-        "intervalSeconds": 60,
-        "timeoutSeconds": 20,
-        "maxConsecutiveFailures": 3
-    }]
+  "id": "my-docker-task",
+  "cpus": 0.1,
+  "mem": 64.0,
+  "container": {
+      "type": "DOCKER",
+      "docker": {
+          "network": "USER",
+          "image": "nginx"
+      }
+  },
+  "ipAddress": {
+      "networkName": "my-calico-net"
+  },
+  "healthChecks": [{
+      "protocol": "HTTP",
+      "path": "/",
+      "port": 80,
+      "gracePeriodSeconds": 300,
+      "intervalSeconds": 60,
+      "timeoutSeconds": 20,
+      "maxConsecutiveFailures": 3
+  }]
 }
 ```
 
 #### Marathon <v1.2.0
 Though "USER" is not a valid network type in Marathon <v1.2.0, you can still launch applications on a Calico network in earlier versions of Marathon, by passing the network name as an arbitrary docker parameter:
 
-```shell
+```json
 {
-    "id": "my-docker-task",
-    "cpus": 0.1,
-    "mem": 64.0,
-    "container": {
-        "type": "DOCKER",
-        "docker": {
-            "image": "nginx",
-            "parameters": [
-              {"key": "net", "value": "my-calico-net"}
-            ]
-        }
-    },
-    "ipAddress": {},
-    "healthChecks": [{
-        "protocol": "HTTP",
-        "path": "/",
-        "port": 80,
-        "gracePeriodSeconds": 300,
-        "intervalSeconds": 60,
-        "timeoutSeconds": 20,
-        "maxConsecutiveFailures": 3
+  "id": "my-docker-task",
+  "cpus": 0.1,
+  "mem": 64.0,
+  "container": {
+      "type": "DOCKER",
+      "docker": {
+          "image": "nginx",
+          "parameters": [{"key": "net", "value": "my-calico-net"}]
+      }
+  },
+  "ipAddress": {},
+  "healthChecks": [{
+      "protocol": "HTTP",
+      "path": "/",
+      "port": 80,
+      "gracePeriodSeconds": 300,
+      "intervalSeconds": 60,
+      "timeoutSeconds": 20,
+      "maxConsecutiveFailures": 3
     }]
 }
 ```

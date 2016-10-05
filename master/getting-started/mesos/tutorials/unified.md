@@ -106,7 +106,7 @@ The above Marathon Application Definition has assigned the labels `app=frontend`
 
 The following YAML policy spec describes rules based on these labels:
 
-```shell
+```yaml
 apiVersion: v1
 kind: policy
 metadata:

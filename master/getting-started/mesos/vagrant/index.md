@@ -16,13 +16,13 @@ This guide requires a host machine with:
 ## 2. Download Demo Files
 
 ```shell
-git clone https://github.com/projectcalico/calico-containers.git
+git clone https://github.com/projectcalico/calico.git
 ```
 
 ## 3. Startup
 
 ```shell
-cd calico-containers/mesos/vagrant-centos/
+cd calico/master/getting-started/mesos/vagrant/
 vagrant up
 ```
 
@@ -51,8 +51,8 @@ That's it! Your Mesos Cluster is ready to use!
 
 ## 4. SSH
 To connect to your Vagrant boxes on OSX / Linux, see
-[Vagrant's SSH command](https://www.vagrantup.com/cli/ssh.html).
-For Windows, see https://github.com/nickryand/vagrant-multi-putty.
+[Vagrant's SSH command](https://www.vagrantup.com/docs/cli/ssh.html).
+For Windows, see <https://github.com/nickryand/vagrant-multi-putty>.
 
 ## 5. Next Steps
 With your cluster deployed, you can follow the
