@@ -89,13 +89,12 @@ var _ = Describe("IPAM", func() {
 		Entry("257 v4 0 v6", "testHost", true, 257, 0, 256, 0),
 		Entry("0 v4 257 v6", "testHost", true, 0, 257, 0, 256),
 	)
-
 })
 
 func setupEnv() {
 
 	cmd := "docker"
-	argsRm := []string{"rm", "-f", "calico-etcd"}
+	argsRm := []string{"rm", "-f", "calico-etcd", "||", "true"}
 	if err := exec.Command(cmd, argsRm...).Run(); err != nil {
 		log.Println(err)
 	}
@@ -111,61 +110,4 @@ func setupEnv() {
 		log.Println(err)
 		os.Exit(1)
 	}
-
 }
-
-// ctx := context.Background()
-
-// dockerClient, err := docker.NewEnvClient()
-// if err != nil {
-// 	log.Fatalf("error creating docker client: %s", err)
-// }
-
-// options := types.ContainerRemoveOptions{
-// 	//RemoveLinks:   true,
-// 	RemoveVolumes: true,
-// 	Force:         true,
-// }
-// if err := dockerClient.ContainerRemove(ctx, "calico-etcd", options); err != nil {
-// 	log.Printf("Error removing container: %s\n", err)
-// }
-
-// port := make(nat.PortSet)
-// port2379, err := nat.NewPort("tcp", "2379")
-// if err != nil {
-// 	log.Printf("Error creating NAT port: %v", err)
-// }
-// port[port2379] = struct{}{}
-
-// env := []string{
-// 	"ETCD_ADVERTISE_CLIENT_URLS=http://127.0.0.1:2379,http://127.0.0.1:4001",
-// 	"ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379,http://0.0.0.0:4001",
-// }
-
-// config := &container.Config{
-// 	ExposedPorts:    port,
-// 	Env:             env,
-// 	Image:           "quay.io/coreos/etcd:v2.3.6",
-// 	NetworkDisabled: false,
-// }
-// portMap := make(nat.PortMap)
-// portMap[port2379] = []nat.PortBinding{{HostIP: "127.0.0.1", HostPort: "2379"}}
-
-// hostConfig := &container.HostConfig{
-// 	PortBindings: portMap,
-// }
-
-// resp, err := dockerClient.ContainerCreate(context.Background(), config, hostConfig, nil, "calico-etcd")
-// if err != nil {
-
-// 	log.Printf("Error creating container: %v", err)
-
-// }
-// err = dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
-// if err != nil {
-// 	log.Printf("Error starting the container: %v", err)
-// }
-
-// pool := api.NewPool()
-// pool.Metadata.CIDR =
-// 	client.Pools().Create(pool)
