@@ -78,7 +78,7 @@ To change the log level, edit the node_filesystem/etc/service/confd/run and
 rebuild the calico-node image.
 
 For more information on the allowed levels, see the
-[documentation](https://github.com/kelseyhightower/confd/blob/master/configuration-guide)
+[documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
 
 
 ## Docker network and IPAM driver
@@ -92,4 +92,4 @@ container.  e.g.
     docker logs calico-libnetwork
 
 For details on how to change the log levels for the plugin, please view the
-[libnetwork-plugin documentation](https://github.com/projectcalico/libnetwork-plugin/blob/master/index).
+[libnetwork-plugin documentation](https://github.com/projectcalico/libnetwork-plugin/blob/master/README.md).
