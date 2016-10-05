@@ -91,6 +91,9 @@ mkdir logs
 cp /var/log/syslog* logs >/dev/null 2>&1
 cp /var/log/messages* logs >/dev/null 2>&1
 
+# Copy DevStack logs, if present.
+test -d /opt/stack/logs && cp -a /opt/stack/logs logs/devstack
+
 echo "  compressing..."
 cd ..
 tar -Jcf "$current_dir/$diags_file.tar.xz" "$diags_file"
