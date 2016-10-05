@@ -23,7 +23,9 @@ package client_test
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -39,7 +41,6 @@ import (
 var etcdType api.BackendType
 
 func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
-	fmt.Println("in func")
 
 	etcdType = "etcdv2"
 
@@ -66,13 +67,8 @@ func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
 
 	v4, v6, outErr := ic.AutoAssign(entry)
 
-	if setup {
-		destroyEnv()
-	}
-
 	if outErr != nil {
-		fmt.Print("printing error.... ")
-		fmt.Println(outErr)
+		log.Println(outErr)
 	}
 
 	return len(v4), len(v6)
@@ -95,24 +91,14 @@ var _ = Describe("IPAM", func() {
 })
 
 func setupEnv() {
-	cmd := "docker"
 
-	argsRun := []string{"run", "--detach", "-p", "2379:2379", "--name", "calico-etcd", "quay.io/coreos/etcd:v2.3.6", "--advertise-client-urls", "http://127.0.0.1:2379,http://127.0.0.1:4001", "--listen-client-urls", "http://0.0.0.0:2379,http://0.0.0.0:4001"}
-	if err := exec.Command(cmd, argsRun...).Run(); err != nil {
+	etcdArgs := strings.Fields((fmt.Sprintf("--endpoints http://%s:2379 rm /calico --recursive || true", os.Getenv("ETCD_IP"))))
+	if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
 		log.Println(err)
 	}
 
 	argsPool := []string{"create", "-f", "../../test/pool1.yaml"}
 	if err := commands.Create(argsPool); err != nil {
-		log.Println(err)
-	}
-}
-
-func destroyEnv() {
-	cmd := "docker"
-
-	argsRm := []string{"rm", "-f", "calico-etcd", "||", "true"}
-	if err := exec.Command(cmd, argsRm...).Run(); err != nil {
 		log.Println(err)
 	}
 }
