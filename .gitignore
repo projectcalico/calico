@@ -21,3 +21,4 @@ birdcl
 .vagrant
 gobgp
 calico_node/bin
+calicoctl/calicoctl
