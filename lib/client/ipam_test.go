@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Test cases:
+// Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
+// Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses
+// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and an error.
+// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and an error.
+
 package client_test
 
 import (
@@ -33,36 +39,6 @@ import (
 
 var etcdType api.BackendType
 
-var args = []client.AutoAssignArgs{
-	{
-		Num4: 0,
-		Num6: 20,
-		//Hostname: "notMac",
-	},
-	{
-		Num4: 4,
-		Num6: 10,
-	},
-	{
-		Num4: 1,
-		Num6: 0,
-	},
-	{
-		Num4: 0,
-		Num6: 256,
-	},
-
-	{
-		Num4:     4,
-		Num6:     254,
-		Hostname: "notMac",
-	},
-	{
-		Num4: 1,
-		Num6: 0,
-	},
-}
-
 func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
 	fmt.Println("in func")
 
@@ -71,7 +47,7 @@ func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
 	etcdConfig := etcd.EtcdConfig{
 		EtcdEndpoints: "http://127.0.0.1:2379",
 	}
-	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig} //etcdType.NewConfig()}
+	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
 
 	bc, err := client.New(ac)
 	if err != nil {
@@ -105,7 +81,6 @@ var _ = Describe("IPAM", func() {
 	DescribeTable("requested IPs vs got IPs",
 		func(host string, setup bool, inv4, inv6, expv4, expv6 int) {
 			outv4, outv6 := testIPAM(inv4, inv6, host, setup)
-			//fmt.Println(outv4, outv6)
 			Expect(outv4).To(Equal(expv4))
 			Expect(outv6).To(Equal(expv6))
 		},
