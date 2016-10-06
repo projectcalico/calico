@@ -260,7 +260,7 @@ add-ssl-hostname:
 
 semaphore:
 	# Clean up unwanted files to free disk space.
-	rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}
+	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
 
 	# Actually run the tests (refreshing the images as required)
 	make st
