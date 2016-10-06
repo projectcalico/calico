@@ -24,15 +24,14 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 
 	"bytes"
 
-	"github.com/ghodss/yaml"
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/client"
-	"github.com/tigera/libcalico-go/lib/validator"
-	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
+	"github.com/ghodss/yaml"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/validator"
 )
 
 // The ResourceManager interface provides useful function for each resource type.  This includes:

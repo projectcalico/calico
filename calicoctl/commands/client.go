@@ -18,7 +18,7 @@ import (
 	"os"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 // Create a new CalicoClient using connection information in the specified

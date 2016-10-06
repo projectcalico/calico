@@ -17,8 +17,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/docopt/docopt-go"
 	log "github.com/Sirupsen/logrus"
+	"github.com/docopt/docopt-go"
 )
 
 func Apply(args []string) error {
