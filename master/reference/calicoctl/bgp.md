@@ -20,7 +20,7 @@ can read about these commands in the [`calicoctl node` guide](node).
 For an overview of BGP configuration, read the [BGP tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp), which
 covers in more detail all available BGP related commands, including use cases.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl bgp' commands
