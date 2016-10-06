@@ -27,7 +27,7 @@ toc:
     section:
     - title: Simple Policy Demo
       path: /getting-started/kubernetes/tutorials/simple-policy
-    - title: Stars Policy Demo 
+    - title: Stars Policy Demo
       path: /getting-started/kubernetes/tutorials/stars-policy/
   - title: Troubleshooting
     path: /getting-started/kubernetes/troubleshooting
@@ -130,7 +130,9 @@ toc:
   - title: Overview
     path: /getting-started/rkt/
   - title: Installation
-    path: /getting-started/rkt/installation
+    section:
+    - title: Vagrant
+      path: /getting-started/rkt/vagrant/
   - title: Tutorials
     path: /getting-started/rkt/tutorials
   - title: Troubleshooting
