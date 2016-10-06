@@ -19,6 +19,7 @@ curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
 unzip awscli-bundle.zip
 sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 ```
+
 For more information, see Amazon's [Installing the AWS Command Line Interface][install-aws-cli].
 
 Run the AWS configure command, which will prompt you to set your User keys.
@@ -30,6 +31,7 @@ aws configure
 #>  Default region name: <Region Name, eg. us-west-2>
 #>  Default output format: <json, text, or table>
 ```
+
 Note: Your `<Region Name>` can be found on the front page of the EC2 dashboard under the "Service Health" text.
 
 Your AWS user needs to have the policy AmazonEC2FullAccess or be in a group with this policy in order to run the ec2
@@ -152,16 +154,10 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 ## 3. Spinning up the VMs
 Create the two Calico Docker hosts by passing in a `cloud-config` file.
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the cloud-config based on
-the networking option that you choose.
-
-- [User Data for Calico as a Docker network plugin](docker-network-plugin/cloud-config)
-- [User Data for Calico without Docker networking](without-docker-networking/cloud-config)
-
 A different file is used for the two servers.
-- For the first server, use the `user-data-first`
-- For the second server, use the `user-data-others`
+
+- For the first server, use [`user-data-first`]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/cloud-config/user-data-first)
+- For the second server, use the [`user-data-others`]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/cloud-config/user-data-others)
 
 Copy these files onto your machine.
 
@@ -228,15 +224,10 @@ of your instances can be found on your AWS EC2 dashboard.
 ssh -i mykey.pem core@<PUBLIC IP>
 ```
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on
-the networking option that you chose for the cloud config in step (3).
+Now that your environment is configured, you are ready to follow the [Calico with Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic) worked example.
 
 > In the worked example, be sure to follow the additional instructions for
 configuring `nat-outgoing`.
-
-- [Calico as a Docker network plugin walkthrough](docker-network-plugin)
-- [Calico without Docker networking walkthrough](without-docker-networking)
 
 # (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP
@@ -245,14 +236,14 @@ security profile.
 
 Let's create a new security profile and look at the default rules.
 
-```
+```shell
 calicoctl profile add WEB
 calicoctl profile WEB rule show
 ```
 
 You should see the following output.
 
-```
+```shell
 Inbound rules:
    1 allow from tag WEB
 Outbound rules:
@@ -261,19 +252,20 @@ Outbound rules:
 
 Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and
 443:
-```
+
+```shell
 calicoctl profile WEB rule add inbound allow tcp to ports 80,443
 ```
 
 Now, we can list the rules again and see the changes:
 
-```
+```shell
 calicoctl profile WEB rule show
 ```
 
 should print
 
-```
+```shell
 Inbound rules:
    1 allow from tag WEB
    2 allow tcp to ports 80,443
@@ -283,14 +275,14 @@ Outbound rules:
 
 On the same host, create a NAT that forwards port 80 traffic to a new container.
 
-```
+```shell
 sudo iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT --to 192.168.2.1:80
 ```
 
 Lastly, the AWS host's security group must be updated for any ports you want to expose.  Run this command from your
 AWS CLI machine to allow incoming traffic to port 80:
 
-```
+```shell
 aws ec2 authorize-security-group-ingress \
   --group-name MySG \
   --protocol tcp \
@@ -301,7 +293,7 @@ aws ec2 authorize-security-group-ingress \
 You should now be able to access the container using the public IP address of your AWS host on port 80 by visiting
 `http://<host public ip>:80` or running:
 
-```
+```shell
 curl http://<host public ip>:80
 ```
 

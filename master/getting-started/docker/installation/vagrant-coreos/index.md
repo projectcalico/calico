@@ -19,20 +19,9 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 
 ### 1.4 Startup and SSH
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the networking option
-by changing into the appropriate directory.
+Run the following:
 
-For Calico as a Docker network plugin
-
-    cd calico-containers/calico-with-docker/docker-network-plugin/vagrant-coreos
-
-For Calico without Docker networking
-
-    cd calico-containers/calico-with-docker/without-docker-networking/vagrant-coreos
-
-Run
-
+    cd calico/{{page.version}}/getting-started/docker/installation/vagrant-coreos
     vagrant up
 
 To connect to your servers
@@ -71,15 +60,8 @@ And finally check that Docker is running on both hosts by running
     docker ps
 
 ## 2. Try out Calico networking
-Now you have a basic two node CoreOS cluster setup and you are ready to try Calico networking.
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on
-the networking option that you chose in step (3).
-
-- [Calico as a Docker network plugin walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation)
-- [Calico without Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/)  
-
+Now you have a basic two node CoreOS cluster setup, see the [Calico with Docker Networking Walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic) for information on how to try Calico Networking.
 
 [calico-networking]: https://github.com/projectcalico/calico-containers
 [virtualbox]: https://www.virtualbox.org/
