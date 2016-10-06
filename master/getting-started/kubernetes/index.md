@@ -15,7 +15,7 @@ Quick-start guides
 ------------------
 These guides let you get a cluster set up quickly, and walk you through using Calico for networking and network policy.
 
-- [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant-coreos)
+- [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
 - [CoreOS on GCE]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/gce)
 - [CoreOS on AWS]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/aws)
 

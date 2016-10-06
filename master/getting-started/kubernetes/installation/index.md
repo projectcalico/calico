@@ -175,7 +175,7 @@ The `kubelet` can be configured to use Calico by starting it with the following 
 - `--network-plugin=cni`
 - `--network-plugin-dir=/etc/cni/net.d`
 
-See the [`kubelet` documentation](http://kubernetes.io/admin/kubelet/)
+See the [`kubelet` documentation](http://kubernetes.io/docs/admin/kubelet/)
 for more details.
 
 #### Example systemd unit file (kubelet.service)
@@ -225,5 +225,5 @@ there are two ways to enable this behavior.
 - Option 1: Start the `kube-proxy` with the `--proxy-mode=iptables` option.
 - Option 2: Annotate the Kubernetes Node API object with `net.experimental.kubernetes.io/proxy-mode` set to `iptables`.
 
-See the [kube-proxy documentation](http://kubernetes.io/admin/kube-proxy/)
+See the [kube-proxy documentation](http://kubernetes.io/docs/admin/kube-proxy/)
 for more details.
