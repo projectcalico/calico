@@ -17,7 +17,7 @@ would be unable to enforce security rules between workloads on the same host;
 all containers on the bridge would be able to communicate with one other.
 
 You can securely configure port mapping by following our [guide on Exposing
-Container Ports to the Internet]({{site.baseurl}}/{{page.version}}/using-calico/external-connectivity).
+Container Ports to the Internet]({{site.baseurl}}/{{page.version}}/usage/external-connectivity).
 
 ## Can Calico containers use any IP address within a pool, even subnet network/broadcast addresses?
 
@@ -40,7 +40,7 @@ center.  Access to that network is via a router, which also is the default
 router for all the container hosts.
 
 If this describes your infrastructure, the
-[External Connectivity tutorial]({{site.baseurl}}/{{page.version}}/using-calico/external-connectivity) explains in more detail
+[External Connectivity tutorial]({{site.baseurl}}/{{page.version}}/usage/external-connectivity) explains in more detail
 what to do. Otherwise, detailed datacenter networking recommendations are given
 in the main [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
@@ -61,7 +61,7 @@ Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the
 internet as well. You can read about how to configure security profiles in the
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy).
+[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy).
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that
@@ -81,7 +81,7 @@ iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.
 ```
 The command will need to be run each time the host is restarted.
 
-Remember: the security profile for the container will need to allow traffic to the exposed port as well.  You can read about how to configure security profiles in the [Advanced Network Policy]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy) guide.
+Remember: the security profile for the container will need to allow traffic to the exposed port as well.  You can read about how to configure security profiles in the [Advanced Network Policy]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy) guide.
 
 ### Can I run Calico in a public cloud environment?
 Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between Calico hosts then you can specify the `--ipip` flag your Calico IP pool:

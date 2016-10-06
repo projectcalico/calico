@@ -111,7 +111,7 @@ Docker's port mapping feature.  However, it is important to note that using
 Docker's port-mapping feature is not secured by Calico policy since the packets
 are routed via the Docker bridge, rather than through the Calico interfaces.
 (For more information on port-forwarding with Calico, check out the [Expose
-Ports to Internet guide]({{site.baseurl}}/{{page.version}}/using-calico/external-connectivity).)
+Ports to Internet guide]({{site.baseurl}}/{{page.version}}/usage/external-connectivity).)
 
 When running in a cloud environment we need to also set `ipip` and
 `nat-outgoing` options. If using the default IPAM driver, `ipip` and
@@ -293,5 +293,5 @@ For more details, read
 
 ## Make a container reachable from the Host-Interface (Internet)
 If you're interested in using port-forwarding, we have a working example on how
-to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/using-calico/external-connectivity)
+to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/usage/external-connectivity)
 when using Calico.

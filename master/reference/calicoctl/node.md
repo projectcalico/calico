@@ -11,7 +11,7 @@ Calico networking.
 
 The `calicoctl node bgp` commands can be used to configure BGP peering for the
 node.  For an overview of BGP configuration, read the
-[BGP tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp), which covers in more detail all available BGP
+[BGP tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/bgp), which covers in more detail all available BGP
 related commands, including use cases.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)

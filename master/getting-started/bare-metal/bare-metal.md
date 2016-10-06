@@ -21,7 +21,7 @@ underlying network fabric.
 
 Calico distinguishes workload endpoints from host endpoints by a
 configurable prefix controlled by the `InterfacePrefix` configuration
-value, (see: [Calico Configuration]({{site.baseurl}}/{{page.version}}/using-calico/configuration)). Interfaces that start with the value of
+value, (see: [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration)). Interfaces that start with the value of
 `InterfacePrefix` are assumed to be workload interfaces. Others are
 treated as host interfaces.
 
@@ -352,7 +352,7 @@ which allows access to ssh; as well as outbound communication to ports
 2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration
-parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/using-calico/configuration). They can be disabled by setting each configuration value to an empty string.
+parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration). They can be disabled by setting each configuration value to an empty string.
 
 > **WARNING**
 >

@@ -16,7 +16,7 @@ manage or interfere with new interfaces or related config (for example routes,
 iptables, ipsets or interface state), as that is likely to conflict with
 Calico's programming and lead to loss of endpoint connectivity.  We recommend
 using 'server' OS installs rather than 'desktop'.  (For NetworkManager in
-particular, please see also [Troubleshooting]({{site.baseurl}}/{{page.version}}/using-calico/troubleshooting).)
+particular, please see also [Troubleshooting]({{site.baseurl}}/{{page.version}}/usage/troubleshooting).)
 
 The hosts must have different hostnames.  We recommend `calico-01` and
 `calico-02`, and the tutorial will use those names.

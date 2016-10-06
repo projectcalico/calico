@@ -223,4 +223,4 @@ the host running Felix. The filter rules are based entirely on ports so
 they are fairly broad.
 
 This behaviour can be configured or disabled via configuration
-parameters; see [here]({{site.baseurl}}/{{page.version}}/using-calico/configuration).
+parameters; see [here]({{site.baseurl}}/{{page.version}}/usage/configuration).
