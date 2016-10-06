@@ -12,7 +12,7 @@ This sections describes the `calicoctl pool` commands.
 These commands allow users to define and view IP address pools from which endpoint 
 IP addresses are allocated.  Users can add, remove, update, or view the IP pools.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a 
 full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl pool' commands

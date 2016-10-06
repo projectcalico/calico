@@ -9,7 +9,7 @@ title: calicoctl profile
 
 This sections describes the `calicoctl profile` commands.
 
-Read the [calicoctl command line interface user guide](../calicoctl) for a 
+Read the [calicoctl Overview](../calicoctl) for a 
 full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl profile' commands

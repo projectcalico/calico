@@ -7,7 +7,7 @@ toc:
   path: /reference/
 - title: Supported Platforms
   path: /reference/supported-platforms
-- title: Calicoctl
+- title: calicoctl
   section:
   - title: Overview
     path: /reference/calicoctl/

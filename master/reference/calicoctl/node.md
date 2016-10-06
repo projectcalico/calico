@@ -17,7 +17,7 @@ node.  For an overview of BGP configuration, read the
 [BGP tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp), which covers in more detail all available BGP
 related commands, including use cases.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node' commands
@@ -317,7 +317,7 @@ This command allows users to remove specific BGP peers from this Calico node.
 NOTE: This command only removes peers configured with `calicoctl node bgp peer 
 add`. It does not remove global peers ([`calicoctl bgp peer add`](bgp)) 
 or peerings with other Calico nodes if the node mesh is on 
-([calicoctl bgp node-mesh](bgp)).
+([`calicoctl bgp node-mesh`](bgp)).
 
 This command must be run on the specific Calico node that you are configuring.
 
@@ -340,9 +340,9 @@ BGP peer removed from node configuration
 This command allows users to view the node-specific BGP peers configured on 
 this node.
 
-NOTE: This command does not show global BGP peers ([calicoctl bgp peer show]
-(bgp)) or peerings to other Calico nodes when the node-mesh is on 
-([calicoctl bgp node-mesh](bgp)). To show all BGP peers of this node and 
+NOTE: This command does not show global BGP peers ([`calicoctl bgp peer show`](bgp))
+or peerings to other Calico nodes when the node-mesh is on 
+([`calicoctl bgp node-mesh`](bgp)). To show all BGP peers of this node and 
 their status, use [`calicoctl status`](status).
 
 This command must be run on individual Calico nodes.
