@@ -63,8 +63,6 @@ toc:
     path: /reference/architecture/components
   - title: Data Path
     path: /reference/architecture/data-path
-  - title: Lifecycle of a container (Calico without Docker networking)
-    path: /reference/architecture/docker-container-lifecycle
 - title: Calico Security Model
   path: /reference/security-model
 - title: Addressing and Connectivity Overview
@@ -75,12 +73,26 @@ toc:
     path: /reference/advanced/calico-cni
   - title: Calico without Docker networking (--net=none)
     section:
-    - title: Overview
-      path: /reference/without-docker-networking/
-    - title: Calico without Docker-Libnetwork
-      path: /reference/without-docker-networking/manual-setup
-    - title: Calico IPv6 Networking
+    - title: Prerequisites
+      path: /reference/without-docker-networking/prerequisites
+    - title: Installation
+      path: /reference/without-docker-networking/installation
+    - title: Environment Setup
+      section:
+      - title: Vagrant CoreOS
+        path: /reference/without-docker-networking/environment-setup/vagrant-coreos/
+      - title: Vagrant Ubuntu
+        path: /reference/without-docker-networking/environment-setup/vagrant-ubuntu/
+      - title: AWS
+        path: /reference/without-docker-networking/environment-setup/aws
+      - title: GCE
+        path: /reference/without-docker-networking/environment-setup/gce
+      - title: Digital Ocean
+        path: /reference/without-docker-networking/environment-setup/digital-ocean
+    - title: IPv6
       path: /reference/without-docker-networking/ipv6
+    - title: Lifecycle of a container (Calico without Docker networking)
+      path: /reference/without-docker-networking/docker-container-lifecycle
   - title: Calico's use of the Neutron API
     path: /reference/advanced/calico-neutron-api
   - title: Secure etcd

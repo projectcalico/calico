@@ -145,4 +145,4 @@ NAME          STATUS                     AGE
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [coreos-gce]: https://coreos.com/running-coreos/cloud-providers/google-compute-engine/
-[gcloud-instructions]: https://cloud.google.com/compute/gcloud-compute/
+[gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/

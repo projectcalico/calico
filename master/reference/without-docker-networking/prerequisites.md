@@ -2,7 +2,6 @@
 title: Preparing the environment for Calico without Docker networking
 ---
 
-
 The worked example in the _Calico without Docker networking tutorial_ is run on
 two Linux servers that have a number of installation requirements.
 
@@ -34,7 +33,7 @@ Each node must have the following software installed:
 Calico uses an etcd cluster for coordinating state between the nodes.  See the
 [etcd documentation][etcd] for details on setting up an etcd cluster.
 
-> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster]({{site.baseurl}}/{{page.version}}/using-calico/advanced/EtcdSecureCluster.md)
+> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster]({{site.baseurl}}/{{page.version}}/reference/advanced/etcd-secure)
 > page.
 
 ### Docker permissions
@@ -83,7 +82,7 @@ the current etcd version if etcd is available.
 ## Continue with the worked example
 
 With the environment set up, you can run through the remainder of the worked
-example in the [Calico without Docker networking tutorial](CalicoWithoutDockerNetworking).
+example in the [Calico without Docker networking tutorial]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/installation).
 
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/

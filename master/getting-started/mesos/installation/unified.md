@@ -41,4 +41,4 @@ sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
 ```
 
 ## Next Steps
-Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni/).
+Now that you have all the necessary components in place, its time to configure a network and launch tasks. See [Calico's Mesos-CNI Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified/).

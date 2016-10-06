@@ -4,7 +4,7 @@
 # Make our URLs look nice. We're not a blog with dated posts, we just want the title.
 permalink:     /:title.html
 
-baseurl: /calico-docs
+baseurl: /calico
 
 # Markdown Processors
 # TODO - we're not entirly sure what these are for

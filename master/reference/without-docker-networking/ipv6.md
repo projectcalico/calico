@@ -2,11 +2,11 @@
 title: Calico IPv6 networking without Docker networking (Optional)
 ---
 
-This tutorial is a continuation of the main 
-[Calico without Docker networking tutorial](index).
+This tutorial is a continuation of the main
+[Calico without Docker networking tutorial]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/installation).
 
 The worked example below focuses on a non-cloud environment.
-  
+
 ## 1. Pre-requisites
 
 The instructions below assume you have the following hosts with IPv4 addresses
@@ -19,7 +19,7 @@ configured. Adjust the instructions accordingly.
 
 ## 2. Add IPv6 addresses to your host
 
-To connect your containers with IPv6, first make sure your Docker hosts each 
+To connect your containers with IPv6, first make sure your Docker hosts each
 have an IPv6 address assigned.
 
 On calico-01
@@ -38,7 +38,7 @@ On calico-01
 
 ## 3. Restart Calico services with IPv6
 
-Then restart your calico-node processes with the `--ip6` parameter to enable 
+Then restart your calico-node processes with the `--ip6` parameter to enable
 v6 routing.
 
 On calico-01
@@ -51,8 +51,8 @@ On calico-02
 
 ## 4. Starting containers
 
-Then, you can start containers with IPv6 connectivity. By default, Calico is 
-configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64 
+Then, you can start containers with IPv6 connectivity. By default, Calico is
+configured to use IPv6 addresses in the pool fd80:24e2:f998:72d6/64
 (use `calicoctl pool add` to change this).
 
 On calico-01, run:
@@ -74,7 +74,7 @@ On calico-01 run:
 On calico-02 run::
 
     sudo calicoctl container add workload-G fd80:24e2:f998:72d6::2
-    
+
 Now create a security profile and set the profile on the two containers.
 
 On either calico host:

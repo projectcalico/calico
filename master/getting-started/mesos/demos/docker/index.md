@@ -18,7 +18,7 @@ This demo requires a Mesos cluster with Calico-libnetwork running,
 along with a few additional components.
 
 To simplify the setup, we have created a Vagrant file to quickly
-deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant)
+deploy a master and two agents. Follow the [Vagrant Mesos Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant/)
 to get started.
 
 Your cluster should contain the following components.

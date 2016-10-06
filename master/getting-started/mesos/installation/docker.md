@@ -1,5 +1,5 @@
 ---
-title: Calico with Docker Containerizer - Manual Install Guide
+title: Installing Calico for the Docker Containerizer
 ---
 
 This document provides the commands to download and run Calico
@@ -65,6 +65,6 @@ sh -c 'echo docker > /etc/mesos-slave/containerizers'
 systemctl restart mesos-slave.service
 ```
 
-That's it! You're ready to launch Calico-networked tasks. Visit
-our [Docker Containerizer Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
-to get started.
+## Next Steps
+
+With Calico Installed, you're now ready to launch Calico-networked tasks. See the [Docker Containerizer Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker) for information.

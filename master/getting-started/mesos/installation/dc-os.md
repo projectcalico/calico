@@ -6,7 +6,7 @@ tile: Installing Calico in DC/OS
 This guide provides instructions for installing Calico and its
 prerequisites on a [Mesos DC/OS](https://dcos.io/) cluster.
 
-##Prerequisites
+## Prerequisites
 
 ### Mesos Master and Agents
 
@@ -14,8 +14,7 @@ You will need to be running a cluster with at least one Mesos master
 and and at least one Mesos agent (though we recommend having two or
 more agents).
 
-You can set up a cluster fairly easily by following the [DC/OS Vagrant Install guide]
-(https://github.com/dcos/dcos-vagrant). It is important to note that
+You can set up a cluster fairly easily by following the [DC/OS Vagrant Install guide](https://github.com/dcos/dcos-vagrant). It is important to note that
 if you install from this vagrant script, the Docker version on the machines
 will be insufficient, so you will need to upgrade to Docker 1.9 or above ***before*** launching the Calico service.
 
@@ -143,6 +142,6 @@ Mesos cluster.
 
 Get started by checking out our user guides for
 the [Docker Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
-or the [Unified Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni),
+or the [Unified Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified),
 or to learn more about the differences between the
 two containerizers, check out our [Mesos README]({{site.baseurl}}/{{page.version}}/getting-started/mesos/).

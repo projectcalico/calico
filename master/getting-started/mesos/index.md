@@ -20,7 +20,7 @@ networked by Calico's Docker-Libnetwork plugin. Once installed on each Mesos
 Agent, operators can create Docker networks up-front, then launch Docker
 tasks on them.
 
-- [Quickstart with Vagrant Install: Calico for Docker Tasks in Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant)
+- [Quickstart with Vagrant Install: Calico for Docker Tasks in Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant/)
 - [Manual Install: Calico for Docker Tasks in Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
 - [Usage Guide: Launching Docker Tasks networked by Calico in Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
 
@@ -29,9 +29,9 @@ Mesos v1.0.0 has introduced first-class support of the [Container Network
 Interface (CNI)](https://github.com/containernetworking/cni) for the Unified
 Containerizer.
 
-- [Quickstart with Docker-Compose: Calico for Mesos CNI](cni-compose-demo/)
+- [Quickstart with Docker-Compose: Calico for Mesos CNI]({{site.baseurl}}/{{page.version}}/getting-started/mesos/demos/cni)
 - [Manual Install: Calico for Mesos Tasks (CNI)]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified)
-- [Usage Guide: Launching Mesos Tasks networked with Calico CNI]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified-cni)
+- [Usage Guide: Launching Mesos Tasks networked with Calico CNI]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified)
 
 ## Calico for DC/OS
 Calico maintains a Framework for DC/OS which serves as an installer to quickly
