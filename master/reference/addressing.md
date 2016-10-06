@@ -20,16 +20,6 @@ IPv6 address spaces are 'flat', in that any IPv4 address can in
 principle - meaning subject to security policy - communicate with any
 other IPv4 address, and similarly for IPv6.
 
-> **NOTE**
->
-> A future Calico release will add private address spaces with IPv4
->
-> :   address ranges that can be provisioned by tenants, and potentially
->     overlap with each other and with the shared IPv4 address space.
->     See [here]({{site.baseurl}}/{{page.version}}/reference/advanced/overlap-ips) for our thoughts on how that will work. (Private
->     networks do not need IPv6 address ranges, because the shared IPv6
->     address space is already sufficient for all needs.)
->
 Within the shared address spaces there may be ranges of IP addresses
 (both v4 and v6) that are routable from outside the data center. Other
 shared network IP address ranges will not be routable from outside: they
