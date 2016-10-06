@@ -16,7 +16,7 @@ package testutils
 import (
 	gonet "net"
 
-	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 func MustParseCIDR(c string) net.IPNet {

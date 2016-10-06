@@ -20,7 +20,7 @@ import (
 
 	"testing"
 
-	"github.com/tigera/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func init() {

@@ -15,9 +15,9 @@
 package client
 
 import (
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 // ProfileInterface has methods to work with Profile resources.

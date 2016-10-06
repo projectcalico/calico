@@ -26,9 +26,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
-	"github.com/tigera/libcalico-go/lib/backend/api"
-	"github.com/tigera/libcalico-go/lib/backend/model"
-	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	"golang.org/x/net/context"
 )
 

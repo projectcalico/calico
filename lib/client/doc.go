@@ -20,7 +20,7 @@ Calico configuration.
 
 This client provides a typed interface for managing different resource types.  The
 definitions for each resource type are defined in the following package:
-	github.com/tigera/libcalico-go/lib/api
+	github.com/projectcalico/libcalico-go/lib/api
 
 The client has a number of methods that return interfaces for managing:
 	-  Policy resources

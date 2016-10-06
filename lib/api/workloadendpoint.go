@@ -15,8 +15,8 @@
 package api
 
 import (
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 type WorkloadEndpoint struct {

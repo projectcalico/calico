@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 type Rule struct {

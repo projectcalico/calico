@@ -18,7 +18,7 @@ import (
 	_ "crypto/sha256"
 	"strings"
 
-	"github.com/tigera/libcalico-go/lib/hash"
+	"github.com/projectcalico/libcalico-go/lib/hash"
 )
 
 type Selector interface {

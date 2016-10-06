@@ -17,7 +17,7 @@ package model
 import (
 	"reflect"
 
-	"github.com/tigera/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var (

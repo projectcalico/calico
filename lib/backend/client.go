@@ -18,10 +18,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tigera/libcalico-go/lib/api"
-	bapi "github.com/tigera/libcalico-go/lib/backend/api"
-	"github.com/tigera/libcalico-go/lib/backend/compat"
-	"github.com/tigera/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/compat"
+	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 )
 
 // NewClient creates a new backend datastore client.

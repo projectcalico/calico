@@ -1,9 +1,9 @@
-[![CircleCI](https://circleci.com/gh/tigera/libcalico-go.svg?style=svg)](https://circleci.com/gh/tigera/libcalico-go)
+[![CircleCI](https://circleci.com/gh/projectcalico/libcalico-go.svg?style=svg)](https://circleci.com/gh/projectcalico/libcalico-go)
 
 # libcalico-go
 This repositiory contains Calico's Go components:
 
-- `libcalico`, which can be imported as `"github.com/tigera/libcalico-go/lib"`
+- `libcalico`, which can be imported as `"github.com/projectcalico/libcalico-go/lib"`
 - `calicoctl`
 
 ## Common set-up
@@ -14,12 +14,12 @@ Assuming you have already installed **go version 1.7.1+**, perform the following
 
 - Clone this repository to your Go project path: 
 ```
-git clone git@github.com:tigera/libcalico-go.git $GOPATH/src/github.com/tigera/libcalico-go
+git clone git@github.com:projectcalico/libcalico-go.git $GOPATH/src/github.com/projectcalico/libcalico-go
 ```
 
 - Switch to your project directory:
 ```
-cd $GOPATH/src/github.com/tigera/libcalico-go
+cd $GOPATH/src/github.com/projectcalico/libcalico-go
 ```
 
 - Populate the `vendor/` directory in the project's root with this project's dependencies:

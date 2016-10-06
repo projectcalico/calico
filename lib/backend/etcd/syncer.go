@@ -20,9 +20,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
-	"github.com/tigera/libcalico-go/lib/backend/api"
-	"github.com/tigera/libcalico-go/lib/backend/model"
-	"github.com/tigera/libcalico-go/lib/hwm"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/hwm"
 	"golang.org/x/net/context"
 )
 

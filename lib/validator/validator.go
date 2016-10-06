@@ -21,11 +21,11 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/numorstring"
-	"github.com/tigera/libcalico-go/lib/scope"
-	"github.com/tigera/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/scope"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 	"gopkg.in/go-playground/validator.v8"
 )
 

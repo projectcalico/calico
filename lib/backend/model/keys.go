@@ -22,7 +22,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string

@@ -15,7 +15,7 @@
 package client
 
 import (
-	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // AssignIPArgs defines the set of arguments for assigning a specific IP address.

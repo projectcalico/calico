@@ -21,9 +21,9 @@ import (
 	"reflect"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/scope"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
 var (

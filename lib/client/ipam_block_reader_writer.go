@@ -24,10 +24,10 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend/model"
-	"github.com/tigera/libcalico-go/lib/errors"
-	cnet "github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 type blockReaderWriter struct {

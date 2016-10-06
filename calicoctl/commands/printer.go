@@ -26,10 +26,10 @@ import (
 	"text/tabwriter"
 	"text/template"
 
-	"github.com/ghodss/yaml"
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/ghodss/yaml"
+	"github.com/projectcalico/libcalico-go/calicoctl/resourcemgr"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 )
 
 type resourcePrinter interface {

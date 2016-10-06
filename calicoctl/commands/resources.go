@@ -20,15 +20,15 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/calicoctl/resourcemgr"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
-	calicoErrors "github.com/tigera/libcalico-go/lib/errors"
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/scope"
+	"github.com/ghodss/yaml"
+	"github.com/projectcalico/libcalico-go/calicoctl/resourcemgr"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
 type action int

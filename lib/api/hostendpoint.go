@@ -15,8 +15,8 @@
 package api
 
 import (
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // HostEndpoint contains information about a “bare-metal” interfaces attached to the host that is

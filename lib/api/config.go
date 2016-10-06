@@ -16,7 +16,7 @@ package api
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 )
 
 type BackendType string

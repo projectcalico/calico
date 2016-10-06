@@ -15,7 +15,7 @@
 package api
 
 import (
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 )
 
 // Policy contains information about a security Policy resource.  This contains a set of

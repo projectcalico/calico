@@ -15,14 +15,14 @@
 package model_test
 
 import (
-	"github.com/tigera/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 type ruleTest struct {

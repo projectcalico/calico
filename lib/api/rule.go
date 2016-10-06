@@ -15,8 +15,8 @@
 package api
 
 import (
-	"github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/numorstring"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 // A Rule encapsulates a set of match criteria and an action.  Both label-based security Policy
