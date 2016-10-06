@@ -25,8 +25,10 @@
 package client_test
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 
@@ -39,15 +41,19 @@ import (
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/backend/etcd"
 	"github.com/tigera/libcalico-go/lib/client"
+	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
-var etcdType api.BackendType
+var etcdType api.BackendType = "etcdv2"
+var etcdConfig = etcd.EtcdConfig{
+	EtcdEndpoints: "http://127.0.0.1:2379",
+}
 
 var _ = Describe("IPAM", func() {
 
-	DescribeTable("Requested IPs vs returned IPs",
+	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pool string, inv4, inv6, expv4, expv6 int, expError error) {
-			outv4, outv6, outError := testIPAM(inv4, inv6, host, cleanEnv, pool)
+			outv4, outv6, outError := testIPAMAutoAssign(inv4, inv6, host, cleanEnv, pool)
 			Expect(outv4).To(Equal(expv4))
 			Expect(outv6).To(Equal(expv6))
 			if expError != nil {
@@ -77,48 +83,68 @@ var _ = Describe("IPAM", func() {
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block)
 		Entry("64 v4 0 v6 host-A", "host-A", false, "pool2", 64, 0, 64, 0, nil),
 	)
+
+	DescribeTable("AssignIP: requested IP vs returned error",
+		func(inIP net.IP, host string, cleanEnv bool, pool string, expError error) {
+			outError := testIPAMAssignIP(inIP, host, pool, cleanEnv)
+			if expError != nil {
+				Ω(outError).Should(HaveOccurred())
+				Expect(outError).To(Equal(expError))
+			}
+		},
+
+		// Test 1: Assign 1 IPv4 from a configured pool - expect no error returned.
+		Entry("Assign 1 IPv4 from a configured pool", net.ParseIP("192.168.1.0"), "testHost", true, "pool1", nil),
+
+		// Test 2: Assign 1 IPv6 from a configured pool - expect no error returned.
+		Entry("Assign 1 IPv6 from a configured pool", net.ParseIP("fd80:24e2:f998:72d6::"), "testHost", true, "pool1", nil),
+
+		// Test 3: Assign 1 IPv4 from a non-configured pool - expect an error returned.
+		Entry("Assign 1 IPv4 from a non-configured pool", net.ParseIP("1.1.1.1"), "testHost", true, "pool1", errors.New("The provided IP address is not in a configured pool\n")),
+
+		// Test 4: Assign 1 IPv4 from a configured pool twice:
+		// - Expect no error returned while assigning the IP for the first time.
+		Entry("Assign 1 IPv4 from a configured pool twice (first time)", net.ParseIP("192.168.1.0"), "testHost", true, "pool1", nil),
+
+		// - Expect an error returned while assigning the SAME IP again.
+		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "testHost", false, "pool1", errors.New("Address already assigned in block")),
+	)
 })
 
-// testIPAM takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
+func testIPAMAssignIP(inIP net.IP, host, pool string, cleanEnv bool) error {
+	args := client.AssignIPArgs{
+		IP:       cnet.IP{inIP},
+		Hostname: host,
+	}
+	setupEnv(cleanEnv, pool)
+	ic := setupIPMAClient(cleanEnv)
+	outErr := ic.(client.IPAMInterface).AssignIP(args)
+
+	if outErr != nil {
+		log.Println(outErr)
+	}
+	return outErr
+}
+
+// testIPAMAutoAssign takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
 // then it calls AutoAssign (function under test) and returns the number of returned IPv4 and IPv6 addresses and returned error.
-func testIPAM(inv4, inv6 int, host string, cleanEnv bool, pool string) (int, int, error) {
+func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, pool string) (int, int, error) {
 
-	etcdType = "etcdv2"
-
-	etcdConfig := etcd.EtcdConfig{
-		EtcdEndpoints: "http://127.0.0.1:2379",
-	}
-	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
-
-	bc, err := client.New(ac)
-	if err != nil {
-		panic(err)
-	}
-
-	ic := bc.IPAM()
-	if cleanEnv {
-		ic.SetIPAMConfig(client.IPAMConfig{
-			StrictAffinity:     false,
-			AutoAllocateBlocks: true,
-		})
-	}
-
-	entry := client.AutoAssignArgs{
+	args := client.AutoAssignArgs{
 		Num4:     inv4,
 		Num6:     inv6,
 		Hostname: host,
 	}
 
 	setupEnv(cleanEnv, pool)
-
-	v4, v6, outErr := ic.AutoAssign(entry)
+	ic := setupIPMAClient(cleanEnv)
+	v4, v6, outErr := ic.(client.IPAMInterface).AutoAssign(args)
 
 	if outErr != nil {
 		log.Println(outErr)
 	}
 
 	return len(v4), len(v6), outErr
-
 }
 
 // setupEnv cleans up etcd if cleanEnv flag is passed and then creates IP pool based on the pool name passed to it.
@@ -134,4 +160,23 @@ func setupEnv(cleanEnv bool, pool string) {
 	if err := commands.Create(argsPool); err != nil {
 		log.Println(err)
 	}
+}
+
+// add a comment here bro
+func setupIPMAClient(cleanEnv bool) interface{} {
+	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
+
+	bc, err := client.New(ac)
+	if err != nil {
+		panic(err)
+	}
+
+	ic := bc.IPAM()
+	if cleanEnv {
+		ic.SetIPAMConfig(client.IPAMConfig{
+			StrictAffinity:     false,
+			AutoAllocateBlocks: true,
+		})
+	}
+	return ic
 }
