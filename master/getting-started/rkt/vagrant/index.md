@@ -17,12 +17,12 @@ This tutorial walks through getting a cluster set up with Vagrant.
 
 ### 1.2 Clone this project
 
-    git clone https://github.com/projectcalico/calico-containers.git
+    git clone https://github.com/projectcalico/calico.git
 
 ### 1.3 Startup and SSH
 Change into the directory for this guide:
 
-    cd calico-containers/cni/rkt
+    cd calico/{{page.version}}/getting-started/rkt/vagrant/
 
 Run
 
