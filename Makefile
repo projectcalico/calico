@@ -102,7 +102,7 @@ dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
 	 pyinstaller calicoctl.spec -ayF
 
 birdcl:
-	wget -N $(BIRDCL_URL)
+	curl -L $(BIRDCL_URL) -o $@
 	chmod +x birdcl
 
 gobgp:
