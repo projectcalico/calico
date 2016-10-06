@@ -6,6 +6,7 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
+  version: ea057115224138376622d63a51b699133310ea31
   subpackages:
   - client
   - pkg/transport
@@ -25,3 +26,9 @@ import:
   version: ^0.10.0
 - package: github.com/termie/go-shutil
 - package: github.com/mitchellh/go-ps
+- package: k8s.io/kubernetes
+  subpackages:
+  - pkg/api
+  - pkg/api/v1
+  - pkg/client/clientset_generated/release_1_4
+  - pkg/client/unversioned/clientcmd
