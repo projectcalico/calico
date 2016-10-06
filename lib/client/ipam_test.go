@@ -17,10 +17,16 @@
 // Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses
 // Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and an error.
 // Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and an error.
+// Test 5: (use pool of size /25 so only two blocks are contained):
+// - Assign 1 address on host A (Expect 1 address)
+// - Assign 1 address on host B (Expect 1 address, different block)
+// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block)
 
 package client_test
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os/exec"
 	"strings"
@@ -38,7 +44,46 @@ import (
 
 var etcdType api.BackendType
 
-func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
+var _ = Describe("IPAM", func() {
+
+	DescribeTable("Requested IPs vs returned IPs",
+		func(host string, cleanEtcd bool, pool string, inv4, inv6, expv4, expv6 int, expError error) {
+			outv4, outv6, outError := testIPAM(inv4, inv6, host, cleanEtcd, pool)
+			Expect(outv4).To(Equal(expv4))
+			Expect(outv6).To(Equal(expv6))
+			if expError != nil {
+				//This should be Ω(outError).Should(HaveOccurred()), but since AutoAssign only returns nil, we can't really check for returned error
+				Ω(outError).ShouldNot(HaveOccurred())
+			}
+		},
+
+		// Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
+		Entry("1 v4 1 v6", "testHost", true, "pool1", 1, 1, 1, 1, nil),
+
+		// Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses.
+		Entry("256 v4 256 v6", "testHost", true, "pool1", 256, 256, 256, 256, nil),
+
+		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and an error.
+		Entry("257 v4 0 v6", "testHost", true, "pool1", 257, 0, 256, 0, errors.New("some error")),
+
+		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and an error.
+		Entry("0 v4 257 v6", "testHost", true, "pool1", 0, 257, 0, 256, errors.New("some error")),
+
+		// Test 5: (use pool of size /25 (/test/pool2.yaml) so only two blocks are contained):
+		// - Assign 1 address on host A (Expect 1 address)
+		Entry("1 v4 0 v6 host-A", "host-A", true, "pool2", 1, 0, 1, 0, nil),
+
+		// - Assign 1 address on host B (Expect 1 address, different block)
+		Entry("1 v4 0 v6 host-B", "host-B", false, "pool2", 1, 0, 1, 0, nil),
+
+		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block)
+		Entry("64 v4 0 v6 host-A", "host-A", false, "pool2", 64, 0, 63, 0, errors.New("some error")),
+	)
+})
+
+// testIPAM takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
+// then it calls AutoAssign (function under test) and returns the number of returned IPv4 and IPv6 addresses and returned error.
+func testIPAM(inv4, inv6 int, host string, cleanEtcd bool, pool string) (int, int, error) {
 
 	etcdType = "etcdv2"
 
@@ -59,9 +104,8 @@ func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
 		Num6:     inv6,
 		Hostname: host,
 	}
-	if setup {
-		setupEnv()
-	}
+
+	setupEnv(cleanEtcd, pool)
 
 	v4, v6, outErr := ic.AutoAssign(entry)
 
@@ -69,33 +113,20 @@ func testIPAM(inv4, inv6 int, host string, setup bool) (int, int) {
 		log.Println(outErr)
 	}
 
-	return len(v4), len(v6)
+	return len(v4), len(v6), outErr
 
 }
 
-var _ = Describe("IPAM", func() {
-
-	DescribeTable("requested IPs vs got IPs",
-		func(host string, setup bool, inv4, inv6, expv4, expv6 int) {
-			outv4, outv6 := testIPAM(inv4, inv6, host, setup)
-			Expect(outv4).To(Equal(expv4))
-			Expect(outv6).To(Equal(expv6))
-		},
-		Entry("1 v4 1 v6", "testHost", true, 1, 1, 1, 1),
-		Entry("256 v4 256 v6", "testHost", true, 256, 256, 256, 256),
-		Entry("257 v4 0 v6", "testHost", true, 257, 0, 256, 0),
-		Entry("0 v4 257 v6", "testHost", true, 0, 257, 0, 256),
-	)
-})
-
-func setupEnv() {
-
-	etcdArgs := strings.Fields("rm /calico --recursive")
-	if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
-		log.Println(err)
+// setupEnv cleans up etcd if cleanEtcd flag is passed and then creates IP pool based on the pool name passed to it.
+func setupEnv(cleanEtcd bool, pool string) {
+	if cleanEtcd {
+		etcdArgs := strings.Fields("rm /calico --recursive")
+		if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
+			log.Println(err)
+		}
 	}
 
-	argsPool := []string{"create", "-f", "../../test/pool1.yaml"}
+	argsPool := strings.Fields(fmt.Sprintf("create -f ../../test/%s.yaml", pool))
 	if err := commands.Create(argsPool); err != nil {
 		log.Println(err)
 	}
