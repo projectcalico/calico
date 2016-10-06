@@ -8,14 +8,12 @@ security configuration, a VM can initiate an IPv6 connection to another
 VM, or to an IPv6 destination outside the data center; and that a VM can
 terminate an IPv6 connection from outside.
 
-Requirements for containers
-===========================
+## Requirements for containers
 
 Containers have no specific requirements for utilising IPv6
 connectivity.
 
-Requirements for guest VM images
-================================
+## Requirements for guest VM images
 
 When using Calico with a VM platform (e.g. OpenStack), obtaining IPv6
 connectivity requires certain configuration in the guest VM image:
@@ -50,8 +48,7 @@ changes will suffice to meet the requirements just listed.
 
         net.ipv6.conf.eth0.router_solicitation_delay = 10
 
-Implementation details
-======================
+## Implementation details
 
 Following are the key points of how IPv6 connectivity is currently
 implemented in Calico.

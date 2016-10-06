@@ -17,8 +17,7 @@ Neutron expects more generally.
 Additionally, there is a [section of this document](#horizon) that briefly covers
 Horizon actions.
 
-Networks
-========
+## Networks
 
 Networks are the basic networking concept in Neutron. A Neutron network
 is considered to be roughly equivalent to a physical network in terms of
@@ -57,8 +56,7 @@ provider network extended attributes will have no effect. See
 [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity) to understand why Neutron provider networks are not
 needed.
 
-Subnets
-=======
+## Subnets
 
 Neutron subnets are child objects of Neutron networks. In vanilla
 Neutron, a subnet is a collection of IP addresses and other network
@@ -79,8 +77,7 @@ preserved and remain meaningful except for:
 :   These have no effect, as the compute nodes will route traffic
     immediately after it egresses the VM.
 
-Ports
-=====
+## Ports
 
 In vanilla Neutron, a port represents a connection from a VM to a single
 layer 2 Neutron network. Obviously, the meaning of this object changes
@@ -97,8 +94,7 @@ All properties on a port work as normal, except for the following:
     the Neutron network that a port is placed in does not affect which
     machines in the deployment it can contact.
 
-Extended Attributes: Port Binding Attributes
---------------------------------------------
+### Extended Attributes: Port Binding Attributes
 
 The `binding:host-id` attribute works as normal. The following notes
 apply to the other attributes:
@@ -112,16 +108,14 @@ apply to the other attributes:
 :   This field, if used, **must** be set to `normal`. If set to any
     other value, Calico will not correctly function!
 
-Quotas
-======
+## Quotas
 
 Neutron quotas function unchanged.
 
 In most deployments we recommend setting non-administrator tenant quotas
 for almost all Neutron objects to zero. For more information, see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack#opens-external-conn-setup).
 
-Security Groups
-===============
+## Security Groups
 
 Security groups in vanilla OpenStack provide packet filtering processing
 to individual ports. They can be used to limit the traffic a port may
@@ -136,8 +130,7 @@ All the attributes of security groups remain unchanged in Calico.
 
 {: id="routers"}
 
-Layer 3 Routing: Routers and Floating IPs
-=========================================
+## Layer 3 Routing: Routers and Floating IPs
 
 Layer 3 routing objects are divided into two categories: routers and
 floating IPs. Neither of these objects are supported by Calico: they
@@ -146,8 +139,7 @@ simply aren't required. For more information, see [this document]({{site.baseurl
 Any attempt to create these objects will fail, as Calico does not set up
 any Neutron L3 Agents.
 
-LBaaS (Load Balancer as a Service)
-==================================
+## LBaaS (Load Balancer as a Service)
 
 Load Balancer as a Service does not function in a Calico network. Any
 attempt to create one will fail.
@@ -158,8 +150,7 @@ attempt to create one will fail.
 > :   functional. Watch this space.
 >
 
-Horizon
-=======
+## Horizon
 
 Horizon makes many provisioning actions available that mirror options on
 the Neutron API. This section lists them, and indicates whether they can
@@ -169,10 +160,9 @@ Much of the detail has been left out of this section, and is instead
 present in the relevant Neutron API sections above: please consult them
 for more.
 
-Section: Project
-----------------
+### Section: Project
 
-### Tab: Compute -&gt; Instances
+#### Tab: Compute -&gt; Instances
 
 When launching instances, remember that security groups are used to
 determine reachability, not networks. Choose networks based on whether
@@ -180,37 +170,36 @@ you need an external or an internal IP address, and choose security
 groups based on the machines you'd like to talk to in the cloud. See
 [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack-setup) for more.
 
-### Tab: Compute -&gt; Access & Security
+#### Tab: Compute -&gt; Access & Security
 
 As noted above, tenants should ensure they configure their security
 groups to set up their connectivity appropriately.
 
-### Tab: Network -&gt; Network Topology
+#### Tab: Network -&gt; Network Topology
 
 For the 'Create Network' button, see the [Networks](#networks) section.
 For the 'Create Router' button, see the [Layer 3 Routing](#routers) section.
 
-### Tab: Network -&gt; Networks
+#### Tab: Network -&gt; Networks
 
 For networks and subnets, see the sections on [Networks](#networks) and
 [Subnets](#subnets).
 
-### Tab: Network -&gt; Routers
+#### Tab: Network -&gt; Routers
 
 Tenants should be prevented from creating routers, as they serve no
 purpose in a Calico network. See [Layer 3 Routing](#routers) for more.
 
-Section: Admin
---------------
+### Section: Admin
 
-### Tab: System Panel -&gt; Networks
+#### Tab: System Panel -&gt; Networks
 
 In the course of general operation administrators are not expected to
 make changes to their networking configuration. However, for initial
 network setup, this panel may be used to make changes. See
 [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity) for details on how to achieve this setup.
 
-### Tab: System Panel -&gt; Routers
+#### Tab: System Panel -&gt; Routers
 
 Administrators should not create routers, as they serve no purpose in a
 Calico network. See [Layer 3 Routing](neutron-api-routers) for more.

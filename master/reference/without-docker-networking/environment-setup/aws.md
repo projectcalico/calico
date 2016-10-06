@@ -227,7 +227,7 @@ Then, follow the [Calico without Docker networking walkthrough]({{site.baseurl}}
 In the worked example, be sure to follow the additional instructions for
 configuring `nat-outgoing`.
 
-# (Optional) Enabling traffic from the internet to containers
+## (Optional) Enabling traffic from the internet to containers
 Services running on a Calico host's containers in AWS can be exposed to the internet.  Since the containers have IP
 addresses in the private IP range, traffic to the container must be routed using a NAT and an appropriate Calico
 security profile.
@@ -295,7 +295,7 @@ You should now be able to access the container using the public IP address of yo
 curl http://<host public ip>:80
 ```
 
-# (Optional) Modifying MTU for Performance Boost
+## (Optional) Modifying MTU for Performance Boost
 
 Some [AWS instance types](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/network_mtu.html#jumbo_frame_instances)
 utilize a default [MTU](https://en.wikipedia.org/wiki/Maximum_transmission_unit)

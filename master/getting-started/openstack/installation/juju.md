@@ -9,8 +9,7 @@ methods](https://jujucharms.com/docs/stable/charms-bundles). This will get you a
 simple OpenStack deployment with two compute nodes, which you can then easily
 scale out by adding more instances of the `nova-compute` charm.
 
-Bundles
-=======
+## Bundles
 
 Icehouse:
 <https://raw.githubusercontent.com/projectcalico/calico/master/source/_static/juju/icehouse.yaml>

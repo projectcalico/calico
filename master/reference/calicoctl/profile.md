@@ -2,19 +2,18 @@
 title: calicoctl profile
 ---
 
-# User reference for 'calicoctl profile' commands
-> NOTE: The `calicoctl profile` commands should NOT be used when running 
-> Calico with the Docker libnetwork driver.  The libnetwork driver manages 
-> the security policy for containers. 
+> NOTE: The `calicoctl profile` commands should NOT be used when running
+> Calico with the Docker libnetwork driver.  The libnetwork driver manages
+> the security policy for containers.
 
 This sections describes the `calicoctl profile` commands.
 
-Read the [calicoctl Overview](../calicoctl) for a 
+Read the [calicoctl Overview](../calicoctl) for a
 full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl profile' commands
 
-Run `calicoctl profile --help` to display the following help menu for the 
+Run `calicoctl profile --help` to display the following help menu for the
 calicoctl profile commands.
 
 ```
@@ -73,11 +72,11 @@ Examples:
 ## calicoctl profile commands
 
 
-### calicoctl profile show 
+### calicoctl profile show
 This command prints a list of the policy profiles known to Calico.
 
-If the `--detailed` flag is passed into the command, 
-the command will print information about the endpoints 
+If the `--detailed` flag is passed into the command,
+the command will print information about the endpoints
 associated with each profile, including:
  - Profile name
  - Workload ID associated with profile
@@ -87,7 +86,7 @@ associated with each profile, including:
  - State of the workload
 
 
-This command can be run on any Calico node. 
+This command can be run on any Calico node.
 
 Command syntax:
 
@@ -100,7 +99,7 @@ calicoctl profile show [--detailed]
 Examples:
 
 ```
-$ calicoctl profile show 
+$ calicoctl profile show
 +------------+
 |    Name    |
 +------------+
@@ -123,13 +122,13 @@ $ calicoctl profile show --detailed
 ```
 
 ### calicoctl profile add \<PROFILE\>
-This command allows you to create policy profiles to configure 
-networking policy for Calico endpoints. 
+This command allows you to create policy profiles to configure
+networking policy for Calico endpoints.
 
-When you create a new profile with this command, it includes default rules and 
-tags that make it act like a traditional security group: endpoints in the group 
-can communicate freely. However, you may modify the rules and tags to suit your 
-needs. See [AdvancedNetworkPolicy] for more discussion of profiles, rules 
+When you create a new profile with this command, it includes default rules and
+tags that make it act like a traditional security group: endpoints in the group
+can communicate freely. However, you may modify the rules and tags to suit your
+needs. See [AdvancedNetworkPolicy] for more discussion of profiles, rules
 and tags.
 
 This command can be run on any Calico node.
@@ -149,17 +148,17 @@ $ calicoctl profile add PROF_TEST
 Created profile PROF_TEST
 ```
 
-### calicoctl profile remove \<PROFILE\> 
-This command allows you to remove policy profiles from Calico. 
+### calicoctl profile remove \<PROFILE\>
+This command allows you to remove policy profiles from Calico.
 
-If you try to remove a profile that is still associated with endpoints, the 
-command will fail and a warning message will be printed.  To remove the profile 
-anyway, you can run the command with the `--no-check` flag to remove the profile 
-without checking dependencies, or you can run the 
-[`calicoctl container`](./container) command that removes the profile 
-association from a container for each container associated with the profile. 
-Note that Felix remove the iptables security rules for a profile when a profile 
-is removed. All traffic to endpoints still associated with a deleted profile 
+If you try to remove a profile that is still associated with endpoints, the
+command will fail and a warning message will be printed.  To remove the profile
+anyway, you can run the command with the `--no-check` flag to remove the profile
+without checking dependencies, or you can run the
+[`calicoctl container`](./container) command that removes the profile
+association from a container for each container associated with the profile.
+Note that Felix remove the iptables security rules for a profile when a profile
+is removed. All traffic to endpoints still associated with a deleted profile
 will be dropped.
 
 This command can be run on any Calico node.
@@ -185,8 +184,8 @@ Deleted profile PROF_TEST
 ### calicoctl profile \<PROFILE\> tag show
 This command shows the tags related to a given profile.
 
-All endpoints with this policy profile have the tags applied. Tags are used in 
-rules to select which endpoints to allow or deny traffic to and from. See the 
+All endpoints with this policy profile have the tags applied. Tags are used in
+rules to select which endpoints to allow or deny traffic to and from. See the
 `calicoctl profile <PROFILE> rule add` command below for additional information.
 
 This command can be run on any Calico node.
@@ -207,15 +206,15 @@ PROF_TEST
 ```
 
 ### calicoctl profile \<PROFILE\> tag (add|remove) \<TAG\>
-This command allows you to add or remove a profile tag from the given profile. 
+This command allows you to add or remove a profile tag from the given profile.
 
-An example use case for adding tags would be if you have multiple profiles 
-that serve a similar purpose, such as a group of web applications. You may have 
-backend service that talks to all of these web applications. This backend 
-service is using a profile called BACKEND.  It would be tedious to create 
-multiple rules on the BACKEND profile for each web application that the backend 
-service interacts with.  Instead, you can set a tag on the web application 
-profiles called WEB_APP, then create a rule on the BACKEND profile that allows 
+An example use case for adding tags would be if you have multiple profiles
+that serve a similar purpose, such as a group of web applications. You may have
+backend service that talks to all of these web applications. This backend
+service is using a profile called BACKEND.  It would be tedious to create
+multiple rules on the BACKEND profile for each web application that the backend
+service interacts with.  Instead, you can set a tag on the web application
+profiles called WEB_APP, then create a rule on the BACKEND profile that allows
 interaction from the WEB_APP tag.
 
 This command can be run on any Calico node.
@@ -249,7 +248,7 @@ Tag WEB_APP removed from profile WEB_SERVER_A
 ### calicoctl profile \<PROFILE\> rule add (inbound|outbound) (allow|deny)
 This command allows you to configure policy rules on your policy profiles.
 
-You can configure rules to allow and/or deny specific traffic 
+You can configure rules to allow and/or deny specific traffic
 to and from your containers, based on a variety of criteria.
 
 You can filter traffic based on any combination of the following:
@@ -261,14 +260,14 @@ You can filter traffic based on any combination of the following:
  - *Destination cidr* - such as 172.25.2.0/24
  - *Destination port* - TCP/UDP only
 
-Rules are executed in order. If a packet matches the rule criteria, rule 
-evaluation stops and the allow/deny action is taken. If an endpoint is part of 
-multiple profiles, the packet is matched against the profiles in order. If it 
-does not match any rules, matching proceeds to the next profile. If the last 
+Rules are executed in order. If a packet matches the rule criteria, rule
+evaluation stops and the allow/deny action is taken. If an endpoint is part of
+multiple profiles, the packet is matched against the profiles in order. If it
+does not match any rules, matching proceeds to the next profile. If the last
 profile is evaluated without a match, the packet is denied.
 
 #### Docker default networking
-When a profile is created with `calicoctl profile add`, the base rules for the 
+When a profile is created with `calicoctl profile add`, the base rules for the
 profile are as follows:
 ```
 Inbound rules:
@@ -277,13 +276,13 @@ Outbound rules:
    1 allow
 ```
 
-The default inbound rules allow traffic from workloads associated 
-with the <PROFILE> and implicitly deny all other traffic to 
+The default inbound rules allow traffic from workloads associated
+with the <PROFILE> and implicitly deny all other traffic to
 the workloads.
 
-The default outbound rules allow all traffic leaving the workloads. 
+The default outbound rules allow all traffic leaving the workloads.
 
-This command allows you to add additional rules to your profiles 
+This command allows you to add additional rules to your profiles
 to filter traffic based on desired policy criteria.
 
 This command can be run on any Calico node.
@@ -317,7 +316,7 @@ calicoctl profile <PROFILE> rule add (inbound|outbound) [--at=<POSITION>]
     <ICMPCODE>: Specific code number related to ICMP type.
 ```
 
-Note: Each IP address specified should match the IP version of each other IP 
+Note: Each IP address specified should match the IP version of each other IP
 address and protocol in the rule.
 
 Examples:
@@ -348,16 +347,16 @@ Outbound rules:
 
 ### calicoctl profile \<PROFILE\> rule remove (inbound|outbound) (allow|deny)
 
-This command allows you to remove existing policy rules from a 
-Calico policy profile. This command follows the same format as 
+This command allows you to remove existing policy rules from a
+Calico policy profile. This command follows the same format as
 the `calicoctl profile <PROFILE> rule add` command above.
 
-Removing rules from a profile may be necessary to provide the 
-desired policy on your Calico nodes.  For example, you may have 
-multiple web applications using profile WEB where each web app 
-serves a different purpose.  You may want these web apps to 
-interact with each other, so you would want to remove the default 
-profile rule that allows traffic from workloads on same profile. 
+Removing rules from a profile may be necessary to provide the
+desired policy on your Calico nodes.  For example, you may have
+multiple web applications using profile WEB where each web app
+serves a different purpose.  You may want these web apps to
+interact with each other, so you would want to remove the default
+profile rule that allows traffic from workloads on same profile.
 See the example code below to understand how to do this.
 
 This command can be run on any Calico node.
@@ -392,7 +391,7 @@ Examples:
 
 ```
 # Consider profile WEB which has been configured to allow inbound
-# ICMP pings, HTTP, and SSH traffic in addition to the default 
+# ICMP pings, HTTP, and SSH traffic in addition to the default
 # traffic rules:
 # Inbound rules:
 #    1 allow from tag WEB
@@ -401,7 +400,7 @@ Examples:
 # Outbound rules:
 #    1 allow
 
-# Remove the 1st rule that allows traffic from other workloads with 
+# Remove the 1st rule that allows traffic from other workloads with
 # the WEB tag.
 $ calicoctl profile WEB rule remove inbound --at=1
 
@@ -416,7 +415,7 @@ Outbound rules:
 ```
 
 ### calicoctl profile \<PROFILE\> rule show
-This command prints the inbound and outbound rules that are configured on a 
+This command prints the inbound and outbound rules that are configured on a
 profile.
 
 This command can be run on any Calico node.
@@ -442,11 +441,11 @@ Outbound rules:
 ```
 
 ### calicoctl profile \<PROFILE\> rule json
-This command prints the inbound and outbound rules that are configured on a 
+This command prints the inbound and outbound rules that are configured on a
 profile in JSON format.
 
-The output of this command can be saved to a file and used in the future to 
-quickly configure a profile (see the `calicoctl profile <PROFILE> rule update` 
+The output of this command can be saved to a file and used in the future to
+quickly configure a profile (see the `calicoctl profile <PROFILE> rule update`
 command below).
 
 This command can be run on any Calico node.
@@ -467,10 +466,10 @@ $ calicoctl profile PROF rule json
 {
   "inbound_rules": [
     {
-      "action": "allow", 
+      "action": "allow",
       "src_tag": "PROF"
     }
-  ], 
+  ],
   "outbound_rules": [
     {
       "action": "allow"
@@ -480,12 +479,12 @@ $ calicoctl profile PROF rule json
 ```
 
 ### calicoctl profile \<PROFILE\> rule update
-This command allows you to import JSON data to quickly configure rules on a 
+This command allows you to import JSON data to quickly configure rules on a
 profile.
 
 The JSON data for this command must be passed into the command as stdin.
 
-This command can be run on any Calico node. 
+This command can be run on any Calico node.
 
 Command syntax:
 

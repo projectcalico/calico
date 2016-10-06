@@ -23,8 +23,7 @@ This procedure requires a Chef server: it is not sufficient to use
 chef-solo. The installation uses knowledge about the other nodes in the
 deployment to determine how to configure a node.
 
-What You Get
-============
+## What You Get
 
 This install guide creates a deployment that contains a single control
 node and at least two compute nodes. All the compute nodes are connected
@@ -34,8 +33,7 @@ possible configuration for Calico.
 Note that this is **not** a production install of Calico or of
 OpenStack. It is intended for trial and testing purposes only.
 
-How To Use It: For Chef Newbies
-===============================
+## How To Use It: For Chef Newbies
 
 If you are unfamiliar with Chef you may want to use the hosted Chef as a
 service, as mentioned on the [Getting Started with Chef
@@ -43,8 +41,7 @@ website](http://gettingstartedwithchef.com/). The following instructions
 provide a step-by-step guide on installing Chef and using the hosted
 Chef service to install a test OpenStack+Calico environment.
 
-Ingredients
------------
+### Ingredients
 
 -   At least four servers running Ubuntu 14.04. These are for:
     -   One OpenStack control node
@@ -56,8 +53,7 @@ performing the bootstrapping from one of the OpenStack nodes, however
 this has never been tested. If you try this out, please let us know how
 it went!
 
-Prepare Your OpenStack Nodes
-----------------------------
+### Prepare Your OpenStack Nodes
 
 The default Ubuntu 14.04 installation may have hosts configuration that
 causes problems for the Chef installation. We recommend ensuring the
@@ -78,8 +74,7 @@ testing), ensure the VM setting allows the VM to expose hardware
 assisted virtualization to the guest OS (setting under the CPU
 configuration).
 
-Prepare Chef
-------------
+### Prepare Chef
 
 -   If you are intending to use the hosted Chef service, follow the
     instructions on [Getting Started with
@@ -104,8 +99,7 @@ Prepare Chef
 
         knife role from file ../roles/*.rb
 
-Bootstrap your OpenStack nodes
-------------------------------
+## Bootstrap your OpenStack nodes
 
 Setting up your test deployment nodes is a two-stage process. The first
 is to bootstrap each node with the appropriate role. Once all roles are
@@ -133,8 +127,7 @@ This will fix up the BGP mesh between the compute nodes.
 
 You should now be ready to go!
 
-How To Use It: For Experienced Chef Users
-=========================================
+## How To Use It: For Experienced Chef Users
 
 We provide a single `calico` cookbook in [this
 repository](https://github.com/projectcalico/calico-chef). This cookbook

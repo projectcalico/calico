@@ -22,7 +22,7 @@ datacenter-private subnet of 10.65/16, and that the hosts have IP
 addresses from 172.18.203/24. If you look at the routing table on a host
 you will see something like this:
 
-``` 
+```
 ubuntu@calico-ci02:~$ route -n
 Kernel IP routing table
 Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
@@ -48,8 +48,7 @@ asked to provision connectivity for a particular workload. A BGP client
 route reflector – to BGP clients running on other hosts, and hence the
 indirect routes appear also.
 
-Bookended security
-==================
+## Bookended security
 
 The routing above in principle allows any workload in a data center to
 communicate with any other – but in general, an operator will want to
@@ -63,8 +62,7 @@ traffic off the data center’s core network, and as a secondary defense
 in case it is possible for a rogue workload to compromise its local
 host.
 
-Is that all?
-============
+## Is that all?
 
 As far as the static data path is concerned, yes. It’s just a
 combination of responding to workload ARP requests with the host MAC, IP

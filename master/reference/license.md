@@ -13,8 +13,7 @@ distribution.
 The licenses under which these software components are distributed are
 reproduced below for clarity.
 
-OpenStack
-=========
+## OpenStack
 
     Copyright (c) 2012 OpenStack Foundation.
     All Rights Reserved.
@@ -31,8 +30,7 @@ OpenStack
     License for the specific language governing permissions and limitations
     under the License.
 
-Dnsmasq
-=======
+## Dnsmasq
 
     dnsmasq is Copyright (c) 2000-2014 Simon Kelley
     This program is free software; you can redistribute it and/or modify
@@ -48,8 +46,7 @@ Dnsmasq
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-BIRD
-====
+## BIRD
 
     BIRD Internet Routing Daemon
 

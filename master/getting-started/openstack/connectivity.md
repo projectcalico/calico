@@ -7,8 +7,7 @@ reached by the outside world. This document will explain how to
 configure your Calico-based OpenStack deployment to ensure that you have
 the desired connectivity with the outside world.
 
-Major Differences from Standard OpenStack
-=========================================
+## Major Differences from Standard OpenStack
 
 If you've deployed OpenStack before you'll be thinking in terms of
 routers, floating IPs, and external networks. Calico's focus on
@@ -16,8 +15,7 @@ simplicity means that it doesn't use any of these concepts. This section
 is mostly a warning: even if you think you know what you're doing,
 please read the rest of this article. You might be surprised!
 
-Setting Up Connectivity
-=======================
+## Setting Up Connectivity
 
 Part 0: Deciding your address ranges
 ------------------------------------

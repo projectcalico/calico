@@ -2,22 +2,21 @@
 title: calicoctl pool
 ---
 
-# User reference for 'calicoctl pool' commands
-> NOTE: ONLY the `calicoctl pool show` command is safe to use when running 
-> Calico with the Docker libnetwork driver. The libnetwork driver manages the 
+> NOTE: ONLY the `calicoctl pool show` command is safe to use when running
+> Calico with the Docker libnetwork driver. The libnetwork driver manages the
 > IP address pools and assignment.  
 
 This sections describes the `calicoctl pool` commands.
 
-These commands allow users to define and view IP address pools from which endpoint 
+These commands allow users to define and view IP address pools from which endpoint
 IP addresses are allocated.  Users can add, remove, update, or view the IP pools.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a
 full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl pool' commands
 
-Run `calicoctl pool --help` to display the following help menu for the 
+Run `calicoctl pool --help` to display the following help menu for the
 calicoctl pool commands.
 
 ```
@@ -36,7 +35,7 @@ Options:
   --ipv6          Show IPv6 information only
   --nat-outgoing  Apply NAT to outgoing traffic
   --ipip          Use IP-over-IP encapsulation across hosts
- 
+
 ```
 
 ## calicoctl pool commands
@@ -45,12 +44,12 @@ Options:
 ### calicoctl pool add
 This command is used to add or modify CIDR pools in Calico.
 
-Pools define the range of IP addresses that Calico considers endpoint IPs to 
-be from. In order to function correctly, all endpoint IPs must fall within a 
-configured pool. This happens automatically for the libnetwork plug-in or any 
+Pools define the range of IP addresses that Calico considers endpoint IPs to
+be from. In order to function correctly, all endpoint IPs must fall within a
+configured pool. This happens automatically for the libnetwork plug-in or any
 system that uses Calico IPAM to assign IPs to endpoints.
 
-The command can be run on any machine that can access the etcd datastore, such 
+The command can be run on any machine that can access the etcd datastore, such
 as a Calico node host.
 
 Command syntax:
@@ -64,9 +63,9 @@ calicoctl pool add <CIDRS>... [--ipip] [--nat-outgoing]
     --nat-outgoing: Apply a NAT to outgoing traffic.
 ```
 
-Any time that Calico IPAM is in use, including with Docker default networking, 
-Mesos, and Kubernetes (when Calico IPAM is enabled), Calico will allocate IP 
-addresses from pools and assign them to newly created containers. The allocated 
+Any time that Calico IPAM is in use, including with Docker default networking,
+Mesos, and Kubernetes (when Calico IPAM is enabled), Calico will allocate IP
+addresses from pools and assign them to newly created containers. The allocated
 IP addresses provide network endpoints to the containers.
 
 Examples:
@@ -98,11 +97,11 @@ Examples:
 $ calicoctl pool remove 172.24.10.0/24
 ```
 
-### calicoctl pool range add \<START_IP\> \<END_IP\> 
+### calicoctl pool range add \<START_IP\> \<END_IP\>
 This command adds all IP addresses between two IPs as Calico pool(s).
 
-NOTE: Calico pools must be identified with a CIDR prefix, so in the case that 
-the start and end of the range are not on a single CIDR boundary, this command 
+NOTE: Calico pools must be identified with a CIDR prefix, so in the case that
+the start and end of the range are not on a single CIDR boundary, this command
 creates multiple pools such that the entire range is covered.
 
 This command can be run on any Calico node.
@@ -114,7 +113,7 @@ calicoctl pool range add <START_IP> <END_IP> [--ipip] [--nat-outgoing]
 
     <START_IP>: IP to include from beginning of pool range.
     <END_IP>: IP to include as the final IP in the pool range.
-    
+
     --ipip: Use IP-over-IP encapsulation across hosts.
     --nat-outgoing: Apply a NAT to outgoing traffic.
 ```
@@ -138,8 +137,8 @@ $ calicoctl pool show
 +----------------+---------+
 ```
 
-### calicoctl pool show 
-This command prints the currently available Calico IP pools and their options. 
+### calicoctl pool show
+This command prints the currently available Calico IP pools and their options.
 
 This command can be run on any Calico node.
 
@@ -148,7 +147,7 @@ Command syntax:
 ```
 calicoctl pool show [--ipv4 | --ipv6]
 
-    --ipv4: Show IPv4 pools only. 
+    --ipv4: Show IPv4 pools only.
     --ipv6: Show IPv6 pools only.
 ```
 

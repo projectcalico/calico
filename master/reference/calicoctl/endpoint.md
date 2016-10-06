@@ -2,8 +2,6 @@
 title: calicoctl endpoint
 ---
 
-# User reference for 'calicoctl endpoint' commands
-
 This sections describes the `calicoctl endpoint` commands.
 
 In Calico an endpoint is a virtual interface from a workload (container or

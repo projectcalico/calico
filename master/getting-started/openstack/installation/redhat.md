@@ -20,8 +20,7 @@ sections.
 > us know](http://www.projectcalico.org/contact/).
 >
 
-Prerequisites
-=============
+## Prerequisites
 
 Before starting this you will need the following:
 
@@ -31,14 +30,12 @@ Before starting this you will need the following:
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
 
-Common Steps
-============
+## Common Steps
 
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed in this section.
 
-Install OpenStack
------------------
+### Install OpenStack
 
 If you haven't already done so, install Openstack with Neutron and ML2
 networking. Instructions for installing OpenStack on RHEL can be found
@@ -51,8 +48,7 @@ here
 At the time of writing the Liberty guide isn't yet available, but you
 can use PackStack instead: <https://www.rdoproject.org/QuickStart>.
 
-Configure YUM repositories
---------------------------
+### Configure YUM repositories
 
 The latest version of Calico for OpenStack is 1.4, and we recommend using it
 with OpenStack Liberty or later.  Other possible combinations are shown by the
@@ -95,8 +91,7 @@ release.  For example, for Mitaka:
 needed so that the Calico repository can install Calico-enhanced versions of
 some of the OpenStack Nova and Neutron packages.
 
-Etcd Install
-============
+## Etcd Install
 
 Calico requires an etcd database to operate - this may be installed on a
 single machine or as a cluster.
@@ -202,8 +197,7 @@ through the process.
         systemctl enable etcd
     ```
 
-Etcd Proxy Install
-==================
+## Etcd Proxy Install
 
 Install an etcd proxy on every node running OpenStack services that
 isn't running the etcd database itself (both control and compute nodes).
@@ -269,8 +263,7 @@ isn't running the etcd database itself (both control and compute nodes).
         systemctl enable etcd
     ```
 
-Control Node Install
-====================
+## Control Node Install
 
 On each control node, perform the following steps:
 
@@ -322,8 +315,7 @@ On each control node, perform the following steps:
         service neutron-server restart
     ```
 
-Compute Node Install
-====================
+## Compute Node Install
 
 On each compute node, perform the following steps:
 

@@ -6,8 +6,7 @@ Calico applies security policy to **endpoints**. Calico policy is
 defined in terms of **security profiles**, which contain lists of
 **rules** to apply as well as sets of **tags**.
 
-Endpoints
-=========
+## Endpoints
 
 Endpoints are the TAPs, veths or other interfaces, which are attached to
 virtual machines or containers.
@@ -19,8 +18,7 @@ is missing, or no profiles are configured, Calico will drop traffic
 to/from that endpoint. There is always an implicit default deny rule at
 the end of the list of profiles.
 
-Security profiles: rules
-========================
+## Security profiles: rules
 
 Endpoints are configured to belong to one or more security profiles.
 Profiles encode the policy (i.e. which packets to allow or deny) to
@@ -52,8 +50,7 @@ If a workload (such as a virtual machine) has multiple endpoints (for
 example, multiple vNICs) then each of those endpoints may belong to a
 different set of security profiles.
 
-Security profiles: tags
-=======================
+## Security profiles: tags
 
 Each profile also has a set of (opaque) tags attached to it. An endpoint
 is considered a **member** of a tag if one of its profiles contains that
@@ -69,8 +66,7 @@ that are to use the database. Then, they can use a single "allow" rule
 in the database's inbound chain to allow connections from all current
 members of the "db-user" tag.
 
-Differences from OpenStack
-==========================
+## Differences from OpenStack
 
 Calico represents OpenStack security groups as profiles (with a single
 tag containing the name of the security group). While this is a simple
@@ -84,8 +80,7 @@ configuration; and networks and routers have no impact. The following
 subsections go into this in more detail, and discuss how these concepts
 map onto the Calico data model.
 
-Networks and Routers
---------------------
+### Networks and Routers
 
 As discussed [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity), networks and routers are not used
 in Calico for connectivity purposes. Similarly, they serve no security
@@ -96,8 +91,7 @@ using security groups. To achieve it, rather than placing all ports that
 need to communicate into a single network, place them all in a security
 group that allows ingress from and egress to the same security group.
 
-Architecture
-============
+## Architecture
 
 At present, the flow of security information proceeds as follows:
 

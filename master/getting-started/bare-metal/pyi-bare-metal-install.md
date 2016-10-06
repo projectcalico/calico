@@ -22,8 +22,7 @@ However, since the bundle doesn't take part in the distribution's
 package management, the dependencies that it does have must be installed
 manually.
 
-Prerequisites
-=============
+## Prerequisites
 
 The bundle has the following pre-requisites:
 
@@ -55,8 +54,7 @@ The bundle has the following pre-requisites:
 > its version.
 >
 
-Unpack the bundle
-=================
+## Unpack the bundle
 
 Once you have a system with the prerequisites above, the next step is to
 unpack the bundle, which is distributed as a `.tgz`. We recommend
@@ -70,8 +68,7 @@ After unpacking the bundle, you should have a directory
 `/opt/calico-felix`, containing a binary
 `/opt/calico-felix/calico-felix`.
 
-Create a start-up script
-========================
+## Create a start-up script
 
 Felix should be started at boot by your init system and the init system
 **must** be configured to restart Felix if it stops. Felix relies on
@@ -117,8 +114,8 @@ Or, for upstart:
 
     exec /opt/calico-felix/calico-felix
 
-Configure Felix
-===============
+## Configure Felix
+
 
 Optionally, you can create a file at `/etc/calico/felix.cfg` to
 configure Felix. The configuration file as well as other options for
@@ -129,8 +126,7 @@ If etcd is not running on the local machine, it's essential to configure
 the `EtcdAddr` or `EtcdEndpoints` setting to tell Felix how to reach
 etcd.
 
-Start Felix
-===========
+## Start Felix
 
 Once you've configured Felix, start it up via your init system.
 
@@ -142,8 +138,7 @@ For upstart:
 
     start calico-felix
 
-Running Felix manually
-======================
+## Running Felix manually
 
 For debugging, it's sometimes useful to run Felix manually and tell it
 to emit its logs to screen. You can do that with the following command:

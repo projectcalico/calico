@@ -1,13 +1,12 @@
 ---
 title: Stars Policy Demo
 ---
-
-# Pre-requisites
-
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.
 
-To create a Kubernetes cluster which supports the Kubernetes network policy API, follow 
+## Pre-requisites
+
+To create a Kubernetes cluster which supports the Kubernetes network policy API, follow
 one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
 
 Before following this guide, you will need to download the required manifests.
@@ -15,7 +14,7 @@ Before following this guide, you will need to download the required manifests.
     git clone https://github.com/projectcalico/calico.git
 
 Then, change into the directory for this guide:
- 
+
     cd calico/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy
 
 
