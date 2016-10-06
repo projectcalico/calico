@@ -5,10 +5,12 @@ title: Deploying Calico and Kubernetes on GCE
 These instructions allow you to set up a Kubernetes cluster with Calico networking on GCE using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with GCE
+
 These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see
 [the CoreOS on GCE documentation][coreos-gce].
 
 ### 1.1 Install the gcloud tool
+
 If you already have the `gcloud` utility installed, and a GCE project configured, you may skip this step.
 
 Download and install GCE, then restart your terminal:
@@ -16,6 +18,7 @@ Download and install GCE, then restart your terminal:
 ```shell
 curl https://sdk.cloud.google.com | bash
 ```
+
 For more information, see Google's [gcloud install instructions][gcloud-instructions].
 
 Log into your account:
@@ -30,6 +33,7 @@ Set the project as the default for gcloud:
 ```shell
 gcloud config set project PROJECT_ID
 ```
+
 And set a default zone
 
 ```shell
@@ -37,6 +41,7 @@ gcloud config set compute/zone us-central1-a
 ```
 
 ### 1.2 Setting up GCE networking
+
 GCE blocks traffic between hosts by default; run the following command to allow Calico traffic to flow between
 containers on different hosts (where the source-ranges parameter assumes you have created your project with the
 default GCE network parameters - modify the address range if yours is different):
@@ -44,31 +49,24 @@ default GCE network parameters - modify the address range if yours is different)
 ```shell
 gcloud compute firewall-rules create calico-ipip --allow 4 --network "default" --source-ranges "10.128.0.0/9"
 ```
+
 You can verify the rule with this command:
 
 ```shell
 gcloud compute firewall-rules list
 ```
 
-<!--- master only -->
-
 ### 1.3 Clone this project
 
-    git clone https://github.com/projectcalico/calico-containers.git
-<!--- else
+Clone the project
 
-### 1.3 Clone this project, and checkout the **release** release
+    git clone https://github.com/projectcalico/calico.git
 
-    git clone https://github.com/projectcalico/calico-containers.git
-    git checkout tags/**release**
-<!--- end of master only -->
+And change into the directory for this guide.
+
+    cd calico/{{page.version}}/getting-started/kubernetes/installation
 
 ## 2. Deploy the VMs
-Change into the directory for this guide.
-
-```shell
-cd calico-containers/cni/kubernetes/
-```
 
 Deploy the Kubernetes master node using the following command:
 
@@ -82,6 +80,7 @@ gcloud compute instances create \
 ```
 
 Deploy at least one worker node using the following command:
+
 ```
 gcloud compute instances create \
   kubernetes-node-1 \
@@ -92,11 +91,13 @@ gcloud compute instances create \
 ```
 
 You should have SSH access to your machines using the following command:
+
 ```
 gcloud compute ssh <INSTANCE NAME>
 ```
 
 ## Configure the Cluster
+
 ### 3.1 Configure Outbound NAT and IP-in-IP
 
 To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
@@ -110,12 +111,13 @@ docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --ipip --nat-outgo
 ```
 
 ### 3.2 Configure kubectl
+
 The following steps configure remote kubectl access to your cluster.
 
 Download `kubectl`
 
 ```shell
-sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.3.5/bin/linux/amd64/kubectl
+sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubectl
 sudo chmod +x /usr/local/bin/kubectl
 ```
 
@@ -144,5 +146,5 @@ NAME          STATUS                     AGE
 {% include {{page.version}}/install-k8s-addons.md %}
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
-[coreos-gce]: https://coreos.com/running-coreos/cloud-providers/google-compute-engine/
-[gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/
+[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html 
+[gcloud-instructions]: https://cloud.google.com/sdk/

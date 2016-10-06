@@ -1,28 +1,33 @@
 ---
 title: Calico Kubernetes Hosted Install
 ---
-[This directory](https://github.com/tigera/calico-docs/tree/master/getting-started/kubernetes/installation/hosted) contains Kubernetes manifests to deploy Calico on top of Kubernetes.
 
-- [`calico-configmap.yaml`](https://github.com/tigera/calico-docs/blob/master/getting-started/kubernetes/installation/hosted/calico-configmap.yaml): Contains a Kubernetes ConfigMap for configuring the deployment.  Make sure the values
-in this file match your desired configuration.
+This document describes deploying Calico on Kubernetes using Kubernetes manifests.  Note that the Kubernetes hosted installation method is experimental and subject to change.
 
-- [`calico-hosted.yaml`](https://github.com/tigera/calico-docs/blob/master/getting-started/kubernetes/installation/hosted/calico-hosted.yaml): Contains a Kubernetes DaemonSet which installs and runs Calico on each Kubernetes master and node.
-This also includes a ReplicaSet which deploys the Calico Kubernetes policy controller.
+- [`calico.yaml`](calico.yaml): Contains a Kubernetes DaemonSet 
+which installs and runs Calico on each Kubernetes master and node. This also includes a ReplicaSet which deploys 
+the Calico Kubernetes policy controller, and a ConfigMap which allows for configuration of the install.
 
-Note that the Kubernetes hosted installation method is experimental and subject to change.
+To install Calico, download [calico.yaml](calico.yaml) and run the following command:
+
+```shell
+kubectl apply -f calico.yaml
+```
 
 # How it works
 
-The `calico-hosted.yaml` file contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
+The `calico.yaml` file contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
 
 It does the following things:
+
+- The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `calico/node` container on each host using a DaemonSet.
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
 - Runs the `calico/kube-policy-controller` pod as a ReplicaSet.
 
 # Configuration options
 
-The `calico-configmap.yaml` provides a way to configure a Calico self-hosted installation.  It exposes
+The ConfigMap in `calico.yaml` provides a way to configure a Calico self-hosted installation.  It exposes
 the following configuration parameters:
 
 ### etcd_endpoints

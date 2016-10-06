@@ -2,7 +2,7 @@
 title: Deploying Calico and Kubernetes on CoreOS using Vagrant and VirtualBox
 ---
 
-These instructions allow you to set up a Kubernetes cluster with [Calico networking][calico-networking] using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
+These instructions allow you to set up a Kubernetes cluster with Calico networking using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.
 
 ## 1. Deploy cluster using Vagrant
 
@@ -12,15 +12,15 @@ These instructions allow you to set up a Kubernetes cluster with [Calico network
 * [Vagrant][vagrant] 1.7.4 or greater.
 * [Git][git]
 
-### 1.2 Clone this project
+### 1.2 Clone the project
 
-    git clone https://github.com/projectcalico/calico-containers.git
+    git clone https://github.com/projectcalico/calico.git 
 
 ### 1.3 Startup and SSH
 
 Change into the directory for this guide:
 
-    cd calico-containers/cni/kubernetes/vagrant-coreos
+    cd calico/{{page.version}}/getting-started/kubernetes/installation/vagrant 
 
 Run
 
@@ -38,8 +38,7 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02
-and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
+You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02 and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
 
 At this point, it's worth checking that your servers can ping each other.
 
@@ -71,23 +70,28 @@ And finally check that Docker is running on both hosts by running
     docker ps
 
 ## 2. Configuring the Cluster
+
 ### 2.1 Configure `kubectl`
+
 Let's configure `kubectl` so you can access the cluster from your local machine. Make sure you have `kubectl` installed locally.  The version you choose depends on your host OS.
 
 For Mac:
-```
-wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/darwin/amd64/kubectl
+
+```shell
+wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/darwin/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 For Linux:
-```
-wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0-alpha.3/bin/linux/amd64/kubectl
+
+```shell
+wget http://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 Then, tell `kubectl` to use the Vagrant cluster we just created.
-```
+
+```shell
 kubectl config set-cluster vagrant-cluster --server=http://172.18.18.101:8080
 kubectl config set-context vagrant-system --cluster=vagrant-cluster
 kubectl config use-context vagrant-system
@@ -98,7 +102,6 @@ kubectl config use-context vagrant-system
 {% include {{page.version}}/install-k8s-addons.md %}
 
 
-[calico-networking]: https://github.com/projectcalico/calico-containers
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html

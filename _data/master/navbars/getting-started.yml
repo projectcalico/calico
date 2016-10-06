@@ -20,15 +20,15 @@ toc:
     - title: GCE
       path: /getting-started/kubernetes/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
-      path: /getting-started/kubernetes/installation/vagrant-coreos
+      path: /getting-started/kubernetes/installation/vagrant/
     - title: Kubeadm
       path: /getting-started/kubernetes/installation/hosted/kubeadm/
   - title: Tutorials
     section:
-    - title: Demonstrating Calico Policy
-      path: /getting-started/kubernetes/tutorials/stars-policy/
     - title: Simple Policy Demo
       path: /getting-started/kubernetes/tutorials/simple-policy
+    - title: Stars Policy Demo 
+      path: /getting-started/kubernetes/tutorials/stars-policy/
   - title: Troubleshooting
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
