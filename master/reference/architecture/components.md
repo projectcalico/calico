@@ -12,7 +12,7 @@ components are:
 
 In addition, we use runit for logging (`svlogd`) and init (`runsv`) services.  
 
-This repository contains the Dockerfile for `calico/node` along with various
+The [calico-containers repostiory](https://github.com/projectcalico/calico-containers) contains the Dockerfile for `calico/node` along with various
 configuration files that are used to configure and "glue" these components
 together.
 
@@ -32,7 +32,7 @@ Felix also programs interface information to the kernel for outgoing endpoint
 traffic. Felix instructs the host to respond to ARPs for workloads with the 
 MAC address of the host.
 
-For more details about Felix, please refer to the core [calico project](https://github.com/projectcalico/calico).
+For more details about Felix, please refer to the core [calico project](https://github.com/projectcalico/felix).
 
 #### BIRD/BIRD6 internet routing daemon
 
@@ -54,7 +54,7 @@ to the [calico-bird repo](https://github.com/projectcalico/calico-bird) for more
 
 The confd templating engine monitors the etcd datastore for any changes to BGP 
 configuration (and some top level global default configuration such as AS
-Number, logging levels and IPAM information).
+Number, logging levels, and IPAM information).
 
 Confd dynamically generates BIRD configuration files based on the data in etcd,
 triggered automatically from updates to the data.  When the configuration file
@@ -69,6 +69,5 @@ to improve performance with the handling of watch prefixes
 ## In Practice
 
 For a detailed look at how each component works when adding Docker containers 
-to Calico networking, check out the [Lifecycle of a Docker Default Container]
-(DockerContainerLifecycle) page.
+to Calico networking, check out the [Lifecycle of a Docker Default Container]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/docker-container-lifecycle) page.
 
