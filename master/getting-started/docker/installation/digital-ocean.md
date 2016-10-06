@@ -30,27 +30,19 @@ You should now see something similar to the following:
 
 ![alt tag]({{site.baseurl}}/images/Create_Droplet_2.png)
 
-
 Before selecting "Create Droplet", you will need to specify the User Data.  
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the cloud-config based on
-the networking option that you choose.
-
-- [User Data for Calico as a Docker network plugin](docker-network-plugin/cloud-config)
-- [User Data for Calico without Docker networking](without-docker-networking/cloud-config)  
-
 For the first droplet `calico-01`, paste in the cloud config from
-`user-data-first`.
+[`user-data-first`]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/cloud-config/user-data-first).
 
 When the first droplet is running, look at the settings to get its private IPv4
 address.
 
 Repeat this process for a second host `calico-02`, but this time use the
-cloud config from `user-data-other`, making the following global changes before
+cloud config from [`user-data-other`]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/cloud-config/user-data-others), making the following global changes before
 pasting it in:
-- Replace all instances of `172.17.8.101` with the private IPv4 address of `calico-01`.
 
+- Replace all instances of `172.17.8.101` with the private IPv4 address of `calico-01`.
 
 ## 2. Running through the worked example
 You can now run through the standard Calico worked example.  You will require
@@ -63,17 +55,13 @@ Droplets section of the Web Console:
 $ ssh core@<ip>
 ```
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on
-the networking option that you chose for the cloud config in step (1).
+Now that your environment is configured, you are ready to follow the [Calico with Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic) worked example.
 
 > In the worked example, be sure to follow the additional instructions for
 configuring `ipip` and `nat-outgoing`.
 
-- [Calico as a Docker network plugin walkthrough](docker-network-plugin/index)
-- [Calico without Docker networking walkthrough](without-docker-networking/index)  
-
 ## (Optional) Enabling traffic from the internet to containers
+
 Services running on a Calico host's containers in DigitalOcean can be exposed to the internet.  Since the containers
 have IP addresses in the private IP range, traffic to the container must be routed using a NAT on the host and an
 appropriate Calico security profile.
