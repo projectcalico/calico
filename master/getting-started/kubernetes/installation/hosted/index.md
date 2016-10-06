@@ -4,8 +4,8 @@ title: Calico Kubernetes Hosted Install
 
 This document describes deploying Calico on Kubernetes using Kubernetes manifests.  Note that the Kubernetes hosted installation method is experimental and subject to change.
 
-- [`calico.yaml`](calico.yaml): Contains a Kubernetes DaemonSet 
-which installs and runs Calico on each Kubernetes master and node. This also includes a ReplicaSet which deploys 
+- [`calico.yaml`](calico.yaml): Contains a Kubernetes DaemonSet
+which installs and runs Calico on each Kubernetes master and node. This also includes a ReplicaSet which deploys
 the Calico Kubernetes policy controller, and a ConfigMap which allows for configuration of the install.
 
 To install Calico, download [calico.yaml](calico.yaml) and run the following command:
@@ -14,7 +14,7 @@ To install Calico, download [calico.yaml](calico.yaml) and run the following com
 kubectl apply -f calico.yaml
 ```
 
-# How it works
+## How it works
 
 The `calico.yaml` file contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
 
@@ -25,7 +25,7 @@ It does the following things:
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
 - Runs the `calico/kube-policy-controller` pod as a ReplicaSet.
 
-# Configuration options
+## Configuration options
 
 The ConfigMap in `calico.yaml` provides a way to configure a Calico self-hosted installation.  It exposes
 the following configuration parameters:

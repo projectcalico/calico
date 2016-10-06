@@ -2,14 +2,11 @@
 title: calicoctl node
 ---
 
-
-# User reference for 'calicoctl node' commands
-
 This sections describes the `calicoctl node` commands.
 
-The `calicoctl node` command starts the calico/node Docker image that runs the 
-main Calico processes such as Felix and the BIRD BGP routing daemon.  The 
-calico/node container is required to be running on every compute host for 
+The `calicoctl node` command starts the calico/node Docker image that runs the
+main Calico processes such as Felix and the BIRD BGP routing daemon.  The
+calico/node container is required to be running on every compute host for
 Calico networking.
 
 The `calicoctl node bgp` commands can be used to configure BGP peering for the
@@ -17,12 +14,12 @@ node.  For an overview of BGP configuration, read the
 [BGP tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/bgp), which covers in more detail all available BGP
 related commands, including use cases.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node' commands
 
-Run `calicoctl node --help` to display the following help menu for the 
+Run `calicoctl node --help` to display the following help menu for the
 calicoctl node commands.
 
 ```
@@ -76,7 +73,7 @@ Options:
 ## calicoctl node commands
 
 
-### calicoctl node 
+### calicoctl node
 
 This command performs two actions:
 
@@ -85,18 +82,18 @@ This command performs two actions:
 (or via `--runtime=docker`) the `calicoctl node` does this by downloading
 the `calico/node` Docker image and running it in a container.
 
-It is required to run the `calicoctl node` command prior to configuring 
-endpoints to use Calico networking.  In order to run the command, the host must 
-be running Docker and must have access to the etcd instance for the Calico 
+It is required to run the `calicoctl node` command prior to configuring
+endpoints to use Calico networking.  In order to run the command, the host must
+be running Docker and must have access to the etcd instance for the Calico
 cluster.
 
-This command must be run as root and must be run on the specific Calico node 
+This command must be run as root and must be run on the specific Calico node
 that you are configuring.
 
 Command syntax:
 
 ```
-calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>] 
+calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     [--runtime=<RUNTIME>] [--as=<AS_NUM>] [--log-dir=<LOG_DIR>]
     [--detach=<DETACH>] [--no-pull]
     [(--libnetwork [--libnetwork-image=<LIBNETWORK_IMAGE_NAME>])]
@@ -119,8 +116,8 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
     --no-pull: Prevent from pulling the Calico node Docker images.
 ```
 
-When running the `calicoctl node` command with the `--libnetwork` plugin, the 
-command starts a container using the `calico/node-libnetwork` Docker image in 
+When running the `calicoctl node` command with the `--libnetwork` plugin, the
+command starts a container using the `calico/node-libnetwork` Docker image in
 addition to starting the `calico/node` Docker image.
 
 The `--runtime=rkt` setting can be used to start the Calico services in a rkt
@@ -131,9 +128,9 @@ calico-node Docker container, instead allowing you to run the core processes
 via some other means. For example, you might install directly on the host and
 execute them via a systemd unit.
 
-The `--ip` and `--ip6` flags should be used to specify a unique IP address that 
-is owned by an interface on this Calico host system.  These IP addresses are 
-used to identify source addresses for BGP peering, allowing an interface 
+The `--ip` and `--ip6` flags should be used to specify a unique IP address that
+is owned by an interface on this Calico host system.  These IP addresses are
+used to identify source addresses for BGP peering, allowing an interface
 through the host system over which traffic will flow to the workloads.
 
 The `--detach` option should be used if you are adding Calico to an init system.
@@ -162,7 +159,7 @@ Pulling Docker image calico/node:v0.7.0
 
 Calico node is running with id: f97a6fe29109ea6d9cc3be70a2a6fd9b56a5dc3c4e9ba77f6b14643ec3da4915
 
-# Run the Calico node using the Docker libnetwork driver 
+# Run the Calico node using the Docker libnetwork driver
 $ sudo calicoctl node --libnetwork
 No IP provided. Using detected IP: 172.25.0.1
 Calico node is running with id: c95fc492d57bd7d3c568e5b1d67001c1cec7c01b771531618fbf910557e37f29
@@ -170,13 +167,13 @@ Calico libnetwork driver is running with id: 504b1d6d42908e376d9941ad8e3dfd65b07
 ```
 
 #### Calico with libnetwork
-When running Calico with libnetwork, the Calico libnetwork driver handles 
+When running Calico with libnetwork, the Calico libnetwork driver handles
 creation of a profile, and adding and removing the container from the Calico
 network during the lifecycle of a network and the containers attached to that
 network.
 
 The `docker network create` command allows you to specify the driver used for
-networking _and_ the driver used for IPAM.  To use Calico networking with 
+networking _and_ the driver used for IPAM.  To use Calico networking with
 libnetwork you need to :
 
 - Run `calicoctl node` with the `--libnetwork` flag
@@ -193,16 +190,16 @@ docker network create -d calico --ipam-driver calico net2
 Read our [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin)
 for more details.
 
-### calicoctl node stop 
-This command is used to stop a `calico/node` instance.  If there are endpoints 
-remaining on the host that have been networked with Calico, a warning message 
+### calicoctl node stop
+This command is used to stop a `calico/node` instance.  If there are endpoints
+remaining on the host that have been networked with Calico, a warning message
 will appear and the command will abort unless forced with the --force option.
 
-To stop the node cleanly, you must first remove all workloads from Calico and 
-manually clean up any workloads that were uncleanly stopped with the 
+To stop the node cleanly, you must first remove all workloads from Calico and
+manually clean up any workloads that were uncleanly stopped with the
 `calicoctl endpoint remove` command.
 
-This command must be run as root and must be run on the specific Calico node 
+This command must be run as root and must be run on the specific Calico node
 that you are configuring.
 
 Command syntax:
@@ -221,11 +218,11 @@ $ calicoctl node stop
 Node stopped and all configuration removed
 ```
 
-### calicoctl node remove 
+### calicoctl node remove
 This command is used to remove data associated with a `calico/node` instance.  
 
-To remove the node cleanly, you must first remove all workloads from Calico and 
-manually clean up any workloads that were uncleanly stopped with the 
+To remove the node cleanly, you must first remove all workloads from Calico and
+manually clean up any workloads that were uncleanly stopped with the
 `calicoctl endpoint remove` command, and then run the `calicoctl node stop`
 command to stop the node before removing it.
 
@@ -285,13 +282,13 @@ $ calicoctl node show
 ### calicoctl node bgp peer add \<PEER_IP\> as \<AS_NUM\>
 This command allows users to configure specific BGP peers with this node.
 
-This command must be run on the specific Calico node that you are configuring. 
-If peering with another Calico compute host (or indeed most BGP 
-implementations) you will need to configure the peering on both devices in 
+This command must be run on the specific Calico node that you are configuring.
+If peering with another Calico compute host (or indeed most BGP
+implementations) you will need to configure the peering on both devices in
 order to enable it.
 
-Use [`calicoctl node bgp peer show`](bgp) to display current list of 
-configured peers, and [`calicoctl status`](status) to see all BGP peers 
+Use [`calicoctl node bgp peer show`](bgp) to display current list of
+configured peers, and [`calicoctl status`](status) to see all BGP peers
 of this node and their status.
 
 
@@ -314,9 +311,9 @@ $ calicoctl node bgp peer add 172.25.0.2 as 65511
 ### calicoctl node bgp peer remove \<PEER_IP\>
 This command allows users to remove specific BGP peers from this Calico node.
 
-NOTE: This command only removes peers configured with `calicoctl node bgp peer 
-add`. It does not remove global peers ([`calicoctl bgp peer add`](bgp)) 
-or peerings with other Calico nodes if the node mesh is on 
+NOTE: This command only removes peers configured with `calicoctl node bgp peer
+add`. It does not remove global peers ([`calicoctl bgp peer add`](bgp))
+or peerings with other Calico nodes if the node mesh is on
 ([`calicoctl bgp node-mesh`](bgp)).
 
 This command must be run on the specific Calico node that you are configuring.
@@ -336,13 +333,13 @@ $ calicoctl node bgp peer remove 172.25.0.1
 BGP peer removed from node configuration
 ```
 
-### calicoctl node bgp peer show 
-This command allows users to view the node-specific BGP peers configured on 
+### calicoctl node bgp peer show
+This command allows users to view the node-specific BGP peers configured on
 this node.
 
 NOTE: This command does not show global BGP peers ([`calicoctl bgp peer show`](bgp))
-or peerings to other Calico nodes when the node-mesh is on 
-([`calicoctl bgp node-mesh`](bgp)). To show all BGP peers of this node and 
+or peerings to other Calico nodes when the node-mesh is on
+([`calicoctl bgp node-mesh`](bgp)). To show all BGP peers of this node and
 their status, use [`calicoctl status`](status).
 
 This command must be run on individual Calico nodes.

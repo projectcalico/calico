@@ -2,8 +2,6 @@
 title: calicoctl config
 ---
 
-# User reference for 'calicoctl config' commands
-
 This sections describes the `calicoctl config` commands.
 
 The `calicoctl config` command allows users to view or modify

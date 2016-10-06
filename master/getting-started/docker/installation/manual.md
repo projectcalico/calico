@@ -8,8 +8,6 @@ on two Linux servers that have a number of installation requirements.
 This tutorial describes how to manually configure a working environment for
 the example.
 
-# Manual Setup
-
 ## Requirements
 
 You will need 2 servers (bare metal or VMs) with a  modern 64-bit Linux OS

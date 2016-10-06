@@ -1,8 +1,6 @@
 ---
 title: Vagrant Deployed Mesos Cluster with Calico
 ---
-
-# Vagrant Start a Mesos Cluster with Calico
 This guide will show you how to use Vagrant to launch a Mesos Cluster
 with Calico installed and ready to network Docker Containerizer tasks.
 

@@ -2,18 +2,16 @@
 title: calicoctl ipam
 ---
 
-# User reference for 'calicoctl ipam' commands
-
 This section describes the `calicoctl ipam` commands.
 
-This command allows an interface into Calico's IP address management to release 
+This command allows an interface into Calico's IP address management to release
 IP addresses from endpoints and view additional information about assigned IPs.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam' commands
 
-Run `calicoctl ipam --help` to display the following help menu for the 
+Run `calicoctl ipam --help` to display the following help menu for the
 calicoctl ipam commands.
 
 ```
@@ -36,15 +34,15 @@ Warnings:
 
 ### calicoctl ipam release <IP>
 
-This command allows you to release an IP address that had been previously 
-assigned to an endpoint.  When an IP address is released, it becomes available 
+This command allows you to release an IP address that had been previously
+assigned to an endpoint.  When an IP address is released, it becomes available
 for assignment to any endpoint.
 
-Note that this does not remove the IP from any existing endpoints that may be 
-using it, so we generally recommend you use this command to clean up addresses 
+Note that this does not remove the IP from any existing endpoints that may be
+using it, so we generally recommend you use this command to clean up addresses
 from endpoints that were not cleanly removed from Calico.
 
-This command can be run on any Calico node. 
+This command can be run on any Calico node.
 
 Command syntax:
 
@@ -66,8 +64,8 @@ Address successfully released
 
 ### calicoctl ipam info <IP>
 
-This command prints information about a given IP address, such as special 
-attributes defined for the IP or whether the IP has been reserved by a user of 
+This command prints information about a given IP address, such as special
+attributes defined for the IP or whether the IP has been reserved by a user of
 the Calico IPAM.
 
 This command can be run on any Calico node.

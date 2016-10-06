@@ -1,19 +1,16 @@
 ---
 title: calicoctl checksystem
 ---
-
-# User reference for 'calicoctl checksystem' commands
-
 This section describes the `calicoctl checksystem` commands.
 
-The `calicoctl checksystem` command allows users to check for 
+The `calicoctl checksystem` command allows users to check for
 incompatibilities between Calico and the host system.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl checksystem' commands
 
-Run `calicoctl checksystem --help` to display the following help menu for the 
+Run `calicoctl checksystem --help` to display the following help menu for the
 calicoctl checksystem commands.
 
 ```
@@ -31,14 +28,14 @@ Options:
 
 ## calicoctl checksystem commands
 
-### calicoctl checksystem 
+### calicoctl checksystem
 This command allows you to verify that your host system is configured correctly
-for calicoctl to manage a Calico network.  The Calico network hosts must be 
-configured to have specific networking modules loaded, such as iptables, 
+for calicoctl to manage a Calico network.  The Calico network hosts must be
+configured to have specific networking modules loaded, such as iptables,
 ipsets support, and IP forwarding.  Calico checks for these modules in the  
 `modules.dep` and `modules.builtin` files under `/lib/modules/<kernel>/`.
 
-Running this command will only check for incompatibilities on the host it is 
+Running this command will only check for incompatibilities on the host it is
 run on.
 
 Command syntax:

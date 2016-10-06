@@ -2,8 +2,6 @@
 title: calicoctl status
 ---
 
-# User reference for 'calicoctl status' commands
-
 This sections describes the `calicoctl status` commands.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)

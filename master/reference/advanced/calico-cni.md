@@ -1,9 +1,6 @@
 ---
 title: Calico for CNI
 ---
-
-
-# Calico for CNI
 Calico provides a CNI plugin for integration with orchestrators which use the [containernetworking/cni][containernetworking-repo] interface.
 
 ### Supported Orchestrators
