@@ -26,18 +26,15 @@ fabric. We will briefly outline those in the rest of this post. That
 said, Calico operates equally well with Ethernet or IP interconnect
 fabrics.
 
-In this post
-============
+## In this post
 {: .no_toc}
 
 * TOC
 {:toc}
 
-Background
-==========
+## Background
 
-Basic Calico architecture overview
-----------------------------------
+### Basic Calico architecture overview
 
 A description of the Calico architecture can be found in our
 [architectural overview]({{site.baseurl}}/{{page.version}}/reference/architecture).
@@ -63,8 +60,7 @@ directed by whatever cloud orchestrator is in use. There are other
 components in the Calico architecture, but they are irrelevant to the
 interconnect network fabric discussion.
 
-Overview of current common IP scale-out fabric architectures
-------------------------------------------------------------
+###Overview of current common IP scale-out fabric architectures
 
 There are two approaches to building an IP fabric for a scale-out
 infrastructure. However, all of them, to date, have assumed that the
@@ -108,13 +104,12 @@ in use, we would be happy to host a guest technical note.
     compute servers). This is the network model that this note
     will address.
 
-BGP-only interconnect fabrics
-=============================
+### BGP-only interconnect fabrics
 
 There are multiple methods to build a BGP-only interconnect fabric. We
 will focus on three models, each with two widely viable variations.
 There are other options, and we will briefly touch on why we didn't
-include some of them in the [Other Options appendix](#other-options-appendix).
+include some of them in the [Other Options appendix](#other-options).
 
 The two methods are:
 
@@ -140,8 +135,7 @@ Another model is where each spine switch is a unique AS, and each TOR
 switch BGP peers with each spine switch. In both cases, the TOR switches
 use ECMP to load-balance traffic between all available spine switches.
 
-Some BGP network design considerations
---------------------------------------
+### Some BGP network design considerations
 
 Contrary to popular opinion, BGP is actually a fairly simple protocol.
 For example, the BGP configuration on a Calico compute server is
@@ -195,10 +189,7 @@ Fabric Design Considerations\_ appendix.
 
 The designs discussed below address these considerations.
 
-{: id=as-per-rack}
-
-The *AS Per Rack* model
------------------------
+### The *AS Per Rack* model
 
 This model is the closest to the model suggested by the [IETF's Routing
 Area Working Group draft on BGP use in data
@@ -266,8 +257,7 @@ each compute server will see the ToR as the next hop for all external
 routes, and the individual compute servers are the next hop for all
 routes external to the rack.
 
-The *AS per Compute Server* model
----------------------------------
+### The *AS per Compute Server* model
 
 This model takes the concept of an AS per rack to its logical
 conclusion. In the earlier referenced [IETF
@@ -320,10 +310,7 @@ connected to (normally, all the compute servers in the rack).
 The inter-ToR connectivity considerations are the same in scale and
 scope as in the AS per rack model.
 
-{: id=downward-default}
-
-The *Downward Default* model
-----------------------------
+### The *Downward Default* model
 
 The final model is a bit different. Whereas, in the previous models, all
 of the routers in the infrastructure carry full routing tables, and
@@ -379,15 +366,14 @@ before, that is not a concern in most deployments as the amount of
 memory consumed by a full routing table in Calico is a fraction of the
 total memory available on a modern compute server.
 
-Recommendation
-==============
+## Recommendation
 
-The Project Calico team recommends the use of the [AS per rack](as-per-rack) model if
+The Project Calico team recommends the use of the [AS per rack](#the-as-per-rack-model) model if
 the resultant routing table size can be accommodated by the ToR and
 spine switches, remembering to account for projected growth.
 
 If there is concern about the route table size in the ToR switches, the
-team recommends the [Downward Default](#downward-default) model.
+team recommends the [Downward Default](#the-downward-default-model) model.
 
 If there are concerns about both the spine and ToR switch route table
 capacity, or there is a desire to run a very simple L2 fabric to connect
@@ -398,11 +384,9 @@ If a Calico user is interested in the AS per compute server, the Project
 Calico team would be very interested in discussing the deployment of
 that model.
 
-Appendix
-========
+## Appendix
 
-Other Options
--------------
+### Other Options
 
 The way the physical and logical connectivity is laid out in this note,
 and the [Ethernet fabric note]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric),
@@ -422,10 +406,9 @@ models, the use of an IGP in Calico may be warranted. The configuration
 of those protocols are, however, beyond the scope of this technical
 note.
 
-IP Fabric Design Considerations
--------------------------------
+### IP Fabric Design Considerations
 
-### AS puddling
+#### AS puddling
 
 The first consideration is that an AS must be kept contiguous. This
 means that any two nodes in a given AS must be able to communicate
@@ -447,7 +430,7 @@ as the peer. This prevents loops from forming in the network. The effect
 of this prevents two routers in the same AS from transiting another
 router (either in that AS or not).
 
-### Next hop behavior
+#### Next hop behavior
 
 Another consideration is based on the differences between iBGP and eBGP.
 BGP operates in two modes, if two routers are BGP peers, but share the
@@ -483,7 +466,7 @@ hop self* is automatically set correctly. If a deployment of Calico in
 an IP interconnect fabric does not satisfy that constraint, then *next
 hop self* must be appropriately configured.
 
-### Route reflection
+#### Route reflection
 
 As mentioned above, BGP expects that all of the iBGP routers in a
 network can see (and speak) directly to one another, this is referred to
@@ -515,7 +498,7 @@ to manage.
 Other route reflector architectures are possible, but those are beyond
 the scope of this document.
 
-### Endpoints
+#### Endpoints
 
 The final consideration is the number of endpoints in a Calico network.
 In the [Ethernet fabric]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)

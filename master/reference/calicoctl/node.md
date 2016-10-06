@@ -187,7 +187,7 @@ docker network create -d calico net1
 docker network create -d calico --ipam-driver calico net2
 ```
 
-Read our [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/calico-with-docker/docker-network-plugin/CalicoAsPlugin)
+Read our [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic)
 for more details.
 
 ### calicoctl node stop

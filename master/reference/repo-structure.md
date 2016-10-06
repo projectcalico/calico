@@ -18,15 +18,12 @@ This respository contains the following:
   Docker image which is used to build the `calicoctl` binary.
 - UTs testing calicoctl, STs testing single host and multihost systems
   using calicoctl and calico/node to create Calico networked containers.  These
-  tests run within the `calico/test` Docker image.  See the [`tests` directory](../tests)
-  for the UT and ST codebase.  Also see the [`Makefile`](../Makefile) for
+  tests run within the `calico/test` Docker image.
+  for the UT and ST codebase.  Also see the Makefile for
   details on how the STs (`make st`) and UTs (`make ut`) are run using the
   `calico/test` image.
-- Documentation for using Calico in a containerized environment.  See
-  main [index](../index), and [`docs` directory](../docs).
 - Release scripts used to validate our documentation and to cut a new branch
-  for a specific release.  See [`release-scripts` directory](../release-scripts)
-  for details.
+  for a specific release.
 
 It pulls together a number of related repositories that provide subsets of
 function for running Calico in a containerized environment.  These related

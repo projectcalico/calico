@@ -81,7 +81,7 @@ iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.
 ```
 The command will need to be run each time the host is restarted.
 
-Remember: the security profile for the container will need to allow traffic to the exposed port as well.  You can read about how to configure security profiles in the [Advanced Network Policy]({{site.baseurl}}/{{page.version}}/using-calico/configuration/aadvanced-network-policy) guide.
+Remember: the security profile for the container will need to allow traffic to the exposed port as well.  You can read about how to configure security profiles in the [Advanced Network Policy]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy) guide.
 
 ### Can I run Calico in a public cloud environment?
 Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between Calico hosts then you can specify the `--ipip` flag your Calico IP pool:
