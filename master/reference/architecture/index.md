@@ -18,7 +18,7 @@ Calico is made up of the following interdependent components:
 -   The [Orchestrator plugin](#orchestrator-plugin),
     orchestrator-specific code that tightly integrates Calico into
     that orchestrator.
--   [etcd](#calico-etcd-component), the data store.
+-   [etcd](#etcd), the data store.
 -   [BIRD](#bgp-client-bird), a BGP client that
     distributes routing information.
 -   [BGP Route Reflector (BIRD)](#bgp-route-reflector-bird), an optional BGP
@@ -108,7 +108,6 @@ information about Felix liveness; marking certain endpoints as failed if
 network setup failed.
 
 
-{:id="calico-etcd-component"}
 
 ## etcd
 
