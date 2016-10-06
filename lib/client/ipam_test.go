@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Test cases:
+// Test cases (AutoAssign):
 // Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
 // Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses
 // Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and an error.
@@ -21,6 +21,14 @@
 // - Assign 1 address on host A (Expect 1 address)
 // - Assign 1 address on host B (Expect 1 address, different block)
 // - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block)
+
+// Test cases (AssignIP):
+// Test 1: Assign 1 IPv4 from a configured pool - expect no error returned.
+// Test 2: Assign 1 IPv6 from a configured pool - expect no error returned.
+// Test 3: Assign 1 IPv4 from a non-configured pool - expect an error returned.
+// Test 4: Assign 1 IPv4 from a configured pool twice:
+// - Expect no error returned while assigning the IP for the first time.
+// - Expect an error returned while assigning the SAME IP again.
 
 package client_test
 
@@ -44,12 +52,15 @@ import (
 	cnet "github.com/tigera/libcalico-go/lib/net"
 )
 
+// Setting BackendType to etcdv2 which is the only supported backend at the moment.
 var etcdType api.BackendType = "etcdv2"
+
+// Setting localhost as the etcd endpoint location since that's where `make run-etcd` runs it.
 var etcdConfig = etcd.EtcdConfig{
 	EtcdEndpoints: "http://127.0.0.1:2379",
 }
 
-var _ = Describe("IPAM", func() {
+var _ = Describe("IPAM tests", func() {
 
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pool string, inv4, inv6, expv4, expv6 int, expError error) {
@@ -74,13 +85,13 @@ var _ = Describe("IPAM", func() {
 		Entry("0 v4 257 v6", "testHost", true, "pool1", 0, 257, 0, 256, nil),
 
 		// Test 5: (use pool of size /25 (/test/pool2.yaml) so only two blocks are contained):
-		// - Assign 1 address on host A (Expect 1 address)
+		// - Assign 1 address on host A (Expect 1 address).
 		Entry("1 v4 0 v6 host-A", "host-A", true, "pool2", 1, 0, 1, 0, nil),
 
-		// - Assign 1 address on host B (Expect 1 address, different block)
+		// - Assign 1 address on host B (Expect 1 address, different block).
 		Entry("1 v4 0 v6 host-B", "host-B", false, "pool2", 1, 0, 1, 0, nil),
 
-		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block)
+		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
 		Entry("64 v4 0 v6 host-A", "host-A", false, "pool2", 64, 0, 64, 0, nil),
 	)
 
@@ -111,6 +122,8 @@ var _ = Describe("IPAM", func() {
 	)
 })
 
+// testIPAMAssignIP takes an IPv4 or IPv6 IP with a hostname and pool name and calls AssignIP.
+// When cleanEnv is passed it passes it along to wipe clean etcd and reset IPAM config.
 func testIPAMAssignIP(inIP net.IP, host, pool string, cleanEnv bool) error {
 	args := client.AssignIPArgs{
 		IP:       cnet.IP{inIP},
@@ -118,7 +131,7 @@ func testIPAMAssignIP(inIP net.IP, host, pool string, cleanEnv bool) error {
 	}
 	setupEnv(cleanEnv, pool)
 	ic := setupIPMAClient(cleanEnv)
-	outErr := ic.(client.IPAMInterface).AssignIP(args)
+	outErr := ic.AssignIP(args)
 
 	if outErr != nil {
 		log.Println(outErr)
@@ -138,7 +151,7 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, pool string)
 
 	setupEnv(cleanEnv, pool)
 	ic := setupIPMAClient(cleanEnv)
-	v4, v6, outErr := ic.(client.IPAMInterface).AutoAssign(args)
+	v4, v6, outErr := ic.AutoAssign(args)
 
 	if outErr != nil {
 		log.Println(outErr)
@@ -162,8 +175,9 @@ func setupEnv(cleanEnv bool, pool string) {
 	}
 }
 
-// add a comment here bro
-func setupIPMAClient(cleanEnv bool) interface{} {
+// setupIPMAClient sets up a client, and returns IPAMInterface.
+// It also resets IPAM config if cleanEnv is true.
+func setupIPMAClient(cleanEnv bool) client.IPAMInterface {
 	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
 
 	bc, err := client.New(ac)
