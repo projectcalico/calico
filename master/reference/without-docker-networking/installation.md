@@ -176,4 +176,4 @@ For details about advanced policy options read the
 
 ## Make a container reachable from the Host-Interface (Internet)
 
-You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet](../../ExposePortsToInternet.md)
+You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/using-calico/exposing-ports)

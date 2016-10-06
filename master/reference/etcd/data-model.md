@@ -150,7 +150,7 @@ The various properties in this object have the following meanings:
 
 `profile_ids`
 
-:   a list of identifiers of [security profiles](#tiered-security-profile) objects
+:   a list of identifiers of [security profiles](#tiered-security-policy) objects
     that apply to this endpoint. Each profile is applied to packets in the order that
     they appear in this list.
 
@@ -250,7 +250,7 @@ The various properties in this object have the following meanings:
 
 `profile_ids`
 
-:   a list of identifiers of [security profile](#tiered-security-profile)
+:   a list of identifiers of [security profile](#tiered-security-policy)
     objects that apply to this endpoint. Each profile is applied to packets
     in the order that they appear in this list.
 

@@ -24,6 +24,8 @@ toc:
   path: /using-calico/dockerless-calico
 - title: External Connectivity
   path: /using-calico/external-connectivity
+- title: Exposing Ports
+  path: /using-calico/exposing-ports
 - title: Troubleshooting
   path: /using-calico/troubleshooting/
 - title: Logging
