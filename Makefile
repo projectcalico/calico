@@ -10,6 +10,7 @@ CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
 
+GO_CONTAINER_NAME?=dockerepo/glide
 BUILD_CONTAINER_NAME=calico/cni_build_container
 BUILD_CONTAINER_MARKER=cni_build_container.created
 DEPLOY_CONTAINER_NAME=calico/cni
@@ -31,6 +32,13 @@ clean:
 # To update upstream dependencies, delete the glide.lock file first.
 vendor:
 	glide install -strip-vcs -strip-vendor --cache
+
+vendor-containerized:
+	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+        $(GO_CONTAINER_NAME) /bin/bash -c ' \
+	cd /go/src/github.com/projectcalico/calico-cni; \
+	glide install -strip-vcs -strip-vendor --cache; \
+	chown $(shell id -u):$(shell id -u) -R vendor'
 
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
@@ -72,7 +80,7 @@ test-containerized: dist/host-local dist/calicoctl run-etcd $(BUILD_CONTAINER_MA
 
 # Run the build in a container. Useful for CI
 .PHONY: build-containerized
-build-containerized: $(BUILD_CONTAINER_MARKER) vendor
+build-containerized: $(BUILD_CONTAINER_MARKER) vendor-containerized
 	mkdir -p dist
 	docker run --rm \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
