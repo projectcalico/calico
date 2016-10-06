@@ -10,6 +10,7 @@ exec 1>&2
 
 changed_files=$(git diff --cached --name-only)
 changed_go_files=$(git diff --cached --name-only | grep -E '.go$' || true)
+all_go_files=$(find -name '*.go' | grep -v /vendor/)
 
 copyright_check_failed=false
 copyright_owner="Tigera, Inc"
@@ -19,20 +20,24 @@ copyright_owner="Tigera, Inc"
 # Run go fmt over the changed files.
 echo "Checking changed files with gofmt..."
 gofmt_failed=false
+repo_loc_failed=false
 for filename in $changed_go_files; do
-  if [ -e "${filename}" ] &&  gofmt -d "${filename}" | grep '.'; then
-    echo "gofmt would make changes to file:" ${filename}
+  if [ ! -e "${filename}" ]; then
+    continue;
+  fi
+  if gofmt -d "${filename}" | grep '.'; then
+    echo "  gofmt would make changes to file:" ${filename}
     gofmt_failed=true
   fi
 done
-if $gofmt_failed; then
-  echo
-  echo "Some files failed gofmt check.  Run "
-  echo "  glide nv | xargs go fmt"
-  echo "to format all files."
-  echo
-  exit 1
-fi
+
+echo "Checking repo location..."
+for filename in $all_go_files; do
+  if grep -q 'tigera/libcalico-go' "${filename}"; then
+    echo "  File refers to old libcalico-go repo location:" ${filename}
+    repo_loc_failed=true
+  fi
+done
 
 # Check copyright statement has been updated.
 echo "Checking changed files for copyright statements..."
@@ -41,10 +46,17 @@ copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserv
 
 for filename in $changed_go_files; do
   if [ -e "${filename}" ] && ! grep -q -E "$copyright_re" "${filename}"; then
-    echo "Changed file is missing Tigera copyright:" ${filename}
+    echo "  Changed file is missing Tigera copyright:" ${filename}
     copyright_check_failed=true
   fi
 done
+
+if $gofmt_failed; then
+  echo
+  echo "Some files failed gofmt check.  Run "
+  echo "  glide nv | xargs go fmt"
+  echo "to format all files."
+fi
 
 if $copyright_check_failed; then
   echo
@@ -55,6 +67,16 @@ if $copyright_check_failed; then
   echo "Example for updated files (use commas and year ranges):"
   echo "  Copyright (c) 2012,2015-${year} ${copyright_owner}. All rights reserved."
   echo "Change expected copyright owner by creating git-hooks/settings.sh."
+fi
+
+if $repo_loc_failed; then
+  echo
+  echo "Found old tigera/libcalico-go repo location.  Should be"
+  echo "projectcalico/libcalico-go."
+fi
+
+if $copyright_check_failed || $repo_loc_failed || $gofmt_failed; then
+  echo
   exit 1
 fi
 
