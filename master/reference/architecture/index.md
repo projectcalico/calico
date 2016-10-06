@@ -19,15 +19,13 @@ Calico is made up of the following interdependent components:
     orchestrator-specific code that tightly integrates Calico into
     that orchestrator.
 -   [etcd](#calico-etcd-component), the data store.
--   [BIRD](#calico-bgp-component), a BGP client that
+-   [BIRD](#bgp-client-bird), a BGP client that
     distributes routing information.
--   [BGP Route Reflector (BIRD)](#bgp-route-reflector), an optional BGP
+-   [BGP Route Reflector (BIRD)](#bgp-route-reflector-bird), an optional BGP
     route reflector for higher scale.
 
 The following sections break down each component in more detail.
 
-
-{:id="felix"}
 
 ## Felix
 
@@ -73,8 +71,6 @@ In particular, it reports errors and problems with configuring its host.
 This data is written into etcd, to make it visible to other components
 and operators of the network.
 
-
-{:id="orchestrator-plugin"}
 
 ## Orchestrator Plugin
 
@@ -170,7 +166,6 @@ committing the state to the database to cause that state to be programmed
 into the network.
 
 
-{:id="calico-bgp-component"}
 
 ## BGP Client (BIRD)
 
@@ -190,8 +185,6 @@ the BGP client will pick them up and distribute them to the other nodes
 in the deployment. This ensures that traffic is efficiently routed
 around the deployment.
 
-
-{:id="bgp-route-reflector"}
 
 ## BGP Route Reflector (BIRD)
 
@@ -218,6 +211,6 @@ The BGP route reflector is responsible for the following task:
 
 #### Centralized Route Distribution
 
-When the [Calico BGP client](#calico-bgp-component) advertises routes
+When the [Calico BGP client](#bgp-client-bird) advertises routes
 from its FIB to the route reflector, the route reflector advertises
 those routes out to the other nodes in the deployment.

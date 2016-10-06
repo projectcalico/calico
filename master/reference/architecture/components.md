@@ -12,7 +12,7 @@ components are:
 
 In addition, we use runit for logging (`svlogd`) and init (`runsv`) services.  
 
-This [repository](https://github.com/projectcalico/calico-containers) contains the Dockerfile for `calico/node` along with various
+The [calico-containers repostiory](https://github.com/projectcalico/calico-containers) contains the Dockerfile for `calico/node` along with various
 configuration files that are used to configure and "glue" these components
 together.
 
@@ -69,5 +69,5 @@ to improve performance with the handling of watch prefixes
 ## In Practice
 
 For a detailed look at how each component works when adding Docker containers 
-to Calico networking, check out the [Lifecycle of a Docker Default Container]({{site.baseurl}}/{{page.version}}/reference/architecture/docker-container-lifecycle) page.
+to Calico networking, check out the [Lifecycle of a Docker Default Container]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/docker-container-lifecycle) page.
 
