@@ -7,8 +7,7 @@ Fuel 9.  Fuel plugin code for Calico is at
 [http://git.openstack.org/cgit/openstack/fuel-plugin-calico](http://git.openstack.org/cgit/openstack/fuel-plugin-calico).
 
 
-Fuel 7.0
-========
+## Fuel 7.0
 
 The plugin for Fuel 7.0 is currently undergoing final review and
 certification; you can find the plugin code at git.openstack.org, and
@@ -19,8 +18,7 @@ its documentation in pending changes on review.openstack.org:
 -   User Guide: <https://review.openstack.org/#/c/281239/>
 -   Test Plan and Report: <https://review.openstack.org/#/c/282362/>
 
-Fuel 6.1
-========
+## Fuel 6.1
 
 The rest of this document describes our integration of Calico with
 Mirantis Fuel 6.1. It is presented in sections covering the following
@@ -33,8 +31,7 @@ aspects of our integration work.
 -   Detailed Observations: Some further detailed observations about the
     elements of the deployed system.
 
-Objective
----------
+### Objective
 
 We will deploy an OpenStack cluster with a controller node and *n*
 compute nodes, with Calico providing the network connectivity between

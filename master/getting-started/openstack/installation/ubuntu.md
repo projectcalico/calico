@@ -13,8 +13,7 @@ control nodes to use Calico, and upgrading compute nodes to use Calico.
 The **Common Steps** must be followed on each node before moving onto
 the specific instructions in those sections.
 
-Prerequisites
-=============
+## Prerequisites
 
 Before starting this you will need the following:
 
@@ -22,21 +21,18 @@ Before starting this you will need the following:
     as your OpenStack compute or control nodes).
 -   SSH access to these machines.
 
-Common Steps
-============
+## Common Steps
 
 Some steps need to be taken on all machines being installed with Calico.
 These steps are detailed in this section.
 
-Install OpenStack
------------------
+### Install OpenStack
 
 If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found at <http://docs.openstack.org>.
 
-Configuring the APT software sources
-------------------------------------
+### Configuring the APT software sources
 
 The latest version of Calico for OpenStack is 1.4, and we recommend using it
 with OpenStack Liberty or later.  Other possible combinations are shown by the
@@ -86,8 +82,7 @@ Once that's done, update your package manager on each machine:
     $ sudo apt-get update
 ```
 
-Etcd Install
-============
+## Etcd Install
 
 Calico requires an etcd database to operate -- this may be installed on
 a single machine or as a cluster.
@@ -150,8 +145,7 @@ through the process.
         $ sudo service etcd start
     ```
 
-Etcd Proxy Install
-==================
+## Etcd Proxy Install
 
 Install an etcd proxy on every node running OpenStack services that
 isn't running the etcd database itself (both control and compute nodes).
@@ -189,8 +183,7 @@ isn't running the etcd database itself (both control and compute nodes).
         $ sudo service etcd start
     ```
 
-Control Node Install
-====================
+## Control Node Install
 
 On each control node ensure etcd or an etcd proxy is installed, and then
 perform the following steps:
@@ -225,8 +218,7 @@ perform the following steps:
         $ sudo service neutron-server restart
     ```
 
-Compute Node Install
-====================
+## Compute Node Install
 
 On each compute node ensure etcd or an etcd proxy is installed, and then
 perform the following steps:

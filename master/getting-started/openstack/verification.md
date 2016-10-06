@@ -5,8 +5,7 @@ title: Verifying your Calico on OpenStack deployment
 This document takes you through the steps you can perform to verify that
 a Calico-based OpenStack deployment is running correctly.
 
-Prerequisites
-=============
+## Prerequisites
 
 This document requires you have the following things:
 
@@ -14,8 +13,7 @@ This document requires you have the following things:
 -   Access to an administrator account on your Calico-based
     OpenStack deployment.
 
-Procedure
-=========
+## Procedure
 
 Begin by creating several instances on your OpenStack deployment using
 your administrator account. Confirm that these instances all launch and
@@ -75,8 +73,7 @@ you've created (by IP).
 If all of these tests behave correctly, your Calico-based OpenStack
 deployment is in good shape.
 
-Troubleshooting
-===============
+## Troubleshooting
 
 If you find that none of the advice below solves your problems, please
 use our diagnostics gathering script to generate diagnostics, and then
@@ -120,8 +117,7 @@ Note that doing this may be considered a security risk in some networks.
 A future Calico enhancement will remove the requirement to perform this
 step.
 
-Routes are missing in the FIB.
-------------------------------
+### Routes are missing in the FIB.
 
 If routes to some VMs aren't present when you run `route`, this suggests
 that your BGP sessions are not functioning correctly. Your BGP daemon
@@ -131,8 +127,7 @@ and are replicating routes. If you're using a full mesh configuration,
 confirm that you have configured BGP sessions with *all* other Calico
 nodes.
 
-VMs Cannot Ping Non-VM IPs
---------------------------
+### VMs Cannot Ping Non-VM IPs
 
 Assuming all the routes are present in the FIB (see above), this most
 commonly happens because the gateway is not configured with routes to
@@ -144,8 +139,7 @@ sure that your gateway is also advertising those routes to its external
 peers. It may do this using eBGP, but it may also be using some other
 routing protocol.
 
-VMs Cannot Ping Other VMs
--------------------------
+### VMs Cannot Ping Other VMs
 
 Before continuing, confirm that the two VMs are in security groups that
 allow inbound traffic from each other (or are both in the same security

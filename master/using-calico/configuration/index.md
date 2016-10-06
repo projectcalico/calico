@@ -18,8 +18,7 @@ hence to describe all the possible fields, files etc. For a more
 task-based approach, when installing Calico with OpenStack on Ubuntu or
 Red Hat, please see our [Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu) or [Red Hat]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/redhat)  installation guides.
 
-System configuration
-====================
+## System configuration
 
 A common problem on Linux systems is running out of space in the
 conntrack table, which can cause poor iptables performance. This can
@@ -32,8 +31,7 @@ table size. To do so, run the following commands:
     sysctl -w net.netfilter.nf_conntrack_max=1000000
     echo "net.netfilter.nf_conntrack_max=1000000" >> /etc/sysctl.conf
 
-Felix configuration
-===================
+## Felix configuration
 
 The core Calico component is Felix. (Please see [this document]({{site.baseurl}}/{{page.version}}/reference/architecture) for more on  the Calico architecture.)
 
@@ -101,8 +99,7 @@ include `FELIX_ETCDSCHEME`, `FELIX_ETCDKEYFILE`, `FELIX_ETCDCERTFILE`,
 `FELIX_ETCDCAFILE`, `FELIX_FELIXHOSTNAME`, `FELIX_LOGFILEPATH` and
 `FELIX_METADATAADDR`.
 
-Configuration file
-------------------
+### Configuration file
 
 On startup, Felix reads an ini-style configuration file. The path to
 this file defaults to `/etc/calico/felix.cfg` but can be overridden
@@ -110,8 +107,7 @@ using the `-c` or `--config-file` options on the command line. If the
 file exists, then it is read (ignoring section names) and all parameters
 are set from it.
 
-etcd configuration
-------------------
+### etcd configuration
 
 > **NOTE**
 >
@@ -130,14 +126,12 @@ etcd configuration is read from etcd from two places.
 
 Note that the names are case sensitive.
 
-OpenStack environment configuration
-===================================
+## OpenStack environment configuration
 
 When running Calico with OpenStack, you also need to configure various
 OpenStack components, as follows.
 
-Nova (/etc/nova/nova.conf)
---------------------------
+### Nova (/etc/nova/nova.conf)
 
 Calico uses the Nova metadata service to provide metadata to VMs,
 without any proxying by Neutron. To make that work:
@@ -147,8 +141,7 @@ without any proxying by Neutron. To make that work:
     or `service_metadata_proxy` to `True`. (The default `False` value is
     correct for a Calico cluster.)
 
-Neutron server (/etc/neutron/neutron.conf)
-------------------------------------------
+### Neutron server (/etc/neutron/neutron.conf)
 
 In `/etc/neutron/neutron.conf` you need the following settings to
 configure the Neutron service.
@@ -173,8 +166,7 @@ the `[calico]` section of `/etc/neutron/neutron.conf`.
 | etcd_host | localhost     | The hostname or IP of the etcd node/proxy |
 | etcd_port | 4001          | The port to use for the etcd node/proxy   |
 
-ML2 (.../ml2_conf.ini)
------------------------
+### ML2 (.../ml2_conf.ini)
 
 In `/etc/neutron/plugins/ml2/ml2_conf.ini` you need the following
 settings to configure the ML2 plugin.

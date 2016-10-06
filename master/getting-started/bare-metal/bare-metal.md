@@ -42,8 +42,7 @@ to/from other interfaces is left alone.
 >
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 
-Overview
-========
+## Overview
 
 To make use of Calico's host endpoint support, you will need to follow
 these steps, described in more detail below:
@@ -59,8 +58,7 @@ these steps, described in more detail below:
 -   insert policy into etcd for Calico to apply
 -   decide whether to disable "failsafe SSH/etcd" access.
 
-Creating an etcd cluster
-========================
+## Creating an etcd cluster
 
 If you haven't already created an etcd cluster for your Calico
 deployment, you'll need to create one.
@@ -74,8 +72,7 @@ To create a production cluster, you should follow the guidance in the
 [etcd manual](https://coreos.com/etcd/docs/latest/). In particular, the
 [clustering guide](https://coreos.com/etcd/docs/latest/).
 
-Installing Felix
-================
+## Installing Felix
 
 There are several ways to install Felix.
 
@@ -112,8 +109,7 @@ Until you initialise the database, Felix will make a regular log that it
 is in state "wait-for-ready". The default location for the log file is
 `/var/log/calico/felix.log`.
 
-Initialising the etcd database
-==============================
+## Initialising the etcd database
 
 Calico doesn't (yet) have a tool to initialise the database for
 bare-metal only deplyments. To initialise the database manually, make
@@ -126,8 +122,7 @@ If you check the felix logfile after this step, the logs should
 transition from periodic notifications that felix is in state
 "wait-for-ready" to a stream of initialisation messages.
 
-Creating basic connectivity and Calico policy
-=============================================
+## Creating basic connectivity and Calico policy
 
 When a host endpoint is added, if there is no security policy for that
 endpoint, Calico will default to denying traffic to/from that endpoint,
@@ -215,8 +210,7 @@ Once you have such a policy in place, you may want to disable the
 Calico's tiered policy data is described in detail in
 [Tiered security policy]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
 
-Creating host endpoint objects
-==============================
+## Creating host endpoint objects
 
 For each host endpoint that you want Calico to secure, you'll need to
 create a host endpoint object in etcd. At present, this must be done
@@ -317,8 +311,7 @@ rejection; in this case "'name' or 'expected\_ipvX\_addrs' must be
 present" tells us that either the interface's name or its expected IP
 address must be specified.
 
-Creating more security policy
-=============================
+## Creating more security policy
 
 The Calico team recommend using tiered policy with bare-metal workloads.
 This allows ordered policy to be applied to endpoints that match
@@ -348,8 +341,7 @@ inbound traffic from the network to endpoints labeled with role
 Calico's tiered policy data is described in detail in
 [Tiered security policy]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
 
-Failsafe rules
-==============
+## Failsafe rules
 
 To avoid completely cutting off a host via incorrect or malformed
 policy, Calico has a failsafe mechanism that keeps various pinholes open

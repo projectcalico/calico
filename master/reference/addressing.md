@@ -10,8 +10,7 @@ well as to other workloads within the data center).
 
 ![]({{site.baseurl}}/images/calico-connectivity.png)
 
-Network provisioning and IP addresses
-=====================================
+## Network provisioning and IP addresses
 
 In current Calico, the ranges from which IP addresses may be assigned to
 workloads are all provisioned by the data center operator. These ranges
@@ -38,8 +37,7 @@ are potentially accessible from all other workloads within the data
 center, but not from the Internet. This is all under the control of the
 data center operators, as it is they who provision the shared network.
 
-Outbound and inbound connectivity to and from the Internet
-==========================================================
+## Outbound and inbound connectivity to and from the Internet
 
 Subject to security configuration, *all* forms of IP addressing can
 initiate *outbound* connections to outside the data center. In the IPv4

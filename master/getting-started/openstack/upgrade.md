@@ -16,8 +16,7 @@ release does not upgrade a given component, you may skip those steps.
 > [Service Impact](#service_impact) section for more details.
 >
 
-Service Impact
-==============
+## Service Impact
 
 During the upgrade, **all VMs will continue to function normally**:
 there should be no impact on the data plane. However, control plane
@@ -31,26 +30,24 @@ For this reason, we highly recommend planning a maintenance window for
 the upgrade. During this window, you should disable all user API access
 to your OpenStack deployment.
 
-Upgrade Procedure
-=================
+## Upgrade Procedure
 
 Upgrade is performed in the following stages, which must be performed in
 the order shown.
 
-1: Upgrade etcd
----------------
+### 1: Upgrade etcd
 
 This step should be run on every machine in your deployment that runs
 any Calico code, and also on the machine running the etcd cluster.
 
-### Ubuntu
+#### Ubuntu
 
 Use apt-get to obtain the more recent version:
 
     apt-get update
     apt-get install etcd
 
-### Red Hat 7
+#### Red Hat 7
 
 Stop the etcd process:
 
@@ -73,7 +70,7 @@ Now, restart etcd:
 On each machine running the Calico compute software (the component
 called Felix), run the following upgrade steps.
 
-### Uninstall pip-installed networking-calico
+#### Uninstall pip-installed networking-calico
 
 If present, uninstall any pip-installed networking-calico package:
 
@@ -82,7 +79,7 @@ If present, uninstall any pip-installed networking-calico package:
 (networking-calico function is now installed as a Debian or RPM package
 instead.)
 
-### Ubuntu
+#### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each compute
 host upgrade the Calico packages, as follows:
@@ -129,7 +126,7 @@ Neutron-provided DHCP agent:
 
     service neutron-dhcp-agent restart
 
-### Red Hat 7
+#### Red Hat 7
 
 First, upgrade python-etcd:
 
@@ -201,7 +198,7 @@ Or if you are using an earlier OpenStack release:
 On each machine running the Calico control software (every machine
 running neutron-server), run the following upgrade steps.
 
-### Ubuntu
+#### Ubuntu
 
 First, use `apt-get` to install the updated packages. On each control
 host you can upgrade only the Calico packages, as follows:
@@ -221,7 +218,7 @@ Then, restart Neutron to ensure that it picks up any changes:
 
     service neutron-server restart
 
-### Red Hat 7
+#### Red Hat 7
 
 First, upgrade python-etcd:
 

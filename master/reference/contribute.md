@@ -45,8 +45,7 @@ Features or any changes to the codebase should be done as follows:
         Otherwise, make a top-level comment and assign back to the
         reviewer as above.
 
-Contributor Agreements
-======================
+## Contributor Agreements
 
 If you plan to contribute in the form of documentation or code, we need
 you to sign our Contributor License Agreement before we can accept your

@@ -7,8 +7,7 @@ scenarios. In particular, this will make it easy for
 you to set up topologies and examine their connectivity to try to get an
 understanding of the way Calico networks behave.
 
-Example 1: Development Machine
-==============================
+## Example 1: Development Machine
 
 In this example, a user wants to spin up a machine to use as a Linux
 development environment. This user has a straightforward use-case: they

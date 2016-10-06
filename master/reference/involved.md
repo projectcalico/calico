@@ -8,8 +8,7 @@ or by diving into the code to propose enhancements or integrate with
 other systems. To see the options for getting involved with Calico the
 project, please take a look at the following.
 
-Mailing Lists
-=============
+## Mailing Lists
 
 Project Calico runs two mailing lists:
 
@@ -30,8 +29,7 @@ When reporting a problem on calico-tech, please try to:
 That will help us (or anyone else) to answer your question quickly and
 correctly.
 
-Read the Source, Luke!
-======================
+## Read the Source, Luke!
 
 All Calico's code is on [GitHub](https://github.com/projectcalico), in
 the following repositories, separated by function.
@@ -54,8 +52,7 @@ the following repositories, separated by function.
 -   [calico-chef](https://github.com/projectcalico/calico-chef) - Chef
     cookbooks for installing test versions of OpenStack-using-Calico.
 
-Contributing
-============
+## Contributing
 
 Calico follows the "Fork & Pull" model of collaborative development,
 with changes being offered to the main Calico codebase via Pull

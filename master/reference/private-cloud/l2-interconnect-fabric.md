@@ -25,8 +25,7 @@ their pods are largely ameliorated by Project Calico, allowing Ethernet
 to be viably considered as a Calico interconnect, even in large-scale
 deployments.
 
-Concerns over Ethernet at scale
-===============================
+## Concerns over Ethernet at scale
 
 It has been acknowledged by the industry for years that, beyond a
 certain size, classical Ethernet networks are unsuitable for production
@@ -73,8 +72,7 @@ before this, I bet you are now. Before you do, however, let's look at
 how Project Calico can mitigate these issues, even in very large
 deployments.
 
-How does Calico tame the Ethernet daemons?
-==========================================
+## How does Calico tame the Ethernet daemons?
 
 First, let's look at how Calico uses an Ethernet interconnect fabric.
 It's important to remember that an Ethernet network *sees* nothing on
@@ -135,8 +133,7 @@ for Calico, but there are more considerations that must be taken into
 account. The Ethernet fabric option has fewer architectural
 considerations in its design.
 
-A brief note about Ethernet topology
-====================================
+## A brief note about Ethernet topology
 
 As mentioned elsewhere in the Calico documentation, since Calico can use
 most of the standard IP tooling, some interesting options regarding

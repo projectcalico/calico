@@ -8,8 +8,7 @@ route reflector.
 
 These instructions are valid for both Ubuntu 14.04 and RHEL 7.
 
-Prerequisites
-=============
+## Prerequisites
 
 Before starting this you will need the following:
 
@@ -17,13 +16,11 @@ Before starting this you will need the following:
     being used as a compute host.
 -   SSH access to the machine.
 
-Installation
-============
+## Installation
 
-Step 1: Install BIRD
---------------------
+### Step 1: Install BIRD
 
-### Ubuntu 14.04
+#### Ubuntu 14.04
 
 Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
 fixes to BIRD that are not yet available in Ubuntu 14.04. To add the
@@ -37,7 +34,7 @@ single `bird` package installs both IPv4 and IPv6 BIRD):
     sudo apt-get update
     sudo apt-get install bird
 
-### RHEL 7
+#### RHEL 7
 
 First, install EPEL. Depending on your system, the following command may
 be sufficient:
@@ -117,10 +114,9 @@ are:
 Note that `<router_id>` should still be set to the route reflector's
 IPv4 address: you cannot use an IPv6 address in that field.
 
-Step 4: Restart BIRD
---------------------
+### Step 4: Restart BIRD
 
-### Ubuntu 14.04
+#### Ubuntu 14.04
 
 Restart BIRD:
 
@@ -130,7 +126,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
 
     sudo service bird6 restart
 
-### RHEL 7
+#### RHEL 7
 
 Restart BIRD:
 
@@ -142,8 +138,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
     systemctl restart bird6
     systemctl enable bird6
 
-Step 5: Reconfigure compute nodes
----------------------------------
+### Step 5: Reconfigure compute nodes
 
 If you used the `calico-gen-bird-conf.sh` script to configure your
 compute hosts, and you used the route reflector IP when you did, you do
