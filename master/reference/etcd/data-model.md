@@ -14,8 +14,8 @@ document does not describe the components that read and write this data
 to provide the connectivity that endpoints in a Calico network want: for
 more on that, see [Architecture]({{site.baseurl}}/{{page.version}}/reference/architecture).
 
-Objects
-=======
+## Objects
+
 
 Calico focuses on the following major object types, stored in etcd:
 
@@ -50,8 +50,7 @@ security policies
 
 The structure of all of this information can be found below.
 
-Endpoints
----------
+### Endpoints
 
 The Calico datamodel supports two types of endpoint:
 
@@ -275,8 +274,7 @@ The various properties in this object have the following meanings:
     >     the IP of the interface for use in match criteria.)
     >
 
-Security Profiles
------------------
+### Security Profiles
 
 Each security profile is split up into three bits of data: 'rules',
 'tags' and 'labels'.
@@ -303,8 +301,7 @@ different keys, of the form:
     /calico/v1/policy/profile/<profile_id>/tags
     /calico/v1/policy/profile/<profile_id>/labels
 
-Tiered security policy
-----------------------
+### Tiered security policy
 
 In addition to directly-referenced security profiles, Calico supports an
 even richer security model that we call "tiered policy". Tiered policy

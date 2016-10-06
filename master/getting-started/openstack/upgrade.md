@@ -13,7 +13,7 @@ release does not upgrade a given component, you may skip those steps.
 > While the upgrade procedure is very safe, you will be unable to
 > issue API requests to your OpenStack system during the procedure.
 > Please plan your upgrade window accordingly, and see the
-> [Service Impact](#service_impact) section for more details.
+> [Service Impact](#service-impact) section for more details.
 >
 
 ## Service Impact

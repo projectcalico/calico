@@ -5,7 +5,7 @@ title: 'Ubuntu Packaged Install Instructions'
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 (Trusty) or 16.04
 (Xenial), with OpenStack Icehouse, Juno, Kilo, Liberty or Mitaka. If you are
-upgrading an existing system, please see [this document](opens-upgrade) instead
+upgrading an existing system, please see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade) instead
 for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
@@ -381,7 +381,7 @@ perform the following steps:
     Note that you'll also need to configure your route reflector to
     allow connections from the compute node as a route reflector client.
     If you are using BIRD as a route reflector, follow the instructions
-    [here](bird-rr-config). If you are using another route reflector, refer
+    [here]({{site.baseurl}}/{{page.version}}/using-calico/bird-rr-config). If you are using another route reflector, refer
     to the appropriate instructions to configure a client connection.
 
     If you *are* configuring a full BGP mesh you'll need to handle the

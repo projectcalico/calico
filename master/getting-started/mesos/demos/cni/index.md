@@ -76,4 +76,4 @@ eth0      Link encap:Ethernet  HWaddr 1E:49:82:B4:C1:F8
 Command exited with status 0 (pid: 1762)
 ```
 
-For more information on using Calico with Mesos CNI, see the [Calico-CNI for Mesos Unified Containerizer Usage Guide](../UsageGuideUnifiedCNI.md).
+For more information on using Calico with Mesos CNI, see the [Calico-CNI for Mesos Unified Containerizer Usage Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified).

@@ -168,7 +168,7 @@ When launching instances, remember that security groups are used to
 determine reachability, not networks. Choose networks based on whether
 you need an external or an internal IP address, and choose security
 groups based on the machines you'd like to talk to in the cloud. See
-[here]({{site.baseurl}}/{{page.version}}/getting-started/openstack-setup) for more.
+[here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity) for more.
 
 #### Tab: Compute -&gt; Access & Security
 

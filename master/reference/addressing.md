@@ -26,7 +26,7 @@ other IPv4 address, and similarly for IPv6.
 >
 > :   address ranges that can be provisioned by tenants, and potentially
 >     overlap with each other and with the shared IPv4 address space.
->     See [here](overlap-ips) for our thoughts on how that will work. (Private
+>     See [here]({{site.baseurl}}/{{page.version}}/reference/advanced/overlap-ips) for our thoughts on how that will work. (Private
 >     networks do not need IPv6 address ranges, because the shared IPv6
 >     address space is already sufficient for all needs.)
 >
