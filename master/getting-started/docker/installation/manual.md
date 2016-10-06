@@ -29,7 +29,7 @@ between the nodes.  This may installed on one or both of the two servers for
 the worked example.  See the [etcd documentation][etcd] for details on setting
 up a cluster.
 
-> NOTE: If you are running etcd with SSL/TLS, see the (Etcd Secure Cluster)[/using-calico/advanced/EtcdSecureCluster]
+> NOTE: If you are running etcd with SSL/TLS, see the [Etcd Secure Cluster]({{site.baseurl}}/{{page.version}}/reference/advanced/etcd-secure)
 > documentation.
 
 ### Docker (with multi-host networking)

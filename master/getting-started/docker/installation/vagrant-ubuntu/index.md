@@ -15,24 +15,13 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
 
 ### 1.2 Clone this project
 
-    git clone https://github.com/projectcalico/calico-containers.git
+    git clone https://github.com/projectcalico/calico.git
 
 ### 1.3 Startup and SSH
 
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the networking option
-by changing into the appropriate directory.
-
 For Calico as a Docker network plugin
 
-    cd calico-containers/calico-with-docker/docker-network-plugin/vagrant-ubuntu
-
-For Calico without Docker networking
-
-    cd calico-containers/calico-with-docker/without-docker-networking/vagrant-ubuntu
-
-Use vagrant to create and boot your VMs.
-
+    cd calico/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu
     vagrant up
 
 To connect to your servers
@@ -71,14 +60,7 @@ And finally check that Docker is running on both hosts by running
 
 ## 2. Try out Calico Networking
 
-Now you have a basic two node Ubuntu cluster setup and you are ready to try Calico networking.
-
-There are two worked examples you can follow: Calico as a Docker network
-plugin, or Calico without Docker networking.  Select the instructions based on
-the networking option that you chose in step (1.3).
-
-- [Calico as a Docker network plugin walkthrough](docker-network-plugin/index)
-- [Calico without Docker networking walkthrough](without-docker-networking/index)  
+Now that you have a basic two node Ubuntu cluster setup, see the [Calico as a Docker network plugin walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic)
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental
