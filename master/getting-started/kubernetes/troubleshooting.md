@@ -3,7 +3,7 @@ title: Troubleshooting Calico for Kubernetes
 ---
 
 This article contains Kubernetes specific troubleshooting advice for Calico.  
-See also the [main Calico troubleshooting](../../using-calico/troubleshooting) pages.
+See also the [main Calico troubleshooting](../../usage/troubleshooting) pages.
 
 ## Viewing Logs
 

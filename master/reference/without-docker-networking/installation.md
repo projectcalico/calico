@@ -172,8 +172,8 @@ See the [IPv6 worked example]({{site.baseurl}}/{{page.version}}/reference/withou
 ## Advanced network policy
 
 For details about advanced policy options read the
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/using-calico/configuration/advanced-network-policy).
+[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 
-You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/using-calico/exposing-ports)
+You cannot simply use `-p`on `docker run` to expose ports. We have a working example on how to [expose a container port to the internet]({{site.baseurl}}/{{page.version}}/usage/exposing-ports)

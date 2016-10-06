@@ -515,7 +515,7 @@ On each compute node, perform the following steps:
     Note that you'll also need to configure your route reflector to
     allow connections from the compute node as a route reflector client.
     If you are using BIRD as a route reflector, follow the instructions
-    in [this document]({{site.baseurl}}/{{page.version}}/using-calico/bird-rr-config). If you are using another route reflector, refer
+    in [this document]({{site.baseurl}}/{{page.version}}/usage/bird-rr-config). If you are using another route reflector, refer
     to the appropriate instructions to configure a client connection.
 
     If you *are* configuring a full BGP mesh you'll need to handle the
