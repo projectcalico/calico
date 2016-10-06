@@ -21,9 +21,7 @@
 package client_test
 
 import (
-	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -92,7 +90,7 @@ var _ = Describe("IPAM", func() {
 
 func setupEnv() {
 
-	etcdArgs := strings.Fields((fmt.Sprintf("--endpoints http://%s:2379 rm /calico --recursive || true", os.Getenv("ETCD_IP"))))
+	etcdArgs := strings.Fields("rm /calico --recursive")
 	if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
 		log.Println(err)
 	}

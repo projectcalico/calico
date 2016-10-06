@@ -2,8 +2,8 @@
 
 set -e
 
-# Run tests in parallel (-p), find tests recursively (-r).
-ginkgo -randomizeAllSpecs -cover -p -r --skipPackage vendor
+# Run tests in random order find tests recursively (-r).
+ginkgo -randomizeAllSpecs -cover -r --skipPackage vendor
 
 echo
 echo '+==============+'
