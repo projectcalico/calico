@@ -164,7 +164,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 		}
 		cidr := affBlocks[0]
 		affBlocks = affBlocks[1:]
-		ips, _ = c.assignFromExistingBlock(cidr, num, handleID, attrs, host, nil)
+		ips, _ = c.assignFromExistingBlock(cidr, num, handleID, attrs, host, true)
 		log.Debugf("Block '%s' provided addresses: %v", cidr.String(), ips)
 	}
 
@@ -196,7 +196,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 			} else {
 				// Claim successful.  Assign addresses from the new block.
 				log.Infof("Claimed new block %s - assigning %d addresses", b.String(), rem)
-				newIPs, err := c.assignFromExistingBlock(*b, rem, handleID, attrs, host, &config.StrictAffinity)
+				newIPs, err := c.assignFromExistingBlock(*b, rem, handleID, attrs, host, config.StrictAffinity)
 				if err != nil {
 					log.Warningf("Failed to assign IPs:", err)
 					break
@@ -265,7 +265,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 				}
 
 				// Attempt to assign from the block.
-				newIPs, err := c.assignFromExistingBlock(*blockCIDR, rem, handleID, attrs, host, nil)
+				newIPs, err := c.assignFromExistingBlock(*blockCIDR, rem, handleID, attrs, host, false)
 				if err != nil {
 					log.Warningf("Failed to assign IPs in pool %s: %s", p.String(), err)
 					break
@@ -455,7 +455,7 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 }
 
 func (c ipams) assignFromExistingBlock(
-	blockCIDR net.IPNet, num int, handleID *string, attrs map[string]string, host string, affCheck *bool) ([]net.IP, error) {
+	blockCIDR net.IPNet, num int, handleID *string, attrs map[string]string, host string, affCheck bool) ([]net.IP, error) {
 	// Limit number of retries.
 	var ips []net.IP
 	for i := 0; i < ipamEtcdRetries; i++ {
@@ -470,7 +470,7 @@ func (c ipams) assignFromExistingBlock(
 		b := allocationBlock{obj.Value.(model.AllocationBlock)}
 
 		log.Debugf("Got block: %+v", b)
-		ips, err = b.autoAssign(num, handleID, host, attrs, true)
+		ips, err = b.autoAssign(num, handleID, host, attrs, affCheck)
 		if err != nil {
 			log.Errorf("Error in auto assign: %s", err)
 			return nil, err
