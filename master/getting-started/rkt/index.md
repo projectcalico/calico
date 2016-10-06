@@ -22,7 +22,7 @@ This tutorial walks through getting a cluster set up with Vagrant.
 ### 1.3 Startup and SSH
 Change into the directory for this guide:
 
-    cd calico-containers/cni/rkt
+    cd calico-containers/docs/cni/rkt
 
 Run
 
