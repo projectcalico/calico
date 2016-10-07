@@ -13,7 +13,7 @@
 # limitations under the License.
 from unittest import skip
 
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 
 """

@@ -16,7 +16,7 @@ import re
 import subprocess
 
 from netaddr import IPAddress, IPNetwork
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from time import sleep
 from tests.st.utils.utils import retry_until_success
