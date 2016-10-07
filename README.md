@@ -1,13 +1,24 @@
 # calico-docs Developer Documentation
 
+This repository is home to documentation, demos, and release information for Project Calico.
+
+**If you are looking for the repository formerly known as `projectcalico/calico`,
+it has been renamed to [`projectcalico/felix`](https://github.com/projectcalico/felix).**
+
+If you are looking for the old documentation, see https://docs-archive.projectcalico.org or [view archived documentation for a pas calico-containers release](https://github.com/projectcalico/calico-containers/tree/v0.22.0)
+
+## Preview
+
 [Click Here for Live Preview Site](https://tigera.github.io/calico/)
 
 ## Building
 
-The docs require jekyll, a ruby gem.
+The docs require jekyll, a ruby gem. Install the `github-pages` gem which includes
+`jekyll` to ensure you are using the exact version of jekyll that github pages 
+is using to serve the live site.
 
 ```
-gem install jekyll
+gem install github-pages
 jekyll serve
 ```
 
