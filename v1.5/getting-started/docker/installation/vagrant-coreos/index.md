@@ -15,7 +15,7 @@ These instructions allow you to set up a CoreOS cluster ready to network Docker 
 
 ### 1.2 Clone this project
 
-    git clone https://github.com/projectcalico/calico-containers.git
+    git clone https://github.com/projectcalico/calico.git
 
 ### 1.4 Startup and SSH
 
