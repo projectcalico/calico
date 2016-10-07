@@ -1,4 +1,4 @@
-# calico-docs Developer Documentation
+# Project Calico Documentation
 
 This repository is home to documentation, demos, and release information for Project Calico.
 
