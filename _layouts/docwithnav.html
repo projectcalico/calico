@@ -13,13 +13,19 @@ The code is a little roundabout for a few reasons:
 	here, so we just need the data field. But, liquid doesn't provide a
 	simple way to 'iteritems', so we have to manually loop through and access
 	the	2nd item.
+	- liquid also has a bug where it truncates after first `.` of a directory
+	name in _data (i.e. _data/v0.1 will be stored as data.v0). Until that
+	bug's fixed, we store version data in _data/v0_1 and do a string replace
+	to find the right data. 
 {% endcomment %}
 
 {% assign current_page = page.path | replace_first: page.version,"" | split: "/" %}
 {% assign current_page = current_page[1] | prepend: "/" %}
 
+{% capture version %}{{ page.version | replace: ".","_" }}{% endcapture %}
+
 {% assign unsorted_navbars = "" | split:"|" %}
-{% for navbars_hashmap in site.data[page.version].navbars %}
+{% for navbars_hashmap in site.data[version].navbars %}
 	{% assign navbar = navbars_hashmap[1] %}
 	{% assign unsorted_navbars = unsorted_navbars | push: navbar %}
 	{% assign navbar_size = navbar.path | size %}
