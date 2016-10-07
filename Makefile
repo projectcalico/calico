@@ -110,8 +110,12 @@ simple-binary: $(CALICOCTL_FILE) birdcl gobgp
 	pyinstaller calicoctl/calicoctl.py -ayF --clean
 
 setup-env:
+	rm -rf venv
 	virtualenv venv
-	venv/bin/pip install --upgrade -r calicoctl/requirements.txt
+	. venv/bin/activate && \
+	    pip install -U pip && \
+	    pip install -U git+https://github.com/projectcalico/libcalico.git@master && \
+	    pip install -U -r https://raw.githubusercontent.com/projectcalico/libcalico/master/build-requirements.txt
 	@echo "run\n. venv/bin/activate"
 
 ###############################################################################
