@@ -5,11 +5,11 @@ This repository is home to documentation, demos, and release information for Pro
 **If you are looking for the repository formerly known as `projectcalico/calico`,
 it has been renamed to [`projectcalico/felix`](https://github.com/projectcalico/felix).**
 
-If you are looking for the old documentation, see https://docs-archive.projectcalico.org or [view archived documentation for a pas calico-containers release](https://github.com/projectcalico/calico-containers/tree/v0.22.0)
+If you are looking for the old documentation, see https://docs-archive.projectcalico.org or [view archived documentation for a past calico-containers release](https://github.com/projectcalico/calico-containers/tree/v0.22.0)
 
 ## Preview
 
-[Click Here for Live Preview Site](https://tigera.github.io/calico/)
+[Click Here for Live Preview Site](https://projectcalico.github.io/calico/)
 
 ## Building
 
