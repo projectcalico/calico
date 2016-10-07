@@ -84,8 +84,6 @@ servers themselves, in order to do things like request software updates.
 Again, the actual manner in which this is configured depends on your
 router.
 
-{: id=opens-external-conn-setup}
-
 Part 2: Set Up OpenStack
 ------------------------
 
