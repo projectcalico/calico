@@ -184,16 +184,19 @@ ut-circle: dist/calicoctl
 
 ## Run etcd in a container. Used by the STs and generally useful.
 run-etcd:
-	@-docker rm -f calico-etcd calico-etcd-ssl
+	$(MAKE) stop-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379" \
 	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
 
+stop-etcd:
+	@-docker rm -f calico-etcd calico-etcd-ssl
+
 ## Run etcd in a container with SSL verification. Used primarily by STs.
 run-etcd-ssl: certs/.certificates.created add-ssl-hostname
-	@-docker rm -f calico-etcd calico-etcd-ssl
+	$(MAKE) stop-etcd
 	docker run --detach \
 	--net=host \
 	-v `pwd`/certs:/etc/calico/certs \
@@ -204,6 +207,17 @@ run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	--advertise-client-urls "https://etcd-authority-ssl:2379,https://localhost:2379" \
 	--listen-client-urls "https://0.0.0.0:2379"
 
+IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
+
+.PHONY: st-checks
+st-checks:
+	# Check that we're running as root.
+	test `id -u` -eq '0' || { echo "STs must be run as root to allow writes to /proc"; false; }
+
+	# Insert an iptables rule to allow access from our test containers to etcd
+	# running on the host.
+	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
+
 ## Run the STs in a container
 st: run-etcd dist/calicoctl busybox.tar routereflector.tar calico-node.tar
 	# Use the host, PID and network namespaces from the host.
@@ -212,6 +226,7 @@ st: run-etcd dist/calicoctl busybox.tar routereflector.tar calico-node.tar
 	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
 	# All of code under test is mounted into the container.
 	#   - This also provides access to calicoctl and the docker client
+	$(MAKE) st-checks
 	docker run --uts=host \
 	           --pid=host \
 	           --net=host \
@@ -223,6 +238,7 @@ st: run-etcd dist/calicoctl busybox.tar routereflector.tar calico-node.tar
 	           -v `pwd`:/code \
 	           calico/test \
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
+	$(MAKE) stop-etcd
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
 st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.tar
@@ -235,6 +251,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	# Mount the full path to the etcd certs directory.
 	#   - docker copies this directory directly from the host, but the
 	#     calicoctl node command reads the files from the test container
+	$(MAKE) st-checks
 	docker run --uts=host \
 	           --pid=host \
 	           --net=host \
@@ -251,6 +268,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -v `pwd`/certs:`pwd`/certs \
 	           calico/test \
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
+	$(MAKE) stop-etcd
 
 add-ssl-hostname:
 	# Set "LOCAL_IP etcd-authority-ssl" in /etc/hosts to use as a hostname for etcd with ssl
