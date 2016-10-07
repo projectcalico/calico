@@ -37,7 +37,7 @@ In Calico, because all traffic is L3 and routed, the role of Neutron
 network as L2 connectivity domain is not helpful. Therefore, in Calico,
 Neutron networks are simply containers for subnets. Best practices for
 operators configuring Neutron networks in Calico deployments can be
-found in [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#opens-external-conn-setup).
+found in [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#part-2-set-up-openstack).
 
 It is not useful for non-administrator tenants to create their own
 Neutron networks. Although Calico will allow non-administrator tenants
@@ -66,7 +66,7 @@ subnets associated with it. Each Neutron subnet represents either an
 IPv4 or IPv6 block of addresses.
 
 Best practices for configuring Neutron subnets in Calico deployments can
-be found [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#opens-external-conn-setup).
+be found [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#part-2-set-up-openstack).
 
 In Calico, these roles for the Neutron subnet are preserved in their
 entirety. All properties associated with these Neutron subnets are
@@ -113,7 +113,7 @@ apply to the other attributes:
 Neutron quotas function unchanged.
 
 In most deployments we recommend setting non-administrator tenant quotas
-for almost all Neutron objects to zero. For more information, see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack#opens-external-conn-setup).
+for almost all Neutron objects to zero. For more information, see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack#part-2-set-up-openstack).
 
 ## Security Groups
 
@@ -202,4 +202,4 @@ network setup, this panel may be used to make changes. See
 #### Tab: System Panel -&gt; Routers
 
 Administrators should not create routers, as they serve no purpose in a
-Calico network. See [Layer 3 Routing](neutron-api-routers) for more.
+Calico network. See [Layer 3 Routing](#layer-3-routing-routers-and-floating-ips) for more.
