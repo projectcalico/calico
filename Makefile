@@ -218,6 +218,7 @@ st: run-etcd dist/calicoctl busybox.tar routereflector.tar calico-node.tar
 	           --privileged \
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v `pwd`:/code \
@@ -241,6 +242,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           --privileged \
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e ETCD_SCHEME=https \
 	           -e ETCD_CA_CERT_FILE=`pwd`/certs/ca.pem \
 	           -e ETCD_CERT_FILE=`pwd`/certs/client.pem \
