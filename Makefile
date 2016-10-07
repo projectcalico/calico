@@ -78,6 +78,11 @@ $(NODE_CONTAINER_BIN_DIR)/bird:
 	chmod +x $(@D)/*
 
 clean_calico_node:
+	# Building the node relies on a few upstream images.
+	# Retag and remove them so that they will be pulled again
+	# We avoid just deleting the image. We didn't build it here so it would be impolite to delete it.
+	-docker tag calico/felix:latest calico/felix:latest-backup && docker rmi calico/felix:latest
+	-docker tag calico/build:latest calico/build:latest-backup && docker rmi calico/build:latest
 	rm -rf $(NODE_CONTAINER_BIN_DIR)
 
 ###############################################################################
@@ -303,7 +308,8 @@ add-ssl-hostname:
 	  echo "\n# Host used by Calico's ETCD with SSL\n$(LOCAL_IP_ENV) etcd-authority-ssl" >> /etc/hosts; \
 	fi
 
-semaphore:
+# This depends on clean to ensure that dependent images get untagged and repulled
+semaphore: clean
 	# Clean up unwanted files to free disk space.
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
 
@@ -326,6 +332,7 @@ clean: clean_calico_node
 	-docker rm -f calico-node
 	-docker rmi calico/node
 	-docker rmi calico/ctl
+	-docker tag calico/test:latest calico/test:latest-backup && docker rmi calico/test:latest
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 	-rm -rf calico_node/bin
 	-rm -rf $(CALICOCTL_DIR)/calicoctl
