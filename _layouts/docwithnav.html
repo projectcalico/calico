@@ -16,7 +16,7 @@ The code is a little roundabout for a few reasons:
 	- liquid also has a bug where it truncates after first `.` of a directory
 	name in _data (i.e. _data/v0.1 will be stored as data.v0). Until that
 	bug's fixed, we store version data in _data/v0_1 and do a string replace
-	to find the right data. 
+	to find the right data.
 {% endcomment %}
 
 {% assign current_page = page.path | replace_first: page.version,"" | split: "/" %}
@@ -43,7 +43,7 @@ The code is a little roundabout for a few reasons:
 
 <script type="text/javascript">
 function redirect(version) {
-	window.location = "{{site.baseurl}}/" + version
+	window.location = "{{site.baseurl}}/" + version + "/introduction"
 }
 </script>
 <!--  HERO  -->
