@@ -8,22 +8,17 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: calico-policy
-    kubernetes.io/cluster-service: "true"
 spec:
   # Only a single instance of the policy controller should be 
   # active at a time.  Since this pod is run as a ReplicaSet,
   # Kubernetes will ensure the pod is recreated in case of failure,
   # removing the need for passive backups.
   replicas: 1
-  selector:
-    kubernetes.io/cluster-service: "true"
-    k8s-app: calico-policy
   template:
     metadata:
       name: calico-policy-controller
       namespace: kube-system
       labels:
-        kubernetes.io/cluster-service: "true"
         k8s-app: calico-policy
     spec:
       hostNetwork: true
