@@ -3,7 +3,9 @@ default: help
 all: test                ## Run all the tests
 binary: dist/calicoctl   ## Create the calicoctl binary
 calico/node: calico_node/.calico_node.created ## Create the calico/node image
+calico/ctl: calicoctl/.calico_ctl.created ## Create the calico/node image
 node_image: calico/node
+ctl_image: calico/ctl
 test: st ut              ## Run all the tests
 ssl-certs: certs/.certificates.created ## Generate self-signed SSL certificates
 
@@ -73,9 +75,11 @@ clean_calico_node:
 # calicoctl build
 # - Building the calicoctl binary in a container
 # - Building the calicoctl binary outside a container ("simple-binary")
+# - Building the calico/ctl image
 ###############################################################################
 CALICOCTL_DIR=calicoctl
 CALICOCTL_FILE=$(CALICOCTL_DIR)/calicoctl.py $(wildcard $(CALICOCTL_DIR)/calico_ctl/*.py) calicoctl.spec
+CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
 
 dist/calicoctl: $(CALICOCTL_FILE) birdcl gobgp
 	# Ignore errors on docker command. CircleCI throws a benign error
@@ -113,6 +117,14 @@ setup-env:
 	virtualenv venv
 	venv/bin/pip install --upgrade -r calicoctl/requirements.txt
 	@echo "run\n. venv/bin/activate"
+
+# build calico_ctl image
+$(CTL_CONTAINER_CREATED): $(CALICOCTL_DIR)/Dockerfile $(CALICOCTL_DIR)/calicoctl
+	docker build -t calico/ctl:latest $(CALICOCTL_DIR)
+	touch $@
+
+$(CALICOCTL_DIR)/calicoctl: dist/calicoctl
+	cp $< $@
 
 ###############################################################################
 # Tests
@@ -282,8 +294,10 @@ clean: clean_calico_node
 	-rm -f *.tar
 	-docker rm -f calico-node
 	-docker rmi calico/node
+	-docker rmi calico/ctl
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 	-rm -rf calico_node/bin
+	-rm -rf $(CALICOCTL_DIR)/calicoctl
 
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
