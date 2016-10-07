@@ -174,6 +174,11 @@ var canonicalisationTests = []struct {
 	{`a == "'"`, `a == "'"`, ""},
 	{`a == '"'`, `a == '"'`, ""},
 	{`a!='"'`, `a != '"'`, ""},
+	// Set items get sorted.
+	{`a in {"d"}`, `a in {"d"}`, ""},
+	{`a in {"a", "b"}`, `a in {"a", "b"}`, ""},
+	{`a in {"d", "a", "b"}`, `a in {"a", "b", "d"}`, ""},
+	{`a in {"z", "x", "y", "a"}`, `a in {"a", "x", "y", "z"}`, ""},
 }
 
 var _ = Describe("Parser", func() {
@@ -214,6 +219,9 @@ var _ = Describe("Parser", func() {
 					Expect(sel2.Evaluate(labels)).To(BeFalse())
 				}
 			})
+			It("should give same UID on each call", func() {
+				Expect(sel.UniqueId()).To(Equal(sel.UniqueId()))
+			})
 		})
 	}
 
@@ -251,6 +259,8 @@ var _ = Describe("Parser", func() {
 			Expect(err).To(BeNil())
 			Expect(sel.UniqueId()).To(Equal(test.expectedUid),
 				"incorrect UID for "+test.input)
+			Expect(sel.UniqueId()).To(Equal(sel.UniqueId()),
+				"inconsistent UID for "+test.input)
 		})
 	}
 })

@@ -170,10 +170,11 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 		case tokenizer.TokIn, tokenizer.TokNotIn:
 			if tokens[2].Kind == tokenizer.TokLBrace {
 				remTokens = tokens[3:]
-				set := make(map[string]bool)
+				values := []string{}
 				for {
 					if remTokens[0].Kind == tokenizer.TokStringLiteral {
-						set[remTokens[0].Value.(string)] = true
+						value := remTokens[0].Value.(string)
+						values = append(values, value)
 						remTokens = remTokens[1:]
 						if remTokens[0].Kind == tokenizer.TokComma {
 							remTokens = remTokens[1:]
@@ -190,10 +191,12 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 					// Skip over the }
 					remTokens = remTokens[1:]
 
+					labelName := tokens[0].Value.(string)
+					set := AsStringSet(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
-						sel = LabelInSetNode{tokens[0].Value.(string), set}
+						sel = LabelInSetNode{labelName, set}
 					} else {
-						sel = LabelNotInSetNode{tokens[0].Value.(string), set}
+						sel = LabelNotInSetNode{labelName, set}
 					}
 				}
 			} else {
