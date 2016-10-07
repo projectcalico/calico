@@ -8,12 +8,12 @@ Use the version selector at the top-right of this page to view a different relea
 
 ## master
 
-| Component              | Version |
-|------------------------|---------|
-| felix                  | latest  |
-| calicoctl              | latest  |
-| calico/node            | latest  |
-| calico/node-libnetwork | latest  |
-| calico/cni             | latest  |
-| libcalico              | latest  |
-| calico-bird            | latest  |
+| Component              | Version  |
+|------------------------|----------|
+| felix                  | v1.4.1b2 |
+| calicoctl              | v0.22.0  |
+| calico/node            | v0.22.0  |
+| calico/node-libnetwork | v0.9.0   |
+| calico/cni             | v1.4.2   |
+| libcalico              | v0.17.0  |
+| calico-bird            | v0.1.0   |
