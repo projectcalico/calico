@@ -30,6 +30,28 @@
 // - Expect no error returned while assigning the IP for the first time.
 // - Expect an error returned while assigning the SAME IP again.
 
+// Test cases (ReleaseIPs):
+// Test 1: Assign 1 IPv4 with AssignIP from a configured pool and then release it.
+// - Assign should not return an error.
+// - ReleaseIPs should return empty slice of IPs (unallocatedIPs) and no error.
+// Test 2: Assign 66 IPs (across 2 blocks) with AutoAssign from a configured pool then release them.
+// - Assign should not return an error.
+// - ReleaseIPs should return an empty slice of IPs (unallocatedIPs) and no error.
+// Test 3: Assign 1 IPv4 address with AssignIP then try to release 2 IPs.
+// - Assign should not return an error.
+// - ReleaseIPs should return a slice with one (unallocatedIPs) and an error???
+// Test 4: release an IP that's not configured in any pools - expect nil slice??? and an error.
+// Test 5: release an IP that's not allocated in the pool - expect a slice with one (unallocatedIPs) and an error.
+
+// Test cases (ClaimAffinity):
+// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect the same IPNet and empty slice of IPNet with no error.
+// Test 2: claim affinity for a IPNet that has an IP already assigned to another host.
+// - Assign an IP with AssignIP to "host-A" from a configured pool - expect no error.
+// - Claim affinity to the block that IP belongs to - expect ????.
+// Test 3: claim affinity to a block twice.
+// - Claim affinity to an unclaimed block - expect to get the same IPNet back in claimed IP slice and no error.
+// - Claim affinity to the same block again - expect the IPNet back as the second return value (failed) and an error.
+
 package client_test
 
 import (
@@ -120,7 +142,85 @@ var _ = Describe("IPAM tests", func() {
 		// - Expect an error returned while assigning the SAME IP again.
 		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "testHost", false, "pool1", errors.New("Address already assigned in block")),
 	)
+
+	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
+		func(inIP net.IP, cleanEnv bool, pool string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
+			unallocatedIPs, outError := testIPAMReleaseIPs(inIP, pool, cleanEnv, assignIP, autoAssignNumIPv4)
+
+			// Expect returned slice of unallocatedIPs to be equal to expected expUnallocatedIPs.
+			Expect(unallocatedIPs).To(Equal(expUnallocatedIPs))
+
+			// Assert if an error was expected.
+			if expError != nil {
+				Ω(outError).Should(HaveOccurred())
+				Expect(outError).To(Equal(expError))
+			}
+		},
+
+		// Test cases (ReleaseIPs):
+		// Test 1: release an IP that's not configured in any pools - expect a slice with the same IP as unallocatedIPs and no error.
+		Entry("Assign 1 IPv4 from a configured pool", net.ParseIP("1.1.1.1"), true, "pool1", net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("1.1.1.1")}}, nil),
+
+		// Test 2: release an IP that's not allocated in the pool - expect a slice with one (unallocatedIPs) and no error.
+		Entry("Assign 1 IPv4 from a configured pool", net.ParseIP("192.168.1.0"), true, "pool1", net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.0")}}, nil),
+
+		// Test 3: Assign 1 IPv4 with AssignIP from a configured pool and then release it.
+		// - Assign should not return an error.
+		// - ReleaseIP should return empty slice of IPs (unallocatedIPs) and no error.
+		Entry("Assign 1 IPv4 from a configured pool", net.IP{}, true, "pool1", net.ParseIP("192.168.1.0"), 0, []cnet.IP{}, nil),
+
+		// Test 4: Assign 66 IPs (across 2 blocks) with AutoAssign from a configured pool then release them.
+		// - Assign should not return an error.
+		// - ReleaseIPs should return an empty slice of IPs (unallocatedIPs) and no error.
+		Entry("Assign 1 IPv4 from a configured pool", net.IP{}, true, "pool1", net.IP{}, 66, []cnet.IP{}, nil),
+
+		// Test 5: Assign 1 IPv4 address with AssignIP then try to release 2 IPs.
+		// - Assign should not return an error.
+		// - ReleaseIPs should return a slice with one (unallocatedIPs) and an error???
+		Entry("Assign 1 IPv4 from a configured pool", net.IP{}, true, "pool1", net.ParseIP("192.168.1.0"), 0, []cnet.IP{}, nil),
+		Entry("Assign 1 IPv4 from a configured pool", net.ParseIP("192.168.1.1"), false, "pool1", net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.1")}}, nil),
+	)
+
 })
+
+// comment bro!
+// Using named returns to be clear which return value is which.
+func testIPAMReleaseIPs(inIP net.IP, pool string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int) (unallocatedIPs []cnet.IP, outErr error) {
+
+	inIPs := []cnet.IP{cnet.IP{inIP}}
+	if cleanEnv {
+		setupEnv(pool)
+	}
+	ic := setupIPMAClient(cleanEnv)
+
+	if len(assignIP) != 0 {
+		err := ic.AssignIP(client.AssignIPArgs{
+			IP: cnet.IP{assignIP},
+		})
+		if err != nil {
+			Fail(fmt.Sprintf("Error assigning IP %s", assignIP))
+		}
+
+		// Re-initialize it to an empty slice to flush out any IP if passed in my mistake.
+		inIPs = []cnet.IP{}
+
+		inIPs = append(inIPs, cnet.IP{assignIP})
+
+	}
+
+	if autoAssignNumIPv4 != 0 {
+		assignedIPv4, _, _ := ic.AutoAssign(client.AutoAssignArgs{
+			Num4: autoAssignNumIPv4,
+		})
+		inIPs = assignedIPv4
+	}
+
+	unallocatedIPs, outErr = ic.ReleaseIPs(inIPs)
+	if outErr != nil {
+		log.Println("######################: ", outErr)
+	}
+	return unallocatedIPs, outErr
+}
 
 // testIPAMAssignIP takes an IPv4 or IPv6 IP with a hostname and pool name and calls AssignIP.
 // When cleanEnv is passed it passes it along to wipe clean etcd and reset IPAM config.
@@ -129,7 +229,9 @@ func testIPAMAssignIP(inIP net.IP, host, pool string, cleanEnv bool) error {
 		IP:       cnet.IP{inIP},
 		Hostname: host,
 	}
-	setupEnv(cleanEnv, pool)
+	if cleanEnv {
+		setupEnv(pool)
+	}
 	ic := setupIPMAClient(cleanEnv)
 	outErr := ic.AssignIP(args)
 
@@ -149,7 +251,9 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, pool string)
 		Hostname: host,
 	}
 
-	setupEnv(cleanEnv, pool)
+	if cleanEnv {
+		setupEnv(pool)
+	}
 	ic := setupIPMAClient(cleanEnv)
 	v4, v6, outErr := ic.AutoAssign(args)
 
@@ -161,18 +265,18 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, pool string)
 }
 
 // setupEnv cleans up etcd if cleanEnv flag is passed and then creates IP pool based on the pool name passed to it.
-func setupEnv(cleanEnv bool, pool string) {
-	if cleanEnv {
-		etcdArgs := strings.Fields("rm /calico --recursive")
-		if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
-			log.Println(err)
-		}
+func setupEnv(pool string) {
+
+	etcdArgs := strings.Fields("rm /calico --recursive")
+	if err := exec.Command("etcdctl", etcdArgs...).Run(); err != nil {
+		log.Println(err)
 	}
 
 	argsPool := strings.Fields(fmt.Sprintf("create -f ../../test/%s.yaml", pool))
 	if err := commands.Create(argsPool); err != nil {
 		log.Println(err)
 	}
+
 }
 
 // setupIPMAClient sets up a client, and returns IPAMInterface.

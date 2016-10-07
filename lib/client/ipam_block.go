@@ -79,7 +79,7 @@ func (b *allocationBlock) autoAssign(
 	checkAffinity := b.StrictAffinity || affinityCheck
 	if checkAffinity && b.HostAffinity != nil && host != *b.HostAffinity {
 		// Affinity check is enabled but the host does not match - error.
-		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", b.HostAffinity, host)
+		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.HostAffinity, host)
 		return nil, errors.New(s)
 	}
 
