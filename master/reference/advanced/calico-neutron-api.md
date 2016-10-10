@@ -202,4 +202,4 @@ network setup, this panel may be used to make changes. See
 #### Tab: System Panel -&gt; Routers
 
 Administrators should not create routers, as they serve no purpose in a
-Calico network. See [Layer 3 Routing](neutron-api-routers) for more.
+Calico network. See [Layer 3 Routing](#routers) for more.
