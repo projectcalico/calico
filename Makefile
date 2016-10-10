@@ -36,6 +36,8 @@ BUILD_CONTAINER_NAME?=calico/build:latest
 NODE_CONTAINER_DIR=calico_node
 NODE_CONTAINER_NAME?=calico/node:latest
 NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem/{etc,sbin} -type f)
+# we can pass --build-arg during node image building
+NODE_CONTAINER_BUILD_ARGS?=
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd
@@ -51,7 +53,7 @@ calico-node-latest.aci: calico-node.tar
 
 # Build calico/node docker image
 $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
-	docker build -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
+	docker build $(NODE_CONTAINER_BUILD_ARGS) -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
 	touch $@
 
 # Build binary from python files, e.g. startup.py or allocate-ipip-addr.py
