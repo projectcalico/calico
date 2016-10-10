@@ -15,7 +15,7 @@ Some `calicoctl` commands rely on a running `calico-node` container, and expect 
 Please raise any encountered issues, or message us on [calico-slack](https://slack.projectcalico.org/).
 
 ## Installation
-1. Make changes to SELinux and QEMU config to allow VM interfaces with type='ethernet'. [this libvirt Wiki page][libvirt-wiki] explains why these changes are required):
+1. Make changes to SELinux and QEMU config to allow VM interfaces with type='ethernet'. ([This libvirt Wiki page][libvirt-wiki] explains why these changes are required):
 
 ```shell
 setenforce permissive
@@ -122,4 +122,4 @@ Starting Calico is as simple as turning on the calico-dockerless service:
 systemctl start calico-dockerless
 ```
 
-[libvirt-wiki]: http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29
+[libvirt-wiki]: https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)

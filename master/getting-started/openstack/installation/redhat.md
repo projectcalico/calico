@@ -321,7 +321,7 @@ On each compute node, perform the following steps:
 
 1.  Make changes to SELinux and QEMU config to allow VM interfaces with
     `type='ethernet'` ([this libvirt Wiki
-    page](http://wiki.libvirt.org/page/Guest_won%27t_start_-_warning:_could_not_open_/dev/net/tun_%28%27generic_ethernet%27_interface%29)
+    page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface))
     explains why these changes are required):
 
     ```

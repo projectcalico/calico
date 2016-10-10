@@ -113,7 +113,7 @@ apply to the other attributes:
 Neutron quotas function unchanged.
 
 In most deployments we recommend setting non-administrator tenant quotas
-for almost all Neutron objects to zero. For more information, see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack#opens-external-conn-setup).
+for almost all Neutron objects to zero. For more information, see [here]({{site.baseurl}}/{{page.version}}/getting-started/openstack/connectivity#opens-external-conn-setup).
 
 ## Security Groups
 
@@ -202,4 +202,4 @@ network setup, this panel may be used to make changes. See
 #### Tab: System Panel -&gt; Routers
 
 Administrators should not create routers, as they serve no purpose in a
-Calico network. See [Layer 3 Routing](neutron-api-routers) for more.
+Calico network. See [Layer 3 Routing](#routers) for more.
