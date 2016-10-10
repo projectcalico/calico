@@ -1,0 +1,10 @@
+gevent
+greenlet
+netaddr
+python-etcd>=0.4.1
+posix-spawn>=0.2.post6
+prometheus_client>=0.0.13
+urllib3>=1.7.1
+setuptools
+protobuf>=3.0.0
+grpcio>=1.0.0
