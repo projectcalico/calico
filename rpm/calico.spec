@@ -8,9 +8,9 @@ License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        calico-%{version}.tar.gz
 Source1:        calico-felix.logrotate
-Source35:	calico-felix.conf
-Source45:	calico-felix.service
-BuildArch:	noarch
+Source35:       calico-felix.conf
+Source45:       calico-felix.service
+BuildArch:      x86_64
 
 
 %description
@@ -35,7 +35,7 @@ This package provides common files.
 %package felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, pyparsing, python-devel, python-netaddr, python-gevent, datrie, ijson, python-urllib3, python-msgpack, prometheus_client
+Requires:       conntrack-tools, ipset, iptables, iptables-utils, net-tools, iproute, which
 
 
 %description felix
@@ -84,6 +84,19 @@ fi
 %install
 rm -rf $RPM_BUILD_ROOT
 %{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+cd pyi
+find . -type d | xargs -I DIR install -d $RPM_BUILD_ROOT/opt/calico-felix/DIR
+find . -type f | \
+  grep -v -E 'calico-iptables-plugin|calico-felix' | \
+  xargs -I FILE install -m 644 FILE $RPM_BUILD_ROOT/opt/calico-felix/FILE
+install -m 755 calico-iptables-plugin $RPM_BUILD_ROOT/opt/calico-felix/calico-iptables-plugin
+install -m 755 calico-felix $RPM_BUILD_ROOT/opt/calico-felix/calico-felix
+find . -type l | xargs -I FILE install FILE $RPM_BUILD_ROOT/opt/calico-felix/FILE
+cd ..
+pushd $RPM_BUILD_ROOT/usr/bin
+ln -s ../../opt/calico-felix/calico-felix ./calico-felix
+ln -fs ../../opt/calico-felix/calico-iptables-plugin ./calico-iptables-plugin
+popd
 
 # Setup directories
 install -d -m 755 %{buildroot}%{_datadir}/calico
@@ -135,6 +148,9 @@ rm -rf $RPM_BUILD_ROOT
 %files felix
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
+/usr/bin/calico-iptables-plugin
+/usr/bin/calico-dummydp-plugin
+/opt/calico-felix/*
 /etc/calico/felix.cfg.example
 %if 0%{?el7}
     %{_unitdir}/calico-felix.service

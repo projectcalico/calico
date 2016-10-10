@@ -21,6 +21,7 @@ from PyInstaller.utils.hooks import copy_metadata
 import re
 import glob
 import sys
+import os
 import os.path
 
 block_cipher = None
@@ -30,13 +31,13 @@ block_cipher = None
 extra_files = [
     ('/usr/local/lib/python2.7/site-packages/posix_spawn/c/*',
      'posix_spawn/c'),
-    ('../version.txt', ''),
+    ('../../version.txt', ''),
 ]
 
 # Add egg metadata for our package and dependencies.  Required to allow us to
 # look up our plugins.
 extra_files += copy_metadata("calico")
-with open("../felix_requirements.txt") as reqs:
+with open("../../python/requirements.txt") as reqs:
     for line in reqs:
         m = re.match(r'^((?:[-_]|\w)+)', line)
         if m:
@@ -60,7 +61,6 @@ hidden_imports = [
 ]
 
 extra_binaries = [
-
 ]
 
 a = Analysis([os.path.join(HOMEPATH,'calico/pyilauncher.py')],
@@ -79,7 +79,7 @@ pyz = PYZ(a.pure, a.zipped_data,
 exe = EXE(pyz,
           a.scripts,
           exclude_binaries=True,
-          name='calico-felix',
+          name='calico-iptables-plugin',
           debug=False,
           strip=False,
           upx=True,

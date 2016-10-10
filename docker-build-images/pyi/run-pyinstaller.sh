@@ -23,4 +23,7 @@ set -e
 cd /code/
 
 rm -rf build dist
-pyinstaller pyi/calico-felix.spec
+pyinstaller docker-build-images/pyi/calico-felix.spec
+
+cd dist/calico-felix
+find -type f | grep -v -E 'calico-iptables-plugin|calico-felix' | xargs chmod -x

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -x
+set -e
+
+if [ -z "${DEB_VERSION}" ]; then
+  echo "DEB_VERSION variable should be set"
+  exit 1
+fi
+if [ -z "${STREAM}" ]; then
+  echo "STREAM variable should be set to trusty/xenial/..."
+  exit 1
+fi
+
+deb_dir=dist/$STREAM
+snapshot=$(date -u '+SNAPSHOT%Y%m%d%H%M%S+0000')
+DEB_VERSION=$(echo ${DEB_VERSION} | sed "s/__SNAPSHOT__/${snapshot}/g")
+unpacked_src_dir=${deb_dir}/calico-${DEB_VERSION}
+
+rm -rf ${deb_dir}
+mkdir -p ${unpacked_src_dir}
+cp -r dist/calico-felix ${unpacked_src_dir}/pyi
+cp -r etc \
+      python/* \
+      LICENSE \
+      README.md \
+      ${unpacked_src_dir}
+
+cp -r debian ${unpacked_src_dir}
+
+head -n 1 "${unpacked_src_dir}/debian/changelog" | grep -q "__STREAM__" || exit 1
+sed -i "s/__SNAPSHOT__/${snapshot}/g" "${unpacked_src_dir}/debian/changelog"
+sed -i "s/__STREAM__/${STREAM}/g" "${unpacked_src_dir}/debian/changelog"
+
+cd ${unpacked_src_dir}
+
+# By default, debuild will exclude .so files from the source deb, we're
+# deliberately shipping pre-compiled .so files as our "source" in the
+# pyinstaller bundle so we need to customize the excludes list.  This list
+# is cribbed from the default (see dpkg-source --help) with the problematic
+# *.so exclusion removed.
+excludes='-I*/*~ -I,,* -I.[#~]* -I.git -I.gitattributes -I.gitignore -I.gitmodules -I.gitreview'
+
+debuild -i="" $excludes -us -uc -b
+debuild -i="" $excludes -us -uc -S
+
+set +x
+echo
+echo "Build complete.  Source and binary debs now in ${deb_dir}."
