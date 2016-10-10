@@ -372,21 +372,35 @@ def remove_conntrack_flows(ip_addresses, ip_version):
         _log.debug("Removing conntrack rules for %s", ip)
         for direction in ["--orig-src", "--orig-dst",
                           "--reply-src", "--reply-dst"]:
-            try:
-                futils.check_call(["conntrack", "--family",
-                                   "ipv%s" % ip_version, "--delete",
-                                   direction, ip])
-            except FailedSystemCall as e:
-                if e.retcode == 1 and "0 flow entries" in e.stderr:
-                    # Expected if there are no flows.
-                    _log.debug("No conntrack entries found for %s/%s.",
-                               ip, direction)
+            remaining_attempts = 3
+            while remaining_attempts > 0:
+                remaining_attempts -= 1
+                try:
+                    futils.check_call(["conntrack", "--family",
+                                       "ipv%s" % ip_version, "--delete",
+                                       direction, ip])
+                except FailedSystemCall as e:
+                    if e.retcode == 1 and "0 flow entries" in e.stderr:
+                        # Success: there are no flows.
+                        _log.debug("No conntrack entries found for %s/%s.",
+                                   ip, direction)
+                        break
+                    if remaining_attempts == 0:
+                        # Log the failure but the cause is likely a conntrack
+                        # or Felix bug so killing the process is unlikely to
+                        # help hence we suppress the exception and let the
+                        # conntrack flows time out.
+                        _log.exception("Failed to remove conntrack flows for "
+                                       "%s/%s after multiple attempts.",
+                                       ip, direction)
+                    else:
+                        _log.warning("Failed to remove conntrack flows for "
+                                     "%s/%s; will retry: %s",
+                                     ip, direction, e)
                 else:
-                    # Suppress the exception, conntrack entries will timeout
-                    # and it's hard to think of an example where killing and
-                    # restarting felix would help.
-                    _log.exception("Failed to remove conntrack flows for %s. "
-                                   "Ignoring.", ip)
+                    _log.debug("Removed conntrack flows for %s/%s.",
+                               ip, direction)
+                    break
 
 
 # These constants map to constants in the Linux kernel. This is a bit poor, but
