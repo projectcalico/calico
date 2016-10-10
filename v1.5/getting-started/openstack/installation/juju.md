@@ -11,21 +11,17 @@ scale out by adding more instances of the `nova-compute` charm.
 
 ## Bundles
 
-Icehouse:
-<https://raw.githubusercontent.com/projectcalico/calico/master/source/_static/juju/icehouse.yaml>
-
-Juno:
-<https://raw.githubusercontent.com/projectcalico/calico/master/source/_static/juju/juno.yaml>
-
-Kilo:
-<https://raw.githubusercontent.com/projectcalico/calico/master/source/_static/juju/kilo.yaml>
-
-Mitaka:
+For Calico with Mitaka:
 <https://jujucharms.com/u/project-calico/calico-mitaka-juju2>
 
-The default admin password for the deployment is "openstack" - you may
-wish to update this in the bundle (search for the keystone
-"admin-password" option).
+For Calico with Liberty and earlier we don't have bundles published in the
+charm store, but you can generate a bundle from our repo at
+<https://github.com/projectcalico/bundle-openstack-calico>.  In particular
+please see
+<https://github.com/projectcalico/bundle-openstack-calico/blob/master/icehouse-kilo-liberty/README.rst>.
+
+The default admin password for these deployments is "openstack" - you may wish
+to update this in the bundle (search for the keystone "admin-password" option).
 
 For more detailed information, please see [this blog
 post](http://www.projectcalico.org/exploring-juju/) on the Calico blog.

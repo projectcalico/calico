@@ -224,7 +224,7 @@ On each compute node ensure etcd or an etcd proxy is installed, and then
 perform the following steps:
 
 1.  Make the changes to SELinux and QEMU config that are described in
-    [this libvirt Wiki page](http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)),
+    [this libvirt Wiki page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface)),
     to allow VM interfaces with `type='ethernet'`.
 
     Disable SELinux if it's running. SELinux isn't installed by default
