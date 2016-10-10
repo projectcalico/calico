@@ -30,7 +30,7 @@ The <KIND> parameter is case insensitive and may be pluralized.
 
 Usage:
   calicoctl delete ([--hostname=<HOSTNAME>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
-                    (<KIND> [<NAME>])
+                    (<KIND> [<NAME>]) |
                     --filename=<FILE>)
                    [--skip-not-exists] [--config=<CONFIG>]
 
