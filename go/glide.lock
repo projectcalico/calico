@@ -1,0 +1,125 @@
+hash: 99fd4f7385d7834c552168cf8140f34a333fc3cf6aa13e4dfaee0f5b84a0b248
+updated: 2016-10-17T10:53:21.086909944+01:00
+imports:
+- name: github.com/cloudfoundry-incubator/candiedyaml
+  version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
+- name: github.com/coreos/etcd
+  version: cc96f91156ed35caaf57ed987b4e9f75d142813a
+  subpackages:
+  - client
+  - pkg/fileutil
+  - pkg/pathutil
+  - pkg/tlsutil
+  - pkg/transport
+  - pkg/types
+- name: github.com/coreos/go-systemd
+  version: a63dfec412dc3675ec36888f359f8a1e5c3f740d
+  subpackages:
+  - journal
+- name: github.com/coreos/pkg
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  subpackages:
+  - capnslog
+- name: github.com/docopt/docopt-go
+  version: 784ddc588536785e7299f7272f39101f7faccc3f
+- name: github.com/ghodss/yaml
+  version: aa0c862057666179de291b67d9f093d12b5a8473
+- name: github.com/go-ini/ini
+  version: 6e4869b434bd001f6983749881c7ead3545887d8
+- name: github.com/gogo/protobuf
+  version: 50d1bd39ce4e7a96b75e3e040be9caf79dbb4c61
+  subpackages:
+  - proto
+- name: github.com/golang/glog
+  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
+- name: github.com/kardianos/osext
+  version: c2c54e542fb797ad986b31721e1baedf214ca413
+- name: github.com/kelseyhightower/envconfig
+  version: 13674b2d056fb658a00ba3f36e78043ced07c924
+- name: github.com/mipearson/rfw
+  version: b66ec87bd85055de3f749a8640e9e4c8053052e4
+- name: github.com/onsi/ginkgo
+  version: 39549e585f5005ce588e6217d4538a4c99a472c9
+  subpackages:
+  - config
+  - extensions/table
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - reporters/stenographer/support/go-colorable
+  - reporters/stenographer/support/go-isatty
+  - types
+- name: github.com/projectcalico/libcalico-go
+  version: 0de0d697efbbccba99fdb1b6560d473e6489f644
+  repo: https://github.com/fasaxc/libcalico-go.git
+  subpackages:
+  - lib
+  - lib/api
+  - lib/api/unversioned
+  - lib/backend
+  - lib/backend/api
+  - lib/backend/compat
+  - lib/backend/etcd
+  - lib/backend/model
+  - lib/client
+  - lib/errors
+  - lib/hash
+  - lib/hwm
+  - lib/net
+  - lib/numorstring
+  - lib/scope
+  - lib/selector
+  - lib/selector/parser
+  - lib/selector/tokenizer
+  - lib/testutils
+  - lib/validator
+- name: github.com/satori/go.uuid
+  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  subpackages:
+  - hooks/syslog
+- name: github.com/ugorji/go
+  version: faddd6128c66c4708f45fdc007f575f75e592a3c
+  subpackages:
+  - codec
+- name: golang.org/x/net
+  version: 8b4af36cd21a1f85a7484b49feb7c79363106d8e
+  subpackages:
+  - context
+- name: golang.org/x/sys
+  version: 002cbb5f952456d0c50e0d2aff17ea5eca716979
+  subpackages:
+  - unix
+- name: gopkg.in/go-playground/validator.v8
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+- name: gopkg.in/tchap/go-patricia.v2
+  version: 666120de432aea38ab06bd5c818f04f4129882c9
+  subpackages:
+  - patricia
+testImports:
+- name: github.com/onsi/gomega
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
+- name: gopkg.in/yaml.v2
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0

@@ -1,0 +1,190 @@
+digraph G {
+size="7.5,10"
+labeljust="l"
+fontname=Helvetica;
+node [fontname=Helvetica]
+edge [fontname=Helvetica,fontsize=10]
+
+    subgraph cluster0 {
+    label="Datastore layer: Syncer goroutine";
+
+        Syncer [shape=box]
+
+        Syncer -> SyncerCallbacks [label="typed KVs"]
+
+        SyncerCallbacks [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Syncer callbacks API</font></td></tr>
+          <tr><td align="left"><font point-size="10">Interface to frontend.<BR ALIGN="LEFT"/>
+<BR ALIGN="LEFT"/>
+OnStatusUpdated(status SyncStatus)<BR ALIGN="LEFT"/>
+OnUpdates(updates []KVPair)<BR ALIGN="LEFT"/>
+</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+        SyncerCallbacks -> SyncerCallbacksDecoupler [penwidth=5];
+
+        SyncerCallbacksDecoupler [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">SyncerCallbacksDecoupler</font></td></tr>
+          <tr><td><font point-size="10">Decouples SyncerCallbacks via channel.</font></td></tr>
+        </table>>, shape=none, margin=0];
+    }
+
+    subgraph cluster1 {
+    label="Calculation layer: Validation goroutine";
+        SyncerCallbacksDecoupler -> ValidationFilter [label="<<via channel>>" penwidth=5];
+        ValidationFilter [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td WIDTH="200"><font point-size="14" >ValidationFilter struct</font></td></tr>
+          <tr><td><font point-size="10">Runs validation on values.</font></td></tr>
+        </table>>, shape=none, margin=0]
+        ValidationFilter -> AsyncCalcGraph [label="SyncerCallbacks", penwidth=5]
+    }
+
+    AsyncCalcGraph [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+      <tr><td WIDTH="200"><font point-size="14" >AsyncCalcGraph struct</font></td></tr>
+      <tr><td><font point-size="10">Puts updates on channel</font></td></tr>
+    </table>>, shape=none, margin=0]
+    AsyncCalcGraph -> AsyncCalcGraph2 [label="<<via channel>>\nSyncStatus and []KVPair", penwidth=5]
+
+    subgraph cluster2 {
+    label="Calculation layer: graph processing goroutine";
+
+        AsyncCalcGraph2 [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td WIDTH="200"><font point-size="14" >AsyncCalcGraph struct</font></td></tr>
+          <tr><td><font point-size="10">Converts channel back to method calls.<BR ALIGN="LEFT"/>Flushes event buffer after each dispatch.</font></td></tr>
+        </table>>, shape=none, margin=0]
+        AsyncCalcGraph2 -> Dispatcher [penwidth=5]
+        AsyncCalcGraph2 -> EventBuffer [label="Rate-limited\nFlush()"]
+
+        subgraph {
+            /* Put some padding either side of the Dispatcher. */
+            rank=same; nodepadding1; Dispatcher; nodepadding2;
+            nodepadding1 [style=invisible,fixedsize=true,width=4]
+            nodepadding2 [style=invisible,fixedsize=true,width=4]
+            nodepadding1 -> Dispatcher [style=invis];
+            Dispatcher -> nodepadding2 [style=invis];
+        }
+
+        Dispatcher [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td WIDTH="200"><font point-size="14" >Dispatcher</font></td></tr>
+          <tr><td><font point-size="10">Fans out updates</font></td></tr>
+        </table>>, shape=none, margin=0]
+        Dispatcher -> PolicyResolver [label="policy, tier\nKVs", penwidth=2]
+        Dispatcher -> ActiveRulesCalc [label="policy, profile\nKVs", penwidth=2]
+        Dispatcher -> ActiveSelIdx [label="all endpoint KVs\nprofile labels KVs", penwidth=4]
+
+        Dispatcher -> LocalDispatcher [label="all\nendpoint KVs", penwidth=4];
+        Dispatcher -> TagIndex [label="all\nendpoint KVs", penwidth=4];
+        Dispatcher -> MemberCalc [label="all\nendpoint KVs", penwidth=4];
+        Dispatcher -> ConfigBatcher [label="config KVs", penwidth=2];
+
+
+        LocalDispatcher [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Local endpoint dispatcher</font></td></tr>
+          <tr><td><font point-size="10">Filters out non-local endpoints.</font></td></tr>
+        </table>>, shape=none, margin=0]
+        LocalDispatcher -> ActiveRulesCalc [label="local\nendpoint KVs", penwidth=2];
+        LocalDispatcher -> PolicyResolver [label="local\nendpoint KVs", penwidth=2]
+
+        ConfigBatcher [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Config batcher</font></td></tr>
+          <tr><td><font point-size="10">Combines individual config keys<BR ALIGN="LEFT"
+                  />into consistent snapshots.</font></td></tr>
+        </table>>, shape=none, margin=0]
+        ConfigBatcher -> PipelineCallbacks [label="OnConfigUpdate()"]
+
+        ActiveRulesCalc [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Active rules calculator</font></td></tr>
+          <tr><td><font point-size="10">Calculates which policies/profiles are<br/>active on this host.</font></td></tr>
+        </table>>, shape=none, margin=0];
+        ActiveRulesCalc -> RuleScanner [label="active rule\nupdates"];
+        ActiveRulesCalc -> PolicyResolver [label="policy match\nupdates"];
+
+        ActiveSelIdx [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Active selector index</font></td></tr>
+          <tr><td><font point-size="10">Combines profile labels with endpoint labels;<br/>indexes labels against selectors.</font></td></tr>
+        </table>>, shape=none, margin=0];
+        "<<shim function>>" [shape=none]
+        ActiveSelIdx -> "<<shim function>>" [label="sel/endpoint\nmatch"];
+
+        RuleScanner [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Rule scanner</font></td></tr>
+          <tr><td><font point-size="10">Scans rules, extracts selectors/tags.<br/>Converts selectors/tags to IP set IDs.</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+        PolicyResolver [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Policy resolver</font></td></tr>
+          <tr><td><font point-size="10">Calculates the active<br/>tiers and policies<br/>for each active endpoint.</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+
+        TagIndex [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Tag index</font></td></tr>
+          <tr><td><font point-size="10">Calculates the endpoints in each active tag.</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+        TagIndex -> "<<shim function>>" [label="tag/endpoint\nmatch"];
+        "<<shim function>>" -> MemberCalc [label="ipset/endpoint\nmatch"];
+
+        MemberCalc [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Ipset member calculator</font></td></tr>
+          <tr><td><font point-size="10">Given the endpoints and their IPs,<br/>calculates the IP memberships of the<br/>IP sets. Handles duplicate IPs.</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+
+        RuleScanner -> PipelineCallbacks [label="OnPolicy(In)Active()\nOnProfile(In)Active()"];
+
+        RuleScannerShim [label="<<shim function>>", shape=none]
+        RuleScanner -> RuleScannerShim [label="Selector\n(in)active"];
+        RuleScannerShim -> ActiveSelIdx [label="Selector\nupdates"]
+        RuleScannerShim -> PipelineCallbacks [label="OnIPSetAdded/Removed()"];
+
+        RuleScanner -> RuleScannerShim [label="Tag\n(in)active"];
+        RuleScannerShim -> TagIndex [label="Tag\nupdates"]
+
+
+        MemberCalc -> PipelineCallbacks [label="OnIPAdded/Removed()"];
+        PolicyResolver -> PipelineCallbacks [label="Endpoints+policies\nOnEndpointTierUpdate()"];
+
+        PipelineCallbacks [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Pipeline callbacks API</font></td></tr>
+          <tr><td align="left"><font point-size="10">Interface to frontend.<BR ALIGN="LEFT"/>
+<BR ALIGN="LEFT"/>
+OnIPSetAdded(setID string)<BR ALIGN="LEFT"/>
+OnIPAdded(setID string, ip ip.Addr)<BR ALIGN="LEFT"/>
+OnIPRemoved(setID string, ip ip.Addr)<BR ALIGN="LEFT"/>
+OnIPSetRemoved(setID string)<BR ALIGN="LEFT"/>
+<BR ALIGN="LEFT"/>
+OnPolicyActive(model.PolicyKey, *proto.Rules)<BR ALIGN="LEFT"/>
+OnPolicyInactive(model.PolicyKey)<BR ALIGN="LEFT"/>
+OnProfileActive(model.ProfileRulesKey, *proto.Rules)<BR ALIGN="LEFT"/>
+OnProfileInactive(model.ProfileRulesKey)<BR ALIGN="LEFT"/>
+<BR ALIGN="LEFT"/>
+OnEndpointTierUpdate(endpointKey model.Key,<BR ALIGN="LEFT"/>
+<BR ALIGN="LEFT"/>
+OnConfigUpdate(globalConfig, hostConfig map[string]string)
+    endpoint interface{},<BR ALIGN="LEFT"/>
+    filteredTiers []endpoint.TierInfo)<BR ALIGN="LEFT"/>
+</font></td></tr>
+        </table>>, shape=none, margin=0];
+
+        PipelineCallbacks -> EventBuffer [label="<<implemented by>>"]
+
+        EventBuffer [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Event buffer</font></td></tr>
+          <tr><td><font point-size="10">Batches/coalesces IP set updates.<BR ALIGN="LEFT"/>converts to protobuf structs.</font></td></tr>
+        </table>>, shape=none, margin=0];
+    }
+
+    subgraph cluster3 {
+    label="Dataplane layer: writer goroutine";
+        DataplaneConnection [label=<<table BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">
+          <tr><td><font point-size="14">Dataplane connection</font></td></tr>
+          <tr><td><font point-size="10">Marshals messages to/from Dataplane.</font></td></tr>
+        </table>>, shape=none, margin=0];
+    }
+
+
+    EventBuffer -> DataplaneConnection [label="<<via channel>>\nproto.XYZUpdate protobuf structs", penwidth=2]
+    DataplaneConnection -> Dataplane [label="protobuf"];
+    Dataplane [shape=box, label="Dataplane driver"];
+}
