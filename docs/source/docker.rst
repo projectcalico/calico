@@ -15,8 +15,6 @@
 Calico with Docker
 ==================
 
-Calico networking for Docker and container environments is an active area of
-current development.  Please look at `calico-containers
-<https://github.com/projectcalico/calico-containers/blob/master/README.md>`__
-for the latest in this area, including instructions for how to set up Calico
-networking for a cluster of Docker container servers.
+This document has moved!
+
+See: http://docs.projectcalico.org/v1.5/getting-started/docker/
