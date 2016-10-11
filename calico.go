@@ -32,9 +32,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/k8s"
 	. "github.com/projectcalico/calico-cni/utils"
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/errors"
-	cnet "github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var hostname string

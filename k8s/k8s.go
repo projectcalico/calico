@@ -11,8 +11,8 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
-	"github.com/tigera/libcalico-go/lib/api"
-	cnet "github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 
 	"encoding/json"
 
@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/1.4/tools/clientcmd"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
