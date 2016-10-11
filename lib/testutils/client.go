@@ -45,6 +45,8 @@ func NewClient(cf string) (*client.Client, error) {
 	return c, err
 }
 
+// CreateNewPool takes a client.Client with a poolSubnet CIDR (in "192.168.1.0/24" format) with
+// ipip, natOut, and ipam bools for the pool to be setup and creates a new pool.
 func CreateNewPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool) {
 
 	_, cidr, err := net.ParseCIDR(poolSubnet)

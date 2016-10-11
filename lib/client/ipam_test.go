@@ -174,8 +174,7 @@ var _ = Describe("IPAM tests", func() {
 
 // testIPAMReleaseIPs takes an IP, slice of string with IP pools to setup, cleanEnv flag means  setup a new environment.
 // assignIP is if you want to assign a single IP before releasing an IP, and AutoAssign is to assign IPs in bulk before releasing any.
-// Using named returns to be clear which return value is which.
-func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int) (unallocatedIPs []cnet.IP, outErr error) {
+func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int) ([]cnet.IP, error) {
 
 	inIPs := []cnet.IP{cnet.IP{inIP}}
 	if cleanEnv {
@@ -209,7 +208,7 @@ func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignI
 		inIPs = assignedIPv4
 	}
 
-	unallocatedIPs, outErr = ic.ReleaseIPs(inIPs)
+	unallocatedIPs, outErr := ic.ReleaseIPs(inIPs)
 	if outErr != nil {
 		log.Println(outErr)
 	}
