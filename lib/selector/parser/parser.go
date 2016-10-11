@@ -192,7 +192,7 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 					remTokens = remTokens[1:]
 
 					labelName := tokens[0].Value.(string)
-					set := AsStringSet(values) // Mutates values.
+					set := ConvertToStringSetInPlace(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
 						sel = LabelInSetNode{labelName, set}
 					} else {

@@ -20,25 +20,50 @@ type StringSet []string
 
 func (ss StringSet) Contains(s string) bool {
 	if len(ss) == 0 {
+		// Empty set or nil.
 		return false
 	}
-	min := 0
-	max := len(ss)
-	for min < (max - 1) {
-		partitionIdx := (min + max) / 2
+	// There's at least one item, do a binary chop to find the correct
+	// entry.  [minIdx, maxIdx) defines the (half-open) search interval.
+	minIdx := 0
+	maxIdx := len(ss)
+	for minIdx < (maxIdx - 1) {
+		// Select the partition index. The loop condition ensures that
+		// minIdx < partitionIdx < maxIdx so we'll always shrink the
+		// search interval on each iteration.
+		partitionIdx := (minIdx + maxIdx) / 2
 		partition := ss[partitionIdx]
 		if s < partition {
-			max = partitionIdx
+			// target is strictly less than the partition, we can
+			// move maxIdx down.
+			maxIdx = partitionIdx
 		} else {
-			min = partitionIdx
+			// Target is >= the partition, move minIdx up.
+			minIdx = partitionIdx
 		}
 	}
-	return ss[min] == s
+	// When we exit the loop, minIdx == (maxIdx - 1).  Since the interval
+	// is half-open that means that, if the value is present, it must be at
+	// minIdx.  (minIdx cannot equal maxIdx due to the empty list check
+	// above and the loop condition.)
+	return ss[minIdx] == s
 }
 
-func AsStringSet(s []string) StringSet {
+func ConvertToStringSetInPlace(s []string) StringSet {
 	if s != nil {
 		sort.Strings(s)
 	}
+	j := 0
+	var last string
+	for _, v := range s {
+		if j != 0 && last == v {
+			// Same as last value, skip.
+			continue
+		}
+		s[j] = v
+		j += 1
+		last = v
+	}
+	s = s[:j]
 	return StringSet(s)
 }

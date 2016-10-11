@@ -174,11 +174,12 @@ var canonicalisationTests = []struct {
 	{`a == "'"`, `a == "'"`, ""},
 	{`a == '"'`, `a == '"'`, ""},
 	{`a!='"'`, `a != '"'`, ""},
-	// Set items get sorted.
+	// Set items get sorted/de-duped.
 	{`a in {"d"}`, `a in {"d"}`, ""},
 	{`a in {"a", "b"}`, `a in {"a", "b"}`, ""},
 	{`a in {"d", "a", "b"}`, `a in {"a", "b", "d"}`, ""},
 	{`a in {"z", "x", "y", "a"}`, `a in {"a", "x", "y", "z"}`, ""},
+	{`a in {"z", "z", "x", "y", "x", "a"}`, `a in {"a", "x", "y", "z"}`, ""},
 }
 
 var _ = Describe("Parser", func() {

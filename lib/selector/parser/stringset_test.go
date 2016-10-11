@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = DescribeTable("StringSet",
+var _ = DescribeTable("StringSet contains tests",
 	func(input []string) {
 		// Making a StringSet is destructive so start with a copy.
 		var cpy []string
@@ -31,7 +31,7 @@ var _ = DescribeTable("StringSet",
 			cpy = make([]string, len(input))
 			copy(cpy, input)
 		}
-		stringSet := parser.AsStringSet(cpy)
+		stringSet := parser.ConvertToStringSetInPlace(cpy)
 
 		By("containing all the input values", func() {
 			for _, s := range input {
@@ -47,7 +47,9 @@ var _ = DescribeTable("StringSet",
 			}
 		})
 
-		Expect(len(stringSet)).To(BeNumerically("<=", len(input)))
+		By("Containing at most the number of input elements", func() {
+			Expect(len(stringSet)).To(BeNumerically("<=", len(input)))
+		})
 	},
 	Entry("nil", nil),
 	Entry("Empty", []string{}),
@@ -57,4 +59,20 @@ var _ = DescribeTable("StringSet",
 	Entry("a, b, c, d", []string{"a", "b", "c", "d"}),
 	Entry("foo, bar, baz, baz", []string{"foo", "bar", "baz", "baz"}),
 	Entry("foo, foo, baz, baz", []string{"foo", "foo", "baz", "baz"}),
+)
+
+var _ = DescribeTable("StringSet dedupe",
+	func(input, expected []string) {
+		// Making a StringSet is destructive so start with a copy.
+		var cpy []string
+		if input != nil {
+			cpy = make([]string, len(input))
+			copy(cpy, input)
+		}
+		stringSet := parser.ConvertToStringSetInPlace(cpy)
+		Expect([]string(stringSet)).To(Equal(expected))
+	},
+	Entry("empty", []string{}, []string{}),
+	Entry("without dupes", []string{"a", "b"}, []string{"a", "b"}),
+	Entry("with dupes", []string{"b", "a", "b", "a"}, []string{"a", "b"}),
 )
