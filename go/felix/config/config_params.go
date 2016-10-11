@@ -20,6 +20,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	"net"
 	"os"
 	"reflect"
@@ -88,6 +89,8 @@ type Config struct {
 	// Configuration parameters.
 
 	DataplaneDriver string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+
+	DatastoreType string `config:"oneof(kubernetes,etcdv2);etcdv2;non-zero,die-on-fail"`
 
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
@@ -255,21 +258,31 @@ func (config *Config) EndpointReportingDelay() time.Duration {
 }
 
 func (config *Config) DatastoreConfig() api.ClientConfig {
-	var etcdEndpoints string
-	if len(config.EtcdEndpoints) == 0 {
-		etcdEndpoints = config.EtcdScheme + "://" + config.EtcdAddr
+	if config.DatastoreType == "kubernetes" {
+		// Create a new Client.  The client will be configured
+		// based on the provided environment.
+		cfg, err := client.LoadClientConfig("")
+		if err != nil {
+			panic(err)
+		}
+		return *cfg
 	} else {
-		etcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
-	}
-	etcdCfg := &etcd.EtcdConfig{
-		EtcdEndpoints:  etcdEndpoints,
-		EtcdKeyFile:    config.EtcdKeyFile,
-		EtcdCertFile:   config.EtcdCertFile,
-		EtcdCACertFile: config.EtcdCaFile,
-	}
-	return api.ClientConfig{
-		BackendType:   api.EtcdV2,
-		BackendConfig: etcdCfg,
+		var etcdEndpoints string
+		if len(config.EtcdEndpoints) == 0 {
+			etcdEndpoints = config.EtcdScheme + "://" + config.EtcdAddr
+		} else {
+			etcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
+		}
+		etcdCfg := &etcd.EtcdConfig{
+			EtcdEndpoints:  etcdEndpoints,
+			EtcdKeyFile:    config.EtcdKeyFile,
+			EtcdCertFile:   config.EtcdCertFile,
+			EtcdCACertFile: config.EtcdCaFile,
+		}
+		return api.ClientConfig{
+			BackendType:   api.EtcdV2,
+			BackendConfig: etcdCfg,
+		}
 	}
 }
 
@@ -279,7 +292,7 @@ func (config *Config) Validate() (err error) {
 		err = errors.New("Failed to determine hostname")
 	}
 
-	if len(config.EtcdEndpoints) == 0 {
+	if config.DatastoreType == "etcdv2" && len(config.EtcdEndpoints) == 0 {
 		if config.EtcdScheme == "" {
 			err = errors.New("EtcdEndpoints and EtcdScheme both missing")
 		}
