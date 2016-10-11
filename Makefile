@@ -32,7 +32,7 @@ bin/calicoctl: vendor/.up-to-date $(GO_FILES)
 	go build -o "$@" $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 .PHONY: release/calicoctl
-release/calicoctl: clean vendor/.up-to-date
+release/calicoctl: clean
 	mkdir -p bin release
 	docker build -t calicoctl-build .
 	docker run --rm --privileged --net=host \
