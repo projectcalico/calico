@@ -162,10 +162,12 @@ func sendNode(node *client.Node, snapshotUpdates chan<- event, resp *client.Resp
 }
 
 func (syn *etcdSyncer) watchEtcd(etcdEvents chan<- event, triggerResync chan<- uint64, initialSnapshotIndex <-chan uint64) {
-	start_index := <-initialSnapshotIndex
+	log.Info("Watcher started, waiting for initial snapshot index...")
+	startIndex := <-initialSnapshotIndex
+	log.WithField("index", startIndex).Info("Received initial snapshot index")
 
 	watcherOpts := client.WatcherOptions{
-		AfterIndex: start_index + 1,
+		AfterIndex: startIndex,
 		Recursive:  true,
 	}
 	watcher := syn.keysAPI.Watcher("/calico/v1", &watcherOpts)
@@ -241,7 +243,7 @@ func (syn *etcdSyncer) mergeUpdates(snapshotUpdates <-chan event, watcherUpdates
 	for {
 		select {
 		case e = <-snapshotUpdates:
-			log.Debugf("Snapshot update %v @ %v", e.key, e.modifiedIndex)
+			log.Debugf("Snapshot update %v @ %v (snapshot @ %v)", e.key, e.modifiedIndex, e.snapshotIndex)
 		case e = <-watcherUpdates:
 			log.Debugf("Watcher update %v @ %v", e.key, e.modifiedIndex)
 		}
