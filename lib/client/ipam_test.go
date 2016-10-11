@@ -43,15 +43,6 @@
 // - Assign should not return no error.
 // - ReleaseIPs should return a slice with one (unallocatedIPs) and no error.
 
-// Test cases (ClaimAffinity):
-// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect the same IPNet and empty slice of IPNet with no error.
-// Test 2: claim affinity for a IPNet that has an IP already assigned to another host.
-// - Assign an IP with AssignIP to "host-A" from a configured pool - expect no error.
-// - Claim affinity to the block that IP belongs to - expect ????.
-// Test 3: claim affinity to a block twice.
-// - Claim affinity to an unclaimed block - expect to get the same IPNet back in claimed IP slice and no error.
-// - Claim affinity to the same block again - expect the IPNet back as the second return value (failed) and an error.
-
 package client_test
 
 import (
@@ -179,61 +170,10 @@ var _ = Describe("IPAM tests", func() {
 		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.1")}}, nil),
 	)
 
-	DescribeTable("ClaimAffinity: claim IPNet vs actual IPNet claimed",
-		func(inNet net.IPNet, host string, cleanEnv bool, pool []string, expClaimedIPs []cnet.IPNet, expFailedIPs []cnet.IPNet, expError error) {
-			outClaimed, outFailed, outError := testIPAMClaimAffinity(inNet, host, pool, cleanEnv)
-
-			// Expect returned slice of claimed IPNet to be equal to expected claimed.
-			Expect(outClaimed).To(Equal(expClaimedIPs))
-
-			// Expect returned slice of failed IPNet to be equal to expected failed.
-			Expect(outFailed).To(Equal(expFailedIPs))
-
-			// Assert if an error was expected.
-			if expError != nil {
-				Expect(outError).To(HaveOccurred())
-				Expect(outError).To(Equal(expError))
-			}
-		},
-
-		// Test cases (ClaimAffinity):
-		// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect the same IPNet and empty slice of IPNet with no error.
-		Entry("Release an IP that's not configured in any pools", net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}, "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, []cnet.IPNet{cnet.IPNet{net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}}}, []cnet.IPNet{}, nil),
-
-		// // Test 2: claim affinity for a IPNet that has an IP already assigned to another host.
-		// // - Assign an IP with AssignIP to "host-A" from a configured pool - expect no error.
-		// Entry("Release an IP that's not configured in any pools", net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}, "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, []cnet.IPNet{cnet.IPNet{net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}}}, []cnet.IPNet{}, nil),
-
-		// // - Claim affinity to the block that IP belongs to - expect ????.
-		// Entry("Release an IP that's not configured in any pools", net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}, "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, []cnet.IPNet{cnet.IPNet{net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}}}, []cnet.IPNet{}, nil),
-
-		// // Test 3: claim affinity to a block twice.
-		// // - Claim affinity to an unclaimed block - expect to get the same IPNet back in claimed IP slice and no error.
-		// Entry("Release an IP that's not configured in any pools", net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 128)}, "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, []cnet.IPNet{cnet.IPNet{net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}}}, []cnet.IPNet{}, nil),
-
-		// // - Claim affinity to the same block again - expect the IPNet back as the second return value (failed) and an error.
-		// Entry("Release an IP that's not configured in any pools", net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}, "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, []cnet.IPNet{cnet.IPNet{net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.IPv4Mask(255, 255, 255, 0)}}}, []cnet.IPNet{}, nil),
-	)
-
 })
 
-func testIPAMClaimAffinity(inNet net.IPNet, host string, poolSubnet []string, cleanEnv bool) (claimed []cnet.IPNet, failed []cnet.IPNet, outErr error) {
-	if cleanEnv {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
-		for _, v := range poolSubnet {
-			testutils.CreateNewPool(*c, v, false, false, true)
-		}
-	}
-	ic := setupIPMAClient(cleanEnv)
-	claimed, failed, outErr = ic.ClaimAffinity(cnet.IPNet{inNet}, host)
-	fmt.Println("###############", claimed[0].Mask.String)
-
-	return claimed, failed, outErr
-
-}
-
-// comment bro!
+// testIPAMReleaseIPs takes an IP, slice of string with IP pools to setup, cleanEnv flag means  setup a new environment.
+// assignIP is if you want to assign a single IP before releasing an IP, and AutoAssign is to assign IPs in bulk before releasing any.
 // Using named returns to be clear which return value is which.
 func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int) (unallocatedIPs []cnet.IP, outErr error) {
 
