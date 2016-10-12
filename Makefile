@@ -52,7 +52,7 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_
 	touch $@
 
 $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon: $(NODE_CONTAINER_DIR)/calico-bgp-daemon/main.go
-	docker run \
+	docker run --rm \
 	-v $(SOURCE_DIR)/$(NODE_CONTAINER_DIR)/calico-bgp-daemon:/go/src/github.com/projectcalico/calico-bgp-daemon \
 	-v $(SOURCE_DIR)/$(NODE_CONTAINER_DIR):/$(NODE_CONTAINER_DIR) \
 	golang:1.7 sh -c \
@@ -71,6 +71,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix:
 	# To get them, we pull that image, then copy the binaries out to our host
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	docker cp calico-felix:/code/. $(@D)
+	-docker rm -f calico-felix
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
@@ -125,12 +126,8 @@ birdcl:
 	chmod +x birdcl
 
 gobgp:
-	docker pull osrg/gobgp
-	docker run \
-	-v $(SOURCE_DIR):/code \
-	--entrypoint=sh \
-	osrg/gobgp \
-	-c 'cp /go/bin/gobgp /code'
+	docker run --rm -v `pwd`:/code golang:1.7 \
+	sh -c 'go get github.com/osrg/gobgp/gobgp && cp /go/bin/gobgp /code && chown $(shell id -u):$(shell id -g) /code/gobgp'
 
 simple-binary: $(CALICOCTL_FILE) birdcl gobgp
 	pip install git+https://github.com/projectcalico/libcalico.git@master
