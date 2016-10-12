@@ -294,9 +294,16 @@ def pprint_gobgp_protocols(version):
         print "Couldn't connect to gobgp."
         return
 
-    print >> sys.stderr, "WARNING: gobgp mode only supports node-to-node mesh type"
     for neighbor in neighbors:
-        ptype = "node-to-node mesh"
+        description = neighbor["conf"]["description"]
+        if description.startswith("Mesh_"):
+            ptype = "node-to-node mesh"
+        elif description.startswith("Node_"):
+            ptype = "node specific"
+        elif description.startswith("Global_"):
+            ptype = "global"
+        else:
+            ptype = "unknown"
         name = neighbor["conf"]["remote_ip"]
         state  = "up" if neighbor["info"]["admin_state"] == "ADMIN_STATE_UP" else "down"
         info = neighbor["info"]["bgp_state"].split("_")[-1].capitalize()
