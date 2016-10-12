@@ -9,9 +9,9 @@ CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-ldflags "-X github.com/tigera/libcalico-go/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
-	-X github.com/tigera/libcalico-go/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
-	-X github.com/tigera/libcalico-go/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
+LDFLAGS=-ldflags "-X github.com/projectcalico/libcalico-go/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
+	-X github.com/projectcalico/libcalico-go/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
+	-X github.com/projectcalico/libcalico-go/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
 default: all
 all: test
@@ -36,9 +36,9 @@ release/calicoctl: clean vendor/.up-to-date
 	mkdir -p bin release
 	docker build -t calicoctl-build .
 	docker run --rm --privileged --net=host \
-	-v ${PWD}:/go/src/github.com/tigera/libcalico-go:rw \
-	-v ${PWD}/bin:/go/src/github.com/tigera/libcalico-go/bin:rw \
-	-w /go/src/github.com/tigera/libcalico-go \
+	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
+	-v ${PWD}/bin:/go/src/github.com/projectcalico/libcalico-go/bin:rw \
+	-w /go/src/github.com/projectcalico/libcalico-go \
 	calicoctl-build make bin/calicoctl
 	mv bin/calicoctl release/calicoctl
 	rm -rf bin
@@ -50,8 +50,8 @@ build-containerized: $(BUILD_CONTAINER_MARKER)
 	mkdir -p dist
 	docker run -ti --rm --privileged --net=host \
 	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/tigera/libcalico-go:rw \
-	-v ${PWD}/dist:/go/src/github.com/tigera/libcalico-go/dist:rw \
+	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
+	-v ${PWD}/dist:/go/src/github.com/projectcalico/libcalico-go/dist:rw \
 	$(BUILD_CONTAINER_NAME) make bin/calicoctl
 
 # Run the tests in a container. Useful for CI, Mac dev.
@@ -59,7 +59,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER)
 test-containerized: run-etcd $(BUILD_CONTAINER_MARKER)
 	docker run -ti --rm --privileged --net=host \
 	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/tigera/libcalico-go:rw \
+	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
 	$(BUILD_CONTAINER_NAME) make ut
 	
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
