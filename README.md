@@ -14,13 +14,19 @@ If you are looking for the old documentation, see https://docs-archive.projectca
 ## Building
 
 The docs require jekyll, a ruby gem. Install the `github-pages` gem which includes
-`jekyll` to ensure you are using the exact version of jekyll that github pages 
+`jekyll` to ensure you are using the exact version of jekyll that github pages
 is using to serve the live site.
 
 ```
 gem install github-pages
-jekyll serve
+jekyll serve -I
 ```
+
+>Note:As more versioned directories are created, build speeds will increase by a
+factor of 2. The `-I` is an optional flag for development that enables
+incremental builds, allowing jekyll to only rebuild changed files. This should
+keep subsequent builds down to less than one second.
+
 
 Alternatively, you can easily volume mount the source files into the official jekyll docker image via using a simple makefile step:
 
