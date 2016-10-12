@@ -13,7 +13,7 @@ import:
 - package: github.com/onsi/gomega
   subpackages:
   - gexec
-- package: github.com/tigera/libcalico-go
+- package: github.com/projectcalico/libcalico-go
   subpackages:
   - lib/api
   - lib/client

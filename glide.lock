@@ -110,8 +110,8 @@ imports:
   version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
 - name: github.com/spf13/pflag
   version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
-- name: github.com/tigera/libcalico-go
-  version: 658ba00cbe61fa2a1a61bf3c85505b6ce28251f6
+- name: github.com/projectcalico/libcalico-go
+  version: 0ddf9de2807feb4ef2953d78fab33e0bc78d2fdb
   subpackages:
   - lib/api
   - lib/api/unversioned
