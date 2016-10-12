@@ -37,4 +37,4 @@ spec:
 #### Spec
 | name     | description                 | requirements               | schema  |
 |----------|-----------------------------|----------------------------|---------|
-| asNumber | The AS Number of this peer. | Must be a valid AS Number. | integer |
+| asNumber | The AS Number of this peer. | Must be a valid AS Number.  The YAML or JSON format may be a string and may be specified in dotted notation. | integer |

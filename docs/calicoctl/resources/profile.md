@@ -27,20 +27,20 @@ spec:
       tag: group=='production'
       net: 10.0.0.0/16
       selector: type=='application'
-      ports: 1234,10:20
+      ports: [1234,"10:20"]
       "!tag": bartag
       "!net": 10.1.0.0/16
       "!selector": type=='database'
-      "!ports": 1050
+      "!ports": [1050]
     destination:
       tag: alphatag
       net: 10.2.0.0/16
       selector: type=='application'
-      ports: 100:200
+      ports: ["100:200"]
       "!tag": type=='bananas'
       "!net": 10.3.0.0/16
       "!selector": type=='apples'
-      "!ports": 1050:110
+      "!ports": ["1050:110"]
   egress:
   - action: allow
     source:

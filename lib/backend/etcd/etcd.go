@@ -144,7 +144,7 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 	log.Infof("Delete Key: %s", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
 	if err != nil {
-		return err
+		return convertEtcdError(err, d.Key)
 	}
 
 	// If there are parents to be deleted, delete these as well provided there

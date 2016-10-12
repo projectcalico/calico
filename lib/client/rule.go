@@ -79,20 +79,26 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 
 // ruleBackendToAPI convert a Backend Rule structure to an API Rule structure.
 func ruleBackendToAPI(br model.Rule) api.Rule {
-	return api.Rule{
-		Action:    ruleActionBackendToAPI(br.Action),
-		IPVersion: br.IPVersion,
-		Protocol:  br.Protocol,
-		ICMP: &api.ICMPFields{
+	var icmp, notICMP *api.ICMPFields
+	if br.ICMPCode != nil || br.ICMPType != nil {
+		icmp = &api.ICMPFields{
 			Code: br.ICMPCode,
 			Type: br.ICMPType,
-		},
-		NotProtocol: br.NotProtocol,
-		NotICMP: &api.ICMPFields{
+		}
+	}
+	if br.NotICMPCode != nil || br.NotICMPType != nil {
+		notICMP = &api.ICMPFields{
 			Code: br.NotICMPCode,
 			Type: br.NotICMPType,
-		},
-
+		}
+	}
+	return api.Rule{
+		Action:      ruleActionBackendToAPI(br.Action),
+		IPVersion:   br.IPVersion,
+		Protocol:    br.Protocol,
+		ICMP:        icmp,
+		NotProtocol: br.NotProtocol,
+		NotICMP:     notICMP,
 		Source: api.EntityRule{
 			Tag:         br.SrcTag,
 			Net:         br.SrcNet,

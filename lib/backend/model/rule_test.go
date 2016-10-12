@@ -35,12 +35,13 @@ var icmpProto = numorstring.ProtocolFromString("icmp")
 var intProto = numorstring.ProtocolFromInt(123)
 var icmpType = 10
 var icmpCode = 6
+var portRange, _ = numorstring.PortFromRange(10, 20)
 var ports = []numorstring.Port{
-	numorstring.PortFromInt(1234),
-	numorstring.PortFromRange(10, 20),
+	numorstring.SinglePort(1234),
+	portRange,
 }
 var ports2 = []numorstring.Port{
-	numorstring.PortFromInt(4567),
+	numorstring.SinglePort(4567),
 }
 var _, cidr, _ = net.ParseCIDR("10.0.0.0/16")
 

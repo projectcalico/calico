@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 208 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,22 +19,21 @@ import (
 	"strconv"
 )
 
-// Int32OrString is a type that can hold an int32 or a string.  When used in
+// UInt8OrString is a type that can hold an uint8 or a string.  When used in
 // JSON or YAML marshalling and unmarshalling, it produces or consumes the
 // inner type.  This allows you to have, for example, a JSON field that can
 // accept a name or number.
-type Int32OrString struct {
+type Uint8OrString struct {
 	Type   NumOrStringType
-	NumVal int32
+	NumVal uint8
 	StrVal string
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
-func (i *Int32OrString) UnmarshalJSON(b []byte) error {
+func (i *Uint8OrString) UnmarshalJSON(b []byte) error {
 	if b[0] == '"' {
 		i.Type = NumOrStringString
-		err := json.Unmarshal(b, &i.StrVal)
-		if err != nil {
+		if err := json.Unmarshal(b, &i.StrVal); err != nil {
 			return err
 		}
 
@@ -52,30 +51,29 @@ func (i *Int32OrString) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, &i.NumVal)
 }
 
-// String returns the string value, or the Itoa of the int value.
-func (i *Int32OrString) String() string {
-	if i.Type == NumOrStringString {
-		return i.StrVal
-	}
-	return strconv.Itoa(int(i.NumVal))
-}
-
-// NumValue returns the NumVal if type Int, or if
-// it is a String, will attempt a conversion to int.
-func (i *Int32OrString) NumValue() (int32, error) {
-	if i.Type == NumOrStringString {
-		num, err := strconv.ParseInt(i.StrVal, 10, 32)
-		return int32(num), err
-	}
-	return i.NumVal, nil
-}
-
 // MarshalJSON implements the json.Marshaller interface.
-func (i Int32OrString) MarshalJSON() ([]byte, error) {
-	num, err := i.NumValue()
-	if err != nil {
+func (i Uint8OrString) MarshalJSON() ([]byte, error) {
+	if num, err := i.NumValue(); err == nil {
 		return json.Marshal(num)
 	} else {
 		return json.Marshal(i.StrVal)
 	}
+}
+
+// String returns the string value, or the Itoa of the int value.
+func (i Uint8OrString) String() string {
+	if i.Type == NumOrStringString {
+		return i.StrVal
+	}
+	return strconv.FormatUint(uint64(i.NumVal), 10)
+}
+
+// NumValue returns the NumVal if type Int, or if
+// it is a String, will attempt a conversion to int.
+func (i Uint8OrString) NumValue() (uint8, error) {
+	if i.Type == NumOrStringString {
+		num, err := strconv.ParseInt(i.StrVal, 10, 8)
+		return uint8(num), err
+	}
+	return i.NumVal, nil
 }

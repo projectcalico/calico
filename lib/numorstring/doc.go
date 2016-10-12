@@ -13,10 +13,7 @@
 // limitations under the License.
 
 /*
-Package numorstring implements a set of type definitions that represent either a
-number or a string.  In a JSON/YAML representation each type is a single field,
-but the marshalling/unmarshalling deals with 3 fields in each type struct, one
-indicating the type, a string value (for string type), and a numerical value
-(for number type).
+Package numorstring implements a set of type definitions that in YAML or JSON
+format may be represented by either a number or a string.
 */
 package numorstring

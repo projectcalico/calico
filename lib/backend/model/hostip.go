@@ -16,9 +16,10 @@ package model
 
 import (
 	"fmt"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	"reflect"
 	"regexp"
+
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var (

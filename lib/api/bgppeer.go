@@ -17,6 +17,7 @@ package api
 import (
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
@@ -53,7 +54,7 @@ type BGPPeerMetadata struct {
 // BGPPeerSpec contains the specification for a BGPPeer resource.
 type BGPPeerSpec struct {
 	// The AS Number of the peer.
-	ASNumber int `json:"asNumber" validate:"asn"`
+	ASNumber numorstring.ASNumber `json:"asNumber"`
 }
 
 // NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current

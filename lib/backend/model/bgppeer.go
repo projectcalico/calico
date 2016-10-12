@@ -23,6 +23,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
@@ -154,6 +155,6 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type BGPPeer struct {
-	PeerIP net.IP `json:"ip"`
-	ASNum  int    `json:"as_num"`
+	PeerIP net.IP               `json:"ip"`
+	ASNum  numorstring.ASNumber `json:"as_num"`
 }
