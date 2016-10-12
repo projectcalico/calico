@@ -47,7 +47,11 @@ toc:
     - title: Docker Containerizer (libnetwork)
       path: /getting-started/mesos/installation/docker
     - title: DC/OS
-      path: /getting-started/mesos/installation/dc-os
+      section:
+      - title: Overview
+        path: /getting-started/mesos/installation/dc-os/
+      - title: Framework Install Walkthrough
+        path: /getting-started/mesos/installation/dc-os/framework
   - title: Tutorials
     section:
     - title: Docker Containerizer
