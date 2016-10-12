@@ -1,4 +1,4 @@
-// Copyright (c) 208 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,17 +32,18 @@ type Uint8OrString struct {
 // UnmarshalJSON implements the json.Unmarshaller interface.
 func (i *Uint8OrString) UnmarshalJSON(b []byte) error {
 	if b[0] == '"' {
-		i.Type = NumOrStringString
-		if err := json.Unmarshal(b, &i.StrVal); err != nil {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
 			return err
 		}
 
-		// If this string is actually a number then tweak to return
-		// a number type.
-		num, err := i.NumValue()
+		num, err := strconv.ParseUint(s, 10, 8)
 		if err == nil {
 			i.Type = NumOrStringNum
-			i.NumVal = num
+			i.NumVal = uint8(num)
+		} else {
+			i.Type = NumOrStringString
+			i.StrVal = s
 		}
 
 		return nil
@@ -72,7 +73,7 @@ func (i Uint8OrString) String() string {
 // it is a String, will attempt a conversion to int.
 func (i Uint8OrString) NumValue() (uint8, error) {
 	if i.Type == NumOrStringString {
-		num, err := strconv.ParseInt(i.StrVal, 10, 8)
+		num, err := strconv.ParseUint(i.StrVal, 10, 8)
 		return uint8(num), err
 	}
 	return i.NumVal, nil

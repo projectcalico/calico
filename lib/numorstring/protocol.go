@@ -16,12 +16,14 @@ package numorstring
 
 type Protocol Uint8OrString
 
+// ProtocolFromInt creates a Protocol struct from an integer value.
 func ProtocolFromInt(p uint8) Protocol {
 	return Protocol(
 		Uint8OrString{Type: NumOrStringNum, NumVal: p},
 	)
 }
 
+// ProtocolFromString creates a Protocol struct from a string value.
 func ProtocolFromString(p string) Protocol {
 	return Protocol(
 		Uint8OrString{Type: NumOrStringString, StrVal: p},

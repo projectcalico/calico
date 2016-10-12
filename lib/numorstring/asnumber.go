@@ -23,6 +23,8 @@ import (
 
 type ASNumber uint32
 
+// ASNumberFromString creates an ASNumber struct from a string value.  The
+// string value may simply be a number or may be the ASN in dotted notation.
 func ASNumberFromString(s string) (ASNumber, error) {
 	if num, err := strconv.ParseUint(s, 10, 32); err == nil {
 		return ASNumber(num), nil
@@ -38,7 +40,7 @@ func ASNumberFromString(s string) (ASNumber, error) {
 	} else if num2, err := strconv.ParseUint(parts[1], 10, 16); err != nil {
 		return 0, errors.New("invalid AS Number format")
 	} else {
-		return ASNumber((num2 << 16) + num1), nil
+		return ASNumber((num1 << 16) + num2), nil
 	}
 }
 

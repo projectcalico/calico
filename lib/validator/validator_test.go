@@ -138,7 +138,7 @@ func init() {
 		Entry("should accept protocol udplite", protocolFromString("udplite"), true),
 		Entry("should accept protocol 1 as int", protocolFromInt(1), true),
 		Entry("should accept protocol 255 as int", protocolFromInt(255), true),
-		Entry("should accept protocol 255 as string", protocolFromString("255"), false),
+		Entry("should accept protocol 255 as string", protocolFromString("255"), true),
 		Entry("should accept protocol 1 as string", protocolFromString("1"), true),
 		Entry("should reject protocol 0 as int", protocolFromInt(0), false),
 		Entry("should reject protocol 256 as string", protocolFromString("256"), false),

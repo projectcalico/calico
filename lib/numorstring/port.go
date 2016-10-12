@@ -27,10 +27,12 @@ type Port struct {
 	MaxPort uint16
 }
 
+// SinglePort creates a Port struct representing a single port.
 func SinglePort(port uint16) Port {
 	return Port{port, port}
 }
 
+// PortFromRange creates a Port struct representing a range of ports.
 func PortFromRange(minPort, maxPort uint16) (Port, error) {
 	port := Port{minPort, maxPort}
 	if minPort > maxPort {
@@ -39,6 +41,8 @@ func PortFromRange(minPort, maxPort uint16) (Port, error) {
 	return port, nil
 }
 
+// PortFromString creates a Port struct from its string representation.  A port
+// may either be single value "1234" or a range of values "100:200".
 func PortFromString(s string) (Port, error) {
 	if num, err := strconv.ParseUint(s, 10, 16); err == nil {
 		return SinglePort(uint16(num)), nil

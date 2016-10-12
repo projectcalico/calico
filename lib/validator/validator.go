@@ -160,7 +160,7 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 	// The protocol field may be an integer 1-255 (i.e. not 0), or one of the valid protocol
 	// names.
 	if num, err := p.NumValue(); err == nil {
-		if (num == 0) {
+		if num == 0 {
 			structLevel.ReportError(reflect.ValueOf(p.NumVal), "Protocol", "protocol", "protocol number invalid")
 		}
 	} else if !protocolRegex.MatchString(p.String()) {
