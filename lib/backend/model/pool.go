@@ -83,7 +83,7 @@ func (options PoolListOptions) KeyFromDefaultPath(path string) Key {
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
-	if options.CIDR.IP != nil && reflect.DeepEqual(*cidr, options.CIDR) {
+	if options.CIDR.IP != nil && !reflect.DeepEqual(*cidr, options.CIDR) {
 		log.Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
 	}
