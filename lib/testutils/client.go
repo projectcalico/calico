@@ -19,10 +19,10 @@ import (
 	"net"
 	"os"
 
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/api/unversioned"
-	"github.com/tigera/libcalico-go/lib/client"
-	cnet "github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // NewClient is a util function to create a new default client.

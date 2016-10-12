@@ -56,11 +56,11 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
-	"github.com/tigera/libcalico-go/lib/api"
-	"github.com/tigera/libcalico-go/lib/backend/etcd"
-	"github.com/tigera/libcalico-go/lib/client"
-	cnet "github.com/tigera/libcalico-go/lib/net"
-	"github.com/tigera/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 // Setting BackendType to etcdv2 which is the only supported backend at the moment.

@@ -22,8 +22,8 @@ import (
 	"reflect"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/tigera/libcalico-go/lib/backend/model"
-	cnet "github.com/tigera/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 const (
