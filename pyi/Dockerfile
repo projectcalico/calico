@@ -18,6 +18,10 @@ RUN yum install -y libffi-devel libffi yajl
 ADD felix_requirements.txt felix_requirements.txt
 RUN pip install -U -r felix_requirements.txt
 
+# Required for IP SAN support.
+RUN pip install urllib3>=1.18
+RUN pip install pyopenssl ndg-httpsclient pyasn1
+
 # And pyinstaller...
 RUN pip install pyinstaller
 
