@@ -71,8 +71,15 @@ type ListInterface interface {
 	KeyFromDefaultPath(key string) Key
 }
 
-// KVPair holds a typed key and value struct as well as datastore specific
+// KVPair holds a typed key and value object as well as datastore specific
 // revision information.
+//
+// The Value is dependent on the Key, but in general will be on of the following
+// types:
+// -  A pointer to a struct
+// -  A slice or map
+// -  A bare string, boolean value or IP address (i.e. without quotes, so not
+//    JSON format).
 type KVPair struct {
 	Key      Key
 	Value    interface{}
