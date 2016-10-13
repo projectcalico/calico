@@ -17,7 +17,6 @@ Then, change into the directory for this guide:
 
     cd calico/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy
 
-
 ## Running the stars example
 
 ### 1) Create the frontend, backend, client, and management-ui apps.
