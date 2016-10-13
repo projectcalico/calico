@@ -3,4 +3,4 @@ bin
 release
 *.coverprofile
 vendor
-﻿calicoctl_build_container.created
+calicoctl_build_container.created
