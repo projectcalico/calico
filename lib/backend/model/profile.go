@@ -196,13 +196,13 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		if !ok {
 			log.Infof("Initialise profile %v", name)
 			pd = &KVPair{
-				Value: Profile{},
+				Value: &Profile{},
 				Key:   ProfileKey{Name: name},
 			}
 			profiles[name] = pd
 		}
 
-		p := pd.Value.(Profile)
+		p := pd.Value.(*Profile)
 		switch t := d.Value.(type) {
 		case []string: // must be tags #TODO should type these
 			log.Infof("Store tags %v", t)
@@ -211,9 +211,9 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		case map[string]string: // must be labels
 			log.Infof("Store labels %v", t)
 			p.Labels = t
-		case ProfileRules: // must be rules
+		case *ProfileRules: // must be rules
 			log.Infof("Store rules %v", t)
-			p.Rules = t
+			p.Rules = *t
 		default:
 			panic(fmt.Errorf("Unexpected type: %v", t))
 		}

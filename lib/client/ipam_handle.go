@@ -23,7 +23,7 @@ import (
 )
 
 type allocationHandle struct {
-	model.IPAMHandle
+	*model.IPAMHandle
 }
 
 func (h allocationHandle) incrementBlock(blockCidr net.IPNet, num int) int {

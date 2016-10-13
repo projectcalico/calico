@@ -142,7 +142,7 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.HostEndpoint{
+		Value: &model.HostEndpoint{
 			Labels: ah.Metadata.Labels,
 
 			Name:              ah.Spec.InterfaceName,
@@ -159,7 +159,7 @@ func (h *hostEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.KVPai
 // to an API HostEndpoint structure.
 // This is part of the conversionHelper interface.
 func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bh := d.Value.(model.HostEndpoint)
+	bh := d.Value.(*model.HostEndpoint)
 	bk := d.Key.(model.HostEndpointKey)
 
 	ips := bh.ExpectedIPv4Addrs

@@ -149,7 +149,7 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.WorkloadEndpoint{
+		Value: &model.WorkloadEndpoint{
 			Labels:      ah.Metadata.Labels,
 			State:       "active",
 			Name:        ah.Spec.InterfaceName,
@@ -171,7 +171,7 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 // to an API WorkloadEndpoint structure.
 // This is part of the conversionHelper interface.
 func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bh := d.Value.(model.WorkloadEndpoint)
+	bh := d.Value.(*model.WorkloadEndpoint)
 	bk := d.Key.(model.WorkloadEndpointKey)
 
 	nets := bh.IPv4Nets

@@ -109,7 +109,7 @@ func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.Policy{
+		Value: &model.Policy{
 			Order:         ap.Spec.Order,
 			InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 			OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
@@ -124,7 +124,7 @@ func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 // to an API Policy structure.
 // This is part of the conversionHelper interface.
 func (h *policies) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bp := d.Value.(model.Policy)
+	bp := d.Value.(*model.Policy)
 	bk := d.Key.(model.PolicyKey)
 
 	ap := api.NewPolicy()

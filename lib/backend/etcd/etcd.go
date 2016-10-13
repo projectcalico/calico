@@ -16,7 +16,6 @@ package etcd
 
 import (
 	goerrors "errors"
-	"reflect"
 	"strings"
 
 	"time"
@@ -172,16 +171,12 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 		return nil, err
 	}
 	log.Infof("Get Key: %s", key)
-	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
+	if r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
 		return nil, convertEtcdError(err, k)
-	} else if object, err := model.ParseValue(k, []byte(results.Node.Value)); err != nil {
+	} else if v, err := model.ParseValue(k, []byte(r.Node.Value)); err != nil {
 		return nil, err
 	} else {
-		if reflect.ValueOf(object).Kind() == reflect.Ptr {
-			// Unwrap any pointers.
-			object = reflect.ValueOf(object).Elem().Interface()
-		}
-		return &model.KVPair{Key: k, Value: object, Revision: results.Node.ModifiedIndex}, nil
+		return &model.KVPair{Key: k, Value: v, Revision: r.Node.ModifiedIndex}, nil
 	}
 }
 
@@ -256,12 +251,8 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 			kvs = append(kvs, filterEtcdList(node, l)...)
 		}
 	} else if k := l.KeyFromDefaultPath(n.Key); k != nil {
-		if object, err := model.ParseValue(k, []byte(n.Value)); err == nil {
-			if reflect.ValueOf(object).Kind() == reflect.Ptr {
-				// Unwrap any pointers.
-				object = reflect.ValueOf(object).Elem().Interface()
-			}
-			kv := &model.KVPair{Key: k, Value: object, Revision: n.ModifiedIndex}
+		if v, err := model.ParseValue(k, []byte(n.Value)); err == nil {
+			kv := &model.KVPair{Key: k, Value: v, Revision: n.ModifiedIndex}
 			kvs = append(kvs, kv)
 		}
 	}

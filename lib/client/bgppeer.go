@@ -113,7 +113,7 @@ func (h *bgpPeers) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.BGPPeer{
+		Value: &model.BGPPeer{
 			PeerIP: ap.Metadata.PeerIP,
 			ASNum:  ap.Spec.ASNumber,
 		},
@@ -126,7 +126,7 @@ func (h *bgpPeers) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 // to an API BGPPeer structure.
 // This is part of the conversionHelper interface.
 func (h *bgpPeers) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	backendBGPPeer := d.Value.(model.BGPPeer)
+	backendBGPPeer := d.Value.(*model.BGPPeer)
 	backendBGPPeerKey := d.Key.(model.BGPPeerKey)
 
 	apiBGPPeer := api.NewBGPPeer()
