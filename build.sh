@@ -3,7 +3,7 @@ set -e
 set -x
 
 # Install the system packages needed for building the PyInstaller based binary
-apk -U add --virtual temp python-dev py-pip alpine-sdk python py-setuptools
+apk -U add --virtual temp python-dev py-pip alpine-sdk python py-setuptools openssl-dev libffi-dev
 
 # Install python dependencies
 pip install --upgrade pip
