@@ -33,13 +33,20 @@ func init() {
 	// Perform tests of JSON unmarshaling of the various field types.
 	DescribeTable("NumOrStringJSONUnmarshaling",
 		func(jtext string, typ reflect.Type, expected interface{}) {
+			// Create a new field type and invoke the unmarshaller interface
+			// directly (this covers a couple more error cases than calling
+			// through json.Unmarshal.
 			new := reflect.New(typ)
-			err := json.Unmarshal([]byte(jtext), new.Interface())
-			if err == nil {
-				Expect(expected).To(Equal(new.Elem().Interface()),
+			u := new.Interface().(json.Unmarshaler)
+			err := u.UnmarshalJSON([]byte(jtext))
+
+			if expected != nil {
+				Expect(err).To(BeNil(),
+					"expected json unmarshal to not error")
+				Expect(new.Elem().Interface()).To(Equal(expected),
 					"expected value not same as json unmarshalled value")
 			} else {
-				Expect(expected).To(BeNil(),
+				Expect(err).ToNot(BeNil(),
 					"expected json unmarshal to error")
 			}
 		},
@@ -70,7 +77,7 @@ func init() {
 		Entry("should reject -1:65535 port range as string", "\"-1:65535\"", portType, nil),
 		Entry("should reject 10:1 port range as string", "\"10:1\"", portType, nil),
 		Entry("should reject 1:2:3 port range as string", "\"1:2:3\"", portType, nil),
-		Entry("should reject bad string", "\"1:2", portType, nil),
+		Entry("should reject bad port string", "\"1:2", portType, nil),
 
 		// Protocol tests.  Invalid integer values will be stored as strings.
 		Entry("should accept 0 protocol as int", "0", protocolType, numorstring.ProtocolFromInt(0)),
@@ -80,46 +87,20 @@ func init() {
 		Entry("should accept 0 protocol as string", "\"0\"", protocolType, numorstring.ProtocolFromInt(0)),
 		Entry("should accept 0 protocol as string", "\"255\"", protocolType, numorstring.ProtocolFromInt(255)),
 		Entry("should accept 256 protocol as string", "\"256\"", protocolType, numorstring.ProtocolFromString("256")),
-		Entry("should reject bad string", "\"25", protocolType, nil),
+		Entry("should reject bad protocol string", "\"25", protocolType, nil),
 	)
 
 	// Perform tests of JSON marshaling of the various field types.
 	DescribeTable("NumOrStringJSONMarshaling",
 		func(field interface{}, jtext string) {
 			b, err := json.Marshal(field)
-			if err == nil {
-				Expect(jtext).To(Equal(string(b)),
+			if jtext != "" {
+				Expect(err).To(BeNil(),
+					"expected json marshal to not error")
+				Expect(string(b)).To(Equal(jtext),
 					"expected json not same as marshalled value")
 			} else {
-				Expect(jtext).To(Equal(""),
-					"expected json marshal to error")
-			}
-		},
-		// ASNumber tests.
-		Entry("should marshal ASN of 0", numorstring.ASNumber(0), "0"),
-		Entry("should marshal ASN of 4294967295", numorstring.ASNumber(4294967295), "4294967295"),
-
-		// Port tests.
-		Entry("should marshal port of 0", numorstring.SinglePort(0), "0"),
-		Entry("should marshal port of 65535", portFromRange(65535, 65535), "65535"),
-		Entry("should marshal port of 10", portFromString("10"), "10"),
-		Entry("should marshal port range of 10:20", portFromRange(10, 20), "\"10:20\""),
-		Entry("should marshal port range of 20:30", portFromRange(20, 30), "\"20:30\""),
-
-		// Protocol tests.
-		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),
-		Entry("should marshal protocol of udp", numorstring.ProtocolFromString("udp"), "\"udp\""),
-	)
-
-	// Perform tests of JSON marshaling of the various field types.
-	DescribeTable("NumOrStringJSONMarshaling",
-		func(field interface{}, jtext string) {
-			b, err := json.Marshal(field)
-			if err == nil {
-				Expect(jtext).To(Equal(string(b)),
-					"expected json not same as marshalled value")
-			} else {
-				Expect(jtext).To(Equal(""),
+				Expect(err).ToNot(BeNil(),
 					"expected json marshal to error")
 			}
 		},
