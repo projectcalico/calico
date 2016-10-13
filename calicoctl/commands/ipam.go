@@ -120,7 +120,7 @@ func releaseIP(ipamClient client.IPAMInterface, passedIP string) {
 	fmt.Printf("Successfully released IP address %s\n", ip)
 }
 
-// validateIP takes a string as an inoput and makes sure it's a valid IPv4 or IPv6 address.
+// validateIP takes a string as an input and makes sure it's a valid IPv4 or IPv6 address.
 func validateIP(str string) net.IP {
 	// Parse the input string as an IP address (IPv4 or IPv6).
 	// This also validates the IP address.
