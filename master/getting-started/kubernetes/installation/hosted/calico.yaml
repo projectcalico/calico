@@ -8,9 +8,8 @@ data:
   # Configure this with the location of your etcd cluster.
   etcd_endpoints: "http://127.0.0.1:2379"
 
-  # True enables BGP networking, false tells Calico to enforce
-  # policy only, using native networking.
-  enable_bgp: "true"
+  # Configure the Calico backend to use.
+  calico_backend: "bird"
 
   # The CNI network configuration to install on each node.
   cni_network_config: |-
@@ -95,12 +94,12 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
-            # Enable BGP.  Disable to enforce policy only. 
-            - name: CALICO_NETWORKING
+            # Choose the backend to use. 
+            - name: CALICO_NETWORKING_BACKEND 
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
-                  key: enable_bgp
+                  key: calico_backend
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
