@@ -340,9 +340,9 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 			c.incrementHandle(*args.HandleID, blockCIDR, 1)
 		}
 
-		// Update the block using the original KVPair
-		// to do a CAS.
-		obj.Value = &block.AllocationBlock
+		// Update the block using the original KVPair to do a CAS.  No need to
+		// update the Value since we have been manipulating the Value pointed to
+		// in the KVPair.
 		_, err = c.client.backend.Update(obj)
 		if err != nil {
 			log.Warningf("Update failed on block %s", block.CIDR.String())
@@ -419,16 +419,15 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 		}
 
 		// If the block is empty and has no affinity, we can delete it.
-		// Otherwise, update the block using CAS.
+		// Otherwise, update the block using CAS.  There is no need to update
+		// the Value since we have updated the structure pointed to in the
+		// KVPair.
 		var updateErr error
 		if b.empty() && b.HostAffinity == nil {
 			log.Debugf("Deleting non-affine block '%s'", b.CIDR.String())
-			updateErr = c.client.backend.Delete(&model.KVPair{
-				Key: model.BlockKey{CIDR: blockCIDR},
-			})
+			updateErr = c.client.backend.Delete(obj)
 		} else {
 			log.Debugf("Updating assignments in block '%s'", b.CIDR.String())
-			obj.Value = &b.AllocationBlock
 			_, updateErr = c.client.backend.Update(obj)
 		}
 
@@ -774,8 +773,8 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 			}
 		} else {
 			// Compare and swap the AllocationBlock using the original
-			// KVPair read from before.
-			obj.Value = &block.AllocationBlock
+			// KVPair read from before.  No need to update the Value since we
+			// have been directly manipulating the value referenced by the KVPair.
 			_, err = c.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
@@ -825,8 +824,9 @@ func (c ipams) incrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		// Increment the handle for this block.
 		handle.incrementBlock(blockCIDR, num)
 
-		// Compare and swap the handle using the KVPair from above.
-		obj.Value = &handle.IPAMHandle
+		// Compare and swap the handle using the KVPair from above.  We've been
+		// manipulating the structure in the KVPair, so pass straight back to
+		// apply the changes.
 		_, err = c.client.backend.Apply(obj)
 		if err != nil {
 			continue
@@ -850,15 +850,13 @@ func (c ipams) decrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 			log.Fatalf("Can't decrement block - too few allocated")
 		}
 
-		// Update / Delete as appropriate.
+		// Update / Delete as appropriate.  Since we have been manipulating the
+		// data in the KVPair, just pass this straight back to the client.
 		if handle.empty() {
 			log.Debugf("Deleting handle: %s", handleID)
-			err = c.client.backend.Delete(&model.KVPair{
-				Key: model.IPAMHandleKey{HandleID: handleID},
-			})
+			err = c.client.backend.Delete(obj)
 		} else {
 			log.Debugf("Updating handle: %s", handleID)
-			obj.Value = &handle.IPAMHandle
 			_, err = c.client.backend.Update(obj)
 		}
 
