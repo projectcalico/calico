@@ -19,8 +19,8 @@ commands directly, be sure to pass the `-p mesoscni` flag.
 ### 1. Clone the Repository
 
 ```shell
-git clone https://github.com/projectcalico/calico-containers.git
-cd calico-containers/mesos/cni-compose-demo
+git clone https://github.com/projectcalico/calico.git
+cd calico/{{page.version}}/mesos/demos/cni/
 ```
 
 ### 2. Download and Build Images
