@@ -176,5 +176,5 @@ visiting `http://<host public ip>:80` or running:
 $ curl http://<host public ip>:80
 ```
 
-[coreos-gce]: https://coreos.com/running-coreos/cloud-providers/google-compute-engine/
+[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html
 [gcloud-instructions]: https://cloud.google.com/compute/docs/gcloud-compute/

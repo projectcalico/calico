@@ -141,7 +141,7 @@ command, which can be found in the
 [`calicoctl container` reference documentation](./container).
 
 For more information about policy profiles, check out the section on
-[security profile data in the etcd data model documentation](../etcd/data-model#security-profiles).
+[security profile data in the etcd data model documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#security-profiles).
 
 This command can be run on any Calico node.
 
