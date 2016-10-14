@@ -23,6 +23,9 @@ CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scal
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
+
 # we can use "custom" build image name
 BUILD_CONTAINER_NAME?=calico/build:latest
 ###############################################################################
@@ -51,13 +54,6 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_
 	docker build -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
 	touch $@
 
-$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon: $(NODE_CONTAINER_DIR)/calico-bgp-daemon/main.go
-	docker run --rm \
-	-v $(SOURCE_DIR)/$(NODE_CONTAINER_DIR)/calico-bgp-daemon:/go/src/github.com/projectcalico/calico-bgp-daemon \
-	-v $(SOURCE_DIR)/$(NODE_CONTAINER_DIR):/$(NODE_CONTAINER_DIR) \
-	golang:1.7 sh -c \
-	'cd /go/src/github.com/projectcalico/calico-bgp-daemon/ && go get -v . && go build -o /$@ . && chown $(shell id -u):$(shell id -g) -R /$(@D)'
-
 # Build binary from python files, e.g. startup.py or allocate-ipip-addr.py
 $(NODE_CONTAINER_BIN_DIR)/%: $(NODE_CONTAINER_DIR)/%.py
 	-docker run -v $(SOURCE_DIR):/code --rm \
@@ -76,6 +72,11 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix:
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
 	curl -L $(CONFD_URL) -o $@
+	chmod +x $@
+
+# Get the calico-bgp-daemon binary
+$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
+	curl -L $(CALICO_BGP_DAEMON_URL) -o $@
 	chmod +x $@
 
 # Get bird binaries
@@ -126,8 +127,8 @@ birdcl:
 	chmod +x birdcl
 
 gobgp:
-	docker run --rm -v `pwd`:/code golang:1.7 \
-	sh -c 'go get github.com/osrg/gobgp/gobgp && cp /go/bin/gobgp /code && chown $(shell id -u):$(shell id -g) /code/gobgp'
+	curl -L $(GOBGP_URL) -o $@
+	chmod +x $@
 
 simple-binary: $(CALICOCTL_FILE) birdcl gobgp
 	pip install git+https://github.com/projectcalico/libcalico.git@master
