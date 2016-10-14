@@ -25,17 +25,17 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
     rm -f glibc-2.23-r3.apk glibc-bin-2.23-r3.apk
 
 # Install runit from the community repository, as its not yet available in global
-RUN apk add --update-cache --repository "http://alpine.gliderlabs.com/alpine/edge/community" runit
+RUN apk add --no-cache --repository "http://alpine.gliderlabs.com/alpine/edge/community" runit
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --update-cache ip6tables ipset iputils iproute2 conntrack-tools
+RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools
 
 # Install Python so libnetwork-plugin can run
 RUN apk --no-cache add python py-setuptools
 
 # Actually install libnetwork-plugin. A python dev environment (and git) is installed so libnetwork-plugin can be pip installed.
 # Finally the dev environment is removed. Doing this in one image layer minimized the final image size.
-RUN apk --no-cache add --virtual temp py-pip git gcc python-dev musl-dev && pip install git+https://github.com/projectcalico/libnetwork-plugin.git && \
+RUN apk --no-cache add --virtual temp py-pip git gcc python-dev musl-dev libffi-dev openssl-dev && pip install git+https://github.com/projectcalico/libnetwork-plugin.git && \
     pip install git+https://github.com/projectcalico/libcalico.git && apk del --purge temp
 
 # Copy in the filesystem - this contains felix, bird, gobgp etc...
