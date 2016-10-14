@@ -106,7 +106,7 @@ the etcd cluster.
 > urllib3 does support domain name-based `subjectAltNames`, allowing for
 > multiple domain names to be embedded in the certificate.
 >
-> For more details of the restrictions, see [this GitHub > issue](https://github.com/projectcalico/calico/issues/933).
+> For more details of the restrictions, see [this GitHub > issue](https://github.com/projectcalico/felix/issues/933).
 
 To enable TLS support:
 
