@@ -102,6 +102,6 @@ example in the [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{p
 
 [etcd]: https://coreos.com/etcd/docs/latest/
 [calico-releases]: https://github.com/projectcalico/calico-containers/releases/
-[docker]: https://docs.docker.com/installation/
+[docker]: https://docs.docker.com/engine/installation/
 [daemon-config-file]: https://docs.docker.com/engine/reference/commandline/dockerd/#/daemon-configuration-file
-[configuring-docker-1.9]: https://docs.docker.com/v1.9/engine/articles/configuring/
+[configuring-docker-1.9]: http://54.71.194.30:4019/engine/articles/configuring/
