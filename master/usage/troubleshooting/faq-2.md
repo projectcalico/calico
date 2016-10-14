@@ -41,8 +41,9 @@ router for all the container hosts.
 
 If this describes your infrastructure, the
 [External Connectivity tutorial]({{site.baseurl}}/{{page.version}}/usage/external-connectivity) explains in more detail
-what to do. Otherwise, detailed datacenter networking recommendations are given
-in the main [Project Calico documentation](http://docs.projectcalico.org/en/latest/index.html).
+what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
+detailed datacenter networking recommendations given
+in the main [this article]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
 

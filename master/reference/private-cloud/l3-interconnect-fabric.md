@@ -60,7 +60,7 @@ directed by whatever cloud orchestrator is in use. There are other
 components in the Calico architecture, but they are irrelevant to the
 interconnect network fabric discussion.
 
-###Overview of current common IP scale-out fabric architectures
+### Overview of current common IP scale-out fabric architectures
 
 There are two approaches to building an IP fabric for a scale-out
 infrastructure. However, all of them, to date, have assumed that the

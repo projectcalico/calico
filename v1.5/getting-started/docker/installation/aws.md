@@ -166,7 +166,7 @@ Before running the commands, note the following:
 (version 976.0.0 as of the writing of this document). The alpha version is used because it
 supports Docker 1.10. If you are using a region other than `us-west-2`, replace the
 image name with the correct CoreOS alpha HVM image from the [CoreOS image
-list](https://coreos.com/os/latest/booting-on-ec2.html) for your zone.
+list](https://coreos.com/os/docs/latest/booting-on-ec2.html) for your zone.
 Use `aws ec2 describe-availability-zones` to display your region if you do not remember.
 -  It may take a couple of minutes for AWS to boot the machines after creating them.
 
