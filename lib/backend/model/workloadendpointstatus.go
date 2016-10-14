@@ -74,7 +74,7 @@ func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error
 }
 
 func (key WorkloadEndpointStatusKey) valueType() reflect.Type {
-	return reflect.TypeOf(WorkloadEndpoint{})
+	return reflect.TypeOf(WorkloadEndpointStatus{})
 }
 
 func (key WorkloadEndpointStatusKey) String() string {
