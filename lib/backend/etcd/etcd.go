@@ -210,34 +210,44 @@ func (c *EtcdClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *EtcdClient) set(d *model.KVPair, options *etcd.SetOptions) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{
+		"key":   d.Key,
+		"value": d.Value,
+		"ttl":   d.TTL,
+		"rev":   d.Revision,
+	})
 	key, err := model.KeyToDefaultPath(d.Key)
 	if err != nil {
+		logCxt.WithError(err).Error("Failed to convert key to path")
 		return nil, err
 	}
 	bytes, err := json.Marshal(d.Value)
 	if err != nil {
+		logCxt.WithError(err).Error("Failed to marshal value")
 		return nil, err
 	}
 
 	value := string(bytes)
 
-	log.Infof("Key: %#v", key)
-	log.Infof("Value: %s", value)
 	if d.TTL != 0 {
-		log.Infof("TTL: %v", d.TTL)
+		logCxt.Debug("Key has TTL, copying etcd options")
 		// Take a copy of the default options so we can set the TTL for
 		// this request only.
 		optionsCopy := *options
 		optionsCopy.TTL = d.TTL
 		options = &optionsCopy
 	}
-	log.Infof("Options: %+v", options)
+	logCxt.WithField("options", options).Debug("Setting KV in etcd")
 	result, err := c.etcdKeysAPI.Set(context.Background(), key, value, options)
 	if err != nil {
+		// Log at debug because we don't know how serious this is.
+		// Caller should log if it's actually a problem.
+		logCxt.WithError(err).Debug("Set failed")
 		return nil, convertEtcdError(err, d.Key)
 	}
 
 	// Datastore object will be identical except for the modified index.
+	logCxt.WithField("newRev", result.Node.ModifiedIndex).Debug("Set succeeded")
 	d.Revision = result.Node.ModifiedIndex
 	return d, nil
 }

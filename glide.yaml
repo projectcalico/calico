@@ -1,0 +1,27 @@
+package: github.com/projectcalico/libcalico-go
+homepage: https://projectcalico.org
+license: Apache-2.0
+owners:
+- name: Rob Brockbank
+  email: rob@tigera.io
+import:
+- package: github.com/coreos/etcd
+  subpackages:
+  - client
+  - pkg/transport
+- package: github.com/docopt/docopt-go
+- package: github.com/ghodss/yaml
+- package: github.com/kelseyhightower/envconfig
+- package: github.com/olekukonko/tablewriter
+- package: github.com/docker/engine-api
+  version: release/1.12
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: gopkg.in/go-playground/validator.v8
+- package: github.com/satori/go.uuid
+- package: github.com/mcuadros/go-version
+- package: github.com/Sirupsen/logrus
+  version: ^0.10.0
+- package: github.com/termie/go-shutil
+- package: github.com/mitchellh/go-ps
