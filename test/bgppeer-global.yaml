@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: global
+  peerIP: 192.20.30.40
+spec:
+  asNumber: 64567
+
