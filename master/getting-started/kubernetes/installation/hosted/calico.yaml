@@ -59,7 +59,7 @@ data:
   # etcd-cert: null
   # etcd-ca: null
 
----  
+---
 
 # This manifest installs the calico/node container, as well
 # as the Calico CNI plugins and network config on 
