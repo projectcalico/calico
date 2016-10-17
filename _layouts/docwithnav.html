@@ -48,32 +48,48 @@ function redirect(version) {
 </script>
 
 <!--  HERO  -->
-<section id="hero" class="dark-text">
-	<h1>{{ this_pages_navbar.bigheader }}</h1>
-	<div style="float: left;"><h5>{{ this_pages_navbar.abstract }}</h5></div>
-	<!--	Ideally here, we would have a drop-down button to select the version
-			For now, we'll just print the current version -->
-	<div style="float: right;">
-		<h5>Viewing Version: <b>{{ page.version }}</b></h5>
-		<span>View other release:</span>
-		<span class="dropdown">
-			<select onchange="redirect(this.value)">
-				<option value="v1.5" {% if page.version == "v1.5" %}{{"selected"}}{% endif %}>v1.5</option>
-				<option value="master" {% if page.version == "master" %}{{"selected"}}{% endif %}>master</option>
-			</select>
-		</span>
-	</div>
-	<div style="clear: both;"></div>
-	<div id="vendorStrip" class="dark-text">
-		<ul>
-			{% for navbar in navbars %}
-				<li><a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}" {% if this_pages_navbar == navbar %}class="YAH"{% endif %}>{{ navbar.bigheader | upcase }}</a></li>
-			{% endfor %}
-		</ul>
-	</div>
-</section>
 <section id="encyclopedia">
 	<div class="container">
+		<nav class="navbar navbar-default">
+			<div class="container-fluid">
+				<div class="navbar-header">
+					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+						<span class="sr-only">Toggle navigation</span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+						<span class="icon-bar"></span>
+					</button>
+					<a class="navbar-brand" href="#">Project Calico</a>
+				</div>
+				<div id="navbar" class="navbar-collapse collapse">
+					<ul class="nav navbar-nav">
+						{% for navbar in navbars %}
+							<li{% if this_pages_navbar == navbar %} class="active"{% endif %}>
+								<a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">{{ navbar.bigheader }}</a>
+							</li>
+						{% endfor %}
+						<li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Dropdown <span class="caret"></span></a>
+          <ul class="dropdown-menu">
+            <li><a href="#">Action</a></li>
+            <li><a href="#">Another action</a></li>
+            <li><a href="#">Something else here</a></li>
+            <li role="separator" class="divider"></li>
+            <li><a href="#">Separated link</a></li>
+            <li role="separator" class="divider"></li>
+            <li><a href="#">One more separated link</a></li>
+          </ul>
+        </li>
+					</ul>
+					<ul class="nav navbar-nav navbar-right">
+						<li class="active"><a href="./">Documentation <span class="sr-only">(current)</span></a></li>
+						<li><a href="../navbar-static-top/">Support</a></li>
+						<li><a href="../navbar-fixed-top/">Blog</a></li>
+					</ul>
+				</div><!--/.nav-collapse -->
+			</div><!--/.container-fluid -->
+		</nav>
+
 		<div class="row">
 			<div class="col-sm-3">
 	<div id="docsToc">
@@ -84,7 +100,7 @@ function redirect(version) {
 	</div> <!-- /docsToc -->
 </div>
 <div class="col-sm-9">
-	<div id="docsContent">
+	<div id="">
     	{% if notitle != "true" %}<h1>{{ title }}</h1>{% endif %}
 		{{ content }}
 	</div>
@@ -92,8 +108,6 @@ function redirect(version) {
 </div>
 </div>
 </section>
-
-{% include footer.html %}
 
 <button class="flyout-button" onclick="kub.toggleToc()"></button>
 
