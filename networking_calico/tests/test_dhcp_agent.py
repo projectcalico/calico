@@ -31,7 +31,10 @@ from networking_calico import datamodel_v1
 from networking_calico.etcdutils import EtcdWatcher
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
-from neutron.common import constants
+try:
+    from neutron_lib import constants
+except Exception:
+    from neutron.common import constants
 from neutron.tests import base
 from oslo_config import cfg
 

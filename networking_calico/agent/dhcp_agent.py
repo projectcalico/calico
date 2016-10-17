@@ -31,7 +31,11 @@ from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
-from neutron.common import constants
+from neutron.common import constants as neutron_constants
+try:
+    from neutron_lib import constants
+except Exception:
+    constants = neutron_constants
 
 from networking_calico.common import mkdir_p
 from networking_calico.datamodel_v1 import dir_for_host
@@ -115,7 +119,7 @@ def empty_network(network_id=NETWORK_ID):
                            "subnets": [],
                            "ports": [],
                            "tenant_id": "calico",
-                           "mtu": constants.DEFAULT_NETWORK_MTU})
+                           "mtu": neutron_constants.DEFAULT_NETWORK_MTU})
 
 
 def copy_network(source_net):
