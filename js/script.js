@@ -262,7 +262,7 @@ var kub = (function () {
 		$('.pi-accordion').each(function () {
 			var accordion = this;
 			var content = this.innerHTML;
-			var container = newDOMElement('div', 'container');
+			var container = newDOMElement('div', 'pi-accordian-container');
 			container.innerHTML = content;
 			$(accordion).empty();
 			accordion.appendChild(container);
@@ -359,7 +359,7 @@ var kub = (function () {
 			}
 
 			if (content) {
-				var innerContainers = $(content).children('.container');
+				var innerContainers = $(content).children('.pi-accordian-container');
 				if (innerContainers.length > 0) {
 					innerContainers.each(function(){
 						CollapseBox($(this));

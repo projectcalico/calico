@@ -37,7 +37,7 @@ The code is a little roundabout for a few reasons:
 
 
 <!Doctype html>
-<html id="docs" class="{{this_pages_navbar.bigheader}}">
+<html lang="en">
 
 {% include head-header.html %}
 
@@ -46,6 +46,7 @@ function redirect(version) {
 	window.location = "{{site.baseurl}}/" + version + "/introduction"
 }
 </script>
+
 <!--  HERO  -->
 <section id="hero" class="dark-text">
 	<h1>{{ this_pages_navbar.bigheader }}</h1>
@@ -71,18 +72,25 @@ function redirect(version) {
 		</ul>
 	</div>
 </section>
-
 <section id="encyclopedia">
+	<div class="container">
+		<div class="row">
+			<div class="col-sm-3">
 	<div id="docsToc">
         <div class="pi-accordion">
 				{% include sidebar.html sidebar=this_pages_navbar.toc %}
         </div> <!-- /pi-accordion -->
 		<button class="push-menu-close-button" onclick="kub.toggleToc()"></button>
 	</div> <!-- /docsToc -->
+</div>
+<div class="col-sm-9">
 	<div id="docsContent">
     	{% if notitle != "true" %}<h1>{{ title }}</h1>{% endif %}
 		{{ content }}
 	</div>
+</div>
+</div>
+</div>
 </section>
 
 {% include footer.html %}
