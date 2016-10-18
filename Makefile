@@ -48,19 +48,21 @@ release/calicoctl: clean
 # Build calicoctl in a container.
 build-containerized: $(BUILD_CONTAINER_MARKER)
 	mkdir -p dist
-	docker run -ti --rm --privileged --net=host \
+	docker run --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
 	-v ${PWD}/dist:/go/src/github.com/projectcalico/libcalico-go/dist:rw \
-	$(BUILD_CONTAINER_NAME) make bin/calicoctl
+	$(BUILD_CONTAINER_NAME) bash -c 'make bin/calicoctl; \
+	chown $(shell id -u):$(shell id -g) -R ./'
 
 # Run the tests in a container. Useful for CI, Mac dev.
 .PHONY: test-containerized
 test-containerized: run-etcd $(BUILD_CONTAINER_MARKER)
-	docker run -ti --rm --privileged --net=host \
+	docker run --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
-	$(BUILD_CONTAINER_NAME) make ut
+	$(BUILD_CONTAINER_NAME) bash -c 'make ut; \
+	chown $(shell id -u):$(shell id -g) -R ./'
 	
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
