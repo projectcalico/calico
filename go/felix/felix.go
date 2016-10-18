@@ -64,6 +64,12 @@ func main() {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
 	}
+	buildInfoLogCxt := log.WithFields(log.Fields{
+		"version":   buildinfo.Version,
+		"buildDate": buildinfo.BuildDate,
+		"gitCommit": buildinfo.GitRevision,
+	})
+	buildInfoLogCxt.Info("Felix starting up")
 	log.Infof("Command line arguments: %v", arguments)
 
 	// Load the configuration from all the different sources including the
@@ -122,7 +128,10 @@ configRetry:
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
 	logutils.ConfigureLogging(configParams)
-	log.Infof("Successfully loaded configuration: %+v", configParams)
+	// Since we may have enabled more logging, log with the build context
+	// again.
+	buildInfoLogCxt.WithField("config", configParams).Info(
+		"Successfully loaded configuration.")
 
 	// Create a pair of pipes, one for sending messages to the dataplane
 	// driver, the other for receiving.
