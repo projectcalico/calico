@@ -19,9 +19,9 @@ import (
 
 	"bytes"
 	log "github.com/Sirupsen/logrus"
-	"github.com/fasaxc/go/src/io"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io"
 )
 
 var _ = Describe("Logutils", func() {
