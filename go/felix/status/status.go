@@ -125,7 +125,6 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 		}
 
 		if datamodelInSync && resyncRequested {
-			// TODO: load data from datamodel, mark missing/extra/incorrect keys dirty.
 			log.Debug("Doing endpoint status resync")
 			esr.attemptResync()
 			resyncRequested = false
@@ -141,10 +140,11 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 
 			err := esr.writeEndpointStatus(statID,
 				esr.epStatusIDToStatus[statID])
-			if err == nil {
-				log.Debugf(
-					"Write successful, discarding %v from dirty set",
-					statID)
+			if err != nil {
+				log.WithError(err).Warn(
+					"Failed to write endpoint status; is datastore up?")
+			} else {
+				log.WithField("statID", statID).Debug("Write successful")
 				esr.dirtyStatIDs.Discard(statID)
 			}
 			// Cork updates until the next timer pop.
@@ -159,7 +159,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	}
 	kvs, err := esr.datastore.List(wlListOpts)
 	if err != nil {
-		log.Errorf("Failed to load workload endpoint statuses from datastore: %v",
+		log.WithError(err).Errorf("Failed to load workload endpoint statuses",
 			err)
 		return
 	}
@@ -170,7 +170,11 @@ func (esr *EndpointStatusReporter) attemptResync() {
 		} else {
 			status := kv.Value.(*model.WorkloadEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
-				log.Debugf("Found out-of sync endpoint status: %v", kv.Key)
+				log.WithFields(log.Fields{
+					"key":            kv.Key,
+					"datastoreState": status,
+					"desiredState":   esr.epStatusIDToStatus[kv.Key],
+				}).Infof("Found out-of sync endpoint status")
 				esr.dirtyStatIDs.Add(kv.Key)
 			}
 		}
@@ -181,8 +185,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	}
 	kvs, err = esr.datastore.List(hostListOpts)
 	if err != nil {
-		log.Errorf("Failed to load workload endpoint statuses from datastore: %v",
-			err)
+		log.WithError(err).Error("Failed to load host endpoint statuses")
 		return
 	}
 	for _, kv := range kvs {
@@ -192,7 +195,11 @@ func (esr *EndpointStatusReporter) attemptResync() {
 		} else {
 			status := kv.Value.(*model.HostEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
-				log.Debugf("Found out-of sync endpoint status: %v", kv.Key)
+				log.WithFields(log.Fields{
+					"key":            kv.Key,
+					"datastoreState": status,
+					"desiredState":   esr.epStatusIDToStatus[kv.Key],
+				}).Infof("Found out-of sync endpoint status")
 				esr.dirtyStatIDs.Add(kv.Key)
 			}
 		}
@@ -201,8 +208,12 @@ func (esr *EndpointStatusReporter) attemptResync() {
 
 func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status string) (err error) {
 	kv := model.KVPair{Key: epID}
+	logCxt := log.WithFields(log.Fields{
+		"newStatus":  status,
+		"endpointID": epID,
+	})
 	if status != "" {
-		log.Debugf("Writing endpoint status for %v: %v", epID, status)
+		logCxt.Info("Writing endpoint status")
 		switch epID.(type) {
 		case model.HostEndpointStatusKey:
 			kv.Value = &model.HostEndpointStatus{status}
@@ -211,7 +222,7 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status st
 		}
 		_, err = esr.datastore.Apply(&kv)
 	} else {
-		log.Debugf("Deleting endpoint status for %v", epID)
+		logCxt.Info("Deleting endpoint status")
 		err = esr.datastore.Delete(&kv)
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
 			// Ignore non-existent resource.

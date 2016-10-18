@@ -236,6 +236,14 @@ func (f *endpointHostnameFilter) OnUpdate(update model.KVPair) (filterOut bool) 
 			filterOut = true
 		}
 	}
+	if !filterOut {
+		// To keep log spam down, log only for local endpoints.
+		if update.Value == nil {
+			log.WithField("id", update.Key).Info("Local endpoint deleted")
+		} else {
+			log.WithField("id", update.Key).Info("Local endpoint updated")
+		}
+	}
 	return
 }
 

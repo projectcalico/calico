@@ -1,10 +1,10 @@
 hash: 99fd4f7385d7834c552168cf8140f34a333fc3cf6aa13e4dfaee0f5b84a0b248
-updated: 2016-10-17T10:53:21.086909944+01:00
+updated: 2016-10-18T11:35:49.438918996+01:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/coreos/etcd
-  version: cc96f91156ed35caaf57ed987b4e9f75d142813a
+  version: 5c60478953b46e91074a54f5f6683b8afbef8968
   subpackages:
   - client
   - pkg/fileutil
@@ -13,7 +13,7 @@ imports:
   - pkg/transport
   - pkg/types
 - name: github.com/coreos/go-systemd
-  version: a63dfec412dc3675ec36888f359f8a1e5c3f740d
+  version: 2c9a2f6e703caf3523f0e5783af22855c3159413
   subpackages:
   - journal
 - name: github.com/coreos/pkg
@@ -59,7 +59,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 0de0d697efbbccba99fdb1b6560d473e6489f644
+  version: 46a196d0f1dc7e8d07b9f51955ec21a150b7f038
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
