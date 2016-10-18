@@ -206,32 +206,28 @@ func (hook ContextHook) Levels() []log.Level {
 }
 
 func (hook ContextHook) Fire(entry *log.Entry) error {
-	if _, file, line, ok := runtime.Caller(7); ok {
-		// We get called on two different code paths.  One via
-		// logrus.Info() and one via Entry.Info().  Use the presence
-		// of exported.go in the stack to figure out which path we're
-		// on.
-		fileName := path.Base(file)
-		if fileName == "exported.go" {
-			// Called via logrus.Info().
-			_, file, line, ok = runtime.Caller(8)
-		} else {
-			_, file6, line6, ok6 := runtime.Caller(6)
-			if ok6 {
-				fileName := path.Base(file6)
-				if fileName != "logger.go" {
-					file = file6
-					line = line6
-				}
+	pcs := make([]uintptr, 4)
+	if numEntries := runtime.Callers(6, pcs); numEntries > 0 {
+		frames := runtime.CallersFrames(pcs)
+		for {
+			frame, more := frames.Next()
+			if !shouldSkipFrame(frame) {
+				entry.Data["file"] = path.Base(frame.File)
+				entry.Data["line"] = frame.Line
+				break
 			}
-		}
-		if ok {
-			fileName = path.Base(file)
-			entry.Data["file"] = fileName
-			entry.Data["line"] = line
+			if !more {
+				break
+			}
 		}
 	}
 	return nil
+}
+
+func shouldSkipFrame(frame runtime.Frame) bool {
+	return strings.LastIndex(frame.File, "exported.go") > 0 ||
+		strings.LastIndex(frame.File, "logger.go") > 0 ||
+		strings.LastIndex(frame.File, "entry.go") > 0
 }
 
 // StreamHook is a logrus Hook that writes to a stream when fired.
