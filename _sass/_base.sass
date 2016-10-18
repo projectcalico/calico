@@ -126,39 +126,6 @@ header
 	background-repeat: no-repeat
 
 
-#docs
-	.flyout-button
-		background-color: #85a4d5
-		position: fixed
-		top: 20px
-		left: 20px
-		width: 50px
-		height: 50px
-		background-image: url(../images/toc_icon.png)
-		background-position: center center
-		background-repeat: no-repeat
-		background-size: auto
-		border-radius: 50%
-		transition: 0.3s
-		z-index: 99999
-
-	&.open-nav .flyout-button
-		display: none
-
-	.logo
-		position: absolute
-		top: 40px
-		left: 50%
-		transform: translate(-50%, -50%)
-		display: block
-		width: 45px
-		height: 44px
-		background-image: url(../images/favicon.png)
-
-
-	&.flip-nav .flyout-button
-		background-image: url(../images/toc_icon_grey.png)
-
 
 .nav-buttons
 	float: right
@@ -452,95 +419,6 @@ section
 
 	& > div
 		height: 100%
-
-#docsToc
-	position: fixed
-	background-color: white
-	top: 0
-	left: 0
-	width: 0
-	height: 100vh
-	overflow: hidden
-	padding: 50px 0
-	z-index: 999999
-	transition: 0.3s
-
-
-	.yah
-		& > .title
-			background-color: $light-grey
-			border-left: 3px solid $orange
-			padding: 7.5px 10px 7.5px 18px
-			margin-left: -3px
-			color: $orange
-
-.open-toc
-	body
-		overflow: hidden
-
-	#docsToc
-		padding: 50px 20px
-		width: 400px
-		max-width: 100vw
-		overflow-y: auto
-
-.pi-accordion
-	& > .pi-accordian-container:first-child > .item:first-child > .title:first-child
-		padding-left: 0
-		font-size: 1.5em
-		font-weight: 700
-
-	& > .pi-accordian-container:first-child > .item.yah:first-child > .title:first-child
-		margin-left: -20px !important
-
-	.item
-		overflow: hidden
-
-	.title
-		color: $dark-grey
-		position: relative
-		padding: 7.5px 10px 7.5px 18px
-		cursor: pointer
-		transition: 0.3s
-
-		&:hover
-			color: $orange
-
-	a.item > .title
-		color: black
-
-		&:hover
-			color: $orange
-
-	div.item > .title
-		&:before
-			content: ""
-			position: absolute
-			top: 12px
-			left: 2px
-			border-style: solid
-			border-width: 5px 0 5px 8px
-			border-color: transparent transparent transparent $orange
-			transform: rotate(0deg)
-			transition: 0.3s
-
-	.wrapper
-		position: relative
-		width: 100%
-		transition: height 0.3s
-
-	.content
-		padding-left: 20px
-		opacity: 0
-		transition: 0.3s
-
-	.item.on
-		& > .title:before
-			transform: rotate(90deg)
-
-		& > .wrapper > .content
-			opacity: 1
-
 
 dt
 	margin-bottom: 8px
