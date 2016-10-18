@@ -1,5 +1,5 @@
 hash: 99fd4f7385d7834c552168cf8140f34a333fc3cf6aa13e4dfaee0f5b84a0b248
-updated: 2016-10-18T11:35:49.438918996+01:00
+updated: 2016-10-18T14:51:21.856961047+01:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -59,7 +59,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 46a196d0f1dc7e8d07b9f51955ec21a150b7f038
+  version: 16ebea98d71cc53f5dfd744ae993566ffb8fdf78
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
