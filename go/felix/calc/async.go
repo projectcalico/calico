@@ -18,7 +18,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/config"
 	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/store"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"time"
@@ -30,7 +29,7 @@ const (
 )
 
 type AsyncCalcGraph struct {
-	Dispatcher       *store.Dispatcher
+	Dispatcher       *Dispatcher
 	inputEvents      chan interface{}
 	outputEvents     chan<- interface{}
 	eventBuffer      *EventBuffer

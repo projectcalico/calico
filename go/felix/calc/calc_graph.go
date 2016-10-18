@@ -20,7 +20,6 @@ import (
 	"github.com/projectcalico/felix/go/datastructures/labels"
 	"github.com/projectcalico/felix/go/datastructures/tags"
 	"github.com/projectcalico/felix/go/felix/endpoint"
-	"github.com/projectcalico/felix/go/felix/store"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hash"
@@ -66,17 +65,17 @@ type PipelineCallbacks interface {
 	hostIPCallbacks
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDispatcher *store.Dispatcher) {
+func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDispatcher *Dispatcher) {
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 	// The source of the processing graph, this dispatcher will be fed all
 	// the updates from the datastore, fanning them out to the registered
 	// handlers.
-	sourceDispatcher = store.NewDispatcher()
+	sourceDispatcher = NewDispatcher()
 
 	// Some of the handlers only need to know about local endpoints.
 	// Create a second dispatcher which will filter out non-local endpoints.
 	localEndpointFilter := &endpointHostnameFilter{hostname: hostname}
-	localEndpointDispatcher := store.NewDispatcher()
+	localEndpointDispatcher := NewDispatcher()
 	sourceDispatcher.Register(model.WorkloadEndpointKey{}, localEndpointDispatcher)
 	sourceDispatcher.Register(model.HostEndpointKey{}, localEndpointDispatcher)
 	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, localEndpointFilter)

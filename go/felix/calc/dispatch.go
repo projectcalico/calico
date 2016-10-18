@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package store
+package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
