@@ -34,7 +34,7 @@ import (
 var (
 	etcdApplyOpts       = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
 	etcdCreateOpts      = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
-	etcdDeleteEmptyOpts = &etcd.DeleteOptions{Recursive: false}
+	etcdDeleteEmptyOpts = &etcd.DeleteOptions{Recursive: false, Dir: true}
 	etcdGetOpts         = &etcd.GetOptions{Quorum: true}
 	etcdListOpts        = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
 	clientTimeout       = 30 * time.Second
