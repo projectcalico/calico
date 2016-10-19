@@ -29,7 +29,7 @@ Valid resource kinds are bgpPeer, hostEndpoint, workloadEndpoint, policy, pool a
 The <KIND> parameter is case insensitive and may be pluralized.
 
 Usage:
-  calicoctl delete ([--hostname=<HOSTNAME>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
+  calicoctl delete ([--node=<NODE>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
                     (<KIND> [<NAME>]) |
                     --filename=<FILE>)
                    [--skip-not-exists] [--config=<CONFIG>]
@@ -47,7 +47,8 @@ Examples:
 Options:
   -s --skip-not-exists         Skip over and treat as successful, resources that don't exist.
   -f --filename=<FILENAME>     Filename to use to delete the resource.  If set to "-" loads from stdin.
-  -n --hostname=<HOSTNAME>     The hostname.
+  -n --node=<NODE>             The node (this may be the hostname of the compute server if your
+                               installation does not explicitly set the names of each Calico node).
      --orchestrator=<ORCH>     The orchestrator (only used for workload endpoints).
      --workload=<WORKLOAD>     The workload (only used for workload endpoints).
   --scope=<SCOPE>              The scope of the resource type.  One of global, node.  This is only valid

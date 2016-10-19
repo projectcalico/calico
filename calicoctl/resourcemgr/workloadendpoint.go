@@ -24,12 +24,12 @@ func init() {
 	registerResource(
 		api.NewWorkloadEndpoint(),
 		api.NewWorkloadEndpointList(),
-		[]string{"HOSTNAME", "ORCHESTRATOR", "WORKLOAD", "NAME"},
-		[]string{"HOSTNAME", "ORCHESTRATOR", "WORKLOAD", "NAME", "NETWORKS", "NATS", "INTERFACE", "PROFILES"},
+		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME"},
+		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME", "NETWORKS", "NATS", "INTERFACE", "PROFILES"},
 		map[string]string{
-			"HOSTNAME":     "{{.Metadata.Hostname}}",
-			"ORCHESTRATOR": "{{.Metadata.OrchestratorID}}",
-			"WORKLOAD":     "{{.Metadata.WorkloadID}}",
+			"NODE":     "{{.Metadata.Node}}",
+			"ORCHESTRATOR": "{{.Metadata.Orchestrator}}",
+			"WORKLOAD":     "{{.Metadata.Workload}}",
 			"NAME":         "{{.Metadata.Name}}",
 			"NETWORKS":     "{{join .Spec.IPNetworks \",\"}}",
 			"NATS":         "{{join .Spec.IPNATs \",\"}}",

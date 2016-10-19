@@ -29,7 +29,7 @@ func init() {
 		map[string]string{
 			"SCOPE":    "{{.Metadata.Scope}}",
 			"PEERIP":   "{{.Metadata.PeerIP}}",
-			"HOSTNAME": "{{.Metadata.Hostname}}",
+			"NODE": "{{.Metadata.Node}}",
 			"ASN":      "{{.Spec.ASNumber}}",
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {

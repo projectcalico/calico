@@ -24,10 +24,10 @@ func init() {
 	registerResource(
 		api.NewHostEndpoint(),
 		api.NewHostEndpointList(),
-		[]string{"HOSTNAME", "NAME"},
-		[]string{"HOSTNAME", "NAME", "INTERFACE", "IPS", "PROFILES"},
+		[]string{"NODE", "NAME"},
+		[]string{"NODE", "NAME", "INTERFACE", "IPS", "PROFILES"},
 		map[string]string{
-			"HOSTNAME":  "{{.Metadata.Hostname}}",
+			"NODE":  "{{.Metadata.Node}}",
 			"NAME":      "{{.Metadata.Name}}",
 			"INTERFACE": "{{.Spec.InterfaceName}}",
 			"IPS":       "{{join .Spec.ExpectedIPs \",\"}}",

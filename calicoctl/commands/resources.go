@@ -94,7 +94,7 @@ func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
 func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource, error) {
 	kind := args["<KIND>"].(string)
 	name := argStringOrBlank(args, "<NAME>")
-	hostname := argStringOrBlank(args, "--hostname")
+	node := argStringOrBlank(args, "--node")
 	workload := argStringOrBlank(args, "--workload")
 	orchestrator := argStringOrBlank(args, "--orchestrator")
 	resScope := argStringOrBlank(args, "--scope")
@@ -104,7 +104,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	case "hostendpoint":
 		h := api.NewHostEndpoint()
 		h.Metadata.Name = name
-		h.Metadata.Hostname = hostname
+		h.Metadata.Hostname = node
 		return *h, nil
 	case "workloadendpoints":
 		fallthrough
@@ -113,7 +113,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 		h.Metadata.Name = name
 		h.Metadata.OrchestratorID = orchestrator
 		h.Metadata.WorkloadID = workload
-		h.Metadata.Hostname = hostname
+		h.Metadata.Hostname = node
 		return *h, nil
 	case "profiles":
 		fallthrough
@@ -149,7 +149,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 				return nil, err
 			}
 		}
-		p.Metadata.Hostname = hostname
+		p.Metadata.Hostname = node
 		switch resScope {
 		case "node":
 			p.Metadata.Scope = scope.Node

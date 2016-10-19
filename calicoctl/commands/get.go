@@ -33,7 +33,7 @@ By specifying the output as 'go-template' and providing a Go template as the val
 of the --go-template flag, you can filter the attributes of the fetched resource(s).
 
 Usage:
-  calicoctl get ([--hostname=<HOSTNAME>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
+  calicoctl get ([--node=<NODE>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
                  (<KIND> [<NAME>]) |
                  --filename=<FILENAME>)
                 [--output=<OUTPUT>] [--config=<CONFIG>]
@@ -49,7 +49,8 @@ Options:
   -f --filename=<FILENAME>     Filename to use to get the resource.  If set to "-" loads from stdin.
   -o --output=<OUTPUT FORMAT>  Output format.  One of: ps, wide, custom-columns=..., yaml, json,
                                go-template=..., go-template-file=...   [Default: ps]
-  -n --hostname=<HOSTNAME>     The hostname.
+  -n --node=<NODE>             The node (this may be the hostname of the compute server if your
+                               installation does not explicitly set the names of each Calico node).
      --orchestrator=<ORCH>     The orchestrator (only used for workload endpoints).
      --workload=<WORKLOAD>     The workload (only used for workload endpoints).
   --scope=<SCOPE>              The scope of the resource type.  One of global, node.  This is only valid
