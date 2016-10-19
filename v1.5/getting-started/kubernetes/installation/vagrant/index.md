@@ -14,19 +14,19 @@ These instructions allow you to set up a Kubernetes cluster with Calico networki
 
 ### 1.2 Clone the project
 
-    git clone https://github.com/projectcalico/calico.git 
+    git clone https://github.com/projectcalico/calico.git
 
 ### 1.3 Startup and SSH
 
 Change into the directory for this guide:
 
-    cd calico/{{page.version}}/getting-started/kubernetes/installation/vagrant 
+    cd calico/{{page.version}}/getting-started/kubernetes/installation/vagrant
 
 Run
 
     vagrant up
 
-> *Note*: This will deploy a Kubernetes master and a single Kubernetes node.  To run more nodes, modify the value `num_instances` in the Vagrantfile before running `vagrant up`.
+> *Note*: This will deploy a Kubernetes master and two Kubernetes nodes.  To run more nodes, modify the value `num_instances` in the Vagrantfile before running `vagrant up`.
 
 To connect to your servers
 
