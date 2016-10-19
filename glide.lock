@@ -1,5 +1,5 @@
-hash: 8f8c8a82f8e1f8d5b2fed647418eb3e1afc24abea34888f288b3f40a60c860e3
-updated: 2016-10-18T14:04:05.070470038+01:00
+hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
+updated: 2016-10-19T12:33:06.598976925+01:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -85,4 +85,37 @@ imports:
   version: 666120de432aea38ab06bd5c818f04f4129882c9
   subpackages:
   - patricia
-testImports: []
+testImports:
+- name: github.com/onsi/ginkgo
+  version: 7b6efc7d7b052568b49ac02d3141c9d7a5a494a4
+  subpackages:
+  - config
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
+- name: github.com/onsi/gomega
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
+- name: gopkg.in/yaml.v2
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
