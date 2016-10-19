@@ -24,8 +24,8 @@ import (
 type Ticker struct {
 	C           <-chan time.Time
 	stop        chan bool
-	minDuration time.Duration
-	maxJitter   time.Duration
+	MinDuration time.Duration
+	MaxJitter   time.Duration
 }
 
 func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
@@ -39,8 +39,8 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 	ticker := &Ticker{
 		C:           c,
 		stop:        make(chan bool),
-		minDuration: minDuration,
-		maxJitter:   maxJitter,
+		MinDuration: minDuration,
+		MaxJitter:   maxJitter,
 	}
 	go ticker.loop(c)
 	return ticker
@@ -48,8 +48,8 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 
 func (t *Ticker) loop(c chan time.Time) {
 	for {
-		jitter := time.Duration(rand.Int63n(int64(t.maxJitter)))
-		delay := t.minDuration + jitter
+		jitter := time.Duration(rand.Int63n(int64(t.MaxJitter)))
+		delay := t.MinDuration + jitter
 		time.Sleep(delay)
 		// Send best-effort then go back to sleep.
 		select {

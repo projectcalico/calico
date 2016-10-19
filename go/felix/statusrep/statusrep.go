@@ -103,6 +103,12 @@ func (esr *EndpointStatusReporter) Start() {
 	go esr.loopHandlingEndpointStatusUpdates()
 }
 
+// loopHandlingEndpointStatusUpdates is the main loop for the status reporter;
+// its processing is divided into two phases.  In the first phase, it waits on
+// its various input channels and updates its cached state.  In the second
+// phase, it works to bring the datastore into sync.  Datastore updates are
+// rate-limited and jittered to coalesce flapping status updates and to avoid
+// thundering herd issues.
 func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 	log.Infof("Starting endpoint status reporter loop with resync "+
 		"interval %v, report rate limit: 1/%v", esr.resyncInterval,
@@ -174,13 +180,19 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 		}
 
 		if datamodelInSync && resyncRequested {
+			// We're in sync and the resync timer has popped,
+			// do a resync with the datastore.  This will look for
+			// out-of-sync keys in the datastore and mark them as
+			// dirty so that we'll make delete/update them below.
 			log.Debug("Doing endpoint status resync")
 			esr.attemptResync()
 			resyncRequested = false
 		}
 
 		if updatesAllowed && esr.dirtyStatIDs.Len() > 0 {
-			// Not throttled and there's an update pending.
+			// Not throttled and there's at least one update
+			// pending.  Choose an arbitrary update from the dirty
+			// set.
 			log.WithField("numDirtyEndpoints", esr.dirtyStatIDs.Len()).Debug(
 				"Unthrottled and updates pending")
 			var statID model.Key
@@ -188,13 +200,16 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 				statID = item.(model.Key)
 				return set.StopIteration
 			})
-
+			// Then try to write the update to the datastore.
+			// Note: the update could be a deletion, in which case
+			// the read from the cache wil return nil.
 			err := esr.writeEndpointStatus(statID,
 				esr.epStatusIDToStatus[statID])
 			if err != nil {
 				log.WithError(err).Warn(
 					"Failed to write endpoint status; is datastore up?")
 			} else {
+				// Success, remove the status from the dirty set.
 				log.WithField("statID", statID).Debug("Write successful")
 				esr.dirtyStatIDs.Discard(statID)
 			}
@@ -210,9 +225,8 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	}
 	kvs, err := esr.datastore.List(wlListOpts)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to load workload endpoint statuses",
-			err)
-		return
+		log.WithError(err).Errorf("Failed to load workload endpoint statuses")
+		kvs = nil // Skip the loop and try host endpoints.
 	}
 	for _, kv := range kvs {
 		if kv.Value == nil {
@@ -237,7 +251,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	kvs, err = esr.datastore.List(hostListOpts)
 	if err != nil {
 		log.WithError(err).Error("Failed to load host endpoint statuses")
-		return
+		kvs = nil // Make sure we skip the loop.
 	}
 	for _, kv := range kvs {
 		if kv.Value == nil {
