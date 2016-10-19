@@ -9,39 +9,42 @@ networking-calico
 networking-calico is the Neutron 'stadium' sub-project that provides 'Calico'
 connectivity and security in an OpenStack/Neutron cloud.
 
-Calico (http://www.projectcalico.org/) uses IP routing to provide connectivity
-between the workloads in a data center that provide or use IP-based services -
-whether VMs, containers or bare metal appliances; and iptables, to impose any
-desired fine-grained security policy between those workloads.  Calico thus
-differs from most other Neutron backends, which use bridging and tunneling to
-simulate L2-level connectivity between the VMs attached to a Neutron network.
+Calico (http://www.projectcalico.org/) uses IP routing to provide
+connectivity - in the form of a flat IP network - between the workloads in a
+data center that provide or use IP-based services - whether VMs, containers or
+bare metal appliances; and iptables, to impose any desired fine-grained
+security policy between those workloads.  Calico thus differs from most other
+Neutron backends, which use bridging and tunneling to simulate L2-level
+connectivity between the VMs attached to a Neutron network.
 
-Calico networks also differ semantically from (non-external) Neutron networks,
-but are arguably similar to external Neutron networks, in that
+Using Calico implies and requires some restrictions on the full generality of
+what can theoretically be expressed by the Neutron API and data model.
+Specifically:
 
-- there is automatically east-west reachability between different Calico
-  networks, without any need for a Neutron virtual router
+- Calico only supports IP addresses in a single, flat IP address space.
+  Therefore it does not support overlapping IP ranges, or "bring your own
+  addressing."  In Neutron API terms, all Calico network subnets must belong to
+  the same address scope.
 
-- there is automatically potential reachability between any Calico network and
-  the outside world (in practice depending on how an operator connects up their
-  cloud fabric network, and how their BGP topology gateways routes and traffic
-  between the cloud network and the Internet).
+- Calico does not provide layer 2 adjacency even on the same Neutron subnet, so
+  raw layer 2 protocols and broadcast do not work with Calico.  In Neutron API
+  terms, all Calico networks are :code:`l2_adjacency False`.
 
-networking-calico works today with vanilla Liberty OpenStack (and there is a
-DevStack plugin that makes it very easy to try this - see
-http://docs.openstack.org/developer/networking-calico/devstack.html).
+- Calico provides connectivity between different networks by default, and
+  relies on security group configuration and policy to implement whatever
+  network isolation and finer-grained security restrictions are desired.  In
+  Neutron API terms, this means that Calico networks must either be external
+  provider networks, or be tenant networks that are connected through a Neutron
+  router to an external network.
 
-The remaining issue is just that the Neutron API does not properly describe the
-semantics that Calico delivers: Calico's connectivity semantics differ from
-what an operator might expect, given the sequence of Neutron API calls that is
-made to set up a Calico system.  Work to address this is in progress at
-https://review.openstack.org/#/c/238895/.  Please do contribute your opinion
-there, if this is of interest to you.
+For more detail please see :ref:`semantics`.
 
 .. toctree::
    :maxdepth: 2
 
    readme
+   semantics
+   floating-ips
    devstack
    implementation-notes
    host-routes

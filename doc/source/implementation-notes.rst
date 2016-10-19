@@ -70,13 +70,8 @@ networking-calico
 The openstack/networking-calico project, part of the Neutron 'stadium',
 contains Calico's Neutron-specific code, comprising:
 
-- an ML2 mechanism driver
+- an ML2 mechanism driver, or a core plugin, for the Neutron server
 
-- DHCP agent drivers
+- a modified DHCP agent
 
 - a Devstack plugin.
-
-.. note:: Actually the ML2 mechanism driver is not there yet; it is currently
-          still at
-          https://github.com/projectcalico/calico/tree/master/calico/openstack,
-          but planned to move to networking-calico very soon.
