@@ -72,7 +72,7 @@ var _ = Describe("CalicoCni", func() {
 				// The endpoint is created in etcd
 				endpoint_path := GetEtcdMostRecentSubdir(fmt.Sprintf("/calico/v1/host/%s/workload/cni/%s", hostname, containerID))
 				Expect(endpoint_path).Should(ContainSubstring(containerID))
-				Expect(GetEtcdString(endpoint_path)).Should(MatchJSON(fmt.Sprintf(`{"state":"active","name":"cali%s","mac":"%s","profile_ids":["net1"],"ipv4_nets":["%s/32"],"ipv6_nets":[],"labels":{}}`, containerID, mac, ip)))
+				Expect(GetEtcdString(endpoint_path)).Should(MatchJSON(fmt.Sprintf(`{"state":"active","name":"cali%s","mac":"%s","profile_ids":["net1"],"ipv4_nets":["%s/32"],"ipv6_nets":[]}`, containerID, mac, ip)))
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging

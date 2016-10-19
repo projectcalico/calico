@@ -1,10 +1,8 @@
-hash: 197b0a0079cc2d47111d41120d2f6f35fa939c9c11eab984d28b9326de37fcac
-updated: 2016-09-11T11:44:11.639839344-07:00
+hash: a77685cf87f1a61704adfb459b39811c30585c8348787f30f91f1d4a869614b3
+updated: 2016-10-20T19:22:49.979409687+01:00
 imports:
 - name: github.com/blang/semver
   version: 60ec3488bfea7cca02b021d106d9911120d25fe9
-- name: github.com/cloudfoundry-incubator/candiedyaml
-  version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/containernetworking/cni
   version: 07a8a28637e97b22eb8dfe710eeae1344f69d16e
   subpackages:
@@ -17,7 +15,7 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: 0b6350227c2c9c8efa25593d0ec57447244162b8
+  version: a47797fdf1d3087a9b31b206771d8fa91f27f92f
   subpackages:
   - client
   - pkg/fileutil
@@ -26,15 +24,16 @@ imports:
   - pkg/transport
   - pkg/types
 - name: github.com/coreos/go-iptables
-  version: 5463fbac3bcc6b990663941c2e12660d19f6b36d
+  version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
   subpackages:
   - iptables
 - name: github.com/coreos/go-systemd
-  version: 2f344660b11f7285b0af86195c4456e92970f640
+  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
   subpackages:
+  - activation
   - journal
 - name: github.com/coreos/pkg
-  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
   - capnslog
 - name: github.com/davecgh/go-spew
@@ -42,24 +41,24 @@ imports:
   subpackages:
   - spew
 - name: github.com/docker/distribution
-  version: 5e8d18f615031aeb79f3bdedcc954b08f86e9719
+  version: 8234784a1a66bfee4a6d72d0a3cbd453b7f903d7
   subpackages:
   - digest
   - reference
 - name: github.com/emicklei/go-restful
-  version: bf50d2be18145391aa3d4339b07195807b25a427
+  version: 3d66f886316ac990eb502aaa89ea38546420b8b7
   subpackages:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: aa0c862057666179de291b67d9f093d12b5a8473
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/gogo/protobuf
-  version: d7788ac7ca647999a3775cb756e449ab177dd138
+  version: e18d7aa8f8c624c915db340349aad4c49b10d173
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
-  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
+  version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/google/gofuzz
   version: fd52762d25a41827db7ef64c43756fd4b9f7e382
 - name: github.com/imdario/mergo
@@ -67,9 +66,9 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 1e291572dcb9ba673cdcdb15e0f422702415ebaf
+  version: 9aca109c9aec4633fced9717c4a09ecab3d33111
 - name: github.com/onsi/ginkgo
-  version: 7b6efc7d7b052568b49ac02d3141c9d7a5a494a4
+  version: 7f8ab55aaf3b86885aa55b762e803744d1674700
   subpackages:
   - config
   - extensions/table
@@ -87,7 +86,7 @@ imports:
   - reporters/stenographer
   - types
 - name: github.com/onsi/gomega
-  version: b48c9a8b2644326d0a44eaaacc8d83e35174a05d
+  version: 2152b45fa28a361beba9aab0885972323a444e28
   subpackages:
   - format
   - gbytes
@@ -103,15 +102,9 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/pborman/uuid
-  version: b984ec7fa9ff9e428bd0cf0abf429384dfbe3e37
-- name: github.com/satori/go.uuid
-  version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
-- name: github.com/Sirupsen/logrus
-  version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
-- name: github.com/spf13/pflag
-  version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
+  version: 3d4f2ba23642d3cfd06bd4b54cf03d99d95c0f1b
 - name: github.com/projectcalico/libcalico-go
-  version: 0ddf9de2807feb4ef2953d78fab33e0bc78d2fdb
+  version: 4d86b6458df42f96e0ac15f6a4130884376d6f02
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -122,38 +115,36 @@ imports:
   - lib/backend/model
   - lib/client
   - lib/errors
-  - lib/hash
   - lib/hwm
   - lib/net
   - lib/numorstring
   - lib/scope
-  - lib/selector
-  - lib/selector/parser
-  - lib/selector/tokenizer
-  - lib/validator
+- name: github.com/satori/go.uuid
+  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+- name: github.com/Sirupsen/logrus
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+- name: github.com/spf13/pflag
+  version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/ugorji/go
-  version: 5cd0f2b3b6cca8e3a0a4101821e41a73cb59bed6
+  version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 63381f39fceb1c5c13503a90e1c2603caeafe3c5
+  version: 9dee363ad4abbc3c9a4a24a9f1e33363e224b111
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
   version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/net
-  version: 9313baa13d9262e49d07b20ed57dceafcd7240cc
+  version: 6acef71eb69611914f7a30939ea9f6e194c78172
   subpackages:
   - context
   - http2
   - http2/hpack
-  - lex/httplex
 - name: golang.org/x/sys
-  version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
-- name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tchap/go-patricia.v2
@@ -161,7 +152,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/yaml.v2
-  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go
   version: 93fcd402979cfad8a7151f96e016416947c6a3cb
   subpackages:
