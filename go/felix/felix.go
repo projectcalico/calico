@@ -163,6 +163,7 @@ configRetry:
 	// Start a thread to shut this process down if the driver fails.
 	go func() {
 		err := cmd.Wait()
+		log.WithError(err).Error("Dataplane driver process stopped")
 		shutdownReasonChan <- fmt.Sprintf("Dataplane driver process failed: %v", err)
 	}()
 
@@ -198,12 +199,13 @@ configRetry:
 }
 
 func manageShutdown(osSignalChan <-chan os.Signal, failureReportChan <-chan string, driverCmd *exec.Cmd) {
+	var reason string
 	select {
 	case sig := <-osSignalChan:
-		log.Infof("Received OS signal %v; shutting down.", sig)
-	case failureReason := <-failureReportChan:
-		log.Errorf("Detected failure: %v; shutting down.", failureReason)
+		reason = fmt.Sprintf("Received OS signal %v", sig)
+	case reason = <-failureReportChan:
 	}
+	log.WithField("reason", reason).Warn("Felix is shutting down")
 
 	// Make sure we don't wait for ever if the driver is unresponsive.
 	go func() {
