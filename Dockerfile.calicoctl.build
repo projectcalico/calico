@@ -19,4 +19,4 @@ RUN apk add --update bash git iproute2 curl make gcc alpine-sdk linux-headers &&
 RUN go get github.com/onsi/ginkgo/ginkgo
 RUN go get github.com/onsi/gomega
 RUN go get github.com/Masterminds/glide
-WORKDIR /go/src/github.com/projectcalico/libcalico-go
+WORKDIR /go/src/github.com/projectcalico/calico-containers

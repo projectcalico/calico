@@ -1,15 +1,12 @@
 general:
   artifacts:
-    - "dist"
+    - "release"
 machine:
   services:
     - docker
-dependencies:
-  override:
-    - echo "Nothing please"
 test:
   override:
-    - make update-tools vendor build-containerized test-containerized
+    - make release/calicoctl test-containerized
 experimental:
   notify:
     branches:

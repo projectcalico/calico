@@ -1,4 +1,4 @@
-package: github.com/projectcalico/libcalico-go
+package: github.com/projectcalico/calico-containers
 homepage: https://projectcalico.org
 license: Apache-2.0
 owners:
@@ -25,3 +25,6 @@ import:
   version: ^0.10.0
 - package: github.com/termie/go-shutil
 - package: github.com/mitchellh/go-ps
+- package: github.com/projectcalico/libcalico-go
+  subpackages:
+  - lib

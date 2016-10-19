@@ -1,5 +1,5 @@
-hash: f7d523998964cfa7e5002ad7038de8226a6d14ca40be50659136f26d2d2ecd67
-updated: 2016-09-27T13:20:15.990078148-07:00
+hash: 8f8c8a82f8e1f8d5b2fed647418eb3e1afc24abea34888f288b3f40a60c860e3
+updated: 2016-10-18T14:04:05.070470038+01:00
 imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
@@ -32,14 +32,35 @@ imports:
   version: 1e291572dcb9ba673cdcdb15e0f422702415ebaf
 - name: github.com/mattn/go-runewidth
   version: d6bea18f789704b5f83375793155289da36a3c7f
-- name: github.com/mitchellh/go-ps
-  version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
 - name: github.com/mcuadros/go-version
   version: d52711f8d6bea8dc01efafdb68ad95a4e2606630
-- name: github.com/Microsoft/go-winio
-  version: ce2922f643c8fd76b46cadc7f404a06282678b34
+- name: github.com/mitchellh/go-ps
+  version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
 - name: github.com/olekukonko/tablewriter
   version: daf2955e742cf123959884fdff4685aa79b63135
+- name: github.com/projectcalico/libcalico-go
+  version: 50b13c349b5c8dea77e60e279936d51b11a937b1
+  subpackages:
+  - calicoctl/commands/node
+  - lib
+  - lib/api
+  - lib/api/unversioned
+  - lib/backend
+  - lib/backend/api
+  - lib/backend/compat
+  - lib/backend/etcd
+  - lib/backend/model
+  - lib/client
+  - lib/errors
+  - lib/hash
+  - lib/hwm
+  - lib/net
+  - lib/numorstring
+  - lib/scope
+  - lib/selector
+  - lib/selector/parser
+  - lib/selector/tokenizer
+  - lib/validator
 - name: github.com/satori/go.uuid
   version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/Sirupsen/logrus
@@ -64,38 +85,4 @@ imports:
   version: 666120de432aea38ab06bd5c818f04f4129882c9
   subpackages:
   - patricia
-testImports:
-- name: github.com/onsi/ginkgo
-  version: 7b6efc7d7b052568b49ac02d3141c9d7a5a494a4
-  subpackages:
-  - config
-  - extensions/table
-  - internal/codelocation
-  - internal/containernode
-  - internal/failer
-  - internal/leafnodes
-  - internal/remote
-  - internal/spec
-  - internal/specrunner
-  - internal/suite
-  - internal/testingtproxy
-  - internal/writer
-  - reporters
-  - reporters/stenographer
-  - types
-- name: github.com/onsi/gomega
-  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
-  subpackages:
-  - format
-  - internal/assertion
-  - internal/asyncassertion
-  - internal/oraclematcher
-  - internal/testingtsupport
-  - matchers
-  - matchers/support/goraph/bipartitegraph
-  - matchers/support/goraph/edge
-  - matchers/support/goraph/node
-  - matchers/support/goraph/util
-  - types
-- name: gopkg.in/yaml.v2
-  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+testImports: []

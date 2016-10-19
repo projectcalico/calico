@@ -22,7 +22,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/ghodss/yaml"
-	"github.com/projectcalico/libcalico-go/calicoctl/resourcemgr"
+	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
