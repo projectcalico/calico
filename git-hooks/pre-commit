@@ -16,7 +16,7 @@
 set -e
 
 # Make sure we get some output if an unexpected command happens to fail.
-trap "echo git pre-commit hook failed." EXIT
+trap "echo; echo git pre-commit hook failed." EXIT
 
 # Redirect output to stderr.
 exec 1>&2
@@ -42,11 +42,11 @@ for filename in $changed_py_files; do
     continue
   fi
   if ! grep -q -E "$copyright_re" "${filename}"; then
-    echo "Changed file is missing ${copyright_owner} copyright:" ${filename}
+    echo "  Changed file is missing ${copyright_owner} copyright:" ${filename}
     py_copyright_check_failed=true
   fi
   if ! grep -q -E "Licensed under the Apache License, Version 2.0" "${filename}"; then
-    echo "Changed file is missing Apache license:" ${filename}
+    echo "  Changed file is missing Apache license:" ${filename}
     py_apache_check_failed=true
   fi
 done
@@ -82,22 +82,29 @@ fi
 
 
 # Run go fmt over the changed files.
-echo "Checking changed Go files with gofmt..."
+echo "Checking changed Go files for formatting, license etc..."
 go_copyright_check_failed=false
 gofmt_failed=false
 go_apache_check_failed=false
+logrus_hook_check_failed=false
 
 for filename in $changed_go_files; do
   if [ ! -e  "${filename}" ]; then
     continue
   fi
   if gofmt -d "${filename}" | grep '.'; then
-    echo "gofmt would make changes to file:" ${filename}
+    echo "  gofmt would make changes to file:" ${filename}
     gofmt_failed=true
   fi
   if ! grep -q -E "Licensed under the Apache License, Version 2.0" "${filename}"; then
-    echo "Changed file is missing Apache license:" ${filename}
+    echo "  Changed file is missing Apache license:" ${filename}
     go_apache_check_failed=true
+  fi
+  if echo $filename | grep -q '_suite_test.go'; then
+    if ! grep -q 'HookLogrus' "$filename"; then
+      echo "  Test suite doesn't call HookLogrusForGinkgo(): $filename"
+      logrus_hook_check_failed=true
+    fi
   fi
 done
 if $gofmt_failed; then
@@ -120,6 +127,18 @@ for filename in $changed_go_files; do
     go_copyright_check_failed=true
   fi
 done
+
+if $logrus_hook_check_failed; then
+  echo
+  echo "One or more test suites don't call HookLogrusForGinkgo()."
+  echo "If a suite doesn't call HookLogrusForGinkgo() then its logs won't be"
+  echo "correctly captured during UT runs.  Example:"
+  echo
+  echo 'import "github.com/projectcalico/libcalico-go/lib/testutils"'
+  echo 'func init() {'
+  echo '	testutils.HookLogrusForGinkgo()'
+  echo '}'
+fi
 
 if $go_copyright_check_failed; then
   echo
@@ -153,7 +172,8 @@ if $go_apache_check_failed; then
 fi
 
 if $go_apache_check_failed || $go_copyright_check_failed || \
-   $py_apache_check_failed || $py_copyright_check_failed; then
+   $py_apache_check_failed || $py_copyright_check_failed || \
+   $logrus_hook_check_failed; then
   exit 1
 fi
 
