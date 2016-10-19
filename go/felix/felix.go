@@ -27,7 +27,7 @@ import (
 	_ "github.com/projectcalico/felix/go/felix/config"
 	"github.com/projectcalico/felix/go/felix/logutils"
 	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/status"
+	"github.com/projectcalico/felix/go/felix/statusrep"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -280,7 +280,7 @@ type DataplaneConn struct {
 	felixReader       io.Reader
 	felixWriter       io.Writer
 	datastore         bapi.Client
-	statusReporter    *status.EndpointStatusReporter
+	statusReporter    *statusrep.EndpointStatusReporter
 
 	datastoreInSync bool
 
@@ -555,7 +555,7 @@ func (fc *DataplaneConn) Start() {
 
 	if fc.config.EndpointReportingEnabled {
 		log.Info("Endpoint status reporting enabled, starting status reporter")
-		fc.statusReporter = status.NewEndpointStatusReporter(
+		fc.statusReporter = statusrep.NewEndpointStatusReporter(
 			fc.config.FelixHostname,
 			fc.endpointUpdates,
 			fc.inSync,

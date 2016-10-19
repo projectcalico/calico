@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package status
+package statusrep
 
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/datastructures/set"
 	"github.com/projectcalico/felix/go/felix/jitter"
 	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"time"
@@ -29,29 +28,75 @@ type EndpointStatusReporter struct {
 	hostname           string
 	endpointUpdates    <-chan interface{}
 	inSync             <-chan bool
-	datastore          api.Client
+	stop               chan bool
+	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
 	dirtyStatIDs       set.Set
 	reportingDelay     time.Duration
 	resyncInterval     time.Duration
+	resyncTicker       stoppable
+	resyncTickerC      <-chan time.Time
+	rateLimitTicker    stoppable
+	rateLimitTickerC   <-chan time.Time
 }
 
 func NewEndpointStatusReporter(hostname string,
 	endpointUpdates <-chan interface{},
 	inSync <-chan bool,
-	datastore api.Client,
+	datastore datastore,
 	reportingDelay time.Duration,
 	resyncInterval time.Duration) *EndpointStatusReporter {
+
+	resyncSchedulingTicker := jitter.NewTicker(resyncInterval, resyncInterval/10)
+	updateRateLimitTicker := jitter.NewTicker(reportingDelay, reportingDelay/10)
+
+	return newEndpointStatusReporterWithTickerChans(
+		hostname,
+		endpointUpdates,
+		inSync,
+		datastore,
+		resyncSchedulingTicker,
+		resyncSchedulingTicker.C,
+		updateRateLimitTicker,
+		updateRateLimitTicker.C,
+	)
+}
+
+// newEndpointStatusReporterWithTickerChans is an internal constructor allowing
+// the tickers to be mocked for UT.
+func newEndpointStatusReporterWithTickerChans(hostname string,
+	endpointUpdates <-chan interface{},
+	inSync <-chan bool,
+	datastore datastore,
+	resyncTicker stoppable,
+	resyncTickerChan <-chan time.Time,
+	rateLimitTicker stoppable,
+	rateLimitTickerChan <-chan time.Time) *EndpointStatusReporter {
 	return &EndpointStatusReporter{
 		hostname:           hostname,
 		endpointUpdates:    endpointUpdates,
 		datastore:          datastore,
 		inSync:             inSync,
+		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
 		dirtyStatIDs:       set.New(),
-		reportingDelay:     reportingDelay,
-		resyncInterval:     resyncInterval,
+		resyncTicker:       resyncTicker,
+		resyncTickerC:      resyncTickerChan,
+		rateLimitTicker:    rateLimitTicker,
+		rateLimitTickerC:   rateLimitTickerChan,
 	}
+}
+
+// datastore is a copy of the parts of the backend client API that we need.
+// See github.com/projectcalico/libcalico-go/lib/backend/api for more detail.
+type datastore interface {
+	List(list model.ListInterface) ([]*model.KVPair, error)
+	Apply(object *model.KVPair) (*model.KVPair, error)
+	Delete(object *model.KVPair) error
+}
+
+type stoppable interface {
+	Stop()
 }
 
 func (esr *EndpointStatusReporter) Start() {
@@ -66,14 +111,18 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 	resyncRequested := false
 	updatesAllowed := true
 
-	resyncSchedulingTicker := jitter.NewTicker(esr.resyncInterval, esr.resyncInterval/10)
-	updateRateLimitTicker := jitter.NewTicker(esr.reportingDelay, esr.reportingDelay/10)
 	for {
+		log.Debug("About to wait on channels")
 		select {
-		case <-resyncSchedulingTicker.C:
+		case <-esr.stop:
+			log.Info("Stopping endpoint status reporter")
+			esr.resyncTicker.Stop()
+			esr.rateLimitTicker.Stop()
+			break
+		case <-esr.resyncTickerC:
 			log.Debug("Endpoint status resync tick: scheduling cleanup")
 			resyncRequested = true
-		case <-updateRateLimitTicker.C:
+		case <-esr.rateLimitTickerC:
 			if !updatesAllowed {
 				log.Debugf("Update tick: uncorking updates")
 				updatesAllowed = true
@@ -112,7 +161,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 					EndpointID: msg.Id.EndpointId,
 				}
 			default:
-				log.Fatalf("Unexpected message: %#v", msg)
+				log.Panicf("Unexpected message: %#v", msg)
 			}
 			if esr.epStatusIDToStatus[statID] != status {
 				if status != "" {
@@ -132,6 +181,8 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 
 		if updatesAllowed && esr.dirtyStatIDs.Len() > 0 {
 			// Not throttled and there's an update pending.
+			log.WithField("numDirtyEndpoints", esr.dirtyStatIDs.Len()).Debug(
+				"Unthrottled and updates pending")
 			var statID model.Key
 			esr.dirtyStatIDs.Iter(func(item interface{}) error {
 				statID = item.(model.Key)
@@ -174,7 +225,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 					"key":            kv.Key,
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
-				}).Infof("Found out-of sync endpoint status")
+				}).Info("Found out-of-sync workload endpoint status")
 				esr.dirtyStatIDs.Add(kv.Key)
 			}
 		}
@@ -199,7 +250,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 					"key":            kv.Key,
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
-				}).Infof("Found out-of sync endpoint status")
+				}).Infof("Found out-of-sync host endpoint status")
 				esr.dirtyStatIDs.Add(kv.Key)
 			}
 		}
@@ -230,4 +281,8 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status st
 		}
 	}
 	return
+}
+
+func (esr *EndpointStatusReporter) Stop() {
+	esr.stop <- true
 }
