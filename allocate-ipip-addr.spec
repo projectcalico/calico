@@ -3,10 +3,10 @@
 block_cipher = None
 
 
-a = Analysis(['calicoctl/calicoctl.py'],
+a = Analysis(['calico_node/allocate-ipip-addr.py'],
              pathex=['/code'],
              binaries=None,
-             datas=[('birdcl', '.'), ('gobgp', '.') ],
+             datas=None,
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],
@@ -21,7 +21,7 @@ exe = EXE(pyz,
           a.binaries,
           a.zipfiles,
           a.datas,
-          name='calicoctl',
+          name='allocate-ipip-addr',
           debug=False,
           strip=False,
           upx=True,

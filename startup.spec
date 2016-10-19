@@ -3,10 +3,10 @@
 block_cipher = None
 
 
-a = Analysis(['calicoctl/calicoctl.py'],
+a = Analysis(['calico_node/startup.py'],
              pathex=['/code'],
              binaries=None,
-             datas=[('birdcl', '.') ],
+             datas=None,
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],
@@ -21,7 +21,7 @@ exe = EXE(pyz,
           a.binaries,
           a.zipfiles,
           a.datas,
-          name='calicoctl-debian-glibc-2.13',
+          name='startup',
           debug=False,
           strip=False,
           upx=True,
