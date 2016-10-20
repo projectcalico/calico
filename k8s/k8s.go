@@ -38,14 +38,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 	utils.ConfigureLogging(conf.LogLevel)
 
-	workloadID, orchestratorID, err := utils.GetIdentifiers(args)
+	workload, orchestrator, err := utils.GetIdentifiers(args)
 	if err != nil {
 		return nil, err
 	}
-	logger := utils.CreateContextLogger(workloadID)
+	logger := utils.CreateContextLogger(workload)
 	logger.WithFields(log.Fields{
-		"OrchestratorID": orchestratorID,
-		"Hostname":       hostname,
+		"Orchestrator": orchestrator,
+		"Node":         hostname,
 	}).Info("Extracted identifiers")
 
 	if endpoint != nil {
@@ -98,9 +98,9 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		// Create the endpoint object and configure it
 		endpoint = api.NewWorkloadEndpoint()
 		endpoint.Metadata.Name = args.IfName
-		endpoint.Metadata.Hostname = hostname
-		endpoint.Metadata.OrchestratorID = orchestratorID
-		endpoint.Metadata.WorkloadID = workloadID
+		endpoint.Metadata.Node = hostname
+		endpoint.Metadata.Orchestrator = orchestrator
+		endpoint.Metadata.Workload = workload
 		endpoint.Metadata.Labels = make(map[string]string)
 
 		// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network

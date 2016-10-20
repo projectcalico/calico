@@ -200,11 +200,11 @@ func ConfigureLogging(logLevel string) {
 }
 
 // Create a logger which always includes common fields
-func CreateContextLogger(workloadID string) *log.Entry {
+func CreateContextLogger(workload string) *log.Entry {
 	// A common pattern is to re-use fields between logging statements by re-using
 	// the logrus.Entry returned from WithFields()
 	contextLogger := log.WithFields(log.Fields{
-		"WorkloadID": workloadID,
+		"Workload": workload,
 	})
 
 	return contextLogger

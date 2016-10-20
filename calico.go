@@ -57,12 +57,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	ConfigureLogging(conf.LogLevel)
 
-	workloadID, orchestratorID, err := GetIdentifiers(args)
+	workload, orchestrator, err := GetIdentifiers(args)
 	if err != nil {
 		return err
 	}
 
-	logger := CreateContextLogger(workloadID)
+	logger := CreateContextLogger(workload)
 
 	// Allow the hostname to be overridden by the network config
 	if conf.Hostname != "" {
@@ -70,8 +70,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	logger.WithFields(log.Fields{
-		"OrchestratorID": orchestratorID,
-		"Hostname":       hostname,
+		"Orchestrator": orchestrator,
+		"Node":         hostname,
 	}).Info("Extracted identifiers")
 
 	calicoClient, err := CreateClient(conf)
@@ -80,9 +80,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	// Always check if there's an existing endpoint.
 	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
-		Hostname:       hostname,
-		OrchestratorID: orchestratorID,
-		WorkloadID:     workloadID})
+		Node:         hostname,
+		Orchestrator: orchestrator,
+		Workload:     workload})
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
-	if orchestratorID == "k8s" {
+	if orchestrator == "k8s" {
 		if result, err = k8s.CmdAddK8s(args, conf, hostname, calicoClient, endpoint); err != nil {
 			return err
 		}
@@ -148,9 +148,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 2) Create the endpoint object
 			endpoint = api.NewWorkloadEndpoint()
 			endpoint.Metadata.Name = args.IfName
-			endpoint.Metadata.Hostname = hostname
-			endpoint.Metadata.OrchestratorID = orchestratorID
-			endpoint.Metadata.WorkloadID = workloadID
+			endpoint.Metadata.Node = hostname
+			endpoint.Metadata.Orchestrator = orchestrator
+			endpoint.Metadata.Workload = workload
 			endpoint.Metadata.Labels = labels
 			endpoint.Spec.Profiles = []string{profileID}
 
@@ -222,7 +222,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
 			var inboundRules []api.Rule
-			if orchestratorID == "k8s" {
+			if orchestrator == "k8s" {
 				inboundRules = []api.Rule{{Action: "allow"}}
 			} else {
 				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Tag: conf.Name}}}
@@ -255,12 +255,12 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	ConfigureLogging(conf.LogLevel)
 
-	workloadID, orchestratorID, err := GetIdentifiers(args)
+	workload, orchestrator, err := GetIdentifiers(args)
 	if err != nil {
 		return err
 	}
 
-	logger := CreateContextLogger(workloadID)
+	logger := CreateContextLogger(workload)
 
 	// Allow the hostname to be overridden by the network config
 	if conf.Hostname != "" {
@@ -268,9 +268,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	logger.WithFields(log.Fields{
-		"WorkloadID":     workloadID,
-		"OrchestratorID": orchestratorID,
-		"Hostname":       hostname,
+		"Workload":     workload,
+		"Orchestrator": orchestrator,
+		"Node":         hostname,
 	}).Info("Extracted identifiers")
 
 	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
@@ -289,9 +289,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	if err := calicoClient.WorkloadEndpoints().Delete(api.WorkloadEndpointMetadata{
-		Hostname:       hostname,
-		OrchestratorID: orchestratorID,
-		WorkloadID:     workloadID}); err != nil {
+		Name:         args.IfName,
+		Node:         hostname,
+		Orchestrator: orchestrator,
+		Workload:     workload}); err != nil {
 		return err
 	}
 
