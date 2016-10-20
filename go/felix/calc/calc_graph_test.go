@@ -627,6 +627,17 @@ func squashStates(baseTests StateList) (desc string, mappedTests []StateList) {
 	return
 }
 
+// These tests drive the calculation graph directly (and synchronously).
+// They take the StateLists in baseTests, expand them using the test expansion
+// functions and then drive the graph through the expanded states.  These tests
+// also deterministically decide when to flush the calculation graph's buffers
+// so they should be deterministic overall.  Any non-determinism is likely to
+// come from iterations over maps or sets inside the calculation graph.
+//
+// Debugging note: since the tests get expanded, a single failure in a base
+// test often creates many fails in the output as each expansion of that test
+// is also likely to fail.  A good strategy for debugging is to focus on the
+// base tests first.
 var _ = Describe("Calculation graph state sequencing tests:", func() {
 	for _, test := range baseTests {
 		baseTest := test
@@ -650,6 +661,15 @@ var _ = Describe("Calculation graph state sequencing tests:", func() {
 	}
 })
 
+// These tests use the same expansion logic as the synchronous tests above
+// but they drive the calculation graph via its asynchronous channel interface.
+// Since they don't have control over when the graph gets flushed, they are
+// less deterministic than the tests above and they can't test the output after
+// every state is reached.
+//
+// Debugging note: only spend time debugging these tests once the equivalent
+// synchronous test above is passing.  It's much easier to debug a
+// deterministic test!
 var _ = Describe("Async calculation graph state sequencing tests:", func() {
 	for _, test := range baseTests {
 		if len(test) == 0 {
@@ -675,10 +695,14 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					go toValidator.SendTo(validator)
 					// And the calc graph in another.
 					asyncGraph.Start()
+					// Channel to tell us when the input is done.
+					done := make(chan bool, 2)
 					// Start a thread to inject the KVs.
 					go func() {
+						log.Info("Input injector thread started")
 						lastState := empty
 						for _, state := range test {
+							log.WithField("state", state).Info("Injecting next state")
 							kvDeltas := state.KVDeltas(lastState)
 							for _, kv := range kvDeltas {
 								toValidator.OnUpdates([]KVPair{kv})
@@ -687,19 +711,35 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 						}
 						toValidator.OnStatusUpdated(api.InSync)
 
-						// The async graph flushes every 10ms, give
-						// it up to 50ms to output the correct state
-						// then cut the output channel so that our
-						// loop below will return.
-						time.Sleep(50 * time.Millisecond)
-						close(outputChan)
+						// Give the graph some time to flush its output.
+						time.Sleep(1 * time.Second)
+						done <- true
 					}()
 
 					// Now drain the output from the output channel.
 					tracker := newStateTracker()
-					for update := range outputChan {
-						log.WithField("update", update).Info("Update from channel")
-						tracker.onEvent(update)
+					inSyncReceived := false
+				readLoop:
+					for {
+						select {
+						case <-done:
+							log.Info("Got done message, stopping.")
+							Expect(inSyncReceived).To(BeTrue(), "Timed out before we got an in-sync message")
+							break readLoop
+						case update := <-outputChan:
+							log.WithField("update", update).Info("Update from channel")
+							Expect(inSyncReceived).To(BeFalse(), "Unexpected update after in-sync")
+							tracker.onEvent(update)
+							if _, ok := update.(*proto.InSync); ok {
+								// InSync should be the last message, to make sure, give
+								// the graph another few ms before we stop.
+								inSyncReceived = true
+								go func() {
+									time.Sleep(20 * time.Millisecond)
+									done <- true
+								}()
+							}
+						}
 					}
 					state := test[len(test)-1]
 
