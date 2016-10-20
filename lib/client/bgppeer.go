@@ -84,7 +84,7 @@ func (h *bgpPeers) convertMetadataToListInterface(m unversioned.ResourceMetadata
 	l := model.BGPPeerListOptions{
 		Scope:    pm.Scope,
 		PeerIP:   pm.PeerIP,
-		Hostname: pm.Hostname,
+		Hostname: pm.Node,
 	}
 	return l, nil
 }
@@ -96,7 +96,7 @@ func (h *bgpPeers) convertMetadataToKey(m unversioned.ResourceMetadata) (model.K
 	k := model.BGPPeerKey{
 		Scope:    pm.Scope,
 		PeerIP:   pm.PeerIP,
-		Hostname: pm.Hostname,
+		Hostname: pm.Node,
 	}
 	return k, nil
 }
@@ -132,7 +132,7 @@ func (h *bgpPeers) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, er
 	apiBGPPeer := api.NewBGPPeer()
 	apiBGPPeer.Metadata.Scope = backendBGPPeerKey.Scope
 	apiBGPPeer.Metadata.PeerIP = backendBGPPeerKey.PeerIP
-	apiBGPPeer.Metadata.Hostname = backendBGPPeerKey.Hostname
+	apiBGPPeer.Metadata.Node = backendBGPPeerKey.Hostname
 	apiBGPPeer.Spec.ASNumber = backendBGPPeer.ASNum
 
 	return apiBGPPeer, nil

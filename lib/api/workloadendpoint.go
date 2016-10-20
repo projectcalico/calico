@@ -36,13 +36,13 @@ type WorkloadEndpointMetadata struct {
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// The name of the workload.
-	WorkloadID string `json:"workloadID,omitempty" valid:"omitempty,name"`
+	Workload string `json:"workload,omitempty" valid:"omitempty,name"`
 
 	// The name of the orchestrator.
-	OrchestratorID string `json:"orchestratorID,omitempty" valid:"omitempty,name"`
+	Orchestrator string `json:"orchestrator,omitempty" valid:"omitempty,name"`
 
-	// The name of the node.
-	Hostname string `json:"hostname,omitempty" valid:"omitempty,name"`
+	// The node name identifying the Calico node instance.
+	Node string `json:"node,omitempty" valid:"omitempty,name"`
 
 	// The labels applied to the workload endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
