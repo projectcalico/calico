@@ -4,48 +4,30 @@
 This repositiory contains Calico's Go components:
 
 - `libcalico`, which can be imported as `"github.com/projectcalico/libcalico-go/lib"`
-- `calicoctl`
 
-## Common set-up
+This library is used by both `calicoctl`, `calico-cni` and `felix`.
 
-Assuming you have already installed **go version 1.7.1+**, perform the following simple steps to get building:
+If you are looking for the golang version of `calicoctl` it is in the process of moving and
+can be found in our
+[calico-containers repo / golang branch](https://github.com/projectcalico/calico-containers/tree/golang).
+ 
+If you wish to use libcalico for integration with Calico networking and
+policy, the main entry point to managing Calico configuration is through
+the client.
 
-- [Install Glide](https://github.com/Masterminds/glide#install)
+-  Documentation for the client is in `lib/client`.
+-  The resource structure definitions are defined in `lib/api`, this
+   includes detailed per-resource and per-field level descriptions.
 
-- Clone this repository to your Go project path: 
-```
-git clone git@github.com:projectcalico/libcalico-go.git $GOPATH/src/github.com/projectcalico/libcalico-go
-```
 
-- Switch to your project directory:
-```
-cd $GOPATH/src/github.com/projectcalico/libcalico-go
-```
+If you are developing against the code in libcalico, please run the tests before
+submitting a Pull Request.
 
-- Populate the `vendor/` directory in the project's root with this project's dependencies:
-```
-glide install
-```
+To run the tests locally (requires a full golang environment Go 1.7+):
 
-## Building calicoctl
+    make ut
+    
+To run the tests within a containerized environment:
 
-### Non-release build
-To do a quick, non-release build of calicoctl, suitable for local testing, run
-```
-make bin/calicoctl
-```
-
-The binary will be put in ./bin:
-```
-./bin/calicoctl --help
-```
-
-### Release build
-
-For releases, we use a Docker-based build to ensure a clean environment with an appropriate glibc.  Specifically, we use a CentOS 6.6 container image to build against glibc v2.12.  this ensures compatibility with any later glibc.
-
-To do a release build, run:
-```
-make release/calicoctl
-```
-The binary will be emitted to `./releases/calicoctl-<version>`
+    make test-containerized
+    
