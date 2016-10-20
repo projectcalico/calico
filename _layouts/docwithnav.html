@@ -37,11 +37,7 @@ The code is a little roundabout for a few reasons:
 
 
 <!Doctype html>
-<html lang="en" id="docs">
-
-{% if page.title %}
-	{% assign title=page.title %}
-{% endif %}
+<html lang="en">
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
@@ -49,11 +45,8 @@ The code is a little roundabout for a few reasons:
 	<link rel="shortcut icon" type="image/png" href="{{site.baseurl}}/images/favicon.png">
 	<link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
 	<link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
-  <link rel="stylesheet" href="{{site.baseurl}}/css/jquery-ui.min.css">
-  <link rel="stylesheet" href="{{site.baseurl}}/css/sweetalert.css">
 	<link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
 	<script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
-  <script src="{{site.baseurl}}/js/jquery-ui.min.js"></script>
 	<script src="{{site.baseurl}}/js/bootstrap/collapse.js"></script>
 	<script src="{{site.baseurl}}/js/script.js"></script>
 	<script>
@@ -65,7 +58,7 @@ The code is a little roundabout for a few reasons:
 	  ga('create', 'UA-52125893-4', 'auto');
 	  ga('send', 'pageview');
 	</script>
-	<title>Calico - {{ title | json }}</title>
+	<title>Calico - {{ page.title | json }}</title>
 </head>
 <body>
 	<script type="text/javascript">
@@ -74,10 +67,9 @@ The code is a little roundabout for a few reasons:
 	}
 	</script>
 
-<!--  HERO  -->
-<section id="encyclopedia">
+<section>
 	<div class="container">
-		<nav class="navbar navbar-default">
+		<nav class="navbar navbar-default navbar-static-top">
 			<div class="container-fluid">
 				<div class="navbar-header">
 					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
@@ -123,27 +115,12 @@ The code is a little roundabout for a few reasons:
 			</div>
 			<div class="col-sm-9">
 				<div id="">
-			    	{% if notitle != "true" %}<h1>{{ title }}</h1>{% endif %}
+		    	<h1>{{ page.title }}</h1>
 					{{ content }}
 				</div>
 			</div>
 		</div>
 	</div>
 </section>
-
-<button class="flyout-button" onclick="kub.toggleToc()"></button>
-
-<style>
-	.cse .gsc-control-cse, .gsc-control-cse, {
-		padding: 0;
-	}
-	.gsc-control-cse table, .gsc-control-cse-en table {
-		margin:0px !important;
-	}
-
-	.gsc-above-wrapper-area {
-		border-bottom: 0;
-	}
-</style>
 </body>
 </html>
