@@ -34,8 +34,8 @@ type HostEndpointMetadata struct {
 	// The name of the endpoint.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
-	// The hostname of the compute server.
-	Hostname string `json:"hostname,omitempty" validate:"omitempty,name"`
+	// The node name identifying the Calico node instance.
+	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the host endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads

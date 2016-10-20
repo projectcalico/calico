@@ -103,7 +103,7 @@ func (h *hostEndpoints) List(metadata api.HostEndpointMetadata) (*api.HostEndpoi
 func (h *hostEndpoints) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
 	hm := m.(api.HostEndpointMetadata)
 	l := model.HostEndpointListOptions{
-		Hostname:   hm.Hostname,
+		Hostname:   hm.Node,
 		EndpointID: hm.Name,
 	}
 	return l, nil
@@ -114,7 +114,7 @@ func (h *hostEndpoints) convertMetadataToListInterface(m unversioned.ResourceMet
 func (h *hostEndpoints) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	hm := m.(api.HostEndpointMetadata)
 	k := model.HostEndpointKey{
-		Hostname:   hm.Hostname,
+		Hostname:   hm.Node,
 		EndpointID: hm.Name,
 	}
 	return k, nil
@@ -166,7 +166,7 @@ func (h *hostEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Resourc
 	ips = append(ips, bh.ExpectedIPv6Addrs...)
 
 	ah := api.NewHostEndpoint()
-	ah.Metadata.Hostname = bk.Hostname
+	ah.Metadata.Node = bk.Hostname
 	ah.Metadata.Name = bk.EndpointID
 	ah.Metadata.Labels = bh.Labels
 	ah.Spec.InterfaceName = bh.Name

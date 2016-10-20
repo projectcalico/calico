@@ -42,10 +42,10 @@ type BGPPeerMetadata struct {
 	// peers with the specified Calico node (specified by the node hostname).
 	Scope scope.Scope `json:"scope" validate:"omitempty,scopeglobalornode"`
 
-	// The hostname of the compute server that is peering with this peer.  When modifying a
-	// BGP peer, the hostname must be specified when the scope is `node`, and must
-	// be omitted when the scope is `global`.
-	Hostname string `json:"hostname,omitempty" validate:"omitempty,name"`
+	// The node name identifying the Calico node instance that is peering with this peer.
+	// When modifying a BGP peer, the node must be specified when the scope is `node`, and
+	// must be omitted when the scope is `global`.
+	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// The IP address of the peer.
 	PeerIP net.IP `json:"peerIP" validate:"omitempty,ip"`
