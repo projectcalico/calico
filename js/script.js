@@ -12,7 +12,7 @@ $(document).ready(function(){
         $(this).collapse('show');
       });
 
-      $(yahLink).addClass('yah');
+      $(yahLink).addClass('current-page');
       yahLink.onclick = function(e){e.preventDefault();};
     });
   }

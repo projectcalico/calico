@@ -1,3 +1,21 @@
 ---
 ---
 @import "../_sass/bootstrap";
+
+#sidebar {
+  a {
+    transition: 0.3s;
+  }
+  a.section {
+    color: green;
+  }
+  a.current-page {
+    color: orange;
+  }
+  a[aria-expanded="true"] {
+    color: blue;
+  }
+  .collapse {
+    padding-left: 10px;
+  }
+}

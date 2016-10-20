@@ -3,10 +3,8 @@
   {% if item.section %}
     <div>
       {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' }}{% endcapture %}
-    <a class="" role="button" data-toggle="collapse" href="#{{titleized}}" aria-expanded="false" aria-controls="{{titleized}}">{{item.title}}</a>
-      <div class="collapse" id="{{ titleized }}">
-        <div class="well">{% include sidebar.html sidebar=item.section prefix=titleized %}</div>
-      </div>
+    <a class="section" role="button" data-toggle="collapse" href="#{{titleized}}" aria-expanded="false" aria-controls="{{titleized}}">{{item.title}}</a>
+      <div class="collapse" id="{{ titleized }}">{% include sidebar.html sidebar=item.section prefix=titleized %}</div>
     </div>
   {% else %}
     {% assign prefix = item.path | slice: 0, 4 %}
@@ -15,6 +13,6 @@
     {% else %}
       {% assign target="" %}
     {% endif %}
-    <div><a data-title="{{ item.title }}" href="{{ site.baseurl }}/{{ page.version }}{{ item.path }}"{{ target }}>{{item.title}}</a></div>
+    <div><a class="item" data-title="{{ item.title }}" href="{{ site.baseurl }}/{{ page.version }}{{ item.path }}"{{ target }}>{{item.title}}</a></div>
   {% endif %}
 {% endfor %}
