@@ -88,11 +88,17 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		if num4 == 1 {
+			if len(assignedV4) != num4 {
+				return fmt.Errorf("Failed to request %d IPv4 addresses. IPAM allocated only %d.", num4, len(assignedV4))
+			}
 			ipV4Network := net.IPNet{IP: assignedV4[0].IP, Mask: net.CIDRMask(32, 32)}
 			r.IP4 = &types.IPConfig{IP: ipV4Network}
 		}
 
 		if num6 == 1 {
+			if len(assignedV6) != num6 {
+				return fmt.Errorf("Failed to request %d IPv6 addresses. IPAM allocated only %d.", num6, len(assignedV6))
+			}
 			ipV6Network := net.IPNet{IP: assignedV6[0].IP, Mask: net.CIDRMask(128, 128)}
 			r.IP6 = &types.IPConfig{IP: ipV6Network}
 		}
