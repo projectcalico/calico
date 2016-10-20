@@ -66,10 +66,10 @@ type WorkloadEndpointSpec struct {
 	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
 
 	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
-	IPv4Gateway net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv4Gateway *net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
 
 	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
-	IPv6Gateway net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
+	IPv6Gateway *net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
 
 	// A list of security Profile resources that apply to this endpoint. Each profile is
 	// applied in the order that they appear in this list.  Profile rules are applied

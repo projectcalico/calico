@@ -154,11 +154,11 @@ type WorkloadEndpoint struct {
 	ProfileIDs  []string          `json:"profile_ids"`
 	IPv4Nets    []net.IPNet       `json:"ipv4_nets"`
 	IPv6Nets    []net.IPNet       `json:"ipv6_nets"`
-	IPv4NAT     []IPNAT           `json:"ipv4_nat"`
-	IPv6NAT     []IPNAT           `json:"ipv6_nat"`
-	Labels      map[string]string `json:"labels"`
-	IPv4Gateway net.IP            `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
-	IPv6Gateway net.IP            `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
+	IPv4NAT     []IPNAT           `json:"ipv4_nat,omitempty"`
+	IPv6NAT     []IPNAT           `json:"ipv6_nat,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	IPv4Gateway *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv6Gateway *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
