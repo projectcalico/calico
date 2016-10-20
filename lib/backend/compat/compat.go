@@ -103,12 +103,12 @@ func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
 		}
 		d := model.KVPair{
 			Key: k,
-			Value: model.Profile{
+			Value: &model.Profile{
 				Tags: t.Value.([]string),
 			},
 			Revision: t.Revision,
 		}
-		p := d.Value.(model.Profile)
+		p := d.Value.(*model.Profile)
 		if l, err = c.client.Get(model.ProfileLabelsKey{pk}); err == nil {
 			p.Labels = l.Value.(map[string]string)
 		}
