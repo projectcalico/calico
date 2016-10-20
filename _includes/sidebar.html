@@ -1,8 +1,9 @@
 
 {% for item in include.sidebar %}
   {% if item.section %}
-    <div>
+    <div class="link">
       {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' }}{% endcapture %}
+    <span class="glyphicon glyphicon-chevron-right" style="font-size: 10px; color: #f69432"></span>
     <a class="section" role="button" data-toggle="collapse" href="#{{titleized}}" aria-expanded="false" aria-controls="{{titleized}}">{{item.title}}</a>
       <div class="collapse" id="{{ titleized }}">{% include sidebar.html sidebar=item.section prefix=titleized %}</div>
     </div>
@@ -13,6 +14,6 @@
     {% else %}
       {% assign target="" %}
     {% endif %}
-    <div><a class="item" data-title="{{ item.title }}" href="{{ site.baseurl }}/{{ page.version }}{{ item.path }}"{{ target }}>{{item.title}}</a></div>
+    <div class="link"><a class="item" data-title="{{ item.title }}" href="{{ site.baseurl }}/{{ page.version }}{{ item.path }}"{{ target }}>{{item.title}}</a></div>
   {% endif %}
 {% endfor %}

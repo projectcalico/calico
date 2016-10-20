@@ -17,4 +17,10 @@ $(document).ready(function(){
     });
   }
   setYAH();
+  $('#sidebar').on('show.bs.collapse', function(event) {
+    $(event.target).prev().prev().removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+  });
+  $('#sidebar').on('hide.bs.collapse', function(event) {
+    $(event.target).prev().prev().removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+  })
 });

@@ -4,16 +4,29 @@
 
 #sidebar {
   a {
-    transition: 0.3s;
+    color: black;
+    text-decoration: none;
   }
-  a.section {
-    color: green;
+  // Blow up the first toplevel link a bit (since it always is the splash page
+  // for this nav.)
+  > div:first-child > a {
+    font-weight: 700;
+    font-size: 1.2em;
   }
+
+  // Highlight the one <a> element that represents the currently viewed page
   a.current-page {
-    color: orange;
+    background-color: #f7f7f7;
+    border-left: 3px solid #f69432;
+    padding: 0px 10px 0px 18px;
+    margin-left: -3px;
+    color: #f69432;
   }
-  a[aria-expanded="true"] {
-    color: blue;
+  // Give all links left padding to create the collapsed indentation.
+  div.link {
+    padding-left: 20px;
+    padding-top: 5px;
+    padding-bottom: 5px;
   }
   .collapse {
     padding-left: 10px;
