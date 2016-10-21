@@ -1,7 +1,3 @@
-> ![warning](../../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](../../README.md) main page.
-
 # BGP Peer Resource
 A BGP Peer resource represents a BGP peer which node(s) in this cluster will connect to. Configuration of BGP peers is required when configuring Calico to peer with your existing datacenter infrastructure (e.g. ToR). For more information on cluster layouts, see Calico's documentation on [L3 Topologies](http://docs.projectcalico.org/en/latest/l3-interconnectFabric.html).
 
