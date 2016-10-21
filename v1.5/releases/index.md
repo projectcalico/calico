@@ -6,7 +6,7 @@ The following table shows component versioning for Calico  **{{ page.version }}*
 
 Use the version selector at the top-right of this page to view a different release.
 
-## v1.5.0 
+## v1.5.0
 
 | Component              | Version  |
 |------------------------|----------|
