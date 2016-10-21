@@ -34,17 +34,19 @@ import (
 var bgpPeerRegex, _ = regexp.Compile(`[A-Za-z]+\_\w+\b`)
 
 // Status prings status of the node and returns error (if any)
-func Status() error {
+func Status(args []string) error {
 	doc := `Usage:
-calicoctl node status
+  calicoctl node status
+
+Options:
+  -h --help                 Show this screen.
 
 Description:
-  Display the status of the Calico node`
-
+  Check the status of the Calico node instance .`
 	// Note: This call is ignoring the error because error check happens at the level above
 	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
 	// printed for this option
-	_, _ = docopt.Parse(doc, nil, true, "calicoctl", false, false)
+	_, _ = docopt.Parse(doc, args, true, "calicoctl", false, false)
 
 	processes, err := gops.Processes()
 	if err != nil {

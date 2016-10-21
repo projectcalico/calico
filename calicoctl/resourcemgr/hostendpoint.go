@@ -27,7 +27,7 @@ func init() {
 		[]string{"NODE", "NAME"},
 		[]string{"NODE", "NAME", "INTERFACE", "IPS", "PROFILES"},
 		map[string]string{
-			"NODE":  "{{.Metadata.Node}}",
+			"NODE":      "{{.Metadata.Node}}",
 			"NAME":      "{{.Metadata.Name}}",
 			"INTERFACE": "{{.Spec.InterfaceName}}",
 			"IPS":       "{{join .Spec.ExpectedIPs \",\"}}",

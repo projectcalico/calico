@@ -27,10 +27,10 @@ func init() {
 		[]string{"SCOPE", "PEERIP", "HOSTNAME", "ASN"},
 		[]string{"SCOPE", "PEERIP", "HOSTNAME", "ASN"},
 		map[string]string{
-			"SCOPE":    "{{.Metadata.Scope}}",
-			"PEERIP":   "{{.Metadata.PeerIP}}",
-			"NODE": "{{.Metadata.Node}}",
-			"ASN":      "{{.Spec.ASNumber}}",
+			"SCOPE":  "{{.Metadata.Scope}}",
+			"PEERIP": "{{.Metadata.PeerIP}}",
+			"NODE":   "{{.Metadata.Node}}",
+			"ASN":    "{{.Spec.ASNumber}}",
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.BGPPeer)

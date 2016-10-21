@@ -27,29 +27,25 @@ import (
 
 // IPAM takes keyword with an IP address then calls the subcommands.
 func IPAM(args []string) error {
-	doc := `Usage: 
-    calicoctl ipam release --ip=<IP>
-    calicoctl ipam show --ip=<IP>
-
-Description:
-    IP address management
+	doc := DatastoreIntro + `Usage:
+  calicoctl ipam release --ip=<IP>
+  calicoctl ipam show --ip=<IP>
 
 Options:
-    --ip=<IP>     IP address
+  -h --help      Show this screen.
+     --ip=<IP>   IP address
+
+Description:
+  Calico IP address management commands.
 
 Warnings:
-  -  Releasing an in-use IP address can result in it being assigned to multiple
-     workloads.
-`
+  Releasing an in-use IP address can result in it being assigned to multiple
+  workloads.`
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
 		return err
 	}
-
-	// Length of parsedArgs is 0 when `-h` `--help` is passed.
-	// Docopt takes care of printing the help message, but we need to
-	// return nil here so command doesn't go any further when `-h` is passed.
 	if len(parsedArgs) == 0 {
 		return nil
 	}

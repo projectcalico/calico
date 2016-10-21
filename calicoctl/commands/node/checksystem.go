@@ -36,18 +36,20 @@ const minKernelVersion = "2.6.24"
 var requiredModules = []string{"xt_set", "ip6_tables"}
 
 // Checksystem checks host system for compatible versions
-func Checksystem() error {
+func Checksystem(args []string) error {
 	doc := `Usage: 
-    calicoctl node checksystem
+  calicoctl node checksystem
+
+Options:
+  -h --help                 Show this screen.
 
 Description:
-    Check for compatibility with the host system
-`
+  Check the compatibility of this compute host to run a Calico node instance.`
 
 	// Note: This call is ignoring the error because error check happens at the level above
 	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
 	// printed for this option
-	_, _ = docopt.Parse(doc, nil, true, "calicoctl", false, false)
+	_, _ = docopt.Parse(doc, args, true, "calicoctl", false, false)
 
 	// Make sure the command is run with super user priviladges
 	if os.Getuid() != 0 {

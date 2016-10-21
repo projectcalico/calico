@@ -27,7 +27,7 @@ func init() {
 		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME"},
 		[]string{"NODE", "ORCHESTRATOR", "WORKLOAD", "NAME", "NETWORKS", "NATS", "INTERFACE", "PROFILES"},
 		map[string]string{
-			"NODE":     "{{.Metadata.Node}}",
+			"NODE":         "{{.Metadata.Node}}",
 			"ORCHESTRATOR": "{{.Metadata.Orchestrator}}",
 			"WORKLOAD":     "{{.Metadata.Workload}}",
 			"NAME":         "{{.Metadata.Name}}",

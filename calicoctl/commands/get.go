@@ -24,7 +24,7 @@ import (
 )
 
 func Get(args []string) error {
-	doc := EtcdIntro + `Display one or many resources identified by file, stdin or resource type and name.
+	doc := DatastoreIntro + `Display one or many resources identified by file, stdin or resource type and name.
 
 Valid resource kinds are bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and profile.
 The <KIND> parameter is case insensitive and may be pluralized.
@@ -46,6 +46,7 @@ Examples:
   calicoctl get -o yaml policy my-policy-1
 
 Options:
+  -h --help                    Show this screen.
   -f --filename=<FILENAME>     Filename to use to get the resource.  If set to "-" loads from stdin.
   -o --output=<OUTPUT FORMAT>  Output format.  One of: ps, wide, custom-columns=..., yaml, json,
                                go-template=..., go-template-file=...   [Default: ps]
@@ -58,7 +59,40 @@ Options:
                                or node-specific.
   -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
                                [default: /etc/calico/calicoctl.cfg]
-`
+
+Description:
+  The get command is used to display a set of resources by filename or stdin, or by type and
+  identifiers.  JSON and YAML formats are accepted for file and stdin format.
+
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and
+  profile.  The <TYPE> is case insensitive and may be pluralized.
+
+  Attempting to get resources that do not exist will simply return no results.
+
+  When getting resources by type, only a single type may be specified at a time.  The name
+  and other identifiers (hostname, scope) are optional, and are wildcarded when omitted.
+  Thus if you specify no identifiers at all (other than type), then all configured resources of
+  the requested type will be returned.
+
+  By default the results are output in a ps-style table output.  There are alternative ways to
+  display the data using the --output option:
+    ps                    Display the results in ps-style output.
+    wide                  As per the ps option, but includes more headings.
+    custom-columns        As per the ps option, but only display the columns that are requested
+                          in the comma serarated list.
+    golang-template       Display the results using the specified golang template.  This can be
+                          used to filter results to, say, return a specific value.
+    golang-template-file  Display the results using the golang template that is contained in the
+                          specified file.
+    yaml                  Display the results in YAML output format.
+    json                  Display the results in JSON output format.
+
+  Note that the data output using YAML or JSON format is always valid to use as input to all of the
+  resource management commands (create, apply, replace, delete, get).
+
+  Please refer to the docs at http://docs.projectcalico.org for more details on the output formats,
+  including example outputs, resource structure (required for the golang template definitions) and
+  the valid column names (required for the custom-columns option).`
 	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
 		return err

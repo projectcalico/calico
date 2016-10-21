@@ -26,50 +26,47 @@ import (
 // Node function is a switch to node related sub-commands
 func Node(args []string) error {
 	var err error
-	doc := `Usage: 
-	calicoctl node status 
-	calicoctl node diags [--log-dir=<LOG_DIR>]
-	calicoctl node checksystem
+	doc := `Usage:
+  calicoctl node <command> [<args>...]
+
+    status         View the current status of a Calico node.
+    diags          Gather a diagnostics bundle for a Calico node.
+    checksystem    Verify the compute host is able to run a Calico node instance.
 
 Options:
-    --help                  Show this screen.
-    status                  Shows the status of the node.
-    diags                   Collects diagnostic information.
-    --log-dir=<LOG_DIR>     The directory for logs [default: /var/log/calico]
-    checksystem             Check for compatibility with the host system.
-	
-Description:
-  Node specific commands for calicoctl
-  
-  See 'calicoctl node --help' to read about a specific subcommand.
-  `
+  -h --help               Show this screen.
 
-	arguments, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+Description:
+  Node specific commands for calicoctl.  These commands must be run directly on
+  the compute host running the Calico node instance.
+  
+  See 'calicoctl node <command> --help' to read about a specific subcommand.
+  `
+	arguments, err := docopt.Parse(doc, args, true, "calicoctl", true, false)
 	if err != nil {
 		return err
 	}
+	if arguments["<command>"] == nil {
+		return nil
+	}
 
-	// If `--help` or `-h` is passed, then arguments map will be empty
-	if len(arguments) > 0 {
-		logDir := append([]string{"diags"}, arguments["--log-dir"].(string))
+	command := arguments["<command>"].(string)
+	args = append([]string{"node", command}, arguments["<args>"].([]string)...)
 
-		// arguments["status"] is a bool and it's true when `calicoctl node status`
-		// is passed, false when status is not present
-		if arguments["status"].(bool) {
-			err = node.Status()
-		} else if arguments["diags"].(bool) {
-			err = node.Diags(logDir)
-		} else if arguments["checksystem"].(bool) {
-			err = node.Checksystem()
-		} else {
-			fmt.Printf("Invalid option.\n")
-			fmt.Println(doc)
-		}
+	switch command {
+	case "status":
+		err = node.Status(args)
+	case "diags":
+		err = node.Diags(args)
+	case "checksystem":
+		err = node.Checksystem(args)
+	default:
+		fmt.Println(doc)
+	}
 
-		if err != nil {
-			fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-			os.Exit(1)
-		}
+	if err != nil {
+		fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 
 	return nil

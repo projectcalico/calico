@@ -22,12 +22,7 @@ import (
 )
 
 func Apply(args []string) error {
-	doc := EtcdIntro + `Apply a resource by filename or stdin.  This creates a resource
-if it does not exist, and replaces a resource if it does exist.
-
-Valid resource kinds are bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and  profile.
-
-Usage:
+	doc := DatastoreIntro + `Usage:
   calicoctl apply --filename=<FILENAME> [--config=<CONFIG>]
 
 Examples:
@@ -38,10 +33,33 @@ Examples:
   cat policy.json | calicoctl apply -f -
 
 Options:
-  -f --filename=<FILENAME>     Filename to use to apply the resource.  If set to "-" loads from stdin.
-  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
-                               [default: /etc/calico/calicoctl.cfg]
-`
+  -h --help                 Show this screen.
+  -f --filename=<FILENAME>  Filename to use to apply the resource.  If set to "-" loads from stdin.
+  -c --config=<CONFIG>      Filename containing connection configuration in YAML or JSON format.
+                            [default: /etc/calico/calicoctl.cfg]
+
+Description:
+  The apply command is used to create or replace a set of resources by filename or stdin.  JSON and
+  YAML formats are accepted.
+
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and
+  profile.
+
+  When applying a resource:
+  -  if the resource does not already exist (as determined by it's primary identifiers)
+     then it is created
+  -  if the resource already exists then the specification for that resource is replaced
+     in it's entirety by the new resource specification.
+
+  The output of the command indicates how many resources were successfully applied, and the error
+  reason if an error occurred.
+
+  The resources are applied in the order they are specified.  In the event of a failure
+  applying a specific resource it is possible to work out which resource failed based on the
+  number of resources successfully applied
+
+  When applying a resource to perform an update, the complete resource spec must be provided,
+  it is not sufficient to supply only the fields that are being updated.`
 	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
 		return err

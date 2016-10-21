@@ -39,17 +39,25 @@ type diagCmd struct {
 // Diags function collects diagnostic information and logs
 func Diags(args []string) error {
 	var err error
-	doc := `Usage: node diags <LOG_DIR>
+	doc := `Usage:
+  calicoctl node diags [--log-dir=<LOG_DIR>]
 
-    Description:
-         Save diagnostic information`
+Options:
+  -h --help               Show this screen.
+     --log-dir=<LOG_DIR>  The directory containing Calico logs [default: /var/log/calico]
+
+Description:
+  Create a diagnostics bundle for the Calico node instance running on this compute host.`
 
 	arguments, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
 	if err != nil {
 		return err
 	}
+	if len(arguments) == 0 {
+		return nil
+	}
 
-	runDiags(arguments["<LOG_DIR>"].(string))
+	runDiags(arguments["--log-dir"].(string))
 
 	return nil
 }
@@ -84,7 +92,7 @@ func runDiags(logDir string) {
 	fmt.Println("Collecting diagnostics")
 
 	// Create a temp directory in /tmp
-	tmpDir, err := ioutil.TempDir("/tmp", "tmp")
+	tmpDir, err := ioutil.TempDir("", "calico")
 	if err != nil {
 		log.Fatalf("Error creating temp directory to dump logs: %v\n", err)
 	}
@@ -104,11 +112,10 @@ func runDiags(logDir string) {
 
 	tmpLogDir := filepath.Join(diagsTmpDir, "logs")
 
+	// Check if the logDir provided/default exists and is a directory
 	fileInfo, err := os.Stat(logDir)
 	if err != nil {
 		log.Printf("Error copying log files: %v\n", err)
-
-		// Check if the logDir provided/default exists and is a directory
 	} else if fileInfo.IsDir() {
 		fmt.Println("Copying Calico logs")
 		err = shutil.CopyTree(logDir, tmpLogDir, nil)
@@ -133,9 +140,9 @@ func runDiags(logDir string) {
 
 	fmt.Printf("\nDiags saved to %s\n", tarFilePath)
 	fmt.Printf(`If required, you can upload the diagnostics bundle to a file sharing service 
-    such as transfer.sh using curl or similar.  For example:
+such as transfer.sh using curl or similar.  For example:
 
-      curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)
+    curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)
 	fmt.Println()
 
 }

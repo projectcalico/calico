@@ -26,8 +26,8 @@ import (
 )
 
 func main() {
-	usage := `Usage:
-    calicoctl [options] <command> [<args>...]
+	doc := `Usage:
+  calicoctl [options] <command> [<args>...]
 
     create         Create a resource by filename or stdin.
     replace        Replace a resource by filename or stdin.
@@ -36,16 +36,20 @@ func main() {
     delete         Delete a resource identified by file, stdin or resource type and name.
     get            Get a resource identified by file, stdin or resource type and name.
     version        Display the version of calicoctl.
-    node           Node related commands.
-    ipam           Configure IP address management.
+    node           Calico node management.
+    ipam           IP address management.
 
 Options:
-  -h --help  Show this screen.
+  -h --help               Show this screen.
   -l --log-level=<level>  Set the log level (one of panic, fatal, error,
-                         warn, info, debug) [default: panic]`
-	var err error
-	doc := commands.EtcdIntro + usage
+                          warn, info, debug) [default: panic]
 
+Description:
+  The calicoctl command line tool is used to manage Calico network and security policy,
+  to view and manage endpoint configuration, and to manage a Calico node instance.
+
+  See 'calicoctl <command> --help' to read about a specific subcommand.`
+	var err error
 	arguments, _ := docopt.Parse(doc, nil, true, "calicoctl", true, false)
 
 	if logLevel := arguments["--log-level"]; logLevel != nil {
@@ -82,7 +86,7 @@ Options:
 		case "ipam":
 			err = commands.IPAM(args)
 		default:
-			fmt.Println(usage)
+			fmt.Println(doc)
 		}
 
 		if err != nil {
@@ -90,5 +94,4 @@ Options:
 			os.Exit(1)
 		}
 	}
-
 }

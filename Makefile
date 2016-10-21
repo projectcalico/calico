@@ -159,7 +159,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER)
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
 	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist:rw \
 	$(BUILD_CONTAINER_NAME) bash -c 'make bin/calicoctl; \
-	chown $(shell id -u):$(shell id -g) -R ./'
+	chown $(shell id -u):$(shell id -g) -R ./vendor ./dist'
 
 
 $(BUILD_CONTAINER_MARKER): Dockerfile.calicoctl.build
@@ -191,7 +191,8 @@ test-containerized: run-etcd $(BUILD_CONTAINER_MARKER)
 	docker run -ti --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
-	$(BUILD_CONTAINER_NAME) make ut
+	$(BUILD_CONTAINER_NAME) make ut; \
+	chown $(shell id -u):$(shell id -g) -R ./vendor ./dist'
 
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
@@ -272,7 +273,7 @@ clean:
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
 	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                        \
+	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
 		nb = sub( /^## /, "", helpMsg );                                \
 		if(nb == 0) {                                                   \
 			helpMsg = $$0;                                              \
@@ -282,5 +283,5 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
 	}                                                                   \
 	{ helpMsg = $$0 }'                                                  \
-	width=$$(grep -o '^[a-zA-Z_0-9]\+:' $(MAKEFILE_LIST) | wc -L)       \
+	width=20                                                            \
 	$(MAKEFILE_LIST)

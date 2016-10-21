@@ -104,16 +104,16 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	case "hostendpoint":
 		h := api.NewHostEndpoint()
 		h.Metadata.Name = name
-		h.Metadata.Hostname = node
+		h.Metadata.Node = node
 		return *h, nil
 	case "workloadendpoints":
 		fallthrough
 	case "workloadendpoint":
 		h := api.NewWorkloadEndpoint()
 		h.Metadata.Name = name
-		h.Metadata.OrchestratorID = orchestrator
-		h.Metadata.WorkloadID = workload
-		h.Metadata.Hostname = node
+		h.Metadata.Orchestrator = orchestrator
+		h.Metadata.Workload = workload
+		h.Metadata.Node = node
 		return *h, nil
 	case "profiles":
 		fallthrough
@@ -149,7 +149,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 				return nil, err
 			}
 		}
-		p.Metadata.Hostname = node
+		p.Metadata.Node = node
 		switch resScope {
 		case "node":
 			p.Metadata.Scope = scope.Node
