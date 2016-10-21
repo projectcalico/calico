@@ -19,7 +19,7 @@ import (
 )
 
 // Policy contains information about a security Policy resource.  This contains a set of
-// security rules to apply.  Security policies allow a label-based security model which can override
+// security rules to apply.  Security policies allow a selector-based security model which can override
 // the security profiles directly referenced by an endpoint.
 //
 // Each policy must do one of the following:
@@ -42,15 +42,15 @@ type Policy struct {
 	Spec     PolicySpec     `json:"spec,omitempty"`
 }
 
-// PolicyMetadata contains the metadata for a label-based security Policy resource.
+// PolicyMetadata contains the metadata for a selector-based security Policy resource.
 type PolicyMetadata struct {
 	unversioned.ObjectMetadata
 
-	// The name of the label-based security policy.
+	// The name of the selector-based security policy.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 }
 
-// PolicySpec contains the specification for a label-based security Policy resource.
+// PolicySpec contains the specification for a selector-based security Policy resource.
 type PolicySpec struct {
 	// Order is an optional field that specifies the order in which the policy is applied.
 	// Policies with higher "order" are applied after those with lower
@@ -106,7 +106,7 @@ func NewPolicy() *Policy {
 	}
 }
 
-// PolicyList contains a list of label-based security Policy resources.  List types are returned from List()
+// PolicyList contains a list of selector-based security Policy resources.  List types are returned from List()
 // enumerations on the client interface.
 type PolicyList struct {
 	unversioned.TypeMetadata

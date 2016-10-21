@@ -63,7 +63,7 @@ type HostEndpointSpec struct {
 
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
-	// after the label-based security policy.
+	// after the selector-based security policy.
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 }
 
