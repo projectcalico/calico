@@ -18,7 +18,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/endpoint"
 	"github.com/projectcalico/felix/go/felix/ip"
-	"github.com/projectcalico/felix/go/felix/labels"
+	"github.com/projectcalico/felix/go/felix/labelindex"
 	"github.com/projectcalico/felix/go/felix/tagindex"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -108,14 +108,14 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDi
 	// and selectors uniformly but we need to shim the interface because
 	// it expects a string ID.
 	var memberCalc *MemberCalculator
-	activeSelectorIndex := labels.NewInheritIndex(
+	activeSelectorIndex := labelindex.NewInheritIndex(
 		func(selId, labelId interface{}) {
 			// Match started callback.
-			memberCalc.MatchStarted(labelId, selId.(string))
+			memberCalc.MatchStarted(labelId.(model.Key), selId.(string))
 		},
 		func(selId, labelId interface{}) {
 			// Match stopped callback.
-			memberCalc.MatchStopped(labelId, selId.(string))
+			memberCalc.MatchStopped(labelId.(model.Key), selId.(string))
 		},
 	)
 	ruleScanner.OnSelectorActive = func(sel selector.Selector) {
@@ -135,10 +135,10 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDi
 	// The active tag index does the same for tags.  Calculating which
 	// endpoints match each tag.
 	tagIndex := tagindex.NewIndex(
-		func(key tagindex.EndpointKey, tagID string) {
+		func(key model.Key, tagID string) {
 			memberCalc.MatchStarted(key, TagIPSetID(tagID))
 		},
-		func(key tagindex.EndpointKey, tagID string) {
+		func(key model.Key, tagID string) {
 			memberCalc.MatchStopped(key, TagIPSetID(tagID))
 		},
 	)
@@ -209,9 +209,6 @@ func (h *HostIPPassthru) OnUpdate(update model.KVPair) (filterOut bool) {
 		h.callbacks.OnHostIPUpdate(hostname, ip)
 	}
 	return false
-}
-
-func (f *HostIPPassthru) OnDatamodelStatus(status api.SyncStatus) {
 }
 
 func TagIPSetID(tagID string) string {

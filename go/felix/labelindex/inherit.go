@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package labels
+package labelindex
 
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/multidict"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -80,9 +79,6 @@ func (l *InheritIndex) OnUpdate(update model.KVPair) (filterOut bool) {
 		}
 	}
 	return
-}
-
-func (l *InheritIndex) OnDatamodelStatus(status api.SyncStatus) {
 }
 
 func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {

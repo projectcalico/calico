@@ -19,13 +19,8 @@ import (
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/set"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
-
-// endpointKeys are expected to be WorkloadEndpointKey or HostEndpointKey
-// objects but all we require is that they're hashable objects.
-type endpointKey interface{}
 
 type IPAddRemoveCallbacks interface {
 	OnIPAdded(ipSetID string, ip ip.Addr)
@@ -33,7 +28,7 @@ type IPAddRemoveCallbacks interface {
 }
 
 type MemberCalculator struct {
-	keyToIPs              map[endpointKey][]ip.Addr
+	keyToIPs              map[model.Key][]ip.Addr
 	keyToMatchingIPSetIDs multidict.IfaceToString
 	ipSetIDToIPToKey      map[string]multidict.IfaceToIface
 
@@ -42,7 +37,7 @@ type MemberCalculator struct {
 
 func NewMemberCalculator() *MemberCalculator {
 	calc := &MemberCalculator{
-		keyToIPs:              make(map[endpointKey][]ip.Addr),
+		keyToIPs:              make(map[model.Key][]ip.Addr),
 		keyToMatchingIPSetIDs: multidict.NewIfaceToString(),
 		ipSetIDToIPToKey:      make(map[string]multidict.IfaceToIface),
 	}
@@ -50,7 +45,7 @@ func NewMemberCalculator() *MemberCalculator {
 }
 
 // MatchStarted tells this object that an endpoint now belongs to an IP set.
-func (calc *MemberCalculator) MatchStarted(key endpointKey, ipSetID string) {
+func (calc *MemberCalculator) MatchStarted(key model.Key, ipSetID string) {
 	log.Debugf("Adding endpoint %v to IP set %v", key, ipSetID)
 	calc.keyToMatchingIPSetIDs.Put(key, ipSetID)
 	ips := calc.keyToIPs[key]
@@ -58,7 +53,7 @@ func (calc *MemberCalculator) MatchStarted(key endpointKey, ipSetID string) {
 }
 
 // MatchStopped tells this object that an endpoint no longer belongs to an IP set.
-func (calc *MemberCalculator) MatchStopped(key endpointKey, ipSetID string) {
+func (calc *MemberCalculator) MatchStopped(key model.Key, ipSetID string) {
 	log.Debugf("Removing endpoint %v from IP set %v", key, ipSetID)
 	calc.keyToMatchingIPSetIDs.Discard(key, ipSetID)
 	ips := calc.keyToIPs[key]
@@ -96,11 +91,8 @@ func (calc *MemberCalculator) OnUpdate(update model.KVPair) (filterOut bool) {
 	return
 }
 
-func (l *MemberCalculator) OnDatamodelStatus(status api.SyncStatus) {
-}
-
 // UpdateEndpointIPs tells this object that an endpoint has a new set of IP addresses.
-func (calc *MemberCalculator) updateEndpointIPs(endpointKey endpointKey, ips []ip.Addr) {
+func (calc *MemberCalculator) updateEndpointIPs(endpointKey model.Key, ips []ip.Addr) {
 	log.Debugf("Endpoint %v IPs updated to %v", endpointKey, ips)
 	oldIPs := calc.keyToIPs[endpointKey]
 	if len(ips) == 0 {
@@ -152,7 +144,7 @@ func (calc *MemberCalculator) Empty() bool {
 	return true
 }
 
-func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key endpointKey, ips []ip.Addr) {
+func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key model.Key, ips []ip.Addr) {
 	log.Debugf("IP set %v now matches IPs %v via %v", ipSetID, ips, key)
 	ipToKeys, ok := calc.ipSetIDToIPToKey[ipSetID]
 	if !ok {
@@ -169,7 +161,7 @@ func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key endpointKey, i
 	}
 }
 
-func (calc *MemberCalculator) removeMatchFromIndex(ipSetID string, key endpointKey, ips []ip.Addr) {
+func (calc *MemberCalculator) removeMatchFromIndex(ipSetID string, key model.Key, ips []ip.Addr) {
 	log.Debugf("IP set %v no longer matches IPs %v via %v", ipSetID, ips, key)
 	ipToKeys := calc.ipSetIDToIPToKey[ipSetID]
 	for _, ip := range ips {

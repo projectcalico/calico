@@ -23,19 +23,22 @@ import (
 
 type UpdateHandler interface {
 	OnUpdate(update model.KVPair) (filterOut bool)
+}
+
+type StatusHandler interface {
 	OnDatamodelStatus(status api.SyncStatus)
 }
 
 type Dispatcher struct {
-	typeToHandler map[reflect.Type][]UpdateHandler
-	allHandlers   map[UpdateHandler]bool
+	typeToHandler  map[reflect.Type][]UpdateHandler
+	statusHandlers map[StatusHandler]bool
 }
 
 // NewDispatcher creates a Dispatcher with all its event handlers set to no-ops.
 func NewDispatcher() *Dispatcher {
 	d := &Dispatcher{
-		typeToHandler: make(map[reflect.Type][]UpdateHandler),
-		allHandlers:   make(map[UpdateHandler]bool),
+		typeToHandler:  make(map[reflect.Type][]UpdateHandler),
+		statusHandlers: make(map[StatusHandler]bool),
 	}
 	return d
 }
@@ -47,7 +50,9 @@ func (d *Dispatcher) Register(keyExample model.Key, receiver UpdateHandler) {
 	}
 	log.Infof("Registering listener for type %v: %#v", keyType, receiver)
 	d.typeToHandler[keyType] = append(d.typeToHandler[keyType], receiver)
-	d.allHandlers[receiver] = true
+	if receiver, ok := receiver.(StatusHandler); ok {
+		d.statusHandlers[receiver] = true
+	}
 }
 
 // Syncer callbacks.
@@ -59,7 +64,7 @@ func (d *Dispatcher) OnUpdates(updates []model.KVPair) {
 }
 
 func (d *Dispatcher) OnStatusUpdated(status api.SyncStatus) {
-	for handler, _ := range d.allHandlers {
+	for handler := range d.statusHandlers {
 		handler.OnDatamodelStatus(status)
 	}
 }

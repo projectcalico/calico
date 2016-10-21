@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package labels_test
+package labelindex_test
 
 import (
-	. "github.com/projectcalico/felix/go/felix/labels"
+	. "github.com/projectcalico/felix/go/felix/labelindex"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

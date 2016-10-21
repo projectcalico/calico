@@ -16,10 +16,9 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/labels"
+	"github.com/projectcalico/felix/go/felix/labelindex"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/tagindex"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"reflect"
@@ -51,7 +50,7 @@ type ActiveRulesCalculator struct {
 	profileIDToEndpointKeys multidict.IfaceToIface
 
 	// Label index, matching policy selectors against local endpoints.
-	labelIndex *labels.InheritIndex
+	labelIndex *labelindex.InheritIndex
 
 	// Cache of profile IDs by local endpoint.
 	endpointKeyToProfileIDs *tagindex.EndpointKeyToProfileIDMap
@@ -74,7 +73,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: tagindex.NewEndpointKeyToProfileIDMap(),
 	}
-	arc.labelIndex = labels.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
+	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc
 }
 
@@ -158,11 +157,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update model.KVPair) (filterOut bool)
 	return
 }
 
-func (arc *ActiveRulesCalculator) OnDatamodelStatus(status api.SyncStatus) {
-
-}
-
-func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key endpointKey, profileIDs []string) {
+func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profileIDs []string) {
 	// Figure out which profiles have been added/removed.
 	log.Debugf("Endpoint %#v now has profile IDs: %v", key, profileIDs)
 	removedIDs, addedIDs := arc.endpointKeyToProfileIDs.Update(key, profileIDs)

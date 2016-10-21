@@ -16,22 +16,16 @@ package tagindex
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
-// EndpointKey expected to be a WorkloadEndpointKey or a HostEndpointKey
-// but we just need it to be hashable.
-type EndpointKey interface{}
-
-type indexKey struct {
-	tag string
-	key EndpointKey
-}
-
+// A TagIndex dynamically calculates the matching tags for a set of endpoints.
+// It generates events when endpoints start and stop matching "active" tags.
+// Tags are marked active by calling the SetTagActive/SetTagInactive
+// methods.
 type TagIndex struct {
 	profileIDToTags         map[string][]string
-	profileIDToEndpointKey  map[string]map[EndpointKey]bool
+	profileIDToEndpointKey  map[string]map[model.Key]bool
 	endpointKeyToProfileIDs *EndpointKeyToProfileIDMap
 	matches                 map[indexKey]map[string]bool
 	activeTags              map[string]bool
@@ -40,12 +34,17 @@ type TagIndex struct {
 	onMatchStopped MatchCallback
 }
 
-type MatchCallback func(key EndpointKey, tagID string)
+type indexKey struct {
+	tag string
+	key model.Key
+}
+
+type MatchCallback func(key model.Key, tagID string)
 
 func NewIndex(onMatchStarted, onMatchStopped MatchCallback) *TagIndex {
 	idx := &TagIndex{
 		profileIDToTags:         make(map[string][]string),
-		profileIDToEndpointKey:  make(map[string]map[EndpointKey]bool),
+		profileIDToEndpointKey:  make(map[string]map[model.Key]bool),
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
 		matches:                 make(map[indexKey]map[string]bool),
 		activeTags:              make(map[string]bool),
@@ -56,6 +55,9 @@ func NewIndex(onMatchStarted, onMatchStopped MatchCallback) *TagIndex {
 	return idx
 }
 
+// SetTagActive marks the given tag as active if it isn't already.
+// If the tag becomes active and it matches endpoints, synchronously invokes
+// the match-started callback for each matching endpoint.
 func (idx *TagIndex) SetTagActive(tag string) {
 	if idx.activeTags[tag] {
 		return
@@ -73,6 +75,9 @@ func (idx *TagIndex) SetTagActive(tag string) {
 	}
 }
 
+// SetTagInactive marks the given tag as inactive if it isn't already.
+// If the tag becomes inactive and it matches endpoints, synchronously invokes
+// the match-stopped callback for each matching endpoint.
 func (idx *TagIndex) SetTagInactive(tag string) {
 	if !idx.activeTags[tag] {
 		return
@@ -89,6 +94,8 @@ func (idx *TagIndex) SetTagInactive(tag string) {
 	}
 }
 
+// OnUpdate is called when a datamodel update is received.  It updates the
+// index and fires the match-started/stopped callbacks as appropriate.
 func (idx *TagIndex) OnUpdate(update model.KVPair) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.ProfileTagsKey:
@@ -114,9 +121,6 @@ func (idx *TagIndex) OnUpdate(update model.KVPair) (filterOut bool) {
 		}
 	}
 	return
-}
-
-func (l *TagIndex) OnDatamodelStatus(status api.SyncStatus) {
 }
 
 func (idx *TagIndex) updateProfileTags(profileID string, tags []string) {
@@ -155,7 +159,7 @@ func (idx *TagIndex) updateProfileTags(profileID string, tags []string) {
 	}
 }
 
-func (idx *TagIndex) updateEndpoint(key EndpointKey, profileIDs []string) {
+func (idx *TagIndex) updateEndpoint(key model.Key, profileIDs []string) {
 	log.Debugf("Updating endpoint %v, profile IDs: %v", key, profileIDs)
 	// Figure out what's changed and update the cache.
 	removedIDs, addedIDs := idx.endpointKeyToProfileIDs.Update(key, profileIDs)
@@ -168,7 +172,7 @@ func (idx *TagIndex) updateEndpoint(key EndpointKey, profileIDs []string) {
 		log.Debugf("Profile ID added: %v", id)
 		revIdx, ok := idx.profileIDToEndpointKey[id]
 		if !ok {
-			revIdx = make(map[EndpointKey]bool)
+			revIdx = make(map[model.Key]bool)
 			idx.profileIDToEndpointKey[id] = revIdx
 		}
 		revIdx[key] = true
@@ -199,7 +203,7 @@ func (idx *TagIndex) updateEndpoint(key EndpointKey, profileIDs []string) {
 	}
 }
 
-func (idx *TagIndex) addToIndex(epKey EndpointKey, tag string, profID string) {
+func (idx *TagIndex) addToIndex(epKey model.Key, tag string, profID string) {
 	logCxt := log.WithFields(log.Fields{
 		"epKey":  epKey,
 		"tag":    tag,
@@ -220,7 +224,7 @@ func (idx *TagIndex) addToIndex(epKey EndpointKey, tag string, profID string) {
 	matchingProfIDs[profID] = true
 }
 
-func (idx *TagIndex) removeFromIndex(epKey EndpointKey, tag string, profID string) {
+func (idx *TagIndex) removeFromIndex(epKey model.Key, tag string, profID string) {
 	logCxt := log.WithFields(log.Fields{
 		"epKey":  epKey,
 		"tag":    tag,
@@ -242,16 +246,16 @@ func (idx *TagIndex) removeFromIndex(epKey EndpointKey, tag string, profID strin
 }
 
 type EndpointKeyToProfileIDMap struct {
-	endpointKeyToProfileIDs map[EndpointKey][]string
+	endpointKeyToProfileIDs map[model.Key][]string
 }
 
 func NewEndpointKeyToProfileIDMap() *EndpointKeyToProfileIDMap {
 	return &EndpointKeyToProfileIDMap{
-		endpointKeyToProfileIDs: make(map[EndpointKey][]string),
+		endpointKeyToProfileIDs: make(map[model.Key][]string),
 	}
 }
 
-func (idx EndpointKeyToProfileIDMap) Update(key EndpointKey, profileIDs []string) (
+func (idx EndpointKeyToProfileIDMap) Update(key model.Key, profileIDs []string) (
 	removedIDs, addedIDs map[string]bool) {
 	oldIDs := idx.endpointKeyToProfileIDs[key]
 	removedIDs = make(map[string]bool)
