@@ -61,8 +61,7 @@ rabbitmqctl status rabbitmq_status 2>&1
 
 echo "  copying contents of etcd..."
 
-${ETCDCTL} ls --recursive -p > etcdctl_ls 2>&1
-${ETCDCTL} ls --recursive -p | grep -v '/$' | xargs -n1 -t ${ETCDCTL} get > etcdctl_get
+${ETCDCTL} ls --recursive -p | grep -v '/$' | xargs -n1 -I '{}' sh -c "echo; echo {}; ${ETCDCTL} get {} " | tee etcdctl_get
 
 echo "  copying config files..."
 
@@ -86,6 +85,12 @@ echo "  copying log files..."
 cp -a "$CALICO_DIR" .
 cp -a "$NEUTRON_DIR" .
 cp -a "$NOVA_DIR" .
+if [ -e /var/log/upstart ]; then
+  mkdir upstart
+  cp /var/log/upstart/calico* ./upstart/
+  cp /var/log/upstart/nova* ./upstart/
+  cp /var/log/upstart/neutron* ./upstart/
+fi
 
 mkdir logs
 cp /var/log/syslog* logs >/dev/null 2>&1
