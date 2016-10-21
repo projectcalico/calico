@@ -1,7 +1,3 @@
-> ![warning](../../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](../../README.md) main page.
-
 # Calico resources
 This guide describes the set of valid resource types that can be managed
 through `calicoctl`.
