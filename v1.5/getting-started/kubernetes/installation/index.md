@@ -125,10 +125,14 @@ Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
 
 ### 3. Deploy the Calico network policy controller
-The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API.  It is recommended that you run it as a static pod
-on each Kubernetes master.
+The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the Kubernetes API for Pod, Namespace, and 
+NetworkPolicy events and configuring Calico in response.  It runs as a single pod managed by a ReplicaSet.
 
-- Download [this manifest](https://raw.githubusercontent.com/projectcalico/k8s-policy/master/examples/policy-controller.yaml) and install it using `kubectl`
+To install the policy controller:
+
+- Download the [policy controller manifest](policy-controller.yaml). 
+- Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
+- Install it using `kubectl`.
 
 ```shell
 $ kubectl create -f policy-controller.yaml
@@ -137,7 +141,7 @@ $ kubectl create -f policy-controller.yaml
 After a few moments, you should see the policy controller enter `Running` state:
 
 ```shell
-$ kubectl get pods --namespace=calico-system
+$ kubectl get pods --namespace=kube-system
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-policy-controller                 2/2       Running   0          1m
 ```
