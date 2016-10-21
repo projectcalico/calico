@@ -21,7 +21,7 @@ import (
 // Profile contains the details a security profile resource.  A profile is set of security rules
 // to apply on an endpoint.  An endpoint (either a host endpoint or an endpoint on a workload) can
 // reference zero or more profiles.  The profile rules are applied directly to the endpoint *after*
-// the label-based security policy has been applied, and in the order the profiles are declared on the
+// the selector-based security policy has been applied, and in the order the profiles are declared on the
 // endpoint.
 type Profile struct {
 	unversioned.TypeMetadata

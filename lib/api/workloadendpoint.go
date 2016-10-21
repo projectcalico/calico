@@ -73,7 +73,7 @@ type WorkloadEndpointSpec struct {
 
 	// A list of security Profile resources that apply to this endpoint. Each profile is
 	// applied in the order that they appear in this list.  Profile rules are applied
-	// after the label-based security policy.
+	// after the selector-based security policy.
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// InterfaceName the name of the Linux interface on the host: for example, tap80.
