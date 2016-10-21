@@ -22,9 +22,10 @@ You should see the pods start in the `kube-system` Namespace:
 ```shell
 $ kubectl get pods --namespace=kube-system
 NAME                             READY     STATUS    RESTARTS   AGE
-calico-node-ctwm7                2/2       Running   0          4m
-calico-node-w03mn                2/2       Running   0          4m
-calico-policy-controller-lo2hf   1/1       Running   0          4m
+calico-node-1f4ih                2/2       Running   0          1m
+calico-node-hor7x                2/2       Running   0          1m
+calico-node-si5br                2/2       Running   0          1m
+calico-policy-controller-so4gl   1/1       Running   0          1m
 ```
 
 ### Install DNS
