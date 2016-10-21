@@ -1,7 +1,3 @@
-> ![warning](../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](README.md) main page.
-
 # calicoctl command line interface user reference
 
 The command line tool, `calicoctl`, makes it easy to manage Calico network

@@ -1,7 +1,3 @@
-> ![warning](../../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](../README.md) main page.
-
 # Setup for calicoctl
 The `calicoctl` command line tool needs to be configured with details of
 your datastore cluster so that it can manage system configurations and
