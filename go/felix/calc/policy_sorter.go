@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package endpoint
+package calc
 
 import (
 	"fmt"
@@ -22,12 +22,12 @@ import (
 )
 
 type PolicySorter struct {
-	tier *TierInfo
+	tier *tierInfo
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tier: &TierInfo{
+		tier: &tierInfo{
 
 			Name:     "default",
 			Policies: make(map[model.PolicyKey]*model.Policy),
@@ -55,7 +55,7 @@ func (poc *PolicySorter) OnUpdate(update model.KVPair) (dirty bool) {
 	return
 }
 
-func (poc *PolicySorter) Sorted() *TierInfo {
+func (poc *PolicySorter) Sorted() *tierInfo {
 	tierInfo := poc.tier
 	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
 	for k, v := range tierInfo.Policies {
@@ -113,7 +113,7 @@ func (a PolicyByOrder) Less(i, j int) bool {
 	return *a[i].Value.Order < *a[j].Value.Order
 }
 
-type TierInfo struct {
+type tierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
@@ -121,14 +121,14 @@ type TierInfo struct {
 	OrderedPolicies []PolKV
 }
 
-func NewTierInfo(name string) *TierInfo {
-	return &TierInfo{
+func NewTierInfo(name string) *tierInfo {
+	return &tierInfo{
 		Name:     name,
 		Policies: make(map[model.PolicyKey]*model.Policy),
 	}
 }
 
-func (t TierInfo) String() string {
+func (t tierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
 		policies[ii] = pol.Key.Name

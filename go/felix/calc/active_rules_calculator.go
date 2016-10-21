@@ -16,6 +16,7 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/labelindex"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/tagindex"
@@ -75,6 +76,16 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	}
 	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc
+}
+
+func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDispatcher *dispatcher.Dispatcher) {
+	// It needs the filtered endpoints...
+	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, arc.OnUpdate)
+	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
+	// ...as well as all the policies and profiles.
+	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
+	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
+	allUpdDispatcher.Register(model.ProfileLabelsKey{}, arc.OnUpdate)
 }
 
 func (arc *ActiveRulesCalculator) OnUpdate(update model.KVPair) (filterOut bool) {

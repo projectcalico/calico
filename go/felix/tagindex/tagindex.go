@@ -16,6 +16,7 @@ package tagindex
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
@@ -53,6 +54,12 @@ func NewIndex(onMatchStarted, onMatchStopped MatchCallback) *TagIndex {
 		onMatchStopped: onMatchStopped,
 	}
 	return idx
+}
+
+func (idx *TagIndex) RegisterWith(dispatcher *dispatcher.Dispatcher) {
+	dispatcher.Register(model.WorkloadEndpointKey{}, idx.OnUpdate)
+	dispatcher.Register(model.HostEndpointKey{}, idx.OnUpdate)
+	dispatcher.Register(model.ProfileTagsKey{}, idx.OnUpdate)
 }
 
 // SetTagActive marks the given tag as active if it isn't already.

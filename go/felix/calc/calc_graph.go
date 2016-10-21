@@ -16,11 +16,10 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/endpoint"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/labelindex"
 	"github.com/projectcalico/felix/go/felix/tagindex"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -44,7 +43,7 @@ type rulesUpdateCallbacks interface {
 type endpointCallbacks interface {
 	OnEndpointTierUpdate(endpointKey model.Key,
 		endpoint interface{},
-		filteredTiers []endpoint.TierInfo)
+		filteredTiers []tierInfo)
 }
 
 type configCallbacks interface {
@@ -65,33 +64,25 @@ type PipelineCallbacks interface {
 	hostIPCallbacks
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDispatcher *Dispatcher) {
+func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 	// The source of the processing graph, this dispatcher will be fed all
 	// the updates from the datastore, fanning them out to the registered
 	// handlers.
-	sourceDispatcher = NewDispatcher()
+	allUpdDispatcher = dispatcher.NewDispatcher()
 
 	// Some of the handlers only need to know about local endpoints.
 	// Create a second dispatcher which will filter out non-local endpoints.
+	localEndpointDispatcher := dispatcher.NewDispatcher()
+	(*localEndpointDispatcherReg)(localEndpointDispatcher).RegisterWith(allUpdDispatcher)
 	localEndpointFilter := &endpointHostnameFilter{hostname: hostname}
-	localEndpointDispatcher := NewDispatcher()
-	sourceDispatcher.Register(model.WorkloadEndpointKey{}, localEndpointDispatcher)
-	sourceDispatcher.Register(model.HostEndpointKey{}, localEndpointDispatcher)
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, localEndpointFilter)
-	localEndpointDispatcher.Register(model.HostEndpointKey{}, localEndpointFilter)
+	localEndpointFilter.RegisterWith(localEndpointDispatcher)
 
 	// The active rules calculator matches local endpoints against policies
 	// and profiles to figure out which policies/profiles are active on this
 	// host.
 	activeRulesCalc := NewActiveRulesCalculator()
-	// It needs the filtered endpoints...
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, activeRulesCalc)
-	localEndpointDispatcher.Register(model.HostEndpointKey{}, activeRulesCalc)
-	// ...as well as all the policies and profiles.
-	sourceDispatcher.Register(model.PolicyKey{}, activeRulesCalc)
-	sourceDispatcher.Register(model.ProfileRulesKey{}, activeRulesCalc)
-	sourceDispatcher.Register(model.ProfileLabelsKey{}, activeRulesCalc)
+	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 
 	// The rule scanner takes the output from the active rules calculator
 	// and scans the individual rules for selectors and tags.  It generates
@@ -128,9 +119,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDi
 		activeSelectorIndex.DeleteSelector(sel.UniqueId())
 		callbacks.OnIPSetRemoved(sel.UniqueId())
 	}
-	sourceDispatcher.Register(model.ProfileLabelsKey{}, activeSelectorIndex)
-	sourceDispatcher.Register(model.WorkloadEndpointKey{}, activeSelectorIndex)
-	sourceDispatcher.Register(model.HostEndpointKey{}, activeSelectorIndex)
+	activeSelectorIndex.RegisterWith(allUpdDispatcher)
 
 	// The active tag index does the same for tags.  Calculating which
 	// endpoints match each tag.
@@ -153,43 +142,46 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDi
 		tagIndex.SetTagInactive(tag)
 		callbacks.OnIPSetRemoved(hash.MakeUniqueID("t", tag))
 	}
-	sourceDispatcher.Register(model.WorkloadEndpointKey{}, tagIndex)
-	sourceDispatcher.Register(model.HostEndpointKey{}, tagIndex)
-	sourceDispatcher.Register(model.ProfileTagsKey{}, tagIndex)
+	tagIndex.RegisterWith(allUpdDispatcher)
 
 	// The member calculator merges the IPs from different endpoints to
 	// calculate the actual IPs that should be in each IP set.  It deals
 	// with corner cases, such as having the same IP on multiple endpoints.
 	memberCalc = NewMemberCalculator()
 	// It needs to know about *all* endpoints to do the calculation.
-	sourceDispatcher.Register(model.WorkloadEndpointKey{}, memberCalc)
-	sourceDispatcher.Register(model.HostEndpointKey{}, memberCalc)
+	memberCalc.RegisterWith(allUpdDispatcher)
 	// Hook it up to the output.
 	memberCalc.callbacks = callbacks
 
 	// The endpoint policy resolver marries up the active policies with
 	// local endpoints and calculates the complete, ordered set of
 	// policies that apply to each endpoint.
-	polResolver := endpoint.NewPolicyResolver()
+	polResolver := NewPolicyResolver()
 	// Hook up the inputs to the policy resolver.
 	activeRulesCalc.PolicyMatchListener = polResolver
-	sourceDispatcher.Register(model.PolicyKey{}, polResolver)
-	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, polResolver)
-	localEndpointDispatcher.Register(model.HostEndpointKey{}, polResolver)
+	polResolver.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
+
 	// And hook its output to the callbacks.
 	polResolver.Callbacks = callbacks
 
 	// Register for host IP updates.
 	hostIPPassthru := NewHostIPPassthru(callbacks)
-	sourceDispatcher.Register(model.HostIPKey{}, hostIPPassthru)
+	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
 	// Register for config updates.
 	configBatcher := NewConfigBatcher(hostname, callbacks)
-	sourceDispatcher.Register(model.GlobalConfigKey{}, configBatcher)
-	sourceDispatcher.Register(model.HostConfigKey{}, configBatcher)
-	sourceDispatcher.Register(model.ReadyFlagKey{}, configBatcher)
+	configBatcher.RegisterWith(allUpdDispatcher)
 
-	return sourceDispatcher
+	return allUpdDispatcher
+}
+
+type localEndpointDispatcherReg dispatcher.Dispatcher
+
+func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
+	led := (*dispatcher.Dispatcher)(l)
+	disp.Register(model.WorkloadEndpointKey{}, led.OnUpdate)
+	disp.Register(model.HostEndpointKey{}, led.OnUpdate)
+	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
 
 type HostIPPassthru struct {
@@ -198,6 +190,10 @@ type HostIPPassthru struct {
 
 func NewHostIPPassthru(callbacks hostIPCallbacks) *HostIPPassthru {
 	return &HostIPPassthru{callbacks: callbacks}
+}
+
+func (h *HostIPPassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
+	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
 }
 
 func (h *HostIPPassthru) OnUpdate(update model.KVPair) (filterOut bool) {
@@ -221,6 +217,11 @@ type endpointHostnameFilter struct {
 	hostname string
 }
 
+func (f *endpointHostnameFilter) RegisterWith(localEndpointDisp *dispatcher.Dispatcher) {
+	localEndpointDisp.Register(model.WorkloadEndpointKey{}, f.OnUpdate)
+	localEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
+}
+
 func (f *endpointHostnameFilter) OnUpdate(update model.KVPair) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
@@ -241,7 +242,4 @@ func (f *endpointHostnameFilter) OnUpdate(update model.KVPair) (filterOut bool) 
 		}
 	}
 	return
-}
-
-func (f *endpointHostnameFilter) OnDatamodelStatus(status api.SyncStatus) {
 }

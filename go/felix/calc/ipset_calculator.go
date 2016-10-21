@@ -16,6 +16,7 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/set"
@@ -42,6 +43,11 @@ func NewMemberCalculator() *MemberCalculator {
 		ipSetIDToIPToKey:      make(map[string]multidict.IfaceToIface),
 	}
 	return calc
+}
+
+func (calc *MemberCalculator) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, calc.OnUpdate)
+	allUpdDispatcher.Register(model.HostEndpointKey{}, calc.OnUpdate)
 }
 
 // MatchStarted tells this object that an endpoint now belongs to an IP set.

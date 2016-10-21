@@ -16,6 +16,7 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
@@ -38,6 +39,13 @@ func NewConfigBatcher(hostname string, callbacks configCallbacks) *ConfigBatcher
 		hostConfig:   make(map[string]string),
 		callbacks:    callbacks,
 	}
+}
+
+func (cb *ConfigBatcher) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+	allUpdDispatcher.Register(model.GlobalConfigKey{}, cb.OnUpdate)
+	allUpdDispatcher.Register(model.HostConfigKey{}, cb.OnUpdate)
+	allUpdDispatcher.Register(model.ReadyFlagKey{}, cb.OnUpdate)
+	allUpdDispatcher.RegisterStatusHandler(cb.OnDatamodelStatus)
 }
 
 func (cb *ConfigBatcher) OnUpdate(update model.KVPair) (filterOut bool) {

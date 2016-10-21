@@ -17,7 +17,6 @@ package calc
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/config"
-	"github.com/projectcalico/felix/go/felix/endpoint"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/proto"
@@ -244,7 +243,7 @@ func (buf *EventBuffer) OnProfileInactive(key model.ProfileRulesKey) {
 
 func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 	endpoint interface{},
-	filteredTiers []endpoint.TierInfo) {
+	filteredTiers []tierInfo) {
 	log.Debugf("Endpoint/tier update: %v", endpointKey)
 	tiers := tierInfoToProtoTierInfo(filteredTiers)
 	switch key := endpointKey.(type) {
@@ -321,7 +320,7 @@ func (buf *EventBuffer) OnHostIPRemove(hostname string) {
 		})
 }
 
-func tierInfoToProtoTierInfo(filteredTiers []endpoint.TierInfo) []*proto.TierInfo {
+func tierInfoToProtoTierInfo(filteredTiers []tierInfo) []*proto.TierInfo {
 	tiers := make([]*proto.TierInfo, len(filteredTiers))
 	if len(filteredTiers) > 0 {
 		for ii, ti := range filteredTiers {

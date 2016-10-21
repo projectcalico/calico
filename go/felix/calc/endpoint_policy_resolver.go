@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package endpoint
+package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -25,7 +26,7 @@ import (
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.IfaceToIface
 	endpointIDToPolicyIDs multidict.IfaceToIface
-	sortedTierData        *TierInfo
+	sortedTierData        *tierInfo
 	endpoints             map[model.Key]interface{}
 	dirtyEndpoints        set.Set
 	sortRequired          bool
@@ -35,7 +36,7 @@ type PolicyResolver struct {
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []tierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -47,6 +48,13 @@ func NewPolicyResolver() *PolicyResolver {
 		dirtyEndpoints:        set.New(),
 		policySorter:          NewPolicySorter(),
 	}
+}
+
+func (pr *PolicyResolver) RegisterWith(allUpdDispatcher, localEndpointDispatcher *dispatcher.Dispatcher) {
+	allUpdDispatcher.Register(model.PolicyKey{}, pr.OnUpdate)
+	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, pr.OnUpdate)
+	localEndpointDispatcher.Register(model.HostEndpointKey{}, pr.OnUpdate)
+	localEndpointDispatcher.RegisterStatusHandler(pr.OnDatamodelStatus)
 }
 
 func (pr *PolicyResolver) OnUpdate(update model.KVPair) (filterOut bool) {
@@ -130,13 +138,13 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key),
-			nil, []TierInfo{})
+			nil, []tierInfo{})
 		return nil
 	}
-	applicableTiers := []TierInfo{}
+	applicableTiers := []tierInfo{}
 	tier := pr.sortedTierData
 	tierMatches := false
-	filteredTier := TierInfo{
+	filteredTier := tierInfo{
 		Name:  tier.Name,
 		Order: tier.Order,
 	}

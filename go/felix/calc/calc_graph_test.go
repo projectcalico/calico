@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/go/felix/config"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -776,7 +777,7 @@ const (
 
 func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
-	var calcGraph *Dispatcher
+	var calcGraph *dispatcher.Dispatcher
 	var tracker *stateTracker
 	var eventBuf *EventBuffer
 	var lastState State

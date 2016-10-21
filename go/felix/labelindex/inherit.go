@@ -16,6 +16,7 @@ package labelindex
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -41,6 +42,12 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		dirtyItemIDs:      make(map[interface{}]bool),
 	}
 	return &inheritIDx
+}
+
+func (l *InheritIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+	allUpdDispatcher.Register(model.ProfileLabelsKey{}, l.OnUpdate)
+	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, l.OnUpdate)
+	allUpdDispatcher.Register(model.HostEndpointKey{}, l.OnUpdate)
 }
 
 // OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calc
+package dispatcher
 
 import (
 	log "github.com/Sirupsen/logrus"
@@ -21,24 +21,19 @@ import (
 	"reflect"
 )
 
-type UpdateHandler interface {
-	OnUpdate(update model.KVPair) (filterOut bool)
-}
+type UpdateHandler func(update model.KVPair) (filterOut bool)
 
-type StatusHandler interface {
-	OnDatamodelStatus(status api.SyncStatus)
-}
+type StatusHandler func(status api.SyncStatus)
 
 type Dispatcher struct {
 	typeToHandler  map[reflect.Type][]UpdateHandler
-	statusHandlers map[StatusHandler]bool
+	statusHandlers []StatusHandler
 }
 
 // NewDispatcher creates a Dispatcher with all its event handlers set to no-ops.
 func NewDispatcher() *Dispatcher {
 	d := &Dispatcher{
-		typeToHandler:  make(map[reflect.Type][]UpdateHandler),
-		statusHandlers: make(map[StatusHandler]bool),
+		typeToHandler: make(map[reflect.Type][]UpdateHandler),
 	}
 	return d
 }
@@ -50,9 +45,10 @@ func (d *Dispatcher) Register(keyExample model.Key, receiver UpdateHandler) {
 	}
 	log.Infof("Registering listener for type %v: %#v", keyType, receiver)
 	d.typeToHandler[keyType] = append(d.typeToHandler[keyType], receiver)
-	if receiver, ok := receiver.(StatusHandler); ok {
-		d.statusHandlers[receiver] = true
-	}
+}
+
+func (d *Dispatcher) RegisterStatusHandler(handler StatusHandler) {
+	d.statusHandlers = append(d.statusHandlers, handler)
 }
 
 // Syncer callbacks.
@@ -64,8 +60,8 @@ func (d *Dispatcher) OnUpdates(updates []model.KVPair) {
 }
 
 func (d *Dispatcher) OnStatusUpdated(status api.SyncStatus) {
-	for handler := range d.statusHandlers {
-		handler.OnDatamodelStatus(status)
+	for _, onStatusUpdate := range d.statusHandlers {
+		onStatusUpdate(status)
 	}
 }
 
@@ -80,8 +76,8 @@ func (d *Dispatcher) OnUpdate(update model.KVPair) (filterOut bool) {
 		log.Fatalf("KVPair contained a struct instead of expected pointer: %#v", update)
 	}
 	log.Debugf("Listeners: %#v", listeners)
-	for _, recv := range listeners {
-		filterOut := recv.OnUpdate(update)
+	for _, onUpdate := range listeners {
+		filterOut := onUpdate(update)
 		if filterOut {
 			// Note: we don't propagate the filterOut flag.  We only
 			// filter downstream in the processing pipeline, we don't
