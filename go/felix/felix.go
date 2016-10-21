@@ -159,23 +159,14 @@ configRetry:
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start dataplane driver: %v", err)
 	}
-	shutdownReasonChan := make(chan string)
-	// Start a thread to shut this process down if the driver fails.
-	go func() {
-		err := cmd.Wait()
-		log.WithError(err).Error("Dataplane driver process stopped")
-		shutdownReasonChan <- fmt.Sprintf("Dataplane driver process failed: %v", err)
-	}()
-
-	termSignalChan := make(chan os.Signal)
-	signal.Notify(termSignalChan, syscall.SIGTERM)
 
 	// Once we've got to this point, the dataplane driver is running.
 	// Start a goroutine to sequence the shutdown if we hit an error or
 	// get sent a TERM signal.  This is done on a best-effort basis.  If
 	// we fail to shut down the driver it will exit when its pipe is
 	// closed.
-	go manageShutdown(termSignalChan, shutdownReasonChan, cmd)
+	shutdownReasonChan := make(chan string)
+	go manageShutdown(shutdownReasonChan, cmd)
 
 	// Now the sub-process is running, close our copy of the file handles
 	// for the child's end of the pipes.
@@ -198,24 +189,59 @@ configRetry:
 	log.Fatal("Managed shutdown failed, exiting.")
 }
 
-func manageShutdown(osSignalChan <-chan os.Signal, failureReportChan <-chan string, driverCmd *exec.Cmd) {
+func manageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd) {
+	// Ask the runtime to tell us if we get a term signal.
+	termSignalChan := make(chan os.Signal)
+	signal.Notify(termSignalChan, syscall.SIGTERM)
+
+	// Start a background thread to tell us when the driver stops.
+	// If the driver stops unexpectedly, we'll terminate this process.
+	// If this process needs to stop, we'll kill the driver and then wait
+	// for the message from the background thread.
+	driverStoppedC := make(chan bool)
+	go func() {
+		err := driverCmd.Wait()
+		log.WithError(err).Warn("Driver process stopped")
+		driverStoppedC <- true
+	}()
+
+	// Wait for one of the channels to give us a reason to shut down.
+	driverAlreadyStopped := false
 	var reason string
 	select {
-	case sig := <-osSignalChan:
+	case <-driverStoppedC:
+		reason = "Driver stopped"
+		driverAlreadyStopped = true
+	case sig := <-termSignalChan:
 		reason = fmt.Sprintf("Received OS signal %v", sig)
 	case reason = <-failureReportChan:
 	}
 	log.WithField("reason", reason).Warn("Felix is shutting down")
 
-	// Make sure we don't wait for ever if the driver is unresponsive.
-	go func() {
-		time.Sleep(5)
-		log.Fatal("Failed to wait for driver to exit, giving up.")
-	}()
-
-	// Signal to the driver to exit.
-	driverCmd.Process.Kill()
-	driverCmd.Wait()
+	if !driverAlreadyStopped {
+		// Driver may still be running, just in case the driver is
+		// unresponsive, start a thread to kill this process if we
+		// don't manage to kill the driver.
+		log.Info("Driver still running, trying to shut it down...")
+		giveUpOnSigTerm := make(chan bool)
+		go func() {
+			time.Sleep(4 * time.Second)
+			giveUpOnSigTerm <- true
+			time.Sleep(1 * time.Second)
+			log.Fatal("Failed to wait for driver to exit, giving up.")
+		}()
+		// Signal to the driver to exit.
+		driverCmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case <-driverStoppedC:
+			log.Info("Driver shut down after SIGTERM")
+		case <-giveUpOnSigTerm:
+			log.Error("Driver did not respond to SIGTERM, sending SIGKILL")
+			driverCmd.Process.Kill()
+			<-driverStoppedC
+			log.Info("Driver shut down after SIGKILL")
+		}
+	}
 
 	// Then exit our process.
 	syscall.Exit(1)
