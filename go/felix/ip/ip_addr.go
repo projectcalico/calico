@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The ip package contains yet another IP address (and CIDR) type :-).   The
+// types differ from the ones in the net package in that they are backed by
+// fixed-sized arrays of the appropriate size.  The key advantage of
+// using a fixed-size array is that it makes the types hashable so they can
+// be used as map keys.  In addition, they can be converted to net.IP by
+// slicing.
 package ip
 
 import (
@@ -19,6 +25,7 @@ import (
 	"net"
 )
 
+// Addr represents either an IPv4 or IPv6 IP address.
 type Addr interface {
 	// Version returns the IP version; 4 or 6.
 	Version() uint8
