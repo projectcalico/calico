@@ -1,7 +1,3 @@
-> ![warning](../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](../README.md) main page.
-
 # User reference for 'calicoctl version' commands
 
 This sections describes the `calicoctl version` commands.

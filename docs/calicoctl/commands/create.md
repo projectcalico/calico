@@ -1,7 +1,3 @@
-> ![warning](../images/warning.png) This document describes an alpha release of calicoctl
->
-> See note at top of [calicoctl guide](../README.md) main page.
-
 # User reference for 'calicoctl create' commands
 
 This sections describes the `calicoctl create` command.
@@ -84,7 +80,7 @@ Failed to create any resources: resource already exists: Profile(name=profile1)
 ### See also
 -  [Resources](../resources/README.md) for details on all valid resources, including file format
    and schema
--  [Policy](../resources/policy.md) for details on the Calico label-based policy model
+-  [Policy](../resources/policy.md) for details on the Calico selector-based policy model
 -  [calicoctl configuration](../general/config.md) for details on configuring `calicoctl` to access
    the Calico datastore.
 
