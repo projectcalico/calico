@@ -16,9 +16,9 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/datastructures/labels"
-	"github.com/projectcalico/felix/go/datastructures/multidict"
-	"github.com/projectcalico/felix/go/datastructures/tags"
+	"github.com/projectcalico/felix/go/felix/labels"
+	"github.com/projectcalico/felix/go/felix/multidict"
+	"github.com/projectcalico/felix/go/felix/tagindex"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -54,7 +54,7 @@ type ActiveRulesCalculator struct {
 	labelIndex *labels.InheritIndex
 
 	// Cache of profile IDs by local endpoint.
-	endpointKeyToProfileIDs *tags.EndpointKeyToProfileIDMap
+	endpointKeyToProfileIDs *tagindex.EndpointKeyToProfileIDMap
 
 	// Callback objects.
 	RuleScanner         ruleScanner
@@ -72,7 +72,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		profileIDToEndpointKeys: multidict.NewIfaceToIface(),
 
 		// Cache of profile IDs by local endpoint.
-		endpointKeyToProfileIDs: tags.NewEndpointKeyToProfileIDMap(),
+		endpointKeyToProfileIDs: tagindex.NewEndpointKeyToProfileIDMap(),
 	}
 	arc.labelIndex = labels.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc

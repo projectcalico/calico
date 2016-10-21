@@ -15,7 +15,7 @@
 package labels_test
 
 import (
-	. "github.com/projectcalico/felix/go/datastructures/labels"
+	. "github.com/projectcalico/felix/go/felix/labels"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

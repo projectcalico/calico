@@ -15,7 +15,7 @@
 package multidict_test
 
 import (
-	. "github.com/projectcalico/felix/go/datastructures/multidict"
+	. "github.com/projectcalico/felix/go/felix/multidict"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

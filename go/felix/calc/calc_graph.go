@@ -16,10 +16,10 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/datastructures/ip"
-	"github.com/projectcalico/felix/go/datastructures/labels"
-	"github.com/projectcalico/felix/go/datastructures/tags"
 	"github.com/projectcalico/felix/go/felix/endpoint"
+	"github.com/projectcalico/felix/go/felix/ip"
+	"github.com/projectcalico/felix/go/felix/labels"
+	"github.com/projectcalico/felix/go/felix/tagindex"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hash"
@@ -134,11 +134,11 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (sourceDi
 
 	// The active tag index does the same for tags.  Calculating which
 	// endpoints match each tag.
-	tagIndex := tags.NewIndex(
-		func(key tags.EndpointKey, tagID string) {
+	tagIndex := tagindex.NewIndex(
+		func(key tagindex.EndpointKey, tagID string) {
 			memberCalc.MatchStarted(key, TagIPSetID(tagID))
 		},
-		func(key tags.EndpointKey, tagID string) {
+		func(key tagindex.EndpointKey, tagID string) {
 			memberCalc.MatchStopped(key, TagIPSetID(tagID))
 		},
 	)

@@ -16,12 +16,12 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/datastructures/ip"
-	"github.com/projectcalico/felix/go/datastructures/multidict"
-	"github.com/projectcalico/felix/go/datastructures/set"
 	"github.com/projectcalico/felix/go/felix/config"
 	"github.com/projectcalico/felix/go/felix/endpoint"
+	"github.com/projectcalico/felix/go/felix/ip"
+	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
