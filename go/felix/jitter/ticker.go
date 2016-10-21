@@ -47,6 +47,7 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 }
 
 func (t *Ticker) loop(c chan time.Time) {
+tickLoop:
 	for {
 		jitter := time.Duration(rand.Int63n(int64(t.MaxJitter)))
 		delay := t.MinDuration + jitter
@@ -56,7 +57,7 @@ func (t *Ticker) loop(c chan time.Time) {
 		case <-t.stop:
 			log.Info("Stopping jittered ticker")
 			close(c)
-			break
+			break tickLoop
 		case c <- time.Now():
 		default:
 		}
