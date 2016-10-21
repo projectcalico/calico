@@ -177,11 +177,69 @@ configRetry:
 		log.Fatalf("Failed to close parent's copy of pipe")
 	}
 
-	log.Info("Starting the dataplane driver")
+	// Create the connection to/from the dataplane driver.
+	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
 	felixConn := NewDataplaneConn(configParams,
 		datastore, toDriverW, fromDriverR, failureReportChan)
+
+	// Now create the calculation graph, which receives updates from the
+	// datastore and outputs dataplane updates for the dataplane driver.
+	//
+	// The Syncer has its own thread and we use an extra thread for the
+	// Validator, just to pipeline that part of the calculation then the
+	// main calculation graph runs in a single thread for simplicity.
+	// The output of the calculation graph arrives at the dataplane
+	// connection via channel.
+	//
+	// Syncer -chan-> Validator -chan-> Calc graph -chan-> felixConn
+	//        KVPair            KVPair             protobufs
+
+	// Get a Syncer from the datastore, which will feed the calculation
+	// graph with updates, bringing Felix into sync..
+	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
+	syncer := datastore.Syncer(syncerToValidator)
+	log.Debugf("Created Syncer: %#v", syncer)
+
+	// Create the ipsets/active policy calculation graph, which will
+	// do the dynamic calculation of ipset memberships and active policies
+	// etc.
+	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, felixConn.ToDataplane)
+
+	// Create the validator, which sits between the syncer and the
+	// calculation graph.
+	validator := calc.NewValidationFilter(asyncCalcGraph)
+
+	// Start the background processing threads.
+	log.Infof("Starting the datastore Syncer/processing graph")
+	syncer.Start()
+	go syncerToValidator.SendTo(validator)
+	asyncCalcGraph.Start()
+	log.Infof("Started the datastore Syncer/processing graph")
+
+	if configParams.EndpointReportingEnabled {
+		log.Info("Endpoint status reporting enabled, starting status reporter")
+		felixConn.statusReporter = statusrep.NewEndpointStatusReporter(
+			configParams.FelixHostname,
+			felixConn.StatusUpdatesFromDataplane,
+			felixConn.InSync,
+			felixConn.datastore,
+			configParams.EndpointReportingDelay(),
+			configParams.EndpointReportingDelay()*180,
+		)
+		felixConn.statusReporter.Start()
+	}
+
+	// Start communicating with the dataplane driver.
 	felixConn.Start()
+
+	// Send the opening message to the dataplane driver, giving it its
+	// config.
+	felixConn.ToDataplane <- &proto.ConfigUpdate{
+		Config: configParams.RawValues(),
+	}
+
+	// Now wait for something to fail.
 	reason := <-failureReportChan
 	log.Warn("Background worker stopped, attempting managed shutdown.")
 	shutdownReasonChan <- reason
@@ -300,15 +358,15 @@ type ipUpdate struct {
 }
 
 type DataplaneConn struct {
-	config            *config.Config
-	toFelix           chan interface{}
-	endpointUpdates   chan interface{}
-	inSync            chan bool
-	failureReportChan chan<- string
-	felixReader       io.Reader
-	felixWriter       io.Writer
-	datastore         bapi.Client
-	statusReporter    *statusrep.EndpointStatusReporter
+	config                     *config.Config
+	ToDataplane                chan interface{}
+	StatusUpdatesFromDataplane chan interface{}
+	InSync                     chan bool
+	failureReportChan          chan<- string
+	felixReader                io.Reader
+	felixWriter                io.Writer
+	datastore                  bapi.Client
+	statusReporter             *statusrep.EndpointStatusReporter
 
 	datastoreInSync bool
 
@@ -326,11 +384,11 @@ func NewDataplaneConn(configParams *config.Config,
 	fromDriver io.Reader,
 	failureReportChan chan<- string) *DataplaneConn {
 	felixConn := &DataplaneConn{
-		config:            configParams,
-		datastore:         datastore,
-		toFelix:           make(chan interface{}),
-		endpointUpdates:   make(chan interface{}),
-		inSync:            make(chan bool, 1),
+		config:                     configParams,
+		datastore:                  datastore,
+		ToDataplane:                make(chan interface{}),
+		StatusUpdatesFromDataplane: make(chan interface{}),
+		InSync:            make(chan bool, 1),
 		failureReportChan: failureReportChan,
 		felixReader:       fromDriver,
 		felixWriter:       toDriver,
@@ -368,19 +426,19 @@ func (fc *DataplaneConn) readMessagesFromDataplane() {
 			fc.handleProcessStatusUpdate(msg.ProcessStatusUpdate)
 		case *proto.FromDataplane_WorkloadEndpointStatusUpdate:
 			if fc.statusReporter != nil {
-				fc.endpointUpdates <- msg.WorkloadEndpointStatusUpdate
+				fc.StatusUpdatesFromDataplane <- msg.WorkloadEndpointStatusUpdate
 			}
 		case *proto.FromDataplane_WorkloadEndpointStatusRemove:
 			if fc.statusReporter != nil {
-				fc.endpointUpdates <- msg.WorkloadEndpointStatusRemove
+				fc.StatusUpdatesFromDataplane <- msg.WorkloadEndpointStatusRemove
 			}
 		case *proto.FromDataplane_HostEndpointStatusUpdate:
 			if fc.statusReporter != nil {
-				fc.endpointUpdates <- msg.HostEndpointStatusUpdate
+				fc.StatusUpdatesFromDataplane <- msg.HostEndpointStatusUpdate
 			}
 		case *proto.FromDataplane_HostEndpointStatusRemove:
 			if fc.statusReporter != nil {
-				fc.endpointUpdates <- msg.HostEndpointStatusRemove
+				fc.StatusUpdatesFromDataplane <- msg.HostEndpointStatusRemove
 			}
 		default:
 			log.Warningf("XXXX Unknown message from felix: %#v", msg)
@@ -424,13 +482,13 @@ func (fc *DataplaneConn) sendMessagesToDataplaneDriver() {
 
 	var config map[string]string
 	for {
-		msg := <-fc.toFelix
+		msg := <-fc.ToDataplane
 		switch msg := msg.(type) {
 		case *proto.InSync:
 			log.Info("Datastore now in sync.")
 			if !fc.datastoreInSync {
 				fc.datastoreInSync = true
-				fc.inSync <- true
+				fc.InSync <- true
 			}
 		case *proto.ConfigUpdate:
 			logCxt := log.WithFields(log.Fields{
@@ -506,26 +564,6 @@ func (fc *DataplaneConn) marshalToDataplane(msg interface{}) {
 	default:
 		log.Fatalf("Unknown message type: %#v", msg)
 	}
-	//
-	//if log.V(4) {
-	//	// For debugging purposes, dump the message to
-	//	// messagepack; parse it as a map and dump it to JSON.
-	//	bs := make([]byte, 0)
-	//	enc := codec.NewEncoderBytes(&bs, msgpackHandle)
-	//	enc.Encode(envelope)
-	//
-	//	dec := codec.NewDecoderBytes(bs, msgpackHandle)
-	//	var decodedType string
-	//	msgAsMap := make(map[string]interface{})
-	//	dec.Decode(&decodedType)
-	//	dec.Decode(msgAsMap)
-	//	jsonMsg, err := json.Marshal(msgAsMap)
-	//	if err == nil {
-	//		log.Infof("Dumped message: %v %v", decodedType, string(jsonMsg))
-	//	} else {
-	//		log.Infof("Failed to dump map to JSON: (%v) %v", err, msgAsMap)
-	//	}
-	//}
 	data, err := pb.Marshal(envelope)
 	if err != nil {
 		log.Fatalf("Failed to marshal data to front end: %#v; %v",
@@ -551,46 +589,6 @@ func (fc *DataplaneConn) Start() {
 	// Start a background thread to write to the dataplane driver.
 	go fc.sendMessagesToDataplaneDriver()
 
-	// Send the opening message to the dataplane driver, giving it its
-	// config.
-	fc.toFelix <- &proto.ConfigUpdate{
-		Config: fc.config.RawValues(),
-	}
-
 	// Start background thread to read messages from dataplane driver.
 	go fc.readMessagesFromDataplane()
-
-	// Create the datastore syncer, which will feed the calculation graph.
-	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	syncer := fc.datastore.Syncer(syncerToValidator)
-	log.Debugf("Created Syncer: %#v", syncer)
-
-	// Create the ipsets/active policy calculation graph, which will
-	// do the dynamic calculation of ipset memberships and active policies
-	// etc.
-	asyncCalcGraph := calc.NewAsyncCalcGraph(fc.config, fc.toFelix)
-
-	// Create the validator, which sits between the syncer and the
-	// calculation graph.
-	validator := calc.NewValidationFilter(asyncCalcGraph)
-
-	// Start the background processing threads.
-	log.Infof("Starting the datastore Syncer/processing graph")
-	syncer.Start()
-	go syncerToValidator.SendTo(validator)
-	asyncCalcGraph.Start()
-	log.Infof("Started the datastore Syncer/processing graph")
-
-	if fc.config.EndpointReportingEnabled {
-		log.Info("Endpoint status reporting enabled, starting status reporter")
-		fc.statusReporter = statusrep.NewEndpointStatusReporter(
-			fc.config.FelixHostname,
-			fc.endpointUpdates,
-			fc.inSync,
-			fc.datastore,
-			fc.config.EndpointReportingDelay(),
-			fc.config.EndpointReportingDelay()*180,
-		)
-		fc.statusReporter.Start()
-	}
 }
