@@ -42,7 +42,7 @@ Warnings:
   Releasing an in-use IP address can result in it being assigned to multiple
   workloads.`
 
-	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

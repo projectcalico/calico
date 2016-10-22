@@ -42,7 +42,7 @@ Description:
   
   See 'calicoctl node <command> --help' to read about a specific subcommand.
   `
-	arguments, err := docopt.Parse(doc, args, true, "calicoctl", true, false)
+	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return err
 	}

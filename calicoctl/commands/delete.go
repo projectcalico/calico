@@ -74,7 +74,7 @@ Description:
   The resources are deleted in the order they are specified.  In the event of a failure
   deleting a specific resource it is possible to work out which resource failed based on the
   number of resources successfully deleted.`
-	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

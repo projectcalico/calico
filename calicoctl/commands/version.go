@@ -21,6 +21,11 @@ import (
 )
 
 var VERSION, BUILD_DATE, GIT_REVISION string
+var VERSION_SUMMARY string
+
+func init() {
+	VERSION_SUMMARY = "calicoctl version " + VERSION + ", build " + GIT_REVISION
+}
 
 func Version(args []string) error {
 	doc := `Usage:
@@ -31,7 +36,7 @@ Options:
 
 Description:
   Display the version of calicoctl.`
-	arguments, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

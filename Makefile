@@ -191,8 +191,8 @@ test-containerized: run-etcd $(BUILD_CONTAINER_MARKER)
 	docker run -ti --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
-	$(BUILD_CONTAINER_NAME) make ut; \
-	chown $(shell id -u):$(shell id -g) -R ./vendor ./dist'
+	$(BUILD_CONTAINER_NAME) bash -c 'make ut; \
+	chown $(shell id -u):$(shell id -g) -R ./vendor'
 
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:

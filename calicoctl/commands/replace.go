@@ -57,7 +57,7 @@ Description:
 
   When replacing a resource, the complete resource spec must be provided, it is not sufficient
   to supply only the fields that are being updated.`
-	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

@@ -46,7 +46,7 @@ Description:
 	// Note: This call is ignoring the error because error check happens at the level above
 	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
 	// printed for this option
-	_, _ = docopt.Parse(doc, args, true, "calicoctl", false, false)
+	_, _ = docopt.Parse(doc, args, true, "", false, false)
 
 	processes, err := gops.Processes()
 	if err != nil {

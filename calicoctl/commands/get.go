@@ -93,7 +93,7 @@ Description:
   Please refer to the docs at http://docs.projectcalico.org for more details on the output formats,
   including example outputs, resource structure (required for the golang template definitions) and
   the valid column names (required for the custom-columns option).`
-	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

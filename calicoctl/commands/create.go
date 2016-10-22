@@ -57,7 +57,7 @@ Description:
   The resources are created in the order they are specified.  In the event of a failure
   creating a specific resource it is possible to work out which resource failed based on the
   number of resources successfully created.`
-	parsedArgs, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}

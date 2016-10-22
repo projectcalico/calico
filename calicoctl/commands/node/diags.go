@@ -49,7 +49,7 @@ Options:
 Description:
   Create a diagnostics bundle for the Calico node instance running on this compute host.`
 
-	arguments, err := docopt.Parse(doc, args, true, "calicoctl", false, false)
+	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		return err
 	}
