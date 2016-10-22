@@ -1,3 +1,6 @@
+---
+title: Policy resource (policy)
+---
 # Policy Resource
 Policy objects can be thought of as being applied to a set of endpoints (rather than being a property of the endpoint) to give more flexible policy arrangements that can override or augment any ACLs directly associated with an endpoint through a profile.
 

@@ -2,11 +2,7 @@
 title: calicoctl version
 ---
 
-# User reference for 'calicoctl version' commands
-
-This sections describes the `calicoctl version` commands.
-
-This command prints the version of `calicoctl` in use.
+This sections describes the `calicoctl version` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
@@ -17,32 +13,17 @@ Run `calicoctl version --help` to display the following help menu for the
 calicoctl version commands.
 
 ```
-
 Usage:
   calicoctl version
 
+Options:
+  -h --help   Show this screen.
+
 Description:
-  Display the version of calicoctl
-
+  Display the version of calicoctl.
 ```
 
-## calicoctl version commands
-
-
-### calicoctl version
-
-Print the version of `calicoctl` in use.
-
-This command is specific to the `calicoctl` being run on a given machine.
-
-Command syntax:
-
-```
-calicoctl version
-
-```
-
-Examples:
+### Examples:
 
 ```
 $ calicoctl version

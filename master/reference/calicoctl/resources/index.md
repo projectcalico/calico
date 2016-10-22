@@ -1,4 +1,7 @@
-# Calico resources
+---
+title: Calico resource types
+---
+
 This guide describes the set of valid resource types that can be managed
 through `calicoctl`.
 
@@ -58,5 +61,3 @@ A file may contain multiple resource documents specified in a YAML list format. 
     profiles: [prof1, prof2]
     expectedIPs: [1.2.3.5]
 ```
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/resources/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
