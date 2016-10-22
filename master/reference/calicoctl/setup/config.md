@@ -1,4 +1,7 @@
-# Setup for calicoctl
+---
+title: Configuring calicoctl
+---
+
 The `calicoctl` command line tool needs to be configured with details of
 your datastore cluster so that it can manage system configurations and
 resources.
@@ -43,7 +46,7 @@ key/cert/ca file may also be omitted if your etcd server is not running in TLS m
 If you are running in TLS mode, your endpoint addresses should be https not http.
 
 
-#### Example (a cluster of 3 etcd servers with no authentication)
+### Example (a cluster of 3 etcd servers with no authentication)
 ```
 etcdEndpoints: http://myhost1:2379,http://myhost2:2379,http://myhost3:2379
 ```
@@ -69,7 +72,7 @@ key/cert/ca file may also be omitted if your etcd server is not running in TLS m
 
 If you are running in TLS mode, your endpoint addresses should be https not http.
 
-#### Example (set ETCD_ENDPOINTS when running calicoctl_
+### Example (set ETCD_ENDPOINTS when running calicoctl_
 ```
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
 ```
@@ -155,5 +158,3 @@ $ etcdctl -u root:<rootpw> auth disable
 To allow calicoctl to use the new calicoctl user, ensure you specify the username 
 and password either in environment variables or in the calicoctl config file as 
 described above.
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/general/setup.md?pixel)](https://github.com/igrigorik/ga-beacon)

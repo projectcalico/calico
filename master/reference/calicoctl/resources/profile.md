@@ -1,4 +1,7 @@
-# Profile Resource
+---
+title: Profile resource (profile)
+---
+
 Profile objects can be thought of as describing the properties of an endpoint (virtual interface, or bare metal interface).  Each endpoint can reference zero or more profiles.  A profile encapsulates a specific set of tags, labels and ACL rules that are directly applied to the endpoint.  Depending on the use case, profiles may be sufficient to express all policy.
 
 ### Sample YAML
