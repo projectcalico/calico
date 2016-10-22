@@ -2,17 +2,14 @@
 title: calicoctl ipam
 ---
 
-This section describes the `calicoctl ipam` commands.
-
-This command allows an interface into Calico's IP address management to release
-IP addresses from endpoints and view additional information about assigned IPs.
+This section describes the `calicoctl ipam release` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl ipam' commands
+## Displaying the help text for 'calicoctl ipam release' command
 
-Run `calicoctl ipam --help` to display the following help menu for the
-calicoctl ipam commands.
+Run `calicoctl ipam release --help` to display the following help menu for the
+calicoctl ipam release command.
 
 ```
 Usage:
@@ -32,7 +29,7 @@ Description:
   were not cleanly removed from Calico.
 ```
 
-#### Examples
+### Examples
 
 ```
 $ calicoctl ipam release --ip=192.168.1.2

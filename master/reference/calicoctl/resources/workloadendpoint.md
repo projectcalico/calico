@@ -1,4 +1,6 @@
-# Host Endpoints Resource
+---
+title: Host Endpoints resource (hostEndpoint)
+---
 Workload endpoints refer to the host-facing side of the Container's veth pair. Each endpoint may specify a set of labels and list of profiles that Calico will use to apply policy to the interface.  If no profiles or labels are applied, Calico, by default, will not apply any policy.
 
 ### Sample YAML

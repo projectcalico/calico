@@ -1,4 +1,7 @@
-# BGP Peer Resource
+---
+title: BGP Peer resource (bgpPeer)
+---
+
 A BGP Peer resource represents a BGP peer which node(s) in this cluster will connect to. Configuration of BGP peers is required when configuring Calico to peer with your existing datacenter infrastructure (e.g. ToR). For more information on cluster layouts, see Calico's documentation on [L3 Topologies](http://docs.projectcalico.org/en/latest/l3-interconnectFabric.html).
 
 There are two types of BGP Peers.
