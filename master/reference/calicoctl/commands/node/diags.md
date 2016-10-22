@@ -1,30 +1,27 @@
 ---
-title: calicoctl diags
+title: calicoctl node diags
 ---
 
-# User reference for 'calicoctl diags' commands
-
-This section describes the `calicoctl diags` commands.
+This section describes the `calicoctl node diags` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl diags' commands
+## Displaying the help text for 'calicoctl node diags' command
 
-Run `calicoctl diags --help` to display the following help menu for the 
-calicoctl diags commands.
+Run `calicoctl node diags --help` to display the following help menu for the 
+calicoctl diags command.
 
 ```
-
 Usage:
-  calicoctl diags [--log-dir=<LOG_DIR>]
-
-Description:
-  Save diagnostic information
+  calicoctl node diags [--log-dir=<LOG_DIR>]
 
 Options:
-  --log-dir=<LOG_DIR>  The directory for logs [default: /var/log/calico]
+  -h --help               Show this screen.
+     --log-dir=<LOG_DIR>  The directory containing Calico logs [default: /var/log/calico]
 
+Description:
+  Create a diagnostics bundle for the Calico node instance running on this compute host.
 ```
 
 ## calicoctl diags commands

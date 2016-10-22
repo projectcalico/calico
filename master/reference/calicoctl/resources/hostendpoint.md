@@ -1,4 +1,7 @@
-# Host Endpoints Resource
+---
+title: Host Endpoint resource (hostEndpoint)
+---
+
 A host endpoints refer to the “bare-metal” interfaces attached to the host that is running Calico’s agent, Felix.  Each endpoint may specify a set of labels and list of profiles that Calico will use to apply policy to the interface.  If no profiles or labels are applied, Calico, by default, will not apply any policy.
 
 ### Sample YAML

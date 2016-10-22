@@ -1,4 +1,6 @@
-# Pool Resource
+---
+title: IP Pool resource (ipPool)
+---
 
 ### Sample YAML
 ```
