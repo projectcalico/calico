@@ -15,18 +15,19 @@ Run `calicoctl ipam --help` to display the following help menu for the
 calicoctl ipam commands.
 
 ```
-
 Usage:
-  calicoctl ipam release <IP>
-  calicoctl ipam info <IP>
+  calicoctl ipam <command> [<args>...]
+
+    release       Release a Calico assigned IP address.
+    show          Show details of a Calico assigned IP address.
+ 
+Options:
+  -h --help               Show this screen.
 
 Description:
-  Manage Calico assigned IP addresses
-
-Warnings:
-  -  Releasing an in-use IP address can result in it being assigned to multiple
-     workloads.
-
+  IP Address Management specific commands for calicoctl.
+  
+  See 'calicoctl ipam <command> --help' to read about a specific subcommand.
 ```
 
 ## calicoctl ipam commands
