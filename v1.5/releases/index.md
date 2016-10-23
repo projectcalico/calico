@@ -8,6 +8,7 @@ Use the version selector at the top-right of this page to view a different relea
 
 ## v1.5.0
 
+{: .table}
 | Component              | Version  |
 |------------------------|----------|
 | felix                  | v1.4.1b2 |

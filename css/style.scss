@@ -32,3 +32,9 @@
     padding-left: 10px;
   }
 }
+
+// Default blockquotes are too big in Bootstrap.
+// Shrink them down
+blockquote {
+  font-size: inherit;
+}
