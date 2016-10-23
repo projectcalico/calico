@@ -201,3 +201,10 @@ $ calicoctl config node bgp loglevel debug
 $ calicoctl config node bgp loglevel --remove
 Value removed
 ```
+
+## See also
+-  [Resources](../resources) for details on all valid resources, including file format
+   and schema
+-  [Policy](../resources/policy.md) for details on the Calico selector-based policy model
+-  [calicoctl configuration](../setup/config.md) for details on configuring `calicoctl` to access
+   the Calico datastore.
