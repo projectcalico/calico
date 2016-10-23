@@ -73,11 +73,9 @@ Failed to replace any 'policy' resources: resource does not exist: Policy(name=d
                                [default: /etc/calico/calicoctl.cfg]
 ```
 
-### See also
--  [Resources](../resources/README.md) for details on all valid resources, including file format
+## See also
+-  [Resources](../resources) for details on all valid resources, including file format
    and schema
 -  [Policy](../resources/policy.md) for details on the Calico selector-based policy model
--  [calicoctl configuration](../general/config.md) for details on configuring `calicoctl` to access
+-  [calicoctl configuration](../setup/config.md) for details on configuring `calicoctl` to access
    the Calico datastore.
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/commands/replace.md?pixel)](https://github.com/igrigorik/ga-beacon)

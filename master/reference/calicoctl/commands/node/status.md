@@ -41,3 +41,10 @@ IP: 172.17.8.100    AS Number: 64511 (inherited)
 IPv6 BGP status
 No IPv6 address configured.
 ```
+
+## See also
+-  [Resources](../../resources/README.md) for details on all valid resources, including file format
+   and schema
+-  [Policy](../../resources/policy.md) for details on the Calico selector-based policy model
+-  [calicoctl configuration](../../setup/config.md) for details on configuring `calicoctl` to access
+   the Calico datastore.

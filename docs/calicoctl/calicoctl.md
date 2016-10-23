@@ -12,7 +12,8 @@ Run `calicoctl --help` to display the following help menu for the top level
 calicoctl commands.
 
 ```
-Usage: calicoctl <command> [<args>...]
+Usage:
+  calicoctl [options] <command> [<args>...]
 
     create         Create a resource by filename or stdin.
     replace        Replace a resource by filename or stdin.
@@ -20,23 +21,33 @@ Usage: calicoctl <command> [<args>...]
                    it does not exist, and replaces a resource if it does exists.
     delete         Delete a resource identified by file, stdin or resource type and name.
     get            Get a resource identified by file, stdin or resource type and name.
-    config         Manage system configuration.
     version        Display the version of calicoctl.
+    node           Calico node management.
+    ipam           IP address management.
 
-See 'calicoctl <command> --help' to read about a specific subcommand.
-```
+Options:
+  -h --help               Show this screen.
+  -l --log-level=<level>  Set the log level (one of panic, fatal, error,
+                          warn, info, debug) [default: panic]
+
+Description:
+  The calicoctl command line tool is used to manage Calico network and security policy,
+  to view and manage endpoint configuration, and to manage a Calico node instance.
+
+  See 'calicoctl <command> --help' to read about a specific subcommand.```
 
 ## Top level command line options
 
 Details on the `calicoctl` commands are described in the documents linked below
 organized by top level command.
 
--  [calicoctl create](commands/create.md)
--  [calicoctl replace](commands/replace.md)
--  [calicoctl apply](commands/apply.md)
--  [calicoctl delete](commands/delete.md)
--  [calicoctl get](commands/get.md)
--  [calicoctl config](commands/config.md)
--  [calicoctl version](commands/version.md)
+-  [calicoctl create](create.md)
+-  [calicoctl replace](replace.md)
+-  [calicoctl apply](apply.md)
+-  [calicoctl delete](delete.md)
+-  [calicoctl get](get.md)
+-  [calicoctl version](version.md)
+-  [calicoctl node](node.md)
+-  [calicoctl ipam](ipam.md)
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/calicoctl.md?pixel)](https://github.com/igrigorik/ga-beacon)
