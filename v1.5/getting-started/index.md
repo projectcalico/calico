@@ -1,18 +1,71 @@
 ---
-title: Calico Integrations
+title: Getting Started
 ---
 
-To get started using Calico, we recommend running through one or more of the
-available tutorials linked below.
+Calico supports many common container orchestration platforms.
 
-These tutorials will help you understand the different environment options when
-using Calico.  In most cases we provide worked examples using manual setup on
-your own servers, a quick set-up in a virtualized environment using Vagrant and
-a number of cloud services.
+To get started using Calico, we recommend following the below links based on your orchestrator.
 
-- [Calico with Kubernetes](kubernetes)
-- [Calico with Docker](docker)
-- [Calico with rkt](rkt)
-- [Calico with Mesos](mesos)
-  - [Calico with DC/OS](mesos/installation/dc-os)
-- [Calico with OpenStack](openstack)
+See the [Calico Usage]({{site.baseurl}}/{{page.verison}}/usage/) guide for General information on Calico for all Orchestrators.
+
+<hr>
+<div id="getting-started-icons">
+  <div class="row">
+    <div class="col-md-4 col-sm-6">
+      <a href="{{site.baseurl}}/{{page.version}}/getting-started/kubernetes/" class="thumbnail">
+        <img src="{{ site.baseurl }}/images/icons/kubernetes.svg">
+        <div class="caption">
+          <h3>Kubernetes</h3>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4 col-sm-6">
+    <a href="{{site.baseurl}}/{{page.version}}/getting-started/mesos/" class="thumbnail">
+      <img src="{{ site.baseurl }}/images/icons/mesos.svg">
+      <div class="caption">
+        <h3>Mesos</h3>
+      </div>
+    </a>
+    </div>
+    <div class="col-md-4 col-sm-6">
+    <a href="{{site.baseurl}}/{{page.version}}/getting-started/openstack/" class="thumbnail">
+      <img src="{{ site.baseurl }}/images/icons/openstack.png">
+      <div class="caption">
+        <h3>Openstack</h3>
+      </div>
+    </a>
+    </div>
+  <div class="col-md-3 col-sm-6">
+    <a href="{{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/dc-os" class="thumbnail">
+      <img src="{{ site.baseurl }}/images/icons/dcos.png">
+      <div class="caption">
+        <h3>DC/OS</h3>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-3 col-sm-6">
+  <a href="http://localhost:4000/v1.5/getting-started/docker/" class="thumbnail">
+    <img src="{{ site.baseurl }}/images/icons/docker.png">
+    <div class="caption">
+      <h3>Docker</h3>
+    </div>
+  </a>
+  </div>
+    <div class="col-md-3 col-sm-6">
+    <a href="http://localhost:4000/v1.5/getting-started/rkt/" class="thumbnail">
+      <img src="{{ site.baseurl }}/images/icons/rkt.png">
+      <div class="caption">
+        <h3>rkt</h3>
+      </div>
+    </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+    <a href="http://localhost:4000/v1.5/getting-started/bare-metal/bare-metal" class="thumbnail" style="text-align: center">
+      <span class="glyphicon glyphicon-hdd" style="font-size:64px"></span>
+      <div class="caption">
+        <h3>Host Protection</h3>
+      </div>
+    </a>
+    </div>
+  </div>
+</div>

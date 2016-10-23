@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 16.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1"
+	 id="svg6517" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:svg="http://www.w3.org/2000/svg" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" sodipodi:docname="Juju_charm_icon_template.svg" inkscape:version="0.48+devel r12274"
+	 xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="96px" height="96px"
+	 viewBox="0 0 96 96" enable-background="new 0 0 96 96" xml:space="preserve">
+<filter  inkscape:label="Badge Shadow" id="filter891" inkscape:collect="always">
+	<feGaussianBlur  stdDeviation="0.71999962" id="feGaussianBlur893" inkscape:collect="always"></feGaussianBlur>
+</filter>
+<filter  inkscape:label="Inner Shadow" style="color-interpolation-filters:sRGB;" id="filter1121">
+	<feFlood  flood-color="rgb(0,0,0)" flood-opacity="0.59999999999999998" result="flood" id="feFlood1123"></feFlood>
+	<feComposite  operator="out" in2="SourceGraphic" in="flood" result="composite1" id="feComposite1125"></feComposite>
+	<feGaussianBlur  in="composite1" stdDeviation="1" result="blur" id="feGaussianBlur1127"></feGaussianBlur>
+	<feOffset  dx="0" dy="2" result="offset" id="feOffset1129"></feOffset>
+	<feComposite  operator="atop" in2="SourceGraphic" in="offset" result="composite2" id="feComposite1131"></feComposite>
+</filter>
+<sodipodi:namedview  showguides="true" showborder="true" fit-margin-left="0" fit-margin-top="0" showgrid="true" inkscape:cy="49.018169" inkscape:cx="18.514671" inkscape:zoom="4.0745362" borderopacity="1.0" bordercolor="#666666" pagecolor="#ffffff" id="base" inkscape:showpageshadow="false" inkscape:guide-bbox="true" inkscape:window-maximized="1" inkscape:window-y="24" inkscape:window-x="0" inkscape:window-height="1029" inkscape:window-width="1920" fit-margin-bottom="0" fit-margin-right="0" inkscape:current-layer="layer1" inkscape:document-units="px" inkscape:pageshadow="2" inkscape:pageopacity="0.0">
+	<inkscape:grid  type="xygrid" id="grid821"></inkscape:grid>
+	<sodipodi:guide  position="16,48" orientation="1,0" id="guide823"></sodipodi:guide>
+	<sodipodi:guide  position="64,80" orientation="0,1" id="guide825"></sodipodi:guide>
+	<sodipodi:guide  position="80,40" orientation="1,0" id="guide827"></sodipodi:guide>
+	<sodipodi:guide  position="64,16" orientation="0,1" id="guide829"></sodipodi:guide>
+</sodipodi:namedview>
+<g id="layer1" transform="translate(268,-635.29076)" inkscape:label="BACKGROUND" inkscape:groupmode="layer">
+	<g id="path6455" sodipodi:nodetypes="sssssssss" inkscape:connector-curvature="0" filter="url(#filter1121)">
+		<path fill="#003366" d="M-268,700.156v-33.73c0-27.243,3.888-31.135,31.103-31.135h33.793c27.216,0,31.104,3.892,31.104,31.135
+			v33.73c0,27.242-3.888,31.135-31.104,31.135h-33.793C-264.112,731.291-268,727.398-268,700.156z"/>
+	</g>
+	<g>
+		<g>
+			<polygon fill="#FFFFFF" points="-233.67,676.304 -233.67,690.275 -221.625,683.277 			"/>
+			<polygon fill="#FFFFFF" points="-232.891,691.635 -220.825,698.612 -220.825,684.646 			"/>
+			<polygon fill="#FFFFFF" points="-219.258,684.646 -219.258,698.612 -207.18,691.635 			"/>
+			<polygon fill="#FFFFFF" points="-218.478,683.277 -206.413,690.275 -206.413,676.304 			"/>
+			<polygon fill="#FFFFFF" points="-233.67,692.987 -233.67,706.967 -221.625,699.951 			"/>
+			<polygon fill="#FFFFFF" points="-232.891,708.314 -220.825,715.291 -220.825,701.323 			"/>
+			<polygon fill="#FFFFFF" points="-219.258,701.323 -219.258,715.291 -207.18,708.314 			"/>
+			<polygon fill="#FFFFFF" points="-218.478,699.951 -206.413,706.967 -206.413,692.987 			"/>
+			<polygon fill="#FFFFFF" points="-232.891,658.282 -220.825,665.257 -220.825,651.291 			"/>
+			<polygon fill="#FFFFFF" points="-219.258,651.291 -219.258,665.257 -207.18,658.282 			"/>
+		</g>
+		<g>
+			<polygon fill="#26A9E0" points="-248.108,667.969 -248.108,681.934 -236.052,674.962 			"/>
+			<polygon fill="#26A9E0" points="-247.325,683.277 -235.237,690.275 -235.237,676.304 			"/>
+			<polygon fill="#26A9E0" points="-204.844,676.304 -204.844,690.297 -192.692,683.277 			"/>
+			<polygon fill="#26A9E0" points="-204.065,674.962 -191.892,681.934 -191.892,667.969 			"/>
+			<polygon fill="#26A9E0" points="-248.108,684.646 -248.108,698.612 -236.052,691.635 			"/>
+			<polygon fill="#26A9E0" points="-247.325,699.951 -235.237,706.967 -235.237,692.987 			"/>
+			<polygon fill="#26A9E0" points="-204.844,692.987 -204.844,706.967 -192.692,699.951 			"/>
+			<polygon fill="#26A9E0" points="-247.325,666.622 -235.237,673.618 -235.237,659.628 			"/>
+			<polygon fill="#26A9E0" points="-233.67,659.628 -233.67,673.618 -221.625,666.622 			"/>
+			<polygon fill="#26A9E0" points="-232.891,674.962 -220.825,681.934 -220.825,667.969 			"/>
+			<polygon fill="#26A9E0" points="-219.258,667.969 -219.258,681.934 -207.18,674.962 			"/>
+			<polygon fill="#26A9E0" points="-218.478,666.622 -206.413,673.618 -206.413,659.628 			"/>
+			<polygon fill="#26A9E0" points="-204.844,659.628 -204.844,673.618 -192.692,666.622 			"/>
+			<polygon fill="#26A9E0" points="-204.065,691.635 -191.892,698.612 -191.892,684.646 			"/>
+		</g>
+	</g>
+</g>
+<g id="layer3" inkscape:label="PLACE YOUR PICTOGRAM HERE" inkscape:groupmode="layer">
+</g>
+<g id="layer2" inkscape:label="BADGE" sodipodi:insensitive="true" inkscape:groupmode="layer" display="none">
+	<g id="g4394" transform="translate(-340.00001,-581)" display="inline">
+		<g id="g855">
+			<g id="g870" inkscape:groupmode="maskhelper" opacity="0.6" filter="url(#filter891)">
+				<path id="path844_1_" sodipodi:type="arc" sodipodi:cx="252" sodipodi:cy="552.36218" sodipodi:rx="12" sodipodi:ry="12" d="
+					M366,591c0,9.941-8.059,18-18,18s-18-8.059-18-18c0-9.941,8.059-18,18-18S366,581.059,366,591z"/>
+			</g>
+			<g id="g862">
+				
+					<path id="path4398" sodipodi:type="arc" sodipodi:cx="252" sodipodi:cy="552.36218" sodipodi:rx="12" sodipodi:ry="12" fill="#F5F5F5" d="
+					M366,590c0,9.941-8.059,18-18,18s-18-8.059-18-18c0-9.941,8.059-18,18-18S366,580.059,366,590z"/>
+				
+					<path id="path4400" sodipodi:type="arc" sodipodi:cx="252" sodipodi:cy="552.36218" sodipodi:rx="12" sodipodi:ry="12" fill="#DD4814" d="
+					M363,590c0,8.284-6.716,15-15,15s-15-6.716-15-15s6.716-15,15-15S363,581.716,363,590z"/>
+				
+					<path id="path4459" sodipodi:arg2="1.6755161" sodipodi:arg1="1.0471976" sodipodi:r2="4.3458705" sodipodi:r1="7.2431178" sodipodi:sides="5" sodipodi:type="star" sodipodi:cx="666.19574" sodipodi:cy="589.50385" inkscape:randomized="0" inkscape:rounded="0.1" inkscape:flatsided="false" fill="#F5F5F5" d="
+					M354.511,598.909c-0.554,0.405-5.792-2.284-6.479-2.281c-0.687,0.002-5.908,2.724-6.465,2.322
+					c-0.557-0.402,0.381-6.215,0.167-6.868c-0.214-0.652-4.416-4.777-4.206-5.431c0.21-0.654,6.028-1.558,6.583-1.963
+					c0.554-0.405,3.179-5.676,3.865-5.678c0.688-0.002,3.345,5.252,3.901,5.654c0.557,0.402,6.381,1.269,6.595,1.922
+					c0.214,0.652-3.961,4.803-4.172,5.458C354.09,592.697,355.065,598.503,354.511,598.909z"/>
+			</g>
+		</g>
+	</g>
+</g>
+</svg>
