@@ -3,9 +3,12 @@ title: Calico resource types
 ---
 
 This guide describes the set of valid resource types that can be managed
-through `calicoctl`.
+through `calicoctl`.  Data may be supplied in YAML or JSON format for each
+resource type, and this guide provides examples in YAML format which may be
+translated diretly to JSON using standard YAML to JSON conversion.
 
 ## Overview of resource YAML file structure
+
 The calicoctl commands for resource management (create, delete, replace, get)
 all take YAML files as input.  The YAML file may contain a single resource type
 (e.g. a profile resource), or a list of multiple resource types (e.g. a profile and two
@@ -24,8 +27,6 @@ metadata:
 spec:
   ... configuration for the resource
 ```
-
-
 
 ### Definitions
 | name     | description                                               | requirements                                                                     | schema |
