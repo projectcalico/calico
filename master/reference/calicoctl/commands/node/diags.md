@@ -73,3 +73,10 @@ such as transfer.sh using curl or similar.  For example:
 
   curl --upload-file /tmp/tmp991ZWu/diags-151015_155032.tar.gz https://transfer.sh/diags-151015_155032.tar.gz
 ```
+
+## See also
+-  [Resources](../../resources/README.md) for details on all valid resources, including file format
+   and schema
+-  [Policy](../../resources/policy.md) for details on the Calico selector-based policy model
+-  [calicoctl configuration](../../setup/config.md) for details on configuring `calicoctl` to access
+   the Calico datastore.

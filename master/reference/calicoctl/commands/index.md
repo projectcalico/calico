@@ -1,12 +1,12 @@
 ---
-title: calicoctl CLI user reference
+title: CLI user reference
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage Calico network
 and security policy.
 
-This user reference is organized in sections based on the top level command options
-of calicoctl.
+This section is a command line reference for calicoctl, organised based on 
+the command hierarchy.
 
 ## Top level help
 
