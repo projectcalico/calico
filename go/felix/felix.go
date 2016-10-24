@@ -202,6 +202,20 @@ configRetry:
 	// etc.
 	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, felixConn.ToDataplane)
 
+	if configParams.UsageReportingEnabled {
+		// Usage reporting enabled, add stats collector to graph and
+		// start the usage reporting thread.
+		statsCollector := calc.NewStatsCollector()
+		statsCollector.RegisterWith(asyncCalcGraph.Dispatcher)
+		go usagerep.PeriodicallyReportUsage(
+			24*time.Hour,
+			configParams.FelixHostname,
+			configParams.ClusterGUID,
+			configParams.ClusterType,
+			statsCollector.NumHostsChan,
+		)
+	}
+
 	// Create the validator, which sits between the syncer and the
 	// calculation graph.
 	validator := calc.NewValidationFilter(asyncCalcGraph)
@@ -233,15 +247,6 @@ configRetry:
 	// config.
 	felixConn.ToDataplane <- &proto.ConfigUpdate{
 		Config: configParams.RawValues(),
-	}
-
-	if configParams.UsageReportingEnabled {
-		go usagerep.PeriodicallyReportUsage(
-			24*time.Hour,
-			configParams.FelixHostname,
-			configParams.ClusterGUID,
-			configParams.ClusterType,
-		)
 	}
 
 	// Now monitor the worker process and our worker threads and shut

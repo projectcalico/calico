@@ -37,7 +37,7 @@ func New() Set {
 	return make(mapSet)
 }
 
-type mapSet map[interface{}]struct{}
+type mapSet map[interface{}]empty
 
 func (set mapSet) Len() int {
 	return len(set)

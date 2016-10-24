@@ -21,6 +21,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/buildinfo"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,16 +31,35 @@ const (
 	baseURL = "https://usage.projectcalico.org/UsageCheck/calicoVersionCheck?"
 )
 
-func PeriodicallyReportUsage(interval time.Duration, hostname string, clusterGUID string, clusterType string) {
+func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clusterType string, numHostsC <-chan int) {
+	log.Info("Usage reporting thread started, waiitng for size estimate")
+	estimatedClusterSize := <-numHostsC
+	log.WithField("size", estimatedClusterSize).Info("Initial cluster size read")
+	if estimatedClusterSize > 25 {
+		// Avoid thundering herd by adding jitter to startup for a large
+		// cluster.
+		preJitter := time.Duration(rand.Intn(estimatedClusterSize)) * time.Second
+		log.WithField("delay", preJitter).Info("Waiting before first check-in")
+		time.Sleep(preJitter)
+	}
+	ReportUsage(hostname, clusterGUID, clusterType, estimatedClusterSize)
 	ticker := jitter.NewTicker(interval, interval/10)
 	for {
-		estimatedClusterSize := 1
-		ReportUsage(hostname, clusterGUID, clusterType, estimatedClusterSize)
-		<-ticker.C
+		select {
+		case estimatedClusterSize = <-numHostsC:
+		case <-ticker.C:
+			ReportUsage(hostname, clusterGUID, clusterType, estimatedClusterSize)
+		}
 	}
 }
 
 func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize int) {
+	if clusterType == "" {
+		clusterType = "unknown"
+	}
+	if clusterGUID == "" {
+		clusterType = "baddecaf"
+	}
 	log.WithFields(log.Fields{
 		"hostname":             hostname,
 		"clusterGUID":          clusterGUID,
@@ -47,8 +67,7 @@ func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize
 		"estimatedClusterSize": estimatedClusterSize,
 		"version":              buildinfo.Version,
 		"gitRevision":          buildinfo.GitRevision,
-	}).Info("Reporting cluster usage and checking for deprecation warnings.")
-
+	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
 		"hostname":     {hostname},
 		"guid":         {clusterGUID},
@@ -59,8 +78,11 @@ func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize
 		"felix_type":   {"go"},
 	}
 	fullURL := baseURL + queryParams.Encode()
+	log.WithField("url", fullURL).Debug("Calculated URL.")
 	resp, err := http.Get(fullURL)
-	defer resp.Body.Close()
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		log.WithError(err).Info("Failed to report usage/get deprecation warnings.")
 		return
@@ -68,8 +90,10 @@ func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize
 	jsonResp := map[string]interface{}{}
 	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
 		log.WithError(err).Warn(
-			"Failed to decode usage reporting server response")
+			"Failed to decode report server response")
 		return
+	} else {
+		log.WithField("json", jsonResp).Debug("Response")
 	}
 	if warn, ok := jsonResp["usage_warning"]; ok {
 		log.Warnf("Usage warning: %v", warn)

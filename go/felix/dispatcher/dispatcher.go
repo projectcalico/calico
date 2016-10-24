@@ -26,14 +26,28 @@ type UpdateHandler func(update model.KVPair) (filterOut bool)
 type StatusHandler func(status api.SyncStatus)
 
 type Dispatcher struct {
-	typeToHandler  map[reflect.Type][]UpdateHandler
+	typeToHandler  map[reflect.Type]updateHandlers
 	statusHandlers []StatusHandler
+}
+
+type updateHandlers []UpdateHandler
+
+func (u updateHandlers) DispatchToAll(update model.KVPair) {
+	for _, onUpdate := range u {
+		filterOut := onUpdate(update)
+		if filterOut {
+			// Note: we don't propagate the filterOut flag.  We only
+			// filter downstream in the processing pipeline, we don't
+			// want to prevent our peers from handling updates.
+			break
+		}
+	}
 }
 
 // NewDispatcher creates a Dispatcher with all its event handlers set to no-ops.
 func NewDispatcher() *Dispatcher {
 	d := &Dispatcher{
-		typeToHandler: make(map[reflect.Type][]UpdateHandler),
+		typeToHandler: make(map[reflect.Type]updateHandlers),
 	}
 	return d
 }
@@ -71,20 +85,13 @@ func (d *Dispatcher) OnUpdate(update model.KVPair) (filterOut bool) {
 	log.Debugf("Dispatching %v", update)
 	keyType := reflect.TypeOf(update.Key)
 	log.Debug("Type: ", keyType)
-	listeners := d.typeToHandler[keyType]
 	if update.Value != nil && reflect.TypeOf(update.Value).Kind() == reflect.Struct {
 		log.Fatalf("KVPair contained a struct instead of expected pointer: %#v", update)
 	}
-	log.Debugf("Listeners: %#v", listeners)
-	for _, onUpdate := range listeners {
-		filterOut := onUpdate(update)
-		if filterOut {
-			// Note: we don't propagate the filterOut flag.  We only
-			// filter downstream in the processing pipeline, we don't
-			// want to prevent our peers from handling updates.
-			break
-		}
-	}
+	typeSpecificHandlers := d.typeToHandler[keyType]
+	log.WithField("typeSpecificHandlers", typeSpecificHandlers).Debug(
+		"Looked up type-specific handlers")
+	typeSpecificHandlers.DispatchToAll(update)
 	return
 }
 
