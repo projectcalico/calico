@@ -328,7 +328,7 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 				return err
 			}
 		}
-		block := allocationBlock{obj.Value.(model.AllocationBlock)}
+		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		err = block.assign(args.IP, args.HandleID, args.Attrs, hostname)
 		if err != nil {
 			log.Errorf("Failed to assign address %s: %s", args.IP, err)
@@ -340,9 +340,9 @@ func (c ipams) AssignIP(args AssignIPArgs) error {
 			c.incrementHandle(*args.HandleID, blockCIDR, 1)
 		}
 
-		// Update the block using the original KVPair
-		// to do a CAS.
-		obj.Value = block.AllocationBlock
+		// Update the block using the original KVPair to do a CAS.  No need to
+		// update the Value since we have been manipulating the Value pointed to
+		// in the KVPair.
 		_, err = c.client.backend.Update(obj)
 		if err != nil {
 			log.Warningf("Update failed on block %s", block.CIDR.String())
@@ -405,7 +405,7 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 		}
 
 		// Block exists - get the allocationBlock from the KVPair.
-		b := allocationBlock{obj.Value.(model.AllocationBlock)}
+		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
 		// Release the IPs.
 		unallocated, handles, err2 := b.release(ips)
@@ -419,16 +419,15 @@ func (c ipams) releaseIPsFromBlock(ips []net.IP, blockCIDR net.IPNet) ([]net.IP,
 		}
 
 		// If the block is empty and has no affinity, we can delete it.
-		// Otherwise, update the block using CAS.
+		// Otherwise, update the block using CAS.  There is no need to update
+		// the Value since we have updated the structure pointed to in the
+		// KVPair.
 		var updateErr error
 		if b.empty() && b.HostAffinity == nil {
 			log.Debugf("Deleting non-affine block '%s'", b.CIDR.String())
-			updateErr = c.client.backend.Delete(&model.KVPair{
-				Key: model.BlockKey{CIDR: blockCIDR},
-			})
+			updateErr = c.client.backend.Delete(obj)
 		} else {
 			log.Debugf("Updating assignments in block '%s'", b.CIDR.String())
-			obj.Value = b.AllocationBlock
 			_, updateErr = c.client.backend.Update(obj)
 		}
 
@@ -467,7 +466,7 @@ func (c ipams) assignFromExistingBlock(
 		}
 
 		// Pull out the block.
-		b := allocationBlock{obj.Value.(model.AllocationBlock)}
+		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
 		log.Debugf("Got block: %+v", b)
 		ips, err = b.autoAssign(num, handleID, host, attrs, affCheck)
@@ -487,7 +486,7 @@ func (c ipams) assignFromExistingBlock(
 
 		// Update the block using CAS by passing back the original
 		// KVPair.
-		obj.Value = b.AllocationBlock
+		obj.Value = &b.AllocationBlock
 		_, err = c.client.backend.Update(obj)
 		if err != nil {
 			log.Infof("Failed to update block '%s' - try again", b.CIDR.String())
@@ -704,7 +703,7 @@ func (c ipams) IPsByHandle(handleID string) ([]net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-	handle := allocationHandle{obj.Value.(model.IPAMHandle)}
+	handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 	assignments := []net.IP{}
 	for k, _ := range handle.Block {
@@ -717,7 +716,7 @@ func (c ipams) IPsByHandle(handleID string) ([]net.IP, error) {
 
 		// Pull out the allocationBlock and get all the assignments
 		// from it.
-		b := allocationBlock{obj.Value.(model.AllocationBlock)}
+		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		assignments = append(assignments, b.ipsByHandle(handleID)...)
 	}
 	return assignments, nil
@@ -731,7 +730,7 @@ func (c ipams) ReleaseByHandle(handleID string) error {
 	if err != nil {
 		return err
 	}
-	handle := allocationHandle{obj.Value.(model.IPAMHandle)}
+	handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 	for blockStr, _ := range handle.Block {
 		_, blockCIDR, _ := net.ParseCIDR(blockStr)
@@ -753,7 +752,7 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 				return err
 			}
 		}
-		block := allocationBlock{obj.Value.(model.AllocationBlock)}
+		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		num := block.releaseByHandle(handleID)
 		if num == 0 {
 			// Block has no addresses with this handle, so
@@ -774,8 +773,8 @@ func (c ipams) releaseByHandle(handleID string, blockCIDR net.IPNet) error {
 			}
 		} else {
 			// Compare and swap the AllocationBlock using the original
-			// KVPair read from before.
-			obj.Value = block.AllocationBlock
+			// KVPair read from before.  No need to update the Value since we
+			// have been directly manipulating the value referenced by the KVPair.
 			_, err = c.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
@@ -811,7 +810,7 @@ func (c ipams) incrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 				}
 				obj = &model.KVPair{
 					Key:   model.IPAMHandleKey{HandleID: handleID},
-					Value: bh,
+					Value: &bh,
 				}
 			} else {
 				// Unexpected error reading handle.
@@ -820,13 +819,14 @@ func (c ipams) incrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		}
 
 		// Get the handle from the KVPair.
-		handle := allocationHandle{obj.Value.(model.IPAMHandle)}
+		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 		// Increment the handle for this block.
 		handle.incrementBlock(blockCIDR, num)
 
-		// Compare and swap the handle using the KVPair from above.
-		obj.Value = handle.IPAMHandle
+		// Compare and swap the handle using the KVPair from above.  We've been
+		// manipulating the structure in the KVPair, so pass straight back to
+		// apply the changes.
 		_, err = c.client.backend.Apply(obj)
 		if err != nil {
 			continue
@@ -843,22 +843,20 @@ func (c ipams) decrementHandle(handleID string, blockCIDR net.IPNet, num int) er
 		if err != nil {
 			log.Fatalf("Can't decrement block because it doesn't exist")
 		}
-		handle := allocationHandle{obj.Value.(model.IPAMHandle)}
+		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 		_, err = handle.decrementBlock(blockCIDR, num)
 		if err != nil {
 			log.Fatalf("Can't decrement block - too few allocated")
 		}
 
-		// Update / Delete as appropriate.
+		// Update / Delete as appropriate.  Since we have been manipulating the
+		// data in the KVPair, just pass this straight back to the client.
 		if handle.empty() {
 			log.Debugf("Deleting handle: %s", handleID)
-			err = c.client.backend.Delete(&model.KVPair{
-				Key: model.IPAMHandleKey{HandleID: handleID},
-			})
+			err = c.client.backend.Delete(obj)
 		} else {
 			log.Debugf("Updating handle: %s", handleID)
-			obj.Value = handle.IPAMHandle
 			_, err = c.client.backend.Update(obj)
 		}
 
@@ -881,7 +879,7 @@ func (c ipams) GetAssignmentAttributes(addr net.IP) (map[string]string, error) {
 		log.Errorf("Error reading block %s: %s", blockCIDR, err)
 		return nil, goerrors.New(fmt.Sprintf("%s is not assigned", addr))
 	}
-	block := allocationBlock{obj.Value.(model.AllocationBlock)}
+	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 	return block.attributesForIP(addr)
 }
 
@@ -899,7 +897,7 @@ func (c ipams) GetIPAMConfig() (*IPAMConfig, error) {
 		log.Errorf("Error getting IPAMConfig: %s", err)
 		return nil, err
 	}
-	return c.convertBackendToIPAMConfig(obj.Value.(model.IPAMConfig)), nil
+	return c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig)), nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
@@ -926,7 +924,7 @@ func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
 	// Write to datastore.
 	obj := model.KVPair{
 		Key:   model.IPAMConfigKey{},
-		Value: c.convertIPAMConfigToBackend(cfg),
+		Value: c.convertIPAMConfigToBackend(&cfg),
 	}
 	_, err = c.client.backend.Apply(&obj)
 	if err != nil {
@@ -936,14 +934,14 @@ func (c ipams) SetIPAMConfig(cfg IPAMConfig) error {
 	return nil
 }
 
-func (c ipams) convertIPAMConfigToBackend(cfg IPAMConfig) *model.IPAMConfig {
+func (c ipams) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfig {
 	return &model.IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
 	}
 }
 
-func (c ipams) convertBackendToIPAMConfig(cfg model.IPAMConfig) *IPAMConfig {
+func (c ipams) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfig {
 	return &IPAMConfig{
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,

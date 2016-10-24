@@ -19,7 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-// A Rule encapsulates a set of match criteria and an action.  Both label-based security Policy
+// A Rule encapsulates a set of match criteria and an action.  Both selector-based security Policy
 // and security Profiles reference rules - separated out as a list of rules for both
 // ingress and egress packet matching.
 //

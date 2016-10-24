@@ -54,7 +54,7 @@ var ipv6 ipVersion = ipVersion{
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
 type allocationBlock struct {
-	model.AllocationBlock
+	*model.AllocationBlock
 }
 
 func newBlock(cidr cnet.IPNet) allocationBlock {
@@ -69,7 +69,7 @@ func newBlock(cidr cnet.IPNet) allocationBlock {
 		b.Unallocated[i] = i
 	}
 
-	return allocationBlock{b}
+	return allocationBlock{&b}
 }
 
 func (b *allocationBlock) autoAssign(

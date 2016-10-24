@@ -108,7 +108,7 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.Profile{
+		Value: &model.Profile{
 			Rules: model.ProfileRules{
 				InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 				OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
@@ -125,7 +125,7 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 // to an API Profile structure.
 // This is part of the conversionHelper interface.
 func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bp := d.Value.(model.Profile)
+	bp := d.Value.(*model.Profile)
 	bk := d.Key.(model.ProfileKey)
 
 	ap := api.NewProfile()

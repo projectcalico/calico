@@ -34,8 +34,8 @@ type HostEndpointMetadata struct {
 	// The name of the endpoint.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
-	// The hostname of the compute server.
-	Hostname string `json:"hostname,omitempty" validate:"omitempty,name"`
+	// The node name identifying the Calico node instance.
+	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the host endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
@@ -63,7 +63,7 @@ type HostEndpointSpec struct {
 
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
-	// after the label-based security policy.
+	// after the selector-based security policy.
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 }
 

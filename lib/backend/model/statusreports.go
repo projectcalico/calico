@@ -34,8 +34,7 @@ type ActiveStatusReportKey struct {
 }
 
 func (key ActiveStatusReportKey) defaultPath() (string, error) {
-	k, err := key.defaultDeletePath()
-	return k + "/metadata", err
+	return key.defaultDeletePath()
 }
 
 func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
@@ -91,8 +90,7 @@ type LastStatusReportKey struct {
 }
 
 func (key LastStatusReportKey) defaultPath() (string, error) {
-	k, err := key.defaultDeletePath()
-	return k + "/metadata", err
+	return key.defaultDeletePath()
 }
 
 func (key LastStatusReportKey) defaultDeletePath() (string, error) {

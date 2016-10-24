@@ -117,7 +117,7 @@ func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 
 	d := model.KVPair{
 		Key: k,
-		Value: model.Pool{
+		Value: &model.Pool{
 			CIDR:          ap.Metadata.CIDR,
 			IPIPInterface: ipipInterface,
 			Masquerade:    ap.Spec.NATOutgoing,
@@ -133,7 +133,7 @@ func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 // to an API Pool structure.
 // This is part of the conversionHelper interface.
 func (h *pools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	backendPool := d.Value.(model.Pool)
+	backendPool := d.Value.(*model.Pool)
 
 	apiPool := api.NewPool()
 	apiPool.Metadata.CIDR = backendPool.CIDR

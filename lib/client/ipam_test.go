@@ -184,7 +184,7 @@ func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignI
 			testutils.CreateNewPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPMAClient(cleanEnv)
+	ic := setupIPAMClient(cleanEnv)
 
 	if len(assignIP) != 0 {
 		err := ic.AssignIP(client.AssignIPArgs{
@@ -229,7 +229,7 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 			testutils.CreateNewPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPMAClient(cleanEnv)
+	ic := setupIPAMClient(cleanEnv)
 	outErr := ic.AssignIP(args)
 
 	if outErr != nil {
@@ -255,7 +255,7 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 			testutils.CreateNewPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPMAClient(cleanEnv)
+	ic := setupIPAMClient(cleanEnv)
 	v4, v6, outErr := ic.AutoAssign(args)
 
 	if outErr != nil {
@@ -267,7 +267,7 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 
 // setupIPMAClient sets up a client, and returns IPAMInterface.
 // It also resets IPAM config if cleanEnv is true.
-func setupIPMAClient(cleanEnv bool) client.IPAMInterface {
+func setupIPAMClient(cleanEnv bool) client.IPAMInterface {
 	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
 
 	bc, err := client.New(ac)

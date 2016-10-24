@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"

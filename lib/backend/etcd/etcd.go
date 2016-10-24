@@ -16,7 +16,6 @@ package etcd
 
 import (
 	goerrors "errors"
-	"reflect"
 	"strings"
 
 	"time"
@@ -35,7 +34,7 @@ import (
 var (
 	etcdApplyOpts       = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
 	etcdCreateOpts      = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
-	etcdDeleteEmptyOpts = &etcd.DeleteOptions{Recursive: false}
+	etcdDeleteEmptyOpts = &etcd.DeleteOptions{Recursive: false, Dir: true}
 	etcdGetOpts         = &etcd.GetOptions{Quorum: true}
 	etcdListOpts        = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
 	clientTimeout       = 30 * time.Second
@@ -144,7 +143,7 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 	log.Infof("Delete Key: %s", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
 	if err != nil {
-		return err
+		return convertEtcdError(err, d.Key)
 	}
 
 	// If there are parents to be deleted, delete these as well provided there
@@ -172,16 +171,12 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 		return nil, err
 	}
 	log.Infof("Get Key: %s", key)
-	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
+	if r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
 		return nil, convertEtcdError(err, k)
-	} else if object, err := model.ParseValue(k, []byte(results.Node.Value)); err != nil {
+	} else if v, err := model.ParseValue(k, []byte(r.Node.Value)); err != nil {
 		return nil, err
 	} else {
-		if reflect.ValueOf(object).Kind() == reflect.Ptr {
-			// Unwrap any pointers.
-			object = reflect.ValueOf(object).Elem().Interface()
-		}
-		return &model.KVPair{Key: k, Value: object, Revision: results.Node.ModifiedIndex}, nil
+		return &model.KVPair{Key: k, Value: v, Revision: r.Node.ModifiedIndex}, nil
 	}
 }
 
@@ -215,34 +210,44 @@ func (c *EtcdClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *EtcdClient) set(d *model.KVPair, options *etcd.SetOptions) (*model.KVPair, error) {
+	logCxt := log.WithFields(log.Fields{
+		"key":   d.Key,
+		"value": d.Value,
+		"ttl":   d.TTL,
+		"rev":   d.Revision,
+	})
 	key, err := model.KeyToDefaultPath(d.Key)
 	if err != nil {
+		logCxt.WithError(err).Error("Failed to convert key to path")
 		return nil, err
 	}
 	bytes, err := json.Marshal(d.Value)
 	if err != nil {
+		logCxt.WithError(err).Error("Failed to marshal value")
 		return nil, err
 	}
 
 	value := string(bytes)
 
-	log.Infof("Key: %#v", key)
-	log.Infof("Value: %s", value)
 	if d.TTL != 0 {
-		log.Infof("TTL: %v", d.TTL)
+		logCxt.Debug("Key has TTL, copying etcd options")
 		// Take a copy of the default options so we can set the TTL for
 		// this request only.
 		optionsCopy := *options
 		optionsCopy.TTL = d.TTL
 		options = &optionsCopy
 	}
-	log.Infof("Options: %+v", options)
+	logCxt.WithField("options", options).Debug("Setting KV in etcd")
 	result, err := c.etcdKeysAPI.Set(context.Background(), key, value, options)
 	if err != nil {
+		// Log at debug because we don't know how serious this is.
+		// Caller should log if it's actually a problem.
+		logCxt.WithError(err).Debug("Set failed")
 		return nil, convertEtcdError(err, d.Key)
 	}
 
 	// Datastore object will be identical except for the modified index.
+	logCxt.WithField("newRev", result.Node.ModifiedIndex).Debug("Set succeeded")
 	d.Revision = result.Node.ModifiedIndex
 	return d, nil
 }
@@ -256,12 +261,8 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 			kvs = append(kvs, filterEtcdList(node, l)...)
 		}
 	} else if k := l.KeyFromDefaultPath(n.Key); k != nil {
-		if object, err := model.ParseValue(k, []byte(n.Value)); err == nil {
-			if reflect.ValueOf(object).Kind() == reflect.Ptr {
-				// Unwrap any pointers.
-				object = reflect.ValueOf(object).Elem().Interface()
-			}
-			kv := &model.KVPair{Key: k, Value: object, Revision: n.ModifiedIndex}
+		if v, err := model.ParseValue(k, []byte(n.Value)); err == nil {
+			kv := &model.KVPair{Key: k, Value: v, Revision: n.ModifiedIndex}
 			kvs = append(kvs, kv)
 		}
 	}

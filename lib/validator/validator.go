@@ -17,8 +17,6 @@ package validator
 import (
 	"reflect"
 	"regexp"
-	"strconv"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -53,7 +51,6 @@ func init() {
 	registerFieldValidator("selector", validateSelector)
 	registerFieldValidator("tag", validateTag)
 	registerFieldValidator("labels", validateLabels)
-	registerFieldValidator("asn", validateASNum)
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
 
@@ -150,12 +147,6 @@ func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStruc
 	return true
 }
 
-func validateASNum(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	f := field.Interface().(int)
-	log.Debugf("Validate AS number: %v", f)
-	return f >= 0 && f <= 4294967295
-}
-
 func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	f := field.Interface().(scope.Scope)
 	log.Debugf("Validate scope: %v", f)
@@ -166,9 +157,10 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 	p := structLevel.CurrentStruct.Interface().(numorstring.Protocol)
 	log.Debugf("Validate protocol: %v %s %d", p.Type, p.StrVal, p.NumVal)
 
-	// The protocol field may be an integer 1-254, or one of the valid protocol names.
+	// The protocol field may be an integer 1-255 (i.e. not 0), or one of the valid protocol
+	// names.
 	if num, err := p.NumValue(); err == nil {
-		if (num < 1) || (num > 255) {
+		if num == 0 {
 			structLevel.ReportError(reflect.ValueOf(p.NumVal), "Protocol", "protocol", "protocol number invalid")
 		}
 	} else if !protocolRegex.MatchString(p.String()) {
@@ -179,39 +171,11 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 	p := structLevel.CurrentStruct.Interface().(numorstring.Port)
 
-	// A port may be specified either as a single port or a range of ports.  Port values are
-	// integers 0-65535.  A range of ports is specified as a string X:Y where X,Y are valid
-	// port values and X <= Y.
-	log.Debugf("Validate port: %v %s %v", p.Type, p.StrVal, p.NumVal)
-	if p.Type == numorstring.NumOrStringNum && ((p.NumVal < 0) || (p.NumVal > 65535)) {
-		structLevel.ReportError(reflect.ValueOf(p.NumVal), "Port", "port", "port number invalid")
-		return
-	} else if p.Type == numorstring.NumOrStringString {
-		ports := strings.Split(p.StrVal, ":")
-		if len(ports) > 2 {
-			structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")
-			return
-		}
-		first := 0
-		for _, port := range ports {
-			log.Debugf("Validate range, checking port %s", port)
-			num, err := strconv.Atoi(port)
-			if err != nil {
-				structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")
-				return
-			}
-
-			if num < 0 || num > 65535 {
-				structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port number invalid")
-				return
-			}
-
-			if num < first {
-				structLevel.ReportError(reflect.ValueOf(p.StrVal), "Port", "port", "port range invalid")
-				return
-			}
-			first = num
-		}
+	// Check that the port range is in the correct order.  The YAML parsing also checks this,
+	// but this protects against misuse of the programmatic API.
+	log.Debugf("Validate port: %s")
+	if p.MinPort > p.MaxPort {
+		structLevel.ReportError(reflect.ValueOf(p.MaxPort), "Port", "port", "port range invalid")
 	}
 }
 

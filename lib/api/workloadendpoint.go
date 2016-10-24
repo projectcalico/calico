@@ -36,13 +36,13 @@ type WorkloadEndpointMetadata struct {
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// The name of the workload.
-	WorkloadID string `json:"workloadID,omitempty" valid:"omitempty,name"`
+	Workload string `json:"workload,omitempty" valid:"omitempty,name"`
 
 	// The name of the orchestrator.
-	OrchestratorID string `json:"orchestratorID,omitempty" valid:"omitempty,name"`
+	Orchestrator string `json:"orchestrator,omitempty" valid:"omitempty,name"`
 
-	// The name of the node.
-	Hostname string `json:"hostname,omitempty" valid:"omitempty,name"`
+	// The node name identifying the Calico node instance.
+	Node string `json:"node,omitempty" valid:"omitempty,name"`
 
 	// The labels applied to the workload endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
@@ -66,14 +66,14 @@ type WorkloadEndpointSpec struct {
 	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
 
 	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
-	IPv4Gateway net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv4Gateway *net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
 
 	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
-	IPv6Gateway net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
+	IPv6Gateway *net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
 
 	// A list of security Profile resources that apply to this endpoint. Each profile is
 	// applied in the order that they appear in this list.  Profile rules are applied
-	// after the label-based security policy.
+	// after the selector-based security policy.
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// InterfaceName the name of the Linux interface on the host: for example, tap80.

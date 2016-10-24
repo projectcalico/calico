@@ -123,11 +123,6 @@ func init() {
 		Entry("should reject . in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid.Intface"}, false),
 		Entry("should reject : in an interface", api.WorkloadEndpointSpec{InterfaceName: "Invalid:Intface"}, false),
 
-		// (API) AS number.
-		Entry("should accept the min value AS number", api.BGPPeerSpec{ASNumber: 0}, true),
-		Entry("should accept the max value AS number", api.BGPPeerSpec{ASNumber: 4294967295}, true),
-		Entry("should reject an AS number too high", api.BGPPeerSpec{ASNumber: 4294967296}, false),
-
 		// (API) Scope
 		Entry("should accept no scope", api.BGPPeerMetadata{}, true),
 		Entry("should accept scope global", api.BGPPeerMetadata{Scope: scope.Global}, true),
@@ -143,32 +138,14 @@ func init() {
 		Entry("should accept protocol udplite", protocolFromString("udplite"), true),
 		Entry("should accept protocol 1 as int", protocolFromInt(1), true),
 		Entry("should accept protocol 255 as int", protocolFromInt(255), true),
-		Entry("should accept protocol 1 as string", protocolFromString("1"), true),
 		Entry("should accept protocol 255 as string", protocolFromString("255"), true),
+		Entry("should accept protocol 1 as string", protocolFromString("1"), true),
 		Entry("should reject protocol 0 as int", protocolFromInt(0), false),
-		Entry("should reject protocol 256 as int", protocolFromString("256"), false),
+		Entry("should reject protocol 256 as string", protocolFromString("256"), false),
 		Entry("should reject protocol 0 as string", protocolFromString("0"), false),
-		Entry("should reject protocol 256 as string", protocolFromInt(256), false),
 		Entry("should reject protocol tcpfoo", protocolFromString("tcpfoo"), false),
 		Entry("should reject protocol footcp", protocolFromString("footcp"), false),
 		Entry("should reject protocol TCP", protocolFromString("TCP"), false),
-
-		// (API) Port
-		Entry("should accept min port number", numorstring.PortFromInt(0), true),
-		Entry("should accept max port number", numorstring.PortFromInt(65535), true),
-		Entry("should accept min port number as string", numorstring.PortFromString("0"), true),
-		Entry("should accept max port number as string", numorstring.PortFromString("65535"), true),
-		Entry("should accept valid port range", numorstring.PortFromRange(0, 60000), true),
-		Entry("should accept valid port range as string", numorstring.PortFromString("1:10"), true),
-		Entry("should accept valid port range length 0", numorstring.PortFromString("10:10"), true),
-		Entry("should reject port number too low", numorstring.PortFromInt(-1), false),
-		Entry("should accept port number too high", numorstring.PortFromInt(65536), false),
-		Entry("should reject port number too low as string", numorstring.PortFromString("-1"), false),
-		Entry("should accept port number too high as string", numorstring.PortFromString("65536"), false),
-		Entry("should reject port range 2nd < 1st", numorstring.PortFromRange(10, 1), false),
-		Entry("should reject port range too many values", numorstring.PortFromString("1:2:3"), false),
-		Entry("should reject port range dash not colon", numorstring.PortFromString("1-2"), false),
-		Entry("should reject port range contains letter", numorstring.PortFromString("a"), false),
 
 		// (API) IPNAT
 		Entry("should accept valid IPNAT IPv4",
@@ -302,7 +279,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromInt(6),
 				Source: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromInt(1)},
+					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
 		Entry("should accept Rule with empty source ports and protocol type 7",
@@ -318,7 +295,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromInt(17),
 				Source: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.PortFromInt(1)},
+					NotPorts: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
 		Entry("should accept Rule with empty source !ports and protocol type 100",
@@ -334,7 +311,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromInt(1)},
+					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
 		Entry("should accept Rule with empty dest ports and protocol type sctp",
@@ -358,7 +335,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromInt(7),
 				Source: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromInt(1)},
+					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
 		Entry("should reject Rule with source !ports and protocol type 100",
@@ -366,7 +343,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromInt(100),
 				Source: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.PortFromInt(1)},
+					NotPorts: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
 		Entry("should reject Rule with dest ports and protocol type tcp",
@@ -374,7 +351,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("sctp"),
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromInt(1)},
+					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
 		Entry("should reject Rule with dest !ports and protocol type udp",
@@ -382,7 +359,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("icmp"),
 				Destination: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.PortFromInt(1)},
+					NotPorts: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
 		Entry("should reject Rule with invalid source ports and protocol type tcp",
@@ -390,7 +367,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Source: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromString("foo")},
+					Ports: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid source !ports and protocol type tcp",
@@ -398,7 +375,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Source: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.PortFromString("foo")},
+					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid dest ports and protocol type tcp",
@@ -406,7 +383,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.PortFromString("foo")},
+					Ports: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 		Entry("should reject Rule with invalid dest !ports and protocol type tcp",
@@ -414,7 +391,7 @@ func init() {
 				Action:   "allow",
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
-					NotPorts: []numorstring.Port{numorstring.PortFromString("foo")},
+					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
 	)
@@ -425,7 +402,7 @@ func protocolFromString(s string) *numorstring.Protocol {
 	return &p
 }
 
-func protocolFromInt(i int32) *numorstring.Protocol {
+func protocolFromInt(i uint8) *numorstring.Protocol {
 	p := numorstring.ProtocolFromInt(i)
 	return &p
 }

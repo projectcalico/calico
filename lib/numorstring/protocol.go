@@ -14,23 +14,44 @@
 
 package numorstring
 
-type Protocol struct {
-	Int32OrString
+type Protocol Uint8OrString
+
+// ProtocolFromInt creates a Protocol struct from an integer value.
+func ProtocolFromInt(p uint8) Protocol {
+	return Protocol(
+		Uint8OrString{Type: NumOrStringNum, NumVal: p},
+	)
 }
 
-func ProtocolFromInt(p int32) Protocol {
-	return Protocol{
-		Int32OrString{Type: NumOrStringNum, NumVal: p},
-	}
-}
-
+// ProtocolFromString creates a Protocol struct from a string value.
 func ProtocolFromString(p string) Protocol {
-	return Protocol{
-		Int32OrString{Type: NumOrStringString, StrVal: p},
-	}
+	return Protocol(
+		Uint8OrString{Type: NumOrStringString, StrVal: p},
+	)
 }
 
-// SupportsPorts returns whether this protocol supports ports.  This returns true if
+// UnmarshalJSON implements the json.Unmarshaller interface.
+func (p *Protocol) UnmarshalJSON(b []byte) error {
+	return (*Uint8OrString)(p).UnmarshalJSON(b)
+}
+
+// MarshalJSON implements the json.Marshaller interface.
+func (p Protocol) MarshalJSON() ([]byte, error) {
+	return Uint8OrString(p).MarshalJSON()
+}
+
+// String returns the string value, or the Itoa of the int value.
+func (p Protocol) String() string {
+	return (Uint8OrString)(p).String()
+}
+
+// NumValue returns the NumVal if type Int, or if
+// it is a String, will attempt a conversion to int.
+func (p Protocol) NumValue() (uint8, error) {
+	return (Uint8OrString)(p).NumValue()
+}
+
+// SupportsProtocols returns whether this protocol supports ports.  This returns true if
 // the numerical or string verion of the protocol indicates TCP (6) or UDP (17).
 func (p Protocol) SupportsPorts() bool {
 	num, err := p.NumValue()

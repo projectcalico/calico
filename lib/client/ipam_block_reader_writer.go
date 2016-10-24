@@ -131,7 +131,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 	log.Infof("Host %s claiming block affinity for %s", host, subnet)
 	obj := model.KVPair{
 		Key:   model.BlockAffinityKey{Host: host, CIDR: subnet},
-		Value: model.BlockAffinity{},
+		Value: &model.BlockAffinity{},
 	}
 	_, err := rw.client.backend.Create(&obj)
 
@@ -143,7 +143,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 	// Create the new block in the datastore.
 	o := model.KVPair{
 		Key:   model.BlockKey{block.CIDR},
-		Value: block.AllocationBlock,
+		Value: &block.AllocationBlock,
 	}
 	_, err = rw.client.backend.Create(&o)
 	if err != nil {
@@ -157,7 +157,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 			}
 
 			// Pull out the allocationBlock object.
-			b := allocationBlock{obj.Value.(model.AllocationBlock)}
+			b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
 			if b.HostAffinity != nil && *b.HostAffinity == host {
 				// Block has affinity to this host, meaning another
@@ -192,7 +192,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 			log.Errorf("Error getting block %s: %s", blockCIDR.String(), err)
 			return err
 		}
-		b := allocationBlock{obj.Value.(model.AllocationBlock)}
+		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
 		// Check that the block affinity matches the given affinity.
 		if b.HostAffinity != nil && *b.HostAffinity != host {
@@ -221,7 +221,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 			// Pass back the original KVPair with the new
 			// block information so we can do a CAS.
-			obj.Value = b
+			obj.Value = &b
 			_, err = rw.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {

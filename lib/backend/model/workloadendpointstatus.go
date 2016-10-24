@@ -118,26 +118,31 @@ func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string)
 		return nil
 	}
 	hostname := r[0][1]
-	orch := r[0][2]
-	workload := r[0][3]
+	orchID := r[0][2]
+	workloadID := r[0][3]
 	endpointID := r[0][4]
 	if options.Hostname != "" && hostname != options.Hostname {
 		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
-	if options.OrchestratorID != "" && orch != options.OrchestratorID {
-		log.Infof("Didn't match orchestrator %s != %s", options.OrchestratorID, orch)
+	if options.OrchestratorID != "" && orchID != options.OrchestratorID {
+		log.Infof("Didn't match orchestrator %s != %s", options.OrchestratorID, orchID)
 		return nil
 	}
-	if options.WorkloadID != "" && workload != options.WorkloadID {
-		log.Infof("Didn't match workload %s != %s", options.WorkloadID, workload)
+	if options.WorkloadID != "" && workloadID != options.WorkloadID {
+		log.Infof("Didn't match workload %s != %s", options.WorkloadID, workloadID)
 		return nil
 	}
 	if options.EndpointID != "" && endpointID != options.EndpointID {
 		log.Infof("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
-	return WorkloadEndpointStatusKey{Hostname: hostname, EndpointID: endpointID}
+	return WorkloadEndpointStatusKey{
+		Hostname:       hostname,
+		OrchestratorID: orchID,
+		WorkloadID:     workloadID,
+		EndpointID:     endpointID,
+	}
 }
 
 type WorkloadEndpointStatus struct {

@@ -103,17 +103,17 @@ func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
 		}
 		d := model.KVPair{
 			Key: k,
-			Value: model.Profile{
+			Value: &model.Profile{
 				Tags: t.Value.([]string),
 			},
 			Revision: t.Revision,
 		}
-		p := d.Value.(model.Profile)
+		p := d.Value.(*model.Profile)
 		if l, err = c.client.Get(model.ProfileLabelsKey{pk}); err == nil {
 			p.Labels = l.Value.(map[string]string)
 		}
 		if r, err = c.client.Get(model.ProfileRulesKey{pk}); err == nil {
-			p.Rules = r.Value.(model.ProfileRules)
+			p.Rules = *r.Value.(*model.ProfileRules)
 		}
 		return &d, nil
 	}
@@ -134,7 +134,7 @@ func (c *ModelAdaptor) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 // These separate KVPairs are used to write three separate objects that make up
 // a single profile.
 func toTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
-	p := d.Value.(model.Profile)
+	p := d.Value.(*model.Profile)
 	pk := d.Key.(model.ProfileKey)
 
 	t = &model.KVPair{
@@ -148,7 +148,7 @@ func toTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
 	}
 	r = &model.KVPair{
 		Key:   model.ProfileRulesKey{pk},
-		Value: p.Rules,
+		Value: &p.Rules,
 	}
 
 	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
