@@ -1,5 +1,5 @@
 ---
-Title: Simple Policy Demo
+title: Simple Policy Demo
 ---
 This guide provides a simple way to try out Kubernetes NetworkPolicy with Calico.  It requires a Kubernetes cluster configured with Calico networking, and expects that you have `kubectl` configured to interact with the cluster.
 
