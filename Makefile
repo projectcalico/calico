@@ -71,7 +71,8 @@ GO_FILES:=$(shell find go/ -type f -name '*.go') $(GENERATED_GO_FILES)
 GENERATED_PYTHON_FILES=python/calico/felix/felixbackend_pb2.py
 
 # All our python files.
-PY_FILES:=$(GENERATED_PYTHON_FILES) $(shell find python/ docs/  -type f -name '*.py')
+PY_FILES:=$(GENERATED_PYTHON_FILES) \
+          $(shell find python/ docs/  -type f -name '*.py' | grep -v /.tox/)
 
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
