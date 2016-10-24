@@ -40,13 +40,16 @@ const remoteHostname = "remotehostname"
 
 // Canned selectors.
 
-const allSelector = "all()"
-
-var allSelectorId = selectorId(allSelector)
-
-const bEpBSelector = "b == 'b'"
-
-var bEqBSelectorId = selectorId(bEpBSelector)
+var (
+	allSelector         = "all()"
+	allSelectorId       = selectorId(allSelector)
+	bEpBSelector        = "b == 'b'"
+	bEqBSelectorId      = selectorId(bEpBSelector)
+	tagSelector         = "has(tag-1)"
+	tagSelectorId       = selectorId(tagSelector)
+	tagFoobarSelector   = "tag-1 == 'foobar'"
+	tagFoobarSelectorId = selectorId(tagFoobarSelector)
+)
 
 // Canned workload endpoints.
 
@@ -79,6 +82,22 @@ var localWlEp1NoProfiles = WorkloadEndpoint{
 		mustParseNet("10.0.0.2/32")},
 	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::1/128"),
 		mustParseNet("fc00:fe11::2/128")},
+}
+
+var localWlEp1DifferentIPs = WorkloadEndpoint{
+	State:      "active",
+	Name:       "cali1",
+	Mac:        mustParseMac("01:02:03:04:05:06"),
+	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
+	IPv4Nets: []net.IPNet{mustParseNet("11.0.0.1/32"),
+		mustParseNet("11.0.0.2/32")},
+	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe12::1/128"),
+		mustParseNet("fc00:fe12::2/128")},
+	Labels: map[string]string{
+		"id": "loc-ep-1",
+		"a":  "a",
+		"b":  "b",
+	},
 }
 
 var ep1IPs = []string{
@@ -179,6 +198,15 @@ var profileRules1 = ProfileRules{
 	},
 }
 
+var profileRulesWithTagInherit = ProfileRules{
+	InboundRules: []Rule{
+		{SrcSelector: tagSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: tagFoobarSelector},
+	},
+}
+
 var profileRules1TagUpdate = ProfileRules{
 	InboundRules: []Rule{
 		{SrcSelector: bEpBSelector},
@@ -201,6 +229,10 @@ var profileTags1 = []string{"tag-1"}
 var profileLabels1 = map[string]string{
 	"profile": "prof-1",
 }
+var profileLabelsTag1 = map[string]string{
+	"tag-1": "foobar",
+}
+
 var tag1LabelID = TagIPSetID("tag-1")
 var tag2LabelID = TagIPSetID("tag-2")
 
@@ -391,6 +423,29 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	},
 ).withName("2 local, overlapping IPs & a policy")
 
+// localEpsWithPolicyUpdatedIPs, when used with localEpsWithPolicy checks
+// correct handling of IP address updates.  We add and remove some IPs from
+// endpoint 1 and check that only its non-shared IPs are removed from the IP
+// sets.
+var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1DifferentIPs},
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
+).withIPSet(allSelectorId, []string{
+	"11.0.0.1", // ep1
+	"fc00:fe12::1",
+	"11.0.0.2",
+	"fc00:fe12::2",
+	"10.0.0.2", // now ep2 only
+	"fc00:fe11::2",
+	"10.0.0.3", // ep2
+	"fc00:fe11::3",
+}).withIPSet(bEqBSelectorId, []string{
+	"11.0.0.1", // ep1
+	"fc00:fe12::1",
+	"11.0.0.2",
+	"fc00:fe12::2",
+})
+
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
 	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRules1},
@@ -467,6 +522,65 @@ var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpd
 	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRules1NegatedTagSelUpdate},
 )
 
+// withProfileTagInherit adds a profile that includes rules that match on
+// tags as labels.  I.e. a tag of name foo should be equivalent to label foo=""
+var withProfileTagInherit = initialisedStore.withKVUpdates(
+	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRulesWithTagInherit},
+	KVPair{Key: ProfileTagsKey{ProfileKey{"prof-1"}}, Value: profileTags1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+).withName("profile")
+
+var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
+	// Two local endpoints with overlapping IPs.
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
+).withIPSet(tagSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withIPSet(tagFoobarSelectorId, []string{}).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{},
+).withName("2 local, overlapping IPs & a tag inherit profile")
+
+var withProfileTagOverriden = initialisedStore.withKVUpdates(
+	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRulesWithTagInherit},
+	KVPair{Key: ProfileTagsKey{ProfileKey{"prof-1"}}, Value: profileTags1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabelsTag1},
+).withName("profile")
+
+// localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
+// overridden by explicit labels on the profile.
+var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
+	// Two local endpoints with overlapping IPs.
+	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
+	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
+).withIPSet(tagSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withIPSet(tagFoobarSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+).withEndpoint(
+	localWlEp1Id,
+	[]tierInfo{},
+).withEndpoint(
+	localWlEp2Id,
+	[]tierInfo{},
+).withName("2 local, overlapping IPs & a tag inherit profile")
+
 // Each entry in baseTests contains a series of states to move through.  Apart
 // from running each of these, we'll also expand each of them by passing it
 // through the expansion functions below.  In particular, we'll do each of them
@@ -483,6 +597,9 @@ var baseTests = []StateList{
 
 	// Add both endpoints, then return to empty, then add them both back.
 	{localEpsWithPolicy, initialisedStore, localEpsWithPolicy},
+
+	// IP updates.
+	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs},
 
 	// Add a profile and a couple of endpoints.  Then update the profile to
 	// use different tags and selectors.
@@ -502,15 +619,25 @@ var baseTests = []StateList{
 	{localEpsWithProfile,
 		localEp1WithOneTierPolicy123,
 		localEpsWithNonMatchingProfile,
+		localEpsWithTagInheritProfile,
 		localEpsWithPolicy,
+		localEpsWithPolicyUpdatedIPs,
 		localEpsWithUpdatedProfile,
+		withProfileTagInherit,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
+		localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
 		localEpsWithProfile},
 
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy},
+
+	// Tag to label inheritance.  Tag foo should be inherited as label
+	// foo="".
+	{withProfileTagInherit, localEpsWithTagInheritProfile},
+	// But if there's an explicit label, it overrides the tag.
+	{localEpsWithTagOverriddenProfile, withProfileTagOverriden},
 
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints

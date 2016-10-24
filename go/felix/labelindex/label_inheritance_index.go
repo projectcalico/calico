@@ -26,6 +26,7 @@ type InheritIndex struct {
 	index             Index
 	labelsByItemID    map[interface{}]map[string]string
 	labelsByParentID  map[interface{}]map[string]string
+	tagsByParentID    map[interface{}][]string
 	parentIDsByItemID map[interface{}][]string
 	itemIDsByParentID multidict.IfaceToIface
 	dirtyItemIDs      map[interface{}]bool
@@ -37,6 +38,7 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		index:             index,
 		labelsByItemID:    make(map[interface{}]map[string]string),
 		labelsByParentID:  make(map[interface{}]map[string]string),
+		tagsByParentID:    make(map[interface{}][]string),
 		parentIDsByItemID: make(map[interface{}][]string),
 		itemIDsByParentID: multidict.NewIfaceToIface(),
 		dirtyItemIDs:      make(map[interface{}]bool),
@@ -45,6 +47,7 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 }
 
 func (l *InheritIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
+	allUpdDispatcher.Register(model.ProfileTagsKey{}, l.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileLabelsKey{}, l.OnUpdate)
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, l.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, l.OnUpdate)
@@ -77,12 +80,21 @@ func (l *InheritIndex) OnUpdate(update model.KVPair) (filterOut bool) {
 		}
 	case model.ProfileLabelsKey:
 		if update.Value != nil {
-			log.Debugf("Updating ARC for profile %v", key)
+			log.Debugf("Updating ARC for profile labels %v", key)
 			labels := update.Value.(map[string]string)
 			l.UpdateParentLabels(key.Name, labels)
 		} else {
-			log.Debugf("Removing profile %v from ARC", key)
+			log.Debugf("Removing profile labels %v from ARC", key)
 			l.DeleteParentLabels(key.Name)
+		}
+	case model.ProfileTagsKey:
+		if update.Value != nil {
+			log.Debugf("Updating ARC for profile tags %v", key)
+			labels := update.Value.([]string)
+			l.UpdateParentTags(key.Name, labels)
+		} else {
+			log.Debugf("Removing profile tags %v from ARC", key)
+			l.DeleteParentTags(key.Name)
 		}
 	}
 	return
@@ -139,6 +151,16 @@ func (idx *InheritIndex) DeleteParentLabels(parentID string) {
 	idx.flushChildren(parentID)
 }
 
+func (idx *InheritIndex) UpdateParentTags(parentID string, Tags []string) {
+	idx.tagsByParentID[parentID] = Tags
+	idx.flushChildren(parentID)
+}
+
+func (idx *InheritIndex) DeleteParentTags(parentID string) {
+	delete(idx.tagsByParentID, parentID)
+	idx.flushChildren(parentID)
+}
+
 func (idx *InheritIndex) flushChildren(parentID interface{}) {
 	idx.itemIDsByParentID.Iter(parentID, func(itemID interface{}) {
 		log.Debug("Marking child ", itemID, " dirty")
@@ -148,7 +170,7 @@ func (idx *InheritIndex) flushChildren(parentID interface{}) {
 }
 
 func (idx *InheritIndex) flushUpdates() {
-	for itemID, _ := range idx.dirtyItemIDs {
+	for itemID := range idx.dirtyItemIDs {
 		log.Debugf("Flushing %#v", itemID)
 		itemLabels, ok := idx.labelsByItemID[itemID]
 		if !ok {
@@ -161,13 +183,27 @@ func (idx *InheritIndex) flushUpdates() {
 			combinedLabels := make(map[string]string)
 			parentIDs := idx.parentIDsByItemID[itemID]
 			for _, parentID := range parentIDs {
+				parentTags := idx.tagsByParentID[parentID]
+				for _, tag := range parentTags {
+					_, ok := combinedLabels[tag]
+					_, ok2 := itemLabels[tag]
+					if !ok && !ok2 {
+						combinedLabels[tag] = ""
+					}
+				}
 				parentLabels := idx.labelsByParentID[parentID]
 				for k, v := range parentLabels {
-					combinedLabels[k] = v
+					if _, ok := itemLabels[k]; !ok {
+						combinedLabels[k] = v
+					}
 				}
 			}
-			for k, v := range itemLabels {
-				combinedLabels[k] = v
+			if len(combinedLabels) > 0 {
+				for k, v := range itemLabels {
+					combinedLabels[k] = v
+				}
+			} else {
+				combinedLabels = itemLabels
 			}
 			idx.index.UpdateLabels(itemID, combinedLabels)
 		}
