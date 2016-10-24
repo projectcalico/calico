@@ -88,8 +88,8 @@ configRetry:
 		configFile := arguments["--config-file"].(string)
 		fileConfig, err := config.LoadConfigFile(configFile)
 		if err != nil {
-			log.Errorf("Failed to load configuration file, %s: %s",
-				configFile, err)
+			log.WithError(err).WithField("configFile", configFile).Error(
+				"Failed to load configuration file")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -97,7 +97,8 @@ configRetry:
 		configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
 		configParams.UpdateFrom(fileConfig, config.ConfigFile)
 		if configParams.Err != nil {
-			log.Errorf("Failed to parse configuration: %s", configParams.Err)
+			log.WithError(configParams.Err).WithField("configFile", configFile).Error(
+				"Failed to parse configuration file")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -107,7 +108,7 @@ configRetry:
 		datastoreConfig := configParams.DatastoreConfig()
 		datastore, err = backend.NewClient(datastoreConfig)
 		if err != nil {
-			log.Errorf("Failed to connect to datastore: %v", err)
+			log.WithError(err).Error("Failed to connect to datastore")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -117,8 +118,8 @@ configRetry:
 		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
 		if configParams.Err != nil {
-			log.Fatalf("Failed to parse/validate configuration from datastore: %s",
-				configParams.Err)
+			log.WithError(configParams.Err).Error(
+				"Failed to parse/validate configuration from datastore.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -137,38 +138,38 @@ configRetry:
 	// driver, the other for receiving.
 	toDriverR, toDriverW, err := os.Pipe()
 	if err != nil {
-		log.Fatalf("Failed to open pipe for dataplane driver: %v", err)
+		log.WithError(err).Fatal("Failed to open pipe for dataplane driver")
 	}
 	fromDriverR, fromDriverW, err := os.Pipe()
 	if err != nil {
-		log.Fatalf("Failed to open pipe for dataplane driver: %v", err)
+		log.WithError(err).Fatal("Failed to open pipe for dataplane driver")
 	}
 
 	cmd := exec.Command(configParams.DataplaneDriver)
 	driverOut, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal("Failed to create pipe for dataplane driver")
+		log.WithError(err).Fatal("Failed to create pipe for dataplane driver")
 	}
 	driverErr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Fatal("Failed to create pipe for dataplane driver")
+		log.WithError(err).Fatal("Failed to create pipe for dataplane driver")
 	}
 	go io.Copy(os.Stdout, driverOut)
 	go io.Copy(os.Stderr, driverErr)
 	cmd.ExtraFiles = []*os.File{toDriverR, fromDriverW}
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start dataplane driver: %v", err)
+		log.WithError(err).Fatal("Failed to start dataplane driver")
 	}
 
 	// Now the sub-process is running, close our copy of the file handles
 	// for the child's end of the pipes.
 	if err := toDriverR.Close(); err != nil {
 		cmd.Process.Kill()
-		log.Fatalf("Failed to close parent's copy of pipe")
+		log.WithError(err).Fatal("Failed to close parent's copy of pipe")
 	}
 	if err := fromDriverW.Close(); err != nil {
 		cmd.Process.Kill()
-		log.Fatalf("Failed to close parent's copy of pipe")
+		log.WithError(err).Fatal("Failed to close parent's copy of pipe")
 	}
 
 	// Create the connection to/from the dataplane driver.
@@ -316,7 +317,7 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 		log.Info("Loading global config from datastore")
 		kvs, err := datastore.List(model.GlobalConfigListOptions{})
 		if err != nil {
-			log.Errorf("Failed to load config from datastore: %v", err)
+			log.WithError(err).Error("Failed to load config from datastore")
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -331,7 +332,7 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 		kvs, err = datastore.List(
 			model.HostConfigListOptions{Hostname: hostname})
 		if err != nil {
-			log.Errorf("Failed to load config from datastore: %v", err)
+			log.WithError(err).Error("Failed to load config from datastore")
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -400,14 +401,16 @@ func (fc *DataplaneConn) readMessagesFromDataplane() {
 		buf := make([]byte, 8)
 		_, err := io.ReadFull(fc.felixReader, buf)
 		if err != nil {
-			log.Fatalf("Failed to read from front-end socket: %v", err)
+			log.WithError(err).Error("Failed to read from front-end socket")
+			fc.shutDownProcess("Failed to read from front-end socket")
 		}
 		length := binary.LittleEndian.Uint64(buf)
 
 		data := make([]byte, length)
 		_, err = io.ReadFull(fc.felixReader, data)
 		if err != nil {
-			log.Fatalf("Failed to read from front-end socket: %v", err)
+			log.WithError(err).Error("Failed to read from front-end socket")
+			fc.shutDownProcess("Failed to read from front-end socket")
 		}
 
 		msg := proto.FromDataplane{}
@@ -557,12 +560,12 @@ func (fc *DataplaneConn) marshalToDataplane(msg interface{}) {
 	case *proto.HostMetadataRemove:
 		envelope.Payload = &proto.ToDataplane_HostMetadataRemove{msg}
 	default:
-		log.Fatalf("Unknown message type: %#v", msg)
+		log.WithField("msg", msg).Panic("Unknown message type")
 	}
 	data, err := pb.Marshal(envelope)
 	if err != nil {
-		log.Fatalf("Failed to marshal data to front end: %#v; %v",
-			msg, err)
+		log.WithError(err).WithField("msg", msg).Panic(
+			"Failed to marshal data to front end")
 	}
 
 	lengthBuffer := make([]byte, 8)
@@ -570,13 +573,15 @@ func (fc *DataplaneConn) marshalToDataplane(msg interface{}) {
 
 	numBytes, err := fc.felixWriter.Write(lengthBuffer)
 	if err != nil || numBytes != len(lengthBuffer) {
-		log.Fatalf("Failed to write to front end (only wrote %v bytes): %v",
-			numBytes, err)
+		log.WithError(err).WithField("bytesWritten", numBytes).Error(
+			"Failed to write to dataplane driver")
+		fc.shutDownProcess("Failed to write to front end")
 	}
 	numBytes, err = fc.felixWriter.Write(data)
 	if err != nil || numBytes != len(data) {
-		log.Fatalf("Failed to write to front end (only wrote %v bytes): %v",
-			numBytes, err)
+		log.WithError(err).WithField("bytesWritten", numBytes).Error(
+			"Failed to write to dataplane driver")
+		fc.shutDownProcess("Failed to write to front end")
 	}
 }
 
