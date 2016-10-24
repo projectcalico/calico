@@ -24,7 +24,14 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hwm"
 	"golang.org/x/net/context"
+	"math/rand"
 )
+
+// defaultEtcdClusterID is default value that an etcd cluster uses if it
+// hasn't been bootstrapped with an explicit value.
+const defaultEtcdClusterID = "7e27652122e8b2ae"
+
+const clusterIDPollInterval = 10 * time.Second
 
 func newSyncer(keysAPI etcd.KeysAPI, callbacks api.SyncerCallbacks) *etcdSyncer {
 	return &etcdSyncer{
@@ -50,6 +57,11 @@ func (syn *etcdSyncer) Start() {
 	if !syn.OneShot {
 		log.Info("Syncer not in one-shot mode, starting watcher thread")
 		go syn.watchEtcd(etcdEvents, triggerResync, initialSnapshotIndex)
+		// In order to make sure that we eventually spot if the etcd
+		// cluster is rebuilt, start a thread to poll the etcd
+		// Cluster ID.  If we don't spot a cluster rebuild then our
+		// watcher will start silently failing.
+		go syn.pollClusterID(clusterIDPollInterval)
 	}
 
 	// Start a background thread to read snapshots from etcd.  It will
@@ -231,6 +243,44 @@ func (syn *etcdSyncer) watchEtcd(etcdEvents chan<- event, triggerResync chan<- u
 				snapshotStarting: !inSync,
 			}
 		}
+	}
+}
+
+// pollClusterID polls etcd for its current cluster ID.  If the cluster ID changes
+// it terminates the process.
+func (syn *etcdSyncer) pollClusterID(interval time.Duration) {
+	log.Info("Cluster ID poll thread started")
+	lastSeenClusterID := ""
+	opts := client.GetOptions{}
+	for {
+		resp, err := syn.keysAPI.Get(context.Background(), "/calico/", &opts)
+		if err != nil {
+			log.WithError(err).Warn("Failed to poll etcd server cluster ID")
+		} else {
+			log.WithField("clusterID", resp.ClusterID).Debug(
+				"Polled etcd for cluster ID.")
+			if lastSeenClusterID == "" {
+				log.WithField("clusterID", resp.ClusterID).Info("etcd cluster ID now known")
+				lastSeenClusterID = resp.ClusterID
+				if resp.ClusterID == defaultEtcdClusterID {
+					log.Error("etcd server is using the default cluster ID; " +
+						"will not be able to spot if etcd is replaced with " +
+						"another cluster using the default cluster ID. " +
+						"Pass a unique --initial-cluster-token when creating " +
+						"your etcd cluster to set the cluster ID.")
+				}
+			} else if resp.ClusterID != "" && lastSeenClusterID != resp.ClusterID {
+				// The Syncer doesn't currently support this (hopefully rare)
+				// scenario.  Terminate the process rather than carry on with
+				// possibly out-of-sync etcd index.
+				log.WithFields(log.Fields{
+					"oldID": lastSeenClusterID,
+					"newID": resp.ClusterID,
+				}).Fatal("etcd cluster ID changed; must exit.")
+			}
+		}
+		// Jitter by 10% of interval.
+		time.Sleep(time.Duration(float64(interval) * (1 + (0.1 * rand.Float64()))))
 	}
 }
 
