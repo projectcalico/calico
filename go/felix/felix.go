@@ -160,20 +160,14 @@ configRetry:
 		log.Fatalf("Failed to start dataplane driver: %v", err)
 	}
 
-	// Once we've got to this point, the dataplane driver is running.
-	// Start a goroutine to sequence the shutdown if we hit an error or
-	// get sent a TERM signal.  This is done on a best-effort basis.  If
-	// we fail to shut down the driver it will exit when its pipe is
-	// closed.
-	shutdownReasonChan := make(chan string)
-	go manageShutdown(shutdownReasonChan, cmd)
-
 	// Now the sub-process is running, close our copy of the file handles
 	// for the child's end of the pipes.
 	if err := toDriverR.Close(); err != nil {
+		cmd.Process.Kill()
 		log.Fatalf("Failed to close parent's copy of pipe")
 	}
 	if err := fromDriverW.Close(); err != nil {
+		cmd.Process.Kill()
 		log.Fatalf("Failed to close parent's copy of pipe")
 	}
 
@@ -239,15 +233,12 @@ configRetry:
 		Config: configParams.RawValues(),
 	}
 
-	// Now wait for something to fail.
-	reason := <-failureReportChan
-	log.Warn("Background worker stopped, attempting managed shutdown.")
-	shutdownReasonChan <- reason
-	time.Sleep(5 * time.Second)
-	log.Fatal("Managed shutdown failed, exiting.")
+	// Now monitor the worker process and our worker threads and shut
+	// down the process gracefully if they fail.
+	monitorAndManageShutdown(failureReportChan, cmd)
 }
 
-func manageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd) {
+func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd) {
 	// Ask the runtime to tell us if we get a term signal.
 	termSignalChan := make(chan os.Signal)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
@@ -300,6 +291,10 @@ func manageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd) {
 			log.Info("Driver shut down after SIGKILL")
 		}
 	}
+
+	// Pause to avoid a tight loop, which would stop the init daemon from
+	// restarting us.
+	time.Sleep(2 * time.Second)
 
 	// Then exit our process.
 	syscall.Exit(1)
