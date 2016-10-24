@@ -6,6 +6,8 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
+  version: report-cluster-id
+  repo: https://github.com/fasaxc/etcd-1.git
   subpackages:
   - client
   - pkg/transport
