@@ -48,7 +48,8 @@ COPY node_share /tmp/node_share
 RUN apk --no-cache add --virtual temp py-pip git gcc python-dev musl-dev libffi-dev openssl-dev && \
   pip install git+$LIBNETWORK_REPO@$LIBNETWORK_VER && \
   pip install git+$LIBCALICO_REPO@$LIBCALICO_VER && \
-  apk del --purge temp
+  apk del --purge temp && \
+  rm -rf /tmp/node_share
 
 # Copy in the filesystem - this contains felix, bird, gobgp etc...
 COPY filesystem /
