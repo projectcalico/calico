@@ -33,6 +33,7 @@ var (
 	IfaceListRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
 	AuthorityRegexp = regexp.MustCompile(`^[^:/]+:\d+$`)
 	HostnameRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+	StringRegexp    = regexp.MustCompile(`^.*$`)
 )
 
 const (
@@ -97,6 +98,9 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
+	Ipv6Support    bool `config:"bool;true"`
+	IgnoreLooseRPF bool `config:"bool;false"`
+
 	StartupCleanupDelay       int `config:"int;30"`
 	PeriodicResyncInterval    int `config:"int;3600"`
 	HostInterfacePollInterval int `config:"int;10"`
@@ -138,6 +142,10 @@ type Config struct {
 
 	FailsafeInboundHostPorts  []int `config:"port-list;22;die-on-fail"`
 	FailsafeOutboundHostPorts []int `config:"port-list;2379,2380,4001,7001;die-on-fail"`
+
+	UsageReportingEnabled bool   `config:"bool;true"`
+	ClusterGUID           string `config:"string;baddecaf"`
+	ClusterType           string `config:"string;"`
 
 	// State tracking.
 
@@ -364,6 +372,9 @@ func loadParams() {
 			}
 			param = &OneofListParam{
 				lowerCaseOptionsToCanonical: lowerCaseToCanon}
+		case "string":
+			param = &RegexpParam{Regexp: StringRegexp,
+				Msg: "invalid string"}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}

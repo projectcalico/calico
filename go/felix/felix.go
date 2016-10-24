@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/logutils"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/statusrep"
+	"github.com/projectcalico/felix/go/felix/usagerep"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -232,6 +233,15 @@ configRetry:
 	// config.
 	felixConn.ToDataplane <- &proto.ConfigUpdate{
 		Config: configParams.RawValues(),
+	}
+
+	if configParams.UsageReportingEnabled {
+		go usagerep.PeriodicallyReportUsage(
+			24*time.Hour,
+			configParams.FelixHostname,
+			configParams.ClusterGUID,
+			configParams.ClusterType,
+		)
 	}
 
 	// Now monitor the worker process and our worker threads and shut
