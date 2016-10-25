@@ -32,17 +32,15 @@ clean:
 
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
-vendor:
-	glide install -strip-vcs -strip-vendor --cache
-
-vendor-containerized:
+vendor: glide.yaml glide.lock
+	# To build without Docker just run "glide install -strip-vendor"
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
         $(GO_CONTAINER_NAME) /bin/bash -c ' \
 	cd /go/src/github.com/projectcalico/calico-cni; \
-	glide install -strip-vcs -strip-vendor --cache; \
+	glide install -strip-vendor; \
 	chown $(shell id -u):$(shell id -u) -R vendor'
 
 # Build the Calico network plugin
@@ -85,7 +83,7 @@ test-containerized: dist/host-local dist/calicoctl run-etcd $(BUILD_CONTAINER_MA
 
 # Run the build in a container. Useful for CI
 .PHONY: build-containerized
-build-containerized: $(BUILD_CONTAINER_MARKER) vendor-containerized
+build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 	mkdir -p dist
 	docker run --rm \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
