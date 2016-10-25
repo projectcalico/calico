@@ -182,8 +182,10 @@ within that list.
 
 Example
 ```
+{% raw %}
 $ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.Metadata.Name}},{{end}}{{end}}"
 endpoint1,eth0,
+{% endraw %}
 ```
 
 ## See also
