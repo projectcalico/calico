@@ -38,20 +38,20 @@ vendor: glide.yaml glide.lock
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
-      --entrypoint /bin/sh $(GO_CONTAINER_NAME) -c ' \
-	cd /go/src/github.com/projectcalico/calico-cni; \
-	glide install -strip-vendor; \
+      --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
+	cd /go/src/github.com/projectcalico/calico-cni && \
+	glide install -strip-vendor && \
 	chown $(shell id -u):$(shell id -u) -R vendor'
 
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
 
 # Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
-	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go;
+	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
 
 .PHONY: test
 # Run the unit tests.
@@ -89,7 +89,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
 	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-cni/dist \
 	$(BUILD_CONTAINER_NAME) bash -c '\
-		make binary; \
+		make binary && \
 		chown -R $(shell id -u):$(shell id -u) dist'
 
 # Etcd is used by the tests
