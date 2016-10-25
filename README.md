@@ -1,15 +1,18 @@
 # Project Calico Documentation
 
-This repository is home to documentation, demos, and release information for Project Calico.
+![Project Calico logo](http://docs.projectcalico.org/images/felix.png)
+
+This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos.  
+
+**If you are a Calico user, you probably want [the live documentation site](https://projectcalico.github.io/calico/).**
 
 **If you are looking for the repository formerly known as `projectcalico/calico`,
 it has been renamed to [`projectcalico/felix`](https://github.com/projectcalico/felix).**
 
-If you are looking for the old documentation, see https://docs-archive.projectcalico.org or [view archived documentation for a past calico-containers release](https://github.com/projectcalico/calico-containers/tree/v0.22.0)
+You can find archives of the previous documentation at:
 
-## Preview
-
-[Click Here for Live Preview Site](https://projectcalico.github.io/calico/)
+- https://docs-archive.projectcalico.org (for general information and OpenStack), and
+- https://github.com/projectcalico/calico-containers/tree/v0.22.0 (for container integrations)
 
 ## Building
 
