@@ -15,6 +15,7 @@
 package calc
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -22,17 +23,31 @@ import (
 )
 
 type StatsCollector struct {
-	keyCountByHost map[string]int
-	lastNumHosts   int
-	NumHostsChan   chan int
-	inSync         bool
+	keyCountByHost       map[string]int
+	numWorkloadEndpoints int
+	numHostEndpoints     int
+
+	lastUpdate StatsUpdate
+	inSync     bool
+
+	Callback func(StatsUpdate) error
 }
 
-func NewStatsCollector() *StatsCollector {
+type StatsUpdate struct {
+	NumHosts             int
+	NumWorkloadEndpoints int
+	NumHostEndpoints     int
+}
+
+func (s StatsUpdate) String() string {
+	return fmt.Sprintf("%#v", s)
+}
+
+func NewStatsCollector(callback func(StatsUpdate) error) *StatsCollector {
 	return &StatsCollector{
 		keyCountByHost: make(map[string]int),
-		NumHostsChan:   make(chan int, 1),
-		lastNumHosts:   -1,
+		lastUpdate:     StatsUpdate{NumHosts: -1},
+		Callback:       callback,
 	}
 }
 
@@ -54,13 +69,16 @@ func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
 
 func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 	hostname := ""
+	var counter *int
 	switch key := update.Key.(type) {
 	case model.HostIPKey:
 		hostname = key.Hostname
 	case model.WorkloadEndpointKey:
 		hostname = key.Hostname
+		counter = &s.numWorkloadEndpoints
 	case model.HostEndpointKey:
 		hostname = key.Hostname
+		counter = &s.numHostEndpoints
 	case model.HostConfigKey:
 		hostname = key.Hostname
 	}
@@ -75,6 +93,9 @@ func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 			"host":     hostname,
 			"newCount": s.keyCountByHost[hostname],
 		}).Debug("Host-specific key added")
+		if counter != nil {
+			*counter += 1
+		}
 	} else if update.UpdateType == model.UpdateTypeKVDeleted {
 		s.keyCountByHost[hostname] -= 1
 		log.WithFields(log.Fields{
@@ -86,6 +107,9 @@ func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 			log.WithField("host", hostname).Debug("Host no longer has any keys")
 			delete(s.keyCountByHost, hostname)
 		}
+		if counter != nil {
+			*counter -= 1
+		}
 	}
 	s.sendUpdate()
 	return
@@ -93,17 +117,17 @@ func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 
 func (s *StatsCollector) sendUpdate() {
 	log.Debug("Checking whether we should send an update")
-	numHosts := len(s.keyCountByHost)
-	if s.inSync && s.lastNumHosts != numHosts {
-		log.WithField("numHosts", numHosts).Debug("Number of hosts in cluster changed")
-		select {
-		case s.NumHostsChan <- numHosts:
-			log.WithField("numHosts", numHosts).Debug("Sent host number update")
-			s.lastNumHosts = numHosts
-		default:
-			// Stats are best-effort.  If no-one is listening, just
-			// ignore.
-			log.Debug("Failed to send number of hosts, ignoring")
+	update := StatsUpdate{
+		NumHosts:             len(s.keyCountByHost),
+		NumHostEndpoints:     s.numHostEndpoints,
+		NumWorkloadEndpoints: s.numWorkloadEndpoints,
+	}
+	if s.inSync && s.lastUpdate != update {
+		if err := s.Callback(update); err != nil {
+			log.WithError(err).Warn("Failed to report stats")
+		} else {
+			log.WithField("stats", update).Debug("Sent stats update")
+			s.lastUpdate = update
 		}
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/buildinfo"
+	"github.com/projectcalico/felix/go/felix/calc"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -31,29 +32,29 @@ const (
 	baseURL = "https://usage.projectcalico.org/UsageCheck/calicoVersionCheck?"
 )
 
-func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clusterType string, numHostsC <-chan int) {
+func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clusterType string, statsUpdateC <-chan calc.StatsUpdate) {
 	log.Info("Usage reporting thread started, waiting for size estimate")
-	estimatedClusterSize := <-numHostsC
-	log.WithField("size", estimatedClusterSize).Info("Initial cluster size read")
-	if estimatedClusterSize > 25 {
+	stats := <-statsUpdateC
+	log.WithField("stats", stats).Info("Initial stats read")
+	if stats.NumHosts > 25 {
 		// Avoid thundering herd by adding jitter to startup for a large
 		// cluster.
-		preJitter := time.Duration(rand.Intn(estimatedClusterSize)) * time.Second
+		preJitter := time.Duration(rand.Intn(stats.NumHosts)) * time.Second
 		log.WithField("delay", preJitter).Info("Waiting before first check-in")
 		time.Sleep(preJitter)
 	}
-	ReportUsage(hostname, clusterGUID, clusterType, estimatedClusterSize)
+	ReportUsage(hostname, clusterGUID, clusterType, stats)
 	ticker := jitter.NewTicker(interval, interval/10)
 	for {
 		select {
-		case estimatedClusterSize = <-numHostsC:
+		case stats = <-statsUpdateC:
 		case <-ticker.C:
-			ReportUsage(hostname, clusterGUID, clusterType, estimatedClusterSize)
+			ReportUsage(hostname, clusterGUID, clusterType, stats)
 		}
 	}
 }
 
-func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize int) {
+func ReportUsage(hostname, clusterGUID, clusterType string, stats calc.StatsUpdate) {
 	if clusterType == "" {
 		clusterType = "unknown"
 	}
@@ -61,21 +62,23 @@ func ReportUsage(hostname, clusterGUID, clusterType string, estimatedClusterSize
 		clusterType = "baddecaf"
 	}
 	log.WithFields(log.Fields{
-		"hostname":             hostname,
-		"clusterGUID":          clusterGUID,
-		"clusterType":          clusterType,
-		"estimatedClusterSize": estimatedClusterSize,
-		"version":              buildinfo.Version,
-		"gitRevision":          buildinfo.GitRevision,
+		"hostname":    hostname,
+		"clusterGUID": clusterGUID,
+		"clusterType": clusterType,
+		"stats":       stats,
+		"version":     buildinfo.Version,
+		"gitRevision": buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
-		"hostname":     {hostname},
-		"guid":         {clusterGUID},
-		"cluster_type": {clusterType},
-		"size":         {fmt.Sprintf("%v", estimatedClusterSize)},
-		"version":      {buildinfo.Version},
-		"git_revision": {buildinfo.GitRevision},
-		"felix_type":   {"go"},
+		"hostname":           {hostname},
+		"guid":               {clusterGUID},
+		"cluster_type":       {clusterType},
+		"size":               {fmt.Sprintf("%v", stats.NumHosts)},
+		"num_wl_endpoints":   {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
+		"num_host_endpoints": {fmt.Sprintf("%v", stats.NumHostEndpoints)},
+		"version":            {buildinfo.Version},
+		"git_revision":       {buildinfo.GitRevision},
+		"felix_type":         {"go"},
 	}
 	fullURL := baseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")

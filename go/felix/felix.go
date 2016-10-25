@@ -39,6 +39,7 @@ import (
 	"reflect"
 	"syscall"
 	"time"
+	"errors"
 )
 
 const usage = `Felix, the Calico per-host daemon.
@@ -57,9 +58,10 @@ func main() {
 	logutils.ConfigureEarlyLogging()
 
 	// Parse command-line args.
-	version := ("Version:    " + buildinfo.Version + "\n" +
-		"Build date: " + buildinfo.BuildDate + "\n" +
-		"Git commit: " + buildinfo.GitRevision)
+	version := ("Version:            " + buildinfo.Version + "\n" +
+		"Git tag/commit:     " + buildinfo.GitVersion + "\n" +
+		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
+		"Build date:         " + buildinfo.BuildDate + "\n")
 	arguments, err := docopt.Parse(usage, nil, true, version, false)
 	if err != nil {
 		println(usage)
@@ -205,14 +207,22 @@ configRetry:
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph and
 		// start the usage reporting thread.
-		statsCollector := calc.NewStatsCollector()
+		statsChan := make(chan calc.StatsUpdate, 1)
+		statsCollector := calc.NewStatsCollector(func(stats calc.StatsUpdate) error {
+			select {
+			case statsChan <- stats:
+				return nil
+			default:
+				return errors.New("Stats channel blocked")
+			}
+		})
 		statsCollector.RegisterWith(asyncCalcGraph.Dispatcher)
 		go usagerep.PeriodicallyReportUsage(
 			24*time.Hour,
 			configParams.FelixHostname,
 			configParams.ClusterGUID,
 			configParams.ClusterType,
-			statsCollector.NumHostsChan,
+			statsChan,
 		)
 	}
 
