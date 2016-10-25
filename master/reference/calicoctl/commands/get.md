@@ -174,12 +174,11 @@ $ calicoctl get hostEndpoint --output=yaml
 #### `go-template` and `go-template-file`
 The `go-template` and `go-template-file` options display the output using a golang template specified as a string
 on the CLI, or defined in a separate file.
-
 When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The 
-resource-lists are defined in the [libcalic API](../resources/README.md) and
-there is a resource-list defined for each resource type.  A resource-list contains an Items field which is itself
-a slice of resources.  Thus, to output the "Name" field from the supplied data, it is necessary to enumerate over
-the slice of resource-lists and the items within that list.
+resource-lists are defined in the [libcalico API](../resources/README.md) and there is a resource-list defined for
+each resource type.  A resource-list contains an Items field which is itself a slice of resources.  Thus, to output
+the "Name" field from the supplied data, it is necessary to enumerate over the slice of resource-lists and the items
+within that list.
 
 Example
 ```

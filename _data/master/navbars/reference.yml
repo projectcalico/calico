@@ -10,11 +10,15 @@ toc:
 - title: calicoctl
   path: /reference/calicoctl
   section:
+  - title: Overview
+    path: /reference/calicoctl/
   - title: Configuring calicoctl
     path: /reference/calicoctl/setup/config
   - title: Commands
     path: /reference/calicoctl/commands
     section:
+    - title: Overview
+      path: /reference/calicoctl/commands/
     - title: apply
       path: /reference/calicoctl/commands/apply
     - title: create
@@ -26,6 +30,8 @@ toc:
     - title: node
       path: /reference/calicoctl/commands/node
       section:
+      - title: Overview
+        path: /reference/calicoctl/commands/node/
       - title: status
         path: /reference/calicoctl/commands/node/status
       - title: diags
@@ -35,6 +41,8 @@ toc:
     - title: ipam
       path: /reference/calicoctl/commands/ipam
       section:
+      - title: Overview
+        path: /reference/calicoctl/commands/ipam/
       - title: release
         path: /reference/calicoctl/commands/ipam/release
       - title: show
@@ -43,6 +51,26 @@ toc:
       path: /reference/calicoctl/commands/version
   - title: Resource definitions
     path: /reference/calicoctl/resources
+    section:
+      - title: Overview
+        path: /reference/calicoctl/resources/
+      - title: BGPPeer
+        path: /reference/calicoctl/resources/bgppeer
+      - title: HostEndpoint
+        path: /reference/calicoctl/resources/hostendpoint
+      - title: Policy
+        path: /reference/calicoctl/resources/policy
+      - title: Pool
+        path: /reference/calicoctl/resources/pool
+      - title: Profile
+        path: /reference/calicoctl/resources/profile
+      - title: WorkloadEndpoint
+        path: /reference/calicoctl/resources/workloadendpoint
+  - title: Setup
+    path: /reference/calicoctl/setup
+    section:
+      - title: Config
+        path: /reference/calicoctl/setup/config
 - title: Deploying on Public Cloud
   section:
     - title: Overview

@@ -51,12 +51,14 @@ spec:
 > Note: The above YAML spec defines almost all of possible fields for a policy specifications, with one exception - the "egress" section has been simplified for readability, despite the fact that it supports all fields that "ingress" does.
 
 #### Metadata
+
 | name | description  | requirements                  | schema |
 |------|--------------|-------------------------------|--------|
 | name | The name of the policy. | | string |
 
 
 #### PolicySpec
+
 | name     | description                                                          | requirements | schema |
 |----------|----------------------------------------------------------------------|--------------|--------|
 | order    | The order number which indicates the order that this policy is used. | | integer |
@@ -65,6 +67,7 @@ spec:
 | selector | Selector expression.                                                 | See [selector expression documentation](http://docs.projectcalico.org/en/latest/etcd-data-model.html#tiered-security-policy) | string |
 
 #### RuleSpec
+
 | name        | description                                | requirements | schema |
 |-------------|--------------------------------------------|----------------|--------|
 | action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
@@ -76,12 +79,14 @@ spec:
 | destination | Destination match parameters. |  | [EntityRule](#entityrule) |
 
 #### ICMPSpec
+
 | name | description                  | requirements         | schema  |
 |------|------------------------------|----------------------|---------|
 | type | Positive match on ICMP type. | Can be integer 1-255 | integer |
 | code | Positive match on ICMP code. | Can be integer 1-255 | integer |
 
 #### EntityRule
+
 | name        | description                                | requirements                  | schema |
 |-------------|--------------------------------------------|----------------|--------|
 | tag      | Match expression on tags.                   |  | string |
