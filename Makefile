@@ -38,7 +38,7 @@ vendor: glide.yaml glide.lock
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
-        $(GO_CONTAINER_NAME) /bin/bash -c ' \
+      --entrypoint /bin/sh $(GO_CONTAINER_NAME) -c ' \
 	cd /go/src/github.com/projectcalico/calico-cni; \
 	glide install -strip-vendor; \
 	chown $(shell id -u):$(shell id -u) -R vendor'
