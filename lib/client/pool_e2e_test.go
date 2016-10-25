@@ -82,10 +82,10 @@ var _ = Describe("Pool tests", func() {
 			log.Println("Out Pool object: ", outPool2)
 
 			// Should match spec1 & outPool1 and outPool2 & spec2 and errors to be nil.
-			Expect(outPool1.Spec).To(Equal(spec1))
-			Expect(outPool2.Spec).To(Equal(spec2))
 			Expect(outError1).NotTo(HaveOccurred())
 			Expect(outError2).NotTo(HaveOccurred())
+			Expect(outPool1.Spec).To(Equal(spec1))
+			Expect(outPool2.Spec).To(Equal(spec2))
 
 			By("Update, Get and compare")
 
@@ -96,8 +96,8 @@ var _ = Describe("Pool tests", func() {
 			outPool1, outError1 = c.Pools().Get(meta1)
 
 			// Assert the Spec for pool with meta1 matches spec2 and no error.
-			Expect(outPool1.Spec).To(Equal(spec2))
 			Expect(outError1).NotTo(HaveOccurred())
+			Expect(outPool1.Spec).To(Equal(spec2))
 
 			By("List all the pools and compare")
 
@@ -125,8 +125,8 @@ var _ = Describe("Pool tests", func() {
 			outPool1, outError1 = c.Pools().Get(meta1)
 
 			// Assert they are equal and no errors.
-			Expect(poolList.Items[0].Spec).To(Equal(outPool1.Spec))
 			Expect(outError1).NotTo(HaveOccurred())
+			Expect(poolList.Items[0].Spec).To(Equal(outPool1.Spec))
 
 			By("Delete, Get and assert error")
 
