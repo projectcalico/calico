@@ -28,7 +28,7 @@ docker-image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:
-	rm -rf dist vendor
+	rm -rf dist vendor $(BUILD_CONTAINER_MARKER) $(DEPLOY_CONTAINER_MARKER)
 
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
