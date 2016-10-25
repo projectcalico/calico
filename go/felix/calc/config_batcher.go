@@ -48,7 +48,7 @@ func (cb *ConfigBatcher) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.RegisterStatusHandler(cb.OnDatamodelStatus)
 }
 
-func (cb *ConfigBatcher) OnUpdate(update model.KVPair) (filterOut bool) {
+func (cb *ConfigBatcher) OnUpdate(update model.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.HostConfigKey:
 		if key.Hostname != cb.hostname {

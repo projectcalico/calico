@@ -66,7 +66,7 @@ func (calc *MemberCalculator) MatchStopped(key model.Key, ipSetID string) {
 	calc.removeMatchFromIndex(ipSetID, key, ips)
 }
 
-func (calc *MemberCalculator) OnUpdate(update model.KVPair) (filterOut bool) {
+func (calc *MemberCalculator) OnUpdate(update model.Update) (filterOut bool) {
 	if update.Value == nil {
 		calc.updateEndpointIPs(update.Key, []ip.Addr{})
 		return

@@ -32,7 +32,7 @@ const (
 )
 
 func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clusterType string, numHostsC <-chan int) {
-	log.Info("Usage reporting thread started, waiitng for size estimate")
+	log.Info("Usage reporting thread started, waiting for size estimate")
 	estimatedClusterSize := <-numHostsC
 	log.WithField("size", estimatedClusterSize).Info("Initial cluster size read")
 	if estimatedClusterSize > 25 {

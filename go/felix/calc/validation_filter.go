@@ -37,8 +37,8 @@ func (v *ValidationFilter) OnStatusUpdated(status api.SyncStatus) {
 	v.sink.OnStatusUpdated(status)
 }
 
-func (v *ValidationFilter) OnUpdates(updates []model.KVPair) {
-	filteredUpdates := make([]model.KVPair, len(updates))
+func (v *ValidationFilter) OnUpdates(updates []model.Update) {
+	filteredUpdates := make([]model.Update, len(updates))
 	for i, update := range updates {
 		logCxt := logrus.WithFields(logrus.Fields{
 			"key":   update.Key,

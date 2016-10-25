@@ -35,7 +35,7 @@ func NewPolicySorter() *PolicySorter {
 	}
 }
 
-func (poc *PolicySorter) OnUpdate(update model.KVPair) (dirty bool) {
+func (poc *PolicySorter) OnUpdate(update model.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
 		oldPolicy := poc.tier.Policies[key]

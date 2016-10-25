@@ -1,5 +1,5 @@
 hash: 71235438415c3ea58a3993e1bb9102b7fca8413335aad3dd0b52649b0ac4b165
-updated: 2016-10-24T15:42:27.533244895+01:00
+updated: 2016-10-25T11:55:24.393417586+01:00
 imports:
 - name: github.com/coreos/etcd
   version: 43df091067566416dcc35a115c559b42be204a3d
@@ -26,7 +26,7 @@ imports:
 - name: github.com/go-ini/ini
   version: 6e4869b434bd001f6983749881c7ead3545887d8
 - name: github.com/gogo/protobuf
-  version: 50d1bd39ce4e7a96b75e3e040be9caf79dbb4c61
+  version: 91cc2497504ffbaba9656e7d988ccfe41c54f6a9
   subpackages:
   - proto
 - name: github.com/golang/glog
@@ -58,7 +58,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: bfa6b81c7dfae89f276da96453ed0b3573b1ca22
+  version: a8b2874899829baf926697f8d0a4952ef1dad407
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -92,7 +92,7 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/net
-  version: 5695785b4430a2c4aa952323f1aed77bf3e7508e
+  version: 65dfc08770ce66f74becfdff5f8ab01caef4e946
   subpackages:
   - context
 - name: golang.org/x/sys

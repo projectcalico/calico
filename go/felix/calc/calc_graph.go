@@ -196,7 +196,7 @@ func (h *HostIPPassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
 }
 
-func (h *HostIPPassthru) OnUpdate(update model.KVPair) (filterOut bool) {
+func (h *HostIPPassthru) OnUpdate(update model.Update) (filterOut bool) {
 	hostname := update.Key.(model.HostIPKey).Hostname
 	if update.Value == nil {
 		h.callbacks.OnHostIPRemove(hostname)
@@ -222,7 +222,7 @@ func (f *endpointHostnameFilter) RegisterWith(localEndpointDisp *dispatcher.Disp
 	localEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
 }
 
-func (f *endpointHostnameFilter) OnUpdate(update model.KVPair) (filterOut bool) {
+func (f *endpointHostnameFilter) OnUpdate(update model.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if key.Hostname != f.hostname {

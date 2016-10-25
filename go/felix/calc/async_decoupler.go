@@ -33,7 +33,7 @@ func (a *SyncerCallbacksDecoupler) OnStatusUpdated(status api.SyncStatus) {
 	a.c <- status
 }
 
-func (a *SyncerCallbacksDecoupler) OnUpdates(updates []model.KVPair) {
+func (a *SyncerCallbacksDecoupler) OnUpdates(updates []model.Update) {
 	a.c <- updates
 }
 
@@ -42,7 +42,7 @@ func (a *SyncerCallbacksDecoupler) SendTo(sink api.SyncerCallbacks) {
 		switch obj := obj.(type) {
 		case api.SyncStatus:
 			sink.OnStatusUpdated(obj)
-		case []model.KVPair:
+		case []model.Update:
 			sink.OnUpdates(obj)
 		}
 	}

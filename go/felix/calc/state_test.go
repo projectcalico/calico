@@ -161,7 +161,7 @@ func (s State) Keys() set.Set {
 	return set
 }
 
-func (s State) KVs() map[Key]interface{} {
+func (s State) KVsCopy() map[Key]interface{} {
 	kvs := make(map[Key]interface{})
 	for _, kv := range s.DatastoreState {
 		kvs[kv.Key] = kv.Value
@@ -169,24 +169,35 @@ func (s State) KVs() map[Key]interface{} {
 	return kvs
 }
 
-func (s State) KVDeltas(prev State) []KVPair {
-	updatedKVs := s.KVs()
+func (s State) KVDeltas(prev State) []Update {
+	newAndUpdatedKVs := s.KVsCopy()
+	updatedKVs := make(map[Key]bool)
 	for _, kv := range prev.DatastoreState {
-		if reflect.DeepEqual(updatedKVs[kv.Key], kv.Value) {
+		if reflect.DeepEqual(newAndUpdatedKVs[kv.Key], kv.Value) {
 			// Key had same value in both states so we ignore it.
-			delete(updatedKVs, kv.Key)
+			delete(newAndUpdatedKVs, kv.Key)
+		} else {
+			// Key has changed
+			updatedKVs[kv.Key] = true
 		}
 	}
 	currentKeys := s.Keys()
-	deltas := make([]KVPair, 0)
+	deltas := make([]Update, 0)
 	for _, kv := range prev.DatastoreState {
 		if !currentKeys.Contains(kv.Key) {
-			deltas = append(deltas, KVPair{Key: kv.Key})
+			deltas = append(
+				deltas,
+				Update{KVPair{Key: kv.Key}, UpdateTypeKVDeleted},
+			)
 		}
 	}
 	for _, kv := range s.DatastoreState {
-		if _, ok := updatedKVs[kv.Key]; ok {
-			deltas = append(deltas, kv)
+		if _, ok := newAndUpdatedKVs[kv.Key]; ok {
+			updateType := UpdateTypeKVNew
+			if updatedKVs[kv.Key] {
+				updateType = UpdateTypeKVUpdated
+			}
+			deltas = append(deltas, Update{kv, updateType})
 		}
 	}
 	return deltas

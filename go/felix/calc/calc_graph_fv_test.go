@@ -744,7 +744,9 @@ func squashStates(baseTests StateList) (desc string, mappedTests []StateList) {
 	mappedState := baseTests[len(baseTests)-1].copy()
 	lastTest := empty
 	for _, test := range baseTests {
-		kvs = append(kvs, test.KVDeltas(lastTest)...)
+		for _, update := range test.KVDeltas(lastTest) {
+			kvs = append(kvs, update.KVPair)
+		}
 		lastTest = test
 	}
 	mappedState.DatastoreState = kvs
@@ -832,9 +834,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 						for _, state := range test {
 							log.WithField("state", state).Info("Injecting next state")
 							kvDeltas := state.KVDeltas(lastState)
-							for _, kv := range kvDeltas {
-								toValidator.OnUpdates([]KVPair{kv})
-							}
+							toValidator.OnUpdates(kvDeltas)
 							lastState = state
 						}
 						toValidator.OnStatusUpdated(api.InSync)
@@ -934,7 +934,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 				kvDeltas := state.KVDeltas(lastState)
 				for _, kv := range kvDeltas {
 					fmt.Fprintf(GinkgoWriter, "       -> Injecting KV: %v\n", kv)
-					validationFilter.OnUpdates([]KVPair{kv})
+					validationFilter.OnUpdates([]Update{kv})
 					if flushStrategy == afterEachKV {
 						if !sentInSync {
 							validationFilter.OnStatusUpdated(api.InSync)

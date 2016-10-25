@@ -55,7 +55,7 @@ func (l *InheritIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 
 // OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface
 // allowing it to be used in a calculation graph more easily.
-func (l *InheritIndex) OnUpdate(update model.KVPair) (filterOut bool) {
+func (l *InheritIndex) OnUpdate(update model.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {

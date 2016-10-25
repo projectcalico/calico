@@ -17,28 +17,30 @@ package calc
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/dispatcher"
-	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 type StatsCollector struct {
-	hosts        set.Set
-	lastNumHosts int
-	NumHostsChan chan int
-	inSync       bool
+	keyCountByHost map[string]int
+	lastNumHosts   int
+	NumHostsChan   chan int
+	inSync         bool
 }
 
 func NewStatsCollector() *StatsCollector {
 	return &StatsCollector{
-		hosts:        set.New(),
-		NumHostsChan: make(chan int, 1),
-		lastNumHosts: -1,
+		keyCountByHost: make(map[string]int),
+		NumHostsChan:   make(chan int, 1),
+		lastNumHosts:   -1,
 	}
 }
 
 func (s *StatsCollector) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.HostIPKey{}, s.OnUpdate)
+	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, s.OnUpdate)
+	allUpdDispatcher.Register(model.HostEndpointKey{}, s.OnUpdate)
+	allUpdDispatcher.Register(model.HostConfigKey{}, s.OnUpdate)
 	allUpdDispatcher.RegisterStatusHandler(s.OnStatusUpdate)
 }
 
@@ -50,15 +52,39 @@ func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
 	}
 }
 
-func (s *StatsCollector) OnUpdate(update model.KVPair) (filterOut bool) {
+func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
+	hostname := ""
 	switch key := update.Key.(type) {
 	case model.HostIPKey:
-		if update.Value == nil {
-			log.WithField("hostname", key.Hostname).Debug("Host deleted")
-			s.hosts.Discard(key.Hostname)
-		} else {
-			log.WithField("hostname", key.Hostname).Debug("Host updated")
-			s.hosts.Add(key.Hostname)
+		hostname = key.Hostname
+	case model.WorkloadEndpointKey:
+		hostname = key.Hostname
+	case model.HostEndpointKey:
+		hostname = key.Hostname
+	case model.HostConfigKey:
+		hostname = key.Hostname
+	}
+	if hostname == "" {
+		log.WithField("key", update.Key).Warn("Failed to get hostname")
+		return
+	}
+	if update.UpdateType == model.UpdateTypeKVNew {
+		s.keyCountByHost[hostname] += 1
+		log.WithFields(log.Fields{
+			"key":      update.Key,
+			"host":     hostname,
+			"newCount": s.keyCountByHost[hostname],
+		}).Debug("Host-specific key added")
+	} else if update.UpdateType == model.UpdateTypeKVDeleted {
+		s.keyCountByHost[hostname] -= 1
+		log.WithFields(log.Fields{
+			"key":      update.Key,
+			"host":     hostname,
+			"newCount": s.keyCountByHost[hostname],
+		}).Debug("Host-specific key deleted")
+		if s.keyCountByHost[hostname] <= 0 {
+			log.WithField("host", hostname).Debug("Host no longer has any keys")
+			delete(s.keyCountByHost, hostname)
 		}
 	}
 	s.sendUpdate()
@@ -66,9 +92,10 @@ func (s *StatsCollector) OnUpdate(update model.KVPair) (filterOut bool) {
 }
 
 func (s *StatsCollector) sendUpdate() {
-	log.Debug("Sending update")
-	numHosts := s.hosts.Len()
+	log.Debug("Checking whether we should send an update")
+	numHosts := len(s.keyCountByHost)
 	if s.inSync && s.lastNumHosts != numHosts {
+		log.WithField("numHosts", numHosts).Debug("Number of hosts in cluster changed")
 		select {
 		case s.NumHostsChan <- numHosts:
 			log.WithField("numHosts", numHosts).Debug("Sent host number update")

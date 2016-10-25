@@ -103,7 +103,7 @@ func (idx *TagIndex) SetTagInactive(tag string) {
 
 // OnUpdate is called when a datamodel update is received.  It updates the
 // index and fires the match-started/stopped callbacks as appropriate.
-func (idx *TagIndex) OnUpdate(update model.KVPair) (filterOut bool) {
+func (idx *TagIndex) OnUpdate(update model.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.ProfileTagsKey:
 		if update.Value != nil {

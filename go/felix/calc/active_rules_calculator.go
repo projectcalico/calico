@@ -89,7 +89,7 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	allUpdDispatcher.Register(model.ProfileTagsKey{}, arc.OnUpdate)
 }
 
-func (arc *ActiveRulesCalculator) OnUpdate(update model.KVPair) (filterOut bool) {
+func (arc *ActiveRulesCalculator) OnUpdate(update model.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {
