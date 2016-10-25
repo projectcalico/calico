@@ -236,11 +236,13 @@ configRetry:
 	go syncerToValidator.SendTo(validator)
 	asyncCalcGraph.Start()
 	log.Infof("Started the datastore Syncer/processing graph")
-
+	var stopSignalChans []chan<- bool
 	if configParams.EndpointReportingEnabled {
 		delay := configParams.EndpointReportingDelay()
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
+		stopChan := make(chan bool, 1)
+		stopSignalChans = append(stopSignalChans, stopChan)
 		felixConn.statusReporter = statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			felixConn.StatusUpdatesFromDataplane,
@@ -250,6 +252,10 @@ configRetry:
 			delay*180,
 		)
 		felixConn.statusReporter.Start()
+		go func() {
+			<-stopChan
+			felixConn.statusReporter.Stop()
+		}()
 	}
 
 	// Start communicating with the dataplane driver.
@@ -263,10 +269,10 @@ configRetry:
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
-	monitorAndManageShutdown(failureReportChan, cmd)
+	monitorAndManageShutdown(failureReportChan, cmd, stopSignalChans)
 }
 
-func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd) {
+func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
 	// Ask the runtime to tell us if we get a term signal.
 	termSignalChan := make(chan os.Signal)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
@@ -296,6 +302,14 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	case reason = <-failureReportChan:
 	}
 	log.WithField("reason", reason).Warn("Felix is shutting down")
+
+	// Notify other components to stop.
+	for _, c := range stopSignalChans {
+		select {
+		case c <- true:
+		default:
+		}
+	}
 
 	if !driverAlreadyStopped {
 		// Driver may still be running, just in case the driver is

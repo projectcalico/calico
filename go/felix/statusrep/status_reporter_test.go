@@ -169,6 +169,7 @@ var _ = Describe("Status", func() {
 				epUpdates <- &wlEPUpdateUp
 				epUpdates <- &wlEPUpdateDown
 				rateLimitTickerChan <- time.Now()
+				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					updatedWlEPKey: wlEPDown,
 				}))
@@ -180,6 +181,7 @@ var _ = Describe("Status", func() {
 				epUpdates <- &wlEPUpdateUp
 				epUpdates <- &wlEPRemove
 				rateLimitTickerChan <- time.Now()
+				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(BeEmpty())
 			})
 			It("should coalesce flapping host EP updates", func() {
@@ -188,6 +190,7 @@ var _ = Describe("Status", func() {
 				epUpdates <- &hostEPUpdateDown
 				epUpdates <- &hostEPUpdateUp
 				epUpdates <- &hostEPUpdateDown
+				rateLimitTickerChan <- time.Now()
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					updatedHostEPKey: hostEPDown,
@@ -200,6 +203,7 @@ var _ = Describe("Status", func() {
 				epUpdates <- &hostEPUpdateUp
 				epUpdates <- &hostEPRemove
 				rateLimitTickerChan <- time.Now()
+				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(BeEmpty())
 			})
 
@@ -211,8 +215,10 @@ var _ = Describe("Status", func() {
 					}
 				})
 				It("should retry write", func() {
-					epUpdates <- &wlEPUpdateUp        // Triggers write immediately.
-					rateLimitTickerChan <- time.Now() // Triggers first retry.
+					epUpdates <- &wlEPUpdateUp
+					rateLimitTickerChan <- time.Now() // Copies queued to active
+					rateLimitTickerChan <- time.Now() // Tries first write
+					rateLimitTickerChan <- time.Now() // Tries second write
 					time.Sleep(20 * time.Millisecond)
 					Expect(datastore.snapshot()).To(BeEmpty())
 					rateLimitTickerChan <- time.Now() // Triggers successful retry.
@@ -247,6 +253,8 @@ var _ = Describe("Status", func() {
 				}))
 			}, 1)
 			It("should clean up one endpoint per tick", func() {
+				// Enable updates.
+				rateLimitTickerChan <- time.Now()
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
 				By("deleting first endpoint immediately after resync")
@@ -257,6 +265,8 @@ var _ = Describe("Status", func() {
 			}, 1)
 
 			It("with concurrent datastore changes, it should handle key not found", func() {
+				// Enable updates.
+				rateLimitTickerChan <- time.Now()
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
 				By("deleting first endpoint immediately after resync")
@@ -306,6 +316,8 @@ var _ = Describe("Status", func() {
 					}
 				})
 				It("should retry the deletes", func() {
+					// Enable updates.
+					rateLimitTickerChan <- time.Now()
 					// Kick off the first resync.
 					resyncTickerChan <- time.Now()    // Triggers first delete.
 					rateLimitTickerChan <- time.Now() // Triggers second.
@@ -329,6 +341,8 @@ var _ = Describe("Status", func() {
 			}, 1)
 			It("should process workload update", func() {
 				epUpdates <- &wlEPUpdateUp
+				rateLimitTickerChan <- time.Now() // Copy to active.
+				rateLimitTickerChan <- time.Now() // Do the write.
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					localWlEPKey:    wlEPUp,
 					localHostEPKey:  hostEPDown,
@@ -342,6 +356,7 @@ var _ = Describe("Status", func() {
 				epUpdates <- &wlEPUpdateUp
 				epUpdates <- &wlEPUpdateUp
 				epUpdates <- &wlEPUpdateDown
+				rateLimitTickerChan <- time.Now()
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					localWlEPKey:    wlEPUp,
@@ -380,7 +395,8 @@ var _ = Describe("Status", func() {
 			It("should clean up one endpoint per tick", func() {
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
-				By("deleting first endpoint immediately after resync")
+				rateLimitTickerChan <- time.Now()
+				By("deleting first endpoint after resync")
 				Eventually(datastore.numKVs).Should(Equal(3))
 				By("deleting second endpoint after rate limit timer tick")
 				rateLimitTickerChan <- time.Now()

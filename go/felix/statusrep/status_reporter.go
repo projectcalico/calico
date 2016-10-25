@@ -31,7 +31,8 @@ type EndpointStatusReporter struct {
 	stop               chan bool
 	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
-	dirtyStatIDs       set.Set
+	queuedDirtyIDs     set.Set
+	activeDirtyIDs     set.Set
 	reportingDelay     time.Duration
 	resyncInterval     time.Duration
 	resyncTicker       stoppable
@@ -79,7 +80,8 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		inSync:             inSync,
 		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
-		dirtyStatIDs:       set.New(),
+		queuedDirtyIDs:     set.New(),
+		activeDirtyIDs:     set.New(),
 		resyncTicker:       resyncTicker,
 		resyncTickerC:      resyncTickerChan,
 		rateLimitTicker:    rateLimitTicker,
@@ -115,7 +117,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 		esr.reportingDelay)
 	datamodelInSync := false
 	resyncRequested := false
-	updatesAllowed := true
+	updatesAllowed := false
 
 	for {
 		log.Debug("About to wait on channels")
@@ -130,7 +132,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 			resyncRequested = true
 		case <-esr.rateLimitTickerC:
 			if !updatesAllowed {
-				log.Debugf("Update tick: uncorking updates")
+				log.Debug("Update tick: uncorking updates.")
 				updatesAllowed = true
 			}
 		case <-esr.inSync:
@@ -175,7 +177,13 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 				} else {
 					delete(esr.epStatusIDToStatus, statID)
 				}
-				esr.dirtyStatIDs.Add(statID)
+				if !esr.activeDirtyIDs.Contains(statID) &&
+					!esr.queuedDirtyIDs.Contains(statID) {
+					// Add the update into the queued set so that
+					// we delay its initial update.  That prevent
+					// flapping at start of day.
+					esr.queuedDirtyIDs.Add(statID)
+				}
 			}
 		}
 
@@ -189,32 +197,47 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 			resyncRequested = false
 		}
 
-		if updatesAllowed && esr.dirtyStatIDs.Len() > 0 {
-			// Not throttled and there's at least one update
-			// pending.  Choose an arbitrary update from the dirty
-			// set.
-			log.WithField("numDirtyEndpoints", esr.dirtyStatIDs.Len()).Debug(
-				"Unthrottled and updates pending")
-			var statID model.Key
-			esr.dirtyStatIDs.Iter(func(item interface{}) error {
-				statID = item.(model.Key)
-				return set.StopIteration
-			})
-			// Then try to write the update to the datastore.
-			// Note: the update could be a deletion, in which case
-			// the read from the cache wil return nil.
-			err := esr.writeEndpointStatus(statID,
-				esr.epStatusIDToStatus[statID])
-			if err != nil {
-				log.WithError(err).Warn(
-					"Failed to write endpoint status; is datastore up?")
-			} else {
-				// Success, remove the status from the dirty set.
-				log.WithField("statID", statID).Debug("Write successful")
-				esr.dirtyStatIDs.Discard(statID)
+		if updatesAllowed {
+			if esr.activeDirtyIDs.Len() > 0 {
+				// Not throttled and there's at least one update
+				// pending.  Choose an arbitrary update from the dirty
+				// set.
+				log.WithField("numDirtyEndpoints", esr.activeDirtyIDs.Len()).Debug(
+					"Unthrottled and updates pending")
+				var statID model.Key
+				esr.activeDirtyIDs.Iter(func(item interface{}) error {
+					statID = item.(model.Key)
+					return set.StopIteration
+				})
+				// Then try to write the update to the datastore.
+				// Note: the update could be a deletion, in which case
+				// the read from the cache wil return nil.
+				err := esr.writeEndpointStatus(statID,
+					esr.epStatusIDToStatus[statID])
+				if err != nil {
+					log.WithError(err).Warn(
+						"Failed to write endpoint status; is datastore up?")
+				} else {
+					// Success, remove the status from the dirty set.
+					log.WithField("statID", statID).Debug("Write successful")
+					esr.activeDirtyIDs.Discard(statID)
+				}
+				// Cork updates until the next timer pop.
+				updatesAllowed = false
 			}
-			// Cork updates until the next timer pop.
-			updatesAllowed = false
+			if esr.queuedDirtyIDs.Len() > 0 {
+				// Now copy the queued statuses to the main dirty set.
+				// Doing this after the attempt to write above means that
+				// endpoints always spend at least one interval in the
+				// queued set.
+				log.WithField("numQueuedUpdates", esr.queuedDirtyIDs.Len()).Debug(
+					"Copying queued set to dirty set")
+				esr.queuedDirtyIDs.Iter(func(item interface{}) error {
+					esr.activeDirtyIDs.Add(item)
+					return nil
+				})
+				esr.queuedDirtyIDs = set.New()
+			}
 		}
 	}
 }
@@ -231,7 +254,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	for _, kv := range kvs {
 		if kv.Value == nil {
 			// Parse error, needs refresh.
-			esr.dirtyStatIDs.Add(kv.Key)
+			esr.activeDirtyIDs.Add(kv.Key)
 		} else {
 			status := kv.Value.(*model.WorkloadEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
@@ -240,7 +263,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
 				}).Info("Found out-of-sync workload endpoint status")
-				esr.dirtyStatIDs.Add(kv.Key)
+				esr.activeDirtyIDs.Add(kv.Key)
 			}
 		}
 	}
@@ -256,7 +279,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 	for _, kv := range kvs {
 		if kv.Value == nil {
 			// Parse error, needs refresh.
-			esr.dirtyStatIDs.Add(kv.Key)
+			esr.activeDirtyIDs.Add(kv.Key)
 		} else {
 			status := kv.Value.(*model.HostEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
@@ -265,7 +288,7 @@ func (esr *EndpointStatusReporter) attemptResync() {
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
 				}).Infof("Found out-of-sync host endpoint status")
-				esr.dirtyStatIDs.Add(kv.Key)
+				esr.activeDirtyIDs.Add(kv.Key)
 			}
 		}
 	}
@@ -298,5 +321,6 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(epID model.Key, status st
 }
 
 func (esr *EndpointStatusReporter) Stop() {
+	log.Info("Stopping endpoint status reporter")
 	esr.stop <- true
 }
