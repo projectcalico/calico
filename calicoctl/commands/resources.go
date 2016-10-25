@@ -22,6 +22,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/ghodss/yaml"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
@@ -240,7 +241,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 
 	// Load the client config and connect.
 	cf := args["--config"].(string)
-	client, err := newClient(cf)
+	client, err := clientmgr.NewClient(cf)
 	if err != nil {
 		return commandResults{err: err}
 	}

@@ -20,13 +20,14 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/node"
 )
 
 // Node function is a switch to node related sub-commands
 func Node(args []string) error {
 	var err error
-	doc := `Usage:
+	doc := constants.DatastoreIntro + `Usage:
   calicoctl node <command> [<args>...]
 
     status         View the current status of a Calico node.
@@ -40,8 +41,7 @@ Description:
   Node specific commands for calicoctl.  These commands must be run directly on
   the compute host running the Calico node instance.
   
-  See 'calicoctl node <command> --help' to read about a specific subcommand.
-  `
+  See 'calicoctl node <command> --help' to read about a specific subcommand.`
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return err

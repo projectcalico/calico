@@ -16,114 +16,53 @@ package commands
 
 import (
 	"fmt"
-	"net"
 	"os"
+	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/client"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/ipam"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
 func IPAM(args []string) error {
-	doc := DatastoreIntro + `Usage:
-  calicoctl ipam release --ip=<IP>
-  calicoctl ipam show --ip=<IP>
+	doc := constants.DatastoreIntro + `Usage:
+  calicoctl ipam <command> [<args>...]
+
+    release       Release a Calico assigned IP address.
+    show          Show details of a Calico assigned IP address.
 
 Options:
-  -h --help      Show this screen.
-     --ip=<IP>   IP address
+  -h --help               Show this screen.
 
 Description:
-  Calico IP address management commands.
+  IP Address Management specific commands for calicoctl.
 
-Warnings:
-  Releasing an in-use IP address can result in it being assigned to multiple
-  workloads.`
-
-	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
+  See 'calicoctl ipam <command> --help' to read about a specific subcommand.`
+	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		return err
 	}
-	if len(parsedArgs) == 0 {
+	if arguments["<command>"] == nil {
 		return nil
 	}
 
-	// Create a new backend client from env vars.
-	backendClient, err := newClient("")
-	if err != nil {
-		fmt.Println(err)
+	command := arguments["<command>"].(string)
+	args = append([]string{"ipam", command}, arguments["<args>"].([]string)...)
+
+	switch command {
+	case "release":
+		err = ipam.Release(args)
+	case "show":
+		err = ipam.Show(args)
+	default:
+		fmt.Println(doc)
 	}
 
-	ipamClient := backendClient.IPAM()
-
-	switch args[1] {
-	case "show":
-		showIP(ipamClient, parsedArgs["--ip"].(string))
-	case "release":
-		releaseIP(ipamClient, parsedArgs["--ip"].(string))
+	if err != nil {
+		fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 
 	return nil
-}
-
-// showIP gets the attributes of an IP address, and returns nil if it is assigned
-// or an error with a message if not assigned.
-func showIP(ipamClient client.IPAMInterface, passedIP string) {
-	ip := validateIP(passedIP)
-	attr, err := ipamClient.GetAssignmentAttributes(cnet.IP{ip})
-
-	// IP address is not assigned, this prints message like
-	// `IP 192.168.71.1 is not assigned in block`. This is not exactly an error,
-	// so not returning it to the caller.
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// IP address is assigned with attributes.
-	if len(attr) != 0 {
-		fmt.Println(attr)
-	} else {
-		// IP address is assigned but attributes are not set.
-		fmt.Printf("No attributes defined for IP %s\n", ip)
-	}
-}
-
-// releaseIP releases the IP address passed to it
-// or prints an error message if it's not assigned.
-func releaseIP(ipamClient client.IPAMInterface, passedIP string) {
-	ip := validateIP(passedIP)
-	ips := []cnet.IP{cnet.IP{ip}}
-
-	// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
-	// release was successful else it returns back the slice with the IP passed in.
-	unallocatedIPs, err := ipamClient.ReleaseIPs(ips)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
-	}
-
-	// Couldn't release the IP if the slice is not empty or IP might already be released/unassigned.
-	// This is not exactly an error, so not returning it to the caller.
-	if len(unallocatedIPs) != 0 {
-		fmt.Printf("IP address %s is not assigned\n", ip)
-		return
-	}
-
-	// If unallocatedIPs slice is empty then IP was released Successfully.
-	fmt.Printf("Successfully released IP address %s\n", ip)
-}
-
-// validateIP takes a string as an input and makes sure it's a valid IPv4 or IPv6 address.
-func validateIP(str string) net.IP {
-	// Parse the input string as an IP address (IPv4 or IPv6).
-	// This also validates the IP address.
-	ip := net.ParseIP(str)
-	if ip == nil {
-		fmt.Println("Invalid IP address specified.")
-		os.Exit(1)
-	}
-	return ip
 }

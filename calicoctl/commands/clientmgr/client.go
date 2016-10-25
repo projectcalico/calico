@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package clientmgr
 
 import (
 	"os"
@@ -21,10 +21,10 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
-// Create a new CalicoClient using connection information in the specified
+// NewClient creates a new CalicoClient using connection information in the specified
 // filename (if it exists), dropping back to environment variables for any
 // parameter not loaded from file.
-func newClient(cf string) (*client.Client, error) {
+func NewClient(cf string) (*client.Client, error) {
 	if _, err := os.Stat(cf); err != nil {
 		log.Infof("Config file cannot be read - reading config from environment")
 		cf = ""

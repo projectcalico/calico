@@ -24,9 +24,8 @@ import (
 	"strings"
 	"time"
 
-	shutil "github.com/termie/go-shutil"
-
 	"github.com/docopt/docopt-go"
+	shutil "github.com/termie/go-shutil"
 )
 
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on

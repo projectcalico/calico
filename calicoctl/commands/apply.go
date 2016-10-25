@@ -19,10 +19,12 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
+
+	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 )
 
 func Apply(args []string) error {
-	doc := DatastoreIntro + `Usage:
+	doc := constants.DatastoreIntro + `Usage:
   calicoctl apply --filename=<FILENAME> [--config=<CONFIG>]
 
 Examples:

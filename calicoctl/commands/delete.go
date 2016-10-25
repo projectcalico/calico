@@ -15,15 +15,16 @@
 package commands
 
 import (
-	"github.com/docopt/docopt-go"
-
 	"fmt"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docopt/docopt-go"
+
+	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 )
 
 func Delete(args []string) error {
-	doc := DatastoreIntro + `Usage:
+	doc := constants.DatastoreIntro + `Usage:
   calicoctl delete ([--node=<NODE>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
                     (<KIND> [<NAME>]) |
                     --filename=<FILE>)

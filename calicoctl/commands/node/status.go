@@ -25,7 +25,6 @@ import (
 
 	"github.com/docopt/docopt-go"
 	gops "github.com/mitchellh/go-ps"
-
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -42,7 +41,8 @@ Options:
   -h --help                 Show this screen.
 
 Description:
-  Check the status of the Calico node instance .`
+  Check the status of the Calico node instance.  This incudes the status and uptime
+  of the node instance, and BGP peering states.`
 	// Note: This call is ignoring the error because error check happens at the level above
 	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
 	// printed for this option
