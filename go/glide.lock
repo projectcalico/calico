@@ -1,5 +1,5 @@
 hash: 71235438415c3ea58a3993e1bb9102b7fca8413335aad3dd0b52649b0ac4b165
-updated: 2016-10-25T11:55:24.393417586+01:00
+updated: 2016-10-25T18:41:59.243476249+01:00
 imports:
 - name: github.com/coreos/etcd
   version: 43df091067566416dcc35a115c559b42be204a3d
@@ -58,7 +58,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: a8b2874899829baf926697f8d0a4952ef1dad407
+  version: 92a17b1c6ba624ffbbbb2d6cec511a1357664ddc
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
