@@ -16,6 +16,8 @@ BUILD_CONTAINER_MARKER=cni_build_container.created
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
 
+LIBCALICOGO_PATH?=none
+
 .PHONY: all binary plugin ipam
 default: all
 all: vendor build-containerized test-containerized
@@ -34,7 +36,10 @@ vendor:
 	glide install -strip-vcs -strip-vendor --cache
 
 vendor-containerized:
-	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
+          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	fi; \
+	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
         $(GO_CONTAINER_NAME) /bin/bash -c ' \
 	cd /go/src/github.com/projectcalico/calico-cni; \
 	glide install -strip-vcs -strip-vendor --cache; \
