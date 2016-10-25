@@ -228,14 +228,16 @@ configRetry:
 	log.Infof("Started the datastore Syncer/processing graph")
 
 	if configParams.EndpointReportingEnabled {
-		log.Info("Endpoint status reporting enabled, starting status reporter")
+		delay := configParams.EndpointReportingDelay()
+		log.WithField("delay", delay).Info(
+			"Endpoint status reporting enabled, starting status reporter")
 		felixConn.statusReporter = statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			felixConn.StatusUpdatesFromDataplane,
 			felixConn.InSync,
 			felixConn.datastore,
-			configParams.EndpointReportingDelay(),
-			configParams.EndpointReportingDelay()*180,
+			delay,
+			delay*180,
 		)
 		felixConn.statusReporter.Start()
 	}
@@ -272,6 +274,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 
 	// Wait for one of the channels to give us a reason to shut down.
 	driverAlreadyStopped := false
+	receivedSignal := false
 	var reason string
 	select {
 	case <-driverStoppedC:
@@ -279,6 +282,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		driverAlreadyStopped = true
 	case sig := <-termSignalChan:
 		reason = fmt.Sprintf("Received OS signal %v", sig)
+		receivedSignal = true
 	case reason = <-failureReportChan:
 	}
 	log.WithField("reason", reason).Warn("Felix is shutting down")
@@ -308,11 +312,23 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		}
 	}
 
-	// Pause to avoid a tight loop, which would stop the init daemon from
-	// restarting us.
-	time.Sleep(2 * time.Second)
+	if !receivedSignal {
+		// We're exiting due to a failure or a config change, wait
+		// a couple of seconds to ensure that we don't go into a tight
+		// restart loop (which would make the init daemon give up trying
+		// to restart us).
+		log.Info("Shutdown wasn't cause by signal, pausing to avoid tight restart loop")
+		go func() {
+			time.Sleep(2 * time.Second)
+			log.Info("Pause complete, exiting.")
+			syscall.Exit(1)
+		}()
+		// But, if we get a signal while we're waiting quit immediately.
+		<-termSignalChan
+	}
 
 	// Then exit our process.
+	log.Info("Received signal, exiting immediately")
 	syscall.Exit(1)
 }
 

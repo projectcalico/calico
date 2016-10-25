@@ -15,23 +15,23 @@
 package calc
 
 import (
-	"github.com/projectcalico/felix/go/felix/dispatcher"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/felix/go/felix/set"
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/dispatcher"
+	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 type StatsCollector struct {
-	hosts set.Set
+	hosts        set.Set
 	lastNumHosts int
 	NumHostsChan chan int
-	inSync bool
+	inSync       bool
 }
 
 func NewStatsCollector() *StatsCollector {
 	return &StatsCollector{
-		hosts: set.New(),
+		hosts:        set.New(),
 		NumHostsChan: make(chan int, 1),
 		lastNumHosts: -1,
 	}
