@@ -25,6 +25,7 @@ spec:
 
 ### Definitions
 #### Metadata
+
 | name     | description                                               | requirements                             | schema |
 |----------|-----------------------------------------------------------|------------------------------------------|--------|
 | name     | The name of this hostEndpoint.                            |                                          | string |
@@ -32,6 +33,7 @@ spec:
 | labels   | A set of labels to apply to this endpoint.                |      | Dictionary with key and values as strings. |
 
 #### Spec
+
 | name         | description                                              | requirements                | schema          |
 |--------------|----------------------------------------------------------|-----------------------------|-----------------|
 | interfaceName    | The name of the interface to apply policy to.            |                             | string          |

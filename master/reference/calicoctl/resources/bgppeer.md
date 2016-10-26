@@ -27,6 +27,7 @@ spec:
 
 ### Definitions
 #### Metadata
+
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
 | scope    | The scope of this peer.                                   | Accepted values: `global` or `node`                                              | string |
@@ -34,6 +35,7 @@ spec:
 | peerIP   | The IP address of this peer.                              | Valid IPv4 or IPv6 address.                                                      | string |
 
 #### Spec
+
 | name     | description                 | requirements               | schema  |
 |----------|-----------------------------|----------------------------|---------|
 | asNumber | The AS Number of this peer. | Must be a valid AS Number.  The YAML or JSON format may be a string and may be specified in dotted notation. | integer |
