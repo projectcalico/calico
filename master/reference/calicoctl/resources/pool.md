@@ -17,12 +17,14 @@ spec:
 
 ### Definitions
 #### Metadata
+
 | name     | description                     | requirements | schema |
 |----------|---------------------------------|--|--------|
 | name     | The name of this pool resource. |  | string |
 | cidr     | The CIDR of this pool.         |  | string representation of CIDR |
 
 #### Spec
+
 | name     | description                 | requirements | schema  |
 |----------|-----------------------------|---------|---------|
 | ipip | Configuration for ipip tunneling for this pool.     | If not specified, ipip tunneling is disabled for this pool. | [IPIPConfiguration](#ipipconfiguration) |
@@ -30,6 +32,7 @@ spec:
 | disabled | When set to true, Calico IPAM will not assign addresses from this pool. |     | boolean |
 
 #### IPIP Configuration
+
 | name     | description                 | requirements | schema  |
 |----------|-----------------------------|--------------|---------|
 | enabled   | When set to true, ipip tunneling will be used to deliver packets to desinations within this pool. |              | boolean |
