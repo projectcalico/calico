@@ -80,7 +80,7 @@ type WorkloadEndpointSpec struct {
 	InterfaceName string `json:"interfaceName,omitempty" validate:"interface"`
 
 	// MAC is the MAC address of the endpoint interface.
-	MAC net.MAC `json:"mac,omitempty" validate:"omitempty,mac"`
+	MAC *net.MAC `json:"mac,omitempty" validate:"omitempty,mac"`
 }
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.

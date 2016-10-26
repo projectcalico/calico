@@ -194,8 +194,16 @@ func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Res
 	ah.Spec.InterfaceName = bh.Name
 	ah.Spec.MAC = bh.Mac
 	ah.Spec.Profiles = bh.ProfileIDs
-	ah.Spec.IPNetworks = nets
-	ah.Spec.IPNATs = nats
+	if len(nets) == 0 {
+		ah.Spec.IPNetworks = nil
+	} else {
+		ah.Spec.IPNetworks = nets
+	}
+	if len(nats) == 0 {
+		ah.Spec.IPNATs = nil
+	} else {
+		ah.Spec.IPNATs = nats
+	}
 	ah.Spec.IPv4Gateway = bh.IPv4Gateway
 	ah.Spec.IPv6Gateway = bh.IPv6Gateway
 

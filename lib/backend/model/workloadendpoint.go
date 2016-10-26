@@ -150,7 +150,7 @@ type WorkloadEndpoint struct {
 	// TODO: Validation for workload endpoint.
 	State       string            `json:"state"`
 	Name        string            `json:"name"`
-	Mac         net.MAC           `json:"mac"`
+	Mac         *net.MAC          `json:"mac"`
 	ProfileIDs  []string          `json:"profile_ids"`
 	IPv4Nets    []net.IPNet       `json:"ipv4_nets"`
 	IPv6Nets    []net.IPNet       `json:"ipv6_nets"`
