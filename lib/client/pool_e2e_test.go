@@ -69,9 +69,11 @@ var _ = Describe("Pool tests", func() {
 
 			// Create a pool with meta1 and spec1.
 			_, outError = c.Pools().Create(&api.Pool{Metadata: meta1, Spec: spec1})
+			Expect(outError).NotTo(HaveOccurred())
 
 			// Apply a pool with meta2 and spec2.
 			_, outError = c.Pools().Apply(&api.Pool{Metadata: meta2, Spec: spec2})
+			Expect(outError).NotTo(HaveOccurred())
 
 			// Get pool with meta1.
 			outPool1, outError1 := c.Pools().Get(meta1)
@@ -90,7 +92,8 @@ var _ = Describe("Pool tests", func() {
 			By("Update, Get and compare")
 
 			// Update meta1 pool with spec2.
-			c.Pools().Update(&api.Pool{Metadata: meta1, Spec: spec2})
+			_, outError = c.Pools().Update(&api.Pool{Metadata: meta1, Spec: spec2})
+			Expect(outError).NotTo(HaveOccurred())
 
 			// Get pool with meta1.
 			outPool1, outError1 = c.Pools().Get(meta1)
@@ -103,12 +106,14 @@ var _ = Describe("Pool tests", func() {
 
 			// Get a list of pools.
 			poolList, outError := c.Pools().List(api.PoolMetadata{})
+			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 			metas := []api.PoolMetadata{meta1, meta2}
 			expectedPools := []api.Pool{}
 			// Go through meta list and append them to expectedPools.
 			for _, v := range metas {
-				p, _ := c.Pools().Get(v)
+				p, outError := c.Pools().Get(v)
+				Expect(outError).NotTo(HaveOccurred())
 				expectedPools = append(expectedPools, *p)
 			}
 
@@ -119,6 +124,7 @@ var _ = Describe("Pool tests", func() {
 
 			// Get a pool list with meta1.
 			poolList, outError = c.Pools().List(meta1)
+			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 
 			// Get a pool with meta1.
@@ -132,6 +138,7 @@ var _ = Describe("Pool tests", func() {
 
 			// Delete a pool with meta1.
 			outError1 = c.Pools().Delete(meta1)
+			Expect(outError1).NotTo(HaveOccurred())
 
 			// Get a pool with meta1.
 			_, outError = c.Pools().Get(meta1)
@@ -141,12 +148,14 @@ var _ = Describe("Pool tests", func() {
 
 			// Delete the second pool with meta2.
 			outError1 = c.Pools().Delete(meta2)
+			Expect(outError1).NotTo(HaveOccurred())
 
 			By("Delete all the pools, Get pool list and expect empty pool list")
 
 			// Both pools are deleted in the calls above.
 			// Get the list of all the pools.
 			poolList, outError = c.Pools().List(api.PoolMetadata{})
+			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 
 			// Create an empty pool list.
