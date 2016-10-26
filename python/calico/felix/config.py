@@ -778,10 +778,17 @@ def _load_plugin(plugin_entry_point, flavor):
         function raises ImportError.
     """
     for v in pkg_resources.iter_entry_points(plugin_entry_point, flavor):
-        entry_point = v.load()
-        log.info("Successfully loaded %s plugin: %s" %
-                 (plugin_entry_point, flavor))
-        return entry_point
+        try:
+            entry_point = v.load()
+        except Exception:
+            # Defensive: in a pyinstaller build we can pick up a copy of the
+            # plugin from the system path as well as from our bundle.  Try
+            # another one.
+            log.warn("Failed to load plugin %s; ignoring", v, exc_info=True)
+        else:
+            log.info("Successfully loaded %s plugin: %s" %
+                     (plugin_entry_point, flavor))
+            return entry_point
     raise ImportError(
         'No plugin called "{0:s}" has been registered for entrypoint "{1:s}".'.
         format(flavor, plugin_entry_point))
