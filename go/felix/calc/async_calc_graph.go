@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/prometheus/client_golang/prometheus"
 	"time"
 )
 
@@ -28,6 +29,27 @@ const (
 	tickInterval    = 10 * time.Millisecond
 	leakyBucketSize = 10
 )
+
+var (
+	dataplaneStatusGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_resync_state",
+		Help: "Current datastore state.",
+	})
+	resyncsStarted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_resyncs_started",
+		Help: "Current datastore state.",
+	})
+	statusToGaugeValue = map[api.SyncStatus]float64{
+		api.WaitForDatastore: 1,
+		api.ResyncInProgress: 2,
+		api.InSync:           3,
+	}
+)
+
+func init() {
+	prometheus.MustRegister(dataplaneStatusGauge)
+	prometheus.MustRegister(resyncsStarted)
+}
 
 type AsyncCalcGraph struct {
 	Dispatcher       *dispatcher.Dispatcher
@@ -63,6 +85,10 @@ func (acg *AsyncCalcGraph) OnUpdates(updates []model.Update) {
 func (acg *AsyncCalcGraph) OnStatusUpdated(status api.SyncStatus) {
 	log.Debugf("Status updated: %v; queueing", status)
 	acg.inputEvents <- status
+	dataplaneStatusGauge.Set(statusToGaugeValue[status])
+	if status == api.ResyncInProgress {
+		resyncsStarted.Inc()
+	}
 }
 
 func (acg *AsyncCalcGraph) loop() {
