@@ -84,7 +84,7 @@ MY_GID:=$(shell id -g)
 .PHONY: golang-build-image
 golang-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
-	cd docker-build-images && docker build -f golang-build.Dockerfile -t calico-golang-build .
+	cd docker-build-images && docker build -f golang-build.Dockerfile -t calico/build-felix-golang .
 
 # Build a docker image used for building debs for trusty.
 .PHONY: trusty-build-image
@@ -126,6 +126,12 @@ centos7-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
 	cd docker-build-images && docker build -f centos7-build.Dockerfile -t calico-centos7-build .
 
+.PHONY: pyinstaller-build-image
+python-build-image:
+	$(MAKE) docker-build-images/passwd docker-build-images/group
+	# Rebuild the container image.  Docker will do its own newness checks.
+	docker build -t calico/build-felix-python -f docker-build-images/pyi/Dockerfile .
+	
 # Build the calico/felix docker image, which contains only felix.
 .PHONY: felix-docker-image
 felix-docker-image: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
@@ -217,7 +223,7 @@ go/vendor go/vendor/.up-to-date: go/glide.lock
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
 	    -v $$HOME/.glide:/.glide:rw \
 	    -w /go/src/github.com/projectcalico/felix/go \
-	    calico-golang-build \
+	    calico/build-felix-golang \
 	    glide install --strip-vcs --strip-vendor
 	touch go/vendor/.up-to-date
 
@@ -244,7 +250,7 @@ bin/calico-felix: $(GO_FILES) \
 	mkdir -p bin
 	$(DOCKER_RUN_RM) \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    calico-golang-build \
+	    calico/build-felix-golang \
 	    go build -o $@ $(LDFLAGS) "./go/felix/felix.go"
 
 # Build the pyinstaller bundle, which is an output artefact in its own right
@@ -258,14 +264,13 @@ $(BUNDLE_FILENAME): dist/calico-felix/calico-iptables-plugin dist/calico-felix/c
 dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt docker-build-images/pyi/*
 	# Remove any pre-existing build container.
 	docker rm -f felix-pyi-build || true
-	# Rebuild the container image.  Docker will do its own newness checks.
-	docker build -t calico-pyi-build -f docker-build-images/pyi/Dockerfile .
+	$(MAKE) python-build-image
 	# Output version information
 	echo "Calico version: $(PY_VERSION) \n" \
 	     "Git revision: $(GIT_COMMIT)\n" > version.txt
 
 	# Create new build container and start it running in the background.
-	docker run -v $${PWD}:/code --name felix-pyi-build -tid calico-pyi-build sh
+	docker run -v $${PWD}:/code --name felix-pyi-build -tid calico/build-felix-python sh
 	# As root, install our package.  This makes it easier to run PyInstaller.
 	docker exec felix-pyi-build pip install -v ./python/
 	# As the current user, build the PyInstaller bundle.
@@ -294,14 +299,16 @@ update-tools:
 # Run go fmt on all our go files.
 .PHONY: go-fmt
 go-fmt:
-	cd go && glide nv | xargs go fmt
+	$(MAKE) golang-build-image
+	$(DOCKER_RUN_RM) -w /code/go calico/build-felix-golang sh -c 'glide nv | xargs go fmt'
 
 .PHONY: ut
 ut: python-ut go-ut
 
 .PHONY: python-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
-	cd python && ./run-unit-test.sh
+	$(MAKE) python-build-image
+	$(DOCKER_RUN_RM) -w /code/python calico/build-felix-python ./run-unit-test.sh
 
 .PHONY: go-ut
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
@@ -312,7 +319,7 @@ go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
 	    -v $$HOME/.glide:/.glide:rw \
 	    -w /go/src/github.com/projectcalico/felix/go \
-	    calico-golang-build \
+	    calico/build-felix-golang \
 	    ./run-coverage
 
 # Launch a browser with Go coverage stats for the whole project.

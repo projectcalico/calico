@@ -24,5 +24,17 @@ RUN pip install -U -r python/requirements.txt
 # Install test requirements so we can run the UTs in this container too.
 ADD python/test_requirements.txt python/test_requirements.txt
 RUN pip install -r python/test_requirements.txt
+
+# Install newer version of git, needed for diff-cover.
+RUN wget http://repository.it4i.cz/mirrors/repoforge/redhat/el6/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
+    yum install -y rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
+    yum install -y --enablerepo=rpmforge-extras git
+
+# tox needs the current user to exist in /etc/passwd for some reason.
+ADD docker-build-images/passwd /passwd
+RUN cat /passwd >> /etc/passwd
+ADD docker-build-images/group /group
+RUN cat /group >> /etc/group
+
 RUN mkdir /code
 WORKDIR /code
