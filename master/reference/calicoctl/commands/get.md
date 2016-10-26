@@ -181,12 +181,12 @@ the "Name" field from the supplied data, it is necessary to enumerate over the s
 within that list.
 
 Example
-```
 {% raw %}
+```
 $ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.Metadata.Name}},{{end}}{{end}}"
 endpoint1,eth0,
-{% endraw %}
 ```
+{% endraw %}
 
 ## See also
 -  [Resources](../resources) for details on all valid resources, including file format

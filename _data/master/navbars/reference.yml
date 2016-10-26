@@ -8,12 +8,9 @@ toc:
 - title: Supported Platforms
   path: /reference/supported-platforms
 - title: calicoctl
-  path: /reference/calicoctl
   section:
   - title: Overview
     path: /reference/calicoctl/
-  - title: Configuring calicoctl
-    path: /reference/calicoctl/setup/config
   - title: Commands
     path: /reference/calicoctl/commands
     section:
@@ -25,10 +22,11 @@ toc:
       path: /reference/calicoctl/commands/create
     - title: delete
       path: /reference/calicoctl/commands/delete
+    - title: get
+      path: /reference/calicoctl/commands/get
     - title: replace
       path: /reference/calicoctl/commands/replace
     - title: node
-      path: /reference/calicoctl/commands/node
       section:
       - title: Overview
         path: /reference/calicoctl/commands/node/
@@ -39,7 +37,6 @@ toc:
       - title: checksystem
         path: /reference/calicoctl/commands/node/checksystem
     - title: ipam
-      path: /reference/calicoctl/commands/ipam
       section:
       - title: Overview
         path: /reference/calicoctl/commands/ipam/
@@ -67,9 +64,8 @@ toc:
       - title: WorkloadEndpoint
         path: /reference/calicoctl/resources/workloadendpoint
   - title: Setup
-    path: /reference/calicoctl/setup
     section:
-      - title: Config
+      - title: Configuring calicoctl
         path: /reference/calicoctl/setup/config
 - title: Deploying on Public Cloud
   section:
