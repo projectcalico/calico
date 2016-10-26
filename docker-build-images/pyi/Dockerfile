@@ -14,21 +14,20 @@ ADD docker-build-images/pyi/get-prereqs.sh get-prereqs.sh
 ADD docker-build-images/pyi/build-prereqs.sh build-prereqs.sh
 RUN ./get-prereqs.sh && \
     ./build-prereqs.sh
-
-# Install Calico pre-reqs.
 ENV LD_LIBRARY_PATH=/usr/local/lib
-RUN pip install pyinstaller
-ADD python/requirements.txt python/requirements.txt
-RUN pip install -U -r python/requirements.txt
-
-# Install test requirements so we can run the UTs in this container too.
-ADD python/test_requirements.txt python/test_requirements.txt
-RUN pip install -r python/test_requirements.txt
 
 # Install newer version of git, needed for diff-cover.
 RUN wget http://repository.it4i.cz/mirrors/repoforge/redhat/el6/en/x86_64/rpmforge/RPMS/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
     yum install -y rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm && \
     yum install -y --enablerepo=rpmforge-extras git
+
+# Install Calico pre-reqs.
+RUN pip install pyinstaller
+
+# Install the frozen build requirements.  Use `make update-frozen-reqs` to
+# update these.
+ADD python/requirements_frozen.txt python/requirements_frozen.txt
+RUN pip install -U -r python/requirements_frozen.txt
 
 # tox needs the current user to exist in /etc/passwd for some reason.
 ADD docker-build-images/passwd /passwd

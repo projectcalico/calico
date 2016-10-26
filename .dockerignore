@@ -20,3 +20,4 @@ dist/*.tgz
 dist/trusty
 dist/xenial
 dist/rpm
+python/.tox

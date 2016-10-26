@@ -31,6 +31,9 @@ help:
 	@echo "  make update-vendor  Update the go/vendor directory with new "
 	@echo "                     versions ofupstream packages.  Record results"
 	@echo "                     in go/glide.lock."
+	@echo "  make update-frozen-reqs  Update the frozen python requirements."
+	@echo "                     Should be run after revving or adding a new"
+	@echo "                     python dependency."
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 
@@ -131,7 +134,22 @@ python-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
 	# Rebuild the container image.  Docker will do its own newness checks.
 	docker build -t calico/build-felix-python -f docker-build-images/pyi/Dockerfile .
-	
+
+.PHONY: update-frozen-reqs
+update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
+	$(MAKE) python-build-image
+	-docker rm -f felix-pip-req-update
+	docker run --name felix-pip-req-update \
+	           -v $${PWD}:/code \
+	           -w /code/python \
+	           -tid calico/build-felix-python sh
+	docker exec felix-pip-req-update \
+	    sh -c 'pip --no-cache-dir install -U -r requirements.txt && \
+	           pip --no-cache-dir install -U -r test_requirements.txt'
+	docker exec --user $(MY_UID):$(MY_GID) felix-pip-req-update \
+	    sh -c 'pip --no-cache-dir freeze > requirements_frozen.txt'
+	-docker rm -f felix-pip-req-update
+
 # Build the calico/felix docker image, which contains only felix.
 .PHONY: felix-docker-image
 felix-docker-image: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
@@ -150,6 +168,7 @@ env:
 # checked out to /code, uses the --rm flag to avoid leaving the container
 # around afterwards.
 DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v $${PWD}:/code
+DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 
 # Build all the debs.
 .PHONY: deb
