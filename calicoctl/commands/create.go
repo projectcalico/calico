@@ -16,6 +16,8 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
@@ -23,7 +25,7 @@ import (
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 )
 
-func Create(args []string) error {
+func Create(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl create --filename=<FILENAME> [--skip-exists] [--config=<CONFIG>]
 
@@ -61,10 +63,11 @@ Description:
   number of resources successfully created.`
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
-		return nil
+		return
 	}
 
 	results := executeConfigCommand(parsedArgs, actionCreate)
@@ -72,6 +75,7 @@ Description:
 
 	if results.fileInvalid {
 		fmt.Printf("Error processing input file: %v\n", results.err)
+		os.Exit(1)
 	} else if results.numHandled == 0 {
 		if results.numResources == 0 {
 			fmt.Printf("No resources specified in file\n")
@@ -82,6 +86,7 @@ Description:
 		} else {
 			fmt.Printf("Failed to create any resources: %v\n", results.err)
 		}
+		os.Exit(1)
 	} else if results.err == nil {
 		if results.singleKind != "" {
 			fmt.Printf("Successfully created %d '%s' resource(s)\n", results.numHandled, results.singleKind)
@@ -98,7 +103,6 @@ Description:
 				results.numHandled, results.numResources)
 		}
 		fmt.Printf("Hit error: %v\n", results.err)
+		os.Exit(1)
 	}
-
-	return results.err
 }

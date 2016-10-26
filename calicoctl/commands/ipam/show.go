@@ -16,6 +16,8 @@ package ipam
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -25,13 +27,13 @@ import (
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
-func Show(args []string) error {
+func Show(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam show --ip=<IP> [--config=<CONFIG>]
 
 Options:
-  -h --help      Show this screen.
-     --ip=<IP>   IP address
+  -h --help                 Show this screen.
+     --ip=<IP>              IP address
   -c --config=<CONFIG>      Filename containing connection configuration in YAML or JSON format.
                             [default: /etc/calico/calicoctl.cfg]
 
@@ -42,10 +44,11 @@ Description:
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
-		return nil
+		return
 	}
 
 	// Create a new backend client from env vars.
@@ -65,7 +68,7 @@ Description:
 	// so not returning it to the caller.
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return
 	}
 
 	// IP address is assigned with attributes.
@@ -75,6 +78,4 @@ Description:
 		// IP address is assigned but attributes are not set.
 		fmt.Printf("No attributes defined for IP %s\n", ip)
 	}
-
-	return nil
 }

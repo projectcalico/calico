@@ -17,7 +17,6 @@ package node
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"regexp"
@@ -33,7 +32,7 @@ import (
 var bgpPeerRegex, _ = regexp.Compile(`[A-Za-z]+\_\w+\b`)
 
 // Status prings status of the node and returns error (if any)
-func Status(args []string) error {
+func Status(args []string) {
 	doc := `Usage:
   calicoctl node status
 
@@ -43,10 +42,15 @@ Options:
 Description:
   Check the status of the Calico node instance.  This incudes the status and uptime
   of the node instance, and BGP peering states.`
-	// Note: This call is ignoring the error because error check happens at the level above
-	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
-	// printed for this option
-	_, _ = docopt.Parse(doc, args, true, "", false, false)
+
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
+	if err != nil {
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
+	}
+	if len(parsedArgs) == 0 {
+		return
+	}
 
 	processes, err := gops.Processes()
 	if err != nil {
@@ -85,7 +89,6 @@ Description:
 	// Have to manually enter an empty line because the table print
 	// library prints the last line, so can't insert a '\n' there
 	fmt.Println()
-	return nil
 }
 
 func psContains(proc string, procList []gops.Process) bool {
@@ -115,7 +118,7 @@ func printBGPPeers(ipv string) {
 		// default socket location for bird install) for non-containerized installs
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
-			log.Printf("Error connecting to BIRDv%s socket: %v", ipv, err)
+			fmt.Printf("Error connecting to BIRDv%s socket: %v", ipv, err)
 			return
 		}
 	}
@@ -125,7 +128,8 @@ func printBGPPeers(ipv string) {
 
 	_, err = c.Write([]byte("show protocols\n"))
 	if err != nil {
-		log.Fatal("Error writing to BIRD socket:", err)
+		fmt.Printf("Error writing to BIRD socket: %s\n", err)
+		os.Exit(1)
 	}
 
 	buf := make([]byte, 1024)

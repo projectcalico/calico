@@ -25,7 +25,7 @@ import (
 )
 
 // Node function is a switch to node related sub-commands
-func Node(args []string) error {
+func Node(args []string) {
 	var err error
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl node <command> [<args>...]
@@ -44,10 +44,11 @@ Description:
   See 'calicoctl node <command> --help' to read about a specific subcommand.`
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if arguments["<command>"] == nil {
-		return nil
+		return
 	}
 
 	command := arguments["<command>"].(string)
@@ -55,19 +56,12 @@ Description:
 
 	switch command {
 	case "status":
-		err = node.Status(args)
+		node.Status(args)
 	case "diags":
-		err = node.Diags(args)
+		node.Diags(args)
 	case "checksystem":
-		err = node.Checksystem(args)
+		node.Checksystem(args)
 	default:
 		fmt.Println(doc)
 	}
-
-	if err != nil {
-		fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
-	}
-
-	return nil
 }

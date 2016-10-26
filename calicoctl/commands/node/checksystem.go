@@ -18,12 +18,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	docopt "github.com/docopt/docopt-go"
 	goversion "github.com/mcuadros/go-version"
 )
@@ -36,7 +36,7 @@ const minKernelVersion = "2.6.24"
 var requiredModules = []string{"xt_set", "ip6_tables"}
 
 // Checksystem checks host system for compatible versions
-func Checksystem(args []string) error {
+func Checksystem(args []string) {
 	doc := `Usage: 
   calicoctl node checksystem
 
@@ -46,10 +46,14 @@ Options:
 Description:
   Check the compatibility of this compute host to run a Calico node instance.`
 
-	// Note: This call is ignoring the error because error check happens at the level above
-	// i.e at `node.go` before it calls `node.Status`. This call is just so help message gets
-	// printed for this option
-	_, _ = docopt.Parse(doc, args, true, "", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
+	if err != nil {
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
+	}
+	if len(parsedArgs) == 0 {
+		return
+	}
 
 	// Make sure the command is run with super user priviladges
 	if os.Getuid() != 0 {
@@ -60,7 +64,7 @@ Description:
 	systemOk := true
 
 	fmt.Print("Checking kernel version...\n")
-	err := checkKernelVersion()
+	err = checkKernelVersion()
 	if err != nil {
 		systemOk = false
 	}
@@ -73,40 +77,37 @@ Description:
 
 	// If any of the checks fail, print a message and exit
 	if !systemOk {
-		fmt.Printf("%-20s\t\t\t%s", "System doesn't meet one or more minimum systems requirements to run Calico", "FAIL\n")
+		fmt.Printf("System doesn't meet one or more minimum systems requirements to run Calico\n")
 		os.Exit(1)
 	}
 
-	fmt.Printf("%-20s\t\t\t%s", "System meets minimum system requirements to run Calico!", "OK\n")
-
-	return nil
+	fmt.Printf("System meets minimum system requirements to run Calico!\n")
 }
 
 // checkKernelVersion checks for minimum required kernel version
 func checkKernelVersion() error {
 	kernelVersion, err := exec.Command("uname", "-r").Output()
 	if err != nil {
-		log.Println(err)
+		printResult("", "FAIL")
+		fmt.Printf("Error executing command: %s\n", err)
+		return err
 	}
 
 	// To strip the trailing `\n`
 	kernelVersionStr := strings.TrimSpace(string(kernelVersion))
-
-	// Print the version for the command output
-	fmt.Printf("\t\t%-20s", kernelVersionStr)
 
 	// Goversion normalizes the versions and compares them returns `true` if
 	// running version is >= minimum version
 	if !goversion.CompareNormalized(kernelVersionStr, minKernelVersion, ">=") {
 
 		// Prints "FAIL" if current version is not >= minimum required version
-		fmt.Printf("\t\t\t\t\tFAIL\n")
-		log.Printf("Minimum kernel version to run Calico is %s. Detected kernel version: %s", minKernelVersion, string(kernelVersion))
+		printResult(kernelVersionStr, "FAIL")
+		fmt.Printf("Minimum kernel version to run Calico is %s. Detected kernel version: %s", minKernelVersion, string(kernelVersion))
 		return errors.New("Kernel version mismatch")
 	}
 
 	// Prints "OK" if current version is >= minimum required version
-	fmt.Printf("\t\t\t\t\tOK\n")
+	printResult(kernelVersionStr, "OK")
 
 	return nil
 }
@@ -116,7 +117,8 @@ func checkKernelModules() error {
 
 	kernelVersion, err := exec.Command("uname", "-r").Output()
 	if err != nil {
-		log.Println(err)
+		fmt.Printf("Error executing command: %s\n", err)
+		return err
 	}
 
 	// To strip the trailing `\n`
@@ -134,7 +136,8 @@ func checkKernelModules() error {
 	// Execute lsmod and cache the result
 	lsmodOut, err := exec.Command("lsmod").Output()
 	if err != nil {
-		log.Println(err)
+		fmt.Printf("Error executing command: %s\n", err)
+		return err
 	}
 
 	// Go through all the required modules and check Loadable and Builtin in order
@@ -150,21 +153,22 @@ func checkKernelModules() error {
 
 				regex, err := regexp.Compile(v)
 				if err != nil {
-					log.Fatalf("Error: %v\n", err)
+					log.Errorf("Error: %v\n", err)
+					return err
 				}
 
 				if !regex.MatchString(string(lsmodOut)) {
-					log.Printf("WARNING: Unable to detect the %s module as Loaded/Builtin module or lsmod\n", v)
+					fmt.Printf("WARNING: Unable to detect the %s module as Loaded/Builtin module or lsmod\n", v)
 					modulesNotFound = append(modulesNotFound, v)
-					fmt.Printf("\t\t%-20s%s", v, "\t\t\t\t\tFAIL\n")
+					printResult(v, "FAIL")
 				} else {
-					fmt.Printf("\t\t%-20s%s", v, "\t\t\t\t\tOK\n")
+					printResult(v, "OK")
 				}
 			} else {
-				fmt.Printf("\t\t%-20s%s", v, "\t\t\t\t\tOK\n")
+				printResult(v, "OK")
 			}
 		} else {
-			fmt.Printf("\t\t%-20s%s", v, "\t\t\t\t\tOK\n")
+			printResult(v, "OK")
 		}
 	}
 
@@ -190,26 +194,23 @@ func checkModule(filename, module, kernelVersion string) error {
 
 	regex, err := regexp.Compile(fmt.Sprintf("\\/%s.ko", module))
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Errorf("Error: %v\n", err)
+		return err
 	}
 
 	fh, err := os.Open(filename)
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Errorf("Error: %v\n", err)
+		return err
 	}
 
 	f := bufio.NewReader(fh)
 	defer fh.Close()
 
-	// Make a byte buffer to read lines
-	buf := make([]byte, 1024)
-
 	for {
-
 		// Ignoring second output (isPrefix) since it's not necessory
-		buf, _, err = f.ReadLine()
+		buf, _, err := f.ReadLine()
 		if err != nil {
-
 			// EOF without a match
 			return errors.New("Module not found")
 		}
@@ -218,5 +219,8 @@ func checkModule(filename, module, kernelVersion string) error {
 			return nil
 		}
 	}
+}
 
+func printResult(val, result string) {
+	fmt.Printf("\t\t%-20s\t\t\t\t\t%s\n", val, result)
 }

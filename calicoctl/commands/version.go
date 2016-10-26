@@ -16,6 +16,8 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/docopt/docopt-go"
 )
@@ -27,7 +29,7 @@ func init() {
 	VERSION_SUMMARY = "calicoctl version " + VERSION + ", build " + GIT_REVISION
 }
 
-func Version(args []string) error {
+func Version(args []string) {
 	doc := `Usage:
   calicoctl version
 
@@ -38,14 +40,14 @@ Description:
   Display the version of calicoctl.`
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if len(arguments) == 0 {
-		return nil
+		return
 	}
 
 	fmt.Println("Version:     ", VERSION)
 	fmt.Println("Build date:  ", BUILD_DATE)
 	fmt.Println("Git commit:  ", GIT_REVISION)
-	return nil
 }

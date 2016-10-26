@@ -15,6 +15,8 @@
 package commands
 
 import (
+	"os"
+
 	"github.com/docopt/docopt-go"
 
 	"fmt"
@@ -24,7 +26,7 @@ import (
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 )
 
-func Get(args []string) error {
+func Get(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl get ([--node=<NODE>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
                  (<KIND> [<NAME>]) |
@@ -88,10 +90,11 @@ Description:
   the valid column names (required for the custom-columns option).`
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if len(parsedArgs) == 0 {
-		return nil
+		return
 	}
 
 	var rp resourcePrinter
@@ -121,24 +124,28 @@ Description:
 		switch outputKey {
 		case "go-template":
 			if outputValue == "" {
-				return fmt.Errorf("need to specify a template")
+				fmt.Printf("need to specify a template")
+				os.Exit(1)
 			}
 			rp = resourcePrinterTemplate{template: outputValue}
 		case "go-template-file":
 			if outputValue == "" {
-				return fmt.Errorf("need to specify a template file")
+				fmt.Printf("need to specify a template file")
+				os.Exit(1)
 			}
 			rp = resourcePrinterTemplateFile{templateFile: outputValue}
 		case "custom-columns":
 			if outputValue == "" {
-				return fmt.Errorf("need to specify at least one column")
+				fmt.Printf("need to specify at least one column")
+				os.Exit(1)
 			}
 			rp = resourcePrinterTable{headings: outputValues}
 		}
 	}
 
 	if rp == nil {
-		return fmt.Errorf("unrecognized output format '%s'", output)
+		fmt.Printf("unrecognized output format '%s'", output)
+		os.Exit(1)
 	}
 
 	results := executeConfigCommand(parsedArgs, actionList)
@@ -146,8 +153,11 @@ Description:
 
 	if results.err != nil {
 		fmt.Printf("Error getting resources: %v\n", results.err)
-		return err
+		os.Exit(1)
 	}
 
-	return rp.print(results.resources)
+	err = rp.print(results.resources)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

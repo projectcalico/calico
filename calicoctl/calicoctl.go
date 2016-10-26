@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"os"
 
@@ -49,7 +48,6 @@ Description:
   to view and manage endpoint configuration, and to manage a Calico node instance.
 
   See 'calicoctl <command> --help' to read about a specific subcommand.`
-	var err error
 	arguments, _ := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
 
 	if logLevel := arguments["--log-level"]; logLevel != nil {
@@ -70,28 +68,23 @@ Description:
 
 		switch command {
 		case "create":
-			err = commands.Create(args)
+			commands.Create(args)
 		case "replace":
-			err = commands.Replace(args)
+			commands.Replace(args)
 		case "apply":
-			err = commands.Apply(args)
+			commands.Apply(args)
 		case "delete":
-			err = commands.Delete(args)
+			commands.Delete(args)
 		case "get":
-			err = commands.Get(args)
+			commands.Get(args)
 		case "version":
-			err = commands.Version(args)
+			commands.Version(args)
 		case "node":
-			err = commands.Node(args)
+			commands.Node(args)
 		case "ipam":
-			err = commands.IPAM(args)
+			commands.IPAM(args)
 		default:
 			fmt.Println(doc)
-		}
-
-		if err != nil {
-			fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-			os.Exit(1)
 		}
 	}
 }

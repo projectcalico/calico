@@ -17,13 +17,13 @@ package node
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	shutil "github.com/termie/go-shutil"
 )
@@ -36,7 +36,7 @@ type diagCmd struct {
 }
 
 // Diags function collects diagnostic information and logs
-func Diags(args []string) error {
+func Diags(args []string) {
 	var err error
 	doc := `Usage:
   calicoctl node diags [--log-dir=<LOG_DIR>]
@@ -50,15 +50,14 @@ Description:
 
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if len(arguments) == 0 {
-		return nil
+		return
 	}
 
 	runDiags(arguments["--log-dir"].(string))
-
-	return nil
 }
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics
@@ -93,13 +92,15 @@ func runDiags(logDir string) {
 	// Create a temp directory in /tmp
 	tmpDir, err := ioutil.TempDir("", "calico")
 	if err != nil {
-		log.Fatalf("Error creating temp directory to dump logs: %v\n", err)
+		fmt.Printf("Error creating temp directory to dump logs: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Println("Using temp dir:", tmpDir)
 	err = os.Chdir(tmpDir)
 	if err != nil {
-		log.Fatalf("Error changing directory to temp directory to dump logs: %v\n", err)
+		fmt.Printf("Error changing directory to temp directory to dump logs: %v\n", err)
+		os.Exit(1)
 	}
 
 	os.Mkdir("diagnostics", os.ModeDir)
@@ -114,12 +115,12 @@ func runDiags(logDir string) {
 	// Check if the logDir provided/default exists and is a directory
 	fileInfo, err := os.Stat(logDir)
 	if err != nil {
-		log.Printf("Error copying log files: %v\n", err)
+		fmt.Printf("Error copying log files: %v\n", err)
 	} else if fileInfo.IsDir() {
 		fmt.Println("Copying Calico logs")
 		err = shutil.CopyTree(logDir, tmpLogDir, nil)
 		if err != nil {
-			log.Fatalf("Error copying log files: %v\n", err)
+			fmt.Printf("Error copying log files: %v\n", err)
 		}
 	} else {
 		fmt.Printf("No logs found in %s; skipping log copying", logDir)
@@ -132,7 +133,7 @@ func runDiags(logDir string) {
 	// some header metadata longer than a certain length (Ref: https://github.com/golang/go/issues/12436)
 	err = exec.Command("tar", "-zcvf", tarFile, "diagnostics").Run()
 	if err != nil {
-		log.Printf("Error compressing the diagnostics: %v\n", err)
+		fmt.Printf("Error compressing the diagnostics: %v\n", err)
 	}
 
 	tarFilePath := filepath.Join(tmpDir, tarFile)
@@ -154,23 +155,23 @@ func writeDiags(cmds diagCmd, dir string) {
 		fmt.Println(cmds.info)
 	}
 
-	// This is for the commands we want to run but don't want to save the output
-	// or for commands that don't produce any output to stdout
-	if cmds.filename == "" {
-		return
-	}
-
 	parts := strings.Fields(cmds.cmd)
 
 	command := exec.Command(parts[0], parts[1:]...)
 
 	content, err := command.Output()
 	if err != nil {
-		log.Println(err)
+		fmt.Println(err)
+	}
+
+	// This is for the commands we want to run but don't want to save the output
+	// or for commands that don't produce any output to stdout
+	if cmds.filename == "" {
+		return
 	}
 
 	fp := filepath.Join(dir, cmds.filename)
 	if err := ioutil.WriteFile(fp, content, 0666); err != nil {
-		log.Fatal(err)
+		log.Errorf("Error writing diags to file: %s\n", err)
 	}
 }

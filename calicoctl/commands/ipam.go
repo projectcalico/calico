@@ -25,7 +25,7 @@ import (
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
-func IPAM(args []string) error {
+func IPAM(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam <command> [<args>...]
 
@@ -41,10 +41,11 @@ Description:
   See 'calicoctl ipam <command> --help' to read about a specific subcommand.`
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
-		return err
+		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
+		os.Exit(1)
 	}
 	if arguments["<command>"] == nil {
-		return nil
+		return
 	}
 
 	command := arguments["<command>"].(string)
@@ -52,17 +53,10 @@ Description:
 
 	switch command {
 	case "release":
-		err = ipam.Release(args)
+		ipam.Release(args)
 	case "show":
-		err = ipam.Show(args)
+		ipam.Show(args)
 	default:
 		fmt.Println(doc)
 	}
-
-	if err != nil {
-		fmt.Printf("Error executing command. Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
-	}
-
-	return nil
 }
