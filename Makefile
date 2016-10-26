@@ -151,7 +151,9 @@ deb: trusty-deb xenial-deb
 .PHONY: trusty-deb
 trusty-deb: dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb
 
-dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/calico-felix debian/*
+dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/calico-iptables-plugin \
+                                                          dist/calico-felix/calico-felix \
+                                                          debian/*
 	$(MAKE) trusty-build-image
 	$(DOCKER_RUN) -e DEB_VERSION=$(DEB_VERSION_TRUSTY) \
 	              calico-trusty-build debian/build-debs
@@ -159,7 +161,9 @@ dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/cali
 .PHONY: xenial-deb
 xenial-deb: dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb
 
-dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb: dist/calico-felix/calico-felix debian/*
+dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb: dist/calico-felix/calico-iptables-plugin \
+                                                          dist/calico-felix/calico-felix \
+                                                          debian/*
 	$(MAKE) xenial-build-image
 	$(DOCKER_RUN) -e DEB_VERSION=$(DEB_VERSION_XENIAL) \
 	              calico-xenial-build debian/build-debs
@@ -250,7 +254,7 @@ pyinstaller: $(BUNDLE_FILENAME)
 $(BUNDLE_FILENAME): dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
 	tar -czf $(BUNDLE_FILENAME) -C dist calico-felix
 
-dist/calico-felix/calico-iptables-plugin: $(PY_FILES) docker-build-images/pyi/*
+dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt docker-build-images/pyi/*
 	# Rebuild the docker container with the latest code.
 	docker build -t calico-pyi-build -f docker-build-images/pyi/Dockerfile .
 
