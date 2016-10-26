@@ -1,3 +1,4 @@
+cffi>=0.8.2
 gevent
 greenlet
 netaddr
