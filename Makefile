@@ -327,7 +327,14 @@ ut: python-ut go-ut
 .PHONY: python-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
 	$(MAKE) python-build-image
-	$(DOCKER_RUN_RM) -w /code/python calico/build-felix-python ./run-unit-test.sh
+	-docker rm -f felix-ut
+	docker run --name felix-ut \
+	           -v $${PWD}:/code \
+	           -w /code/python \
+	           -tid calico/build-felix-python sh
+	docker exec felix-ut sh -c 'pip install -e .'
+	docker exec --user $(MY_UID):$(MY_GID) felix-ut ./run-unit-test.sh
+	docker rm -f felix-ut
 
 .PHONY: go-ut
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)

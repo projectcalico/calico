@@ -20,10 +20,26 @@
 # script as './run-unit-test.sh -r'.
 set -e
 
+if [ -n "$VIRTUAL_ENV" ]; then
+  echo "run-unit-test.sh cannot be run from within a virtualenv"
+  exit 1
+fi
+
+# Set up the tox venv so that we can use its version of coverage.  This
+# avoids errors if the system coverage binary is not present or is of a
+# different version.
+tox --notest "$@"
+
+source .tox/py27/bin/activate
 coverage erase
-./tox-cover.sh thread calico.test
-./tox-cover.sh gevent calico.felix
-coverage report -m
+deactivate
+
+tox "$@"
+
+# Make sure we run the following coverage html command with the recent
+# coverage.
+source .tox/py27/bin/activate
 coverage html
 coverage xml
 diff-cover coverage.xml --compare-branch=origin/master
+deactivate
