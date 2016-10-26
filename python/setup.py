@@ -19,53 +19,23 @@ import inspect
 import os
 import os.path
 import setuptools
-import sys
 
-PY26_DEPENDENCIES = ['argparse']
 
 def collect_requirements():
-    def filter_requirements(filters, file):
-        for reqfilter in filters:
-            if reqfilter in file:
-                return True
-
-        return False
-
-    reqs = set()
-
     # This monstrosity is the only way to definitely get the location of
     # setup.py regardless of how you execute it. It's tempting to use __file__
     # but that only works if setup.py is executed directly, otherwise it all
     # goes terribly wrong.
-    directory =  os.path.dirname(
+    directory = os.path.dirname(
         os.path.abspath(inspect.getfile(inspect.currentframe()))
     )
-
-    files = os.listdir(directory)
-    unfiltered_reqs = (f for f in files if f.endswith('requirements.txt'))
-
-    # If the environment variable $CALICODEPS is set, only the corresponding
-    # dependencies are installed.
-    deps = os.environ.get('CALICODEPS')
-    if deps:
-        filters = map(lambda s: s.lower().strip(), deps.split(','))
-        requirements_files = (
-            f for f in unfiltered_reqs if filter_requirements(filters, f)
-        )
-    else:
-        requirements_files = unfiltered_reqs
-
-    for reqfile in requirements_files:
-        with open(reqfile, 'r') as f:
-            for line in f:
-                line = line.split('#', 1)[0].strip()
-                if line:
-                    reqs.add(line)
-
-    # If we're running on Python 2.6, add other necessary dependencies. These
-    # are added unconditionally.
-    if sys.version_info < (2, 7):
-        reqs.add(*PY26_DEPENDENCIES)
+    reqfile = os.path.join(directory, "requirements.txt")
+    reqs = set()
+    with open(reqfile, 'r') as f:
+        for line in f:
+            line = line.split('#', 1)[0].strip()
+            if line:
+                reqs.add(line)
 
     return reqs
 
