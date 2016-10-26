@@ -550,6 +550,14 @@ class DatastoreWriter(Actor):
         """
         interval = self._config.REPORTING_INTERVAL_SECS
         _log.info("Reporting Felix status at interval: %s", interval)
+
+        # Do a short initial sleep before we report in.  This ensures that
+        # we're stably up before we check in.
+        jitter = random.random() * 0.1 * interval
+        sleep_time = interval/2.0 + jitter
+        _log.info("Delay before initial status report: %.1f", sleep_time)
+        gevent.sleep(sleep_time)
+
         while True:
             self.update_felix_status(async=True)
             # Jitter by 10% of interval.
