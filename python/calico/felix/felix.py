@@ -110,7 +110,7 @@ def _main_greenlet():
                   "actors...")
 
         if config.PROM_METRICS_ENABLED:
-            httpd = HTTPServer(("0.0.0.0", config.PROM_METRICS_PORT),
+            httpd = HTTPServer(("0.0.0.0", config.PROM_METRICS_DRIVER_PORT),
                                MetricsHandler)
             stats_server = gevent.Greenlet(httpd.serve_forever)
             stats_server.start()

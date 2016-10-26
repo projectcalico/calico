@@ -33,7 +33,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -261,9 +263,25 @@ configRetry:
 		Config: configParams.RawValues(),
 	}
 
+	if configParams.PrometheusMetricsEnabled {
+		log.Info("Prometheus metrics enabled.  Starting server.")
+		go servePrometheusMetrics(configParams.PrometheusMetricsPort)
+	}
+
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, cmd, stopSignalChans)
+}
+
+func servePrometheusMetrics(port int) {
+	for {
+		log.WithField("port", port).Info("Starting prometheus metrics endpoint")
+		http.Handle("/metrics", promhttp.Handler())
+		err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+		log.WithError(err).Error(
+			"Prometheus metrics endpoint failed, trying to restart it...")
+		time.Sleep(1)
+	}
 }
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {

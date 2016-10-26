@@ -288,10 +288,7 @@ class Config(object):
         self.add_parameter("PrometheusMetricsEnabled",
                            "Whether to enable prometheus metrics.",
                            False, value_is_bool=True)
-        self.add_parameter("PrometheusMetricsPort",
-                           "Port on which to export Prometheus metrics.",
-                           9091, value_is_int=True)
-        self.add_parameter("EtcdDriverPrometheusMetricsPort",
+        self.add_parameter("DataplaneDriverPrometheusMetricsPort",
                            "Port on which to export Prometheus metrics from "
                            "the etcd driver process.",
                            9092, value_is_int=True)
@@ -399,10 +396,8 @@ class Config(object):
             self.parameters["IptablesMarkMask"].value
         self.PROM_METRICS_ENABLED = \
             self.parameters["PrometheusMetricsEnabled"].value
-        self.PROM_METRICS_PORT = \
-            self.parameters["PrometheusMetricsPort"].value
         self.PROM_METRICS_DRIVER_PORT = \
-            self.parameters["EtcdDriverPrometheusMetricsPort"].value
+            self.parameters["DataplaneDriverPrometheusMetricsPort"].value
         self.FAILSAFE_INBOUND_PORTS = \
             self.parameters["FailsafeInboundHostPorts"].value
         self.FAILSAFE_OUTBOUND_PORTS = \
@@ -699,12 +694,8 @@ class Config(object):
                         "defaulting to 0xff000000")
             self.IPTABLES_MARK_MASK = 0xff000000
 
-        if not 0 < self.PROM_METRICS_PORT < 65536:
-            log.warning("Prometheus port out-of-range, defaulting to 9091")
-            self.PROM_METRICS_PORT = 9091
-
         if not 0 < self.PROM_METRICS_DRIVER_PORT < 65536:
-            log.warning("Etcd driver Prometheus port out-of-range, "
+            log.warning("Prometheus port out-of-range, "
                         "defaulting to 9092")
             self.PROM_METRICS_DRIVER_PORT = 9092
 

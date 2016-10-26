@@ -136,9 +136,9 @@ type Config struct {
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xff000000;non-zero,die-on-fail"`
 
-	PrometheusMetricsEnabled        bool `config:"bool;false"`
-	PrometheusMetricsPort           int  `config:"int(0,65535);9091"`
-	EtcdDriverPrometheusMetricsPort int  `config:"int(0,65535);9092"`
+	PrometheusMetricsEnabled             bool `config:"bool;false"`
+	PrometheusMetricsPort                int  `config:"int(0,65535);9091"`
+	DataplaneDriverPrometheusMetricsPort int  `config:"int(0,65535);9092"`
 
 	FailsafeInboundHostPorts  []int `config:"port-list;22;die-on-fail"`
 	FailsafeOutboundHostPorts []int `config:"port-list;2379,2380,4001,7001;die-on-fail"`
