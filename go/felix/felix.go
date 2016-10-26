@@ -16,6 +16,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
@@ -39,7 +40,6 @@ import (
 	"reflect"
 	"syscall"
 	"time"
-	"errors"
 )
 
 const usage = `Felix, the Calico per-host daemon.

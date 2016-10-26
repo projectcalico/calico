@@ -117,9 +117,9 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 		esr.reportingDelay)
 	datamodelInSync := false
 	resyncRequested := false
-	updatesAllowed := false
 
 	for {
+		updatesAllowed := false
 		log.Debug("About to wait on channels")
 		select {
 		case <-esr.stop:
@@ -131,13 +131,10 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 			log.Debug("Endpoint status resync tick: scheduling cleanup")
 			resyncRequested = true
 		case <-esr.rateLimitTickerC:
-			if !updatesAllowed {
-				log.Debug("Update tick: uncorking updates.")
-				updatesAllowed = true
-			}
-		case <-esr.inSync:
+			updatesAllowed = true
+		case inSync := <-esr.inSync:
 			log.Debug("Datamodel in sync, enabling status resync")
-			datamodelInSync = true
+			datamodelInSync = datamodelInSync || inSync
 		case msg := <-esr.endpointUpdates:
 			var statID model.Key
 			var status string
@@ -222,8 +219,6 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 					log.WithField("statID", statID).Debug("Write successful")
 					esr.activeDirtyIDs.Discard(statID)
 				}
-				// Cork updates until the next timer pop.
-				updatesAllowed = false
 			}
 			if esr.queuedDirtyIDs.Len() > 0 {
 				// Now copy the queued statuses to the main dirty set.

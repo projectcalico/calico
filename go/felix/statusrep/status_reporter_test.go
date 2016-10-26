@@ -253,23 +253,26 @@ var _ = Describe("Status", func() {
 				}))
 			}, 1)
 			It("should clean up one endpoint per tick", func() {
-				// Enable updates.
-				rateLimitTickerChan <- time.Now()
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
-				By("deleting first endpoint immediately after resync")
-				Eventually(datastore.numKVs).Should(Equal(3))
-				By("deleting second endpoint after rate limit timer tick")
+				// Then send a no-op event (so that we block until
+				// the above event finishes).  No cleanup should happen yet.
+				inSyncChan <- true
+				Expect(datastore.numKVs()).To(Equal(4))
+				// Rate limit tick should trigger cleanup.
 				rateLimitTickerChan <- time.Now()
-				Eventually(datastore.numKVs).Should(Equal(2))
+				inSyncChan <- true
+				Expect(datastore.numKVs()).To(Equal(3))
+				rateLimitTickerChan <- time.Now()
+				inSyncChan <- true
+				Expect(datastore.numKVs()).To(Equal(2))
 			}, 1)
 
 			It("with concurrent datastore changes, it should handle key not found", func() {
-				// Enable updates.
-				rateLimitTickerChan <- time.Now()
 				// Kick off the resync.
 				resyncTickerChan <- time.Now()
-				By("deleting first endpoint immediately after resync")
+				// Trigger first deletion.
+				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.numKVs).Should(Equal(3))
 				Expect(datastore.NumDeletes()).To(Equal(1))
 				// Now clear the datastore so the next delete will fail.
@@ -316,12 +319,12 @@ var _ = Describe("Status", func() {
 					}
 				})
 				It("should retry the deletes", func() {
-					// Enable updates.
-					rateLimitTickerChan <- time.Now()
 					// Kick off the first resync.
-					resyncTickerChan <- time.Now()    // Triggers first delete.
+					resyncTickerChan <- time.Now()
+					rateLimitTickerChan <- time.Now() // Triggers first delete.
 					rateLimitTickerChan <- time.Now() // Triggers second.
-					Eventually(datastore.numKVs).Should(Equal(4),
+					inSyncChan <- false               // Wait for next loop
+					Expect(datastore.numKVs()).To(Equal(4),
 						"datastore should still contain all original keys")
 					// Send in timer ticks to finish retries.
 					rateLimitTickerChan <- time.Now()
