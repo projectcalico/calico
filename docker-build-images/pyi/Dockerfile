@@ -1,3 +1,4 @@
+# SL6.5 has the oldest version of glibc that we support.  Build against that.
 FROM ringo/scientific:6.5
 MAINTAINER Shaun Crampton shaun@tigera.io
 
@@ -16,14 +17,12 @@ RUN ./get-prereqs.sh && \
 
 # Install Calico pre-reqs.
 ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN pip install pyinstaller
 ADD python/requirements.txt python/requirements.txt
-RUN pip install -U -r python/requirements.txt; \
-    pip install pyinstaller
+RUN pip install -U -r python/requirements.txt
 
-# Install Calico into site-packages.  It's easier to package up the egg-info
-# etc if we use the installed version.  Doing the install here rather than
-# in the run-pyinstaller script means we don't have to run the latter as root
-# (but it does mean that the build script needs to rebuild the container
-# image each time).
-COPY . /code
-RUN cd /code/python && pip install -v .
+# Install test requirements so we can run the UTs in this container too.
+ADD python/test_requirements.txt python/test_requirements.txt
+RUN pip install -r python/test_requirements.txt
+RUN mkdir /code
+WORKDIR /code

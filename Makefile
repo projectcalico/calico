@@ -141,8 +141,9 @@ env:
 	    pip install -e ./python
 
 # Pre-configured docker run command that runs as this user with the repo
-# cehcked out to /code.
-DOCKER_RUN:=docker run --rm --user $(MY_UID):$(MY_GID) -v $${PWD}:/code
+# checked out to /code, uses the --rm flag to avoid leaving the container
+# around afterwards.
+DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v $${PWD}:/code
 
 # Build all the debs.
 .PHONY: deb
@@ -155,7 +156,7 @@ dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/cali
                                                           dist/calico-felix/calico-felix \
                                                           debian/*
 	$(MAKE) trusty-build-image
-	$(DOCKER_RUN) -e DEB_VERSION=$(DEB_VERSION_TRUSTY) \
+	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_TRUSTY) \
 	              calico-trusty-build debian/build-debs
 
 .PHONY: xenial-deb
@@ -165,14 +166,14 @@ dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb: dist/calico-felix/cali
                                                           dist/calico-felix/calico-felix \
                                                           debian/*
 	$(MAKE) xenial-build-image
-	$(DOCKER_RUN) -e DEB_VERSION=$(DEB_VERSION_XENIAL) \
+	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_XENIAL) \
 	              calico-xenial-build debian/build-debs
 
 # Build RPMs.
 .PHONY: rpm
 rpm: dist/calico-felix/calico-felix
 	$(MAKE) centos7-build-image
-	$(DOCKER_RUN) -e RPM_VERSION=$(RPM_VERSION) \
+	$(DOCKER_RUN_RM) -e RPM_VERSION=$(RPM_VERSION) \
 	              calico-centos7-build rpm/build-rpms
 
 .PHONY: protobuf
@@ -180,14 +181,14 @@ protobuf: python/calico/felix/felixbackend_pb2.py go/felix/proto/felixbackend.pb
 
 # Generate the protobuf bindings for go.
 go/felix/proto/felixbackend.pb.go: go/felix/proto/felixbackend.proto
-	$(DOCKER_RUN) -v $${PWD}/go/felix/proto:/src:rw \
+	$(DOCKER_RUN_RM) -v $${PWD}/go/felix/proto:/src:rw \
 	              calico/protoc \
 	              --gogofaster_out=. \
 	              felixbackend.proto
 
 # Generate the protobuf bindings for Python.
 python/calico/felix/felixbackend_pb2.py: go/felix/proto/felixbackend.proto
-	$(DOCKER_RUN) -v $${PWD}/go/felix/proto:/src:rw \
+	$(DOCKER_RUN_RM) -v $${PWD}/go/felix/proto:/src:rw \
 	              -v $${PWD}/python/calico/felix/:/dst:rw \
 	              calico/protoc \
 	              --python_out=/dst/ \
@@ -211,7 +212,7 @@ go/vendor go/vendor/.up-to-date: go/glide.lock
 	# freshness checking for us.
 	$(MAKE) golang-build-image
 	mkdir -p $$HOME/.glide
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
 	    -v $$HOME/.glide:/.glide:rw \
@@ -241,7 +242,7 @@ bin/calico-felix: $(GO_FILES) \
 	# freshness checking for us.
 	$(MAKE) golang-build-image
 	mkdir -p bin
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_RM) \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
 	    calico-golang-build \
 	    go build -o $@ $(LDFLAGS) "./go/felix/felix.go"
@@ -255,18 +256,22 @@ $(BUNDLE_FILENAME): dist/calico-felix/calico-iptables-plugin dist/calico-felix/c
 	tar -czf $(BUNDLE_FILENAME) -C dist calico-felix
 
 dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt docker-build-images/pyi/*
-	# Rebuild the docker container with the latest code.
+	# Remove any pre-existing build container.
+	docker rm -f felix-pyi-build || true
+	# Rebuild the container image.  Docker will do its own newness checks.
 	docker build -t calico-pyi-build -f docker-build-images/pyi/Dockerfile .
-
 	# Output version information
 	echo "Calico version: $(PY_VERSION) \n" \
 	     "Git revision: $(GIT_COMMIT)\n" > version.txt
 
-	# Run pyinstaller to generate the distribution directory.
-	echo "Running pyinstaller"
-	$(DOCKER_RUN) \
-	       calico-pyi-build \
-	       /code/docker-build-images/pyi/run-pyinstaller.sh
+	# Create new build container and start it running in the background.
+	docker run -v $${PWD}:/code --name felix-pyi-build -tid calico-pyi-build sh
+	# As root, install our package.  This makes it easier to run PyInstaller.
+	docker exec felix-pyi-build pip install -v ./python/
+	# As the current user, build the PyInstaller bundle.
+	docker exec -u $(MY_UID):$(MY_GID) felix-pyi-build /code/docker-build-images/pyi/run-pyinstaller.sh
+	# Finally, shut down the container.
+	docker rm -f felix-pyi-build
 
 	# Check that the build succeeded and update the mtimes on the target file
 	# since pyinstaller doesn't seem to do so.
@@ -302,7 +307,7 @@ python-ut: python/calico/felix/felixbackend_pb2.py
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(MAKE) golang-build-image
-	$(DOCKER_RUN) \
+	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
 	    -v $$HOME/.glide:/.glide:rw \

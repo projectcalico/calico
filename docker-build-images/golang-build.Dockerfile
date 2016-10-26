@@ -1,6 +1,6 @@
-# Centos 6.6 has the oldest version of glibc that we support.  Build against
+# SL6.5 has the oldest version of glibc that we support.  Build against
 # that.
-FROM centos:6.6
+FROM ringo/scientific:6.5
 
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
