@@ -46,11 +46,19 @@ r="$r|(?:tempest\.api\.compute\.test_quotas*)"
 r="$r|(?:tempest\.api\.compute\.test_versions*)"
 r="$r|(?:tempest\.api\.compute\.volumes*)"
 
+# exclude the other Tempest scenario tests that don't work with Calico yet
+r="$r|(?:tempest\.scenario\.test_network_v6\.TestGettingAddress.*)"
+r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_network_basic_ops.*)"
+r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_router_rescheduling.*)"
+r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_update_router_admin_state.*)"
+r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_multiple_security_groups.*)"
+r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_port_security_disable_security_group.*)"
+
 # End list of exclusions.
 r="$r)"
 
-# only run test_server_basic_ops
-r="$r(tempest\.scenario\.test_server_basic_ops).*$"
+# Run the remaining Tempest scenario tests.
+r="$r(tempest\.scenario).*$"
 
 if [ -z $DEVSTACK_GATE_GRENADE ]; then
     # Do not run the tempest test cases on grenade jobs. By not setting this,
@@ -59,3 +67,6 @@ if [ -z $DEVSTACK_GATE_GRENADE ]; then
     # tempest tests.
     export DEVSTACK_GATE_TEMPEST_REGEX="$r"
 fi
+
+# Don't run Tempest tests in parallel.
+export TEMPEST_CONCURRENCY=1

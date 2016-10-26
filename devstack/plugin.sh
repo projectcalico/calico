@@ -142,18 +142,24 @@ EOF
 		    # have been started.
 		    echo Calico plugin: extra
 
-		    # Run Felix and tail its log file.
+		    # Run Felix, with logging to screen (stdout).
+		    sudo mkdir /etc/calico || true
+		    sudo bash -c "cat > /etc/calico/felix.cfg" <<EOF
+[global]
+LogSeverityScreen = debug
+EOF
 		    run_process calico-felix "sudo /usr/local/bin/calico-felix"
-		    tail_log calico-log "/var/log/calico/felix.log"
 
 		    # Run script to automatically generate and
 		    # maintain BIRD config for the cluster.
-		    run_process calico-bird "HOST_IP=$HOST_IP /opt/stack/networking-calico/devstack/auto-bird-conf.sh"
+		    run_process calico-bird \
+                      "sudo ${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP} ${DEST}"
 
 		    # Run the Calico DHCP agent.
 		    sudo mkdir /var/log/neutron || true
 		    sudo chown `whoami` /var/log/neutron
-		    run_process calico-dhcp "/usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
+		    run_process calico-dhcp \
+		      "/usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
 
 		    ;;
 

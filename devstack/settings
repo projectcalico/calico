@@ -60,3 +60,7 @@ Q_AGENT=calico-felix
 
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
+
+# Test Felix floating IP fix.
+FELIX_REPO=https://github.com/neiljerram/felix.git
+FELIX_BRANCH=fip-postrouting-dnat
