@@ -32,10 +32,10 @@ func Release(args []string) {
   calicoctl ipam release --ip=<IP> [--config=<CONFIG>]
 
 Options:
-  -h --help                 Show this screen.
-     --ip=<IP>              IP address
-  -c --config=<CONFIG>      Filename containing connection configuration in YAML or JSON format.
-                            [default: /etc/calico/calicoctl.cfg]
+  -h --help             Show this screen.
+     --ip=<IP>          IP address to release.
+  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format. [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam release command releases an IP address from the Calico IP Address
@@ -44,8 +44,8 @@ Description:
 
   Note that this does not remove the IP from any existing endpoints that may be
   using it, so only use this command to clean up addresses from endpoints that
-  were not cleanly removed from Calico.`
-
+  were not cleanly removed from Calico.
+`
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
@@ -60,6 +60,7 @@ Description:
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	ipamClient := client.IPAM()

@@ -39,28 +39,32 @@ Examples:
 
 Options:
   -h --help                  Show this screen.
-  -f --filename=<FILENAME>   Filename to use to replace the resource.  If set to "-" loads from stdin.
-  -c --config=<CONFIG>       Filename containing connection configuration in YAML or JSON format.
+  -f --filename=<FILENAME>   Filename to use to replace the resource.  If set
+                             to "-" loads from stdin.
+  -c --config=<CONFIG>       Filename containing connection configuration in
+                             YAML or JSON format.
                              [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  The replace command is used to replace a set of resources by filename or stdin.  JSON and
-  YAML formats are accepted.
+  The replace command is used to replace a set of resources by filename or
+  stdin.  JSON and YAML formats are accepted.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and
-  profile.
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, pool,
+  policy, and profile.
 
-  Attempting to replace a resource that does not exist is treated as a terminating error.
+  Attempting to replace a resource that does not exist is treated as a
+  terminating error.
 
-  The output of the command indicates how many resources were successfully replaced, and the error
-  reason if an error occurred.
+  The output of the command indicates how many resources were successfully
+  eplaced, and the error reason if an error occurred.
 
-  The resources are replaced in the order they are specified.  In the event of a failure
-  replacing a specific resource it is possible to work out which resource failed based on the
-  number of resources successfully replaced.
+  The resources are replaced in the order they are specified.  In the event of
+  a failure replacing a specific resource it is possible to work out which
+  resource failed based on the number of resources successfully replaced.
 
-  When replacing a resource, the complete resource spec must be provided, it is not sufficient
-  to supply only the fields that are being updated.`
+  When replacing a resource, the complete resource spec must be provided, it is
+  not sufficient to supply only the fields that are being updated.
+`
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))

@@ -83,6 +83,8 @@ Description:
 			commands.Node(args)
 		case "ipam":
 			commands.IPAM(args)
+		case "config":
+			commands.Config(args)
 		default:
 			fmt.Println(doc)
 		}

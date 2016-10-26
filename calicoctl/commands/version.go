@@ -37,7 +37,8 @@ Options:
   -h --help   Show this screen.
 
 Description:
-  Display the version of calicoctl.`
+  Display the version of calicoctl.
+`
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))

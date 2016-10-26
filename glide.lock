@@ -1,8 +1,8 @@
 hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-10-20T15:42:13.536406931+01:00
+updated: 2016-11-01T17:41:15.217791692Z
 imports:
 - name: github.com/coreos/etcd
-  version: 6b1b13eabb6b6b6e07867c496451696c64a8117d
+  version: db83736b7b222ffe55dfacbcfea13395019a71a9
   subpackages:
   - client
   - pkg/fileutil
@@ -37,7 +37,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
 - name: github.com/projectcalico/libcalico-go
-  version: 2fb2aca8785016c3440491e7452adb0309303c11
+  version: 72934becad2115a5fa2178c9a46564358b4554e0
   subpackages:
   - lib
   - lib/api
@@ -69,11 +69,11 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/net
-  version: daba796358cd2742b75aae05761f1b898c9f6a5c
+  version: 541150ac4f433e755f5663eba5d888c2fa347343
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: 002cbb5f952456d0c50e0d2aff17ea5eca716979
+  version: c200b10b5d5e122be351b67af224adc6128af5bf
   subpackages:
   - unix
 - name: gopkg.in/go-playground/validator.v8
@@ -86,7 +86,7 @@ imports:
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 testImports:
 - name: github.com/onsi/ginkgo
-  version: 39549e585f5005ce588e6217d4538a4c99a472c9
+  version: a8ccd817611666211fdf6e6a752174a0db8374a8
   subpackages:
   - config
   - internal/codelocation
@@ -105,7 +105,7 @@ testImports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  version: ff4bc6b6f9f5affa66635cd04d31d2a7ee21ffd6
   subpackages:
   - format
   - internal/assertion

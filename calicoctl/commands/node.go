@@ -30,19 +30,20 @@ func Node(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl node <command> [<args>...]
 
-    status         View the current status of a Calico node.
-    diags          Gather a diagnostics bundle for a Calico node.
-    checksystem    Verify the compute host is able to run a Calico node instance.
+    status       View the current status of a Calico node.
+    diags        Gather a diagnostics bundle for a Calico node.
+    checksystem  Verify the compute host is able to run a Calico node instance.
 
 Options:
-  -h --help               Show this screen.
+  -h --help      Show this screen.
 
 Description:
   Node specific commands for calicoctl.  These commands must be run directly on
   the compute host running the Calico node instance.
   
-  See 'calicoctl node <command> --help' to read about a specific subcommand.`
-	arguments, err := docopt.Parse(doc, args, true, "", true, false)
+  See 'calicoctl node <command> --help' to read about a specific subcommand.
+`
+	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)

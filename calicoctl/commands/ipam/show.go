@@ -32,16 +32,16 @@ func Show(args []string) {
   calicoctl ipam show --ip=<IP> [--config=<CONFIG>]
 
 Options:
-  -h --help                 Show this screen.
-     --ip=<IP>              IP address
-  -c --config=<CONFIG>      Filename containing connection configuration in YAML or JSON format.
-                            [default: /etc/calico/calicoctl.cfg]
+  -h --help             Show this screen.
+     --ip=<IP>          IP address to show.
+  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format. [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  The ipam show command prints information about a given IP address, such as special
-  attributes defined for the IP or whether the IP has been reserved by a user of
-  the Calico IP Address Manager.`
-
+  The ipam show command prints information about a given IP address, such as
+  special attributes defined for the IP or whether the IP has been reserved by
+  a user of the Calico IP Address Manager.
+`
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
@@ -56,6 +56,7 @@ Description:
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	ipamClient := client.IPAM()

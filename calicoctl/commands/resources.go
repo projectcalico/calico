@@ -100,6 +100,12 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	orchestrator := argStringOrBlank(args, "--orchestrator")
 	resScope := argStringOrBlank(args, "--scope")
 	switch strings.ToLower(kind) {
+	case "nodes":
+		fallthrough
+	case "node":
+		p := api.NewNode()
+		p.Metadata.Name = name
+		return *p, nil
 	case "hostendpoints":
 		fallthrough
 	case "hostendpoint":

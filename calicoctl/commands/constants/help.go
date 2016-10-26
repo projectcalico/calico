@@ -15,7 +15,7 @@
 package constants
 
 const (
-	DatastoreIntro = `Set the Calico datastore access information in the environment variables
+	DatastoreIntro = `Set the Calico datastore access information in the environment variables or
 or supply details in a config file.
 
 `
