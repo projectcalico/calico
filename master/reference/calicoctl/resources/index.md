@@ -29,6 +29,7 @@ spec:
 ```
 
 ### Definitions
+
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
 | apiVersion     | Indicates the version of the API that the data corresponds to.                           | Currently only `v1` is accepted. | string |

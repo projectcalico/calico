@@ -26,6 +26,7 @@ spec:
 
 ### Definitions
 #### Metadata
+
 | name           | description                                                | requirements                             | schema |
 |----------------|------------------------------------------------------------|------------------------------------------|--------|
 | name           | The name of this endpoint resource.                        | Required for `create`/`update`/`delete`. | string |
@@ -35,6 +36,7 @@ spec:
 | labels         | A set of labels to apply to this endpoint.                 |      | Dictionary with key and values as strings. |
 
 #### Spec
+
 | name          | description                                             | requirements                | schema          |
 |---------------|---------------------------------------------------------|-----------------------------|-----------------|
 | ipNetworks    | The CIDRS assigned to the interface. | | List of strings |
