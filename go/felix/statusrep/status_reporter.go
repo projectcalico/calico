@@ -60,6 +60,8 @@ func NewEndpointStatusReporter(hostname string,
 		resyncSchedulingTicker.C,
 		updateRateLimitTicker,
 		updateRateLimitTicker.C,
+		reportingDelay,
+		resyncInterval,
 	)
 }
 
@@ -72,7 +74,9 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 	resyncTicker stoppable,
 	resyncTickerChan <-chan time.Time,
 	rateLimitTicker stoppable,
-	rateLimitTickerChan <-chan time.Time) *EndpointStatusReporter {
+	rateLimitTickerChan <-chan time.Time,
+	reportingDelay time.Duration,
+	resyncInterval time.Duration) *EndpointStatusReporter {
 	return &EndpointStatusReporter{
 		hostname:           hostname,
 		endpointUpdates:    endpointUpdates,
@@ -86,6 +90,8 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		resyncTickerC:      resyncTickerChan,
 		rateLimitTicker:    rateLimitTicker,
 		rateLimitTickerC:   rateLimitTickerChan,
+		reportingDelay:     reportingDelay,
+		resyncInterval:     resyncInterval,
 	}
 }
 
@@ -120,7 +126,6 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 
 	for {
 		updatesAllowed := false
-		log.Debug("About to wait on channels")
 		select {
 		case <-esr.stop:
 			log.Info("Stopping endpoint status reporter")

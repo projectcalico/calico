@@ -139,6 +139,8 @@ var _ = Describe("Status", func() {
 			resyncTickerChan,
 			rateLimitTicker,
 			rateLimitTickerChan,
+			1*time.Second,
+			2*time.Second,
 		)
 		esr.Start()
 		log.Info("Started EndpointStatusReporter")

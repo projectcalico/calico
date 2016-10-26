@@ -241,8 +241,6 @@ configRetry:
 		delay := configParams.EndpointReportingDelay()
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
-		stopChan := make(chan bool, 1)
-		stopSignalChans = append(stopSignalChans, stopChan)
 		felixConn.statusReporter = statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
 			felixConn.StatusUpdatesFromDataplane,
@@ -252,10 +250,6 @@ configRetry:
 			delay*180,
 		)
 		felixConn.statusReporter.Start()
-		go func() {
-			<-stopChan
-			felixConn.statusReporter.Stop()
-		}()
 	}
 
 	// Start communicating with the dataplane driver.
