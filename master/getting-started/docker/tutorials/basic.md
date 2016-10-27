@@ -52,11 +52,11 @@ driver in a separate container.
 
 On calico-01
 
-    sudo calicoctl node --libnetwork
+    sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> calicoctl node --libnetwork
 
 On calico-02
 
-    sudo calicoctl node --libnetwork
+    sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> calicoctl node --libnetwork
 
 This will start a container on each host. Check they are running
 
