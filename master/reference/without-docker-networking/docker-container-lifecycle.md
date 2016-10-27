@@ -170,7 +170,7 @@ on the container endpoints.
 > containers with a single interface managed using calicoctl, we treat a
 > container and endpoint as the same thing.  For more complicated scenarios,
 > calicoctl provides commands for managing actual endpoints (see the
-> [`calicoctl endpoint` reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl/endpoint) for usage and
+> [`calicoctl endpoint` reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for usage and
 > examples).
 
 ### System Response
