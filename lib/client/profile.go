@@ -133,7 +133,11 @@ func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, er
 	ap.Metadata.Labels = bp.Labels
 	ap.Spec.IngressRules = rulesBackendToAPI(bp.Rules.InboundRules)
 	ap.Spec.EgressRules = rulesBackendToAPI(bp.Rules.OutboundRules)
-	ap.Spec.Tags = bp.Tags
+	if len(bp.Tags) == 0 {
+		ap.Spec.Tags = nil
+	} else {
+		ap.Spec.Tags = bp.Tags
+	}
 
 	return ap, nil
 }
