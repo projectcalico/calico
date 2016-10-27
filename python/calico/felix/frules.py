@@ -300,9 +300,9 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
                 (iface_match, CHAIN_PREROUTING),
                 async=False)
 
-    # Both IPV4 and IPV6 nat tables need felix-PREROUTING and
-    # felix-POSTROUTING, along with the dependent DNAT and SNAT tables
-    # required for NAT/floating IP support.
+    # Both IPV4 and IPV6 nat tables need felix-PREROUTING,
+    # felix-POSTROUTING and felix-OUTPUT, along with the dependent
+    # DNAT and SNAT tables required for NAT/floating IP support.
 
     prerouting_chain, prerouting_deps = (
         iptables_generator.nat_prerouting_chain(ip_version=ip_version)
@@ -310,18 +310,25 @@ def install_global_rules(config, filter_updater, nat_updater, ip_version,
     postrouting_chain, postrouting_deps = (
         iptables_generator.nat_postrouting_chain(ip_version=ip_version)
     )
+    output_chain, output_deps = (
+        iptables_generator.nat_output_chain(ip_version=ip_version)
+    )
     nat_updater.rewrite_chains({CHAIN_PREROUTING: prerouting_chain,
                                 CHAIN_POSTROUTING: postrouting_chain,
+                                CHAIN_OUTPUT: output_chain,
                                 CHAIN_FIP_DNAT: [],
                                 CHAIN_FIP_SNAT: []},
                                {CHAIN_PREROUTING: prerouting_deps,
-                                CHAIN_POSTROUTING: postrouting_deps},
+                                CHAIN_POSTROUTING: postrouting_deps,
+                                CHAIN_OUTPUT: output_deps},
                                async=False)
 
     nat_updater.ensure_rule_inserted(
         "PREROUTING --jump %s" % CHAIN_PREROUTING, async=False)
     nat_updater.ensure_rule_inserted(
         "POSTROUTING --jump %s" % CHAIN_POSTROUTING, async=False)
+    nat_updater.ensure_rule_inserted(
+        "OUTPUT --jump %s" % CHAIN_OUTPUT, async=False)
 
     # Now the filter table. This needs to have felix-FORWARD and felix-INPUT
     # chains, which we must create before adding any rules that send to them.
