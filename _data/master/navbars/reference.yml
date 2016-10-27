@@ -20,6 +20,8 @@ toc:
       path: /reference/calicoctl/commands/apply
     - title: create
       path: /reference/calicoctl/commands/create
+    - title: config
+      path: /reference/calicoctl/commands/config
     - title: delete
       path: /reference/calicoctl/commands/delete
     - title: get

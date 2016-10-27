@@ -44,10 +44,10 @@ Description:
 Details on the `calicoctl` commands are described in the documents linked below
 organized by top level command.
 
--  [calicoctl create](create.md)
--  [calicoctl replace](replace.md)
--  [calicoctl apply](apply.md)
--  [calicoctl delete](delete.md)
--  [calicoctl get](get.md)
--  [calicoctl config](config.md)
--  [calicoctl version](version.md)
+-  [calicoctl create]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/create)
+-  [calicoctl replace]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/replace)
+-  [calicoctl apply]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/apply)
+-  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/delete)
+-  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get)
+-  [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config)
+-  [calicoctl version]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/version)
