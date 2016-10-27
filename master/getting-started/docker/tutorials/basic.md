@@ -47,8 +47,7 @@ If you have everything set up properly you should have `calicoctl` in your
 ## 2. Starting Calico services
 
 Once you have your cluster up and running, start calico on all the nodes,
-specifying the `--libnetwork` option to start the Calico network and IPAM
-driver in a separate container.
+specifying the `--libnetwork` option to start libnetwork plugin in calico-node.
 
 On calico-01
 
@@ -65,9 +64,8 @@ This will start a container on each host. Check they are running
 You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
-    CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
-    eec9ebbfb486        calico/node-libnetwork:latest   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
-    ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+    CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
+    408bd2b9ba53        calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
 
 ## 3. Create the networks
 
