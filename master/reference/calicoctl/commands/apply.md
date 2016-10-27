@@ -4,7 +4,7 @@ title: calicoctl apply
 
 This sections describes the `calicoctl apply` command.
 
-Read the [calicoctl command line interface user reference](../calicoctl.md) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl apply' command
@@ -77,8 +77,8 @@ Successfully applied 2 'policy' resource(s)
 ```
 
 ## See also
--  [Resources](../resources) for details on all valid resources, including file format
+-  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
--  [Policy](../resources/policy.md) for details on the Calico selector-based policy model
--  [calicoctl configuration](../setup/config.md) for details on configuring `calicoctl` to access
+-  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
    the Calico datastore.

@@ -4,7 +4,7 @@ title: calicoctl node
 
 This section describes the `calicoctl node` commands.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node' commands
@@ -35,13 +35,13 @@ Description:
 Details on the `calicoctl node` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl node status](status.md)
--  [calicoctl node diags](diags.md)
--  [calicoctl node checksystem](checksystem.md)
+-  [calicoctl node status]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/status)
+-  [calicoctl node diags]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/diags)
+-  [calicoctl node checksystem]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/checksystem)
 
 ## See also
--  [Resources](../../resources/README.md) for details on all valid resources, including file format
+-  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
--  [Policy](../../resources/policy.md) for details on the Calico selector-based policy model
--  [calicoctl configuration](../../setup/config.md) for details on configuring `calicoctl` to access
+-  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
    the Calico datastore.

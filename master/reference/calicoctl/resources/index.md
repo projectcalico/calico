@@ -33,7 +33,7 @@ spec:
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
 | apiVersion     | Indicates the version of the API that the data corresponds to.                           | Currently only `v1` is accepted. | string |
-| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`](bgppeer.md), [`hostendpoint`](hostendpoint.md), [`policy`](policy.md), [`pool`](pool.md), [`profile`](profile.md), or [`workloadendpoint`](workloadendpoint.md) | string |
+| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer), [`hostendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint), [`policy`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy), [`pool`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/pool), [`profile`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile), or [`workloadendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) | string |
 | metadata | Contains sub-fields which are used identify the particular instance of the resource. | | YAML |
 | spec | contains the resource specification, i.e. the configuration for the resource. | | YAML |
 

@@ -64,7 +64,7 @@ spec:
 | order    | The order number which indicates the order that this policy is used. | | integer |
 | ingress  | The ingress rules belonging to this policy.                          | | List of [RuleSpecs](#rulespec) |
 | egress   | The egress rules belonging to this policy.                           | | List of [RuleSpecs](#rulespec)  |
-| selector | Selector expression.                                                 | See [selector expression documentation](http://docs.projectcalico.org/en/latest/etcd-data-model.html#tiered-security-policy) | string |
+| selector | Selector expression.                                                 | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 
 #### RuleSpec
 
@@ -91,9 +91,9 @@ spec:
 |-------------|--------------------------------------------|----------------|--------|
 | tag      | Match expression on tags.                   |  | string |
 | net    | Match on cidr. |  | string representation of cidr |
-| selector    | Selector expression. | See [selector expression documentation](http://docs.projectcalico.org/en/latest/etcd-data-model.html#tiered-security-policy) | string |
+| selector    | Selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | ports | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
 | "!tag" | Negative match on tag. |  | string |
 | "!net" | Negative match on cidr. | | string representation of cidr |
-| "!selector" | Negative match on selector expression. | See [selector expression documentation](http://docs.projectcalico.org/en/latest/etcd-data-model.html#tiered-security-policy) | string |
+| "!selector" | Negative match on selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | "!ports"      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
