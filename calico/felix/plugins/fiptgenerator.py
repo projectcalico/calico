@@ -181,6 +181,26 @@ class FelixIptablesGenerator(FelixPlugin):
 
         return chain, deps
 
+    def nat_output_chain(self, ip_version):
+        """
+        Generate the NAT felix-OUTPUT chain.
+
+        Returns a list of iptables fragments with which to program the
+        felix-OUTPUT chain which is unconditionally invoked from the
+        NAT OUTPUT chain.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = ["--append %s --jump %s" % (CHAIN_OUTPUT, CHAIN_FIP_DNAT)]
+        deps = set([CHAIN_FIP_DNAT])
+
+        return chain, deps
+
     def filter_input_chain(self, ip_version, hosts_set_name=None):
         """
         Generate the IPv4/IPv6 FILTER felix-INPUT chains.
