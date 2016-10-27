@@ -27,7 +27,7 @@ spec:
 
 | name     | description                 | requirements | schema  |
 |----------|-----------------------------|---------|---------|
-| ipip | Configuration for ipip tunneling for this pool.     | If not specified, ipip tunneling is disabled for this pool. | [IPIPConfiguration](#ipipconfiguration) |
+| ipip | Configuration for ipip tunneling for this pool.     | If not specified, ipip tunneling is disabled for this pool. | [IPIP Configuration](#ipip-configuration) |
 | nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | | boolean |
 | disabled | When set to true, Calico IPAM will not assign addresses from this pool. |     | boolean |
 

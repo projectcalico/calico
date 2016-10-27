@@ -4,7 +4,7 @@ title: calicoctl ipam
 
 This section describes the `calicoctl ipam` commands.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for a full list of calicoctl commands.
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam' commands
 
@@ -32,5 +32,5 @@ Description:
 Details on the `calicoctl ipam` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl ipam release](release.md)
--  [calicoctl ipam show](show.md)
+-  [calicoctl ipam release]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam/release)
+-  [calicoctl ipam show]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam/show)
