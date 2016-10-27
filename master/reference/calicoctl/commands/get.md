@@ -4,7 +4,7 @@ title: calicoctl get
 
 This sections describes the `calicoctl get` command.
 
-Read the [calicoctl command line interface user reference](../calicoctl.md) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl get' command
@@ -127,7 +127,7 @@ myhost     eth0                                       profile1
 #### `custom-columns`
 Similar to the `ps` format, the `custom-columns` option displays output in ps-style table output but allows the user
 to specify and ordered, comma-separated list of columns to display in the output.  The valid heading names for each
-resource type is documented in the [Resources](../resources/README.md) guide.
+resource type is documented in the [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) guide.
 
 Example
 ```
@@ -139,7 +139,7 @@ eth0
 
 #### `yaml` and `json`
 The `yaml` and `json` options display the output as a list of YAML documents or JSON dictionaries.  The fields for
-resource type are documented in the [Resources](../resources/README.md) guide, or alternatively view the structure
+resource type are documented in the [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) guide, or alternatively view the structure
 definitions (implemented in golang) in the [libcalic API](https://github.com/projectcalico/libcalico-go/tree/master/lib/api).
 
 The output from either of these formats may be used as input for all of the resource management commands.
@@ -175,7 +175,7 @@ $ calicoctl get hostEndpoint --output=yaml
 The `go-template` and `go-template-file` options display the output using a golang template specified as a string
 on the CLI, or defined in a separate file.
 When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The 
-resource-lists are defined in the [libcalico API](../resources/README.md) and there is a resource-list defined for
+resource-lists are defined in the [libcalico API]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) and there is a resource-list defined for
 each resource type.  A resource-list contains an Items field which is itself a slice of resources.  Thus, to output
 the "Name" field from the supplied data, it is necessary to enumerate over the slice of resource-lists and the items
 within that list.
@@ -189,8 +189,8 @@ endpoint1,eth0,
 {% endraw %}
 
 ## See also
--  [Resources](../resources) for details on all valid resources, including file format
+-  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
--  [Policy](../resources/policy.md) for details on the Calico selector-based policy model
--  [calicoctl configuration](../setup/config.md) for details on configuring `calicoctl` to access
+-  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
    the Calico datastore.
