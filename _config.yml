@@ -19,11 +19,11 @@ defaults:
       version: master
   -
     scope:
-      path: "master"
+      path: master
     values:
       version: master
   -
     scope:
-      path: "v1.5"
+      path: v1.5
     values:
       version: v1.5

@@ -8,3 +8,7 @@ footer_text: 'Copyright 2016 Tigera, Inc'
 admin_name: 'noc'
 admin_email: 'noc@tigera.io'
 
+version: v1.5
+versions:
+- master
+- v1.5
