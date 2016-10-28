@@ -64,6 +64,6 @@ integrations.
  - [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin):
    Implements Calico plugin support for the (libnetwork based) Docker
    networking plugin.  It provides both network and IPAM drivers which may
-   be used when creating networks through Docker.  The driver is built as a
-   Docker image (available on DockerHub).  When Calico node is started with the
-   `--libnetwork` flag, a separate container is launched running the driver.
+   be used when creating networks through Docker. When Calico node is started with the
+   `--libnetwork` flag, calico/node container is started with libnetwork plgin
+   inside the same container.

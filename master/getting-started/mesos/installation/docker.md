@@ -31,10 +31,10 @@ curl -o /usr/bin/calicoctl -L http://www.projectcalico.org/builds/calicoctl
 chmod a+x calicoctl
 ```
 
-2. Launch the `calico/node` and `calico/node-libnetwork` containers.
+2. Launch the `calico/node` container.
 
-For production deployments, we recommend running the two
-containers as services. Visit our guide on [running Calico
+For production deployments, we recommend running the
+container as services. Visit our guide on [running Calico
 as a Service]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service) to learn how to do this.
 
 For test environments that you would like to get up and running
@@ -46,12 +46,11 @@ sudo ETCD_AUTHORITY=<ETCD HOST:PORT> ./calicoctl node --libnetwork
 
 Again, be sure to set the ETCD_AUTHORITY to the correct `IP/Hostname:Port` for your etcd cluster.
 
-3. Ensure calico's services are running by checking for two Calico containers in Docker:
+3. Ensure calico's services are running by checking for the Calico container in Docker:
 
 ```shell
 $ docker ps
 CONTAINER ID        NAMES               IMAGE                           CREATED
-19263eda1810        calico-libnetwork   calico/node-libnetwork:latest   3 seconds
 f237fb21d357        calico-node         calico/node:latest              3 seconds
 ```
 

@@ -16,13 +16,11 @@ mesos_dns_url = "https://github.com/mesosphere/mesos-dns/releases/download/v0.5.
 calicoctl_url = "http://www.projectcalico.org/builds/calicoctl"
 
 # The version of the calico docker images to install.  This is used to pre-load
-# the calico/node and calico/node-libnetwork images which slows down the
-# install process, but speeds up the tutorial.
+# the calico/node image which slows down the install process, but speeds up the tutorial.
 #
 # This version should match the version required by calicoctl installed from
 # calicoctl_url.
 calico_node_ver = "latest"
-calico_libnetwork_ver = "latest"
 
 # Script to write out the Calico environment file.
 $write_calico_env=<<SCRIPT
@@ -161,7 +159,6 @@ Vagrant.configure("2") do |config|
 
       # Provision with docker, and download the calico-node docker image
       host.vm.provision :docker, images: [
-	        "calico/node-libnetwork:#{calico_libnetwork_ver}",
 	        "calico/node:#{calico_node_ver}",
       ]
 
@@ -177,7 +174,7 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, inline: "chmod +x /usr/bin/calicoctl"
 
       # Install the Calico service files and start the Calico services.
-      ["calico", "calico-libnetwork"].each do |service_name|
+      ["calico",].each do |service_name|
         host.vm.provision "file", source: "units/#{service_name}.service", destination: "/tmp/#{service_name}.service"
         host.vm.provision :shell, inline: "mv /tmp/#{service_name}.service /usr/lib/systemd/system/#{service_name}.service"
         host.vm.provision :shell, inline: "systemctl start #{service_name}"

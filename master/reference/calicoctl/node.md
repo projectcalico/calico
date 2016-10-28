@@ -54,8 +54,7 @@ Options:
   --ipv4                    Show IPv4 information only.
   --ipv6                    Show IPv6 information only.
   --libnetwork              Use the libnetwork plugin.
-  --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
-                            Calico's libnetwork driver.
+  --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    (Deprecated) This flag will be ignored.
                             [default: calico/node-libnetwork:latest]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --no-pull                 Prevent from pulling the Calico node Docker images.
@@ -117,8 +116,7 @@ calicoctl node [--ip=<IP>] [--ip6=<IP6>] [--node-image=<DOCKER_IMAGE_NAME>]
 ```
 
 When running the `calicoctl node` command with the `--libnetwork` plugin, the
-command starts a container using the `calico/node-libnetwork` Docker image in
-addition to starting the `calico/node` Docker image.
+command starts the `calico/node` Docker image with libnetwork plugin enabled in it.
 
 The `--runtime=rkt` setting can be used to start the Calico services in a rkt
 container.

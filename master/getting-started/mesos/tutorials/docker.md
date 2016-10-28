@@ -17,7 +17,7 @@ This guide assumes you have a running Mesos Cluster that meets the following spe
 - 1 or more Mesos Agent(s) with:
   - Docker Containerizer enabled in Mesos
   - Docker 1.9+ installed with a configured cluster store
-  - calico-node and calico-libnetwork services running
+  - calico-node service running
 
 To quickly generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
 

@@ -16,7 +16,7 @@ the described networking interface.
 
 ### a.) Docker Containerizer
 Tasks launched in Mesos using the Docker Containerizer (i.e. Docker Engine) are
-networked by Calico's Docker-Libnetwork plugin. Once installed on each Mesos
+networked by Calico's Docker-libnetwork plugin. Once installed on each Mesos
 Agent, operators can create Docker networks up-front, then launch Docker
 tasks on them.
 
