@@ -10,8 +10,8 @@
 #
 # This version should match the version required by calicoctl installed in the
 # cloud config files.
-calico_node_ver = "latest"
-calico_libnetwork_ver = "latest"
+calico_node_ver = "v0.22.0"
+calico_libnetwork_ver = "v0.9.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2

@@ -60,7 +60,7 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.
 
-	wget http://www.projectcalico.org/builds/calicoctl
+	wget https://github.com/projectcalico/calico-containers/releases/download/v0.22.0/calicoctl
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any
@@ -73,8 +73,8 @@ run `calicoctl node` the first time.  Select the appropriate versions of the
 `calico/node` and `calico/node-libnetwork` as required by the version of
 calicoctl:
 
-    docker pull calico/node:latest
-    docker pull calico/node-libnetwork:latest
+    docker pull calico/node:v0.22.0
+    docker pull calico/node-libnetwork:v0.9.0
 
 ### Final checks
 
