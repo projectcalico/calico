@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/projectcalico/libcalico-go.svg?style=svg)](https://circleci.com/gh/projectcalico/libcalico-go)
+[![CircleCI](https://circleci.com/gh/projectcalico/libcalico-go.svg?style=svg)](https://circleci.com/gh/projectcalico/libcalico-go) [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org) [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 
 # libcalico-go
 This repositiory contains Calico's Go components:
