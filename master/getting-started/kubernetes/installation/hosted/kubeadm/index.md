@@ -10,6 +10,8 @@ This install is designed to work for kubeadm clusters, or any cluster which labe
 a single master node with `kubeadm.alpha.kubernetes.io/role: master`.  This label is used for deploying
 a single node etcd cluster.
 
+You can easily create a compatible cluster by following [the official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
+
 - [`calico.yaml`](calico.yaml): Contains all the Calico components,
 as well as Kubernetes objects to deploy a single node etcd cluster.
 
