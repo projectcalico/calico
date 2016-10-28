@@ -66,8 +66,8 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
-    eec9ebbfb486        calico/node-libnetwork:latest   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
-    ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+    eec9ebbfb486        calico/node-libnetwork:v0.9.0   "./start.sh"             21 seconds ago      Up 19 seconds                           calico-libnetwork
+    ffe6cb403e9b        calico/node:v0.22.0             "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
 ## 3. Create the networks
 
