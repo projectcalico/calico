@@ -286,10 +286,10 @@ func blockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	ip := cnet.IP{pool.IP}
 	return func() *cnet.IPNet {
 		returnIP := ip
-		ip = incrementIP(ip, big.NewInt(blockSize))
 		if pool.Contains(ip.IP) {
 			ipnet := net.IPNet{returnIP.IP, version.BlockPrefixMask}
 			cidr := cnet.IPNet{ipnet}
+			ip = incrementIP(ip, big.NewInt(blockSize))
 			return &cidr
 		} else {
 			return nil

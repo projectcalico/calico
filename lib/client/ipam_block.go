@@ -361,11 +361,10 @@ func getIPVersion(ip cnet.IP) ipVersion {
 	return ipv4
 }
 
-func largerThanBlock(blockCIDR cnet.IPNet) bool {
-	ones, bits := blockCIDR.Mask.Size()
-	prefixLength := bits - ones
+func largerThanOrEqualToBlock(blockCIDR cnet.IPNet) bool {
+	ones, _ := blockCIDR.Mask.Size()
 	ipVersion := getIPVersion(cnet.IP{blockCIDR.IP})
-	return prefixLength < ipVersion.BlockPrefixLength
+	return ones <= ipVersion.BlockPrefixLength
 }
 
 func intInSlice(searchInt int, slice []int) bool {

@@ -507,7 +507,7 @@ func (c ipams) assignFromExistingBlock(
 // If an empty string is passed as the host, then the value of os.Hostname is used.
 func (c ipams) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
 	// Validate that the given CIDR is at least as big as a block.
-	if !largerThanBlock(cidr) {
+	if !largerThanOrEqualToBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
 		return nil, nil, invalidSizeError(estr)
 	}
@@ -556,7 +556,7 @@ func (c ipams) ClaimAffinity(cidr net.IPNet, host string) ([]net.IPNet, []net.IP
 // If an empty string is passed as the host, then the value of os.Hostname is used.
 func (c ipams) ReleaseAffinity(cidr net.IPNet, host string) error {
 	// Validate that the given CIDR is at least as big as a block.
-	if !largerThanBlock(cidr) {
+	if !largerThanOrEqualToBlock(cidr) {
 		estr := fmt.Sprintf("The requested CIDR (%s) is smaller than the minimum.", cidr.String())
 		return invalidSizeError(estr)
 	}

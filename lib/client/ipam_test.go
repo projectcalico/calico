@@ -43,6 +43,16 @@
 // - Assign should not return no error.
 // - ReleaseIPs should return a slice with one (unallocatedIPs) and no error.
 
+// Test cases (ClaimAffinity):
+// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect 1 claimed blocks, 0 failed and expect no error.
+// Test 2: claim affinity for an unclaimed IPNet of size smaller than 64 - expect 0 claimed blocks, 0 failed and expect an error error.
+// Test 3: claim affinity for a IPNet that has an IP already assigned to another host.
+// - Assign an IP with AssignIP to "host-A" from a configured pool - expect 0 claimed blocks, 0 failed and expect no error.
+// - Claim affinity for "Host-B" to the block that IP belongs to - expect 3 claimed blocks and 1 failed.
+// Test 4: claim affinity to a block twice from different hosts.
+// - Claim affinity to an unclaimed block for "Host-A" - expect 4 claimed blocks, 0 failed and expect no error.
+// - Claim affinity to the same block again but for "host-B" this time - expect 0 claimed blocks, 4 failed and expect no error.
+
 package client_test
 
 import (
@@ -69,6 +79,15 @@ var etcdType api.BackendType = "etcdv2"
 // Setting localhost as the etcd endpoint location since that's where `make run-etcd` runs it.
 var etcdConfig = etcd.EtcdConfig{
 	EtcdEndpoints: "http://127.0.0.1:2379",
+}
+
+type testArgsClaimAff struct {
+	inNet, host                 string
+	cleanEnv                    bool
+	pool                        []string
+	assignIP                    net.IP
+	expClaimedIPs, expFailedIPs int
+	expError                    error
 }
 
 var _ = Describe("IPAM tests", func() {
@@ -170,6 +189,59 @@ var _ = Describe("IPAM tests", func() {
 		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.1")}}, nil),
 	)
 
+	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
+		func(args testArgsClaimAff) {
+			inIPNet := testutils.MustParseCIDR(args.inNet)
+
+			// Wipe clean etcd, create a new client, and pools when cleanEnv flag is true.
+			if args.cleanEnv {
+				testutils.CleanEtcd()
+				c, _ := testutils.NewClient("")
+				for _, v := range args.pool {
+					testutils.CreateNewPool(*c, v, false, false, true)
+				}
+			}
+
+			ic := setupIPAMClient(args.cleanEnv)
+
+			assignIPutil(ic, args.assignIP, "Host-A")
+
+			outClaimed, outFailed, outError := ic.ClaimAffinity(inIPNet, args.host)
+			log.Println("Claimed IP blocks: ", outClaimed)
+			log.Println("Failed to claim IP blocks: ", outFailed)
+
+			// Expect returned slice of claimed IPNet to be equal to expected claimed.
+			Expect(len(outClaimed)).To(Equal(args.expClaimedIPs))
+
+			// Expect returned slice of failed IPNet to be equal to expected failed.
+			Expect(len(outFailed)).To(Equal(args.expFailedIPs))
+
+			// Assert if an error was expected.
+			if args.expError != nil {
+				Expect(outError).To(HaveOccurred())
+				Expect(outError.Error()).To(Equal(args.expError.Error()))
+			}
+		},
+
+		// Test cases (ClaimAffinity):
+		// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect 1 claimed blocks, 0 failed and expect no error.
+		Entry("Claim affinity for an unclaimed IPNet of size 64", testArgsClaimAff{"192.168.1.0/26", "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 1, 0, nil}),
+
+		// Test 2: claim affinity for an unclaimed IPNet of size smaller than 64 - expect 0 claimed blocks, 0 failed and expect an error error.
+		Entry("Claim affinity for an unclaimed IPNet of size smaller than 64", testArgsClaimAff{"192.168.1.0/27", "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, 0, errors.New("The requested CIDR (192.168.1.0/27) is smaller than the minimum.")}),
+
+		// Test 3: claim affinity for a IPNet that has an IP already assigned to another host.
+		// - Assign an IP with AssignIP to "Host-A" from a configured pool
+		// - Claim affinity for "Host-B" to the block that IP belongs to - expect 3 claimed blocks and 1 failed.
+		Entry("Claim affinity for a IPNet that has an IP already assigned to another host (Claim affinity for Host-B)", testArgsClaimAff{"10.0.0.0/24", "host-B", true, []string{"10.0.0.0/24", "fd80:24e2:f998:72d6::/120"}, net.ParseIP("10.0.0.1"), 3, 1, nil}),
+
+		// Test 4: claim affinity to a block twice from different hosts.
+		// - Claim affinity to an unclaimed block for "Host-A" - expect 4 claimed blocks, 0 failed and expect no error.
+		Entry("Claim affinity to an unclaimed block for Host-A", testArgsClaimAff{"10.0.0.0/24", "host-A", true, []string{"10.0.0.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 4, 0, nil}),
+
+		// - Claim affinity to the same block again but for "host-B" this time - expect 0 claimed blocks, 4 failed and expect no error.
+		Entry("Claim affinity to the same block again but for Host-B this time", testArgsClaimAff{"10.0.0.0/24", "host-B", false, []string{"10.0.0.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, 4, nil}),
+	)
 })
 
 // testIPAMReleaseIPs takes an IP, slice of string with IP pools to setup, cleanEnv flag means  setup a new environment.
@@ -265,7 +337,7 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 	return len(v4), len(v6), outErr
 }
 
-// setupIPMAClient sets up a client, and returns IPAMInterface.
+// setupIPAMClient sets up a client, and returns IPAMInterface.
 // It also resets IPAM config if cleanEnv is true.
 func setupIPAMClient(cleanEnv bool) client.IPAMInterface {
 	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
@@ -283,4 +355,18 @@ func setupIPAMClient(cleanEnv bool) client.IPAMInterface {
 		})
 	}
 	return ic
+}
+
+// assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.
+func assignIPutil(ic client.IPAMInterface, assignIP net.IP, host string) {
+	if len(assignIP) != 0 {
+		err := ic.AssignIP(client.AssignIPArgs{
+			IP:       cnet.IP{assignIP},
+			Hostname: host,
+		})
+		log.Printf("Assigning IP: %s\n", assignIP)
+		if err != nil {
+			Fail(fmt.Sprintf("Error assigning IP %s", assignIP))
+		}
+	}
 }
