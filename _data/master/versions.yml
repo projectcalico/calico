@@ -1,0 +1,8 @@
+calico-node: master
+calicoctl: master
+node-libnetwork: master
+felix: master
+calico-cni: master
+libcalico: master
+calico-bird: master
+kube-policy-controller: master

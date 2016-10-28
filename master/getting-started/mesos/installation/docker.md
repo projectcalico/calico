@@ -51,8 +51,8 @@ Again, be sure to set the ETCD_AUTHORITY to the correct `IP/Hostname:Port` for y
 ```shell
 $ docker ps
 CONTAINER ID        NAMES               IMAGE                           CREATED
-19263eda1810        calico-libnetwork   calico/node-libnetwork:latest   3 seconds
-f237fb21d357        calico-node         calico/node:latest              3 seconds
+19263eda1810        calico-libnetwork   calico/node-libnetwork:{{site.data[page.version_fix].versions.node-libnetwork}}   3 seconds
+f237fb21d357        calico-node         calico/node:{{site.data[page.version_fix].versions.calico-node }}              3 seconds
 ```
 
 4. Enable Docker Containerizer in Mesos.
