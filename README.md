@@ -39,6 +39,32 @@ make serve
 
 As the output states, docs should then be viewable at http://localhost:4000/ .
 
+## Versioning & Branches
+The live site is generated from the master branch of this repository.
+
+Documentation for past releases is maintained as a folder in the root of this repository.
+
+Most pull requests which modify information in the docs should primarily target
+the `/master/` folder, especially if they are describing newly added features.
+However, changes should also be applied to past-release directories if they fix
+general typos or incorrect information.
+
+##### How to Quickly Back-Apply Master Changes to a Previous Release
+Let's say there's a single commit that makes changes to Master which I want
+to apply to the v1.5 directory. First, generate a diff:
+```
+git diff f35c02fe73e6a64d187ee3f6e9298ca47ded91ab^1 f35c02fe73e6a64d187ee3f6e9298ca47ded91ab > my-patch.diff
+```
+
+Then, apply that diff to the target version directory.
+```
+git apply -p2 --directory=v1.5 my-patch.diff
+```
+- `-p2` strips off /master on the front of the paths.
+- `--directory=v1.5` adds "v1.5" to the start of the paths.
+
+Then simply inspect the results (`git status`, `git diff`, etc.) and commit.
+
 ## Navigation & Sidebar
 
 The docs (currently) are split into 4 sections:
