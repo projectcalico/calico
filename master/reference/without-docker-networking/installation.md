@@ -37,11 +37,11 @@ Once you have your cluster up and running, start calico on all the nodes
 
 On calico-01
 
-    sudo calicoctl node
+    sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> calicoctl node
 
 On calico-02
 
-    sudo calicoctl node
+    sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> calicoctl node
 
 This will start a container on each host. Check they are running
 
