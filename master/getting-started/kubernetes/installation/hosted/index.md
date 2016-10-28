@@ -4,11 +4,11 @@ title: Calico Kubernetes Hosted Install
 
 This document describes deploying Calico on Kubernetes using Kubernetes manifests.  Note that the Kubernetes hosted installation method is experimental and subject to change.
 
-- [`calico.yaml`](calico.yaml): Contains a Kubernetes DaemonSet which installs and runs Calico 
-on each Kubernetes master and node. This also includes a ReplicaSet which deploys the Calico Kubernetes 
-policy controller, and a ConfigMap which allows for configuration of the install.
+- [`calico.yaml`](calico.yaml): Deploys Calico on Kubernetes.  Assumes an etcd cluster is available - modify `etcd_endpoints` to direct Calico at the correct cluster.
 
-To install Calico, download [calico.yaml](calico.yaml) and run the following command:
+- [`kubeadm/calico.yaml`](kubeadm/calico.yaml):  Installs Calico as well as a single node etcd cluster for cases where etcd is not already available (e.g kubeadm clusters).  See [here](kubeadm) for more information.
+
+To install Calico, download one of the above manifests depending on your deployment, and run the following command:
 
 ```shell
 kubectl apply -f calico.yaml
@@ -16,8 +16,7 @@ kubectl apply -f calico.yaml
 
 > **NOTE**
 >
-> Make sure you configure the provided ConfigMap with the location of your etcd cluster before running the above command. 
-
+> If using your own etcd cluster, make sure you configure the provided ConfigMap with the location of the cluster before running the above command. 
 
 ## How it works
 
