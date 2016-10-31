@@ -16,8 +16,6 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 
 ARG LIBCALICO_REPO="https://github.com/projectcalico/libcalico.git"
 ARG LIBCALICO_VER="master"
-ARG LIBNETWORK_REPO="https://github.com/projectcalico/libnetwork-plugin.git"
-ARG LIBNETWORK_VER="master"
 
 # Download and install glibc for use by non-static binaries that require it.
 RUN apk --no-cache add wget ca-certificates libgcc && \
@@ -35,21 +33,9 @@ RUN apk add --no-cache --repository "http://alpine.gliderlabs.com/alpine/edge/co
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools
 
-# Install Python so libnetwork-plugin can run
-RUN apk --no-cache add python py-setuptools
-
 # Copy "shared directory" which can be used to pass custom files (local git repos,
 # that can be used by pip install git+file:///)
 COPY node_share /tmp/node_share
-
-# Actually install libnetwork-plugin. A python dev environment (and git) is installed so
-# libnetwork-plugin can be pip installed.
-# Finally the dev environment is removed. Doing this in one image layer minimized the final image size.
-RUN apk --no-cache add --virtual temp py-pip git gcc python-dev musl-dev libffi-dev openssl-dev && \
-  pip install git+$LIBNETWORK_REPO@$LIBNETWORK_VER && \
-  pip install git+$LIBCALICO_REPO@$LIBCALICO_VER && \
-  apk del --purge temp && \
-  rm -rf /tmp/node_share
 
 # Copy in the filesystem - this contains felix, bird, gobgp etc...
 COPY filesystem /

@@ -2,7 +2,7 @@
 default: help
 all: test                ## Run all the tests
 binary: dist/calicoctl   ## Create the calicoctl binary
-calico/node: calico_node/.calico_node.created ## Create the calico/node image
+calico/node: $(NODE_CONTAINER_CREATED) ## Create the calico/node image
 calico/ctl: calicoctl/.calico_ctl.created ## Create the calico/node image
 node_image: calico/node
 ctl_image: calico/ctl
@@ -35,13 +35,14 @@ BUILD_CONTAINER_NAME?=calico/build:latest
 ###############################################################################
 NODE_CONTAINER_DIR=calico_node
 NODE_CONTAINER_NAME?=calico/node:latest
-NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem/{etc,sbin} -type f)
+NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 # we can pass --build-arg during node image building
 NODE_CONTAINER_BUILD_ARGS?=
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
-NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd
+NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_CONTAINER_NAME?=calico/felix:latest
+LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:latest
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_CONTAINER_NAME)
@@ -51,8 +52,8 @@ calico-node.tar: $(NODE_CONTAINER_CREATED)
 calico-node-latest.aci: calico-node.tar
 	docker2aci $<
 
-# Build calico/node docker image
-$(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
+# Build calico/node docker image - explicitly depend on the container binaries.
+$(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
 	docker build $(NODE_CONTAINER_BUILD_ARGS) -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
 	touch $@
 
@@ -70,6 +71,15 @@ $(NODE_CONTAINER_BIN_DIR)/calico-felix:
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
 	docker cp calico-felix:/code/. $(@D)
 	-docker rm -f calico-felix
+
+# Get libnetwork-plugin binaries
+$(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
+	-docker rm -f calico-$(@F)
+	# Latest libnetwork-plugin binaries are stored in automated builds of calico/libnetwork-plugin.
+	# To get them, we pull that image, then copy the binaries out to our host
+	docker create --name calico-$(@F) $(LIBNETWORK_PLUGIN_CONTAINER_NAME)
+	docker cp calico-$(@F):/$(@F) $(@D)
+	-docker rm -f calico-$(@F)
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:

@@ -422,12 +422,17 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
             }
     }
 
-    # Additional rw bind (/run/docker/plugins) necessory when libnetwork is enabled 
+    # Additional rw binds (/run/docker/plugins and /var/run/docker.sock) necessary when libnetwork is enabled
     if libnetwork_enabled:
         binds["/run/docker/plugins"] = {
             "bind": "/run/docker/plugins",
             "ro": False
             }
+
+        binds["/var/run/docker.sock"] = {
+            "bind": "/var/run/docker.sock",
+            "ro": False
+        }
 
     binds.update(etcd_binds)
 
@@ -442,6 +447,7 @@ def _start_node_container_docker(ip, ip6, as_num, log_dir, node_image, detach, e
     # Add /run/docker/plugins to the list of volumes to be mounted when libnetwork is enabled
     if libnetwork_enabled:
         volumes.append("/run/docker/plugins")
+        volumes.append("/var/run/docker.sock")
 
     container = docker_client.create_container(
         node_image,
