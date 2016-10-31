@@ -124,7 +124,18 @@ Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
 
-### 3. Deploy the Calico network policy controller
+### 3. Install standard CNI lo plugin
+In addition to the CNI plugin specified by the CNI config file, Kubernetes requires the standard CNI loopback plugin.
+
+Download the file `loopback` and cp it to CNI binary dir.
+
+```bash
+wget https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
+tar -zxvf cni-v0.3.0.tgz
+sudo cp loopback /opt/cin/bin/
+```
+
+### 4. Deploy the Calico network policy controller
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the Kubernetes API for Pod, Namespace, and 
 NetworkPolicy events and configuring Calico in response.  It runs as a single pod managed by a ReplicaSet.
 
