@@ -38,7 +38,7 @@ type HostEndpointKey struct {
 
 func (key HostEndpointKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
 	if key.EndpointID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
@@ -61,7 +61,7 @@ func (key HostEndpointKey) valueType() reflect.Type {
 }
 
 func (key HostEndpointKey) String() string {
-	return fmt.Sprintf("HostEndpoint(hostname=%s, name=%s)", key.Hostname, key.EndpointID)
+	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
 }
 
 type HostEndpointListOptions struct {
