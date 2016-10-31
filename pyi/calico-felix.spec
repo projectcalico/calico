@@ -35,7 +35,7 @@ extra_files = [
 
 # Add egg metadata for our package and dependencies.  Required to allow us to
 # look up our plugins.
-extra_files += copy_metadata("calico")
+extra_files += copy_metadata("felix")
 with open("../felix_requirements.txt") as reqs:
     for line in reqs:
         m = re.match(r'^((?:[-_]|\w)+)', line)

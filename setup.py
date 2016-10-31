@@ -70,8 +70,8 @@ def collect_requirements():
     return reqs
 
 setuptools.setup(
-    name="calico",
-    version="1.4.4.dev1",
+    name="felix",
+    version="1.4.4",
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [
