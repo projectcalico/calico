@@ -174,11 +174,9 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, inline: "chmod +x /usr/bin/calicoctl"
 
       # Install the Calico service files and start the Calico services.
-      ["calico",].each do |service_name|
-        host.vm.provision "file", source: "units/#{service_name}.service", destination: "/tmp/#{service_name}.service"
-        host.vm.provision :shell, inline: "mv /tmp/#{service_name}.service /usr/lib/systemd/system/#{service_name}.service"
-        host.vm.provision :shell, inline: "systemctl start #{service_name}"
-      end
+      host.vm.provision "file", source: "units/calico.service", destination: "/tmp/calico.service"
+      host.vm.provision :shell, inline: "mv /tmp/calico.service /usr/lib/systemd/system/calico.service"
+      host.vm.provision :shell, inline: "systemctl start calico"
 
       if i == 1
         # Master specific stuff.
