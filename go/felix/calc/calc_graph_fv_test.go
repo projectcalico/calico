@@ -935,7 +935,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 				kvDeltas := state.KVDeltas(lastState)
 				for _, kv := range kvDeltas {
 					fmt.Fprintf(GinkgoWriter, "       -> Injecting KV: %v\n", kv)
-					validationFilter.OnUpdates([]Update{kv})
+					validationFilter.OnUpdates([]api.Update{kv})
 					if flushStrategy == afterEachKV {
 						if !sentInSync {
 							validationFilter.OnStatusUpdated(api.InSync)

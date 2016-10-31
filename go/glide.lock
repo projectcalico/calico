@@ -1,5 +1,5 @@
 hash: b385655c0f503ef227e09c01c0f1e2a5619e8ea4d8aa74997ab373df54301a2c
-updated: 2016-10-26T17:38:58.179230829+01:00
+updated: 2016-10-31T11:05:58.317115412Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -20,7 +20,7 @@ imports:
   subpackages:
   - journal
 - name: github.com/coreos/pkg
-  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  version: 447b7ec906e523386d9c53be15b55a8ae86ea944
   subpackages:
   - capnslog
 - name: github.com/docopt/docopt-go
@@ -30,7 +30,7 @@ imports:
 - name: github.com/go-ini/ini
   version: 6e4869b434bd001f6983749881c7ead3545887d8
 - name: github.com/gogo/protobuf
-  version: 91cc2497504ffbaba9656e7d988ccfe41c54f6a9
+  version: a9cd0c35b97daf74d0ebf3514c5254814b2703b4
   subpackages:
   - proto
 - name: github.com/golang/glog
@@ -70,7 +70,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 92a17b1c6ba624ffbbbb2d6cec511a1357664ddc
+  version: 6b59b9bb3b740b75052f24adf18546835d20a2c3
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -121,7 +121,7 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/net
-  version: 65dfc08770ce66f74becfdff5f8ab01caef4e946
+  version: 4cfeeeb61ae8daa2a4b06572024786e56f23504c
   subpackages:
   - context
 - name: golang.org/x/sys
@@ -138,7 +138,7 @@ imports:
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 testImports:
 - name: github.com/onsi/gomega
-  version: e46a88d81f5164c47e2d51c1c3d863dde7997993
+  version: d6ea11462a5e887f44c322f3c8cdda78d5a05117
   subpackages:
   - format
   - internal/assertion

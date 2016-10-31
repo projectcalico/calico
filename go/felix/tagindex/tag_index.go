@@ -17,6 +17,7 @@ package tagindex
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/dispatcher"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
@@ -103,7 +104,7 @@ func (idx *TagIndex) SetTagInactive(tag string) {
 
 // OnUpdate is called when a datamodel update is received.  It updates the
 // index and fires the match-started/stopped callbacks as appropriate.
-func (idx *TagIndex) OnUpdate(update model.Update) (filterOut bool) {
+func (idx *TagIndex) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.ProfileTagsKey:
 		if update.Value != nil {

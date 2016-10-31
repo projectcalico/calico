@@ -20,7 +20,6 @@ import (
 	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/prometheus/client_golang/prometheus"
 	"time"
 )
@@ -77,7 +76,7 @@ func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}) *As
 	return g
 }
 
-func (acg *AsyncCalcGraph) OnUpdates(updates []model.Update) {
+func (acg *AsyncCalcGraph) OnUpdates(updates []api.Update) {
 	log.Debugf("Got %v updates; queueing", len(updates))
 	acg.inputEvents <- updates
 }
@@ -97,7 +96,7 @@ func (acg *AsyncCalcGraph) loop() {
 		select {
 		case update := <-acg.inputEvents:
 			switch update := update.(type) {
-			case []model.Update:
+			case []api.Update:
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
 				acg.Dispatcher.OnUpdates(update)

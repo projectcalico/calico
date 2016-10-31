@@ -18,6 +18,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/dispatcher"
 	"github.com/projectcalico/felix/go/felix/multidict"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -55,7 +56,7 @@ func (l *InheritIndex) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 
 // OnUpdate makes LabelInheritanceIndex compatible with the UpdateHandler interface
 // allowing it to be used in a calculation graph more easily.
-func (l *InheritIndex) OnUpdate(update model.Update) (filterOut bool) {
+func (l *InheritIndex) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {

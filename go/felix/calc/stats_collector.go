@@ -67,7 +67,7 @@ func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
 	}
 }
 
-func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
+func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	hostname := ""
 	var counter *int
 	switch key := update.Key.(type) {
@@ -86,7 +86,7 @@ func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 		log.WithField("key", update.Key).Warn("Failed to get hostname")
 		return
 	}
-	if update.UpdateType == model.UpdateTypeKVNew {
+	if update.UpdateType == api.UpdateTypeKVNew {
 		s.keyCountByHost[hostname] += 1
 		log.WithFields(log.Fields{
 			"key":      update.Key,
@@ -96,7 +96,7 @@ func (s *StatsCollector) OnUpdate(update model.Update) (filterOut bool) {
 		if counter != nil {
 			*counter += 1
 		}
-	} else if update.UpdateType == model.UpdateTypeKVDeleted {
+	} else if update.UpdateType == api.UpdateTypeKVDeleted {
 		s.keyCountByHost[hostname] -= 1
 		log.WithFields(log.Fields{
 			"key":      update.Key,

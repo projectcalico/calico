@@ -17,6 +17,7 @@ package calc
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"sort"
 )
@@ -35,7 +36,7 @@ func NewPolicySorter() *PolicySorter {
 	}
 }
 
-func (poc *PolicySorter) OnUpdate(update model.Update) (dirty bool) {
+func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.PolicyKey:
 		oldPolicy := poc.tier.Policies[key]

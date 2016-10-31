@@ -20,6 +20,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
@@ -66,7 +67,7 @@ func (calc *MemberCalculator) MatchStopped(key model.Key, ipSetID string) {
 	calc.removeMatchFromIndex(ipSetID, key, ips)
 }
 
-func (calc *MemberCalculator) OnUpdate(update model.Update) (filterOut bool) {
+func (calc *MemberCalculator) OnUpdate(update api.Update) (filterOut bool) {
 	if update.Value == nil {
 		calc.updateEndpointIPs(update.Key, []ip.Addr{})
 		return

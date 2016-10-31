@@ -57,7 +57,7 @@ func (pr *PolicyResolver) RegisterWith(allUpdDispatcher, localEndpointDispatcher
 	localEndpointDispatcher.RegisterStatusHandler(pr.OnDatamodelStatus)
 }
 
-func (pr *PolicyResolver) OnUpdate(update model.Update) (filterOut bool) {
+func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 	policiesDirty := false
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey, model.HostEndpointKey:

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"reflect"
 )
@@ -169,7 +170,7 @@ func (s State) KVsCopy() map[Key]interface{} {
 	return kvs
 }
 
-func (s State) KVDeltas(prev State) []Update {
+func (s State) KVDeltas(prev State) []api.Update {
 	newAndUpdatedKVs := s.KVsCopy()
 	updatedKVs := make(map[Key]bool)
 	for _, kv := range prev.DatastoreState {
@@ -182,22 +183,22 @@ func (s State) KVDeltas(prev State) []Update {
 		}
 	}
 	currentKeys := s.Keys()
-	deltas := make([]Update, 0)
+	deltas := make([]api.Update, 0)
 	for _, kv := range prev.DatastoreState {
 		if !currentKeys.Contains(kv.Key) {
 			deltas = append(
 				deltas,
-				Update{KVPair{Key: kv.Key}, UpdateTypeKVDeleted},
+				api.Update{KVPair{Key: kv.Key}, api.UpdateTypeKVDeleted},
 			)
 		}
 	}
 	for _, kv := range s.DatastoreState {
 		if _, ok := newAndUpdatedKVs[kv.Key]; ok {
-			updateType := UpdateTypeKVNew
+			updateType := api.UpdateTypeKVNew
 			if updatedKVs[kv.Key] {
-				updateType = UpdateTypeKVUpdated
+				updateType = api.UpdateTypeKVUpdated
 			}
-			deltas = append(deltas, Update{kv, updateType})
+			deltas = append(deltas, api.Update{kv, updateType})
 		}
 	}
 	return deltas

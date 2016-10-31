@@ -16,7 +16,6 @@ package calc
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 func NewSyncerCallbacksDecoupler() *SyncerCallbacksDecoupler {
@@ -33,7 +32,7 @@ func (a *SyncerCallbacksDecoupler) OnStatusUpdated(status api.SyncStatus) {
 	a.c <- status
 }
 
-func (a *SyncerCallbacksDecoupler) OnUpdates(updates []model.Update) {
+func (a *SyncerCallbacksDecoupler) OnUpdates(updates []api.Update) {
 	a.c <- updates
 }
 
@@ -42,7 +41,7 @@ func (a *SyncerCallbacksDecoupler) SendTo(sink api.SyncerCallbacks) {
 		switch obj := obj.(type) {
 		case api.SyncStatus:
 			sink.OnStatusUpdated(obj)
-		case []model.Update:
+		case []api.Update:
 			sink.OnUpdates(obj)
 		}
 	}

@@ -21,7 +21,7 @@ import (
 	"reflect"
 )
 
-type UpdateHandler func(update model.Update) (filterOut bool)
+type UpdateHandler func(update api.Update) (filterOut bool)
 
 type StatusHandler func(status api.SyncStatus)
 
@@ -32,7 +32,7 @@ type Dispatcher struct {
 
 type updateHandlers []UpdateHandler
 
-func (u updateHandlers) DispatchToAll(update model.Update) {
+func (u updateHandlers) DispatchToAll(update api.Update) {
 	for _, onUpdate := range u {
 		filterOut := onUpdate(update)
 		if filterOut {
@@ -67,7 +67,7 @@ func (d *Dispatcher) RegisterStatusHandler(handler StatusHandler) {
 
 // Syncer callbacks.
 
-func (d *Dispatcher) OnUpdates(updates []model.Update) {
+func (d *Dispatcher) OnUpdates(updates []api.Update) {
 	for _, update := range updates {
 		d.OnUpdate(update)
 	}
@@ -81,7 +81,7 @@ func (d *Dispatcher) OnStatusUpdated(status api.SyncStatus) {
 
 // Dispatcher callbacks.
 
-func (d *Dispatcher) OnUpdate(update model.Update) (filterOut bool) {
+func (d *Dispatcher) OnUpdate(update api.Update) (filterOut bool) {
 	log.Debugf("Dispatching %v", update)
 	keyType := reflect.TypeOf(update.Key)
 	log.Debug("Type: ", keyType)

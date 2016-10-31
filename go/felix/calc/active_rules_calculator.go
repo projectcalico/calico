@@ -20,6 +20,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/labelindex"
 	"github.com/projectcalico/felix/go/felix/multidict"
 	"github.com/projectcalico/felix/go/felix/tagindex"
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"reflect"
@@ -89,7 +90,7 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	allUpdDispatcher.Register(model.ProfileTagsKey{}, arc.OnUpdate)
 }
 
-func (arc *ActiveRulesCalculator) OnUpdate(update model.Update) (filterOut bool) {
+func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {

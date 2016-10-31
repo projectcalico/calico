@@ -20,12 +20,12 @@ import (
 	net2 "net"
 )
 
-func mustParseMac(m string) net.MAC {
+func mustParseMac(m string) *net.MAC {
 	hwAddr, err := net2.ParseMAC(m)
 	if err != nil {
 		log.Fatalf("Failed to parse MAC: %v; %v", m, err)
 	}
-	return net.MAC{hwAddr}
+	return &net.MAC{hwAddr}
 }
 
 func mustParseNet(n string) net.IPNet {

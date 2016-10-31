@@ -17,7 +17,6 @@ package calc
 import (
 	"github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/validator"
 	"reflect"
 )
@@ -37,8 +36,8 @@ func (v *ValidationFilter) OnStatusUpdated(status api.SyncStatus) {
 	v.sink.OnStatusUpdated(status)
 }
 
-func (v *ValidationFilter) OnUpdates(updates []model.Update) {
-	filteredUpdates := make([]model.Update, len(updates))
+func (v *ValidationFilter) OnUpdates(updates []api.Update) {
+	filteredUpdates := make([]api.Update, len(updates))
 	for i, update := range updates {
 		logCxt := logrus.WithFields(logrus.Fields{
 			"key":   update.Key,
