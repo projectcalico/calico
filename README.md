@@ -1,5 +1,4 @@
-[![CircleCI](https://circleci.com/gh/projectcalico/felix.svg?style=svg)](https://circleci.com/gh/projectcalico/felix)
-[![Build Status](https://semaphoreci.com/api/v1/calico/felix/branches/go/shields_badge.svg)](https://semaphoreci.com/calico/felix)
+[![Build Status](https://semaphoreci.com/api/v1/calico/felix-2/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/felix-2)
 [![Coverage Status](https://coveralls.io/repos/projectcalico/felix/badge.svg?branch=master&service=github)](https://coveralls.io/github/projectcalico/felix?branch=master)
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
