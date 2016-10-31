@@ -62,7 +62,7 @@ Examples:
   Add and set up a rule to prevent all inbound traffic except pings from the 192.168/16 subnet
   $ calicoctl profile add only-local-pings
   $ calicoctl profile only-local-pings rule add inbound deny icmp
-  $ calicoctl profile only-local-pings rule add inbound --at=0 allow from 192.168.0.0/16
+  $ calicoctl profile only-local-pings rule add inbound --at=0 allow from cidr 192.168.0.0/16
 """
 import copy
 import sys
