@@ -25,17 +25,12 @@ import subprocess
 # The root directory
 PATH_ROOT = path.dirname(path.dirname(path.realpath(__file__)))
 sys.path.append(path.join(PATH_ROOT, "calicoctl"))
-from calico_ctl import __version__
+__version__ = "0.22.0-dev"
 
 # Path names relative to the root of the project
-PATH_CALICOCTL_NODE = path.join("calicoctl", "calico_ctl", "node.py")
-PATH_CALICOCTL_INIT = path.join("calicoctl", "calico_ctl", "__init__.py")
-PATH_CALICONODE_BUILD = path.join("calico_node", "build.sh")
-PATH_MAKEFILE = "Makefile"
 PATH_MAIN_README = "README.md"
-PATH_DOCS = "docs"
+PATH_DOCS = "v1.6"
 PATH_RELEASE_DATA = ".releasedata"
-PATH_BUILDING = path.join(PATH_DOCS, "Building.md")
 
 # Regexes for calico-containers version format.
 INIT_VERSION = re.compile(r'__version__\s*=\s*"(.*)"')
@@ -50,13 +45,9 @@ README_RE = re.compile(r'https://github\.com/projectcalico/calico\-containers/bl
 
 # Files to include in the list of files to automatically update.  All file
 # paths are relative to the project root.
-UPDATE_FILES_STATIC = [PATH_MAIN_README,
-                       PATH_CALICOCTL_NODE,
-                       PATH_CALICONODE_BUILD,
-                       PATH_CALICOCTL_INIT,
-                       PATH_MAKEFILE]
+UPDATE_FILES_STATIC = [PATH_MAIN_README]
 UPDATE_FILES_DIRS = [PATH_DOCS]
-UPDATE_FILES_EXCLUDE = [PATH_BUILDING]
+UPDATE_FILES_EXCLUDE = []
 UPDATE_FILES_RE = re.compile("(.*\.md)|(Vagrantfile)|(user\-data\-.*)|(.*\.yaml)")
 
 # Indicators separating blocks of master only and release only text.
@@ -122,81 +113,6 @@ def load_file(filename):
     with open(path.join(PATH_ROOT, filename), "r") as in_file:
         return in_file.readlines()
 
-
-def get_calicoctl_version():
-    """
-    Determine the current version from the calicoctl __init__.py
-    :return: The current calicoctl version
-    """
-    return "v" + __version__
-
-
-def check_version_increment(old_version, new_version):
-    """
-    Check that the new version is a valid increment from the old version.
-    :param old_version:
-    :param new_version:
-    :return: The increment type
-    """
-    old_version_tuple = _get_version_tuple(old_version)
-    new_version_tuple = _get_version_tuple(new_version)
-
-    if new_version_tuple is None:
-        print_warning("The format of version '%s' is not valid.  It should be"
-                      " in the form vX.Y.Z or vX.Y.Z-ABCD" % new_version)
-        return None
-
-    old_major, old_minor, old_patch, old_name = old_version_tuple
-    new_major, new_minor, new_patch, new_name = new_version_tuple
-
-    if (new_major == old_major + 1 and
-        new_minor == 0 and
-        new_patch == 0):
-        return "Major version increment"
-
-    if (new_major == old_major and
-        new_minor == old_minor + 1 and
-        new_patch == 0):
-        return "Minor version increment"
-
-    if (new_major == old_major and
-        new_minor == old_minor and
-        new_patch == old_patch + 1):
-        return "Patch update"
-
-    if (new_major == old_major and
-        new_minor == old_minor and
-        new_patch == old_patch and
-        new_name != old_name):
-        return "Development update"
-
-    print_warning("The version increment is not valid.  Expecting a single "
-                  "increment of major, minor or patch.")
-    return None
-
-
-def _get_version_tuple(version_string):
-    """
-    Return the version tuple from the string.
-    :param version_string:
-    :return:
-    """
-    match = VERSION_RE.match(version_string)
-    if match:
-        return (int(match.group(1)),
-                int(match.group(2)),
-                int(match.group(3)),
-                None)
-    match = VERSION_NAME_RE.match(version_string)
-    if match:
-        return (int(match.group(1)),
-                int(match.group(2)),
-                int(match.group(3)),
-                match.group(4))
-
-    return None
-
-
 def update_files(regex_replace_list, values, is_release=True):
     """
     Update files based on the supplied regex replace list and format values.
@@ -237,80 +153,20 @@ def update_files(regex_replace_list, values, is_release=True):
         assert not master_block, "<!--- start indicator with no end in file %s" % filen
         replace_file(filen, new_lines)
 
-
-def load_release_data():
-    """
-    Load the release data.  This always prints a warning if the release data
-    contains any release data.
-    :return:
-    """
-    filen = path.join(PATH_ROOT, PATH_RELEASE_DATA)
-    try:
-        with open(filen, "r") as in_file:
-            data = pickle.load(in_file)
-
-        if data:
-            print_warning("You are continuing an existing release.  If this "
-                          "an error, delete the release data file and try "
-                          "again.  "
-                          "Filename = see below")
-            print filen
-
-        return data
-    except:
-        return {}
-
-def save_release_data(release_data):
-    """
-    Save the release data.
-    :param release_data: The release data to pickle.
-    """
-    assert isinstance(release_data, dict)
-    filen = path.join(PATH_ROOT, PATH_RELEASE_DATA)
-    filen_bak = "%s.bak" % filen
-    try:
-        if path.exists(filen_bak):
-            print_warning("Backup release data is found indicating an unclean "
-                          "save.  If this is expected, delete the file and "
-                          "try again.  "
-                          "Filename=%s" % filen_bak)
-            sys.exit(1)
-
-        if path.exists(filen):
-            os.rename(filen, filen_bak)
-
-        with open(filen, "w") as out_file:
-            pickle.dump(release_data, out_file)
-
-        if path.exists(filen_bak):
-            os.remove(filen_bak)
-    except Exception, e:
-        print_warning("Unable to store release data: %s" % e)
-        sys.exit(1)
-
-
-def get_github_library_version(name, current, url):
+def get_github_library_version(name, url):
     """
     Ask the user for the version of a GitHub library.
     :param name: A friendly name.
-    :param current: The current version
     :param url: The GitHub repo.
     :return:
     """
     while True:
         # For the release, make sure the default versions do not include "-dev"
-        if current.endswith("-dev"):
-            current = current[:-4]
-        version = raw_input("Version of %s [currently %s]?: " % (name, current))
-        if not version:
-            # Default to current if user just presses enter
-            version = current
-
+        version = raw_input("Version of %s?: " % name)
         if not url_exists("%s/releases/tag/%s" % (url, version)):
-            print_warning("The version of %s is not valid.  Please check the "
+            print_warning("The version of %s is not valid.  Ensure you've chosen a correct value by checking the "
                           "GitHub releases for exact naming at "
-                          "%s/releases" % (name, url))
-            continue
+                          "%s/releases before you continue." % (name, url))
         return version
 
 
@@ -408,105 +264,3 @@ def check_or_exit(msg):
             print_warning("Please complete the required steps and then "
                           "re-run the script.")
             sys.exit(1)
-
-
-def validate_markdown_uris():
-    """
-    Validate that all of the URIs in the markdown files are accessible.
-    """
-    print "Validating URIs in markdown files"
-    all_valid = True
-    all_md_files = [f for f in get_update_file_list() if f.endswith(".md")]
-    for filename in all_md_files:
-        lines = load_file(filename)
-        found_analytic_url = False
-        for line in lines:
-            for name, uri in MD_URL_RE.findall(line):
-                if name == "Analytics":
-                    found_analytic_url = True
-                    valid = validate_analytics_url(filename, uri)
-                else:
-                    valid = validate_uri(filename, uri)
-                all_valid = all_valid and valid
-        if not found_analytic_url:
-            print_bullet("%s: No analytics URL in file" % filename)
-    if not all_valid:
-        print_warning("Errors detected in markdown file URIs.  Please correct "
-                      "the errors highlighted above and then re-run the"
-                      "script.")
-        sys.exit(1)
-    print "Validation complete"
-
-
-def validate_uri(filename, uri):
-    """
-    Validate a URI exists, either by checking the file exists, or by checking
-    the URL is accessbile.
-    :param filename:  The filename of the MD file containing the URI.
-    :param uri:  The URI to validate (either a web URL, or a filename)
-    :return:  True if URI is valid and accessible
-    """
-    if uri.startswith("http"):
-        # Validating a URL.  Don't validate the shield URLs.
-        if uri.startswith("https://img.shields.io"):
-            return True
-        if uri.startswith("https://badge.imagelayers.io"):
-            return True
-
-        # There should no calico-containers URL except for:
-        # - The README URLs which we skip since these are auto-generated
-        # - Issues (which we can validate)
-        # - Releases (which we can validate)
-        # Everything else should be specified with a relative path.
-        if (uri.startswith("https://github.com/projectcalico/calico-containers") or
-            uri.startswith("https://www.github.com/projectcalico/calico-containers")):
-
-            if README_RE.match(uri):
-                return True
-
-            # If an explicit version has been specified then keep it in, but warn the user.
-            if (uri.startswith("https://github.com/projectcalico/calico-containers/blob") or
-                uri.startswith("https://www.github.com/projectcalico/calico-containers/blob")):
-                print_bullet("%s: WARNING: Should this be a relative URL?: %s" % (filename, uri))
-                return True
-
-            if ((uri.find("/calico-containers/issues") < 0) and
-                (uri.find("/calico-containers/releases") < 0)):
-                print_bullet("%s: Do not specify calico-containers file using a URL, "
-                             "specify using a relative path: %s" % (filename, uri))
-                return False
-
-        if not url_exists(uri):
-            print_bullet("%s: URL is not valid: %s" % (filename, uri))
-            return False
-        else:
-            return True
-    else:
-        # Validating a file.
-        uri_parts = uri.split("#")
-        relative_filename = uri_parts[0]
-        path = os.path.normpath(os.path.join(PATH_ROOT,
-                                             os.path.dirname(filename),
-                                             relative_filename))
-        if not os.path.exists(path):
-            print_bullet("%s: Referenced file does not exist: %s" % (filename, uri))
-            return False
-        else:
-            return True
-
-
-def validate_analytics_url(filename, analytics_url):
-    """
-    Validate the anaylytics URL is correct. The URL is fixed format which
-    includes the MD filename.
-
-    :param filename:  The filename of the MD file containing the URI.
-    :param url:  The analytics URL to validate.
-    :return:  True if URL is valid and accessible
-    """
-    expected_url = "https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/%s?pixel" % filename
-    if analytics_url != expected_url:
-        print_bullet("%s: Anayltics URL is incorrect, should be %s" % (filename, expected_url))
-        return False
-    else:
-        return True
