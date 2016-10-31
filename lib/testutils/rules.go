@@ -63,7 +63,7 @@ var InRule2 = api.Rule{
 }
 
 var EgressRule1 = api.Rule{
-	Action:    "deny",
+	Action:    "pass",
 	IPVersion: &ipv4,
 	Protocol:  &numProtocol1,
 	ICMP:      &icmp1,
