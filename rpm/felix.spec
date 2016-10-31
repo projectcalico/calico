@@ -1,12 +1,12 @@
 %{!?python_sitelib: %define python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")}
 
-Name:           calico
+Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.3
+Version:        1.4.4
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
-Source0:        calico-%{version}.tar.gz
+Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
 Source35:	calico-felix.conf
 Source45:	calico-felix.service
@@ -23,25 +23,25 @@ lightweight Linux containers (LXCs), bare metal, and Network Functions
 Virtualization (NFV).
 
 
-%package common
+%package -n calico-common
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
 Requires:       python-etcd, posix-spawn, python-setuptools
 
-%description common
+%description -n calico-common
 This package provides common files.
 
 
-%package felix
+%package -n calico-felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
 Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, pyparsing, python-devel, python-netaddr, python-gevent, datrie, ijson, python-urllib3, python-msgpack, prometheus_client
 
 
-%description felix
+%description -n calico-felix
 This package provides the Felix component.
 
-%post felix
+%post -n calico-felix
 %if 0%{?el7}
 if [ $1 -eq 1 ] ; then
     # Initial installation
@@ -51,7 +51,7 @@ if [ $1 -eq 1 ] ; then
 fi
 %endif
 
-%preun felix
+%preun -n calico-felix
 if [ $1 -eq 0 ] ; then
     # Package removal, not upgrade
 %if 0%{?el7}
@@ -62,7 +62,7 @@ if [ $1 -eq 0 ] ; then
 %endif
 fi
 
-%postun felix
+%postun -n calico-felix
 if [ $1 -ge 1 ] ; then
     # Package upgrade, not uninstall
 %if 0%{?el7}
@@ -120,9 +120,10 @@ install    -m 644 %_sourcedir/calico-felix.logrotate    %{buildroot}/%{_sysconfd
 rm -rf $RPM_BUILD_ROOT
 
 
-%files common
+%files -n calico-common
 %defattr(-,root,root,-)
 %{python_sitelib}/calico*
+%{python_sitelib}/felix*
 /usr/bin/calico-diags
 /usr/bin/calico-cleanup
 /usr/bin/calico-gen-bird-conf.sh
@@ -132,7 +133,7 @@ rm -rf $RPM_BUILD_ROOT
 /usr/share/calico/bird/*
 %doc
 
-%files felix
+%files -n calico-felix
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
 /etc/calico/felix.cfg.example
@@ -147,6 +148,17 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Oct 31 2016 Neil Jerram <neil@tigera.io> 1.4.4-1
+  - felix version 1.4.4 release
+    - Add a retry for deleting conntrack entries.
+    - calico-diags: include DevStack logs, if present
+    - Make repo branch for coverage diff configurable
+    - Add 'this doc has moved' to relevant location in new docs site.
+    - Update coveralls badge.
+    - IP SAN support in pyinstaller build
+    - Add SemaphoreCI badge.
+    - Pin pycparser version.
+
 * Mon Oct 03 2016 Neil Jerram <neil@tigera.io> 1.4.3-1
   - calico version 1.4.3 release
     - Support InterfacePrefix having multiple values, to allow hybrid Calico use by

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.4
+
+- Add a retry for deleting conntrack entries.
+- calico-diags: include DevStack logs, if present
+- Make repo branch for coverage diff configurable
+- Add 'this doc has moved' to relevant location in new docs site.
+- Update coveralls badge.
+- IP SAN support in pyinstaller build
+- Add SemaphoreCI badge.
+- Pin pycparser version.
+
 ## 1.4.3
 
 - Support InterfacePrefix having multiple values, to allow hybrid Calico use by
