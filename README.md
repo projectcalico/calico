@@ -99,12 +99,17 @@ All links should be absolute links. To link to versioned content, prefix all lin
 
 ## Releases
 
-The following steps detail how to cut a new release:
+The following steps detail how to cut a new release.
+
+Warning: [Jekyll has issues processing `_data` files  if a "dot" is in the directory name](https://github.com/jekyll/jekyll/issues/5429).
+Workarounds are in place until Github Pages updates to a release of Jekyll
+that has a fix. In the meantime, follow the directions carefully when
+creating these directories.
 
 1. Save off master as a release:
 
   ```
-  cp -R ./master X_Y
+  cp -R ./master X.Y
   cp -R ./_includes/master ./_includes/X_Y
   cp -R ./_data/master ./_data/X_Y
   ```
@@ -114,12 +119,16 @@ The following steps detail how to cut a new release:
   ```
   -
     scope:
-      path: "X_Y"
+      path: X.Y
     values:
-      version: "X_Y"
+      version: X.Y
+      version_fix: X_Y
+
   ```
 
-3. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html`. (This step should be replaced by automation ASAP.)
+3. Edit `_data/global.yml`:
+   - Add an entry to the `versions` list.
+   - Change the `version` to `X.Y`
 
 ## Testing
 
