@@ -10,6 +10,13 @@ kramdown:
   html_to_native: true
   syntax_highlighter: rouge
 
+# Note: The version_fix variable below is used to reference
+# versioned site data. Liquid has a bug where it truncates after the first `.` 
+# of a directory name in _data (i.e. _data/v0.1 will be stored as data.v0). 
+# https://github.com/jekyll/jekyll/issues/5429
+# Until that bugfix is included in the next github pages gem revision,
+# we store version data in _data/v0_1 and do a string replace,
+# and reference the data via site.data[version_fix].
 defaults:
   -
     scope:
@@ -22,8 +29,10 @@ defaults:
       path: "master"
     values:
       version: master
+      version_fix: master
   -
     scope:
       path: "v1.5"
     values:
       version: v1.5
+      version_fix: v1_5

@@ -8,13 +8,13 @@ Use the version selector at the top-right of this page to view a different relea
 
 ## v1.5.0
 
-| Component                     | Version  |
-|-------------------------------|----------|
-| felix                         | v1.4.1b2 |
-| calicoctl                     | v0.22.0  |
-| calico/node                   | v0.22.0  |
-| calico/node-libnetwork        | v0.9.0   |
-| calico/cni                    | v1.4.2   |
-| libcalico                     | v0.17.0  |
-| calico-bird                   | v0.1.0   |
-| calico/kube-policy-controller | v0.3.0   |
+| Component                     | Version                                                     |
+|-------------------------------|-------------------------------------------------------------|
+| felix                         | {{site.data[page.version_fix].versions.felix}}                       |
+| calicoctl                     | {{site.data[page.version_fix].versions.calicoctl}}                   |
+| calico/node                   | {{site.data[page.version_fix].versions.calico-node}}                 |
+| calico/node-libnetwork        | {{site.data[page.version_fix].versions.node-libnetwork}}            |
+| calico/cni                    | {{site.data[page.version_fix].versions.calico-cni}}                  |
+| libcalico                     | {{site.data[page.version_fix].versions.libcalico}}                   |
+| calico-bird                   | {{site.data[page.version_fix].versions.calico-bird}}                 |
+| calico/kube-policy-controller | {{site.data[page.version_fix].versions.kube-policy-controller}} |

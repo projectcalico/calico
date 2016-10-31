@@ -56,11 +56,11 @@ Options:
   --libnetwork              Use the libnetwork plugin.
   --libnetwork-image=<LIBNETWORK_IMAGE_NAME>    Docker image to use for
                             Calico's libnetwork driver.
-                            [default: calico/node-libnetwork:latest]
+                            [default: calico/node-libnetwork:{{site.data[page.version_fix].versions.node-libnetwork}}]
   --log-dir=<LOG_DIR>       The directory for logs [default: /var/log/calico]
   --no-pull                 Prevent from pulling the Calico node Docker images.
   --node-image=<DOCKER_IMAGE_NAME>    Docker image to use for Calico's per-node
-                            container. [default: calico/node:latest]
+                            container. [default: calico/node:{{site.data[page.version_fix].versions.node-libnetwork}}]
   --remove-endpoints        Remove the endpoint data when deleting the node
                             from the Calico network.
   --runtime=<RUNTIME>       Specify how Calico services should be
@@ -153,9 +153,9 @@ $ calicoctl node
 No IP provided. Using detected IP: 172.25.0.1
 Calico node is running with id: c95fc492d57bd7d3c568e5b1d67001c1cec7c01b771531618fbf910557e37f29
 
-# Run the Calico node with IPv4 and IPv6, using calico/node version v0.7.0
-$ calicoctl node --ip=172.25.0.1 --ip6=2620:0104::1 --node-image=calico/node:v0.7.0
-Pulling Docker image calico/node:v0.7.0
+# Run the Calico node with IPv4 and IPv6, using calico/node version {{site.data[page.version_fix].versions.calico-node}}
+$ calicoctl node --ip=172.25.0.1 --ip6=2620:0104::1 --node-image=calico/node:{{site.data[page.version_fix].versions.calico-node}}
+Pulling Docker image calico/node:{{site.data[page.version_fix].versions.calico-node}}
 
 Calico node is running with id: f97a6fe29109ea6d9cc3be70a2a6fd9b56a5dc3c4e9ba77f6b14643ec3da4915
 

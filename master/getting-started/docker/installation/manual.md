@@ -72,7 +72,7 @@ You can optionally preload the Calico Docker image to avoid the delay when you
 run `calicoctl node` the first time.  Select the appropriate version of the
 `calico/node` as required by the version of calicoctl:
 
-    docker pull calico/node:latest
+    docker pull calico/node:{{page.versions.calico-node}}
 
 ### Final checks
 
