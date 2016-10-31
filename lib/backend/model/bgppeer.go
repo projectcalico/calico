@@ -55,7 +55,7 @@ func (key BGPPeerKey) defaultPath() (string, error) {
 		return e, nil
 	case scope.Node:
 		if key.Hostname == "" {
-			return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+			return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 		}
 		e := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
 			key.Hostname, key.PeerIP.Version(), key.PeerIP)
@@ -81,7 +81,7 @@ func (key BGPPeerKey) String() string {
 	if key.Scope == scope.Global {
 		return fmt.Sprintf("BGPPeer(global, ip=%s)", key.PeerIP)
 	} else {
-		return fmt.Sprintf("BGPPeer(hostname=%s, ip=%s)", key.Hostname, key.PeerIP)
+		return fmt.Sprintf("BGPPeer(node=%s, ip=%s)", key.Hostname, key.PeerIP)
 	}
 }
 
