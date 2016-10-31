@@ -63,7 +63,7 @@ var _ = Describe("BGPPeer tests", func() {
 			_, outError := c.BGPPeers().Update(&api.BGPPeer{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: BGPPeer(hostname=node1, ip=10.0.0.1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: BGPPeer(node=node1, ip=10.0.0.1)").Error()))
 
 			By("Create, Apply, Get and compare")
 
@@ -141,7 +141,7 @@ var _ = Describe("BGPPeer tests", func() {
 			_, outError = c.BGPPeers().Get(meta1)
 
 			// Expect an error since the BGPPeer was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: BGPPeer(hostname=node1, ip=10.0.0.1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: BGPPeer(node=node1, ip=10.0.0.1)").Error()))
 
 			// Delete the second BGPPeer with meta2.
 			outError1 = c.BGPPeers().Delete(meta2)

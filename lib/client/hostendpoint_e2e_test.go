@@ -65,7 +65,7 @@ var _ = Describe("HostEndpoint tests", func() {
 			_, outError := c.HostEndpoints().Update(&api.HostEndpoint{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: HostEndpoint(hostname=hostname1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: HostEndpoint(node=hostname1, name=host1)").Error()))
 
 			By("Create, Apply, Get and compare")
 
@@ -147,7 +147,7 @@ var _ = Describe("HostEndpoint tests", func() {
 			_, outError = c.HostEndpoints().Get(meta1)
 
 			// Expect an error since the HostEndpoint was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: HostEndpoint(hostname=hostname1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: HostEndpoint(node=hostname1, name=host1)").Error()))
 
 			// Delete the second HostEndpoint with meta2.
 			outError1 = c.HostEndpoints().Delete(meta2)

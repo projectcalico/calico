@@ -73,7 +73,7 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 			_, outError := c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(hostname=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
 
 			By("Create, Apply, Get and compare")
 
@@ -154,7 +154,7 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 			_, outError = c.WorkloadEndpoints().Get(meta1)
 
 			// Expect an error since the WorkloadEndpoint was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(hostname=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
 
 			// Delete the second WorkloadEndpoint with meta2.
 			outError1 = c.WorkloadEndpoints().Delete(meta2)
