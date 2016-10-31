@@ -2,7 +2,8 @@
   "CN": "etcd",
   "hosts": [
     "localhost",
-    "etcd-authority-ssl"
+    "etcd-authority-ssl",
+    "127.0.0.1"
   ],
   "key": {
     "algo": "ecdsa",

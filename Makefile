@@ -240,10 +240,11 @@ run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	docker run --detach \
 	--net=host \
 	-v $(SOURCE_DIR)/certs:/etc/calico/certs \
-	--name calico-etcd-ssl quay.io/coreos/etcd:v2.0.11 \
+	--name calico-etcd-ssl quay.io/coreos/etcd \
+	etcd \
 	--cert-file "/etc/calico/certs/server.pem" \
 	--key-file "/etc/calico/certs/server-key.pem" \
-	--ca-file "/etc/calico/certs/ca.pem" \
+	--trusted-ca-file "/etc/calico/certs/ca.pem" \
 	--advertise-client-urls "https://etcd-authority-ssl:2379,https://localhost:2379" \
 	--listen-client-urls "https://0.0.0.0:2379"
 
