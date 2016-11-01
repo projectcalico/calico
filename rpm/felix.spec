@@ -13,6 +13,9 @@ Source45:       calico-felix.service
 BuildArch:      x86_64
 
 
+%define _unpackaged_files_terminate_build 0
+
+
 %description
 Project Calico is an open source solution for virtual networking in
 cloud data centers. Its IP-centric architecture offers numerous
@@ -26,7 +29,6 @@ Virtualization (NFV).
 %package -n calico-common
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       python-etcd, posix-spawn, python-setuptools
 
 %description -n calico-common
 This package provides common files.
@@ -135,8 +137,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -n calico-common
 %defattr(-,root,root,-)
-%{python_sitelib}/calico*
-%{python_sitelib}/felix*
 /usr/bin/calico-diags
 /usr/bin/calico-cleanup
 /usr/bin/calico-gen-bird-conf.sh
