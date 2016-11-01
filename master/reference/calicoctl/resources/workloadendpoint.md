@@ -15,8 +15,12 @@ metadata:
   labels:
     type: production
 spec:
-  ipNetworks: ["192.168.0.0/16", "00:bb::aa/128"]
-  profiles: [profile1, profile2]
+  ipNetworks:
+  - "192.168.0.0/16"
+  - "00:bb::aa/128"
+  profiles:
+  - profile1
+  - profile2
   interfaceName: eth0
   mac: "01:23:45:67:89:ab:cd:ef"
 ```
