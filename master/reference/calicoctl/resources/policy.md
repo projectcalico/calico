@@ -4,7 +4,7 @@ title: Policy resource (policy)
 # Policy Resource
 Policy objects can be thought of as being applied to a set of endpoints (rather than being a property of the endpoint) to give more flexible policy arrangements that can override or augment any ACLs directly associated with an endpoint through a profile.
 
-Each policy has a label/tag based selector predicate, such as “type == ‘webserver’ && role == ‘frontend’”, that selects which endpoints it should apply to, and an ordering number that specifies the policy’s priority. For each endpoint, Calico applies the security policies that apply to it, in priority order, and then that endpoint’s security profiles.
+Each policy has a label/tag based selector predicate, such as `type == webserver && role == frontend`, that selects which endpoints it should apply to, and an order number that specifies the policy’s priority. For each endpoint, Calico applies the security policies that apply to it, in priority order, and then that endpoint’s security profiles.
 
 ### Sample YAML
 ```
@@ -21,8 +21,8 @@ spec:
     icmp:
       - type: 10
       - code: 6
-    "!protocol": ipv6
-    "!icmp":
+    notProtocol": ipv6
+    notICMP:
       - type: 19
       - code: 255
     source:
@@ -30,19 +30,19 @@ spec:
       net: 10.0.0.0/16
       selector: type=='application'
       ports: [1234,"10:20"]
-      "!tag": bartag
-      "!net": 10.1.0.0/16
-      "!selector": type=='database'
-      "!ports": [1050]
+      notTag: bartag
+      notNet: 10.1.0.0/16
+      notSelector: type=='database'
+      notPorts: [1050]
     destination:
       tag: alphatag
       net: 10.2.0.0/16
       selector: type=='application'
       ports: ["100:200"]
-      "!tag": type=='bananas'
-      "!net": 10.3.0.0/16
-      "!selector": type=='apples'
-      "!ports": ["1050:110"]
+      notTag: type=='bananas'
+      notNet: 10.3.0.0/16
+      notSelector: type=='apples'
+      notPorts: ["1050:110"]
   egress:
   - action: allow
     source:
@@ -73,8 +73,8 @@ spec:
 | action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
 | protocol    | Positive protocol match.  | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
 | icmp        | ICMP match criteria.     | | [ICMPSpec](#icmpspec) |
-| "!protocol" | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| "!icmp"     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
+| notProtocol | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
+| notICMP     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
 | source      | Source match parameters. |  | [EntityRule](#entityrule) |
 | destination | Destination match parameters. |  | [EntityRule](#entityrule) |
 
@@ -90,10 +90,10 @@ spec:
 | name        | description                                | requirements                  | schema |
 |-------------|--------------------------------------------|----------------|--------|
 | tag      | Match expression on tags.                   |  | string |
-| net    | Match on cidr. |  | string representation of cidr |
+| net    | Match on CIDR. |  | string representation of cidr |
 | selector    | Selector expression. | | string |
 | ports | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
-| "!tag" | Negative match on tag. |  | string |
-| "!net" | Negative match on cidr. | | string representation of cidr |
-| "!selector" | Negative match on selector expression. | | string |
-| "!ports"      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
+| notTag | Negative match on tag. |  | string |
+| notNet | Negative match on CIDR. | | string representation of cidr |
+| notSelector | Negative match on selector expression. | | string |
+| notPorts      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |

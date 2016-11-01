@@ -20,8 +20,6 @@ toc:
       path: /reference/calicoctl/commands/apply
     - title: create
       path: /reference/calicoctl/commands/create
-    - title: config
-      path: /reference/calicoctl/commands/config
     - title: delete
       path: /reference/calicoctl/commands/delete
     - title: get
@@ -59,8 +57,8 @@ toc:
         path: /reference/calicoctl/resources/hostendpoint
       - title: Policy
         path: /reference/calicoctl/resources/policy
-      - title: Pool
-        path: /reference/calicoctl/resources/pool
+      - title: IPPool
+        path: /reference/calicoctl/resources/ippool
       - title: Profile
         path: /reference/calicoctl/resources/profile
       - title: WorkloadEndpoint

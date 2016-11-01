@@ -2,7 +2,7 @@
 title: Host Endpoint resource (hostEndpoint)
 ---
 
-A host endpoints refer to the “bare-metal” interfaces attached to the host that is running Calico’s agent, Felix.  Each endpoint may specify a set of labels and list of profiles that Calico will use to apply policy to the interface.  If no profiles or labels are applied, Calico, by default, will not apply any policy.
+A host endpoint refers to the “bare-metal” interfaces attached to the host that is running Calico’s agent, Felix.  Each endpoint may specify a set of labels and list of profiles that Calico will use to apply policy to the interface.  If no profiles or labels are applied, Calico, by default, will not apply any policy.
 
 ### Sample YAML
 ```
@@ -10,15 +10,15 @@ apiVersion: v1
 kind: hostEndpoint
 metadata:
   name: eth0
-  hostname: myhost
+  node: myhost
   labels:
-    tier: production
+    type: production
 spec:
   interface: eth0
-  expectedIPs:
+  expectedIPs: 
   - 192.168.0.1
   - 192.168.0.2
-  profiles:
+  profiles: 
   - profile1
   - profile2
 ```
@@ -29,7 +29,7 @@ spec:
 | name     | description                                               | requirements                             | schema |
 |----------|-----------------------------------------------------------|------------------------------------------|--------|
 | name     | The name of this hostEndpoint.                            |                                          | string |
-| hostname | The hostname of the host where this hostEndpoint resides. | Required for `create`/`update`/`delete`. | string |
+| node     | The hostname of the host where this hostEndpoint resides. | Required for `create`/`update`/`apply`/`delete`. | string |
 | labels   | A set of labels to apply to this endpoint.                |      | Dictionary with key and values as strings. |
 
 #### Spec
