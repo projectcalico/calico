@@ -15,8 +15,12 @@ metadata:
     type: production
 spec:
   interface: eth0
-  expectedIPs: [192.168.0.1, 192.168.0.2]
-  profiles: [profile1, profile2]
+  expectedIPs: 
+  - 192.168.0.1
+  - 192.168.0.2
+  profiles: 
+  - profile1
+  - profile2
 ```
 
 ### Definitions

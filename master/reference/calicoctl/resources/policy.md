@@ -21,8 +21,8 @@ spec:
     icmp:
       - type: 10
       - code: 6
-    "!protocol": ipv6
-    "!icmp":
+    notProtocol": ipv6
+    notICMP:
       - type: 19
       - code: 255
     source:
@@ -30,19 +30,19 @@ spec:
       net: 10.0.0.0/16
       selector: type=='application'
       ports: [1234,"10:20"]
-      "!tag": bartag
-      "!net": 10.1.0.0/16
-      "!selector": type=='database'
-      "!ports": [1050]
+      notTag: bartag
+      notNet: 10.1.0.0/16
+      notSelector: type=='database'
+      notPorts: [1050]
     destination:
       tag: alphatag
       net: 10.2.0.0/16
       selector: type=='application'
       ports: ["100:200"]
-      "!tag": type=='bananas'
-      "!net": 10.3.0.0/16
-      "!selector": type=='apples'
-      "!ports": ["1050:110"]
+      notTag: type=='bananas'
+      notNet: 10.3.0.0/16
+      notSelector: type=='apples'
+      notPorts: ["1050:110"]
   egress:
   - action: allow
     source:
@@ -73,8 +73,8 @@ spec:
 | action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
 | protocol    | Positive protocol match.  | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
 | icmp        | ICMP match criteria.     | | [ICMPSpec](#icmpspec) |
-| "!protocol" | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| "!icmp"     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
+| notProtocol | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
+| notICMP     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
 | source      | Source match parameters. |  | [EntityRule](#entityrule) |
 | destination | Destination match parameters. |  | [EntityRule](#entityrule) |
 

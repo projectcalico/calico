@@ -49,8 +49,12 @@ A file may contain multiple resource documents specified in a YAML list format. 
       type: database
   spec:
     interface: eth0
-    profiles: [prof1, prof2]
-    expectedIPs: [1.2.3.4, "00:bb::aa"]
+    profiles:
+    - prof1
+    - prof2
+    expectedIPs:
+    - 1.2.3.4
+    - "00:bb::aa"
 - apiVersion: v1
   kind: hostEndpoint
   metadata:
@@ -60,6 +64,9 @@ A file may contain multiple resource documents specified in a YAML list format. 
       type: frontend
   spec:
     interface: eth1
-    profiles: [prof1, prof2]
-    expectedIPs: [1.2.3.5]
+    profiles:
+    - prof1
+    - prof2
+    expectedIPs:
+    - 1.2.3.5
 ```
