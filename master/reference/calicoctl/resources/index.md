@@ -9,7 +9,7 @@ translated diretly to JSON using standard YAML to JSON conversion.
 
 ## Overview of resource YAML file structure
 
-The calicoctl commands for resource management (create, delete, replace, get)
+The calicoctl commands for resource management (create, apply, delete, replace, get)
 all take YAML files as input.  The YAML file may contain a single resource type
 (e.g. a profile resource), or a list of multiple resource types (e.g. a profile and two
 hostEndpoint resources).
@@ -33,9 +33,9 @@ spec:
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
 | apiVersion     | Indicates the version of the API that the data corresponds to.                           | Currently only `v1` is accepted. | string |
-| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer), [`hostendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint), [`policy`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy), [`pool`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/pool), [`profile`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile), or [`workloadendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) | string |
-| metadata | Contains sub-fields which are used identify the particular instance of the resource. | | YAML |
-| spec | contains the resource specification, i.e. the configuration for the resource. | | YAML |
+| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer), [`hostendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint), [`policy`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy), [`IPPool`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool), [`profile`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile), or [`workloadendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) | string |
+| metadata | Contains sub-fields which are used to uniquely identify the particular instance of the resource. | | YAML |
+| spec | Contains the resource specification, i.e. the configuration for the resource. | | YAML |
 
 ### Multiple resources in a single file
 A file may contain multiple resource documents specified in a YAML list format. For example, the following is the contents of a file containing two `hostEndpoint` resources:
@@ -44,22 +44,29 @@ A file may contain multiple resource documents specified in a YAML list format. 
   kind: hostEndpoint
   metadata:
     name: endpoint1
-    hostname: host1
+    node: host1
     labels:
       type: database
   spec:
     interface: eth0
-    profiles: [prof1, prof2]
-    expectedIPs: [1.2.3.4, "00:bb::aa"]
+    profiles:
+    - prof1
+    - prof2
+    expectedIPs:
+    - 1.2.3.4
+    - "00:bb::aa"
 - apiVersion: v1
   kind: hostEndpoint
   metadata:
     name: endpoint2
-    hostname: host1
+    node: host1
     labels:
       type: frontend
   spec:
     interface: eth1
-    profiles: [prof1, prof2]
-    expectedIPs: [1.2.3.5]
+    profiles:
+    - prof1
+    - prof2
+    expectedIPs:
+    - 1.2.3.5
 ```
