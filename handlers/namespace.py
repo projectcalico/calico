@@ -63,15 +63,6 @@ def add_update_namespace(namespace):
     # update it if it already exists.
     client.create_profile(profile_name, rules, labels)
 
-    # Delete any per-namespace policy.  Older versions of the policy-controller
-    # used to install these, but they're not relevant any more.
-    name = "calico-%s" % profile_name
-    try:
-        client.remove_policy(NET_POL_TIER_NAME, name)
-    except KeyError:
-        # Policy doesn't exist, we're all good.
-        pass
-
     _log.debug("Created/updated profile for namespace %s", namespace_name)
 
 
@@ -80,7 +71,7 @@ def delete_namespace(namespace):
     Takes a deleted namespace and removes the corresponding
     configuration from the Calico datastore.
     """
-    # Delete the Calico policy which represnets this namespace.
+    # Delete the Calico policy which represents this namespace.
     namespace_name = namespace["metadata"]["name"]
     profile_name = NS_PROFILE_FMT % namespace_name
     _log.debug("Deleting namespace profile: %s", profile_name)
