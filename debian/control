@@ -63,7 +63,11 @@ Package: networking-calico
 Architecture: all
 Depends:
  ${misc:Depends},
- ${python:Depends}
+ python-pbr,
+ python-babel,
+ python-eventlet,
+ python-six,
+ python-etcd
 Description: Project Calico networking for OpenStack/Neutron.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. It uses IP routing to provide connectivity
