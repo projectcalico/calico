@@ -124,6 +124,19 @@ SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
 
 enable_plugin networking-calico $ncdir
+disable_service tempest
+
+# Devstack by default creates an initial Neutron network topology for VMs to
+# attach to: a private tenant network, an external public network, and a
+# Neutron router connecting these; and then VMs are attached to the tenant
+# network.  This setup works fine with the Calico driver, and it is the setup
+# that - for example - Tempest testing expects.  But for a first demonstration
+# of Calico we prefer to use a simpler setup with only a public provider
+# network: shared and with a 'local' network_type but no segmentation ID.  So
+# for that demonstration we tell Devstack not to create those initial networks,
+# and instead create a provider network with the 'neutron net-create' and
+# 'neutron subnet-create' invocations below.
+NEUTRON_CREATE_INITIAL_NETWORKS=False
 
 LOGFILE=stack.log
 LOG_COLOR=False

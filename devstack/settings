@@ -2,9 +2,9 @@
 # Devstack settings that are wanted when using Calico
 # ===================================================
 
-# If SERVICE_HOST is not the local host name, we will prepare a
-# compute-only node.
-if [ x$SERVICE_HOST != x$HOSTNAME ]; then
+# If SERVICE_HOST is not the local host name, or 127.0.0.1, we will
+# prepare a compute-only node.
+if [ x$SERVICE_HOST != x$HOSTNAME -a x$SERVICE_HOST != x127.0.0.1 ]; then
     CALICO_COMPUTE_ONLY=true
     MYSQL_HOST=${MYSQL_HOST:-$SERVICE_HOST}
     RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
@@ -22,7 +22,6 @@ else
     # services and agents; 'tempest' is OpenStack's high level testing
     # framework; and 'n-net' is Nova networking.
     disable_service dstat
-    disable_service tempest
     disable_service n-net
 
     # Enable services that Devstack doesn't enable by default, but
@@ -61,11 +60,3 @@ Q_AGENT=calico-felix
 
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
-
-# Devstack normally creates some initial Neutron networks for VMs to
-# attach to.  But it can't easily be made to do this in the way that
-# Calico wants, i.e. shared and with a 'local' network_type but no
-# segmentation ID.  So we tell Devstack not to create those initial
-# networks, and instead document the correct (for Calico) 'neutron
-# net-create' and 'neutron subnet-create' invocations in README.rst.
-NEUTRON_CREATE_INITIAL_NETWORKS=False
