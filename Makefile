@@ -29,7 +29,7 @@ CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releas
 GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
 
 # we can use "custom" build image name
-BUILD_CONTAINER_NAME?=calico/build:latest
+NODE_BUILD_CONTAINER_NAME?=calico/build:latest
 ###############################################################################
 # calico/node build. Contains the following areas
 # - Populate the calico_node/filesystem
@@ -59,7 +59,7 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile  $(addprefix $(NODE_
 # Build binary from python files, e.g. startup.py or allocate-ipip-addr.py
 $(NODE_CONTAINER_BIN_DIR)/%: $(NODE_CONTAINER_DIR)/%.py
 	-docker run -v $(SOURCE_DIR):/code --rm \
-	 $(BUILD_CONTAINER_NAME) \
+	 $(NODE_BUILD_CONTAINER_NAME) \
 	 sh -c 'pyinstaller -ayF --distpath $(@D) $< && chown $(shell id -u):$(shell id -g) -R $(@D)'
 
 # Get felix binaries
@@ -95,7 +95,7 @@ clean_calico_node:
 	# Retag and remove them so that they will be pulled again
 	# We avoid just deleting the image. We didn't build it here so it would be impolite to delete it.
 	-docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME)
-	-docker tag $(BUILD_CONTAINER_NAME) $(BUILD_CONTAINER_NAME)-backup && docker rmi $(BUILD_CONTAINER_NAME)
+	-docker tag $(NODE_BUILD_CONTAINER_NAME) $(NODE_BUILD_CONTAINER_NAME)-backup && docker rmi $(NODE_BUILD_CONTAINER_NAME)
 	rm -rf $(NODE_CONTAINER_BIN_DIR)
 
 ###############################################################################
@@ -113,8 +113,8 @@ LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/comman
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
-BUILD_CONTAINER_NAME_BROKEN=calico/calicoctl_build_container
-BUILD_CONTAINER_MARKER_BROKEN=calicoctl_build_container.created
+CALICOCTL_BUILD_CONTAINER_NAME=calico/calicoctl_build_container
+CALICOCTL_BUILD_CONTAINER_MARKER=calicoctl_build_container.created
 
 GO_FILES:=$(shell find calicoctl -name '*.go')
 
@@ -152,18 +152,18 @@ release/calicoctl: clean
 	cd release && ln -sf calicoctl-$(CALICOCTL_VERSION) calicoctl
 
 ## Build calicoctl in a container.
-build-containerized: $(BUILD_CONTAINER_MARKER)
+build-containerized: $(CALICOCTL_BUILD_CONTAINER_MARKER)
 	mkdir -p dist
 	docker run --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
 	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist:rw \
-	$(BUILD_CONTAINER_NAME) bash -c 'make bin/calicoctl; \
+	$(CALICOCTL_BUILD_CONTAINER_NAME) bash -c 'make bin/calicoctl; \
 	chown $(shell id -u):$(shell id -g) -R ./vendor ./dist'
 
 
-$(BUILD_CONTAINER_MARKER): Dockerfile.calicoctl.build
-	docker build -f Dockerfile.calicoctl.build -t $(BUILD_CONTAINER_NAME) .
+$(CALICOCTL_BUILD_CONTAINER_MARKER): Dockerfile.calicoctl.build
+	docker build -f Dockerfile.calicoctl.build -t $(CALICOCTL_BUILD_CONTAINER_NAME) .
 	touch $@
 
 .PHONY: update-tools
@@ -185,14 +185,13 @@ update-tools:
 ut: bin/calicoctl
 	./run-uts
 
-.PHONY: test-containerized
+PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: run-etcd $(BUILD_CONTAINER_MARKER)
-	docker run -ti --rm --privileged --net=host \
+test-containerized: run-etcd $(CALICOCTL_BUILD_CONTAINER_MARKER)
+	docker run --rm --privileged --net=host \
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
-	$(BUILD_CONTAINER_NAME) bash -c 'make ut; \
-	chown $(shell id -u):$(shell id -g) -R ./vendor'
+	$(CALICOCTL_BUILD_CONTAINER_NAME) bash -c 'make ut && chown $(shell id -u):$(shell id -g) -R ./vendor'
 
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
