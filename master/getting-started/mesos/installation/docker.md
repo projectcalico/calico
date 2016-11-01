@@ -34,8 +34,8 @@ chmod a+x calicoctl
 2. Launch the `calico/node` container.
 
 For production deployments, we recommend running the
-container as a services. Visit our guide on [running Calico
-as a Service]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service) to learn how to do this.
+container as a service. Visit our guide on [running Calico
+as a service]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service) to learn how to do this.
 
 For test environments that you would like to get up and running
 quickly, you can launch the container with `calicoctl`:
