@@ -1,13 +1,12 @@
-hash: b385655c0f503ef227e09c01c0f1e2a5619e8ea4d8aa74997ab373df54301a2c
-updated: 2016-10-31T11:05:58.317115412Z
+hash: 8721db413d3cd439601b43cb0cc5bb4bb5175af6f2f38cd967cfa15cd6810890
+updated: 2016-11-01T10:59:36.176933483Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: 43df091067566416dcc35a115c559b42be204a3d
-  repo: https://github.com/fasaxc/etcd-1.git
+  version: ea057115224138376622d63a51b699133310ea31
   subpackages:
   - client
   - pkg/fileutil
@@ -70,8 +69,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 6b59b9bb3b740b75052f24adf18546835d20a2c3
-  repo: https://github.com/fasaxc/libcalico-go.git
+  version: e0b0737c502563b0afd679808b0451a81350467c
   subpackages:
   - lib
   - lib/api
