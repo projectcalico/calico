@@ -83,13 +83,9 @@ For more information on the allowed levels, see the
 
 ## Docker network and IPAM driver
 When running Calico as a Docker network plugin (i.e. using the `--libnetwork`
-option on the `calicoctl node` command), the Calico driver is run in a separate
-calico-libnetwork container.
+option on the `calicoctl node` command), the Calico driver is run inside the calico/node container.
 
 The logs may be viewed running the standard `docker logs` command for this
 container.  e.g.
 
-    docker logs calico-libnetwork
-
-For details on how to change the log levels for the plugin, please view the
-[libnetwork-plugin documentation](https://github.com/projectcalico/libnetwork-plugin/blob/master/README.md).
+    docker logs calico-node

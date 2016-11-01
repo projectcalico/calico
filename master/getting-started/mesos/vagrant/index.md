@@ -43,7 +43,6 @@ That's it! Your Mesos Cluster is ready to use!
 | Agents       | Centos | calico-mesos-02 | 172.24.197.102 | mesos-agent            |
 |              |        | calico-mesos-03 | 172.24.197.103 | docker                 |
 |              |        |                 |                | calico-node            |
-|              |        |                 |                | calico-libnetwork      |
 '-----------------------------------------------------------------------------------'
 </pre>
 

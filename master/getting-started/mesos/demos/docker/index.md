@@ -14,7 +14,7 @@ For a deeper look at how to configure Calico with the Docker containerizer,
 check out [Calico's Docker Containerizer guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker).
 
 ## Prerequisites
-This demo requires a Mesos cluster with Calico-libnetwork running,
+This demo requires a Mesos cluster with calico/node running,
 along with a few additional components.
 
 To simplify the setup, we have created a Vagrant file to quickly
@@ -27,10 +27,10 @@ Your cluster should contain the following components.
     - Etcd - `172.24.197.101:2379`
     - Marathon - `172.24.197.101:8080`
     - Marathon Load Balancer - `172.24.197.101`
-    - `calico/node` and `calico/node-libnetwork` running in Docker 1.9+
+    - `calico/node` running in Docker 1.9+
 - Two Mesos Agent Instances - `172.24.197.102`, `172.24.197.103`
     - Calicoctl
-    - `calico/node` and `calico/node-libnetwork` running in Docker 1.9+
+    - `calico/node` running in Docker 1.9+
 
 ## Overview
 We will launch the following four dummy tasks across the cluster
