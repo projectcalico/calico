@@ -10,7 +10,7 @@ Package: calico-compute
 Architecture: all
 Depends:
  bird,
- calico-felix (>= 1.4), calico-felix (<< 1.5),
+ calico-felix (>= 1.4),
  networking-calico (= ${binary:Version}),
  neutron-dhcp-agent,
  iptables-persistent,
