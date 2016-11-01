@@ -1,0 +1,32 @@
+package: github.com/projectcalico/felix/go
+homepage: https://projectcalico.org
+license: Apache-2.0
+owners:
+- name: Rob Brockbank
+  email: rob@tigera.io
+import:
+- package: github.com/coreos/etcd
+  version: ea057115224138376622d63a51b699133310ea31
+  subpackages:
+  - client
+  - pkg/transport
+- package: github.com/docopt/docopt-go
+- package: github.com/ghodss/yaml
+- package: github.com/golang/glog
+- package: github.com/kelseyhightower/envconfig
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: gopkg.in/go-playground/validator.v8
+- package: github.com/satori/go.uuid
+- package: github.com/go-ini/ini
+  version: ^1.21.0
+- package: github.com/projectcalico/libcalico-go
+  subpackages:
+  - lib
+- package: github.com/Sirupsen/logrus
+  version: ^0.10.0
+- package: github.com/kardianos/osext
+- package: github.com/mipearson/rfw
+- package: github.com/prometheus/client_golang
+  version: ^0.8.0

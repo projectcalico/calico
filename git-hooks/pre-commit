@@ -16,51 +16,57 @@
 set -e
 
 # Make sure we get some output if an unexpected command happens to fail.
-trap "echo git pre-commit hook failed." EXIT
+trap "echo; echo git pre-commit hook failed." EXIT
 
 # Redirect output to stderr.
 exec 1>&2
 
 changed_files=$(git diff --cached --name-only)
 changed_py_files=$( { git diff --cached --name-only | grep -E '\.py$'; } || true)
+changed_go_files=$( { git diff --cached --name-only | grep -E '\.go$'; } || true)
 
 copyright_owner="Tigera, Inc"
 
 [ -f "git-hooks/settings.sh" ] && source "git-hooks/settings.sh"
 
 # Check copyright statement has been updated.
-echo "Checking changed files for copyright statements..."
+echo "Checking changed Python files for copyright statements..."
 year=$(date +'%Y')
 copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserved\."
 
-copyright_check_failed=false
-apache_check_failed=false
+py_copyright_check_failed=false
+py_apache_check_failed=false
 
 for filename in $changed_py_files; do
+  if [ ! -e  "${filename}" ]; then
+    continue
+  fi
   if ! grep -q -E "$copyright_re" "${filename}"; then
-    echo "Changed file is missing ${copyright_owner} copyright:" ${filename}
-    copyright_check_failed=true
+    echo "  Changed file is missing ${copyright_owner} copyright:" ${filename}
+    py_copyright_check_failed=true
   fi
   if ! grep -q -E "Licensed under the Apache License, Version 2.0" "${filename}"; then
-    echo "Changed file is missing Apache license:" ${filename}
-    apache_check_failed=true
+    echo "  Changed file is missing Apache license:" ${filename}
+    py_apache_check_failed=true
   fi
 done
 
-if $copyright_check_failed; then
+if $py_copyright_check_failed; then
   echo
-  echo "Copyright statement should match"
-  echo "  ${copyright_re}"
+  echo "Python Copyright statement should match:"
+  echo
+  echo "  # ${copyright_re}"
   echo "Example for new files:"
-  echo "  Copyright (c) ${year} ${copyright_owner}. All rights reserved."
+  echo "  # Copyright (c) ${year} ${copyright_owner}. All rights reserved."
   echo "Example for updated files (use commas and year ranges):"
-  echo "  Copyright (c) 2012,2015-${year} ${copyright_owner}. All rights reserved."
+  echo "  # Copyright (c) 2012,2015-${year} ${copyright_owner}. All rights reserved."
   echo "Change expected copyright owner by creating git-hooks/settings.sh."
 fi
 
-if $apache_check_failed; then
+if $py_apache_check_failed; then
   echo
-  echo "Apache license header should be:"
+  echo "Python Apache license header should be:"
+  echo
   echo '# Licensed under the Apache License, Version 2.0 (the "License");'
   echo '# you may not use this file except in compliance with the License.'
   echo '# You may obtain a copy of the License at'
@@ -74,7 +80,100 @@ if $apache_check_failed; then
   echo '# limitations under the License.'
 fi
 
-if $apache_check_failed || $copyright_check_failed; then
+
+# Run go fmt over the changed files.
+echo "Checking changed Go files for formatting, license etc..."
+go_copyright_check_failed=false
+gofmt_failed=false
+go_apache_check_failed=false
+logrus_hook_check_failed=false
+
+for filename in $changed_go_files; do
+  if [ ! -e  "${filename}" ]; then
+    continue
+  fi
+  if gofmt -d "${filename}" | grep '.'; then
+    echo "  gofmt would make changes to file:" ${filename}
+    gofmt_failed=true
+  fi
+  if ! grep -q -E "Licensed under the Apache License, Version 2.0" "${filename}"; then
+    echo "  Changed file is missing Apache license:" ${filename}
+    go_apache_check_failed=true
+  fi
+  if echo $filename | grep -q '_suite_test.go'; then
+    if ! grep -q 'HookLogrus' "$filename"; then
+      echo "  Test suite doesn't call HookLogrusForGinkgo(): $filename"
+      logrus_hook_check_failed=true
+    fi
+  fi
+done
+if $gofmt_failed; then
+  echo
+  echo "Some files failed gofmt check.  Run "
+  echo "  make go-fmt"
+  echo "to format all files."
+  echo
+  exit 1
+fi
+
+# Check copyright statement has been updated.
+echo "Checking changed Go files for copyright statements..."
+year=$(date +'%Y')
+copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserved\."
+
+for filename in $changed_go_files; do
+  if [ -e "${filename}" ] && ! grep -q -E "$copyright_re" "${filename}"; then
+    echo "Changed file is missing Tigera copyright:" ${filename}
+    go_copyright_check_failed=true
+  fi
+done
+
+if $logrus_hook_check_failed; then
+  echo
+  echo "One or more test suites don't call HookLogrusForGinkgo()."
+  echo "If a suite doesn't call HookLogrusForGinkgo() then its logs won't be"
+  echo "correctly captured during UT runs.  Example:"
+  echo
+  echo 'import "github.com/projectcalico/libcalico-go/lib/testutils"'
+  echo 'func init() {'
+  echo '	testutils.HookLogrusForGinkgo()'
+  echo '}'
+fi
+
+if $go_copyright_check_failed; then
+  echo
+  echo "Copyright statement should match"
+  echo "  // ${copyright_re}"
+  echo "Example for new files:"
+  echo "  // Copyright (c) ${year} ${copyright_owner}. All rights reserved."
+  echo "Example for updated files (use commas and year ranges):"
+  echo "  // Copyright (c) 2012,2015-${year} ${copyright_owner}. All rights reserved."
+  echo "Change expected copyright owner by creating git-hooks/settings.sh."
+fi
+
+if $go_apache_check_failed; then
+  echo
+  echo "Apache license header should be as follows (with blank line before"
+  echo "package):"
+  echo
+  echo '// Licensed under the Apache License, Version 2.0 (the "License");'
+  echo '// you may not use this file except in compliance with the License.'
+  echo '// You may obtain a copy of the License at'
+  echo '//'
+  echo '//     http://www.apache.org/licenses/LICENSE-2.0'
+  echo '//'
+  echo '// Unless required by applicable law or agreed to in writing, software'
+  echo '// distributed under the License is distributed on an "AS IS" BASIS,'
+  echo '// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.'
+  echo '// See the License for the specific language governing permissions and'
+  echo '// limitations under the License.'
+  echo
+  echo 'package ...'
+fi
+
+if $go_apache_check_failed || $go_copyright_check_failed || \
+   $py_apache_check_failed || $py_copyright_check_failed || \
+   $logrus_hook_check_failed; then
   exit 1
 fi
 

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -x
+set -e
+
+repo=/code/
+pkg=felix
+
+mkdir -p /tmp/rpmbuild/BUILD \
+         /tmp/rpmbuild/RPMS \
+         /tmp/rpmbuild/SOURCES \
+         /tmp/rpmbuild/SPECS\
+         /tmp/rpmbuild/SRPMS
+
+cd /tmp/rpmbuild
+
+# Infer RPM spec and package names, and link the package spec into
+# ../SPECS.
+spec=`basename ${repo}/rpm/*.spec`
+cd SPECS
+ln -sf ${repo}/rpm/$spec
+
+# Infer the version that the spec wants to build.
+version=`grep Version: $spec | awk '{print $2;}'`
+
+# Link patches into ../SOURCES.
+cd ../SOURCES
+for f in ${repo}/rpm/*; do ln -sf $f; done
+
+# Tar up the Git source, with the naming that rpmbuild expects.
+dir=${pkg}-${version}
+unpacked_src_dir=/tmp/$dir
+mkdir -p $unpacked_src_dir
+cd /code/
+cp -r dist/calico-felix ${unpacked_src_dir}/pyi
+cp -r etc \
+      python/* \
+      LICENSE \
+      README.md \
+      ${unpacked_src_dir}
+cd /tmp
+tar -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
+
+# Build.
+cd rpmbuild
+rpmbuild --define '_topdir '`pwd` -ba SPECS/${spec}
+
+rm -rf /code/dist/rpms
+cp -r /tmp/rpmbuild /code/dist/rpms

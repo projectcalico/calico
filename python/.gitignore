@@ -1,0 +1,4 @@
+.coverage
+.tox
+coverage.xml
+htmlcov

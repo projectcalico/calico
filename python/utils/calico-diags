@@ -1,0 +1,112 @@
+#!/bin/bash
+[ -z $BASH ] && echo "You must run this script in bash" && exit 1
+if [ "$LOGNAME" != "root" ]
+then
+  echo "You must run this script as root"
+  exit 1
+fi
+
+echo "Collecting diags"
+echo "This script attempts to collect a wide range of diagnostics, some of which may not be available on your system - don't worry if this script produces warning messages for these."
+
+ETCDCTL=${ETCDCTL:-etcdctl}
+ROUTE_FILE=route
+CALICO_CFG=/etc/calico
+CALICO_DIR=/var/log/calico
+NEUTRON_DIR=/var/log/neutron
+NOVA_DIR=/var/log/nova
+date=`date +"%F_%H-%M-%S"`
+system=`hostname`
+diags_file=calico-diags_"$system"_"$date"
+diags_dir=/tmp/"$diags_file"
+current_dir=`pwd`
+echo "  creating dir $diags_dir"
+mkdir "$diags_dir" || exit 2
+pushd "$diags_dir" > /dev/null || exit 2
+
+echo "  storing system state..."
+
+echo DATE=$date > date
+echo $system > hostname
+
+facter > facter 2>&1
+ps auwxx > ps 2>&1
+df -h > df
+ss -tnlp > ss 2>&1
+
+dpkg -l > dpkg 2>&1
+yum list > yum_list 2>&1
+yum repolist > yum_repolist 2>&1
+
+for cmd in "route -n" "ip route" "ip -6 route" "ip rule list"
+do
+  echo $cmd >> $ROUTE_FILE
+  $cmd >> $ROUTE_FILE
+  echo >> $ROUTE_FILE
+done
+
+ip link show > ip_link
+ip addr show > ip_addr
+netstat -an > netstat
+iptables-save > iptables
+ip6tables-save > ip6tables
+ipset list > ipset
+ip -6 neigh > ip6neigh
+birdc show protocols > bird_protocols 2>&1
+
+service calico-felix status > felix_status 2>&1
+service neutron-server status > neutron_server_status 2>&1
+service nova-compute status > nova_compute_status 2>&1
+rabbitmqctl status rabbitmq_status 2>&1
+
+echo "  copying contents of etcd..."
+
+${ETCDCTL} ls --recursive -p | grep -v '/$' | xargs -n1 -I '{}' sh -c "echo; echo {}; ${ETCDCTL} get {} " | tee etcdctl_get
+
+echo "  copying config files..."
+
+if [ -f /etc/bird.conf ]; then
+    cp /etc/bird.conf bird.conf
+else
+    cp /etc/bird/bird.conf bird.conf
+fi
+
+cp -a "$CALICO_CFG" etc_calico
+
+# Use grep -v to attempt to strip out password information
+grep -v -i "password" /etc/nova/nova.conf > nova.conf 2>&1
+grep -v -i "password" /etc/neutron/neutron.conf > neutron.conf 2>&1
+grep -v -i "password" /etc/neutron/plugins/ml2/ml2_conf.ini > ml2_conf.ini 2>&1
+grep -v -i "password" /etc/neutron/dhcp_agent.ini > dhcp_agent.ini 2>&1
+grep -v -i "password" /etc/neutron/metadata_agent.ini > metadata_agent.ini 2>&1
+
+echo "  copying log files..."
+
+cp -a "$CALICO_DIR" .
+cp -a "$NEUTRON_DIR" .
+cp -a "$NOVA_DIR" .
+if [ -e /var/log/upstart ]; then
+  mkdir upstart
+  cp /var/log/upstart/calico* ./upstart/
+  cp /var/log/upstart/nova* ./upstart/
+  cp /var/log/upstart/neutron* ./upstart/
+fi
+
+mkdir logs
+cp /var/log/syslog* logs >/dev/null 2>&1
+cp /var/log/messages* logs >/dev/null 2>&1
+
+# Copy DevStack logs, if present.
+test -d /opt/stack/logs && cp -a /opt/stack/logs logs/devstack
+
+echo "  compressing..."
+cd ..
+tar -Jcf "$current_dir/$diags_file.tar.xz" "$diags_file"
+
+popd > /dev/null
+
+echo "Diags saved to \"$diags_dir\" and compressed to \"./$diags_file.tar.xz\""
+echo "Please run this script on all nodes involved in your issue (including any controllers)."
+echo "We've tried to strip passwords from your nova and neutron configuration, but please review the diagnostics yourself before uploading."
+echo "Once you've collected and reviewed the diagnostics, please raise a github issue detailing the symptoms you encountered, upload the diagnostics and link them from the issue."
+echo "If you don't have anywhere to upload diagnostics to, you could use \`curl --upload-file ./$diags_file.tar.xz https://transfer.sh/controller_diags.tar.xz\`."
