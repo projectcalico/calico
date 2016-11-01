@@ -30,10 +30,10 @@
       - action: deny
         protocol: tcp
         source:
-          "!tag": abcd
-          "!net": aa:bb:cc::ff/100
-          "!selector": 
-          "!ports": [100]
+          notTag: abcd
+          notNet: aa:bb:cc::ff/100
+          notSelector: 
+          notPorts: [100]
     selector:
 - apiVersion: v1
   kind: hostEndpoint

@@ -24,10 +24,10 @@
       - action: deny
         protocol: tcp
         source:
-          "!tag": abcd
-          "!net": aa:bb:cc::ff/100
-          "!selector": 
-          "!ports": [100,"3:4",65535,"10:20","20:40"]
+          notTag: abcd
+          notNet: aa:bb:cc::ff/100
+          notSelector: 
+          notPorts: [100,"3:4",65535,"10:20","20:40"]
     selector:
 - apiVersion: v1
   kind: policy
