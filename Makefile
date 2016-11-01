@@ -333,12 +333,19 @@ ut: python-ut go-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
 	$(MAKE) python-build-image
 	-docker rm -f felix-ut
+	# Start container to run commands in.  We background the container so we
+	# can run some commands as root and some not.
 	docker run --name felix-ut \
 	           -v $${PWD}:/code \
 	           -w /code/python \
 	           -tid calico/build-felix-python sh
+	# Pre-create the egg-info as non-root user.
+	docker exec --user $(MY_UID):$(MY_GID) felix-ut python2.7 ./setup.py egg_info
+	# Do the install as root.
 	docker exec felix-ut sh -c 'pip install -e .'
+	# Run the UTs as non-root.
 	docker exec --user $(MY_UID):$(MY_GID) felix-ut ./run-unit-test.sh
+	# Tear down the container.
 	docker rm -f felix-ut
 
 .PHONY: go-ut
