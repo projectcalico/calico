@@ -62,8 +62,8 @@ CANDIDATE_VERSION_REPLACE = [
     (re.compile(r'http://www\.projectcalico\.org/builds/calicoctl'),
      'http://www.projectcalico.org/builds/calicoctl?circleci-branch={version}-candidate'),
 
-    (re.compile(r'git\+https://github\.com/projectcalico/calico\.git'),
-     'git+https://github.com/projectcalico/calico.git@{calico-version}'),
+    (re.compile(r'git\+https://github\.com/projectcalico/felix\.git'),
+     'git+https://github.com/projectcalico/felix.git@{calico-version}'),
 
     (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git@master'),
      'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
@@ -167,7 +167,7 @@ def start_release():
 
         calico_version = \
             utils.get_github_library_version("calico (felix)", __felix_version__,
-                                             "https://github.com/projectcalico/calico")
+                                             "https://github.com/projectcalico/felix")
         libcalico_version = \
             utils.get_github_library_version("libcalico", __libcalico_version__,
                                              "https://github.com/projectcalico/libcalico")
