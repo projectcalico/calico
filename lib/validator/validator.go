@@ -63,6 +63,7 @@ func init() {
 	registerStructValidator(validatePoolMetadata, api.PoolMetadata{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
+	registerStructValidator(validateNodeSpec, api.NodeSpec{})
 }
 
 func registerFieldValidator(key string, fn validator.Func) {
@@ -81,7 +82,7 @@ func Validate(current interface{}) error {
 
 	verr := errors.ErrorValidation{}
 	for _, f := range err.(validator.ValidationErrors) {
-		verr.ErrFields = append(verr.ErrFields,
+		verr.ErroredFields = append(verr.ErroredFields,
 			errors.ErroredField{Name: f.Name, Value: f.Value})
 	}
 	return verr
@@ -276,5 +277,13 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts), "Destination.NotPorts", "destination !ports", "port is not valid for protocol")
 		}
+	}
+}
+
+func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel) {
+	ns := structLevel.CurrentStruct.Interface().(api.NodeSpec)
+
+	if ns.BGP != nil && ns.BGP.IPv4Address == nil && ns.BGP.IPv6Address == nil {
+		structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address), "BGP.IPv4Address", "ipv4Address", "no BGP IP address specified")
 	}
 }

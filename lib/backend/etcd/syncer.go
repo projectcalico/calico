@@ -17,6 +17,8 @@ package etcd
 import (
 	"time"
 
+	"math/rand"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
@@ -24,7 +26,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hwm"
 	"golang.org/x/net/context"
-	"math/rand"
 )
 
 // defaultEtcdClusterID is default value that an etcd cluster uses if it

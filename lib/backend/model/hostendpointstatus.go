@@ -37,7 +37,7 @@ type HostEndpointStatusKey struct {
 
 func (key HostEndpointStatusKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
 	if key.EndpointID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}

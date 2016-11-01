@@ -20,8 +20,6 @@ import (
 
 	"time"
 
-	"encoding/json"
-
 	log "github.com/Sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
@@ -32,12 +30,13 @@ import (
 )
 
 var (
-	etcdApplyOpts       = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
-	etcdCreateOpts      = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
-	etcdDeleteEmptyOpts = &etcd.DeleteOptions{Recursive: false, Dir: true}
-	etcdGetOpts         = &etcd.GetOptions{Quorum: true}
-	etcdListOpts        = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
-	clientTimeout       = 30 * time.Second
+	etcdApplyOpts        = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
+	etcdCreateOpts       = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
+	etcdDeleteEmptyOpts  = &etcd.DeleteOptions{Recursive: false, Dir: true}
+	etcdGetOpts          = &etcd.GetOptions{Quorum: true}
+	etcdListOpts         = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
+	etcdListChildrenOpts = &etcd.GetOptions{Quorum: true, Recursive: false, Sort: true}
+	clientTimeout        = 30 * time.Second
 )
 
 type EtcdConfig struct {
@@ -172,7 +171,19 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 	}
 	log.Infof("Get Key: %s", key)
 	if r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
-		return nil, convertEtcdError(err, k)
+		// Convert the error to our non datastore specific types
+		err = convertEtcdError(err, k)
+
+		// Older deployments with etcd may not have the Host metadata, so in the
+		// event that the key does not exist, just do a get on the directory to
+		// check it exists, and if so return an empty Metadata.
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+			if _, ok := k.(model.HostMetadataKey); ok {
+				return c.getHostMetadataFromDirectory(k)
+			}
+		}
+
+		return nil, err
 	} else if v, err := model.ParseValue(k, []byte(r.Node.Value)); err != nil {
 		return nil, err
 	} else {
@@ -183,10 +194,25 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 // List entries in the datastore.  This may return an empty list of there are
 // no entries matching the request in the ListInterface.
 func (c *EtcdClient) List(l model.ListInterface) ([]*model.KVPair, error) {
+	// We need to handle the listing of HostMetadata separately for two reasons:
+	// -  older deployments may not have a Metadata, and instead we need to enumerate
+	//    based on existence of the directory
+	// -  it is not sensible to enumerate all of the endpoints, so better to enumerate
+	//    the host directories and then attempt to get the metadata.
+	switch lt := l.(type) {
+	case model.HostMetadataListOptions:
+		return c.listHostMetadata(lt)
+	default:
+		return c.defaultList(l)
+	}
+}
+
+// defaultList provides the default list processing.
+func (c *EtcdClient) defaultList(l model.ListInterface) ([]*model.KVPair, error) {
 	// To list entries, we enumerate from the common root based on the supplied
 	// IDs, and then filter the results.
 	key := model.ListOptionsToDefaultPathRoot(l)
-	log.Infof("List Key: %s", key)
+	log.Debugf("List Key: %s", key)
 	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListOpts); err != nil {
 		// If the root key does not exist - that's fine, return no list entries.
 		err = convertEtcdError(err, nil)
@@ -221,9 +247,9 @@ func (c *EtcdClient) set(d *model.KVPair, options *etcd.SetOptions) (*model.KVPa
 		logCxt.WithError(err).Error("Failed to convert key to path")
 		return nil, err
 	}
-	bytes, err := json.Marshal(d.Value)
+	bytes, err := model.SerializeValue(d)
 	if err != nil {
-		logCxt.WithError(err).Error("Failed to marshal value")
+		logCxt.WithError(err).Error("Failed to serialize value")
 		return nil, err
 	}
 
@@ -266,13 +292,13 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 			kvs = append(kvs, kv)
 		}
 	}
-	log.Infof("Returning: %#v", kvs)
+	log.Debugf("Returning: %#v", kvs)
 	return kvs
 }
 
 func convertEtcdError(err error, key model.Key) error {
 	if err == nil {
-		log.Info("Command completed without error")
+		log.Debug("Command completed without error")
 		return nil
 	}
 
@@ -280,16 +306,16 @@ func convertEtcdError(err error, key model.Key) error {
 	case etcd.Error:
 		switch err.(etcd.Error).Code {
 		case etcd.ErrorCodeTestFailed:
-			log.Info("Test failed error")
+			log.Debug("Test failed error")
 			return errors.ErrorResourceUpdateConflict{Identifier: key}
 		case etcd.ErrorCodeNodeExist:
-			log.Info("Node exists error")
+			log.Debug("Node exists error")
 			return errors.ErrorResourceAlreadyExists{Err: err, Identifier: key}
 		case etcd.ErrorCodeKeyNotFound:
-			log.Info("Key not found error")
+			log.Debug("Key not found error")
 			return errors.ErrorResourceDoesNotExist{Err: err, Identifier: key}
 		case etcd.ErrorCodeUnauthorized:
-			log.Info("Unauthorized error")
+			log.Debug("Unauthorized error")
 			return errors.ErrorConnectionUnauthorized{Err: err}
 		default:
 			log.Infof("Generic etcd error error: %v", err)
@@ -298,5 +324,81 @@ func convertEtcdError(err error, key model.Key) error {
 	default:
 		log.Infof("Unhandled error: %v", err)
 		return errors.ErrorDatastoreError{Err: err, Identifier: key}
+	}
+}
+
+// getHostMetadataFromDirectory gets hosts that may not be configured with a host
+// metadata (older deployments or Openstack deployments).
+func (c *EtcdClient) getHostMetadataFromDirectory(k model.Key) (*model.KVPair, error) {
+	// The delete path of the host metadata includes the whole of the per-host
+	// felix tree, so check the existence of this tree and return and empty
+	// Metadata if it exists.
+	key, err := model.KeyToDefaultDeletePath(k)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
+		return nil, convertEtcdError(err, k)
+	}
+
+	// The node exists, so return an empty Metadata.
+	kv := &model.KVPair{
+		Key:   k,
+		Value: &model.HostMetadata{},
+	}
+	return kv, nil
+}
+
+func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model.KVPair, error) {
+	// If the hostname is specified then just attempt to get the host,
+	// returning an empty string if it does not exist.
+	if l.Hostname != "" {
+		log.Debug("Listing host metadata with exact key")
+		hmk := model.HostMetadataKey{
+			Hostname: l.Hostname,
+		}
+		if kv, err := c.Get(hmk); err == nil {
+			return []*model.KVPair{kv}, nil
+		} else {
+			err = convertEtcdError(err, nil)
+			switch err.(type) {
+			case errors.ErrorResourceDoesNotExist:
+				return []*model.KVPair{}, nil
+			default:
+				return nil, err
+			}
+		}
+	}
+
+	// No hostname specified, so enumerate the directories directly under
+	// the host tree, return no entries if the host directory does not exist.
+	log.Debug("Listing all host metadatas")
+	key := "/calico/v1/host"
+	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListChildrenOpts); err != nil {
+		// If the root key does not exist - that's fine, return no list entries.
+		log.WithError(err).Info("Error enumerating host directories")
+		err = convertEtcdError(err, nil)
+		switch err.(type) {
+		case errors.ErrorResourceDoesNotExist:
+			return []*model.KVPair{}, nil
+		default:
+			return nil, err
+		}
+	} else {
+		// TODO:  Since the host metadata is currently empty, we don't need
+		// to perform an additional get here, but in the future when the metadata
+		// may contain fields, we would need to perform a get.
+		log.Debug("Parse host directories.")
+		kvs := []*model.KVPair{}
+		for _, n := range results.Node.Nodes {
+			k := l.KeyFromDefaultPath(n.Key + "/metadata")
+			if k != nil {
+				kvs = append(kvs, &model.KVPair{
+					Key:   k,
+					Value: &model.HostMetadata{},
+				})
+			}
+		}
+		return kvs, nil
 	}
 }

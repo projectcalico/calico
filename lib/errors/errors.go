@@ -61,7 +61,7 @@ func (e ErrorConnectionUnauthorized) Error() string {
 
 // Validation error containing the fields that are failed validation.
 type ErrorValidation struct {
-	ErrFields []ErroredField
+	ErroredFields []ErroredField
 }
 
 type ErroredField struct {
@@ -70,15 +70,15 @@ type ErroredField struct {
 }
 
 func (e ErrorValidation) Error() string {
-	if len(e.ErrFields) == 0 {
+	if len(e.ErroredFields) == 0 {
 		return "unknown validation error"
-	} else if len(e.ErrFields) == 1 {
+	} else if len(e.ErroredFields) == 1 {
 		return fmt.Sprintf("error with field %s = '%v'",
-			e.ErrFields[0].Name,
-			e.ErrFields[0].Value)
+			e.ErroredFields[0].Name,
+			e.ErroredFields[0].Value)
 	} else {
 		s := "error with the following fields:\n"
-		for _, f := range e.ErrFields {
+		for _, f := range e.ErroredFields {
 			s = s + fmt.Sprintf("-  %s = '%v'\n",
 				f.Name,
 				f.Value)

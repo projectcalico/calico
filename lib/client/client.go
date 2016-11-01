@@ -48,6 +48,11 @@ func New(config api.ClientConfig) (*Client, error) {
 	return &cc, err
 }
 
+// Nodes returns an interface for managing node resources.
+func (c *Client) Nodes() NodeInterface {
+	return newNodes(c)
+}
+
 // Policies returns an interface for managing policy resources.
 func (c *Client) Policies() PolicyInterface {
 	return newPolicies(c)
@@ -81,6 +86,11 @@ func (c *Client) BGPPeers() BGPPeerInterface {
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c *Client) IPAM() IPAMInterface {
 	return newIPAM(c)
+}
+
+// Config returns an interface for managing system configuration..
+func (c *Client) Config() ConfigInterface {
+	return newConfigs(c)
 }
 
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)

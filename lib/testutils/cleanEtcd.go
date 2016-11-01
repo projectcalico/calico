@@ -26,3 +26,13 @@ func CleanEtcd() {
 		log.Println(err)
 	}
 }
+
+// DumpEtcd prints out a recursive dump of the contents of etcd.
+func DumpEtcd() {
+	output, err := exec.Command("curl", "http://127.0.0.1:2379/v2/keys?recursive=true").Output()
+	if err != nil {
+		log.Println(err)
+	} else {
+		log.Println(string(output))
+	}
+}

@@ -394,6 +394,12 @@ func init() {
 					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
 				},
 			}, false),
+
+		// (API) NodeSpec
+		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &ipv4_1}}, true),
+		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &ipv6_1}}, true),
+		Entry("should accept node with no BGP", api.NodeSpec{}, true),
+		Entry("should reject node with BGP but no IPs", api.NodeSpec{BGP: &api.NodeBGPSpec{}}, false),
 	)
 }
 

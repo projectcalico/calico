@@ -15,6 +15,7 @@
 package client
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -106,6 +107,20 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 		return nil, err
 	}
 
+	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
+	// expect a null value in the JSON, so we fix up to make Labels an empty map
+	// and tags an empty slice.
+	tags := ap.Spec.Tags
+	if tags == nil {
+		log.Info("Tags is nil - convert to empty map for backend")
+		tags = []string{}
+	}
+	labels := ap.Metadata.Labels
+	if labels == nil {
+		log.Info("Labels is nil - convert to empty map for backend")
+		labels = map[string]string{}
+	}
+
 	d := model.KVPair{
 		Key: k,
 		Value: &model.Profile{
@@ -113,8 +128,8 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 				InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 				OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
 			},
-			Tags:   ap.Spec.Tags,
-			Labels: ap.Metadata.Labels,
+			Tags:   tags,
+			Labels: labels,
 		},
 	}
 

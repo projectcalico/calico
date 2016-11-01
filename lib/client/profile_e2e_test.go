@@ -74,7 +74,7 @@ var _ = Describe("Profile tests", func() {
 			_, outError := c.Profiles().Update(&api.Profile{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: ProfileTags(name=profile1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: Profile(name=profile1)").Error()))
 
 			By("Create, Apply, Get and compare")
 
@@ -155,7 +155,7 @@ var _ = Describe("Profile tests", func() {
 			_, outError = c.Profiles().Get(meta1)
 
 			// Expect an error since the profile was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: ProfileTags(name=profile1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: Profile(name=profile1)").Error()))
 
 			// Delete the second profile with meta2.
 			outError1 = c.Profiles().Delete(meta2)
