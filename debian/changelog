@@ -1,8 +1,36 @@
-calico (1.4.3+1__SNAPSHOT__~__STREAM__) __STREAM__; urgency=low
+calico (1.4.4+1__SNAPSHOT__~__STREAM__) __STREAM__; urgency=low
 
   * Development release.
 
  -- Shaun Crampton <shaun@tigera.io>  Mon, 5 Sep 2016 15:24:06 +0100
+
+felix (1.4.4-1-xenial) xenial; urgency=low
+
+  * felix release (from Git commit 567247c).
+    - Add a retry for deleting conntrack entries.
+    - calico-diags: include DevStack logs, if present
+    - Make repo branch for coverage diff configurable
+    - Add 'this doc has moved' to relevant location in new docs site.
+    - Update coveralls badge.
+    - IP SAN support in pyinstaller build
+    - Add SemaphoreCI badge.
+    - Pin pycparser version.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 31 Oct 2016 16:15:06 +0000
+
+felix (1.4.4-1-trusty) trusty; urgency=low
+
+  * felix release (from Git commit 567247c).
+    - Add a retry for deleting conntrack entries.
+    - calico-diags: include DevStack logs, if present
+    - Make repo branch for coverage diff configurable
+    - Add 'this doc has moved' to relevant location in new docs site.
+    - Update coveralls badge.
+    - IP SAN support in pyinstaller build
+    - Add SemaphoreCI badge.
+    - Pin pycparser version.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 31 Oct 2016 16:15:06 +0000
 
 calico (1.4.3-1-xenial) xenial; urgency=low
 

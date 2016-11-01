@@ -44,8 +44,8 @@ packages = setuptools.find_packages()
 requirements = collect_requirements()
 
 setuptools.setup(
-    name="calico",
-    version="1.4.4.dev1",
+    name="felix",
+    version="1.4.5.dev1",
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [

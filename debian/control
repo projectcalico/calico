@@ -1,4 +1,4 @@
-Source: calico
+Source: felix
 Section: net
 Priority: optional
 Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
