@@ -42,7 +42,7 @@ test: ut
 
 # Extract current version from the debian-style changelog and replace the
 # placeholders with the stream name.
-DEB_VERSION:=$(shell grep calico debian/changelog | \
+DEB_VERSION:=$(shell grep felix debian/changelog | \
                      head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1 | \
                      cut -d '-' -f 1)
 DEB_VERSION_TRUSTY:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/trusty/g")
