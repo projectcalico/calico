@@ -52,7 +52,6 @@ spec:
 The above YAML spec defines almost all of possible fields for a profile specifications, with the following exceptions:
 - "egress" supports all fields that "ingress" does.
 
-See Calico's [See selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) for more information on valid selector expressions.
 
 
 #### Metadata
@@ -96,9 +95,9 @@ See Calico's [See selector expression documentation]({{site.baseurl}}/{{page.ver
 |-------------|--------------------------------------------|----------------------------------------|-------------------------------|
 | tag         | Match expression on tags.                  |                                        | string                        |
 | net         | Match on cidr.                             |                                        | string representation of cidr |
-| selector    | Selector expression.                       | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
+| selector    | Selector expression.                       |  | string |
 | ports       | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
 | "!tag" | Negative match on tag. |  | string |
 | "!net" | Negative match on cidr. | | string representation of cidr |
-| "!selector" | Negative match on selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
+| "!selector" | Negative match on selector expression. | | string |
 | "!ports"      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
