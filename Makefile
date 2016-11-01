@@ -331,6 +331,11 @@ semaphore: clean
 	ST_TO_RUN=tests/st/no_orchestrator/ make st-ssl
 	ST_TO_RUN=tests/st/bgp/test_route_reflector_cluster.py make st-ssl
 
+	bash -c 'if [ -z "$$PULL_REQUEST_NUMBER" ]; then \
+		docker push $(NODE_CONTAINER_NAME) && \
+		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME) && \
+		docker push quay.io/$(NODE_CONTAINER_NAME); \
+	fi'
 
 ## Clean everything (including stray volumes)
 clean: clean_calico_node
