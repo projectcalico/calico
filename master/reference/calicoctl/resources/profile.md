@@ -59,7 +59,7 @@ See Calico's [See selector expression documentation]({{site.baseurl}}/{{page.ver
 
 | name   | description  | requirements                  | schema |
 |--------|--------------|-------------------------------|--------|
-| name   | The name of the profile. | Required for `create`/`update`/`delete`. If omitted on `get`, calicoctl enumerates over all profiles. | string |
+| name   | The name of the profile. | Required for `create`/`update`/`apply`/`delete`. If omitted on `get`, calicoctl enumerates over all profiles. | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
 
 #### PolicySpec
@@ -95,10 +95,10 @@ See Calico's [See selector expression documentation]({{site.baseurl}}/{{page.ver
 | name        | description                                | requirements                           | schema                        |
 |-------------|--------------------------------------------|----------------------------------------|-------------------------------|
 | tag         | Match expression on tags.                  |                                        | string                        |
-| net         | Match on cidr.                             |                                        | string representation of cidr |
+| net         | Match on CIDR.                             |                                        | string representation of cidr |
 | selector    | Selector expression.                       | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | ports       | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
 | "!tag" | Negative match on tag. |  | string |
-| "!net" | Negative match on cidr. | | string representation of cidr |
+| "!net" | Negative match on CIDR. | | string representation of CIDR |
 | "!selector" | Negative match on selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | "!ports"      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |

@@ -1,6 +1,7 @@
 ---
 title: IP Pool resource (ipPool)
 ---
+An IPPool resource represents an IP address pool which Calico-CNI uses to allocate IP addresses to endpoints/containers. IPPool configuration requires a pool name and CIDR (subnet) for the IP pool.
 
 ### Sample YAML
 ```
@@ -10,7 +11,8 @@ metadata:
   name: pool1
   cidr: 10.1.0.0/16
 spec:
-  ipip: false
+  ipip: 
+    enabled: false
   nat-outgoing: true
   disabled: false
 ```

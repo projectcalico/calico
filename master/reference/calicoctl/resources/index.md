@@ -33,7 +33,7 @@ spec:
 | name     | description                                               | requirements                                                                     | schema |
 |----------|-----------------------------------------------------------|----------------------------------------------------------------------------------|--------|
 | apiVersion     | Indicates the version of the API that the data corresponds to.                           | Currently only `v1` is accepted. | string |
-| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer), [`hostendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint), [`policy`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy), [`pool`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/pool), [`profile`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile), or [`workloadendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) | string |
+| kind    | Specifies the type of resource described by the YAML document. | Can be [`bgppeer`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer), [`hostendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint), [`policy`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy), [`IPPool`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool), [`profile`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile), or [`workloadendpoint`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) | string |
 | metadata | Contains sub-fields which are used to uniquely identify the particular instance of the resource. | | YAML |
 | spec | Contains the resource specification, i.e. the configuration for the resource. | | YAML |
 
@@ -44,7 +44,7 @@ A file may contain multiple resource documents specified in a YAML list format. 
   kind: hostEndpoint
   metadata:
     name: endpoint1
-    hostname: host1
+    node: host1
     labels:
       type: database
   spec:
@@ -55,7 +55,7 @@ A file may contain multiple resource documents specified in a YAML list format. 
   kind: hostEndpoint
   metadata:
     name: endpoint2
-    hostname: host1
+    node: host1
     labels:
       type: frontend
   spec:

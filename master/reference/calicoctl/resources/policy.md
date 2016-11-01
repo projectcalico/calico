@@ -4,7 +4,7 @@ title: Policy resource (policy)
 # Policy Resource
 Policy objects can be thought of as being applied to a set of endpoints (rather than being a property of the endpoint) to give more flexible policy arrangements that can override or augment any ACLs directly associated with an endpoint through a profile.
 
-Each policy has a label/tag based selector predicate, such as “type == ‘webserver’ && role == ‘frontend’”, that selects which endpoints it should apply to, and an ordering number that specifies the policy’s priority. For each endpoint, Calico applies the security policies that apply to it, in priority order, and then that endpoint’s security profiles.
+Each policy has a label/tag based selector predicate, such as `type == webserver && role == frontend`, that selects which endpoints it should apply to, and an order number that specifies the policy’s priority. For each endpoint, Calico applies the security policies that apply to it, in priority order, and then that endpoint’s security profiles.
 
 ### Sample YAML
 ```
@@ -90,10 +90,10 @@ spec:
 | name        | description                                | requirements                  | schema |
 |-------------|--------------------------------------------|----------------|--------|
 | tag      | Match expression on tags.                   |  | string |
-| net    | Match on cidr. |  | string representation of cidr |
+| net    | Match on CIDR. |  | string representation of cidr |
 | selector    | Selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | ports | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
 | "!tag" | Negative match on tag. |  | string |
-| "!net" | Negative match on cidr. | | string representation of cidr |
+| "!net" | Negative match on CIDR. | | string representation of cidr |
 | "!selector" | Negative match on selector expression. | See [selector expression documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#tiered-security-policy) | string |
 | "!ports"      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
