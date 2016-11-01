@@ -113,8 +113,8 @@ LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/comman
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
-BUILD_CONTAINER_NAME=calico/calicoctl_build_container
-BUILD_CONTAINER_MARKER=calicoctl_build_container.created
+BUILD_CONTAINER_NAME_BROKEN=calico/calicoctl_build_container
+BUILD_CONTAINER_MARKER_BROKEN=calicoctl_build_container.created
 
 GO_FILES:=$(shell find calicoctl -name '*.go')
 
@@ -216,6 +216,7 @@ certs/.certificates.created:
 
 	touch certs/.certificates.created
 
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 .PHONY: run-etcd
 ## Run etcd in a container. Used by the tests and generally useful.
 run-etcd:
