@@ -137,13 +137,20 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 
 	// Create the new block.
 	block := newBlock(subnet)
-	block.HostAffinity = &host
+
+	// Make sure hostname is not empty.
+	if host == "" {
+		log.Errorf("Hostname can't be empty")
+		return goerrors.New("Hostname must be sepcified to claim block affinity")
+	}
+	affinityKeyStr := "host:" + host
+	block.Affinity = &affinityKeyStr
 	block.StrictAffinity = config.StrictAffinity
 
 	// Create the new block in the datastore.
 	o := model.KVPair{
 		Key:   model.BlockKey{block.CIDR},
-		Value: &block.AllocationBlock,
+		Value: block.AllocationBlock,
 	}
 	_, err = rw.client.backend.Create(&o)
 	if err != nil {
@@ -159,7 +166,7 @@ func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, c
 			// Pull out the allocationBlock object.
 			b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
-			if b.HostAffinity != nil && *b.HostAffinity == host {
+			if b.Affinity != nil && *b.Affinity == affinityKeyStr {
 				// Block has affinity to this host, meaning another
 				// process on this host claimed it.
 				log.Debugf("Block %s already claimed by us.  Success", subnet)
@@ -194,9 +201,15 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 		}
 		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
+		// Make sure hostname is not empty.
+		if host == "" {
+			log.Errorf("Hostname can't be empty")
+			return goerrors.New("Hostname must be sepcified to release block affinity")
+		}
+
 		// Check that the block affinity matches the given affinity.
-		if b.HostAffinity != nil && *b.HostAffinity != host {
-			log.Errorf("Mismatched affinity: %s != %s", *b.HostAffinity, host)
+		if b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
+			log.Errorf("Mismatched affinity: %s != %s", *b.Affinity, "host:"+host)
 			return affinityClaimedError{Block: b}
 		}
 
@@ -217,7 +230,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 			// This prevents the host from automatically assigning
 			// from this block unless we're allowed to overflow into
 			// non-affine blocks.
-			b.HostAffinity = nil
+			b.Affinity = nil
 
 			// Pass back the original KVPair with the new
 			// block information so we can do a CAS.

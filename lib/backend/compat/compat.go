@@ -15,6 +15,8 @@
 package compat
 
 import (
+	goerrors "errors"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -58,6 +60,16 @@ func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 		}
 		d.Revision = p.Revision
 		return d, nil
+	case model.BlockKey:
+		if err = validateBlockValue(d); err != nil {
+			return nil, err
+		}
+		b, err := c.client.Create(d)
+		if err != nil {
+			return nil, err
+		}
+		d.Revision = b.Revision
+		return d, nil
 	default:
 		return c.client.Create(d)
 	}
@@ -89,6 +101,16 @@ func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
 			return nil, err
 		}
 		d.Revision = p.Revision
+		return d, nil
+	case model.BlockKey:
+		if err = validateBlockValue(d); err != nil {
+			return nil, err
+		}
+		b, err := c.client.Update(d)
+		if err != nil {
+			return nil, err
+		}
+		d.Revision = b.Revision
 		return d, nil
 	default:
 		return c.client.Update(d)
@@ -122,6 +144,16 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		}
 		d.Revision = p.Revision
 		return d, nil
+	case model.BlockKey:
+		if err = validateBlockValue(d); err != nil {
+			return nil, err
+		}
+		b, err := c.client.Apply(d)
+		if err != nil {
+			return nil, err
+		}
+		d.Revision = b.Revision
+		return d, nil
 	default:
 		return c.client.Apply(d)
 	}
@@ -152,6 +184,8 @@ func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
 		return c.getProfile(k)
 	case model.NodeKey:
 		return c.getNode(kt)
+	case model.BlockKey:
+		return c.getBlock(k)
 	default:
 		return c.client.Get(k)
 	}
@@ -163,6 +197,8 @@ func (c *ModelAdaptor) List(l model.ListInterface) ([]*model.KVPair, error) {
 	switch lt := l.(type) {
 	case model.NodeListOptions:
 		return c.listNodes(lt)
+	case model.BlockListOptions:
+		return c.listBlock(lt)
 	default:
 		return c.client.List(l)
 	}
@@ -199,6 +235,23 @@ func (c *ModelAdaptor) getProfile(k model.Key) (*model.KVPair, error) {
 	return &d, nil
 }
 
+// getBlock gets KVPair for Block. It gets the block value first,
+// then checks for `Affinity` field first, then `HostAffinity` as a backup.
+// For more details see: https://github.com/projectcalico/libcalico-go/issues/226
+func (c *ModelAdaptor) getBlock(k model.Key) (*model.KVPair, error) {
+	bk := k.(model.BlockKey)
+
+	v, err := c.client.Get(model.BlockKey{CIDR: bk.CIDR})
+	if err != nil {
+		return nil, err
+	}
+
+	// Make sure Affinity field has a proper value,
+	// and map the value to Affinity if the deprecated HostAffinity field is used
+	// by calling ensureBlockAffinity, and update the KVPair to return.
+	return ensureBlockAffinity(v), nil
+}
+
 // getNode gets the composite node by getting the individual components
 // and joining the results together.
 func (c *ModelAdaptor) getNode(nk model.NodeKey) (*model.KVPair, error) {
@@ -217,6 +270,15 @@ func (c *ModelAdaptor) getNode(nk model.NodeKey) (*model.KVPair, error) {
 	}
 
 	return &model.KVPair{Key: nk, Value: &nv}, nil
+}
+
+// validateBlockValue validates the AllocationBlock fields (specifically Affinity) to
+// make sure the deprecated HostAffinity field is not used.
+func validateBlockValue(kvp *model.KVPair) error {
+	if kvp.Value.(*model.AllocationBlock).HostAffinity != nil {
+		return goerrors.New("AllocationBlock.HostAffinity is deprecated, please use Affinity instead.")
+	}
+	return nil
 }
 
 // listNodes lists the composite node resources by listing the primary node
@@ -249,6 +311,47 @@ func (c *ModelAdaptor) listNodes(l model.NodeListOptions) ([]*model.KVPair, erro
 	}
 
 	return results, nil
+}
+
+// listBlock returns list of KVPairs for Block, includes making sure
+// backwards compatiblity. See getBlock for more details.
+func (c *ModelAdaptor) listBlock(l model.BlockListOptions) ([]*model.KVPair, error) {
+
+	// Get a list of block KVPairs.
+	blockList, err := c.client.List(l)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create an empty slice of KVPair.
+	results := make([]*model.KVPair, len(blockList))
+
+	// Go through the list to make sure Affinity field has a proper value,
+	// and maps the value to Affinity if the deprecated HostAffinity field is used
+	// by calling ensureBlockAffinity, and populate the KVPair slice to return.
+	for i, bkv := range blockList {
+		results[i] = ensureBlockAffinity(bkv)
+	}
+
+	return results, nil
+}
+
+// ensureBlockAffinity ensures Affinity field has a proper value,
+// and maps the value to Affinity if the deprecated HostAffinity field is used.
+func ensureBlockAffinity(kvp *model.KVPair) *model.KVPair {
+	val := kvp.Value.(*model.AllocationBlock)
+
+	// Check for `Affinity` field first (this is to make sure we're
+	// compatible with Python version etcd data-model).
+	if val.Affinity == nil && val.HostAffinity != nil {
+		// Convert HostAffinity=hostname into Affinity=host:hostname format.
+		hostAffinityStr := "host:" + *val.HostAffinity
+		val.Affinity = &hostAffinityStr
+
+		// Set AllocationBlock.HostAffinity to nil so it's never non-nil for the clients.
+		val.HostAffinity = nil
+	}
+	return &model.KVPair{Key: kvp.Key, Value: val}
 }
 
 // Get the node sub components and fill in the details in the supplied node

@@ -48,5 +48,5 @@ type affinityClaimedError struct {
 }
 
 func (e affinityClaimedError) Error() string {
-	return fmt.Sprintf("%s already claimed by %s", e.Block.CIDR, e.Block.HostAffinity)
+	return fmt.Sprintf("%s already claimed by %s", e.Block.CIDR, e.Block.Affinity)
 }
