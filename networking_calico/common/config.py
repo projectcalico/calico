@@ -22,12 +22,12 @@ SHARED_ETCD_OPTS = [
     cfg.StrOpt('etcd_scheme', default='http',
                help='The protocol scheme to be used for connections to etcd'),
     # etcd TLS-related options.
-    cfg.StrOpt('etcd_key_file', default=None,
+    cfg.StrOpt('etcd_key_file',
                help="The path to the TLS key file to use with etcd."),
-    cfg.StrOpt('etcd_cert_file', default=None,
+    cfg.StrOpt('etcd_cert_file',
                help="The path to the TLS client certificate file to use with "
                     "etcd."),
-    cfg.StrOpt('etcd_ca_cert_file', default=None,
+    cfg.StrOpt('etcd_ca_cert_file',
                help="The path to the TLS CA certificate file to use with "
                     "etcd."),
 ]
