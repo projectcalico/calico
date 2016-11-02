@@ -37,7 +37,7 @@ func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 	var err error
 	switch d.Key.(type) {
 	case model.ProfileKey:
-		t, l, r := toTagsLabelsRules(d)
+		t, l, r := ToTagsLabelsRules(d)
 		if t, err = c.client.Create(t); err != nil {
 			return nil, err
 		} else if _, err := c.client.Create(l); err != nil {
@@ -69,7 +69,7 @@ func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
 	var err error
 	switch d.Key.(type) {
 	case model.ProfileKey:
-		t, l, r := toTagsLabelsRules(d)
+		t, l, r := ToTagsLabelsRules(d)
 		if t, err = c.client.Update(t); err != nil {
 			return nil, err
 		} else if _, err := c.client.Apply(l); err != nil {
@@ -101,7 +101,7 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 	var err error
 	switch d.Key.(type) {
 	case model.ProfileKey:
-		t, l, r := toTagsLabelsRules(d)
+		t, l, r := ToTagsLabelsRules(d)
 		if t, err = c.client.Apply(t); err != nil {
 			return nil, err
 		} else if _, err := c.client.Apply(l); err != nil {
@@ -300,17 +300,16 @@ func (c *ModelAdaptor) applyOrDeleteSubcomponents(components []*model.KVPair) er
 	return nil
 }
 
-// toTagsLabelsRules converts a Profile KVPair to separate KVPair types for Keys,
+// ToTagsLabelsRules converts a Profile KVPair to separate KVPair types for Keys,
 // Labels and Rules. These separate KVPairs are used to write three separate objects
 // that make up a single profile.
-func toTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
+func ToTagsLabelsRules(d *model.KVPair) (t, l, r *model.KVPair) {
 	p := d.Value.(*model.Profile)
 	pk := d.Key.(model.ProfileKey)
 
 	t = &model.KVPair{
-		Key:      model.ProfileTagsKey{pk},
-		Value:    p.Tags,
-		Revision: d.Revision,
+		Key:   model.ProfileTagsKey{pk},
+		Value: p.Tags,
 	}
 	l = &model.KVPair{
 		Key:   model.ProfileLabelsKey{pk},

@@ -18,17 +18,22 @@ import (
 	"errors"
 	"fmt"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 )
 
 // NewClient creates a new backend datastore client.
 func NewClient(config api.ClientConfig) (c bapi.Client, err error) {
+	log.Debugf("Using datastore type '%s'", config.BackendType)
 	switch config.BackendType {
 	case api.EtcdV2:
 		c, err = etcd.NewEtcdClient(config.BackendConfig.(*etcd.EtcdConfig))
+	case api.Kubernetes:
+		c, err = k8s.NewKubeClient(config.BackendConfig.(*k8s.KubeConfig))
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
 			config.BackendType))
