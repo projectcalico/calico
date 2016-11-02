@@ -44,7 +44,8 @@ Options:
   -h --help                 Show this screen.
 
 Description:
-  Check the compatibility of this compute host to run a Calico node instance.`
+  Check the compatibility of this compute host to run a Calico node instance.
+`
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

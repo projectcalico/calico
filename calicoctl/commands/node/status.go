@@ -40,8 +40,9 @@ Options:
   -h --help                 Show this screen.
 
 Description:
-  Check the status of the Calico node instance.  This incudes the status and uptime
-  of the node instance, and BGP peering states.`
+  Check the status of the Calico node instance.  This incudes the status and
+  uptime of the node instance, and BGP peering states.
+`
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {

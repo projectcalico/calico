@@ -28,15 +28,18 @@ func main() {
 	doc := `Usage:
   calicoctl [options] <command> [<args>...]
 
-    create         Create a resource by filename or stdin.
-    replace        Replace a resource by filename or stdin.
-    apply          Apply a resource by filename or stdin.  This creates a resource if
-                   it does not exist, and replaces a resource if it does exists.
-    delete         Delete a resource identified by file, stdin or resource type and name.
-    get            Get a resource identified by file, stdin or resource type and name.
-    version        Display the version of calicoctl.
-    node           Calico node management.
-    ipam           IP address management.
+    create    Create a resource by filename or stdin.
+    replace   Replace a resource by filename or stdin.
+    apply     Apply a resource by filename or stdin.  This creates a resource
+              if it does not exist, and replaces a resource if it does exists.
+    delete    Delete a resource identified by file, stdin or resource type and
+              name.
+    get       Get a resource identified by file, stdin or resource type and
+              name.
+    config    Manage system-wide and low-level node configuration options.
+    ipam      IP address management.
+    node      Calico node management.
+    version   Display the version of calicoctl.
 
 Options:
   -h --help               Show this screen.
@@ -44,10 +47,12 @@ Options:
                           warn, info, debug) [default: panic]
 
 Description:
-  The calicoctl command line tool is used to manage Calico network and security policy,
-  to view and manage endpoint configuration, and to manage a Calico node instance.
+  The calicoctl command line tool is used to manage Calico network and security
+  policy, to view and manage endpoint configuration, and to manage a Calico
+  node instance.
 
-  See 'calicoctl <command> --help' to read about a specific subcommand.`
+  See 'calicoctl <command> --help' to read about a specific subcommand.
+`
 	arguments, _ := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
 
 	if logLevel := arguments["--log-level"]; logLevel != nil {

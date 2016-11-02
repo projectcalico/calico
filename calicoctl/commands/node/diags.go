@@ -43,10 +43,21 @@ func Diags(args []string) {
 
 Options:
   -h --help               Show this screen.
-     --log-dir=<LOG_DIR>  The directory containing Calico logs [default: /var/log/calico]
+     --log-dir=<LOG_DIR>  The directory containing Calico logs.
+                          [default: /var/log/calico]
 
 Description:
-  Create a diagnostics bundle for the Calico node instance running on this compute host.`
+  This command is used to gather diagnostic information from a Calico node.
+  This is usually used when trying to diagnose an issue that may be related to
+  your Calico network.
+
+  The output of the command explains how to automatically upload the
+  diagnostics to http://transfer.sh for easy sharing of the data. Note that the
+  uploaded files will be deleted after 14 days.
+
+  This command must be run on the specific Calico node that you are gathering
+  diagnostics for.
+`
 
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
