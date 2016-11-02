@@ -1,0 +1,115 @@
+
+
+  +--------------------------------+
+  |      docker-build-images/      |
+  | ubuntu-trusty-build.Dockerfile |
+  +--------------------------------+
+                   |
+                   |
+             docker| build
+                   |
+                   |
+                   v
+         +--------------------+      +------------------------+      +--------------+
+         | trusty-build-image |      | calico-iptables-plugin |      | calico-felix |
+         +--------------------+      +------------------------+      +--------------+
+                            \                     |                    /
+                             '------.     debian/build-debs    .------'
+                                     \            |           /
+                                      \           v          /
+                                   +----------------------------+
+                                   | Debian packages for Trusty |
+                                   +----------------------------+
+
+
+
+
+Targets:
+
+golang-build-image: 'calico/build-felix-golang' (for any Go building?)
+  docker-build-images/passwd
+  docker-build-images/group
+  docker-build-images/golang-build.Dockerfile
+
+trusty-build-image: 'calico-trusty-build' (for building Trusty Debs)
+  docker-build-images/ubuntu-trusty-build.Dockerfile
+
+xenial-build-image: 'calico-xenial-build' (for Xenial Debs)
+  docker-build-images/ubuntu-xenial-build.Dockerfile
+
+docker-build-images/passwd:
+docker-build-images/group:
+
+centos7-build-image: 'calico-centos7-build' (for RPMs)
+  docker-build-images/passwd
+  docker-build-images/group
+  docker-build-images/centos7-build.Dockerfile
+
+python-build-image: 'calico/build-felix-python' (for ??)
+  docker-build-images/passwd
+  docker-build-images/group
+  docker-build-images/pyi/Dockerfile
+
+update-frozen-reqs:
+  reqs files
+  python-build-image
+  pip install reqs
+  pip freeze > frozen reqs file
+
+felix-docker-image: 'calico/felix'
+  calico-iptables-plugin
+  calico-felix
+  <rootdir>/Dockerfile
+
+env: (for development only)
+
+trusty-deb:
+  calico-iptables-plugin
+  calico-felix
+  debian/*
+  trusty-build-image
+  run debian/build-debs in 'calico-trusty-build'
+
+xenial-deb - same but for xenial
+
+rpm:
+  calico-iptables-plugin
+  calico-felix
+  rpm/*
+  centos7-build-image
+  run rpm/build-rpms in 'calico-centos7-build'
+
+protobuf:
+  py file:
+    run felixbackend.proto in 'calico/protoc'
+  go file:
+    run felixbackend.proto in 'calico/protoc'
+
+vendor/glide stuff
+update-tools
+go-fmt
+ut...
+  golang-build-image
+  python-build-image
+
+calico-felix:
+  Go files
+  golang-build-image
+  run 'go build' in calico/build-felix-golang
+
+pyinstaller:
+  calico-felix-<version>.tgz:
+    calico-iptables-plugin
+    calico-felix
+    tar up those executables
+
+# Release concerns
+Felix now arch-dependent?
+
+calico-iptables-plugin:
+  Python files
+  python-build-image
+  generate version.txt file
+  in calico/build-felix-python:
+    run pip install
+    run docker-build-images/pyi/run-pyinstaller.sh

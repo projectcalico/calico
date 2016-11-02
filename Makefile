@@ -55,7 +55,7 @@ DEB_VERSION_XENIAL:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/xenial/g")
 PY_VERSION:=$(shell cd python; python2.7 setup.py --version 2>>/dev/null)
 
 # Figure out what git commit we have checked out.  We'll bake that into the
-# execetable.
+# executable.
 GIT_COMMIT:=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT:=$(shell git rev-parse --short HEAD)
 GIT_DESCRIPTION:=$(shell git describe --tags)
@@ -91,6 +91,7 @@ MY_GID:=$(shell id -g)
 golang-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
 	cd docker-build-images && docker build -f golang-build.Dockerfile -t calico/build-felix-golang .
+#NJ: Can we add more regularity to Docker image naming?
 
 # Build a docker image used for building debs for trusty.
 .PHONY: trusty-build-image
@@ -132,7 +133,7 @@ centos7-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
 	cd docker-build-images && docker build -f centos7-build.Dockerfile -t calico-centos7-build .
 
-.PHONY: pyinstaller-build-image
+.PHONY: python-build-image
 python-build-image:
 	$(MAKE) docker-build-images/passwd docker-build-images/group
 	# Rebuild the container image.  Docker will do its own newness checks.
@@ -179,6 +180,7 @@ deb: trusty-deb xenial-deb
 
 .PHONY: trusty-deb
 trusty-deb: dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb
+#NJ: Can we define $(TRUSTY_DEB) as the file name, and lose the trusty-deb phony?
 
 dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/calico-iptables-plugin \
                                                           dist/calico-felix/calico-felix \
@@ -200,6 +202,7 @@ dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb: dist/calico-felix/cali
 # Build RPMs.
 .PHONY: rpm
 rpm: dist/calico-felix/calico-felix
+#NJ: missed dep on calico-iptables-plugin; also on rpm/* ?
 	$(MAKE) centos7-build-image
 	$(DOCKER_RUN_RM) -e RPM_VERSION=$(RPM_VERSION) \
 	              calico-centos7-build rpm/build-rpms
@@ -336,6 +339,7 @@ ut: python-ut go-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
 	$(MAKE) python-build-image
 	-docker rm -f felix-ut
+#NJ: Using fixed names like 'felix-ut' is going to cause problems if we have multiple jobs (e.g. Jenkins) doing UT in parallel.
 	# Start container to run commands in.  We background the container so we
 	# can run some commands as root and some not.
 	docker run --name felix-ut \
