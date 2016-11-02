@@ -19,19 +19,20 @@ import (
 	"os"
 	"strings"
 
-	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"fmt"
-	"strconv"
+
+	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 func Config(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl config set <NAME> <VALUE> [--node=<NODE>] [--config=<CONFIG>]
   calicoctl config unset <NAME> [--node=<NODE>] [--config=<CONFIG>]
-  calicoctl config view <NAME> [--node=<NODE>] [--config=<CONFIG>]
+  calicoctl config get <NAME> [--node=<NODE>] [--config=<CONFIG>]
 
 Examples:
   # Turn off the full BGP node-to-node mesh
@@ -43,8 +44,8 @@ Examples:
   # Set log level to info for node "node1"
   calicoctl config set logLevel info --node=node1
 
-  # Display the full set of config values
-  calicoctl config view
+  # Display the current setting for the nodeToNodeMesh
+  calicoctl config get nodeToNodeMesh
 
 Options:
   -n --node=<NODE>      The node name.
@@ -76,7 +77,7 @@ supported configuration will then inherit the value from the global settings.
 The table below details the valid config options.
 
  Name            | Scope       | Value                                  |
------------------+-----------+-------------+----------------------------+
+-----------------+-------------+----------------------------------------+
  logLevel        | global,node | none,debug,info,warning,error,critical |
  nodeToNodeMesh  | global      | on,off                                 |
  asNumber        | global      | 0-4294967295                           |
@@ -127,7 +128,7 @@ The table below details the valid config options.
 	} else if parsedArgs["unset"].(bool) {
 		err = ct.unset(node)
 	} else {
-		err = ct.view(node)
+		err = ct.get(node)
 	}
 
 	if err != nil {
@@ -142,7 +143,7 @@ The table below details the valid config options.
 type configType interface {
 	set(value, node string) error
 	unset(node string) error
-	view(node string) error
+	get(node string) error
 }
 
 // loglevel implements the configType interface.
@@ -166,7 +167,7 @@ func (l loglevel) unset(node string) error {
 	}
 }
 
-func (l loglevel) view(node string) error {
+func (l loglevel) get(node string) error {
 	var level string
 	var location client.ConfigLocation
 	var err error
@@ -196,7 +197,7 @@ func (n nodemesh) set(value, node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
-	
+
 	switch value {
 	case "on":
 		return n.c.SetNodeToNodeMesh(true)
@@ -215,11 +216,11 @@ func (n nodemesh) unset(node string) error {
 	return n.c.SetNodeToNodeMesh(client.GlobalDefaultNodeToNodeMesh)
 }
 
-func (n nodemesh) view(node string) error {
+func (n nodemesh) get(node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
-	
+
 	enabled, err := n.c.GetNodeToNodeMesh()
 	if err != nil {
 		return err
@@ -232,7 +233,6 @@ func (n nodemesh) view(node string) error {
 	return nil
 }
 
-
 // ipip implements the configType interface.
 type ipip struct {
 	c client.ConfigInterface
@@ -242,7 +242,7 @@ func (i ipip) set(value, node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
-	
+
 	switch value {
 	case "on":
 		return i.c.SetGlobalIPIP(true)
@@ -261,11 +261,11 @@ func (i ipip) unset(node string) error {
 	return i.c.SetGlobalIPIP(client.GlobalDefaultIPIP)
 }
 
-func (i ipip) view(node string) error {
+func (i ipip) get(node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
-	
+
 	enabled, err := i.c.GetGlobalIPIP()
 	if err != nil {
 		return err
@@ -283,15 +283,14 @@ type asnum struct {
 	c client.ConfigInterface
 }
 
-
 func (a asnum) set(value, node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
 
-	asn, err := strconv.ParseUint(value, 10, 64)
+	asn, err := numorstring.ASNumberFromString(value)
 	if err != nil {
-		return err
+		return errors.New("the supplied AS number is not valid")
 	}
 
 	return a.c.SetGlobalASNumber(asn)
@@ -305,7 +304,7 @@ func (a asnum) unset(node string) error {
 	return a.c.SetGlobalASNumber(client.GlobalDefaultASNumber)
 }
 
-func (a asnum) view(node string) error {
+func (a asnum) get(node string) error {
 	if node != "" {
 		return errors.New("--node should not be specified")
 	}
@@ -314,6 +313,6 @@ func (a asnum) view(node string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(asn)
+	fmt.Println(asn.String())
 	return nil
 }

@@ -28,7 +28,7 @@ func init() {
 		[]string{"NAME", "ASN", "IPV4", "IPV6"},
 		map[string]string{
 			"NAME": "{{.Metadata.Name}}",
-			"ASN": "{{if .Spec.BGP}}{{.Spec.BGP.ASNumber}}{{end}}",
+			"ASN":  "{{if .Spec.BGP}}{{.Spec.BGP.ASNumber}}{{end}}",
 			"IPV4": "{{if .Spec.BGP}}{{.Spec.BGP.IPv4Address}}{{end}}",
 			"IPV6": "{{if .Spec.BGP}}{{.Spec.BGP.IPv6Address}}{{end}}",
 		},

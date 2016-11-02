@@ -100,43 +100,31 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 	orchestrator := argStringOrBlank(args, "--orchestrator")
 	resScope := argStringOrBlank(args, "--scope")
 	switch strings.ToLower(kind) {
-	case "nodes":
-		fallthrough
-	case "node":
+	case "node", "nodes":
 		p := api.NewNode()
 		p.Metadata.Name = name
 		return *p, nil
-	case "hostendpoints":
-		fallthrough
-	case "hostendpoint":
+	case "hostendpoint", "hostendpoints":
 		h := api.NewHostEndpoint()
 		h.Metadata.Name = name
 		h.Metadata.Node = node
 		return *h, nil
-	case "workloadendpoints":
-		fallthrough
-	case "workloadendpoint":
+	case "workloadendpoint", "workloadendpoints":
 		h := api.NewWorkloadEndpoint()
 		h.Metadata.Name = name
 		h.Metadata.Orchestrator = orchestrator
 		h.Metadata.Workload = workload
 		h.Metadata.Node = node
 		return *h, nil
-	case "profiles":
-		fallthrough
-	case "profile":
+	case "profile", "profiles":
 		p := api.NewProfile()
 		p.Metadata.Name = name
 		return *p, nil
-	case "policies":
-		fallthrough
-	case "policy":
+	case "policy", "policies":
 		p := api.NewPolicy()
 		p.Metadata.Name = name
 		return *p, nil
-	case "pools":
-		fallthrough
-	case "pool":
+	case "pool", "pools":
 		p := api.NewPool()
 		if name != "" {
 			_, cidr, err := net.ParseCIDR(name)
@@ -146,9 +134,7 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 			p.Metadata.CIDR = *cidr
 		}
 		return *p, nil
-	case "bgppeers":
-		fallthrough
-	case "bgppeer":
+	case "bgppeer", "bgppeers":
 		p := api.NewBGPPeer()
 		if name != "" {
 			err := p.Metadata.PeerIP.UnmarshalText([]byte(name))
