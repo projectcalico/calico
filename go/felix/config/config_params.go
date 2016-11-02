@@ -236,7 +236,8 @@ func (config *Config) resolve() (changed bool, err error) {
 				name, value, source)
 			if source < currentSource {
 				log.Infof("Skipping config value for %v from %v; "+
-					"already have a value from %v", source, currentSource)
+					"already have a value from %v", name,
+					source, currentSource)
 				continue
 			}
 			field := reflect.ValueOf(config).Elem().FieldByName(name)
