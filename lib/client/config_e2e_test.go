@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var _ = Describe("with config option API tests", func() {
@@ -119,12 +120,12 @@ var _ = Describe("with config option API tests", func() {
 
 	It("should handle default AS number configuration", func() {
 		var err error
-		var asn uint64
+		var asn numorstring.ASNumber
 
 		By("checking default unset value")
 		asn, err = config.GetGlobalASNumber()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(asn).To(Equal(uint64(64511)))
+		Expect(asn).To(Equal(numorstring.ASNumber(64511)))
 
 		By("checking default set value to true")
 		err = config.SetGlobalASNumber(11111)
@@ -132,7 +133,7 @@ var _ = Describe("with config option API tests", func() {
 
 		asn, err = config.GetGlobalASNumber()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(asn).To(Equal(uint64(11111)))
+		Expect(asn).To(Equal(numorstring.ASNumber(11111)))
 	})
 
 	It("should handle default IP in IP configuration", func() {

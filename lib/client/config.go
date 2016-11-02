@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 type ConfigLocation int8
@@ -54,8 +55,8 @@ const (
 type ConfigInterface interface {
 	SetNodeToNodeMesh(bool) error
 	GetNodeToNodeMesh() (bool, error)
-	SetGlobalASNumber(uint64) error
-	GetGlobalASNumber() (uint64, error)
+	SetGlobalASNumber(numorstring.ASNumber) error
+	GetGlobalASNumber() (numorstring.ASNumber, error)
 	SetGlobalIPIP(bool) error
 	GetGlobalIPIP() (bool, error)
 	SetNodeIPIPTunnelAddress(string, *net.IP) error
@@ -114,22 +115,22 @@ func (c *config) GetNodeToNodeMesh() (bool, error) {
 // SetGlobalASNumber sets the global AS Number used by the BGP agent running
 // on each node.  This may be overridden by an explicitly configured value in
 // the node resource.
-func (c *config) SetGlobalASNumber(asNumber uint64) error {
+func (c *config) SetGlobalASNumber(asNumber numorstring.ASNumber) error {
 	_, err := c.c.backend.Apply(&model.KVPair{
 		Key:   model.GlobalBGPConfigKey{Name: "as_num"},
-		Value: strconv.FormatUint(asNumber, 10),
+		Value: asNumber.String(),
 	})
 	return err
 }
 
 // SetGlobalASNumber gets the global AS Number used by the BGP agent running
 // on each node.  See SetGlobalASNumber for more details.
-func (c *config) GetGlobalASNumber() (uint64, error) {
+func (c *config) GetGlobalASNumber() (numorstring.ASNumber, error) {
 	if s, err := c.getValue(model.GlobalBGPConfigKey{Name: "as_num"}); err != nil {
 		return 0, err
 	} else if s == nil {
 		return GlobalDefaultASNumber, nil
-	} else if asn, err := strconv.ParseUint(*s, 10, 64); err != nil {
+	} else if asn, err := numorstring.ASNumberFromString(*s); err != nil {
 		return 0, err
 	} else {
 		return asn, nil
