@@ -196,8 +196,9 @@ $(DEB_XENIAL): dist/calico-felix/calico-iptables-plugin \
 
 # Build RPMs.
 .PHONY: rpm
-rpm: dist/calico-felix/calico-felix
-#NJ: missed dep on calico-iptables-plugin; also on rpm/* ?
+rpm: dist/calico-felix/calico-iptables-plugin \
+     dist/calico-felix/calico-felix \
+     rpm/*
 	$(MAKE) calico-build/centos7
 	$(DOCKER_RUN_RM) -e RPM_VERSION=$(RPM_VERSION) \
 	              calico-build/centos7 rpm/build-rpms
