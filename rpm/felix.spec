@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.4
-Release:        1%{?dist}
+Version:        2.0.0
+Release:        0.1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
