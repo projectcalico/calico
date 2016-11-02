@@ -1,0 +1,4 @@
+*.pyc
+*.swp
+images/
+*.created

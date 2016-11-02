@@ -1,4 +1,5 @@
 _drafts/
+*.pyc
 _site
 .sass-cache
 .DS_Store
@@ -6,3 +7,4 @@ _site
 .idea
 .vagrant
 .jekyll-metadata
+.releasedata
