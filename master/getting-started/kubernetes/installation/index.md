@@ -115,14 +115,18 @@ cat >/etc/cni/net.d/10-calico.conf <<EOF
     },
     "policy": {
         "type": "k8s"
+    },
+    "kubernetes": {
+        "kubeconfig": "</PATH/TO/KUBECONFIG>"
     }
 }
 EOF
 ```
 
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
+Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
 
-For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md)
+For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.1/configuration.md).
 
 ### 3. Install standard CNI lo plugin
 In addition to the CNI plugin specified by the CNI config file, Kubernetes requires the standard CNI loopback plugin.
@@ -218,7 +222,8 @@ ExecStart=/opt/bin/kubelet \
 --api-servers=http://<API SERVER IP>:8080 \
 --network-plugin-dir=/etc/cni/net.d \
 --network-plugin=cni \
---logtostderr=true
+--logtostderr=true \
+--kubeconfig=/etc/kubernetes/kubelet.conf
 Restart=always
 RestartSec=10
 
