@@ -40,6 +40,9 @@ help:
 all: pyinstaller deb rpm felix-docker-image
 test: ut
 
+# re-define default --compare-branch=origin/master to some custom name
+UT_COMPARE_BRANCH?=
+
 # Extract current version from the debian-style changelog and replace the
 # placeholders with the stream name.
 DEB_VERSION:=$(shell grep felix debian/changelog | \
@@ -344,7 +347,7 @@ python-ut: python/calico/felix/felixbackend_pb2.py
 	# Do the install as root.
 	docker exec felix-ut sh -c 'pip install -e .'
 	# Run the UTs as non-root.
-	docker exec --user $(MY_UID):$(MY_GID) felix-ut ./run-unit-test.sh
+	docker exec --user $(MY_UID):$(MY_GID) felix-ut sh -c 'COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh'
 	# Tear down the container.
 	docker rm -f felix-ut
 
