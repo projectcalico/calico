@@ -161,7 +161,7 @@ endpoint1   1.2.3.4,0:bb::aa
 eth0                           
 ```
 
-#### `yaml` and `json`
+#### `yaml / json`
 
 The `yaml` and `json` options display the output as a list of YAML documents or JSON dictionaries.  The fields for
 resource type are documented in the [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) guide, or alternatively view the structure
@@ -196,7 +196,7 @@ $ calicoctl get hostEndpoint --output=yaml
     - profile1
 ```
 
-#### `go-template` and `go-template-file`
+#### `go-template / go-template-file`
 
 The `go-template` and `go-template-file` options display the output using a golang template specified as a string
 on the CLI, or defined in a separate file.

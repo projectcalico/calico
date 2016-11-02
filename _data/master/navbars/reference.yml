@@ -11,7 +11,7 @@ toc:
   section:
   - title: Overview
     path: /reference/calicoctl/
-  - title: Commands
+  - title: Command Reference
     path: /reference/calicoctl/commands
     section:
     - title: Overview
@@ -46,7 +46,7 @@ toc:
         path: /reference/calicoctl/commands/ipam/show
     - title: version
       path: /reference/calicoctl/commands/version
-  - title: Resource definitions
+  - title: Resource Definitions
     path: /reference/calicoctl/resources
     section:
       - title: Overview
@@ -55,10 +55,10 @@ toc:
         path: /reference/calicoctl/resources/bgppeer
       - title: HostEndpoint
         path: /reference/calicoctl/resources/hostendpoint
-      - title: Policy
-        path: /reference/calicoctl/resources/policy
       - title: IPPool
         path: /reference/calicoctl/resources/ippool
+      - title: Policy
+        path: /reference/calicoctl/resources/policy
       - title: Profile
         path: /reference/calicoctl/resources/profile
       - title: WorkloadEndpoint

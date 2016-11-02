@@ -1,5 +1,5 @@
 ---
-title: CLI user reference
+title: Command Reference
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage Calico network
