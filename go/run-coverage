@@ -8,7 +8,7 @@ find . -name "*.coverprofile" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*.go' | \
-	      grep -vE '/vendor/|felix/proto' | \
+	      grep -vE '/vendor/|felix/proto|.glide' | \
 	      xargs -n 1 dirname | \
 	      sort | uniq | \
 	      tr '\n' ',' | \
