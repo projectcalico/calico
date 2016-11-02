@@ -10,7 +10,7 @@
 #
 # This version should match the version required by calicotl installed in the
 # cloud config files.
-calico_docker_ver = "latest"
+calico_docker_ver = "v0.23.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2

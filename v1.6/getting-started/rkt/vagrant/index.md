@@ -72,7 +72,7 @@ You can check that it's running
 
 	$ sudo rkt list
 	UUID            APP     IMAGE NAME                              STATE   NETWORKS
-	bc13af40        node    registry-1.docker.io/calico/node:latest running
+	bc13af40        node    registry-1.docker.io/calico/node:v0.23.0 running
 
 You can check the status and logs using normal systemd commands e.g. `systemctl status calico-node` and `journalctl -u calico-node`
 
@@ -130,7 +130,7 @@ Normal [systemd commands][systemd-run] can then be used to get the status of the
 
 	$ sudo rkt list
 	UUID		APP	IMAGE NAME					STATE	CREATED		STARTEDNETWORKS
-	05f8779a	node	registry-1.docker.io/calico/node:latest		running	1 hour ago	1 hour ago
+	05f8779a	node	registry-1.docker.io/calico/node:v0.23.0		running	1 hour ago	1 hour ago
 	c89f2f35	busybox	registry-1.docker.io/library/busybox:latest	running	2 seconds ago	1 second ago	frontend:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
 
 
@@ -145,7 +145,7 @@ Repeat for a "backend" service on `calico-02`
 
 	$ sudo rkt list
 	UUID		APP	IMAGE NAME					STATE	CREATED		STARTEDNETWORKS
-	2cc27ce1	node	registry-1.docker.io/calico/node:latest		running	1 hour ago	1 hour ago
+	2cc27ce1	node	registry-1.docker.io/calico/node:v0.23.0		running	1 hour ago	1 hour ago
 	407208a5	busybox	registry-1.docker.io/library/busybox:latest	running	11 seconds ago	10 seconds ago	backend:ip4=192.168.0.64, default-restricted:ip4=172.16.28.2
 
 We now have a `busybox` container running on the network `backend` with an IP address of `192.168.0.1`

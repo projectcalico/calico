@@ -51,7 +51,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                           COMMAND                  CREATED             STATUS              PORTS               NAMES
-    ffe6cb403e9b        calico/node:latest              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
+    ffe6cb403e9b        calico/node:v0.23.0              "/sbin/my_init"          21 seconds ago      Up 20 seconds                           calico-node
 
 ## 3. Running in the cloud (AWS / DigitalOcean / GCE)
 

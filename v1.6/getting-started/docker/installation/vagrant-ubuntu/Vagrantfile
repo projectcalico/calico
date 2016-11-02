@@ -2,14 +2,14 @@
 # vi: set ft=ruby :
 
 # The calicoctl download URL.
-calicoctl_url = "http://www.projectcalico.org/builds/calicoctl"
+calicoctl_url = "https://github.com/projectcalico/calico-containers/releases/download/v0.23.0/calicoctl"
 
 # The version of the calico docker images to install.  This is used to pre-load
 # the calico/node image which slows down the install process, but speeds up the tutorial.
 #
 # This version should match the version required by calicoctl installed from
 # calicoctl_url.
-calico_node_ver = "latest"
+calico_node_ver = "v0.23.0"
 
 # Size of the cluster created by Vagrant
 num_instances=2

@@ -64,7 +64,7 @@ yum install -y posix-spawn python-gevent python-eventlet python-etcd
 
 ```shell
 # calicoctl
-curl -L http://www.projectcalico.org/builds/calicoctl -o /usr/local/bin/calicoctl
+curl -L https://github.com/projectcalico/calico-containers/releases/download/v0.23.0/calicoctl -o /usr/local/bin/calicoctl
 chmod +x /usr/local/bin/calicoctl
 
 # bird
