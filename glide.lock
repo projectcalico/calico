@@ -1,8 +1,8 @@
 hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-11-01T17:41:15.217791692Z
+updated: 2016-11-02T11:50:16.526307186Z
 imports:
 - name: github.com/coreos/etcd
-  version: db83736b7b222ffe55dfacbcfea13395019a71a9
+  version: 5b7728f3cb1df4aa8b66e07de1bd5df484bc8e35
   subpackages:
   - client
   - pkg/fileutil
@@ -37,7 +37,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
 - name: github.com/projectcalico/libcalico-go
-  version: 72934becad2115a5fa2178c9a46564358b4554e0
+  version: 45e13d19f33baed6bbb884486465047d64ae0022
   subpackages:
   - lib
   - lib/api
@@ -69,7 +69,7 @@ imports:
   subpackages:
   - codec
 - name: golang.org/x/net
-  version: 541150ac4f433e755f5663eba5d888c2fa347343
+  version: 4bb47a1098b37d69980d96237e2ae4ff56bb5a95
   subpackages:
   - context
 - name: golang.org/x/sys
