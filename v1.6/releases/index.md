@@ -10,11 +10,11 @@ Use the version selector at the top-right of this page to view a different relea
 
 | Component              | Version |
 |------------------------|---------|
-| felix                  | latest  |
-| calicoctl              | latest  |
-| calico/node            | latest  |
-| calico/cni             | latest  |
-| libcalico              | latest  |
-| calico-bird            | latest  |
-| libnetwork-plugin      | latest  |
-| calico/kube-policy-controller | latest  |
+| felix                  | 1.4.4  |
+| calicoctl              | v0.23.0 |
+| calico/node            | v0.23.0 |
+| calico/cni             | v1.4.3  |
+| libcalico              | v0.18.0 |
+| calico-bird            | v0.1.0  |
+| libnetwork-plugin      | v0.10.0 |
+| calico/kube-policy-controller | v0.4.0  |

@@ -57,6 +57,7 @@ function redirect(version) {
 		<span>View other release:</span>
 		<span class="dropdown">
 			<select onchange="redirect(this.value)">
+				<option value="v1.6" {% if page.version == "v1.6" %}{{"selected"}}{% endif %}>v1.6</option>
 				<option value="v1.5" {% if page.version == "v1.5" %}{{"selected"}}{% endif %}>v1.5</option>
 				<option value="master" {% if page.version == "master" %}{{"selected"}}{% endif %}>master</option>
 			</select>
