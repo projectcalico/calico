@@ -66,8 +66,9 @@ Description:
   or by type and identifiers.  JSON and YAML formats are accepted for file and
   stdin format.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, pool
-  policy, and profile.  The <TYPE> is case insensitive and may be pluralized.
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint,
+  ipPool, policy, and profile.  The <TYPE> is case insensitive and may be
+  pluralized.
 
   Attempting to delete a resource that does not exists is treated as a
   terminating error unless the --skip-not-exists flag is set.  If this flag is

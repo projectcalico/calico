@@ -48,8 +48,8 @@ Description:
   The apply command is used to create or replace a set of resources by filename
   or stdin.  JSON and YAML formats are accepted.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, pool,
-  policy, and profile.
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint,
+  ipPool, policy, and profile.
 
   When applying a resource:
   -  if the resource does not already exist (as determined by it's primary

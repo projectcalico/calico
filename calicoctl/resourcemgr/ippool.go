@@ -22,8 +22,8 @@ import (
 
 func init() {
 	registerResource(
-		api.NewPool(),
-		api.NewPoolList(),
+		api.NewIPPool(),
+		api.NewIPPoolList(),
 		[]string{"CIDR"},
 		[]string{"CIDR", "NAT", "IPIP"},
 		map[string]string{
@@ -32,24 +32,24 @@ func init() {
 			"IPIP": "{{if .Spec.IPIP}}{{.Spec.IPIP.Enabled}}{{else}}false{{end}}",
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Pool)
-			return client.Pools().Apply(&r)
+			r := resource.(api.IPPool)
+			return client.IPPools().Apply(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Pool)
-			return client.Pools().Create(&r)
+			r := resource.(api.IPPool)
+			return client.IPPools().Create(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Pool)
-			return client.Pools().Update(&r)
+			r := resource.(api.IPPool)
+			return client.IPPools().Update(&r)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Pool)
-			return nil, client.Pools().Delete(r.Metadata)
+			r := resource.(api.IPPool)
+			return nil, client.IPPools().Delete(r.Metadata)
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
-			r := resource.(api.Pool)
-			return client.Pools().List(r.Metadata)
+			r := resource.(api.IPPool)
+			return client.IPPools().List(r.Metadata)
 		},
 	)
 }

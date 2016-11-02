@@ -124,8 +124,8 @@ func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource
 		p := api.NewPolicy()
 		p.Metadata.Name = name
 		return *p, nil
-	case "pool", "pools":
-		p := api.NewPool()
+	case "ippool", "ippools":
+		p := api.NewIPPool()
 		if name != "" {
 			_, cidr, err := net.ParseCIDR(name)
 			if err != nil {
