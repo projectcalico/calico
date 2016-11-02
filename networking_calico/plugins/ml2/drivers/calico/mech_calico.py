@@ -551,6 +551,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if port['device_owner'].startswith('compute:'):
             return True
 
+        # Also return True if port is for a Kuryr container.
+        if port['device_owner'].startswith('kuryr:container'):
+            return True
+
         # Otherwise log and return False.
         LOG.debug("Not a VM port: %s" % port)
         return False

@@ -47,6 +47,7 @@ For more detail please see :ref:`semantics`.
    semantics
    floating-ips
    devstack
+   kuryr
    implementation-notes
    host-routes
    dhcp-agent
