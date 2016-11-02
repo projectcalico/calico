@@ -50,6 +50,8 @@ DEB_VERSION:=$(shell grep felix debian/changelog | \
                      cut -d '-' -f 1)
 DEB_VERSION_TRUSTY:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/trusty/g")
 DEB_VERSION_XENIAL:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/xenial/g")
+DEB_TRUSTY:=dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb
+DEB_XENIAL:=dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb
 
 # Lookup the python package version.
 PY_VERSION:=$(shell cd python; python2.7 setup.py --version 2>>/dev/null)
@@ -175,25 +177,19 @@ DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 
 # Build all the debs.
 .PHONY: deb
-deb: trusty-deb xenial-deb
+deb: $(DEB_TRUSTY) $(DEB_XENIAL)
 
-.PHONY: trusty-deb
-trusty-deb: dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb
-#NJ: Can we define $(TRUSTY_DEB) as the file name, and lose the trusty-deb phony?
-
-dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb: dist/calico-felix/calico-iptables-plugin \
-                                                          dist/calico-felix/calico-felix \
-                                                          debian/*
+$(DEB_TRUSTY): dist/calico-felix/calico-iptables-plugin \
+               dist/calico-felix/calico-felix \
+               debian/*
 	$(MAKE) calico-build/trusty
 	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_TRUSTY) \
 	              calico-build/trusty debian/build-debs
 
-.PHONY: xenial-deb
-xenial-deb: dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb
 
-dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb: dist/calico-felix/calico-iptables-plugin \
-                                                          dist/calico-felix/calico-felix \
-                                                          debian/*
+$(DEB_XENIAL): dist/calico-felix/calico-iptables-plugin \
+               dist/calico-felix/calico-felix \
+               debian/*
 	$(MAKE) calico-build/xenial
 	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_XENIAL) \
 	              calico-build/xenial debian/build-debs
