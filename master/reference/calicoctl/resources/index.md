@@ -1,5 +1,5 @@
 ---
-title: Calico resource types
+title: Resource Definitions
 ---
 
 This guide describes the set of valid resource types that can be managed
@@ -15,6 +15,7 @@ all take YAML files as input.  The YAML file may contain a single resource type
 hostEndpoint resources).
 
 ### A single resource
+
 The general structure of a single resource is as follows:
 
 ```
@@ -38,6 +39,7 @@ spec:
 | spec | Contains the resource specification, i.e. the configuration for the resource. | | YAML |
 
 ### Multiple resources in a single file
+
 A file may contain multiple resource documents specified in a YAML list format. For example, the following is the contents of a file containing two `hostEndpoint` resources:
 ```
 - apiVersion: v1
