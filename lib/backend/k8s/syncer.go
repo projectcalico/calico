@@ -284,7 +284,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 			// If this is the kube-system Namespace, also send
 			// the pool through. // TODO: Hacky.
 			if ns.ObjectMeta.Name == "kube-system" {
-				pool, _ := syn.kc.converter.namespaceToPool(&ns)
+				pool, _ := syn.kc.converter.namespaceToIPPool(&ns)
 				if pool != nil {
 					snap = append(snap, *pool)
 					keys[pool.Key] = true
@@ -387,7 +387,7 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	// information, so send a pool update. FIXME: Make this better.
 	var pool *model.KVPair
 	if ns.ObjectMeta.Name == "kube-system" {
-		pool, err = syn.kc.converter.namespaceToPool(ns)
+		pool, err = syn.kc.converter.namespaceToIPPool(ns)
 		if err != nil {
 			log.Panicf("%s", err)
 		}

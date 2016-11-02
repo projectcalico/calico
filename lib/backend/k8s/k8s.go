@@ -111,8 +111,8 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 // exists.
 func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	switch d.Key.(type) {
-	case model.PoolKey:
-		return c.applyPool(d)
+	case model.IPPoolKey:
+		return c.applyIPPool(d)
 	}
 	log.Infof("Ignoring 'Apply' for %s", d.Key)
 	return d, nil
@@ -132,8 +132,8 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 		return c.getProfile(k.(model.ProfileKey))
 	case model.WorkloadEndpointKey:
 		return c.getWorkloadEndpoint(k.(model.WorkloadEndpointKey))
-	case model.PoolKey:
-		return c.getPool(k.(model.PoolKey))
+	case model.IPPoolKey:
+		return c.getIPPool(k.(model.IPPoolKey))
 	case model.PolicyKey:
 		return c.getPolicy(k.(model.PolicyKey))
 	case model.HostConfigKey:
@@ -159,8 +159,8 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listProfiles(l.(model.ProfileListOptions))
 	case model.WorkloadEndpointListOptions:
 		return c.listWorkloadEndpoints(l.(model.WorkloadEndpointListOptions))
-	case model.PoolListOptions:
-		return c.listPools(l.(model.PoolListOptions))
+	case model.IPPoolListOptions:
+		return c.listIPPools(l.(model.IPPoolListOptions))
 	case model.PolicyListOptions:
 		return c.listPolicies(l.(model.PolicyListOptions))
 	case model.GlobalConfigListOptions:
@@ -279,28 +279,28 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 	return c.converter.podToWorkloadEndpoint(pod)
 }
 
-// listPools lists Pools thus the k8s API based on kube-system Namespace annotations.
-func (c *KubeClient) listPools(l model.PoolListOptions) ([]*model.KVPair, error) {
+// listIPPools lists Pools thus the k8s API based on kube-system Namespace annotations.
+func (c *KubeClient) listIPPools(l model.IPPoolListOptions) ([]*model.KVPair, error) {
 	// Kubernetes backend only supports a single pool.
-	kvp, err := c.getPool(model.PoolKey{})
+	kvp, err := c.getIPPool(model.IPPoolKey{})
 	if err != nil {
 		return []*model.KVPair{}, nil
 	}
 	return []*model.KVPair{kvp}, nil
 }
 
-// getPool gets the Pool from the k8s API based on kube-system Namespace annotations.
-func (c *KubeClient) getPool(k model.PoolKey) (*model.KVPair, error) {
+// getIPPool gets the IPPool from the k8s API based on kube-system Namespace annotations.
+func (c *KubeClient) getIPPool(k model.IPPoolKey) (*model.KVPair, error) {
 	ns, err := c.clientSet.Namespaces().Get("kube-system")
 	if err != nil {
 		return nil, err
 	}
-	return c.converter.namespaceToPool(ns)
+	return c.converter.namespaceToIPPool(ns)
 }
 
-// The Kubernetes backend only supports a single pool, which is stored
-// as an annotation on the Kubernetes kube-system Namespace.
-func (c *KubeClient) applyPool(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) applyIPPool(kvp *model.KVPair) (*model.KVPair, error) {
+	// The Kubernetes backend only supports a single pool, which is stored
+	// as an annotation on the Kubernetes kube-system Namespace.
 	ns, err := c.clientSet.Namespaces().Get("kube-system")
 	if err != nil {
 		return nil, err

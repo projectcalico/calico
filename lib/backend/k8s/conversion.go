@@ -79,7 +79,7 @@ func (c converter) parseProfileName(profileName string) (string, error) {
 	return splits[1], nil
 }
 
-func (c converter) namespaceToPool(ns *k8sapi.Namespace) (*model.KVPair, error) {
+func (c converter) namespaceToIPPool(ns *k8sapi.Namespace) (*model.KVPair, error) {
 	if ns.ObjectMeta.Name != "kube-system" {
 		return nil, goerrors.New("Invalid namespace, must be kube-system")
 	}
@@ -90,13 +90,13 @@ func (c converter) namespaceToPool(ns *k8sapi.Namespace) (*model.KVPair, error) 
 		// No pools exist.
 		return nil, goerrors.New("No Kubernetes Pod IP Pool configured")
 	}
-	pool := model.Pool{}
+	pool := model.IPPool{}
 	err := json.Unmarshal([]byte(poolStr), &pool)
 	if err != nil {
 		return nil, err
 	}
 	return &model.KVPair{
-		Key:      model.PoolKey{CIDR: pool.CIDR},
+		Key:      model.IPPoolKey{CIDR: pool.CIDR},
 		Value:    &pool,
 		Revision: ns.ObjectMeta.ResourceVersion,
 	}, nil
