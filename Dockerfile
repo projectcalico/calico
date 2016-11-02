@@ -18,6 +18,8 @@ WORKDIR /code
 
 # Minimal dummy config
 RUN mkdir /etc/calico && echo -e "[global]\nMetadataAddr = None\nLogFilePath = None\nLogSeverityFile = None" >/etc/calico/felix.cfg
+RUN ln -s /code/calico-felix /usr/bin
+RUN ln -s /code/calico-iptables-plugin /usr/bin
 
 # Run felix by default
-CMD ["./calico-felix"]
+CMD ["calico-felix"]
