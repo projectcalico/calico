@@ -37,7 +37,7 @@ This package provides common files.
 %package -n calico-felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
-Requires:       conntrack-tools, ipset, iptables, iptables-utils, net-tools, iproute, which
+Requires:       calico-common, conntrack-tools, ipset, iptables, iptables-utils, net-tools, iproute, which
 
 
 %description -n calico-felix
