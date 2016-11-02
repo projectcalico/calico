@@ -259,7 +259,7 @@ spec:
       containers:
         # Writes basic configuration to datastore. 
         - name: configure-calico
-          image: calico/ctl:v0.21.0 
+          image: calico/ctl:latest
           args: 
           - "pool"
           - "add"
