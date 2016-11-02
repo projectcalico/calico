@@ -21,87 +21,87 @@ import (
 )
 
 // PoolInterface has methods to work with Pool resources.
-type PoolInterface interface {
-	List(api.PoolMetadata) (*api.PoolList, error)
-	Get(api.PoolMetadata) (*api.Pool, error)
-	Create(*api.Pool) (*api.Pool, error)
-	Update(*api.Pool) (*api.Pool, error)
-	Apply(*api.Pool) (*api.Pool, error)
-	Delete(api.PoolMetadata) error
+type IPPoolInterface interface {
+	List(api.IPPoolMetadata) (*api.IPPoolList, error)
+	Get(api.IPPoolMetadata) (*api.IPPool, error)
+	Create(*api.IPPool) (*api.IPPool, error)
+	Update(*api.IPPool) (*api.IPPool, error)
+	Apply(*api.IPPool) (*api.IPPool, error)
+	Delete(api.IPPoolMetadata) error
 }
 
-// pools implements PoolInterface
-type pools struct {
+// ipPools implements IPPoolInterface
+type ipPools struct {
 	c *Client
 }
 
-// newPools returns a new PoolInterface bound to the supplied client.
-func newPools(c *Client) PoolInterface {
-	return &pools{c}
+// newIPPools returns a new IPPoolInterface bound to the supplied client.
+func newIPPools(c *Client) IPPoolInterface {
+	return &ipPools{c}
 }
 
-// Create creates a new pool.
-func (h *pools) Create(a *api.Pool) (*api.Pool, error) {
+// Create creates a new IP pool.
+func (h *ipPools) Create(a *api.IPPool) (*api.IPPool, error) {
 	return a, h.c.create(*a, h)
 }
 
-// Update updates an existing pool.
-func (h *pools) Update(a *api.Pool) (*api.Pool, error) {
+// Update updates an existing IP pool.
+func (h *ipPools) Update(a *api.IPPool) (*api.IPPool, error) {
 	return a, h.c.update(*a, h)
 }
 
-// Apply updates a pool if it exists, or creates a new pool if it does not exist.
-func (h *pools) Apply(a *api.Pool) (*api.Pool, error) {
+// Apply updates an IP pool if it exists, or creates a new pool if it does not exist.
+func (h *ipPools) Apply(a *api.IPPool) (*api.IPPool, error) {
 	return a, h.c.apply(*a, h)
 }
 
-// Delete deletes an existing pool.
-func (h *pools) Delete(metadata api.PoolMetadata) error {
+// Delete deletes an existing IP pool.
+func (h *ipPools) Delete(metadata api.IPPoolMetadata) error {
 	return h.c.delete(metadata, h)
 }
 
-// Get returns information about a particular pool.
-func (h *pools) Get(metadata api.PoolMetadata) (*api.Pool, error) {
+// Get returns information about a particular IP pool.
+func (h *ipPools) Get(metadata api.IPPoolMetadata) (*api.IPPool, error) {
 	if a, err := h.c.get(metadata, h); err != nil {
 		return nil, err
 	} else {
-		return a.(*api.Pool), nil
+		return a.(*api.IPPool), nil
 	}
 }
 
-// List takes a Metadata, and returns a PoolList that contains the list of pools
+// List takes a Metadata, and returns an IPPoolList that contains the list of IP pools
 // that match the Metadata (wildcarding missing fields).
-func (h *pools) List(metadata api.PoolMetadata) (*api.PoolList, error) {
-	l := api.NewPoolList()
+func (h *ipPools) List(metadata api.IPPoolMetadata) (*api.IPPoolList, error) {
+	l := api.NewIPPoolList()
 	err := h.c.list(metadata, h, l)
 	return l, err
 }
 
-// convertMetadataToListInterface converts a PoolMetadata to a PoolListOptions.
+// convertMetadataToListInterface converts an IPPoolMetadata to an IPPoolListOptions.
 // This is part of the conversionHelper interface.
-func (h *pools) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
-	pm := m.(api.PoolMetadata)
-	l := model.PoolListOptions{
+func (h *ipPools) convertMetadataToListInterface(m unversioned.ResourceMetadata) (model.ListInterface, error) {
+	pm := m.(api.IPPoolMetadata)
+	l := model.IPPoolListOptions{
 		CIDR: pm.CIDR,
 	}
 	return l, nil
 }
 
-// convertMetadataToKey converts a PoolMetadata to a PoolKey
+// convertMetadataToKey converts an IPPoolMetadata to an IPPoolKey
 // This is part of the conversionHelper interface.
-func (h *pools) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	pm := m.(api.PoolMetadata)
-	k := model.PoolKey{
+func (h *ipPools) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
+	pm := m.(api.IPPoolMetadata)
+	k := model.IPPoolKey{
 		CIDR: pm.CIDR,
 	}
 	return k, nil
 }
 
-// convertAPIToKVPair converts an API Pool structure to a KVPair containing a
-// backend Pool and PoolKey.
+// convertAPIToKVPair converts an API IPPool structure to a KVPair containing a
+// backend IPPool and IPPoolKey.
 // This is part of the conversionHelper interface.
-func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
-	ap := a.(api.Pool)
+func (h *ipPools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
+	ap := a.(api.IPPool)
 	k, err := h.convertMetadataToKey(ap.Metadata)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 
 	d := model.KVPair{
 		Key: k,
-		Value: &model.Pool{
+		Value: &model.IPPool{
 			CIDR:          ap.Metadata.CIDR,
 			IPIPInterface: ipipInterface,
 			Masquerade:    ap.Spec.NATOutgoing,
@@ -129,13 +129,13 @@ func (h *pools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 	return &d, nil
 }
 
-// convertKVPairToAPI converts a KVPair containing a backend Pool and PoolKey
-// to an API Pool structure.
+// convertKVPairToAPI converts a KVPair containing a backend IPPool and IPPoolKey
+// to an API IPPool structure.
 // This is part of the conversionHelper interface.
-func (h *pools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	backendPool := d.Value.(*model.Pool)
+func (h *ipPools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
+	backendPool := d.Value.(*model.IPPool)
 
-	apiPool := api.NewPool()
+	apiPool := api.NewIPPool()
 	apiPool.Metadata.CIDR = backendPool.CIDR
 	apiPool.Spec.NATOutgoing = backendPool.Masquerade
 	apiPool.Spec.Disabled = backendPool.Disabled

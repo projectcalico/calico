@@ -233,7 +233,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 		pools := []net.IPNet{}
 		if pool == nil {
 			// Default to all configured pools.
-			allPools, err := c.client.Pools().List(api.PoolMetadata{})
+			allPools, err := c.client.IPPools().List(api.IPPoolMetadata{})
 			if err != nil {
 				log.Errorf("Error reading configured pools: %s", err)
 				return ips, nil

@@ -78,7 +78,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 		pools = []cnet.IPNet{*pool}
 	} else {
 		// Default to all configured pools.
-		allPools, err := rw.client.Pools().List(api.PoolMetadata{})
+		allPools, err := rw.client.IPPools().List(api.IPPoolMetadata{})
 		if err != nil {
 			log.Errorf("Error reading configured pools: %s", err)
 			return nil, err
@@ -254,7 +254,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 // withinConfiguredPools returns true if the given IP is within a configured
 // Calico pool, and false otherwise.
 func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
-	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
+	allPools, _ := rw.client.IPPools().List(api.IPPoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
 		if !p.Spec.Disabled && p.Metadata.CIDR.Contains(ip.IP) {
@@ -267,7 +267,7 @@ func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
 // isConfiguredPool returns true if the given IPNet is a configured
 // Calico pool, and false otherwise.
 func (rw blockReaderWriter) isConfiguredPool(cidr cnet.IPNet) bool {
-	allPools, _ := rw.client.Pools().List(api.PoolMetadata{})
+	allPools, _ := rw.client.IPPools().List(api.IPPoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
 		if !p.Spec.Disabled && reflect.DeepEqual(p.Metadata.CIDR, cidr) {

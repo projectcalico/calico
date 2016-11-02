@@ -27,15 +27,15 @@ import (
 )
 
 var (
-	matchPool = regexp.MustCompile("^/?calico/v1/ipam/v./pool/([^/]+)$")
-	typePool  = reflect.TypeOf(Pool{})
+	matchIPPool = regexp.MustCompile("^/?calico/v1/ipam/v./pool/([^/]+)$")
+	typeIPPool = reflect.TypeOf(IPPool{})
 )
 
-type PoolKey struct {
+type IPPoolKey struct {
 	CIDR net.IPNet `json:"-" validate:"required,name"`
 }
 
-func (key PoolKey) defaultPath() (string, error) {
+func (key IPPoolKey) defaultPath() (string, error) {
 	if key.CIDR.IP == nil {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
@@ -44,27 +44,27 @@ func (key PoolKey) defaultPath() (string, error) {
 	return e, nil
 }
 
-func (key PoolKey) defaultDeletePath() (string, error) {
+func (key IPPoolKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
-func (key PoolKey) defaultDeleteParentPaths() ([]string, error) {
+func (key IPPoolKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key PoolKey) valueType() reflect.Type {
-	return typePool
+func (key IPPoolKey) valueType() reflect.Type {
+	return typeIPPool
 }
 
-func (key PoolKey) String() string {
-	return fmt.Sprintf("Pool(cidr=%s)", key.CIDR)
+func (key IPPoolKey) String() string {
+	return fmt.Sprintf("IPPool(cidr=%s)", key.CIDR)
 }
 
-type PoolListOptions struct {
+type IPPoolListOptions struct {
 	CIDR net.IPNet
 }
 
-func (options PoolListOptions) defaultPathRoot() string {
+func (options IPPoolListOptions) defaultPathRoot() string {
 	k := "/calico/v1/ipam/"
 	if options.CIDR.IP == nil {
 		return k
@@ -74,9 +74,9 @@ func (options PoolListOptions) defaultPathRoot() string {
 	return k
 }
 
-func (options PoolListOptions) KeyFromDefaultPath(path string) Key {
+func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 	log.Infof("Get Pool key from %s", path)
-	r := matchPool.FindAllStringSubmatch(path, -1)
+	r := matchIPPool.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
 		log.Infof("%s didn't match regex", path)
 		return nil
@@ -87,10 +87,10 @@ func (options PoolListOptions) KeyFromDefaultPath(path string) Key {
 		log.Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
 	}
-	return PoolKey{CIDR: *cidr}
+	return IPPoolKey{CIDR: *cidr}
 }
 
-type Pool struct {
+type IPPool struct {
 	CIDR          net.IPNet `json:"cidr"`
 	IPIPInterface string    `json:"ipip"`
 	Masquerade    bool      `json:"masquerade"`

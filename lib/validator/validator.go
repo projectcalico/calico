@@ -60,7 +60,7 @@ func init() {
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
-	registerStructValidator(validatePoolMetadata, api.PoolMetadata{})
+	registerStructValidator(validatePoolMetadata, api.IPPoolMetadata{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
@@ -241,7 +241,7 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 }
 
 func validatePoolMetadata(v *validator.Validate, structLevel *validator.StructLevel) {
-	pool := structLevel.CurrentStruct.Interface().(api.PoolMetadata)
+	pool := structLevel.CurrentStruct.Interface().(api.IPPoolMetadata)
 
 	// The Calico IPAM places restrictions on the minimum IP pool size, check that the
 	// pool is at least the minimum size.

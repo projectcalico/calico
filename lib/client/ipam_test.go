@@ -198,7 +198,7 @@ var _ = Describe("IPAM tests", func() {
 				testutils.CleanEtcd()
 				c, _ := testutils.NewClient("")
 				for _, v := range args.pool {
-					testutils.CreateNewPool(*c, v, false, false, true)
+					testutils.CreateNewIPPool(*c, v, false, false, true)
 				}
 			}
 
@@ -253,7 +253,7 @@ func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignI
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
 		for _, v := range poolSubnet {
-			testutils.CreateNewPool(*c, v, false, false, true)
+			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
 	ic := setupIPAMClient(cleanEnv)
@@ -298,7 +298,7 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
 		for _, v := range poolSubnet {
-			testutils.CreateNewPool(*c, v, false, false, true)
+			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
 	ic := setupIPAMClient(cleanEnv)
@@ -324,7 +324,7 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
 		for _, v := range poolSubnet {
-			testutils.CreateNewPool(*c, v, false, false, true)
+			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
 	ic := setupIPAMClient(cleanEnv)

@@ -58,9 +58,9 @@ func (c *Client) Policies() PolicyInterface {
 	return newPolicies(c)
 }
 
-// Pools returns an interface for managing pool resources.
-func (c *Client) Pools() PoolInterface {
-	return newPools(c)
+// IPPools returns an interface for managing IP pool resources.
+func (c *Client) IPPools() IPPoolInterface {
+	return newIPPools(c)
 }
 
 // Profiles returns an interface for managing profile resources.

@@ -19,27 +19,27 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-// Pool contains the details of a Calico IP pool resource.
+// IPPool contains the details of a Calico IP pool resource.
 // A pool resource is used by Calico in two ways:
 // 	- to provide a set of IP addresses from which Calico IPAM assigns addresses
 // 	  for workloads.
 // 	- to provide configuration specific to IP address range, such as configuration
 // 	  for the BGP daemon (e.g. when to use a GRE tunnel to encapsulate packets
 // 	  between compute hosts).
-type Pool struct {
+type IPPool struct {
 	unversioned.TypeMetadata
-	Metadata PoolMetadata `json:"metadata,omitempty"`
-	Spec     PoolSpec     `json:"spec,omitempty"`
+	Metadata IPPoolMetadata `json:"metadata,omitempty"`
+	Spec     IPPoolSpec     `json:"spec,omitempty"`
 }
 
-// PoolMetadata contains the metadata for an IP pool resource.
-type PoolMetadata struct {
+// IPPoolMetadata contains the metadata for an IP pool resource.
+type IPPoolMetadata struct {
 	unversioned.ObjectMetadata
 	CIDR net.IPNet `json:"cidr"`
 }
 
-// PoolSpec contains the specification for an IP pool resource.
-type PoolSpec struct {
+// IPPoolSpec contains the specification for an IP pool resource.
+type IPPoolSpec struct {
 	// Contains configuration for ipip tunneling for this pool. If not specified,
 	// then ipip tunneling is disabled for this pool.
 	IPIP *IPIPConfiguration `json:"ipip,omitempty"`
@@ -58,31 +58,31 @@ type IPIPConfiguration struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
-// NewPool creates a new (zeroed) Pool struct with the TypeMetadata initialised to the current
+// NewIPPool creates a new (zeroed) Pool struct with the TypeMetadata initialised to the current
 // version.
-func NewPool() *Pool {
-	return &Pool{
+func NewIPPool() *IPPool {
+	return &IPPool{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind:       "pool",
+			Kind:       "ipPool",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}
 }
 
-// PoolList contains a list of IP pool resources.  List types are returned from List()
+// IPPoolList contains a list of IP pool resources.  List types are returned from List()
 // enumerations in the client interface.
-type PoolList struct {
+type IPPoolList struct {
 	unversioned.TypeMetadata
 	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
-	Items    []Pool                   `json:"items" validate:"dive"`
+	Items    []IPPool                   `json:"items" validate:"dive"`
 }
 
-// NewPool creates a new (zeroed) PoolList struct with the TypeMetadata initialised to the current
+// NewIPPool creates a new (zeroed) PoolList struct with the TypeMetadata initialised to the current
 // version.
-func NewPoolList() *PoolList {
-	return &PoolList{
+func NewIPPoolList() *IPPoolList {
+	return &IPPoolList{
 		TypeMetadata: unversioned.TypeMetadata{
-			Kind:       "poolList",
+			Kind:       "ipPoolList",
 			APIVersion: unversioned.VersionCurrent,
 		},
 	}

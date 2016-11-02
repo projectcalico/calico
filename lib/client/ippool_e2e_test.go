@@ -13,10 +13,10 @@
 // limitations under the License.
 
 // Test cases (Pool object e2e):
-// Test 1: Pass two fully populated PoolSpecs and expect the series of operations to succeed.
-// Test 2: Pass one partially populated PoolSpec and another fully populated PoolSpec and expect the series of operations to succeed.
-// Test 3: Pass one fully populated PoolSpec and another empty PoolSpec and expect the series of operations to succeed.
-// Test 4: Pass two fully populated PoolSpecs with two PoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
+// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
+// Test 2: Pass one partially populated IPPoolSpec and another fully populated IPPoolSpec and expect the series of operations to succeed.
+// Test 3: Pass one fully populated IPPoolSpec and another empty IPPoolSpec and expect the series of operations to succeed.
+// Test 4: Pass two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
 
 // Series of operations each test goes through:
 // Update meta1 - check for failure (because it doesn't exist).
@@ -46,10 +46,10 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = Describe("Pool tests", func() {
+var _ = Describe("IPPool tests", func() {
 
-	DescribeTable("Pool e2e tests",
-		func(meta1, meta2 api.PoolMetadata, spec1, spec2 api.PoolSpec) {
+	DescribeTable("IPPool e2e tests",
+		func(meta1, meta2 api.IPPoolMetadata, spec1, spec2 api.IPPoolSpec) {
 
 			// Erase etcd clean.
 			testutils.CleanEtcd()
@@ -60,28 +60,28 @@ var _ = Describe("Pool tests", func() {
 				log.Println("Error creating client:", err)
 			}
 			By("Updating the pool before it is created")
-			_, outError := c.Pools().Update(&api.Pool{Metadata: meta1, Spec: spec1})
+			_, outError := c.IPPools().Update(&api.IPPool{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: Pool(cidr=10.0.0.0/24)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: IPPool(cidr=10.0.0.0/24)").Error()))
 
 			By("Create, Apply, Get and compare")
 
 			// Create a pool with meta1 and spec1.
-			_, outError = c.Pools().Create(&api.Pool{Metadata: meta1, Spec: spec1})
+			_, outError = c.IPPools().Create(&api.IPPool{Metadata: meta1, Spec: spec1})
 			Expect(outError).NotTo(HaveOccurred())
 
 			// Apply a pool with meta2 and spec2.
-			_, outError = c.Pools().Apply(&api.Pool{Metadata: meta2, Spec: spec2})
+			_, outError = c.IPPools().Apply(&api.IPPool{Metadata: meta2, Spec: spec2})
 			Expect(outError).NotTo(HaveOccurred())
 
 			// Get pool with meta1.
-			outPool1, outError1 := c.Pools().Get(meta1)
-			log.Println("Out Pool object: ", outPool1)
+			outPool1, outError1 := c.IPPools().Get(meta1)
+			log.Println("Out IPPool object: ", outPool1)
 
 			// Get pool with meta2.
-			outPool2, outError2 := c.Pools().Get(meta2)
-			log.Println("Out Pool object: ", outPool2)
+			outPool2, outError2 := c.IPPools().Get(meta2)
+			log.Println("Out IPPool object: ", outPool2)
 
 			// Should match spec1 & outPool1 and outPool2 & spec2 and errors to be nil.
 			Expect(outError1).NotTo(HaveOccurred())
@@ -92,11 +92,11 @@ var _ = Describe("Pool tests", func() {
 			By("Update, Get and compare")
 
 			// Update meta1 pool with spec2.
-			_, outError = c.Pools().Update(&api.Pool{Metadata: meta1, Spec: spec2})
+			_, outError = c.IPPools().Update(&api.IPPool{Metadata: meta1, Spec: spec2})
 			Expect(outError).NotTo(HaveOccurred())
 
 			// Get pool with meta1.
-			outPool1, outError1 = c.Pools().Get(meta1)
+			outPool1, outError1 = c.IPPools().Get(meta1)
 
 			// Assert the Spec for pool with meta1 matches spec2 and no error.
 			Expect(outError1).NotTo(HaveOccurred())
@@ -105,14 +105,14 @@ var _ = Describe("Pool tests", func() {
 			By("List all the pools and compare")
 
 			// Get a list of pools.
-			poolList, outError := c.Pools().List(api.PoolMetadata{})
+			poolList, outError := c.IPPools().List(api.IPPoolMetadata{})
 			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
-			metas := []api.PoolMetadata{meta1, meta2}
-			expectedPools := []api.Pool{}
+			metas := []api.IPPoolMetadata{meta1, meta2}
+			expectedPools := []api.IPPool{}
 			// Go through meta list and append them to expectedPools.
 			for _, v := range metas {
-				p, outError := c.Pools().Get(v)
+				p, outError := c.IPPools().Get(v)
 				Expect(outError).NotTo(HaveOccurred())
 				expectedPools = append(expectedPools, *p)
 			}
@@ -123,12 +123,12 @@ var _ = Describe("Pool tests", func() {
 			By("List a specific pool and compare")
 
 			// Get a pool list with meta1.
-			poolList, outError = c.Pools().List(meta1)
+			poolList, outError = c.IPPools().List(meta1)
 			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 
 			// Get a pool with meta1.
-			outPool1, outError1 = c.Pools().Get(meta1)
+			outPool1, outError1 = c.IPPools().Get(meta1)
 
 			// Assert they are equal and no errors.
 			Expect(outError1).NotTo(HaveOccurred())
@@ -137,94 +137,94 @@ var _ = Describe("Pool tests", func() {
 			By("Delete, Get and assert error")
 
 			// Delete a pool with meta1.
-			outError1 = c.Pools().Delete(meta1)
+			outError1 = c.IPPools().Delete(meta1)
 			Expect(outError1).NotTo(HaveOccurred())
 
 			// Get a pool with meta1.
-			_, outError = c.Pools().Get(meta1)
+			_, outError = c.IPPools().Get(meta1)
 
 			// Expect an error since the pool was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: Pool(cidr=10.0.0.0/24)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: IPPool(cidr=10.0.0.0/24)").Error()))
 
 			// Delete the second pool with meta2.
-			outError1 = c.Pools().Delete(meta2)
+			outError1 = c.IPPools().Delete(meta2)
 			Expect(outError1).NotTo(HaveOccurred())
 
 			By("Delete all the pools, Get pool list and expect empty pool list")
 
 			// Both pools are deleted in the calls above.
 			// Get the list of all the pools.
-			poolList, outError = c.Pools().List(api.PoolMetadata{})
+			poolList, outError = c.IPPools().List(api.IPPoolMetadata{})
 			Expect(outError).NotTo(HaveOccurred())
 			log.Println("Get pool list returns: ", poolList.Items)
 
 			// Create an empty pool list.
-			// Note: you can't use make([]api.Pool, 0) because it creates an empty underlying struct,
-			// whereas new([]api.Pool) just returns a pointer without creating an empty struct.
-			emptyPoolList := new([]api.Pool)
+			// Note: you can't use make([]api.IPPool, 0) because it creates an empty underlying struct,
+			// whereas new([]api.IPPool) just returns a pointer without creating an empty struct.
+			emptyPoolList := new([]api.IPPool)
 
 			// Expect returned poolList to contain empty poolList.
 			Expect(poolList.Items).To(Equal(*emptyPoolList))
 		},
 
-		// Test 1: Pass two fully populated PoolSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated PoolSpecs",
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
-			api.PoolSpec{
+		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
+		Entry("Two fully populated IPPoolSpecs",
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
 				},
 				NATOutgoing: true,
 				Disabled:    true,
 			},
-			api.PoolSpec{
+			api.IPPoolSpec{
 				IPIP:        nil,
 				NATOutgoing: true,
 				Disabled:    false,
 			}),
 
-		// Test 2: Pass one partially populated PoolSpec and another fully populated PoolSpec and expect the series of operations to succeed.
-		Entry("One partially populated PoolSpec and another fully populated PoolSpec",
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
-			api.PoolSpec{
+		// Test 2: Pass one partially populated IPPoolSpec and another fully populated IPPoolSpec and expect the series of operations to succeed.
+		Entry("One partially populated IPPoolSpec and another fully populated IPPoolSpec",
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
 				},
 			},
-			api.PoolSpec{
+			api.IPPoolSpec{
 				IPIP:        nil,
 				NATOutgoing: true,
 				Disabled:    true,
 			}),
 
-		// Test 3: Pass one fully populated PoolSpec and another empty PoolSpec and expect the series of operations to succeed.
-		Entry("One fully populated PoolSpec and another empty PoolSpec",
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
-			api.PoolSpec{
+		// Test 3: Pass one fully populated IPPoolSpec and another empty IPPoolSpec and expect the series of operations to succeed.
+		Entry("One fully populated IPPoolSpec and another empty IPPoolSpec",
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
 				},
 				NATOutgoing: true,
 				Disabled:    true,
 			},
-			api.PoolSpec{},
+			api.IPPoolSpec{},
 		),
 
-		// Test 4: Pass two fully populated PoolSpecs with two PoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
-		Entry("Two fully populated PoolSpecs with two PoolMetadata (one IPv4 and another IPv6)",
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.PoolMetadata{CIDR: testutils.MustParseCIDR("fe80::00/120")},
-			api.PoolSpec{
+		// Test 4: Pass two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
+		Entry("Two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6)",
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("fe80::00/120")},
+			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
 				},
 				NATOutgoing: true,
 				Disabled:    true,
 			},
-			api.PoolSpec{
+			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
 				},

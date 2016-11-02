@@ -45,25 +45,25 @@ func NewClient(cf string) (*client.Client, error) {
 	return c, err
 }
 
-// CreateNewPool takes a client.Client with a poolSubnet CIDR (in "192.168.1.0/24" format) with
+// CreateNewIPPool takes a client.Client with a poolSubnet CIDR (in "192.168.1.0/24" format) with
 // ipip, natOut, and ipam bools for the pool to be setup and creates a new pool.
-func CreateNewPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool) {
+func CreateNewIPPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool) {
 
 	_, cidr, err := net.ParseCIDR(poolSubnet)
 	if err != nil {
 		log.Printf("Error parsing CIDR: %s\n", err)
 	}
 
-	pool := api.Pool{
+	pool := api.IPPool{
 		TypeMetadata: unversioned.TypeMetadata{
 			Kind:       "pool",
 			APIVersion: "v1",
 		},
-		Metadata: api.PoolMetadata{
+		Metadata: api.IPPoolMetadata{
 			ObjectMetadata: unversioned.ObjectMetadata{},
 			CIDR:           cnet.IPNet{*cidr},
 		},
-		Spec: api.PoolSpec{
+		Spec: api.IPPoolSpec{
 			IPIP: &api.IPIPConfiguration{
 				Enabled: ipip,
 			},
@@ -72,7 +72,7 @@ func CreateNewPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool) 
 		},
 	}
 
-	_, err = c.Pools().Create(&pool)
+	_, err = c.IPPools().Create(&pool)
 
 	if err != nil {
 		log.Printf("Error creating pool: %s\n", err)

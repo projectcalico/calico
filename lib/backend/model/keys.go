@@ -196,7 +196,7 @@ func KeyFromDefaultPath(path string) Key {
 	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a host ID: %v", path)
 		return HostIPKey{Hostname: m[1]}
-	} else if m := matchPool.FindStringSubmatch(path); m != nil {
+	} else if m := matchIPPool.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
@@ -204,7 +204,7 @@ func KeyFromDefaultPath(path string) Key {
 		if err != nil {
 			panic(err)
 		}
-		return PoolKey{CIDR: *c}
+		return IPPoolKey{CIDR: *c}
 	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a global config: %v", path)
 		return GlobalConfigKey{Name: m[1]}
