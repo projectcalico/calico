@@ -19,11 +19,7 @@
 felix.config
 ~~~~~~~~~~~~
 
-Configuration management for Felix.
-
-On instantiation, this module automatically parses the configuration file and
-builds a singleton configuration object. That object may (once) be changed by
-etcd configuration being reported back to it.
+Configuration parsing for the dataplane driver.
 """
 from numbers import Number
 
@@ -73,9 +69,8 @@ class ConfigParameter(object):
     """
     A configuration parameter. This contains the following information.
     - The name of the field.
-    - Where the location can validly be read from
-    - The current value
-    - Where the value was read from
+    - The current value.
+    - Type of the field.
     """
     def __init__(self, name, description, default, value_is_int=False,
                  value_is_bool=False, value_is_int_list=False,
@@ -152,19 +147,15 @@ class ConfigParameter(object):
 class Config(object):
     def __init__(self):
         """
-        Create a config. This reads data from the following sources.
-        - Environment variables
-        - Configuration file (/etc/calico/felix.cfg)
-        - per-host etcd (/calico/vX/config)
-        - global etcd (/calico/vX/host/<host>/config)
+        Constructor.  Creates a config object, ready to receive the raw
+        config via the update_from() method.
 
-        After object creation, the environment variables and config file have
-        been read, and the variables ETCD_ADDRS and HOSTNAME have been set and
-        validated. The caller is then responsible for reading the remaining
-        config from etcd and calling report_etcd_config with the returned
-        values before the rest of the config structure can be used.
+        update_from() expects to receive a pre-merged set of config,
+        as loaded by the main calico-felix process from the various
+        config sources that we support.
 
-        :raises EtcdException
+        After calling update_from(), the parsed and validated config is
+        available via CONST_CASE fields on the object.
         """
         self.parameters = {}
         self.plugins = {}
@@ -212,8 +203,6 @@ class Config(object):
                            "spoofing their source IP.  (For example, "
                            "unprivileged containers.)",
                            False, value_is_bool=True)
-        self.add_parameter("ClusterGUID", "Unique cluster identifier",
-                           "baddecaf")
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
         self.add_parameter("LogSeverityFile",
@@ -303,22 +292,13 @@ class Config(object):
 
     def _finish_update(self, final=False):
         """
-        Config has been completely read. Called twice - once after reading from
-        environment and config file (so we should be able to access etcd), and
-        once after reading from etcd (so we have all the config ready to go).
+        Config has been completely read. Called twice so that plugins have
+        a chance to add their config parameters.
 
         Responsible for :
         - storing the parameters in the relevant fields in the structure
         - validating the configuration is valid (for this stage in the process)
         - updating logging parameters
-
-        Note that we complete the logging even before etcd configuration
-        changes are read. Hence, for example, if logging to file is turned on
-        after reading environment variables and config file, then the log file
-        is created and logging to it starts - even if later on etcd
-        configuration turns the file off. That's because we must log if etcd
-        configuration load fails, and not having the log file early enough is
-        worse.
 
         :param final: Have we completed (rather than just read env and config
                       file)
@@ -363,7 +343,6 @@ class Config(object):
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
-        self.CLUSTER_GUID = self.parameters["ClusterGUID"].value
         self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
 
         self._validate_cfg(final=final)
@@ -407,13 +386,12 @@ class Config(object):
         """
         Report configuration parameters read from etcd to the config
         component. This must be called only once, after configuration is
-        initially read and before the config structure is used (except for
-        ETCD_ADDRS and HOSTNAME).
+        initially read and before the config structure is used.
 
-        :param config_dict: Dictionary of etcd parameters
+        :param config_dict: Dictionary of config parameters
         :raises ConfigException
         """
-        log.debug("Configuration reported from etcd")
+        log.debug("Updating with config: %s", config_dict)
 
         for name, parameter in self.parameters.iteritems():
             if name in config_dict:
@@ -443,9 +421,9 @@ class Config(object):
 
     def _validate_cfg(self, final=True):
         """
-        Firewall that the config is not invalid. Called twice, once when
-        environment variables and config file have been read, and once
-        after those plus the etcd configuration have been read.
+        Firewall that the config is not invalid. Called twice to let plugins
+        register their config before a second call.
+
         :param final: Is this after final etcd config has been read?
         :raises ConfigException
         """
