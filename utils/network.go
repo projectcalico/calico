@@ -13,10 +13,15 @@ import (
 )
 
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *log.Entry) (hostVethName, contVethMAC string, err error) {
-	// Select the first 11 characters of the containerID for the host veth
+func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *log.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
+	// Select the first 11 characters of the containerID for the host veth.
 	hostVethName = "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
 	contVethName := args.IfName
+
+	// If a desired veth name was passed in, use that instead.
+	if desiredVethName != "" {
+		hostVethName = desiredVethName
+	}
 
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
 		veth := &netlink.Veth{
@@ -29,6 +34,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 		}
 
 		if err := netlink.LinkAdd(veth); err != nil {
+			logger.Errorf("Error adding veth %+v: %s", veth, err)
 			return err
 		}
 
@@ -81,6 +87,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 			if err := hostNS.Do(func(_ ns.NetNS) error {
 				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
 				if err != nil {
+					logger.Errorf("Error listing IPv6 addresses: %s", err)
 					return err
 				}
 
@@ -94,6 +101,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 				hostIPv6Addr = addresses[0].IP
 				return nil
 			}); err != nil {
+				logger.Errorf("Error getting IPv6 address: %s", err)
 				return err
 			}
 
@@ -117,6 +125,7 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 	})
 
 	if err != nil {
+		logger.Errorf("Error creating veth: %s", err)
 		return "", "", err
 	}
 

@@ -1,3 +1,16 @@
+// Copyright 2015 Tigera Inc
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package utils
 
 import (
@@ -144,6 +157,29 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 			return nil, err
 		}
 	}
+	if conf.DatastoreType != "" {
+		if err := os.Setenv("DATASTORE_TYPE", conf.DatastoreType); err != nil {
+			return nil, err
+		}
+	}
+
+	// Set Kubernetes specific variables for use with the Kubernetes libcalico backend.
+	if conf.Kubernetes.Kubeconfig != "" {
+		if err := os.Setenv("KUBECONFIG", conf.Kubernetes.Kubeconfig); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Kubernetes.K8sAPIRoot != "" {
+		if err := os.Setenv("K8S_API_ENDPOINT", conf.Kubernetes.K8sAPIRoot); err != nil {
+			return nil, err
+		}
+	}
+	if conf.Policy.K8sAuthToken != "" {
+		if err := os.Setenv("K8S_API_TOKEN", conf.Policy.K8sAuthToken); err != nil {
+			return nil, err
+		}
+	}
+	log.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.
 	clientConfig, err := client.LoadClientConfig("")

@@ -1,3 +1,16 @@
+// Copyright 2015 Tigera Inc
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package k8s
 
 import (
@@ -12,6 +25,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 
 	"encoding/json"
@@ -20,13 +34,13 @@ import (
 	"k8s.io/client-go/1.4/tools/clientcmd"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	calicoclient "github.com/projectcalico/libcalico-go/lib/client"
 )
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoClient *client.Client, endpoint *api.WorkloadEndpoint) (*types.Result, error) {
+func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoClient *calicoclient.Client, endpoint *api.WorkloadEndpoint) (*types.Result, error) {
 	var err error
 	var result *types.Result
 
@@ -46,7 +60,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	logger.WithFields(log.Fields{
 		"Orchestrator": orchestrator,
 		"Node":         hostname,
-	}).Info("Extracted identifiers")
+	}).Info("Extracted identifiers for CmdAddK8s")
 
 	if endpoint != nil {
 		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
@@ -90,12 +104,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		}
 
 		// Run the IPAM plugin
+		logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
 		result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 		if err != nil {
 			return nil, err
 		}
+		logger.Debugf("IPAM plugin returned: %+v", result)
 
-		// Create the endpoint object and configure it
+		// Create the endpoint object and configure it.
 		endpoint = api.NewWorkloadEndpoint()
 		endpoint.Metadata.Name = args.IfName
 		endpoint.Metadata.Node = hostname
@@ -103,15 +119,16 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Workload = workload
 		endpoint.Metadata.Labels = make(map[string]string)
 
-		// Set the profileID according to whether Kubernetes policy is required. If it's not, then just use the network
-		// name (which is the normal behavior) otherwise use one based on the Kubernetes pod's Mamespace.
-
+		// Set the profileID according to whether Kubernetes policy is required.
+		// If it's not, then just use the network name (which is the normal behavior)
+		// otherwise use one based on the Kubernetes pod's Namespace.
 		if conf.Policy.PolicyType == "k8s" {
 			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)}
 		} else {
 			endpoint.Spec.Profiles = []string{conf.Name}
 		}
 
+		// Populate the endpoint with the output from the IPAM plugin.
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 			// Cleanup IP allocation and return the error.
 			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
@@ -131,14 +148,15 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.WithField("labels", labels).Info("Fetched K8s labels")
 			endpoint.Metadata.Labels = labels
 		}
-
-		fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 	}
+	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
-	hostVethName, contVethMac, err := utils.DoNetworking(args, conf, result, logger)
+	hostVethName := k8sbackend.VethNameForWorkload(workload)
+	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
+		logger.Errorf("Error setting up networking: %s", err)
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
@@ -146,10 +164,11 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	mac, err := net.ParseMAC(contVethMac)
 	if err != nil {
 		// Cleanup IP allocation and return the error.
+		logger.Errorf("Error parsing MAC (%s): %s", contVethMac, err)
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
-	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
+	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
 	logger.WithField("endpoint", endpoint).Info("Added Mac and interface name to endpoint")
 

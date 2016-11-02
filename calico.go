@@ -74,10 +74,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		"Node":         hostname,
 	}).Info("Extracted identifiers")
 
+	logger.WithFields(log.Fields{"NetConfg": conf}).Info("Loaded CNI NetConf")
 	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
 	}
+
 	// Always check if there's an existing endpoint.
 	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
 		Node:         hostname,
@@ -87,7 +89,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	logger.Debug("Retrieved endpoints: %v", endpoints)
+	logger.Debugf("Retrieved endpoints: %v", endpoints)
 
 	var endpoint *api.WorkloadEndpoint
 	if len(endpoints.Items) == 1 {
@@ -165,7 +167,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 			// 3) Set up the veth
-			hostVethName, contVethMac, err := DoNetworking(args, conf, result, logger)
+			hostVethName, contVethMac, err := DoNetworking(args, conf, result, logger, "")
 			if err != nil {
 				// Cleanup IP allocation and return the error.
 				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
@@ -184,7 +186,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
-			endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
+			endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
