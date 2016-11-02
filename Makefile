@@ -40,6 +40,10 @@ help:
 all: pyinstaller deb rpm calico/felix
 test: ut
 
+# PID of the current make process.  We will use this to uniquify some names
+# that could be used at the same time by concurrent build jobs.
+MYPID:=$(.MAKE.PID)
+
 # re-define default --compare-branch=origin/master to some custom name
 UT_COMPARE_BRANCH?=
 
@@ -143,17 +147,17 @@ calico-build/python:
 .PHONY: update-frozen-reqs
 update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
 	$(MAKE) calico-build/python
-	-docker rm -f felix-pip-req-update
-	docker run --name felix-pip-req-update \
+	-docker rm -f felix-pip-req-update-$(MYPID)
+	docker run --name felix-pip-req-update-$(MYPID) \
 	           -v $${PWD}:/code \
 	           -w /code/python \
 	           -tid calico-build/python sh
-	docker exec felix-pip-req-update \
+	docker exec felix-pip-req-update-$(MYPID) \
 	    sh -c 'pip --no-cache-dir install -U -r requirements.txt && \
 	           pip --no-cache-dir install -U -r test_requirements.txt'
-	docker exec --user $(MY_UID):$(MY_GID) felix-pip-req-update \
+	docker exec --user $(MY_UID):$(MY_GID) felix-pip-req-update-$(MYPID) \
 	    sh -c 'pip --no-cache-dir freeze > requirements_frozen.txt'
-	-docker rm -f felix-pip-req-update
+	-docker rm -f felix-pip-req-update-$(MYPID)
 
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: calico/felix
@@ -334,22 +338,21 @@ ut: python-ut go-ut
 .PHONY: python-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
 	$(MAKE) calico-build/python
-	-docker rm -f felix-ut
-#NJ: Using fixed names like 'felix-ut' is going to cause problems if we have multiple jobs (e.g. Jenkins) doing UT in parallel.
+	-docker rm -f felix-ut-$(MYPID)
 	# Start container to run commands in.  We background the container so we
 	# can run some commands as root and some not.
-	docker run --name felix-ut \
+	docker run --name felix-ut-$(MYPID) \
 	           -v $${PWD}:/code \
 	           -w /code/python \
 	           -tid calico-build/python sh
 	# Pre-create the egg-info as non-root user.
-	docker exec --user $(MY_UID):$(MY_GID) felix-ut python2.7 ./setup.py egg_info
+	docker exec --user $(MY_UID):$(MY_GID) felix-ut-$(MYPID) python2.7 ./setup.py egg_info
 	# Do the install as root.
-	docker exec felix-ut sh -c 'pip install -e .'
+	docker exec felix-ut-$(MYPID) sh -c 'pip install -e .'
 	# Run the UTs as non-root.
-	docker exec --user $(MY_UID):$(MY_GID) felix-ut sh -c 'COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh'
+	docker exec --user $(MY_UID):$(MY_GID) felix-ut-$(MYPID) sh -c 'COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh'
 	# Tear down the container.
-	docker rm -f felix-ut
+	docker rm -f felix-ut-$(MYPID)
 
 .PHONY: go-ut
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
