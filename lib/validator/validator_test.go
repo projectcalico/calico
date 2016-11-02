@@ -314,6 +314,14 @@ func init() {
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
+		Entry("should reject Rule with invalid port (port 0)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Destination: api.EntityRule{
+					NotPorts: []numorstring.Port{numorstring.SinglePort(0)},
+				},
+			}, false),
 		Entry("should accept Rule with empty dest ports and protocol type sctp",
 			api.Rule{
 				Action:   "allow",
@@ -392,6 +400,14 @@ func init() {
 				Protocol: protocolFromString("tcp"),
 				Destination: api.EntityRule{
 					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 200, MaxPort: 100}},
+				},
+			}, false),
+		Entry("should reject Rule with one invalid port in the port range (MinPort 0)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Destination: api.EntityRule{
+					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 0, MaxPort: 100}},
 				},
 			}, false),
 

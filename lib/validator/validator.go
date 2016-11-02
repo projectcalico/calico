@@ -178,6 +178,11 @@ func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
 	if p.MinPort > p.MaxPort {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort), "Port", "port", "port range invalid")
 	}
+
+	// No need to check for the upperbound (65536) because we use uint16.
+	if p.MinPort < 1 || p.MaxPort < 1 {
+		structLevel.ReportError(reflect.ValueOf(p.MaxPort), "Port", "port", "port range invalid, port number must be between 0 and 65536")
+	}
 }
 
 func validateIPNAT(v *validator.Validate, structLevel *validator.StructLevel) {
