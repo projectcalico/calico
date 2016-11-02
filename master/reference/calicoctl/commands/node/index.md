@@ -16,12 +16,12 @@ calicoctl node commands.
 Usage:
   calicoctl node <command> [<args>...]
 
-    status         View the current status of a Calico node.
-    diags          Gather a diagnostics bundle for a Calico node.
-    checksystem    Verify the compute host is able to run a Calico node instance.
+    status       View the current status of a Calico node.
+    diags        Gather a diagnostics bundle for a Calico node.
+    checksystem  Verify the compute host is able to run a Calico node instance.
 
 Options:
-  -h --help               Show this screen.
+  -h --help      Show this screen.
 
 Description:
   Node specific commands for calicoctl.  These commands must be run directly on
@@ -38,10 +38,3 @@ organized by sub command.
 -  [calicoctl node status]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/status)
 -  [calicoctl node diags]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/diags)
 -  [calicoctl node checksystem]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/checksystem)
-
-## See also
--  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
-   and schema
--  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
--  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
-   the Calico datastore.

@@ -14,195 +14,95 @@ Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calico
 Run `calicoctl config --help` to display the following help menu for the
 calicoctl config commands.
 
-```shell
+```
 Usage:
-  calicoctl config felix <NAME> [<VALUE>|--remove] [--force]
-  calicoctl config bgp <NAME> [<VALUE>|--remove] [--force]
-  calicoctl config node bgp <NAME> [<VALUE>|--remove] [--force]
+  calicoctl config set <NAME> <VALUE> [--node=<NODE>] [--config=<CONFIG>]
+  calicoctl config unset <NAME> [--node=<NODE>] [--config=<CONFIG>]
+  calicoctl config get <NAME> [--node=<NODE>] [--config=<CONFIG>]
 
-Description:
-  Configure or show low-level component configuration for Felix and BGP.
+Examples:
+  # Turn off the full BGP node-to-node mesh
+  calicoctl config set nodeToNodeMesh off
+
+  # Set global log level to warning
+  calicoctl config set logLevel warning
+
+  # Set log level to info for node "node1"
+  calicoctl config set logLevel info --node=node1
+
+  # Display the current setting for the nodeToNodeMesh
+  calicoctl config get nodeToNodeMesh
 
 Options:
- --remove  Remove the configuration entry.
- --force   Force update of configuration entry even if key value is unknown,
-           or the value is not recognized as valid.
+  -n --node=<NODE>      The node name.
+  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format.
+                        [default: /etc/calico/calicoctl.cfg]
 
-Valid configuration:
-  Command         | <NAME>   | <VALUE>s
-------------------+----------+-----------------------------------------
-  config felix    | loglevel | none debug info warning error critical
-  config bgp      | loglevel | none debug info
-  config node bgp | loglevel | none debug info
+Description:
 
-Warnings:
-  -  Changing the global BGP logging levels using the `calicoctl config bgp`
-     command may cause all BGP sessions to bounce potentially resulting in a
-     transient loss of service.  If you need to change the logging level for
-     BGP, it is recommended to change the levels on a per-node basis using
-     the `calicoctl config node bgp` command.
+These commands can be used to manage global system-wide configuration and some
+node-specific low level configuration.
 
+The --node option is used to specify the node name for low-level configuration
+that is specific to a particular node.
+
+For configuration that has both global values and node-specific values, the
+--node parameter is optional:  including the parameter will manage the
+node-specific value,  not including it will manage the global value.  For these
+options, if the node-specific value is unset, the global value will be used on
+the node.
+
+For configuration that is only global, the --node option should not be
+included.  Unsetting the global value will return it to it's original default.
+
+For configuration that is node-specific only, the --node option should be
+included.  Unsetting the node value will remove the configuration, and for
+supported configuration will then inherit the value from the global settings.
+
+The table below details the valid config options.
+
+ Name            | Scope       | Value                                  |
+-----------------+-------------+----------------------------------------+
+ logLevel        | global,node | none,debug,info,warning,error,critical |
+ nodeToNodeMesh  | global      | on,off                                 |
+ asNumber        | global      | 0-4294967295                           |
+ ipip            | global      | on,off                                 |
 ```
 
-## calicoctl config commands
-
-
-### calicoctl config felix \<NAME\>
-This command allows you to show or modify key values for configuration
-associated with the Felix process.
-
-Currently, you can modify the following:
-
-```shell
-  Command         | <NAME>   | <VALUE>s
-------------------+----------+-----------------------------------------
-  config felix    | loglevel | none debug info warning error critical
-```
-
-`loglevel` represents the logging level of messages sent to the Felix log file.
-All messages with a lower priority than the `loglevel` value will be filtered
-out. All Calico logs can be found `/var/log/calico`, unless a different log
-directory was specified in the [`calicoctl node`](node) command.
-
-
-This command can be run on any Calico node and affects every Felix in the
-cluster.
-
-Command syntax:
+### Examples
 
 ```
-calicoctl config felix <NAME> [<VALUE>|--remove] [--force]
+# Turn off the full BGP node-to-node mesh
+$calicoctl config set nodeToNodeMesh off
 
-    <NAME>: Config variable key in question.
-    <VALUE>: Value to assign to the config variable.
+# Set global log level to warning
+$calicoctl config set logLevel warning
 
-    --remove: Remove the config key value.
-    --force: Force update of config, even if key or value are unknown.
-```
-The `--remove` flag allows you to completely remove the value from the etcd
-datastore.  Felix will instead read a value from the Felix config file.
+# Set log level to info for node "node1"
+$calicoctl config set logLevel info --node=node1
 
-The `--force` flag is used to configure a value on the config key that the
-`calicoctl config` command does not recognize.  A warning message appears if an
-unrecognized value is passed into the command.  This flag allows you to
-override the warning message use a value that is not in the recognized list.
-
-Examples:
-
-```
-$ calicoctl config felix loglevel
-info
-
-$ calicoctl config felix loglevel debug
-
-$ calicoctl config felix loglevel --remove
-Value removed
+# Display the current setting for the nodeToNodeMesh
+$calicoctl config get nodeToNodeMesh
+off
 ```
 
-### calicoctl config bgp \<NAME\>
-This command allows you to show or modify key values for configuration
-associated with the BGP process.
-
-Currently, you can modify the following:
-
-```shell
-  Command         | <NAME>   | <VALUE>s
-------------------+----------+----------------
-  config bgp      | loglevel | none debug info
-```
-
-`loglevel` represents the logging level of messages sent to the BIRD BGP daemon
-log file. All messages with a lower priority than the `loglevel` value will be
-filtered out. All Calico logs can be found `/var/log/calico`, unless a different log
-directory was specified in the [`calicoctl node`](./node) command.
-
-This command can be run on any Calico node and affects all of the BIRD processes
-in the cluster.
-
-Command syntax:
+### Options
 
 ```
-calicoctl config bgp <NAME> [<VALUE>|--remove] [--force]
-
-    <NAME>: Config variable key in question.
-    <VALUE>: Value to assign to the config variable.
-
-    --remove: Remove the config key value.
-    --force: Force update of config, even if key or value are unknown.
-```
-The `--remove` flag allows you to completely remove the value from the etcd
-datastore.  The process reading the value then determines a value to use
-internally.
-
-The `--force` flag is used to configure a value on the config key that the
-`calicoctl config` command does not recognize.  A warning message appears if an
-unrecognized value is passed into the command.  This flag allows you to
-override the warning message use a value that is not in the recognized list.
-
-Examples:
-
-```
-$ calicoctl config bgp loglevel
-info
-
-$ calicoctl config bgp loglevel debug
-
-
-$ calicoctl config bgp loglevel --remove
-Value removed
+-n --node=<NODE>      The node name.
 ```
 
-### calicoctl config node bgp \<NAME\>
-This command allows you to show or modify key values for configuration
-associated with the BGP process on individual nodes.
-
-Currently, you can modify the following:
-```
-  Command         | <NAME>   | <VALUE>s
-------------------+----------+----------------
-  config node bgp | loglevel | none debug info
-```
-
-`loglevel` represents the logging level of messages sent to the BIRD BGP daemon
-log file. All messages with a lower priority than the `loglevel` value will be
-filtered out. All Calico logs can be found `/var/log/calico`, unless a different log
-directory was specified in the [`calicoctl node`](./node) command.
-
-This command must be run on the specific Calico node that you want to configure.
-
-Command syntax:
+### General options
 
 ```
-calicoctl config node bgp <NAME> [<VALUE>|--remove] [--force]
-
-    <NAME>: Config variable key in question.
-    <VALUE>: Value to assign to the config variable.
-
-    --remove: Remove the config key value.
-    --force: Force update of config, even if key or value are unknown.
-```
-The `--remove` flag allows you to completely remove the value from the etcd
-datastore.  The process reading the value then determines a value to use
-internally.
-
-The `--force` flag is used to configure a value on the config key that the
-`calicoctl config` command does not recognize.  A warning message appears if an
-unrecognized value is passed into the command.  This flag allows you to
-override the warning message to use a value that is not in the recognized list.
-
-Examples:
-
-```
-$ calicoctl config node bgp loglevel
-info
-
-$ calicoctl config node bgp loglevel debug
-
-$ calicoctl config node bgp loglevel --remove
-Value removed
+-c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                      JSON format.
+                      [default: /etc/calico/calicoctl.cfg]
 ```
 
 ## See also
+
 -  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
 -  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model

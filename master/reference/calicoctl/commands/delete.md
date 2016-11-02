@@ -14,9 +14,9 @@ calicoctl delete command.
 
 ```
 Usage:
-  calicoctl delete ([--node=<NODE>] [--orchestrator=<ORCH>] [--workload=<WORKLOAD>] [--scope=<SCOPE>]
-                    (<KIND> [<NAME>]) |
-                    --filename=<FILE>)
+  calicoctl delete ([--scope=<SCOPE>] [--node=<NODE>] [--orchestrator=<ORCH>]
+                    [--workload=<WORKLOAD>] (<KIND> [<NAME>]) |
+                   --filename=<FILE>)
                    [--skip-not-exists] [--config=<CONFIG>]
 
 Examples:
@@ -31,42 +31,51 @@ Examples:
 
 Options:
   -h --help                 Show this screen.
-  -s --skip-not-exists      Skip over and treat as successful, resources that don't exist.
-  -f --filename=<FILENAME>  Filename to use to delete the resource.  If set to "-" loads from stdin.
-  -n --node=<NODE>          The node (this may be the hostname of the compute server if your
-                            installation does not explicitly set the names of each Calico node).
-     --orchestrator=<ORCH>  The orchestrator (only used for workload endpoints).
-     --workload=<WORKLOAD>  The workload (only used for workload endpoints).
-  --scope=<SCOPE>           The scope of the resource type.  One of global, node.  This is only valid
-                            for BGP peers and is used to indicate whether the peer is a global peer
-                            or node-specific.
-  -c --config=<CONFIG>      Filename containing connection configuration in YAML or JSON format.
+  -s --skip-not-exists      Skip over and treat as successful, resources that
+                            don't exist.
+  -f --filename=<FILENAME>  Filename to use to delete the resource.  If set to
+                            "-" loads from stdin.
+  -n --node=<NODE>          The node (this may be the hostname of the compute
+                            server if your installation does not explicitly set
+                            the names of each Calico node).
+     --orchestrator=<ORCH>  The orchestrator (valid for workload endpoints).
+     --workload=<WORKLOAD>  The workload (valid for workload endpoints).
+     --scope=<SCOPE>        The scope of the resource type.  One of global,
+                            node.  This is only valid for BGP peers and is used
+                            to indicate whether the peer is a global peer or
+                            node-specific.
+  -c --config=<CONFIG>      Filename containing connection configuration in
+                            YAML or JSON format.
                             [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  The delete command is used to delete a set of resources by filename or stdin, or
-  by type and identifiers.  JSON and YAML formats are accepted for file and stdin format.
+  The delete command is used to delete a set of resources by filename or stdin,
+  or by type and identifiers.  JSON and YAML formats are accepted for file and
+  stdin format.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint, policy, pool and
-  profile.  The <TYPE> is case insensitive and may be pluralized.
+  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint,
+  ipPool, policy, and profile.  The <TYPE> is case insensitive and may be
+  pluralized.
 
-  Attempting to delete a resource that does not exists is treated as a terminating error unless the
-  --skip-not-exists flag is set.  If this flag is set, resources that do not exist are skipped.
+  Attempting to delete a resource that does not exists is treated as a
+  terminating error unless the --skip-not-exists flag is set.  If this flag is
+  set, resources that do not exist are skipped.
 
-  When deleting resources by type, only a single type may be specified at a time.  The name
-  is required along with any and other identifiers required to uniquely identify a resource of the
-  specified type.
+  When deleting resources by type, only a single type may be specified at a
+  time.  The name is required along with any and other identifiers required to
+  uniquely identify a resource of the specified type.
 
-  The output of the command indicates how many resources were successfully deleted, and the error
-  reason if an error occurred.  If the --skip-not-exists flag is set then skipped resources are
-  included in the success count.
+  The output of the command indicates how many resources were successfully
+  deleted, and the error reason if an error occurred.  If the --skip-not-exists
+  flag is set then skipped resources are included in the success count.
 
-  The resources are deleted in the order they are specified.  In the event of a failure
-  deleting a specific resource it is possible to work out which resource failed based on the
-  number of resources successfully deleted.
+  The resources are deleted in the order they are specified.  In the event of a
+  failure deleting a specific resource it is possible to work out which
+  resource failed based on the number of resources successfully deleted.
 ```
 
 ### Examples
+
 ```
 # Delete a set of resources (of mixed type) using the data in resources.yaml.
 # Results indicate that 8 resources were successfully deleted.
@@ -79,23 +88,33 @@ Successfully deleted 1 'policy' resource(s)
 ```
 
 ### Options
+
 ```
-  -s --skip-not-exists         Skip over and treat as successful, resources that don't exist.
-  -f --filename=<FILENAME>     Filename to use to delete the resource.  If set to "-" loads from stdin.
-     --scope=<SCOPE>           The scope of the resource type.  One of global, node.  This is required
-                               for BGP peers and is used to indicate whether the scope of the peer 
-                               resource is a global or node-specific.
-  -n --hostname=<HOSTNAME>     The hostname.  This is required when deleting 'hostEndpoint' resources, 
-                               and 'bgpPeer' resources with scope 'node'.
+-s --skip-not-exists      Skip over and treat as successful, resources that
+                          don't exist.
+-f --filename=<FILENAME>  Filename to use to delete the resource.  If set to
+                          "-" loads from stdin.
+-n --node=<NODE>          The node (this may be the hostname of the compute
+                          server if your installation does not explicitly set
+                          the names of each Calico node).
+   --orchestrator=<ORCH>  The orchestrator (valid for workload endpoints).
+   --workload=<WORKLOAD>  The workload (valid for workload endpoints).
+   --scope=<SCOPE>        The scope of the resource type.  One of global,
+                          node.  This is only valid for BGP peers and is used
+                          to indicate whether the peer is a global peer or
+                          node-specific.
 ```
 
 ### General options
+
 ```
-  -c --config=<CONFIG>         Filename containing connection configuration in YAML or JSON format.
-                               [default: /etc/calico/calicoctl.cfg]
+-c --config=<CONFIG>      Filename containing connection configuration in
+                          YAML or JSON format.
+                          [default: /etc/calico/calicoctl.cfg]
 ```
 
 ## See also
+
 -  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
    and schema
 -  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
