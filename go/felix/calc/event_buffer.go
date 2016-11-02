@@ -260,6 +260,11 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 			return
 		}
 		ep := endpoint.(*model.WorkloadEndpoint)
+
+		mac := ""
+		if ep.Mac != nil {
+			mac = ep.Mac.String()
+		}
 		buf.pendingUpdates = append(buf.pendingUpdates,
 			&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
@@ -271,7 +276,7 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 				Endpoint: &proto.WorkloadEndpoint{
 					State:      ep.State,
 					Name:       ep.Name,
-					Mac:        ep.Mac.String(),
+					Mac:        mac,
 					ProfileIds: ep.ProfileIDs,
 					Ipv4Nets:   netsToStrings(ep.IPv4Nets),
 					Ipv6Nets:   netsToStrings(ep.IPv6Nets),

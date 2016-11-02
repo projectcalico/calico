@@ -111,7 +111,6 @@ var ep1IPs = []string{
 var localWlEp2 = WorkloadEndpoint{
 	State:      "active",
 	Name:       "cali2",
-	Mac:        mustParseMac("02:02:03:04:05:06"),
 	ProfileIDs: []string{"prof-2", "prof-3"},
 	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.2/32"),
 		mustParseNet("10.0.0.3/32")},
@@ -127,7 +126,6 @@ var localWlEp2 = WorkloadEndpoint{
 var localWlEp2NoProfiles = WorkloadEndpoint{
 	State: "active",
 	Name:  "cali2",
-	Mac:   mustParseMac("02:02:03:04:05:06"),
 	IPv4Nets: []net.IPNet{mustParseNet("10.0.0.2/32"),
 		mustParseNet("10.0.0.3/32")},
 	IPv6Nets: []net.IPNet{mustParseNet("fc00:fe11::2/128"),
