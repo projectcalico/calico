@@ -16,16 +16,26 @@ toc:
     section:
     - title: Overview
       path: /reference/calicoctl/commands/
-    - title: apply
-      path: /reference/calicoctl/commands/apply
     - title: create
       path: /reference/calicoctl/commands/create
+    - title: replace
+      path: /reference/calicoctl/commands/replace
+    - title: apply
+      path: /reference/calicoctl/commands/apply
     - title: delete
       path: /reference/calicoctl/commands/delete
     - title: get
       path: /reference/calicoctl/commands/get
-    - title: replace
-      path: /reference/calicoctl/commands/replace
+    - title: config
+      path: /reference/calicoctl/commands/config
+    - title: ipam
+      section:
+      - title: Overview
+        path: /reference/calicoctl/commands/ipam/
+      - title: release
+        path: /reference/calicoctl/commands/ipam/release
+      - title: show
+        path: /reference/calicoctl/commands/ipam/show
     - title: node
       section:
       - title: Overview
@@ -36,14 +46,6 @@ toc:
         path: /reference/calicoctl/commands/node/diags
       - title: checksystem
         path: /reference/calicoctl/commands/node/checksystem
-    - title: ipam
-      section:
-      - title: Overview
-        path: /reference/calicoctl/commands/ipam/
-      - title: release
-        path: /reference/calicoctl/commands/ipam/release
-      - title: show
-        path: /reference/calicoctl/commands/ipam/show
     - title: version
       path: /reference/calicoctl/commands/version
   - title: Resource Definitions

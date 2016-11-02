@@ -25,10 +25,10 @@ Usage:
               name.
     get       Get a resource identified by file, stdin or resource type and 
               name.
-    version   Display the version of calicoctl.
-    node      Calico node management.
-    ipam      IP address management.
     config    Manage system-wide and low-level node configuration options.
+    ipam      IP address management.
+    node      Calico node management.
+    version   Display the version of calicoctl.
 
 Options:
   -h --help               Show this screen.
@@ -54,4 +54,6 @@ organized by top level command.
 -  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/delete)
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get)
 -  [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config)
+-  [calicoctl ipam]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam)
+-  [calicoctl node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node)
 -  [calicoctl version]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/version)
