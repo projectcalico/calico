@@ -53,17 +53,19 @@ toc:
     section:
       - title: Overview
         path: /reference/calicoctl/resources/
-      - title: BGPPeer
+      - title: BGP Peer
         path: /reference/calicoctl/resources/bgppeer
-      - title: HostEndpoint
+      - title: Host Endpoint
         path: /reference/calicoctl/resources/hostendpoint
-      - title: IPPool
+      - title: IP Pool
         path: /reference/calicoctl/resources/ippool
+      - title: Node
+        path: /reference/calicoctl/resources/node
       - title: Policy
         path: /reference/calicoctl/resources/policy
       - title: Profile
         path: /reference/calicoctl/resources/profile
-      - title: WorkloadEndpoint
+      - title: Workload Endpoint
         path: /reference/calicoctl/resources/workloadendpoint
   - title: Setup
     section:

@@ -1,19 +1,29 @@
 ---
-title: BGP Peer resource (bgpPeer)
+title: BGP Peer Resource (bgpPeer)
 ---
 
-A BGP Peer (bgpPeer) resource represents a BGP peer which node(s) in this cluster will connect to. Configuration of BGP peers is required when configuring Calico to peer with your existing datacenter infrastructure (e.g. ToR). For more information on cluster layouts, see Calico's documentation on [L3 Topologies]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
+A BGP Peer resource (bgpPeer) represents a BGP peer which the node(s) in a Calico 
+cluster will peer with.  Configuration of BGP peers is required when configuring 
+Calico network to peer with your existing datacenter fabric (e.g. ToR). For more 
+information on cluster layouts, see Calico's documentation on 
+[L3 Topologies]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
 
-There are two types of BGP Peers.
+Calico has the concept of two scopes of BGP Peer resource, used to identify which 
+Calico nodes are connecting to the peer represented by the resource.
 
 #### Global Peer
-If this is a `global` scoped BGP peer, all nodes in the cluster will attempt to establish a BGP connection with it.
+
+If this is a `global` scoped BGP peer, all nodes in the cluster will attempt to 
+establish a BGP connection with it.
 
 #### Node Peer
-A BGP peer can also be added at the `node` scope, meaning only a single specified node will peer with it. BGP peer resources of this nature must specify a `node` to inform Calico which node this peer is targeting.
 
+A BGP peer can also be added at the `node` scope, meaning only a single specified 
+node will peer with it. BGP peer resources of this nature must specify a `node` 
+to inform Calico which node this peer is targeting.
 
 ### Sample YAML
+
 ```
 apiVersion: v1
 kind: bgppeer
@@ -26,6 +36,7 @@ spec:
 ```
 
 ### Definitions
+
 #### Metadata
 
 | name     | description                                               | requirements                                                                     | schema |
