@@ -15,17 +15,20 @@ calicoctl commands.
 
 ```
 Usage:
-    calicoctl [options] <command> [<args>...]
+  calicoctl [options] <command> [<args>...]
 
-    create         Create a resource by filename or stdin.
-    replace        Replace a resource by filename or stdin.
-    apply          Apply a resource by filename or stdin.  This creates a resource if
-                   it does not exist, and replaces a resource if it does exists.
-    delete         Delete a resource identified by file, stdin or resource type and name.
-    get            Get a resource identified by file, stdin or resource type and name.
-    version        Display the version of calicoctl.
-    node           Node related commands.
-    ipam           Configure IP address management.
+    create    Create a resource by filename or stdin.
+    replace   Replace a resource by filename or stdin.
+    apply     Apply a resource by filename or stdin.  This creates a resource 
+              if it does not exist, and replaces a resource if it does exists.
+    delete    Delete a resource identified by file, stdin or resource type and
+              name.
+    get       Get a resource identified by file, stdin or resource type and 
+              name.
+    version   Display the version of calicoctl.
+    node      Calico node management.
+    ipam      IP address management.
+    config    Manage system-wide and low-level node configuration options.
 
 Options:
   -h --help               Show this screen.
@@ -33,8 +36,9 @@ Options:
                           warn, info, debug) [default: panic]
 
 Description:
-  The calicoctl command line tool is used to manage Calico network and security policy,
-  to view and manage endpoint configuration, and to manage a Calico node instance.
+  The calicoctl command line tool is used to manage Calico network and security
+  policy, to view and manage endpoint configuration, and to manage a Calico 
+  node instance.
 
   See 'calicoctl <command> --help' to read about a specific subcommand.
 ```

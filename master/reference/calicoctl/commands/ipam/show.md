@@ -13,16 +13,18 @@ calicoctl ipam show command.
 
 ```
 Usage:
-  calicoctl ipam show --ip=<IP>
+  calicoctl ipam show --ip=<IP> [--config=<CONFIG>]
 
 Options:
-  -h --help      Show this screen.
-     --ip=<IP>   IP address
+  -h --help             Show this screen.
+     --ip=<IP>          IP address to show.
+  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format. [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  The ipam show command prints information about a given IP address, such as special
-  attributes defined for the IP or whether the IP has been reserved by a user of
-  the Calico IP Address Manager.
+  The ipam show command prints information about a given IP address, such as
+  special attributes defined for the IP or whether the IP has been reserved by
+  a user of the Calico IP Address Manager.
 ```
 
 ### Examples
@@ -36,3 +38,21 @@ IP 192.168.1.2 is not currently assigned
 $ calicoctl ipam show --ip=192.168.1.1
 No attributes defined for 192.168.1.1
 ```
+
+### Options
+
+```
+   --ip=<IP>          IP address to show.
+```
+
+### General options
+
+```
+-c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format. [default: /etc/calico/calicoctl.cfg]
+```
+
+## See also
+
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
+   the Calico datastore.

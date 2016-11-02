@@ -13,19 +13,21 @@ calicoctl ipam release command.
 
 ```
 Usage:
-  calicoctl ipam release --ip=<IP>
+  calicoctl ipam release --ip=<IP> [--config=<CONFIG>]
 
 Options:
-  -h --help      Show this screen.
-     --ip=<IP>   IP address
+  -h --help             Show this screen.
+     --ip=<IP>          IP address to release.
+  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
+                        JSON format. [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam release command releases an IP address from the Calico IP Address
-  Manager that was been previously assigned to an endpoint.  When an IP address 
+  Manager that was been previously assigned to an endpoint.  When an IP address
   is released, it becomes available for assignment to any endpoint.
 
   Note that this does not remove the IP from any existing endpoints that may be
-  using it, so only use this command to clean up addresses from endpoints that 
+  using it, so only use this command to clean up addresses from endpoints that
   were not cleanly removed from Calico.
 ```
 
@@ -34,3 +36,16 @@ Description:
 ```
 $ calicoctl ipam release --ip=192.168.1.2
 ```
+
+### General options
+
+```
+-c --config=<CONFIG>      Filename containing connection configuration in
+                          YAML or JSON format.
+                          [default: /etc/calico/calicoctl.cfg]
+```
+
+## See also
+
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) for details on configuring `calicoctl` to access
+   the Calico datastore.
