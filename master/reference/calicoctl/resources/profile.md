@@ -1,10 +1,18 @@
 ---
-title: Profile resource (profile)
+title: Profile Resource (profile)
 ---
 
-Profile objects can be thought of as describing the properties of an endpoint (virtual interface, or bare metal interface).  Each endpoint can reference zero or more profiles.  A profile encapsulates a specific set of tags, labels and ACL rules that are directly applied to the endpoint.  Depending on the use case, profiles may be sufficient to express all policy.
+A Profile resource (profile) can be thought of as describing the properties of 
+an endpoint (virtual interface, or bare metal interface).  Each endpoint can 
+reference zero or more profiles.  A profile encapsulates a specific set of tags,
+labels and ACL rules that are directly applied to the endpoint.  Depending on 
+the use case, profiles may be sufficient to express all policy.
+
+Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) 
+which provides an alternate way to select what policy is applied to an endpoint.
 
 ### Sample YAML
+
 ```
 apiVersion: v1
 kind: profile
@@ -49,9 +57,10 @@ spec:
     source:
       selector: type=='application'
 ```
-The above YAML spec defines almost all of possible fields for a profile specifications, with the following exceptions:
-- "egress" supports all fields that "ingress" does.
 
+> Note: The above YAML spec defines almost all of possible fields for the profile 
+specification, with one exception - the "egress" section has been simplified 
+for readability, despite the fact that it supports all fields that "ingress" does.
 
 
 #### Metadata
