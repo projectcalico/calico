@@ -5,3 +5,4 @@ dist/
 *.tar
 *.created
 *.coverage
+.idea/

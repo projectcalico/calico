@@ -29,7 +29,6 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
 NS_POLICY_ANNOTATION = "net.beta.kubernetes.io/network-policy"
 
 # Tier name /order to use for policies.
-NET_POL_TIER_NAME = "k8s-network-policy"
 NET_POL_TIER_ORDER = 1000
 
 # The priority assigned to network policies created by the controller.

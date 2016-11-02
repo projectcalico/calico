@@ -37,7 +37,7 @@ def add_update_network_policy(policy):
                       outbound_rules=[Rule(action="allow")])
 
         # Create the network policy using the calculated selector and rules.
-        client.create_policy(NET_POL_TIER_NAME,
+        client.create_policy("default",
                              name,
                              selector,
                              order=NET_POL_ORDER,
@@ -57,6 +57,6 @@ def delete_network_policy(policy):
 
     # Delete the corresponding Calico policy
     try:
-        client.remove_policy(NET_POL_TIER_NAME, name)
+        client.remove_policy("default", name)
     except KeyError:
         _log.info("Unable to find policy '%s' - already deleted", name)

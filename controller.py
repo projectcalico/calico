@@ -20,6 +20,7 @@ from constants import *
 
 _log = logging.getLogger(__name__)
 
+
 # Raised upon receiving an error from the Kubernetes API.
 class KubernetesApiError(Exception):
     pass
@@ -60,7 +61,7 @@ class Controller(object):
         """
 
         elect = os.environ.get("LEADER_ELECTION", "false")
-        self._leader_elect = elect.lower() ==  "true"
+        self._leader_elect = elect.lower() == "true"
         """
         Whether or not leader election is enabled.  If set to False, this
         policy controller will assume it is the only instance.
@@ -133,17 +134,24 @@ class Controller(object):
             self._wait_for_leadership()
             self._start_leader_thread()
 
+        # Remove old tier if it exists
+        try:
+            _log.debug("Attempting to remove old tier k8s-network-policy")
+            self._client.delete_policy_tier("k8s-network-policy")
+        except KeyError:
+            pass
+
         # Ensure the tier exists.
         metadata = {"order": NET_POL_TIER_ORDER}
-        self._client.set_policy_tier_metadata(NET_POL_TIER_NAME, metadata)
+        self._client.set_policy_tier_metadata("default", metadata)
 
-        # Ensure the backstop policy exists.  This policy fowards
+        # Ensure the backstop policy exists.  This policy forwards
         # any traffic to Kubernetes pods which doesn't match another policy
         # to the next-tier (i.e the per-namespace Profiles).
         selector = "has(%s)" % K8S_NAMESPACE_LABEL
         rules = Rules(inbound_rules=[Rule(action="next-tier")],
                       outbound_rules=[Rule(action="next-tier")])
-        self._client.create_policy(NET_POL_TIER_NAME,
+        self._client.create_policy("default",
                                    "k8s-policy-no-match",
                                    selector,
                                    order=NET_POL_BACKSTOP_ORDER,
