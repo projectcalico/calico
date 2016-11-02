@@ -83,6 +83,9 @@ PY_FILES:=$(GENERATED_PYTHON_FILES) \
 MY_UID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
+# (optional) Local path to the repository with 'libcalico-go' code
+LIBCALICOGO_PATH?=none
+
 # Build a docker image used for building our go code into a binary.
 .PHONY: golang-build-image
 golang-build-image:
@@ -237,10 +240,13 @@ go/vendor go/vendor/.up-to-date: go/glide.lock
 	# freshness checking for us.
 	$(MAKE) golang-build-image
 	mkdir -p $$HOME/.glide
+	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
+	  EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	fi; \
 	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $$HOME/.glide:/.glide:rw \
+	    -v $$HOME/.glide:/.glide:rw $$EXTRA_DOCKER_BIND \
 	    -w /go/src/github.com/projectcalico/felix/go \
 	    calico/build-felix-golang \
 	    glide install --strip-vcs --strip-vendor
