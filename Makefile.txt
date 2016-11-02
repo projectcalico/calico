@@ -26,37 +26,37 @@
 
 Targets:
 
-golang-build-image: 'calico/build-felix-golang' (for any Go building?)
+calico-build/golang:
   docker-build-images/passwd
   docker-build-images/group
   docker-build-images/golang-build.Dockerfile
 
-trusty-build-image: 'calico-trusty-build' (for building Trusty Debs)
+calico-build/trusty:
   docker-build-images/ubuntu-trusty-build.Dockerfile
 
-xenial-build-image: 'calico-xenial-build' (for Xenial Debs)
+calico-build/xenial:
   docker-build-images/ubuntu-xenial-build.Dockerfile
 
 docker-build-images/passwd:
 docker-build-images/group:
 
-centos7-build-image: 'calico-centos7-build' (for RPMs)
+calico-build/centos7:
   docker-build-images/passwd
   docker-build-images/group
   docker-build-images/centos7-build.Dockerfile
 
-python-build-image: 'calico/build-felix-python' (for ??)
+calico-build/python:
   docker-build-images/passwd
   docker-build-images/group
   docker-build-images/pyi/Dockerfile
 
 update-frozen-reqs:
   reqs files
-  python-build-image
+  calico-build/python
   pip install reqs
   pip freeze > frozen reqs file
 
-felix-docker-image: 'calico/felix'
+calico/felix:
   calico-iptables-plugin
   calico-felix
   <rootdir>/Dockerfile
@@ -67,8 +67,8 @@ trusty-deb:
   calico-iptables-plugin
   calico-felix
   debian/*
-  trusty-build-image
-  run debian/build-debs in 'calico-trusty-build'
+  calico-build/trusty
+  run debian/build-debs in 'calico-build/trusty'
 
 xenial-deb - same but for xenial
 
@@ -76,8 +76,8 @@ rpm:
   calico-iptables-plugin
   calico-felix
   rpm/*
-  centos7-build-image
-  run rpm/build-rpms in 'calico-centos7-build'
+  calico-build/centos7
+  run rpm/build-rpms in 'calico-build/centos7'
 
 protobuf:
   py file:
@@ -89,13 +89,13 @@ vendor/glide stuff
 update-tools
 go-fmt
 ut...
-  golang-build-image
-  python-build-image
+  calico-build/golang
+  calico-build/python
 
 calico-felix:
   Go files
-  golang-build-image
-  run 'go build' in calico/build-felix-golang
+  calico-build/golang
+  run 'go build' in calico-build/golang
 
 pyinstaller:
   calico-felix-<version>.tgz:
@@ -108,8 +108,8 @@ Felix now arch-dependent?
 
 calico-iptables-plugin:
   Python files
-  python-build-image
+  calico-build/python
   generate version.txt file
-  in calico/build-felix-python:
+  in calico-build/python:
     run pip install
     run docker-build-images/pyi/run-pyinstaller.sh
