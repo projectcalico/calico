@@ -263,7 +263,7 @@ func (config *Config) DatastoreConfig() api.ClientConfig {
 		// based on the provided environment.
 		cfg, err := client.LoadClientConfig("")
 		if err != nil {
-			panic(err)
+			log.WithError(err).Panic("Failed to create empty config")
 		}
 		return *cfg
 	} else {
