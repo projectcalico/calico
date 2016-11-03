@@ -29,7 +29,6 @@ __version__ = "0.22.0-dev"
 
 # Path names relative to the root of the project
 PATH_MAIN_README = "README.md"
-PATH_DOCS = "v1.6"
 PATH_RELEASE_DATA = ".releasedata"
 
 # Regexes for calico-containers version format.
@@ -46,7 +45,7 @@ README_RE = re.compile(r'https://github\.com/projectcalico/calico\-containers/bl
 # Files to include in the list of files to automatically update.  All file
 # paths are relative to the project root.
 UPDATE_FILES_STATIC = [PATH_MAIN_README]
-UPDATE_FILES_DIRS = [PATH_DOCS]
+UPDATE_FILES_DIRS = []
 UPDATE_FILES_EXCLUDE = []
 UPDATE_FILES_RE = re.compile("(.*\.md)|(Vagrantfile)|(user\-data\-.*)|(.*\.yaml)")
 
@@ -69,19 +68,20 @@ def run(command):
         subprocess.call(command, shell=True)
 
 
-def get_update_file_list():
+def get_update_file_list(directory):
     """
     Return a set of files that need to be updated with new version strings.
     :return: A set of files that need to be updated with release information.
     """
     update_files_list = set(UPDATE_FILES_STATIC)
     update_files_exclude = set(UPDATE_FILES_EXCLUDE)
-    for dirn in UPDATE_FILES_DIRS:
-        for root, dirs, files in os.walk(path.join(PATH_ROOT, dirn)):
-            for filen in files:
-                if UPDATE_FILES_RE.match(filen):
-                    filep = path.join(root, filen)
-                    update_files_list.add(path.relpath(filep, PATH_ROOT))
+
+    for root, dirs, files in os.walk(path.join(PATH_ROOT, directory)):
+        for filen in files:
+            if UPDATE_FILES_RE.match(filen):
+                filep = path.join(root, filen)
+                update_files_list.add(path.relpath(filep, PATH_ROOT))
+                
     return update_files_list - update_files_exclude
 
 
@@ -124,7 +124,7 @@ def update_files(regex_replace_list, values, is_release=True):
     # Copy the regex replace list, but update the replace strings to include
     # the supplied values.
     regex_replace_list = [(reg, repl.format(**values)) for (reg, repl) in regex_replace_list]
-    filens = get_update_file_list()
+    filens = get_update_file_list(values["calico-version"])
     for filen in filens:
         old_lines = load_file(filen)
         new_lines = []
