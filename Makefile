@@ -185,17 +185,8 @@ calico-build/python:
 .PHONY: update-frozen-reqs
 update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
 	$(MAKE) calico-build/python
-	-docker rm -f felix-pip-req-update-$(MYPID)
-	docker run --name felix-pip-req-update-$(MYPID) \
-	           -v $${PWD}:/code \
-	           -w /code/python \
-	           -tid calico-build/python sh
-	docker exec felix-pip-req-update-$(MYPID) \
-	    sh -c 'pip --no-cache-dir install -U -r requirements.txt && \
-	           pip --no-cache-dir install -U -r test_requirements.txt'
-	docker exec --user $(MY_UID):$(MY_GID) felix-pip-req-update-$(MYPID) \
-	    sh -c 'pip --no-cache-dir freeze > requirements_frozen.txt'
-	-docker rm -f felix-pip-req-update-$(MYPID)
+	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
+	    "pip --no-cache-dir install -U -r requirements.txt -r test_requirements.txt && pip --no-cache-dir freeze > requirements_frozen.txt && chown $(MY_UID):$(MY_GID) requirements_frozen.txt"
 
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: calico/felix
