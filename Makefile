@@ -1,3 +1,45 @@
+# This Makefile builds Felix and packages it in various forms:
+#
+#               Python install                                         Go install
+#                 PyInstaller                                             Glide
+#             Key library packages                                          |
+#                      |                                                    |
+#                      |                                                    |
+#                      v              +--------+     +-------+              v
+#           +---------------------+   | Felix  |     | Felix |   +---------------------+
+#           | calico-build/python |   | Python |     |  Go   |   | calico-build/golang |
+#           +---------------------+   |  code  |     |  code |   +---------------------+
+#                             \       +--------+     +-------+         /
+#                              \         /                  \         /
+#                               \       /                    \       /
+#                                \     /                      \     /
+#                              pip install                    go build
+#                           run-pyinstaller.sh                    \
+#                                    |                             \
+#                                    |                              \
+# +----------------------+           |                               :
+# | calico-build/centos7 |           v                               v
+# | calico-build/xenial  |     +------------------------+      +--------------+
+# | calico-build/trusty  |     | calico-iptables-plugin |      | calico-felix |
+# +----------------------+     +------------------------+      +--------------+
+#                     \          /          |        \           /   /      |
+#                      \        /    .------|---------\---------'   /       |
+#                       \      /    /       |          \           /        |
+#                        \    /    /        |           \ .-------'         |
+#                         \  /    /         :            \                  |
+#                     rpm/build-rpms         '-----.    / '-------------.   |
+#                   debian/build-debs               \  /                 \  |
+#                           |                        \/                   \ |
+#                           |                   docker build              tar
+#                           v                         |                    |
+#            +----------------------------+           |                    |
+#            |  RPM packages for Centos7  |           v                    v
+#            | Debian packages for Xenial |    +--------------+   +--------------------+
+#            | Debian packages for Trusty |    | calico/felix |   | PyInstaller bundle |
+#            +----------------------------+    +--------------+   | (tarball of two    |
+#                                                                 |  executables)      |
+#                                                                 +--------------------+
+
 help:
 	@echo "Felix Makefile"
 	@echo
