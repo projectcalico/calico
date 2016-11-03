@@ -19,16 +19,10 @@
 felix.config
 ~~~~~~~~~~~~
 
-Configuration management for Felix.
-
-On instantiation, this module automatically parses the configuration file and
-builds a singleton configuration object. That object may (once) be changed by
-etcd configuration being reported back to it.
+Configuration parsing for the dataplane driver.
 """
-import os
 from numbers import Number
 
-import ConfigParser
 import logging
 import socket
 
@@ -75,9 +69,8 @@ class ConfigParameter(object):
     """
     A configuration parameter. This contains the following information.
     - The name of the field.
-    - Where the location can validly be read from
-    - The current value
-    - Where the value was read from
+    - The current value.
+    - Type of the field.
     """
     def __init__(self, name, description, default, value_is_int=False,
                  value_is_bool=False, value_is_int_list=False,
@@ -85,7 +78,6 @@ class ConfigParameter(object):
         """
         Create a configuration parameter.
         :param str description: Description for logging
-        :param list sources: List of valid sources to try
         :param str default: Default value
         :param bool value_is_int: Integer value?
         """
@@ -101,7 +93,6 @@ class ConfigParameter(object):
         """
         Set a value of a parameter - unless already set.
         :param value: value
-        :param source: source; for example "Configuration file /etc/felix.cfg"
         """
         log.debug("Read value %r for %s (%s)",
                   value,
@@ -156,41 +147,21 @@ class ConfigParameter(object):
 class Config(object):
     def __init__(self):
         """
-        Create a config. This reads data from the following sources.
-        - Environment variables
-        - Configuration file (/etc/calico/felix.cfg)
-        - per-host etcd (/calico/vX/config)
-        - global etcd (/calico/vX/host/<host>/config)
+        Constructor.  Creates a config object, ready to receive the raw
+        config via the update_from() method.
 
-        After object creation, the environment variables and config file have
-        been read, and the variables ETCD_ADDRS and HOSTNAME have been set and
-        validated. The caller is then responsible for reading the remaining
-        config from etcd and calling report_etcd_config with the returned
-        values before the rest of the config structure can be used.
+        update_from() expects to receive a pre-merged set of config,
+        as loaded by the main calico-felix process from the various
+        config sources that we support.
 
-        :raises EtcdException
+        After calling update_from(), the parsed and validated config is
+        available via CONST_CASE fields on the object.
         """
         self.parameters = {}
         self.plugins = {}
 
-        self.add_parameter("EtcdAddr", "Address and port for etcd",
-                           "localhost:4001")
         self.add_parameter("FelixHostname", "Felix compute host hostname",
                            socket.gethostname())
-        self.add_parameter("EtcdScheme", "Protocol type for http or https",
-                           "http")
-        self.add_parameter("EtcdKeyFile", "Path to etcd key file",
-                           "none")
-        self.add_parameter("EtcdCertFile", "Path to etcd certificate file",
-                           "none")
-        self.add_parameter("EtcdCaFile", "Path to etcd CA certificate file",
-                           "/etc/ssl/certs/ca-certificates.crt")
-        self.add_parameter("EtcdEndpoints", "Comma separated list of etcd "
-                           "endpoints, of the form scheme://address:port.  "
-                           "For example "
-                           "\"https://1.2.3.4:2379,https://1.2.3.5:2379\".  "
-                           "This option overrides EtcdScheme and EtcdAddr.",
-                           "")
 
         self.add_parameter("StartupCleanupDelay",
                            "Delay before cleanup starts",
@@ -232,19 +203,8 @@ class Config(object):
                            "spoofing their source IP.  (For example, "
                            "unprivileged containers.)",
                            False, value_is_bool=True)
-        self.add_parameter("ClusterGUID", "Unique cluster identifier",
-                           "baddecaf")
-        self.add_parameter("UsageReportingEnabled",
-                           "If set to true, periodically report cluster "
-                           "version, hostname, size and guid to "
-                           "projectcalico.org.  Receive version deprecation / "
-                           "security warnings.",
-                           True, value_is_bool=True)
         self.add_parameter("LogFilePath",
                            "Path to log file", "/var/log/calico/felix.log")
-        self.add_parameter("EtcdDriverLogFilePath",
-                           "Path to log file for etcd driver",
-                           "/var/log/calico/felix-etcd.log")
         self.add_parameter("LogSeverityFile",
                            "Log severity for logging to file", "INFO")
         self.add_parameter("LogSeveritySys",
@@ -270,9 +230,6 @@ class Config(object):
                            "Whether Felix should report per-endpoint status "
                            "into etcd",
                            False, value_is_bool=True)
-        self.add_parameter("EndpointReportingDelaySecs",
-                           "Minimum delay between per-endpoint status reports",
-                           1, value_is_int=True)
         self.add_parameter("MaxIpsetSize",
                            "Maximum size of the ipsets that Felix uses to "
                            "represent profile tag memberships.  Should be set "
@@ -307,14 +264,14 @@ class Config(object):
                            "access to etcd.  The default value allows "
                            "connectivity to etcd's default ports "
                            "2379,2380,4001 and 7001.",
-                           [2379,2380,4001,7001], value_is_int_list=True)
+                           [2379, 2380, 4001, 7001], value_is_int_list=True)
         self.add_parameter("Ipv6Support",
-                           "Whether IPv6 support is enabled.  If 'true', Felix "
-                           "will program ip6tables rules and any IPv6 routes; "
-                           "if 'false', Felix will not provide any IPv6 "
-                           "function.  If set to 'auto', Felix will attempt "
-                           "to detect whether the system supports IPv6 and "
-                           "use it if it does.",
+                           "Whether IPv6 support is enabled.  If 'true', "
+                           "Felix will program ip6tables rules and any IPv6 "
+                           "routes; if 'false', Felix will not provide any "
+                           "IPv6 function.  If set to 'auto', Felix will "
+                           "attempt to detect whether the system supports "
+                           "IPv6 and use it if it does.",
                            "auto")
 
         # The following setting determines which flavour of Iptables Generator
@@ -335,33 +292,19 @@ class Config(object):
 
     def _finish_update(self, final=False):
         """
-        Config has been completely read. Called twice - once after reading from
-        environment and config file (so we should be able to access etcd), and
-        once after reading from etcd (so we have all the config ready to go).
+        Config has been completely read. Called twice so that plugins have
+        a chance to add their config parameters.
 
         Responsible for :
         - storing the parameters in the relevant fields in the structure
         - validating the configuration is valid (for this stage in the process)
         - updating logging parameters
 
-        Note that we complete the logging even before etcd configuration
-        changes are read. Hence, for example, if logging to file is turned on
-        after reading environment variables and config file, then the log file
-        is created and logging to it starts - even if later on etcd
-        configuration turns the file off. That's because we must log if etcd
-        configuration load fails, and not having the log file early enough is
-        worse.
-
         :param final: Have we completed (rather than just read env and config
                       file)
         """
 
         self.HOSTNAME = self.parameters["FelixHostname"].value
-        self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
-        self.ETCD_ENDPOINTS = self.parameters["EtcdEndpoints"].value
-        self.ETCD_KEY_FILE = self.parameters["EtcdKeyFile"].value
-        self.ETCD_CERT_FILE = self.parameters["EtcdCertFile"].value
-        self.ETCD_CA_FILE = self.parameters["EtcdCaFile"].value
         self.STARTUP_CLEANUP_DELAY = \
             self.parameters["StartupCleanupDelay"].value
         self.RESYNC_INTERVAL = self.parameters["PeriodicResyncInterval"].value
@@ -375,7 +318,6 @@ class Config(object):
         self.DEFAULT_INPUT_CHAIN_ACTION = \
             self.parameters["DefaultEndpointToHostAction"].value
         self.LOGFILE = self.parameters["LogFilePath"].value
-        self.DRIVERLOGFILE = self.parameters["EtcdDriverLogFilePath"].value
         self.LOGLEVFILE = self.parameters["LogSeverityFile"].value
         self.LOGLEVSYS = self.parameters["LogSeveritySys"].value
         self.LOGLEVSCR = self.parameters["LogSeverityScreen"].value
@@ -384,11 +326,8 @@ class Config(object):
         self.IP_IN_IP_ADDR = self.parameters["IpInIpTunnelAddr"].value
         self.REPORTING_INTERVAL_SECS = \
             self.parameters["ReportingIntervalSecs"].value
-        self.REPORTING_TTL_SECS = self.parameters["ReportingTTLSecs"].value
         self.REPORT_ENDPOINT_STATUS = \
             self.parameters["EndpointReportingEnabled"].value
-        self.ENDPOINT_REPORT_DELAY = \
-            self.parameters["EndpointReportingDelaySecs"].value
         self.MAX_IPSET_SIZE = self.parameters["MaxIpsetSize"].value
         self.IPTABLES_GENERATOR_PLUGIN = \
             self.parameters["IptablesGeneratorPlugin"].value
@@ -404,22 +343,11 @@ class Config(object):
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
-        self.CLUSTER_GUID = self.parameters["ClusterGUID"].value
-        self.USAGE_REPORT = self.parameters["UsageReportingEnabled"].value
         self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
 
         self._validate_cfg(final=final)
 
         # Now calculate config options that rely on parameter validation.
-
-        # Determine the ETCD addresses to use.
-        endpoints = [x.strip() for x in self.ETCD_ENDPOINTS.split(",")]
-        if len(endpoints[0]) > 0:
-            self.ETCD_SCHEME = endpoints[0].split("://")[0]
-            self.ETCD_ADDRS = [e.split("://")[1] for e in endpoints]
-        else:
-            self.ETCD_SCHEME = self.parameters["EtcdScheme"].value
-            self.ETCD_ADDRS = [self.parameters["EtcdAddr"].value]
 
         # Generate the IPTables mark masks we'll actually use internally.
         # From least to most significant bits of the mask we use them for:
@@ -458,13 +386,12 @@ class Config(object):
         """
         Report configuration parameters read from etcd to the config
         component. This must be called only once, after configuration is
-        initially read and before the config structure is used (except for
-        ETCD_ADDRS and HOSTNAME).
+        initially read and before the config structure is used.
 
-        :param config_dict: Dictionary of etcd parameters
+        :param config_dict: Dictionary of config parameters
         :raises ConfigException
         """
-        log.debug("Configuration reported from etcd")
+        log.debug("Updating with config: %s", config_dict)
 
         for name, parameter in self.parameters.iteritems():
             if name in config_dict:
@@ -494,105 +421,12 @@ class Config(object):
 
     def _validate_cfg(self, final=True):
         """
-        Firewall that the config is not invalid. Called twice, once when
-        environment variables and config file have been read, and once
-        after those plus the etcd configuration have been read.
+        Firewall that the config is not invalid. Called twice to let plugins
+        register their config before a second call.
+
         :param final: Is this after final etcd config has been read?
         :raises ConfigException
         """
-        # Set default or python None value for each etcd "none" config value
-        if self.ETCD_SCHEME.lower() == "none":
-            self.ETCD_SCHEME = "http"
-        if self.ETCD_KEY_FILE.lower() == "none":
-            self.ETCD_KEY_FILE = None
-        if self.ETCD_CERT_FILE.lower() == "none":
-            self.ETCD_CERT_FILE = None
-        if self.ETCD_CA_FILE == "none":
-            self.ETCD_CA_FILE = None
-
-        # Determine which etcd scheme and addresses will be used.
-        addrs = []
-        addr_opt = None
-        scheme = None
-        scheme_opt = None
-        if self.ETCD_ENDPOINTS != "":
-            addr_opt = "EtcdEndpoints"
-            scheme_opt = "EtcdEndpoints"
-            endpoints = [x.strip() for x in self.ETCD_ENDPOINTS.split(",")]
-            try:
-                for e in endpoints:
-                    s, a = e.split("://")
-                    addrs.append(a)
-                    if scheme == None:
-                        scheme = s
-                    else:
-                        if scheme != s:
-                            raise ConfigException("Inconsistent protocols in "
-                                                  "EtcdEndpoints.",
-                                                  self.parameters[scheme_opt])
-            except ValueError:
-                raise ConfigException("Invalid format of EtcdEndpoints, must "
-                                      "be `ENDPOINT[,ENDPOINT][,...]` where "
-                                      "ENDPOINT:=`http[s]://ADDRESS:PORT`.",
-                                      self.parameters[scheme_opt])
-        else:
-            addr_opt = "EtcdAddr"
-            scheme_opt = "EtcdScheme"
-            addrs = [self.parameters["EtcdAddr"].value]
-            scheme = self.ETCD_SCHEME
-
-        for addr in addrs:
-            fields = addr.split(":")
-            if len(fields) != 2:
-                raise ConfigException("Invalid format for field - must be "
-                                  "hostname:port", self.parameters[addr_opt])
-            self._validate_addr(addr_opt, fields[0])
-
-            try:
-                int(fields[1])
-            except ValueError:
-                raise ConfigException("Invalid port in field",
-                                      self.parameters[addr_opt])
-
-        if scheme == "https":
-            # key and certificate must be both specified or both not specified
-            if bool(self.ETCD_KEY_FILE) != bool(self.ETCD_CERT_FILE):
-                if not self.ETCD_KEY_FILE:
-                    raise ConfigException("Missing etcd key file. Key and "
-                                          "certificate must both be specified "
-                                          "or both be blank.",
-                                          self.parameters["EtcdKeyFile"])
-                else:
-                    raise ConfigException("Missing etcd certificate. Key and "
-                                          "certificate must both be specified "
-                                          "or both be blank.",
-                                          self.parameters["EtcdCertFile"])
-
-            # Make sure etcd key and certificate are readable
-            if self.ETCD_KEY_FILE and self.ETCD_CERT_FILE:
-                if not (os.path.isfile(self.ETCD_KEY_FILE) and
-                        os.access(self.ETCD_KEY_FILE, os.R_OK)):
-                    raise ConfigException("Cannot read key file. Key file "
-                                          "must be a readable path.",
-                                          self.parameters["EtcdKeyFile"])
-                if not (os.path.isfile(self.ETCD_CERT_FILE) and
-                        os.access(self.ETCD_CERT_FILE, os.R_OK)):
-                    raise ConfigException("Cannot read cert file. Cert file "
-                                          "must be a readable path.",
-                                          self.parameters["EtcdCertFile"])
-
-            # If Certificate Authority cert provided, check it's readable
-            if (self.ETCD_CA_FILE and
-                    not (os.path.isfile(self.ETCD_CA_FILE) and
-                         os.access(self.ETCD_CA_FILE, os.R_OK))):
-                raise ConfigException("Missing CA certificate or file is "
-                                      "unreadable. Value must be readable "
-                                      "file path.",
-                                      self.parameters["EtcdCaFile"])
-        elif scheme != "http":
-            raise ConfigException("Invalid protocol scheme. Value must be one "
-                                  "of: \"\", \"http\", \"https\".",
-                                  self.parameters[scheme_opt])
 
         try:
             self.LOGLEVFILE = LOGLEVELS[self.LOGLEVFILE.lower()]
@@ -616,8 +450,6 @@ class Config(object):
         # this case no log file should be written.
         if self.LOGFILE.lower() == "none":
             self.LOGFILE = None
-        if self.DRIVERLOGFILE.lower() == "none":
-            self.DRIVERLOGFILE = None
 
         if self.METADATA_IP.lower() == "none":
             # Metadata is not required.
@@ -661,19 +493,7 @@ class Config(object):
         # interval and ttl to 0 - i.e. status reporting is disabled.
         if self.REPORTING_INTERVAL_SECS <= 0:
             log.warning("Reporting disabled.")
-            self.REPORTING_TTL_SECS = 0
             self.REPORTING_INTERVAL_SECS = 0
-
-        # Ensure the TTL is longer than the reporting interval, defaulting
-        # it if not.
-        if (self.REPORTING_TTL_SECS <= self.REPORTING_INTERVAL_SECS or
-                self.REPORTING_TTL_SECS == 0):
-            log.warning("Reporting TTL set to %s.", self.REPORTING_TTL_SECS)
-            self.REPORTING_TTL_SECS = self.REPORTING_INTERVAL_SECS * 5/2
-
-        if self.ENDPOINT_REPORT_DELAY < 0:
-            log.warning("Endpoint status delay is negative, defaulting to 1.")
-            self.ENDPOINT_REPORT_DELAY = 1
 
         if self.HOST_IF_POLL_INTERVAL_SECS < 0:
             log.warning("Host interface poll interval is negative, "
