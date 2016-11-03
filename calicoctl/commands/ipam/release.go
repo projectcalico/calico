@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 
 	docopt "github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 )
@@ -34,8 +35,9 @@ func Release(args []string) {
 Options:
   -h --help             Show this screen.
      --ip=<IP>          IP address to release.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format. [default: /etc/calico/calicoctl.cfg]
+  -c --config=<CONFIG>  Path to the file containing connection configuration in
+                        YAML or JSON format.
+                        [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam release command releases an IP address from the Calico IP Address
@@ -66,8 +68,8 @@ Description:
 	ipamClient := client.IPAM()
 	passedIP := parsedArgs["--ip"].(string)
 
-	ip := validateIP(passedIP)
-	ips := []net.IP{net.IP{ip}}
+	ip := argutils.ValidateIP(passedIP)
+	ips := []net.IP{ip}
 
 	// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
 	// release was successful else it returns back the slice with the IP passed in.

@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipam
+package node
 
 import (
 	"fmt"
-	"net"
 	"os"
 )
 
-// validateIP takes a string as an input and makes sure it's a valid IPv4 or IPv6 address.
-func validateIP(str string) net.IP {
-	// Parse the input string as an IP address (IPv4 or IPv6).
-	// This also validates the IP address.
-	ip := net.ParseIP(str)
-	if ip == nil {
-		fmt.Println("Invalid IP address specified.")
+func enforceRoot() {
+	// Make sure the command is run with super user priviladges
+	if os.Getuid() != 0 {
+		fmt.Println("Need super user privilages: Operation not permitted")
 		os.Exit(1)
 	}
-	return ip
 }

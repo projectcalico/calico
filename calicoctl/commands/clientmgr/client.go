@@ -18,6 +18,7 @@ import (
 	"os"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
@@ -25,13 +26,9 @@ import (
 // filename (if it exists), dropping back to environment variables for any
 // parameter not loaded from file.
 func NewClient(cf string) (*client.Client, error) {
-	if _, err := os.Stat(cf); err != nil {
-		log.Infof("Config file cannot be read - reading config from environment")
-		cf = ""
-	}
-
-	cfg, err := client.LoadClientConfig(cf)
+	cfg, err := LoadClientConfig(cf)
 	if err != nil {
+		log.Info("Error loading config")
 		return nil, err
 	}
 	log.Infof("Loaded client config: type=%v %#v", cfg.BackendType, cfg.BackendConfig)
@@ -42,4 +39,15 @@ func NewClient(cf string) (*client.Client, error) {
 	}
 
 	return c, err
+}
+
+// LoadClientConfig loads the client config from file if the file exists,
+// otherwise will load from environment variables.
+func LoadClientConfig(cf string) (*api.ClientConfig, error) {
+	if _, err := os.Stat(cf); err != nil {
+		log.Infof("Config file cannot be read - reading config from environment")
+		cf = ""
+	}
+
+	return client.LoadClientConfig(cf)
 }

@@ -40,7 +40,7 @@ Description:
 
   See 'calicoctl ipam <command> --help' to read about a specific subcommand.
 `
-	arguments, err := docopt.Parse(doc, args, true, "", false, false)
+	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)

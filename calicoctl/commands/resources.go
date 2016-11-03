@@ -22,6 +22,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/ghodss/yaml"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -94,11 +95,11 @@ func convertToSliceOfResources(loaded interface{}) []unversioned.Resource {
 // getResourceFromArguments returns a resource instance from the command line arguments.
 func getResourceFromArguments(args map[string]interface{}) (unversioned.Resource, error) {
 	kind := args["<KIND>"].(string)
-	name := argStringOrBlank(args, "<NAME>")
-	node := argStringOrBlank(args, "--node")
-	workload := argStringOrBlank(args, "--workload")
-	orchestrator := argStringOrBlank(args, "--orchestrator")
-	resScope := argStringOrBlank(args, "--scope")
+	name := argutils.ArgStringOrBlank(args, "<NAME>")
+	node := argutils.ArgStringOrBlank(args, "--node")
+	workload := argutils.ArgStringOrBlank(args, "--workload")
+	orchestrator := argutils.ArgStringOrBlank(args, "--orchestrator")
+	resScope := argutils.ArgStringOrBlank(args, "--scope")
 	switch strings.ToLower(kind) {
 	case "node", "nodes":
 		p := api.NewNode()
@@ -268,24 +269,6 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	return results
 }
 
-// argStringOrBlank returns the requested argument as a string, or as a blank
-// string if the argument is not present.
-func argStringOrBlank(args map[string]interface{}, argName string) string {
-	if args[argName] != nil {
-		return args[argName].(string)
-	}
-	return ""
-}
-
-// argBoolOrFalse returns the requested argument as a boolean, or as false
-// if the argument is not present.
-func argBoolOrFalse(args map[string]interface{}, argName string) bool {
-	if args[argName] != nil {
-		return args[argName].(bool)
-	}
-	return false
-}
-
 // execureResourceAction fans out the specific resource action to the appropriate method
 // on the ResourceManager for the specific resource.
 func executeResourceAction(args map[string]interface{}, client *client.Client, resource unversioned.Resource, action action) (unversioned.Resource, error) {
@@ -311,9 +294,9 @@ func executeResourceAction(args map[string]interface{}, client *client.Client, r
 		skip := false
 		switch err.(type) {
 		case calicoErrors.ErrorResourceAlreadyExists:
-			skip = argBoolOrFalse(args, "--skip-exists")
+			skip = argutils.ArgBoolOrFalse(args, "--skip-exists")
 		case calicoErrors.ErrorResourceDoesNotExist:
-			skip = argBoolOrFalse(args, "--skip-not-exists")
+			skip = argutils.ArgBoolOrFalse(args, "--skip-not-exists")
 		}
 		if skip {
 			resourceOut = resource

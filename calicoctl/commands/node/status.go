@@ -53,12 +53,14 @@ Description:
 		return
 	}
 
+	// Must run this command as root to be able to connect to BIRD sockets
+	enforceRoot()
+
+	// Go through running processes and check if `calico-felix` processes is not running
 	processes, err := gops.Processes()
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	// Go through running processes and check if `calico-felix` processes is not running
 	if !psContains("calico-felix", processes) {
 		// Return and print message if calico-node is not running
 		fmt.Printf("Calico process is not running.\n")
@@ -66,12 +68,6 @@ Description:
 	}
 
 	fmt.Printf("Calico process is running.\n")
-
-	// Must run this command as root to be able to connect to BIRD sockets
-	if os.Getuid() != 0 {
-		fmt.Println("This command must be run as root.")
-		os.Exit(1)
-	}
 
 	// Check if birdv4 process is running, print the BGP peer table if it is, else print a warning
 	if psContains("bird", processes) {

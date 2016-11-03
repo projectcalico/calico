@@ -20,9 +20,9 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
-	"github.com/projectcalico/libcalico-go/lib/net"
 
 	docopt "github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 )
 
@@ -34,8 +34,9 @@ func Show(args []string) {
 Options:
   -h --help             Show this screen.
      --ip=<IP>          IP address to show.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format. [default: /etc/calico/calicoctl.cfg]
+  -c --config=<CONFIG>  Path to the file containing connection configuration in
+                        YAML or JSON format.
+                        [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam show command prints information about a given IP address, such as
@@ -61,8 +62,8 @@ Description:
 
 	ipamClient := client.IPAM()
 	passedIP := parsedArgs["--ip"].(string)
-	ip := validateIP(passedIP)
-	attr, err := ipamClient.GetAssignmentAttributes(net.IP{ip})
+	ip := argutils.ValidateIP(passedIP)
+	attr, err := ipamClient.GetAssignmentAttributes(ip)
 
 	// IP address is not assigned, this prints message like
 	// `IP 192.168.71.1 is not assigned in block`. This is not exactly an error,

@@ -56,11 +56,8 @@ Description:
 		return
 	}
 
-	// Make sure the command is run with super user priviladges
-	if os.Getuid() != 0 {
-		fmt.Println("Need super user privilages: Operation not permitted")
-		os.Exit(1)
-	}
+	// Make sure the command is run with super user privileges
+	enforceRoot()
 
 	systemOk := true
 

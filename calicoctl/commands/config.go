@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -49,8 +50,8 @@ Examples:
 
 Options:
   -n --node=<NODE>      The node name.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format.
+  -c --config=<CONFIG>  Path to the file containing connection configuration in
+                        YAML or JSON format.
                         [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -101,9 +102,9 @@ The table below details the valid config options.
 	}
 
 	// From the command line arguments construct the Config object to send to the client.
-	node := argStringOrBlank(parsedArgs, "--node")
-	name := argStringOrBlank(parsedArgs, "<NAME>")
-	value := argStringOrBlank(parsedArgs, "<VALUE>")
+	node := argutils.ArgStringOrBlank(parsedArgs, "--node")
+	name := argutils.ArgStringOrBlank(parsedArgs, "<NAME>")
+	value := argutils.ArgStringOrBlank(parsedArgs, "<VALUE>")
 
 	// For now we map each option through to separate config methods, but
 	// eventually we'll aim to have a config style resource and this will
