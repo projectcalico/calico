@@ -1,4 +1,4 @@
-FROM golang:1.7.1-alpine
+FROM golang:1.7-alpine
 
 MAINTAINER Casey Davenport <casey@tigera.io>
 
@@ -18,5 +18,4 @@ RUN apk add --update bash git iproute2 curl make gcc alpine-sdk linux-headers &&
 
 RUN go get github.com/onsi/ginkgo/ginkgo
 RUN go get github.com/onsi/gomega
-RUN go get github.com/Masterminds/glide
 WORKDIR /go/src/github.com/projectcalico/calico-containers
