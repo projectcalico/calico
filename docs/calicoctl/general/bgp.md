@@ -231,5 +231,3 @@ the following command from the "Node1" command line:
 	+--------------+-------------------+-------+----------+-------------+
 	|   aa:bb::ff  | node-to-node mesh |   up  | 16:17:26 | Established |
 	+--------------+-------------------+-------+----------+-------------+
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/general/bgp.md?pixel)](https://github.com/igrigorik/ga-beacon)
