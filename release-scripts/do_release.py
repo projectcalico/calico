@@ -16,7 +16,14 @@
 """do_release.py
 
 Usage:
-  do_release.py [CALICO_PLATFORM_VERSION] [CALICO_DOCKER_VERSION FELIX_VERSION LIBCALICO_VERSION LIBNETWORK_VERSION] [--dry-run]
+  do_release.py [--dry-run]
+  [--calico=<CALICO_VERSION>]
+  [--calico-containers=<CALICO_CONTAINERS_VERSION>]
+  [--felix=<FELIX_VERSION>]
+  [--libnetwork=<LIBNETWORK_VERSION>]
+  [--calico-cni=<CALICO_CNI_VERSION>]
+  [--k8s-policy-controller=<POLICY_CONTROLLER_VERSION>]
+
 
 Options:
   -h --help     Show this screen.
@@ -32,6 +39,7 @@ import utils
 from utils import print_paragraph as para
 from utils import print_user_actions as actions
 from utils import print_bullet as bullet
+from utils import check_or_exit
 from utils import run
 
 
@@ -41,9 +49,6 @@ VERSION_REPLACE = [
 
     (re.compile(r'__libnetwork_plugin_version__\s*=\s*".*"'),
      '__libnetwork_plugin_version__ = "{libnetwork-version}"'),
-
-    (re.compile(r'__libcalico_version__\s*=\s*".*"'),
-     '__libcalico_version__ = "{libcalico-version}"'),
 
     (re.compile(r'__felix_version__\s*=\s*".*"'),
      '__felix_version__ = "{felix-version}"'),
@@ -60,12 +65,6 @@ VERSION_REPLACE = [
     (re.compile(r'git\+https://github\.com/projectcalico/felix\.git'),
      'git+https://github.com/projectcalico/felix.git@{felix-version}'),
 
-    (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git@master'),
-     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
-
-    (re.compile(r'git\+https://github\.com/projectcalico/libcalico\.git[^@]'),
-     'git+https://github.com/projectcalico/libcalico.git@{libcalico-version}'),
-
     (re.compile(r'calico_docker_ver\s*=\s*"latest"'),
      'calico_docker_ver = "{calico-containers-version}"'),
 
@@ -74,12 +73,6 @@ VERSION_REPLACE = [
 
     (re.compile(r'calico/node:latest'),
      'calico/node:{calico-containers-version}'),
-
-    (re.compile(r'calico/build:latest'),
-     'calico/build:{libcalico-version}'),
-
-    (re.compile(r'https://raw\.githubusercontent\.com/projectcalico/libcalico/master/build-requirements-nosh\.txt'),
-     'https://raw.githubusercontent.com/projectcalico/libcalico/{libcalico-version}/build-requirements-nosh.txt'),
 
     (re.compile(r'calico/node-libnetwork:latest'),
      'calico/node-libnetwork:{libnetwork-version}'),
@@ -100,9 +93,9 @@ def start_release():
     Start the release process, asking user for version information.
     :return:
     """
-    new_version = arguments["CALICO_PLATFORM_VERSION"]
+    new_version = arguments.get("--calico")
     if not new_version:
-        new_version = raw_input("New Calico platform version? (vX.Y): ")
+        new_version = raw_input("New Calico version? (vX.Y): ")
 
     # Check if any of the new version dirs exist already
     new_dirs = ["./%s" % new_version,
@@ -127,47 +120,53 @@ def start_release():
     para("Created commit of the raw, unchanged release files.")
     para("Moving on to Version replacement of files.")
 
-    calico_containers_version = arguments["CALICO_DOCKER_VERSION"]
-    felix_version = arguments["FELIX_VERSION"]
-    libcalico_version = arguments["LIBCALICO_VERSION"]
-    libnetwork_version = arguments["LIBNETWORK_VERSION"]
-
-    if not (calico_containers_version and felix_version and libcalico_version and libnetwork_version):
-        para("To pin the calico libraries used by calico-containers, please specify "
-             "the name of the requested versions as they appear in the GitHub "
-             "releases.")
+    calico_containers_version = arguments["--calico-containers"]
+    if not calico_containers_version:
         calico_containers_version = \
             utils.get_github_library_version("calico-containers", "https://github.com/projectcalico/calico-containers")
+
+    felix_version = arguments["--felix"]
+    if not felix_version:
         felix_version = \
             utils.get_github_library_version("felix", "https://github.com/projectcalico/felix")
-        libcalico_version = \
-            utils.get_github_library_version("libcalico", "https://github.com/projectcalico/libcalico")
+
+    libnetwork_version = arguments["--libnetwork"]
+    if not libnetwork_version:
         libnetwork_version = \
             utils.get_github_library_version("libnetwork-plugin", "https://github.com/projectcalico/libnetwork-plugin")
-        kube_policy_controller_version = \
-            utils.get_github_library_version("kube-policy-controller", "https://github.com/projectcalico/k8s-policy")
 
+    calico_cni_version = arguments["--calico-cni"]
+    if not calico_cni_version:
         calico_cni_version = \
             utils.get_github_library_version("calico-cni-version", "https://github.com/projectcalico/calico-cni")
 
+    kube_policy_controller_version = arguments["--k8s-policy-controller"]
+    if not kube_policy_controller_version:
+        kube_policy_controller_version = \
+            utils.get_github_library_version("kube-policy-controller", "https://github.com/projectcalico/k8s-policy")
+
     versions = {
+        "calico-version": new_version,
         "calico-containers-version": calico_containers_version,
         "calico-containers-version-no-v": calico_containers_version[1:],
         "felix-version": felix_version,
-        "libcalico-version": libcalico_version,
         "libnetwork-version": libnetwork_version,
         "kube-policy-controller-version": kube_policy_controller_version,
         "calico-cni-version": calico_cni_version
     }
 
+    actions()
+    para("Using:")
+    para(str(versions))
+    check_or_exit("Continue?")
+
     # Update the code tree
     utils.update_files(VERSION_REPLACE, versions)
 
-    calico_containers_version = versions["calico-containers-version"]
     para("The codebase has been updated to reference the release artifacts.")
     bullet("Adding, and committing the updated files")
     run("git add --all")
-    run('git commit -m "Update version strings for release %s"' % calico_containers_version)
+    run('git commit -m "Update version strings for release %s"' % new_version)
     actions()
     para("You are done with release preparation. You now have two new commits on your branch which add the "
          "necessary files. Please: ")

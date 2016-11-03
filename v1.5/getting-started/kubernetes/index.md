@@ -32,5 +32,3 @@ These guides walk you through setting up a Kubernetes cluster with Calico.
 
 ## Troubleshooting
 - [Troubleshooting]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/troubleshooting)
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/docs/cni/kubernetes/README.md?pixel)](https://github.com/igrigorik/ga-beacon)

@@ -11,30 +11,66 @@ toc:
   section:
   - title: Overview
     path: /reference/calicoctl/
-  - title: status
-    path: /reference/calicoctl/status
-  - title: node
-    path: /reference/calicoctl/node
-  - title: container
-    path: /reference/calicoctl/container
-  - title: endpoint
-    path: /reference/calicoctl/endpoint
-  - title: profile
-    path: /reference/calicoctl/profile
-  - title: pool
-    path: /reference/calicoctl/pool
-  - title: bgp
-    path: /reference/calicoctl/bgp
-  - title: ipam
-    path: /reference/calicoctl/ipam
-  - title: checksystem
-    path: /reference/calicoctl/checksystem
-  - title: diags
-    path: /reference/calicoctl/diags
-  - title: version
-    path: /reference/calicoctl/version
-  - title: config
-    path: /reference/calicoctl/config
+  - title: Command Reference
+    path: /reference/calicoctl/commands
+    section:
+    - title: Overview
+      path: /reference/calicoctl/commands/
+    - title: create
+      path: /reference/calicoctl/commands/create
+    - title: replace
+      path: /reference/calicoctl/commands/replace
+    - title: apply
+      path: /reference/calicoctl/commands/apply
+    - title: delete
+      path: /reference/calicoctl/commands/delete
+    - title: get
+      path: /reference/calicoctl/commands/get
+    - title: config
+      path: /reference/calicoctl/commands/config
+    - title: ipam
+      section:
+      - title: Overview
+        path: /reference/calicoctl/commands/ipam/
+      - title: release
+        path: /reference/calicoctl/commands/ipam/release
+      - title: show
+        path: /reference/calicoctl/commands/ipam/show
+    - title: node
+      section:
+      - title: Overview
+        path: /reference/calicoctl/commands/node/
+      - title: status
+        path: /reference/calicoctl/commands/node/status
+      - title: diags
+        path: /reference/calicoctl/commands/node/diags
+      - title: checksystem
+        path: /reference/calicoctl/commands/node/checksystem
+    - title: version
+      path: /reference/calicoctl/commands/version
+  - title: Resource Definitions
+    path: /reference/calicoctl/resources
+    section:
+      - title: Overview
+        path: /reference/calicoctl/resources/
+      - title: BGP Peer
+        path: /reference/calicoctl/resources/bgppeer
+      - title: Host Endpoint
+        path: /reference/calicoctl/resources/hostendpoint
+      - title: IP Pool
+        path: /reference/calicoctl/resources/ippool
+      - title: Node
+        path: /reference/calicoctl/resources/node
+      - title: Policy
+        path: /reference/calicoctl/resources/policy
+      - title: Profile
+        path: /reference/calicoctl/resources/profile
+      - title: Workload Endpoint
+        path: /reference/calicoctl/resources/workloadendpoint
+  - title: Setup
+    section:
+      - title: Configuring calicoctl
+        path: /reference/calicoctl/setup/config
 - title: Deploying on Public Cloud
   section:
     - title: Overview
