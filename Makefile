@@ -2,7 +2,6 @@
 default: help
 all: test                                 ## Run all the tests
 binary: dist/calicoctl                    ## Create the calicoctl binary
-calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
 all: vendor build-containerized test-containerized
@@ -41,6 +40,8 @@ NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_CONTAINER_NAME?=calico/felix:latest
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:latest
+
+calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_CONTAINER_NAME)
@@ -291,6 +292,7 @@ test-containerized: run-etcd build-containerized
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_NAME?=calico/ctl:latest
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
+CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
@@ -305,6 +307,8 @@ BUILD_CALICOCTL_CONTAINER_NAME=calico/calicoctl_build_container
 BUILD_CALICOCTL_CONTAINER_MARKER=calicoctl_build_container.created
 
 LIBCALICOGO_PATH?=none
+
+calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
 
 ## Use this to populate the vendor directory after checking out the repository.
 ## To update upstream dependencies, delete the glide.lock file first.
@@ -325,6 +329,11 @@ dist/calicoctl: $(CALICOCTL_FILES) vendor
 
 $(BUILD_CALICOCTL_CONTAINER_MARKER): Dockerfile.calicoctl.build
 	docker build -f Dockerfile.calicoctl.build -t $(BUILD_CALICOCTL_CONTAINER_NAME) .
+	touch $@
+
+# build calico_ctl image
+$(CTL_CONTAINER_CREATED): Dockerfile.calicoctl build-containerized
+	docker build -t $(CTL_CONTAINER_NAME) -f Dockerfile.calicoctl .
 	touch $@
 
 ## Run the build in a container. Useful for CI
@@ -402,8 +411,10 @@ clean: clean_calico_node
 	-rm *.tar
 	-rm -r vendor
 	-rm $(BUILD_CALICOCTL_CONTAINER_MARKER)
+	-rm $(CTL_CONTAINER_CREATED)
 	-docker rm -f calico-node
 	-docker rmi $(NODE_CONTAINER_NAME)
+	-docker rmi $(CTL_CONTAINER_NAME)
 	-docker rmi $(BUILD_CALICOCTL_CONTAINER_NAME)
 	-docker tag calico/test:latest calico/test:latest-backup && docker rmi calico/test:latest
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
