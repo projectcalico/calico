@@ -226,6 +226,16 @@ def warn_if_hostname_conflict(ip):
 
 
 def main():
+    # If we're running with the k8s backend, don't do any of this,
+    # since it currently doesn't support BGP, Calico IPAM, and doesn't
+    # require any of the etcd interactions below.
+    if os.getenv("DATASTORE_TYPE", "") == "kubernetes":
+        print "Using k8s backend"
+        with open('startup.env', 'w') as f:
+            f.write("DATASTORE_TYPE=kubernetes\n")
+            f.write("HOSTNAME=%s\n" % hostname)
+        return
+
     # Check to see if etcd is available.  If not, wait until it is before
     # continuing.  This is to avoid etcd / node startup race conditions.
     print "Waiting for etcd connection..."
