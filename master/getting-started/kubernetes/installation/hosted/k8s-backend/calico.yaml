@@ -5,12 +5,6 @@ metadata:
   name: calico-config 
   namespace: kube-system
 data:
-  # Configure this with the location of your etcd cluster.
-  etcd_endpoints: "http://1.2.3.4:1234"
-
-  # Configure the Calico backend to use.
-  calico_backend: "none"
-
   # The CNI network configuration to install on each node.
   cni_network_config: |-
     {
@@ -62,29 +56,19 @@ spec:
           image: caseydavenport/node:latest 
           imagePullPolicy: Always
           env:
-            # The location of the Calico etcd cluster.
-            - name: ETCD_ENDPOINTS
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: etcd_endpoints
-            # The datastore type to use.
+            # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
+            # Enable felix debug logging.
             - name: FELIX_LOGSEVERITYSYS 
               value: "debug"
-            - name: FELIX_LOGSEVERITYSCREEN 
-              value: "debug"
-            # Choose the backend to use. 
+            # Don't enable BGP. 
             - name: CALICO_NETWORKING_BACKEND 
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: calico_backend
+              value: "none"
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
-            # Auto-detect the BGP IP address.
+            # No IP address needed. 
             - name: IP
               value: ""
           securityContext:
@@ -103,12 +87,6 @@ spec:
           imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:
-            # The location of the Calico etcd cluster.
-            - name: ETCD_ENDPOINTS
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: etcd_endpoints
             # The CNI network config to install on each node.
             - name: CNI_NETWORK_CONFIG
               valueFrom:
