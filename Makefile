@@ -316,26 +316,15 @@ $(BUNDLE_FILENAME): dist/calico-felix/calico-iptables-plugin dist/calico-felix/c
 	tar -czf $(BUNDLE_FILENAME) -C dist calico-felix
 
 dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt docker-build-images/pyi/*
-	# Remove any pre-existing build container.
-	docker rm -f felix-pyi-build || true
 	$(MAKE) calico-build/python
+
 	# Output version information
 	echo "Calico version: $(PY_VERSION) \n" \
 	     "Git revision: $(GIT_COMMIT)\n" > version.txt
 
-	# Create new build container and start it running in the background.
-	docker run -v $${PWD}:/code \
-	           -w /code/ \
-	           --name felix-pyi-build -tid \
-	           calico-build/python sh
-	# As root, install our package.  This makes it easier to run PyInstaller.
-	docker exec felix-pyi-build sh -c 'cd python && pip install .'
-	# As the current user, build the PyInstaller bundle.
-	docker exec -u $(MY_UID):$(MY_GID) \
-	            felix-pyi-build \
-	            /code/docker-build-images/pyi/run-pyinstaller.sh
-	# Finally, shut down the container.
-	docker rm -f felix-pyi-build
+	# Create and run build container.
+	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
+	    'pip install . && ../docker-build-images/pyi/run-pyinstaller.sh && rm -rf ../build `find . -name "*.pyc"` && chown -R $(MY_UID):$(MY_GID) ../dist'
 
 	# Check that the build succeeded and update the mtimes on the target file
 	# since pyinstaller doesn't seem to do so.
