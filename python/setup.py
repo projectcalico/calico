@@ -45,7 +45,7 @@ requirements = collect_requirements()
 
 setuptools.setup(
     name="felix",
-    version="1.4.5.dev1",
+    version="2.0.0.dev1",
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [
