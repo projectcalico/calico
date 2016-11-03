@@ -49,5 +49,3 @@ organized by top level command.
 -  [calicoctl version](version.md)
 -  [calicoctl node](node.md)
 -  [calicoctl ipam](ipam.md)
-
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/libcalico-go/docs/calicoctl/calicoctl.md?pixel)](https://github.com/igrigorik/ga-beacon)
