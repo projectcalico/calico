@@ -41,5 +41,5 @@ tox "$@"
 source .tox/py27/bin/activate
 coverage html
 coverage xml
-diff-cover coverage.xml --compare-branch=origin/master
+diff-cover coverage.xml --compare-branch="${COMPARE_BRANCH:-origin/master}"
 deactivate

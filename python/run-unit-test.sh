@@ -26,4 +26,4 @@ coverage erase
 coverage report -m
 coverage html
 coverage xml
-diff-cover coverage.xml --compare-branch=origin/master
+diff-cover coverage.xml --compare-branch="${COMPARE_BRANCH:-origin/master}"
