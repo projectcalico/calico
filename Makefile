@@ -196,21 +196,20 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar #run-etcd-st
 	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
 	# All of code under test is mounted into the container.
 	#   - This also provides access to calicoctl and the docker client
-	#$(MAKE) st-checks
-	#docker run --uts=host \
-	#           --pid=host \
-	#           --net=host \
-	#           --privileged \
-	#           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
-	#           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
-	#           -e MY_IP=$(LOCAL_IP_ENV) \
-	#           --rm -ti \
-	#           -v /var/run/docker.sock:/var/run/docker.sock \
-	#           -v $(SOURCE_DIR):/code \
-	#           calico/test \
-	#           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
-	#$(MAKE) stop-etcd
-	echo "No STs to run at the moment"
+	# $(MAKE) st-checks
+	docker run --uts=host \
+	           --pid=host \
+	           --net=host \
+	           --privileged \
+	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
+	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           --rm -ti \
+	           -v /var/run/docker.sock:/var/run/docker.sock \
+	           -v $(SOURCE_DIR):/code \
+	           calico/test \
+	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
+	$(MAKE) stop-etcd
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
 .PHONY: st-ssl
