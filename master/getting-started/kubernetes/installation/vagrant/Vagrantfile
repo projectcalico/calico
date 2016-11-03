@@ -1,5 +1,5 @@
 # Size of the cluster created by Vagrant
-num_instances=3
+num_instances=2
 
 # Change basename of the VM
 instance_name_prefix="k8s-node"
