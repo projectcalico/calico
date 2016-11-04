@@ -52,9 +52,11 @@ type configCallbacks interface {
 	OnDatastoreNotReady()
 }
 
-type hostIPCallbacks interface {
+type passthruCallbacks interface {
 	OnHostIPUpdate(hostname string, ip *net.IP)
 	OnHostIPRemove(hostname string)
+	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
+	OnIPPoolRemove(model.IPPoolKey)
 }
 
 type PipelineCallbacks interface {
@@ -62,7 +64,7 @@ type PipelineCallbacks interface {
 	rulesUpdateCallbacks
 	endpointCallbacks
 	configCallbacks
-	hostIPCallbacks
+	passthruCallbacks
 }
 
 func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
@@ -185,26 +187,38 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
 
-type HostIPPassthru struct {
-	callbacks hostIPCallbacks
+type DataplanePassthru struct {
+	callbacks passthruCallbacks
 }
 
-func NewHostIPPassthru(callbacks hostIPCallbacks) *HostIPPassthru {
-	return &HostIPPassthru{callbacks: callbacks}
+func NewHostIPPassthru(callbacks passthruCallbacks) *DataplanePassthru {
+	return &DataplanePassthru{callbacks: callbacks}
 }
 
-func (h *HostIPPassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
+func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
+	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
 }
 
-func (h *HostIPPassthru) OnUpdate(update api.Update) (filterOut bool) {
-	hostname := update.Key.(model.HostIPKey).Hostname
-	if update.Value == nil {
-		h.callbacks.OnHostIPRemove(hostname)
-	} else {
-		ip := update.Value.(*net.IP)
-		h.callbacks.OnHostIPUpdate(hostname, ip)
+func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
+	switch key := update.Key.(type) {
+	case model.HostIPKey:
+		hostname := key.Hostname
+		if update.Value == nil {
+			h.callbacks.OnHostIPRemove(hostname)
+		} else {
+			ip := update.Value.(*net.IP)
+			h.callbacks.OnHostIPUpdate(hostname, ip)
+		}
+	case model.IPPoolKey:
+		if update.Value == nil {
+			h.callbacks.OnIPPoolRemove(key)
+		} else {
+			pool := update.Value.(*model.IPPool)
+			h.callbacks.OnIPPoolUpdate(key, pool)
+		}
 	}
+
 	return false
 }
 

@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"strings"
 )
 
 type EventHandler func(message interface{})
@@ -323,6 +324,28 @@ func (buf *EventBuffer) OnHostIPRemove(hostname string) {
 		&proto.HostMetadataRemove{
 			Hostname: hostname,
 		})
+}
+
+func (buf *EventBuffer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) {
+	buf.pendingUpdates = append(buf.pendingUpdates,
+		&proto.IPAMPoolUpdate{
+			Id: cidrToIPPoolID(key),
+			Pool: &proto.IPAMPool{
+				Cidr:       pool.CIDR.String(),
+				Masquerade: pool.Masquerade,
+			},
+		})
+}
+
+func (buf *EventBuffer) OnIPPoolRemove(key model.IPPoolKey) {
+	buf.pendingUpdates = append(buf.pendingUpdates,
+		&proto.IPAMPoolRemove{
+			Id: cidrToIPPoolID(key),
+		})
+}
+
+func cidrToIPPoolID(key model.IPPoolKey) string {
+	return strings.Replace(key.CIDR.String(), "/", "-", 1)
 }
 
 func tierInfoToProtoTierInfo(filteredTiers []tierInfo) []*proto.TierInfo {

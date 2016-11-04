@@ -63,6 +63,9 @@ class MasqueradeManager(Actor):
                 _log.info("IPAM pool deleted: %s", pool_id)
                 del self.pools_by_id[pool_id]
             else:
+                if ":" in pool["cidr"]:
+                    _log.debug("Ignoring IPv6 pool: %s", pool_id)
+                    return
                 _log.info("IPAM pool %s updated: %s", pool_id, pool)
                 self.pools_by_id[pool_id] = pool
             self._dirty = True
