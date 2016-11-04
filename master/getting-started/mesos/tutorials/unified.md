@@ -21,7 +21,7 @@ cat <<EOF > $NETWORK_CNI_CONFIG_DIR/calico-net-1.conf
     "ipam": {
         "type": "calico-ipam"
     },
-    "etcd_authority": "<etcd-ip:port>:2379"
+    "etcd_endpoints": "http://<etcd-ip:port>:2379"
 }
 EOF
 ```

@@ -34,10 +34,9 @@ we must provide the location of the running etcd instance
 by setting the `ECTD_AUTHORITY` environment variable.
 
 ```shell
-curl -L -O \
-    https://github.com/projectcalico/calico-containers/releases/download/v0.18.0/calicoctl
+curl -L -O https://github.com/projectcalico/calico-containers/releases/download/v0.18.0/calicoctl
 chmod +x ./calicoctl
-sudo ETCD_AUTHORITY=<etcd-ip:port> ./calicoctl node
+sudo ETCD_ENDPOINTS=http://<etcd-ip:port> ./calicoctl node
 ```
 
 ## Next Steps

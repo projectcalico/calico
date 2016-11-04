@@ -99,7 +99,7 @@ example ETCD environment variables will exist.
 
 ```shell
 $ sudo -u core -i
-$ env | grep ETCD_AUTHORITY
+$ env | grep ETCD_ENDPOINTS 
 ```
 
 Now that your environment is configured, you are ready to follow the [Calico without Docker networking walkthrough]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/installation) worked example.

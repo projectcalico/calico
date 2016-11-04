@@ -16,8 +16,7 @@ environment file and starts the Calico node image as a service.
 `calico.env` - the EnvironmentFile:
 
 ```shell
-ETCD_AUTHORITY=localhost:2379
-ETCD_SCHEME=http
+ETCD_ENDPOINTS=http://localhost:2379
 ETCD_CA_FILE=""
 ETCD_CERT_FILE=""
 ETCD_KEY_FILE=""
@@ -30,24 +29,24 @@ CALICO_LIBNETWORK_ENABLED=true
 CALICO_NETWORKING_BACKEND=bird
 ```
 
-Be sure to update this environment file as necessary, such as modifying the
-ETCD_AUTHORITY value to point at the correct instance of Etcd.
+Be sure to update this environment file as necessary, such as modifying 
+ETCD_ENDPOINTS to point at the correct etcd cluster endpoints. 
 
-> Note: The ETCD_SCHEME, ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
+> Note: The ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
 > environment variables are required when using Etcd with SSL/TLS.  The values
 > here are standard values for a non-SSL version of Etcd, but you can use this
 > template to define your SSL values if desired.  For more details about running
 > Calico with Etcd using SSL/TLS, check out the
 > [Etcd Secure Cluster guide]({{site.baseurl}}/{{page.version}}/reference/advanced/etcd-secure).
 >
-> If the CALICO_HOSTNAME is blank, the compute server hostname will be used
+> If CALICO_HOSTNAME is blank, the compute server hostname will be used
 > to identify the Calico node.
 >
-> If CALICO_IP and CALICO_IP6 are left blank, the next hop IP addresses for
+> If CALICO_IP or CALICO_IP6 are left blank, the next hop IP addresses for
 > this node will be automatically determined by querying the host interfaces.
 > It may be necessary to explicitly set these values.
 >
-> If the CALICO_AS is left blank, the AS Number for the node BGP client will be
+> If CALICO_AS is left blank, the AS Number for the node BGP client will be
 > inherited from the global defaut value.  Set this if you need to explicitly
 > set the AS Number for this node.
 >
@@ -81,8 +80,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -e AS=${CALICO_AS} \
  -e NO_DEFAULT_POOLS=${CALICO_NO_DEFAULT_POOLS} \
  -e CALICO_LIBNETWORK_ENABLED=${CALICO_LIBNETWORK_ENABLED} \
- -e ETCD_AUTHORITY=${ETCD_AUTHORITY} \
- -e ETCD_SCHEME=${ETCD_SCHEME} \
+ -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
  -e ETCD_CA_CERT_FILE=${ETCD_CA_CERT_FILE} \
  -e ETCD_CERT_FILE=${ETCD_CERT_FILE} \
  -e ETCD_KEY_FILE=${ETCD_KEY_FILE} \
