@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.2
+
+- Fix that "nat-outgoing" was not being honoured.
+
 ## 2.0.0-beta
 
 - Separate Felix into dataplane driver and dataplane-independent

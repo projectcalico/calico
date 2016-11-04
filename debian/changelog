@@ -1,3 +1,9 @@
+felix (2.0.0~beta.2-__STREAM__) __STREAM__; urgency=low
+
+  * fix that net-outgoing was not being honoured.
+
+ -- Shaun Crampton <shaun@tigera.io>  Fri, 04 Nov 2016 18:17:00 +0000
+
 felix (2.0.0~beta-__STREAM__) __STREAM__; urgency=low
 
   * felix release (from Git commit 3f4882e).

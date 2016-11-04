@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.0.0
-Release:        0.1.beta%{?dist}
+Release:        0.2.beta2%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -164,6 +164,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Nov 04 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.2.beta2
+  - felix version 2.0.0-0.2.beta2 release
+    - Fix that nat-outgoing was not being honoured.
+
 * Fri Nov 04 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.beta
   - felix version 2.0.0-0.1.beta release
     - Separate Felix into dataplane driver and dataplane-independent
