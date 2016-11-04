@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.0-beta
+
+- Separate Felix into dataplane driver and dataplane-independent
+  parts.  (The initial dataplane driver is the one that uses Linux
+  iptables and routing commands; this division will allow us to target
+  other dataplane implementations.)
+- Rewrite the dataplane-independent part of Felix in Go, for improved
+  performance.
+- Update calico-diags to collect Upstart logs.
+- Improve usage reporting: extra stats, better version number.
+- Improve endpoint status reporting.
+- Support Kubernetes backend.
+- Build system improvements.
+
 ## 1.4.4
 
 - Add a retry for deleting conntrack entries.

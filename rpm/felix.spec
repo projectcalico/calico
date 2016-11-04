@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.0.0
-Release:        0.1%{?dist}
+Release:        0.1.beta%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -164,6 +164,20 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Nov 04 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.beta
+  - felix version 2.0.0-0.1.beta release
+    - Separate Felix into dataplane driver and dataplane-independent
+      parts.  (The initial dataplane driver is the one that uses Linux
+      iptables and routing commands; this division will allow us to target
+      other dataplane implementations.)
+    - Rewrite the dataplane-independent part of Felix in Go, for improved
+      performance.
+    - Update calico-diags to collect Upstart logs.
+    - Improve usage reporting: extra stats, better version number.
+    - Improve endpoint status reporting.
+    - Support Kubernetes backend.
+    - Build system improvements.
+
 * Mon Oct 31 2016 Neil Jerram <neil@tigera.io> 1.4.4-1
   - felix version 1.4.4 release
     - Add a retry for deleting conntrack entries.
