@@ -31,26 +31,18 @@ correctly.
 
 ## Read the Source, Luke!
 
-All Calico's code is on [GitHub](https://github.com/projectcalico), in
-the following repositories, separated by function.
+All of Calico's code is on [GitHub](https://github.com/projectcalico).  The following 
+list contains the most commonly encountered repositories:
 
--   [calico](https://github.com/projectcalico/calico) - All of the core
-    Calico code except for that specific to Docker/container
-    environments: the Felix agent, the OpenStack plugin; testing for all
-    of those; and the source for Calico's documentation.
--   [calico-containers](https://github.com/projectcalico/calico-containers) -
-    Calico code and components specific to Docker/container
-    environments: the lightweight orchestrator for Docker environments,
-    Powerstrip adapter, and so on; and instructions for demonstrating
-    Calico networking in various container environments.
--   [calico-neutron](https://github.com/projectcalico/calico-neutron)
-    -Calico-specific patched version of OpenStack Neutron.
--   [calico-nova](https://github.com/projectcalico/calico-nova) -
-    Calico-specific patched version of OpenStack Nova.
--   [calico-dnsmasq](https://github.com/projectcalico/calico-dnsmasq)
-    -Calico-specific patched version of Dnsmasq.
--   [calico-chef](https://github.com/projectcalico/calico-chef) - Chef
-    cookbooks for installing test versions of OpenStack-using-Calico.
+Repository         | Description
+-------------------|----------------------------
+[felix](https://github.com/projectcalico/felix) | The felix policy enforcement agent.
+[calico-containers](https://github.com/projectcalico/calico-containers) | Home of the calico/node and calicoctl components. 
+[calico-cni](https://github.com/projectcalico/calico-cni) | The Calico CNI plugin.
+[libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | The Calico libnetwork plugin for Docker.
+[k8s-policy](https://github.com/projectcalico/k8s-policy) | Kubernetes policy controller. 
+[libcalico](https://github.com/projectcalico/libcalico) | Python Calico library.
+[libcalico-go](https://github.com/projectcalico/libcalico-go) | Golang Calico library.
 
 ## Contributing
 
