@@ -41,7 +41,7 @@ For test environments that you would like to get up and running
 quickly, you can launch the container with `calicoctl`:
 
 ```shell
-sudo ETCD_AUTHORITY=<ETCD HOST:PORT> ./calicoctl node --libnetwork
+sudo ETCD_AUTHORITY=<ETCD HOST:PORT> ./calicoctl noderun
 ```
 
 Again, be sure to set the ETCD_AUTHORITY to the correct `IP/Hostname:Port` for your etcd cluster.

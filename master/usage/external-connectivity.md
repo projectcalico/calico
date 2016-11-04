@@ -17,10 +17,23 @@ The easiest way to get outbound connectivity is to turn on NAT Outgoing on all
 Calico pools you want to be able to access the internet.
 
 ```shell
-calicoctl pool show
-# For each pool that needs connectivity:
-calicoctl pool add 192.168.0.0/16 --nat-outgoing [--ipip if needed]
+calicoctl get ipPool
 ```
+
+# For each pool that needs connectivity:
+```
+$ cat << EOF | calicoctl create -f -
+> - apiVersion: v1
+>   kind: ipPool
+>   metadata:
+>     cidr: 192.168.0.0/16
+>   spec:
+>     ipip:
+>       enabled: false
+>     nat-outgoing: true
+> EOF
+```
+[set `ipip:` `enabled:true` if needed]
 
 Please note that many solutions for inbound connectivity will also provide
 outbound connectivity.

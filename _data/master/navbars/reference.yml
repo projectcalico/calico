@@ -101,28 +101,6 @@ toc:
   section:
   - title: Calico for CNI
     path: /reference/advanced/calico-cni
-  - title: Calico without Docker networking (--net=none)
-    section:
-    - title: Prerequisites
-      path: /reference/without-docker-networking/prerequisites
-    - title: Installation
-      path: /reference/without-docker-networking/installation
-    - title: Environment Setup
-      section:
-      - title: Vagrant CoreOS
-        path: /reference/without-docker-networking/environment-setup/vagrant-coreos/
-      - title: Vagrant Ubuntu
-        path: /reference/without-docker-networking/environment-setup/vagrant-ubuntu/
-      - title: AWS
-        path: /reference/without-docker-networking/environment-setup/aws
-      - title: GCE
-        path: /reference/without-docker-networking/environment-setup/gce
-      - title: Digital Ocean
-        path: /reference/without-docker-networking/environment-setup/digital-ocean
-    - title: IPv6
-      path: /reference/without-docker-networking/ipv6
-    - title: Lifecycle of a container (Calico without Docker networking)
-      path: /reference/without-docker-networking/docker-container-lifecycle
   - title: Calico's use of the Neutron API
     path: /reference/advanced/calico-neutron-api
   - title: Secure etcd
