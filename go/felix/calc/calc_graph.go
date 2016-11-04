@@ -168,7 +168,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	polResolver.Callbacks = callbacks
 
 	// Register for host IP updates.
-	hostIPPassthru := NewHostIPPassthru(callbacks)
+	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
 	// Register for config updates.
@@ -191,7 +191,7 @@ type DataplanePassthru struct {
 	callbacks passthruCallbacks
 }
 
-func NewHostIPPassthru(callbacks passthruCallbacks) *DataplanePassthru {
+func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
 	return &DataplanePassthru{callbacks: callbacks}
 }
 
@@ -205,15 +205,19 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	case model.HostIPKey:
 		hostname := key.Hostname
 		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through HostIP deletion")
 			h.callbacks.OnHostIPRemove(hostname)
 		} else {
+			log.WithField("update", update).Debug("Passing-through HostIP update")
 			ip := update.Value.(*net.IP)
 			h.callbacks.OnHostIPUpdate(hostname, ip)
 		}
 	case model.IPPoolKey:
 		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through IPPool deletion")
 			h.callbacks.OnIPPoolRemove(key)
 		} else {
+			log.WithField("update", update).Debug("Passing-through IPPool update")
 			pool := update.Value.(*model.IPPool)
 			h.callbacks.OnIPPoolUpdate(key, pool)
 		}

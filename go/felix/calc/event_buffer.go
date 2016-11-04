@@ -312,6 +312,10 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 }
 
 func (buf *EventBuffer) OnHostIPUpdate(hostname string, ip *net.IP) {
+	log.WithFields(log.Fields{
+		"hostname": hostname,
+		"ip":       ip,
+	}).Debug("HostIP update")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.HostMetadataUpdate{
 			Hostname: hostname,
@@ -320,6 +324,7 @@ func (buf *EventBuffer) OnHostIPUpdate(hostname string, ip *net.IP) {
 }
 
 func (buf *EventBuffer) OnHostIPRemove(hostname string) {
+	log.WithField("hostname", hostname).Debug("HostIP removed")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.HostMetadataRemove{
 			Hostname: hostname,
@@ -327,6 +332,10 @@ func (buf *EventBuffer) OnHostIPRemove(hostname string) {
 }
 
 func (buf *EventBuffer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) {
+	log.WithFields(log.Fields{
+		"key":  key,
+		"pool": pool,
+	}).Debug("IPPool update")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.IPAMPoolUpdate{
 			Id: cidrToIPPoolID(key),
@@ -338,6 +347,7 @@ func (buf *EventBuffer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) 
 }
 
 func (buf *EventBuffer) OnIPPoolRemove(key model.IPPoolKey) {
+	log.WithField("key", key).Debug("IPPool removed")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.IPAMPoolRemove{
 			Id: cidrToIPPoolID(key),
