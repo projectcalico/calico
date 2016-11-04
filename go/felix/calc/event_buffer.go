@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"strings"
 )
 
 type EventHandler func(message interface{})
@@ -311,6 +312,10 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 }
 
 func (buf *EventBuffer) OnHostIPUpdate(hostname string, ip *net.IP) {
+	log.WithFields(log.Fields{
+		"hostname": hostname,
+		"ip":       ip,
+	}).Debug("HostIP update")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.HostMetadataUpdate{
 			Hostname: hostname,
@@ -319,10 +324,38 @@ func (buf *EventBuffer) OnHostIPUpdate(hostname string, ip *net.IP) {
 }
 
 func (buf *EventBuffer) OnHostIPRemove(hostname string) {
+	log.WithField("hostname", hostname).Debug("HostIP removed")
 	buf.pendingUpdates = append(buf.pendingUpdates,
 		&proto.HostMetadataRemove{
 			Hostname: hostname,
 		})
+}
+
+func (buf *EventBuffer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPool) {
+	log.WithFields(log.Fields{
+		"key":  key,
+		"pool": pool,
+	}).Debug("IPPool update")
+	buf.pendingUpdates = append(buf.pendingUpdates,
+		&proto.IPAMPoolUpdate{
+			Id: cidrToIPPoolID(key),
+			Pool: &proto.IPAMPool{
+				Cidr:       pool.CIDR.String(),
+				Masquerade: pool.Masquerade,
+			},
+		})
+}
+
+func (buf *EventBuffer) OnIPPoolRemove(key model.IPPoolKey) {
+	log.WithField("key", key).Debug("IPPool removed")
+	buf.pendingUpdates = append(buf.pendingUpdates,
+		&proto.IPAMPoolRemove{
+			Id: cidrToIPPoolID(key),
+		})
+}
+
+func cidrToIPPoolID(key model.IPPoolKey) string {
+	return strings.Replace(key.CIDR.String(), "/", "-", 1)
 }
 
 func tierInfoToProtoTierInfo(filteredTiers []tierInfo) []*proto.TierInfo {

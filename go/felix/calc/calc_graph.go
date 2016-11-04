@@ -52,9 +52,11 @@ type configCallbacks interface {
 	OnDatastoreNotReady()
 }
 
-type hostIPCallbacks interface {
+type passthruCallbacks interface {
 	OnHostIPUpdate(hostname string, ip *net.IP)
 	OnHostIPRemove(hostname string)
+	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
+	OnIPPoolRemove(model.IPPoolKey)
 }
 
 type PipelineCallbacks interface {
@@ -62,7 +64,7 @@ type PipelineCallbacks interface {
 	rulesUpdateCallbacks
 	endpointCallbacks
 	configCallbacks
-	hostIPCallbacks
+	passthruCallbacks
 }
 
 func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDispatcher *dispatcher.Dispatcher) {
@@ -166,7 +168,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	polResolver.Callbacks = callbacks
 
 	// Register for host IP updates.
-	hostIPPassthru := NewHostIPPassthru(callbacks)
+	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 
 	// Register for config updates.
@@ -185,26 +187,42 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
 
-type HostIPPassthru struct {
-	callbacks hostIPCallbacks
+type DataplanePassthru struct {
+	callbacks passthruCallbacks
 }
 
-func NewHostIPPassthru(callbacks hostIPCallbacks) *HostIPPassthru {
-	return &HostIPPassthru{callbacks: callbacks}
+func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
+	return &DataplanePassthru{callbacks: callbacks}
 }
 
-func (h *HostIPPassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
+func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
+	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
 }
 
-func (h *HostIPPassthru) OnUpdate(update api.Update) (filterOut bool) {
-	hostname := update.Key.(model.HostIPKey).Hostname
-	if update.Value == nil {
-		h.callbacks.OnHostIPRemove(hostname)
-	} else {
-		ip := update.Value.(*net.IP)
-		h.callbacks.OnHostIPUpdate(hostname, ip)
+func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
+	switch key := update.Key.(type) {
+	case model.HostIPKey:
+		hostname := key.Hostname
+		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through HostIP deletion")
+			h.callbacks.OnHostIPRemove(hostname)
+		} else {
+			log.WithField("update", update).Debug("Passing-through HostIP update")
+			ip := update.Value.(*net.IP)
+			h.callbacks.OnHostIPUpdate(hostname, ip)
+		}
+	case model.IPPoolKey:
+		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through IPPool deletion")
+			h.callbacks.OnIPPoolRemove(key)
+		} else {
+			log.WithField("update", update).Debug("Passing-through IPPool update")
+			pool := update.Value.(*model.IPPool)
+			h.callbacks.OnIPPoolUpdate(key, pool)
+		}
 	}
+
 	return false
 }
 

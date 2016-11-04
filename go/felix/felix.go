@@ -626,6 +626,10 @@ func (fc *DataplaneConn) marshalToDataplane(msg interface{}) {
 		envelope.Payload = &proto.ToDataplane_HostMetadataUpdate{msg}
 	case *proto.HostMetadataRemove:
 		envelope.Payload = &proto.ToDataplane_HostMetadataRemove{msg}
+	case *proto.IPAMPoolUpdate:
+		envelope.Payload = &proto.ToDataplane_IpamPoolUpdate{msg}
+	case *proto.IPAMPoolRemove:
+		envelope.Payload = &proto.ToDataplane_IpamPoolRemove{msg}
 	default:
 		log.WithField("msg", msg).Panic("Unknown message type")
 	}
