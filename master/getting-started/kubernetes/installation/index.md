@@ -55,7 +55,7 @@ wget http://www.projectcalico.org/builds/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run
 ```
 
 See the [`calicoctl node` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/)
@@ -67,7 +67,7 @@ If you're using systemd as your init system then the following service file can 
 
 ```bash
 [Unit]
-Description=calicoctl node
+Description=calicoctl node run
 After=docker.service
 Requires=docker.service
 
@@ -77,7 +77,7 @@ Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
 ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
 ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-ExecStart=/opt/bin/calicoctl node --detach=false
+ExecStart=/opt/bin/calicoctl node run --detach=false
 Restart=always
 RestartSec=10
 

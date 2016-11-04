@@ -42,7 +42,7 @@ Now that etcd is running, we can run Calico.
 
 Now, start the Calico node service on each node in the cluster.
 
-    $ sudo ETCD_AUTHORITY=$MANAGER_IP:2379 calicoctl node --libnetwork --ip=$NODE_IP
+    $ sudo ETCD_AUTHORITY=$MANAGER_IP:2379 calicoctl node run --ip=$NODE_IP
 
 ## 4. Configure Swarm Cluster
 
@@ -101,13 +101,20 @@ Then, we will configure three networks using the Calico network and Calico
 IPAM drivers. Note that we need to first create a pool of allowable IP
 addresses for the containers. Here we create a pool with CIDR 192.168.0.0/16.
 
-    $ calicoctl pool add 192.168.0.0/16
+```
+$ cat << EOF | calicoctl create -f -
+> - apiVersion: v1
+>   kind: ipPool
+>   metadata:
+>     cidr: 192.168.0.0/16
+> EOF
+```
 
 To create the networks, run:
 
-    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico net1
-    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico net2
-    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico net3
+    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico-ipam net1
+    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico-ipam net2
+    $ docker -H $MANAGER_IP:$SWARM_PORT network create --driver=calico --ipam-driver calico-ipam net3
 
 Now, let's create some containers on our cluster. Run the following commands on
 your client.
