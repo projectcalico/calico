@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash -xe
 
 # Automatically update the codebase for a new release, and (locally) commit
 # those changes.

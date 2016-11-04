@@ -186,7 +186,9 @@ calico-build/python:
 update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
 	$(MAKE) calico-build/python
 	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	    "pip --no-cache-dir install -U -r requirements.txt -r test_requirements.txt && pip --no-cache-dir freeze > requirements_frozen.txt && chown $(MY_UID):$(MY_GID) requirements_frozen.txt"
+	"pip --no-cache-dir install -U -r requirements.txt -r test_requirements.txt"\
+	" && pip --no-cache-dir freeze > requirements_frozen.txt"\
+	" && chown $(MY_UID):$(MY_GID) requirements_frozen.txt"
 
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: calico/felix
@@ -324,7 +326,10 @@ dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt do
 
 	# Create and run build container.
 	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	    'pip install . && ../docker-build-images/pyi/run-pyinstaller.sh && rm -rf ../build `find . -name "*.pyc"` && chown -R $(MY_UID):$(MY_GID) ../dist'
+	'pip install .'\
+	' && ../docker-build-images/pyi/run-pyinstaller.sh'\
+	' && rm -rf ../build `find . -name "*.pyc"`'\
+	' && chown -R $(MY_UID):$(MY_GID) ../dist'
 
 	# Check that the build succeeded and update the mtimes on the target file
 	# since pyinstaller doesn't seem to do so.
@@ -357,7 +362,9 @@ ut: python-ut go-ut
 python-ut: python/calico/felix/felixbackend_pb2.py
 	$(MAKE) calico-build/python
 	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	    "pip install . && COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh && chown -R $(MY_UID):$(MY_GID) coverage.xml .coverage htmlcov"
+	"pip install ."\
+	" && COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh"\
+	" && chown -R $(MY_UID):$(MY_GID) coverage.xml .coverage htmlcov"
 
 .PHONY: go-ut
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
