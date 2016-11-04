@@ -5,7 +5,6 @@ order: 2
 toc:
 - title: Using Calico
   path: /usage/
-
 - title: Configuration
   path: /usage/configuration/
 - title: Advanced Network Policy

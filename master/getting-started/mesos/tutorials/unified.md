@@ -3,8 +3,9 @@ title: Networking Mesos Tasks with Calico-CNI
 ---
 
 ## Prerequisites
+
 This guide assumes you have a running Mesos Cluster whereby each Agent has
-CNI enabled, and Calico services and binaries are installed. See [Adding Calico-CNI to an existing Mesos Cluster]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified), or use the [Docker-Compose Demo Cluster]({{site.baseurl}}/{{page.version}}/getting-started/mesos/demos/cni/) to meet these requirements.
+CNI enabled, and Calico services and binaries are installed. See [Adding Calico-CNI to an existing Mesos Cluster]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified).
 
 ## Getting started
 
@@ -25,14 +26,14 @@ cat <<EOF > $NETWORK_CNI_CONFIG_DIR/calico-net-1.conf
 EOF
 ```
 
-> Note: If you have used the Docker-Compose demo to launch a cluster, this network configuration has already been created for you.
-
 Mesos-Agent loads these network configurations into memory at launch, so you will need to restart the Agent process for your new configuration to take effect.
 
 ## 2. Launch a Calico-Networked Task
+
 With your CNI network configured, you are now ready to launch tasks on it. There are several common methods you can use to do so.
 
 #### a.) Using Mesos-Execute
+
 To quickly test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
 
 ```shell
@@ -46,6 +47,7 @@ mesos-execute --containerizer=mesos \
 The task will have been successfully networked by Calico if its return code is `0`. Additionally, the task's `stdout` log should show an IP address from the default Calico pool: `192.168.0.0/16`
 
 #### b.) Using Marathon
+
 In Marathon v1.2.0+, set the task's `ipAddress.networkName` to the name of the CNI network:
 
 ```shell

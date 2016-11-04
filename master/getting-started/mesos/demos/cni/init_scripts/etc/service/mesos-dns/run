@@ -1,6 +1,0 @@
-#!/bin/sh
-
-ip addr add 192.168.255.254/32 dev lo
-
-# Start mesos-dns on this agent
-exec mesos-dns -config=/etc/config/mesos-dns.json
