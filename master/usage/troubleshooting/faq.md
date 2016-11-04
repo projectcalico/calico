@@ -50,6 +50,14 @@ interface.  This makes the host behave like a gateway, responding to
 ARPs for 169.245.1.1 without having to actually allocate the IP address 
 to the interface.
 
+## Can I prevent my Kubernetes pods from initiating outgoing connections?
+
+The Kubernetes [NetworkPolicy]() API doesn't currently support this.  However,
+Calico does!  You can use `calicoctl` to configure egress policy to prevent
+Kubernetes pods from initiating outgoing connections based on the full set of 
+supported Calico policy primitives including labels, Kubernetes namespaces,
+CIDRs, and ports.
+
 ## I've heard Calico uses proxy ARP, doesn't proxy ARP cause a lot of problems?
 
 It can, but not in the way that Calico uses it.
