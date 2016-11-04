@@ -20,8 +20,6 @@ toc:
   path: /usage/configuration/securing-calico
 - title: IPv6
   path: /usage/ipv6
-- title: Dockerless Calico
-  path: /usage/dockerless-calico
 - title: External Connectivity
   path: /usage/external-connectivity
 - title: Exposing Ports
