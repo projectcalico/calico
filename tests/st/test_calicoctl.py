@@ -865,6 +865,7 @@ class InvalidData(TestBase):
                                 'profiles': ['prof1',
                                              'prof2']}
                    }),
+                   # https://github.com/projectcalico/libcalico-go/pull/236/files
                    ("policy-invalidHighPortinList", {
                        'apiVersion': 'v1',
                        'kind': 'policy',
@@ -881,6 +882,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}}),
+                   # https://github.com/projectcalico/libcalico-go/issues/248
                    ("policy-invalidHighPortinRange", {
                        'apiVersion': 'v1',
                        'kind': 'policy',
@@ -1070,19 +1072,29 @@ class InvalidData(TestBase):
     def test_invalid_profiles_rejected(self, name, testdata):
 
         with DockerHost('host', dind=False, start_calico=False) as host:
+            commanderror = False
             def check_no_data_in_store(testdata):
                 out = host.calicoctl(
                     "get %s --output=yaml" % testdata['kind'])
                 output = yaml.safe_load(out)
                 assert output == [], "Testdata has left data in datastore " \
-                                     "instead of being completely rejected"
+                                     "instead of being completely " \
+                                     "rejected:\n" \
+                                     "Injected: %s\n" \
+                                     "Got back: %s" % (testdata, output)
 
             host.writefile("testfile.yaml", testdata)
-            self.assertRaises(CommandExecError,
-                              host.calicoctl,
-                              "create -f testfile.yaml")
+            try:
+                host.calicoctl("create -f testfile.yaml")
+            except CommandExecError:
+                logger.debug("calicoctl error hit, as expected")
+                commanderror = True
+
             if name.startswith('compound'):
                 for data in testdata:
                     check_no_data_in_store(data)
             else:
                 check_no_data_in_store(testdata)
+
+            # Cover the case where no data got stored, but calicoctl didn't fail:
+            assert commanderror is True, "Failed - calicoctl did not fail to add invalid config"
