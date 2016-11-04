@@ -41,8 +41,8 @@ cd ${unpacked_src_dir}
 # *.so exclusion removed.
 excludes='-I*/*~ -I,,* -I.[#~]* -I.git -I.gitattributes -I.gitignore -I.gitmodules -I.gitreview'
 
-debuild -i="" $excludes -us -uc -b
-debuild -i="" $excludes -us -uc -S
+debuild --no-lintian -i="" $excludes -us -uc -b
+debuild --no-lintian --no-tgz-check -i="" $excludes -us -uc -S
 
 set +x
 echo
