@@ -43,10 +43,9 @@ var logrusToSyslogLevel = map[log.Level]syslog.Priority{
 	log.PanicLevel: syslog.LOG_CRIT,
 }
 
-// ConfigureEarlyLogging does minimal logging config for early startup.
-// It either disables non-panic logging entirely or, if the
-// FELIX_LOGSEVERITYSCREEN environment variable is set, enables the given log
-// level to screen.
+// ConfigureEarlyLogging installs our logging adapters, and enables early logging to stderr
+// if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
+// environment variable.
 func ConfigureEarlyLogging() {
 	// Replace logrus' formatter with a custom one using our time format,
 	// shared with the Python code.
@@ -55,11 +54,24 @@ func ConfigureEarlyLogging() {
 	// Install a hook that adds file/line no information.
 	log.AddHook(&ContextHook{})
 
-	logLevelScreen := log.PanicLevel
-	if rawLogLevel := os.Getenv("FELIX_LOGSEVERITYSCREEN"); rawLogLevel != "" {
+	// First try the early-only environment variable.  Since the normal
+	// config processing doesn't know about that variable, normal config
+	// will override it once it's loaded.
+	rawLogLevel := os.Getenv("FELIX_EARLYLOGSEVERITYSCREEN")
+	if rawLogLevel == "" {
+		// Early-only flag not set, look for the normal config-owned
+		// variable.
+		rawLogLevel = os.Getenv("FELIX_LOGSEVERITYSCREEN")
+	}
+
+	// Default to logging errors.
+	logLevelScreen := log.ErrorLevel
+	if rawLogLevel != "" {
 		parsedLevel, err := log.ParseLevel(rawLogLevel)
 		if err == nil {
 			logLevelScreen = parsedLevel
+		} else {
+			log.WithError(err).Error("Failed to parse early log level, defaulting to error.")
 		}
 	}
 	log.SetLevel(logLevelScreen)
