@@ -1,9 +1,0 @@
-#!/bin/bash
-
-# From https://github.com/jpetazzo/dind
-
-# If a pidfile is still around (for example after a container restart),
-# delete it so that docker can start.
-rm -rf /var/run/docker.pid
-DOCKER_DAEMON_ARGS="--bip=10.255.0.1/16"
-docker daemon $DOCKER_DAEMON_ARGS > /var/log/docker.log
