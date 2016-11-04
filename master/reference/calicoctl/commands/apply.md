@@ -27,8 +27,8 @@ Options:
   -h --help                 Show this screen.
   -f --filename=<FILENAME>  Filename to use to apply the resource.  If set to
                             "-" loads from stdin.
-  -c --config=<CONFIG>      Filename containing connection configuration in
-                            YAML or JSON format.
+  -c --config=<CONFIG>      Path to the file containing connection
+                            configuration in YAML or JSON format.
                             [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -79,8 +79,8 @@ Successfully applied 2 'policy' resource(s)
 ### General options
 
 ```
--c --config=<CONFIG>      Filename containing connection configuration in
-                          YAML or JSON format.
+-c --config=<CONFIG>      Path to the file containing connection
+                          configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
 

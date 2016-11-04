@@ -18,8 +18,9 @@ Usage:
 Options:
   -h --help             Show this screen.
      --ip=<IP>          IP address to show.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format. [default: /etc/calico/calicoctl.cfg]
+-c --config=<CONFIG>    Path to the file containing connection
+                        configuration in YAML or JSON format.
+                        [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam show command prints information about a given IP address, such as
@@ -48,8 +49,9 @@ No attributes defined for 192.168.1.1
 ### General options
 
 ```
--c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format. [default: /etc/calico/calicoctl.cfg]
+-c --config=<CONFIG>       Path to the file containing connection
+                           configuration in YAML or JSON format.
+                           [default: /etc/calico/calicoctl.cfg]
 ```
 
 ## See also

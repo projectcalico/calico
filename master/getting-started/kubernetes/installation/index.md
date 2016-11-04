@@ -67,7 +67,7 @@ If you're using systemd as your init system then the following service file can 
 
 ```bash
 [Unit]
-Description=calicoctl node run
+Description=calico node
 After=docker.service
 Requires=docker.service
 
@@ -75,9 +75,7 @@ Requires=docker.service
 User=root
 Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStartPre=/usr/bin/wget -N -P /opt/bin http://www.projectcalico.org/builds/calicoctl
-ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
-ExecStart=/opt/bin/calicoctl node run --detach=false
+ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node -e ETCD_ENDPOINTS= -e HOSTNAME=${HOSTNAME} -e IP= -e NO_DEFAULT_POOLS= -e AS= -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e CALICO_LIBNETWORK_ENABLED=true -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico calico/node:latest
 Restart=always
 RestartSec=10
 
