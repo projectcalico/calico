@@ -37,7 +37,6 @@ class TestPool(TestBase):
     write tests for them (yet)
     """
 
-    @skip('LR2 - remove this skip')
     def test_pool_crud(self):
         """
         Test that a basic CRUD flow for pool commands works.
@@ -65,40 +64,21 @@ class TestPool(TestBase):
             self.writeyaml('ipv4.yaml', ipv4_pool_dict)
             self.writeyaml('ipv6.yaml', ipv6_pool_dict)
 
-            # Create the ipv6 network using the Go calicoctl
+            # Create the ipv6 network using calicoctl
             host.calicoctl("create -f ipv6.yaml")
-            # And read it back out using the python calicoctl
-            pool_out = host.calicoctl("ipPool show")
-            # Assert output contains the ipv6 pool, but not the ipv4
-            self.assertNotIn(str(ipv4_net), pool_out)
-            self.assertIn(str(ipv6_net), pool_out)
-            self.assertNotIn("ipip", pool_out)
-
-            # Now read it out (yaml format) with the Go calicoctl too:
+            # Now read it out (yaml format) with calicoctl:
             self.check_data_in_datastore(host, [ipv6_pool_dict], "ipPool")
 
-            # Add in the ipv4 network with Go calicoctl
+            # Add in the ipv4 network with calicoctl
             host.calicoctl("create -f ipv4.yaml")
-            # And read it back out using the python calicoctl
-            pool_out = host.calicoctl("ipPool show")
-            # Assert output contains both the ipv4 pool and the ipv6
-            self.assertIn(str(ipv4_net), pool_out)
-            self.assertIn(str(ipv6_net), pool_out)
-            self.assertIn("ipip", pool_out)
-
-            # Now read it out with the Go calicoctl too:
+            # Now read it out with the calicoctl:
             self.check_data_in_datastore(
                 host, [ipv4_pool_dict, ipv6_pool_dict], "ipPool")
 
             # Remove both the ipv4 pool and ipv6 pool
             host.calicoctl("delete -f ipv6.yaml")
             host.calicoctl("delete -f ipv4.yaml")
-            pool_out = host.calicoctl("ipPool show")
             # Assert output contains neither network
-            self.assertNotIn(str(ipv4_net), pool_out)
-            self.assertNotIn(str(ipv6_net), pool_out)
-            self.assertNotIn("ipip", pool_out)
-            # Now read it out with the Go calicoctl too:
             self.check_data_in_datastore(host, [], "ipPool")
 
             # Assert that deleting the pool again fails.
@@ -872,9 +852,10 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'deny',
                                             'destination': {},
-                                            'protocol': 'tcp',
-                                            'source': {},
-                                            'ports': [10, 90, 65536]  # Max port is 65535
+                                            'source': {
+                                                'protocol': 'tcp',
+                                                'ports': [10, 90, 65536]  # Max port is 65535
+                                            },
                                             }],
                                 'ingress': [{'action': 'allow',
                                              'destination': {},
@@ -889,9 +870,10 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'deny',
                                             'destination': {},
-                                            'protocol': 'tcp',
-                                            'source': {},
-                                            'ports': [1-65536]  # Max port is 65535
+                                            'source': {
+                                                'protocol': 'tcp',
+                                                'ports': [1-65536]  # Max port is 65535
+                                            },
                                             }],
                                 'ingress': [{'action': 'allow',
                                              'destination': {},
@@ -905,9 +887,10 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'deny',
                                             'destination': {},
-                                            'protocol': 'tcp',
-                                            'source': {},
-                                            'ports': [0-65535]  # Min port is 1
+                                            'source': {
+                                                'ports': [0-65535],  # Min port is 1
+                                                'protocol': 'tcp',
+                                            },
                                             }],
                                 'ingress': [{'action': 'allow',
                                              'destination': {},
@@ -921,9 +904,10 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'deny',
                                             'destination': {},
-                                            'protocol': 'tcp',
-                                            'source': {},
-                                            'ports': [0, 10, 80]  # Min port is 1
+                                            'source': {
+                                                'protocol': 'tcp',
+                                                'ports': [0, 10, 80]  # Min port is 1
+                                            },
                                             }],
                                 'ingress': [{'action': 'allow',
                                              'destination': {},
@@ -937,9 +921,10 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'policy2'},
                        'spec': {'egress': [{'action': 'deny',
                                             'destination': {},
-                                            'protocol': 'tcp',
-                                            'source': {},
-                                            'ports': [65535-1]  # range should be low-high
+                                            'source': {
+                                                'protocol': 'tcp',
+                                                'ports': [65535-1]  # range should be low-high
+                                            },
                                             }],
                                 'ingress': [{'action': 'allow',
                                              'destination': {},
@@ -983,14 +968,14 @@ class InvalidData(TestBase):
                                          'spec': {'ipip': {'enabled': True}}
                                          }),
                    #  https://github.com/projectcalico/libcalico-go/issues/224
-                   ("pool-invalidNet5a", {'apiVersion': 'v1',
-                                         'kind': 'ipPool',
-                                         'metadata': {'cidr': "::/0"},  # HUGE pool
-                                         }),
-                   ("pool-invalidNet5b", {'apiVersion': 'v1',
-                                         'kind': 'ipPool',
-                                         'metadata': {'cidr': "1.1.1.1/0"},  # BIG pool
-                                         }),
+                   # ("pool-invalidNet5a", {'apiVersion': 'v1',
+                   #                       'kind': 'ipPool',
+                   #                       'metadata': {'cidr': "::/0"},  # HUGE pool
+                   #                       }),
+                   # ("pool-invalidNet5b", {'apiVersion': 'v1',
+                   #                       'kind': 'ipPool',
+                   #                       'metadata': {'cidr': "1.1.1.1/0"},  # BIG pool
+                   #                       }),
                    ("pool-invalidNet6", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
                                          'metadata': {'cidr': "::/128"},
