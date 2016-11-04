@@ -5,10 +5,6 @@ title: Advanced Network Policy
 Calico endpoints are assigned their network policy by configuring them with a
 policy profile.  
 
-In the [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/installation),
-the profiles are created under-the-covers as part of the Docker network
-creation (available natively in Docker 1.9 and above).
-
 By default, a Calico profile is created with rules and tags (identifiers) such
 that endpoints with the same profile can all communicate with one another.  
 In this tutorial, we look at how to customize policy profiles for more advanced
