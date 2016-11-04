@@ -12,6 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// IPAM AutoAssign from different pools:
+// Step-1: AutoAssign 1 IP from pool1 - expect that the IP is from pool1.
+// Step-2: AutoAssign 1 IP from pool2 - expect that the IP is from pool2.
+// Step-3: AutoAssign 1 IP from pool1 (second time) - expect that the
+// IP is from from the same block as the first IP from pool1.
+// Step-4: AutoAssign 1 IP from pool2 (second time) - expect that the
+// IP is from from the same block as the first IP from pool2.
+
 // Test cases (AutoAssign):
 // Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
 // Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses
@@ -63,12 +71,15 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/backend"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
@@ -92,9 +103,109 @@ type testArgsClaimAff struct {
 
 var _ = Describe("IPAM tests", func() {
 
+	Describe("IPAM AutoAssign from different pools", func() {
+		testutils.CleanEtcd()
+		c, _ := testutils.NewClient("")
+		ic := setupIPAMClient(true)
+
+		host := "host-A"
+		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
+		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+		var block1, block2 cnet.IPNet
+
+		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
+		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
+
+		// Step-1: AutoAssign 1 IP from pool1 - expect that the IP is from pool1.
+		Context("AutoAssign 1 IP from pool1", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				IPv4Pool: &pool1,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			blocks := getAffineBlocks(host)
+
+			for _, b := range blocks {
+				if pool1.Contains(b.IPNet.IP) {
+					block1 = b
+				}
+			}
+
+			It("should be from pool1", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(pool1.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-2: AutoAssign 1 IP from pool2 - expect that the IP is from pool2.
+		Context("AutoAssign 1 IP from pool2", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				IPv4Pool: &pool2,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			blocks := getAffineBlocks(host)
+
+			for _, b := range blocks {
+				if pool2.Contains(b.IPNet.IP) {
+					block2 = b
+				}
+			}
+
+			It("should be from pool2", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-3: AutoAssign 1 IP from pool1 (second time) - expect that the
+		// IP is from from the same block as the first IP from pool1.
+		Context("AutoAssign 1 IP from pool1 (second time)", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				IPv4Pool: &pool1,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			It("should be a from the same block as the first IP from pool1", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(block1.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-4: AutoAssign 1 IP from pool2 (second time) - expect that the
+		// IP is from from the same block as the first IP from pool2.
+		Context("AutoAssign 1 IP from pool2 (second time)", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				IPv4Pool: &pool2,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			It("should be a from the same block as the first IP pool2", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+	})
+
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
-		func(host string, cleanEnv bool, pool []string, inv4, inv6, expv4, expv6 int, expError error) {
-			outv4, outv6, outError := testIPAMAutoAssign(inv4, inv6, host, cleanEnv, pool)
+		func(host string, cleanEnv bool, pool []string, usePool string, inv4, inv6, expv4, expv6 int, expError error) {
+			outv4, outv6, outError := testIPAMAutoAssign(inv4, inv6, host, cleanEnv, pool, usePool)
 			Expect(outv4).To(Equal(expv4))
 			Expect(outv6).To(Equal(expv6))
 			if expError != nil {
@@ -103,26 +214,26 @@ var _ = Describe("IPAM tests", func() {
 		},
 
 		// Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
-		Entry("1 v4 1 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, 1, 1, 1, 1, nil),
+		Entry("1 v4 1 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 1, 1, 1, 1, nil),
 
 		// Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses.
-		Entry("256 v4 256 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, 256, 256, 256, 256, nil),
+		Entry("256 v4 256 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 256, 256, 256, 256, nil),
 
 		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and no error.
-		Entry("257 v4 0 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, 257, 0, 256, 0, nil),
+		Entry("257 v4 0 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 257, 0, 256, 0, nil),
 
 		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and no error.
-		Entry("0 v4 257 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, 0, 257, 0, 256, nil),
+		Entry("0 v4 257 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 0, 257, 0, 256, nil),
 
 		// Test 5: (use pool of size /25 so only two blocks are contained):
 		// - Assign 1 address on host A (Expect 1 address).
-		Entry("1 v4 0 v6 host-A", "host-A", true, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, 1, 0, 1, 0, nil),
+		Entry("1 v4 0 v6 host-A", "host-A", true, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.1/25", 1, 0, 1, 0, nil),
 
 		// - Assign 1 address on host B (Expect 1 address, different block).
-		Entry("1 v4 0 v6 host-B", "host-B", false, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, 1, 0, 1, 0, nil),
+		Entry("1 v4 0 v6 host-B", "host-B", false, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.1/25", 1, 0, 1, 0, nil),
 
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
-		Entry("64 v4 0 v6 host-A", "host-A", false, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, 64, 0, 64, 0, nil),
+		Entry("64 v4 0 v6 host-A", "host-A", false, []string{"10.0.0.1/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.1/25", 64, 0, 64, 0, nil),
 	)
 
 	DescribeTable("AssignIP: requested IP vs returned error",
@@ -312,12 +423,13 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 
 // testIPAMAutoAssign takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
 // then it calls AutoAssign (function under test) and returns the number of returned IPv4 and IPv6 addresses and returned error.
-func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string) (int, int, error) {
-
+func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string, usePool string) (int, int, error) {
+	fromPool := testutils.MustParseCIDR(usePool)
 	args := client.AutoAssignArgs{
 		Num4:     inv4,
 		Num6:     inv6,
 		Hostname: host,
+		IPv4Pool: &fromPool,
 	}
 
 	if cleanEnv {
@@ -369,4 +481,27 @@ func assignIPutil(ic client.IPAMInterface, assignIP net.IP, host string) {
 			Fail(fmt.Sprintf("Error assigning IP %s", assignIP))
 		}
 	}
+}
+
+// getAffineBlocks gets all the blocks affined to the host passed in.
+func getAffineBlocks(host string) []cnet.IPNet {
+	opts := model.BlockAffinityListOptions{Host: host, IPVersion: 4}
+	compatClient, err := backend.NewClient(api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig})
+
+	datastoreObjs, err := compatClient.List(opts)
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			log.Printf("No affined blocks found")
+		} else {
+			Expect(err).NotTo(HaveOccurred(), "Error getting affine blocks: %s", err)
+		}
+	}
+
+	// Iterate through and extract the block CIDRs.
+	blocks := []cnet.IPNet{}
+	for _, o := range datastoreObjs {
+		k := o.Key.(model.BlockAffinityKey)
+		blocks = append(blocks, k.CIDR)
+	}
+	return blocks
 }
