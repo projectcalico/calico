@@ -22,3 +22,8 @@ birdcl
 gobgp
 calico_node/bin
 calicoctl/calicoctl
+bin
+release
+*.coverprofile
+vendor
+calicoctl_build_container.created

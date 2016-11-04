@@ -1,7 +1,6 @@
 <!--- master only -->
 [![Build Status](https://semaphoreci.com/api/v1/calico/calico-containers/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/calico-containers)
 [![CircleCI branch](https://img.shields.io/circleci/project/projectcalico/calico-containers/master.svg?label=calicoctl)](https://circleci.com/gh/projectcalico/calico-containers/tree/master)
-[![Coverage Status](https://coveralls.io/repos/github/projectcalico/calico-containers/badge.svg?branch=master)](https://coveralls.io/github/projectcalico/calico-containers?branch=master)
 [![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
 [![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
 
@@ -36,26 +35,50 @@ This repository contains:
    and start the Calico service listed above, and allows you to interact with
    the datastore (etcd) to define and apply rich security policy to the
    containers you create.
--  Build, test and release frameworks.
 
-## Getting Started
+Please refer to our [main documentation](http://docs.projectcalico.org) for details on deploying Calico and 
+using `calicoctl`.
 
-**For more information on deploying and using calico, see [Calico Documentation](http://docs.projectcalico.org).**
+## Common set-up
 
-## Contact
+Assuming you have already installed **go version 1.7.1+**, perform the following simple steps to get building:
 
-We welcome questions/comments/feedback (and pull requests).
+- [Install Glide](https://github.com/Masterminds/glide#install)
 
-* [Slack Calico Users Channel](https://slack.projectcalico.org)
-* [Announcement Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org)
-* [Technical Mailing List](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
-* IRC - [#calico](https://kiwiirc.com/client/irc.freenode.net/#calico)
-* For issues related to Calico in a containerized environment, please
-[raise issues](https://github.com/projectcalico/calico-containers/issues/new) on
-GitHub.
+- Clone this repository to your Go project path: 
+```
+git clone git@github.com:projectcalico/calico-containers.git $GOPATH/src/github.com/projectcalico/calico-containers
+```
 
-## Contributing
+- Switch to your project directory:
+```
+cd $GOPATH/src/github.com/projectcalico/calico-containers
+```
 
-If you are interested in contributing, please review our [contributing guidelines](CONTRIBUTING.md).
+- Populate the `vendor/` directory in the project's root with this project's dependencies:
+```
+glide install
+```
 
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+## Building calicoctl
+
+### Non-release build
+To do a quick, non-release build of calicoctl, suitable for local testing, run
+```
+make bin/calicoctl
+```
+
+The binary will be put in ./bin:
+```
+./bin/calicoctl --help
+```
+
+### Release build
+
+For releases, we use a Docker-based build to ensure a clean environment with an appropriate glibc.  Specifically, we use a CentOS 6.6 container image to build against glibc v2.12.  this ensures compatibility with any later glibc.
+
+To do a release build, run:
+```
+make release/calicoctl
+```
+The binary will be emitted to `./release/calicoctl-<version>`

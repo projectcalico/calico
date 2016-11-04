@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: bgpPeer
+metadata:
+  scope: node
+  node: Node1
+  peerIP: aa:bb::ff
+spec:
+  asNumber: 64514
+
