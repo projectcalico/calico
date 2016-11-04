@@ -62,6 +62,10 @@ class MultiHostMainline(TestBase):
           each host assigned to that network.
         - Check that hosts on the same network can ping each other.
         - Check that hosts on different networks cannot ping each other.
+        - Modify the profile rules
+        - Check that connectivity has changed to match the profile we set up
+        - Re-apply the original profile
+        - Check that connectivity goes back to what it was originally.
         """
         with DockerHost("host1",
                         additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
