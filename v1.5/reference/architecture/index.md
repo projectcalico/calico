@@ -2,12 +2,11 @@
 title: Calico Architecture
 ---
 
-This document discusses the various pieces of the Calico etcd-based
-architecture, with a focus on what specific role each component plays in
-the Calico network. This does not discuss the Calico etcd data model,
-which also acts as the primary API into the Calico network: for more on
-that, see the [data model]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
+This document discusses the various pieces of the Calico's architecture, 
+with a focus on what specific role each component plays in
+the Calico network. 
 
+<!-- TODO(smc) data-model: Link to new data model docs. -->
 
 # Components
 
@@ -92,8 +91,7 @@ The orchestrator plugin is responsible for the following tasks:
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
-APIs into the Calico etcd data model (see the [data model]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model)) to allow
-Calico to perform the appropriate network programming.
+APIs into Calico's data-model and then store it in Calico's datastore.
 
 Some of this translation will be very simple, other bits may be more
 complex in order to render a single complex operation (e.g. live

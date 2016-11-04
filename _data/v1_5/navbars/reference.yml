@@ -49,12 +49,6 @@ toc:
       path: /reference/private-cloud/l3-interconnect-fabric
     - title: Troubleshooting
       path: /reference/private-cloud/troubleshooting
-- title: Data Model
-  section:
-    - title: Overview
-      path: /reference/etcd/data-model
-    - title: Structure
-      path: /reference/etcd/structure
 - title: Architecture
   section:
   - title: Introduction
