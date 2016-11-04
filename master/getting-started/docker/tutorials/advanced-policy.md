@@ -14,7 +14,7 @@ driver creates a profile object for that network.  The default policy applied
 by Calico when a new network is created allows communication between all 
 containers connected to that network, and no communication from other networks.
 
-Using the standard `calicoctl create` with a `profile` resource, it is possible to 
+Using the standard `calicoctl create` to create a `profile` resource, it is possible to 
 manage the feature-rich policy associated with a network.
 
 > Note that if you want to access the feature rich Calico policy, you must use

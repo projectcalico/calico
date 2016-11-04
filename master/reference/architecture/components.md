@@ -66,8 +66,4 @@ Calico uses a fork of the main confd repo which includes an additional change
 to improve performance with the handling of watch prefixes 
 [calico-bird repo](https://github.com/projectcalico/calico-bird) for more details.
 
-## In Practice
-
-For a detailed look at how each component works when adding Docker containers 
-to Calico networking, check out the [Lifecycle of a Docker Default Container]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/docker-container-lifecycle) page.
 
