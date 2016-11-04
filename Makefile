@@ -150,6 +150,10 @@ routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output routereflector.tar calico/routereflector:latest
 
+workload.tar:
+	cd workload && docker build -t workload .
+	docker save --output workload.tar workload
+
 ## Run etcd in a container. Used by the STs and generally useful.
 run-etcd-st:
 	$(MAKE) stop-etcd
@@ -189,7 +193,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar run-etcd-st
+st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-st
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
