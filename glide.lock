@@ -1,5 +1,5 @@
 hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-11-03T16:24:49.767096088Z
+updated: 2016-11-04T15:25:16.21788654Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -107,7 +107,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 07933e320e9c551090fb2b4ef0680d8320c4345f
+  version: 3481b1ea6e5446a0d32c482349af68bcc12461eb
   subpackages:
   - lib
   - lib/api
@@ -136,7 +136,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/termie/go-shutil
@@ -206,7 +206,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 - name: k8s.io/kubernetes
-  version: 909e19b88ea1728c5c9b0dd42ecc7b78827c59e1
+  version: 00269a6c605975d46ab33c50af5e320f75f6735c
   subpackages:
   - pkg/api
   - pkg/api/errors
@@ -247,7 +247,7 @@ imports:
   - pkg/apis/extensions/v1beta1
   - pkg/apis/policy
   - pkg/apis/policy/install
-  - pkg/apis/policy/v1alpha1
+  - pkg/apis/policy/v1beta1
   - pkg/apis/rbac
   - pkg/apis/rbac/install
   - pkg/apis/rbac/v1alpha1
