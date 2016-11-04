@@ -25,8 +25,7 @@ calico_node_ver = "latest"
 # Script to write out the Calico environment file.
 $write_calico_env=<<SCRIPT
 cat <<EOF > /etc/sysconfig/calico
-ETCD_AUTHORITY=${1}:2379
-ETCD_SCHEME=http
+ETCD_ENDPOINTS=http://${1}:2379
 ETCD_CA_FILE=""
 ETCD_CERT_FILE=""
 ETCD_KEY_FILE=""

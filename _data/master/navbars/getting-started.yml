@@ -14,15 +14,19 @@ toc:
     - title: Introduction
       path: /getting-started/kubernetes/installation/
     - title: Hosted
-      path: /getting-started/kubernetes/installation/hosted/
+      section:
+      - title: Introduction
+        path: /getting-started/kubernetes/installation/hosted/
+      - title: Kubeadm
+        path: /getting-started/kubernetes/installation/hosted/kubeadm/
+      - title: Calico without etcd (experimental) 
+        path: /getting-started/kubernetes/installation/hosted/k8s-backend/
     - title: AWS
       path: /getting-started/kubernetes/installation/aws
     - title: GCE
       path: /getting-started/kubernetes/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/kubernetes/installation/vagrant/
-    - title: Kubeadm
-      path: /getting-started/kubernetes/installation/hosted/kubeadm/
   - title: Tutorials
     section:
     - title: Simple Policy Demo

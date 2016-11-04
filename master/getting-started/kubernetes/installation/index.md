@@ -16,6 +16,10 @@ for annotation-based policy can still be found in [an older release](https://git
   - Calico can share the etcd cluster used by Kubernetes, but it's recommended
   that a separate cluster is set up.
 
+> **NOTE:**
+>
+> Calico can also enforce network policy [without a dependency on etcd](hosted/k8s-backend/).  This feature is currently experimental.
+
 ## About the Calico Components
 
 There are three components of a Calico / Kubernetes integration.
@@ -168,7 +172,9 @@ Since this method uses Kubernetes to install Calico, you must first deploy a sta
 with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the
 [desired configuration for installing Calico](#configuring-kubernetes).
 
-Download the Calico self-hosted manifest, [`calico.yaml`](hosted/calico.yaml).
+We provide multiple self-hosted manifests for different deployment scenarios.  For more information, see the Calico [self-hosted documentation](hosted).
+
+To install, download Calico self-hosted manifest, [`calico.yaml`](hosted/calico.yaml).
 
 Edit the provided ConfigMap at the top of the file in order to configure Calico 
 for your deployment.  Then install the manifests using Kubernetes.
@@ -178,8 +184,6 @@ kubectl create -f calico.yaml
 ```
 
 You should see the Calico services start in the `kube-system` Namespace.
-
-For more information, see the Calico [self-hosted documentation](hosted).
 
 ## Configuring Kubernetes
 

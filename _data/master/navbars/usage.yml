@@ -5,7 +5,6 @@ order: 2
 toc:
 - title: Using Calico
   path: /usage/
-
 - title: Configuration
   path: /usage/configuration/
 - title: Advanced Network Policy
@@ -20,8 +19,6 @@ toc:
   path: /usage/configuration/securing-calico
 - title: IPv6
   path: /usage/ipv6
-- title: Dockerless Calico
-  path: /usage/dockerless-calico
 - title: External Connectivity
   path: /usage/external-connectivity
 - title: Exposing Ports

@@ -29,7 +29,6 @@ Mesos v1.0.0 has introduced first-class support of the [Container Network
 Interface (CNI)](https://github.com/containernetworking/cni) for the Unified
 Containerizer.
 
-- [Quickstart with Docker-Compose: Calico for Mesos CNI]({{site.baseurl}}/{{page.version}}/getting-started/mesos/demos/cni)
 - [Manual Install: Calico for Mesos Tasks (CNI)]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified)
 - [Usage Guide: Launching Mesos Tasks networked with Calico CNI]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified)
 

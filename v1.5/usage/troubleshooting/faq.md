@@ -20,8 +20,7 @@ For a more detailed discussion of this topic, see our blog post at
 
 ## "Does Calico work with IPv6?"
 
-Yes! We have demonstrated IPv6 with Calico on OpenStack and
-Docker/Powerstrip.
+Yes! 
 
 ## "Is Calico compliant with PCI/DSS requirements?"
 

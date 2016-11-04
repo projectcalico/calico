@@ -51,7 +51,7 @@ Be sure to replace `<etcd-ip:port>` with the address and port at which etcd
 is listening.
 
 ```shell
-$ export ETCD_AUTHORITY=<etcd-ip:port>
+$ export ETCD_ENDPOINTS=http://<etcd-ip:port>
 $ calicoctl profile my-calico-net rule show
 Inbound rules:
    1 allow from tag my-calico-net

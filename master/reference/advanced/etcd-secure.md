@@ -10,24 +10,17 @@ Calico supports insecure and TLS/certificate-enabled etcd clusters.
 To use TLS-enabled etcd, the following environment variables need to be set
 before running any `calicoctl` command:
 
-* **`ETCD_AUTHORITY`**: The `<hostname>:<port_number>` pair representing the 
- access point to the cluster. **Default**: 127.0.0.1:2379
-  * NOTE: When running Etcd with TLS enabled, the address of the ETCD_AUTHORITY 
-    must be a hostname value, NOT an IP address, such as `etcd-host:2379`.
-* **`ETCD_SCHEME`**: The http or https protocol used by the etcd datastore. 
- **Default**: http
-* **`ETCD_CA_CERT_FILE`**: The full path to the CA certificate file for the 
- Certificate Authority that signed the etcd server key/certificate pair.
-* **`ETCD_CERT_FILE`**: The full path to the client certificate file for 
- accessing the etcd cluster.
-* **`ETCD_KEY_FILE`**: The full path to the client key file for accessing the 
- etcd cluster.
+Variable              | Description                       | Default
+----------------------|-----------------------------------|------------------------------
+ETCD_ENDPOINTS        | A comma-separated list of etcd cluster endpoints | http://127.0.0.1:2379
+ETCD_CA_CERT_FILE     | The full path to the CA certificate file for the Certificate Authority that signed the etcd server key/certificate pair. | None
+ETCD_CERT_FILE        | The full path to the client certificate file for accessing the etcd cluster. | None
+ETCD_KEY_FILE         | The full path to the client key file for accessing the etcd cluster. | None
 
 For example:
 
 ```shell
-export ETCD_AUTHORITY=hostname:2379
-export ETCD_SCHEME=https
+export ETCD_ENDPOINTS=http://hostname:2379
 export ETCD_CA_CERT_FILE=/path/to/ca.pem
 export ETCD_CERT_FILE=/path/to/server.pem
 export ETCD_KEY_FILE=/path/to/server-key.pem
@@ -61,9 +54,9 @@ be passed into the Calico command.
 For example, to run `calicoctl node`, you would call something like this:
 
 ```shell
-sudo ETCD_SCHEME=https ETCD_KEY_FILE=/path/to/client.key \
+sudo ETCD_KEY_FILE=/path/to/client.key \
      ETCD_CA_CERT_FILE=/path/to/ca.crt ETCD_CERT_FILE=/path/to/client.crt \
-     ETCD_AUTHORITY=hostname:2379 calicoctl node
+     ETCD_ENDPOINTS=http://hostname:2379 calicoctl node
 ```
 
 Alternatively, if you have previously defined/exported your environment

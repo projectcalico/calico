@@ -52,7 +52,7 @@ help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
 
-    curl -L http://$ETCD_AUTHORITY/version
+    curl -L http://172.18.18.101/version
 
 And finally check that Docker is running on both hosts by running
 

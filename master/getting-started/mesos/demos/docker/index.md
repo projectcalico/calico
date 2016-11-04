@@ -186,7 +186,7 @@ is to only allow inbound traffic from nodes with the same profile
 Let's view the rules for the `management-ui` network's profile by running the
 `calicoctl profile <profile> rule show` command:
 
-	$ export ETCD_AUTHORITY=172.24.197.101:2379
+	$ export ETCD_ENDPOINTS=http://172.24.197.101:2379
 	$ calicoctl profile management-ui rule show
 
 	Inbound rules:

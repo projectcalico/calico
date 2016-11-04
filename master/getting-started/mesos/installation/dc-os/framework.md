@@ -148,7 +148,7 @@ can perform the Framework Installation steps manually (etcd, docker cluster-stor
        "ipam": {
            "type": "calico-ipam"
        },
-       "etcd_authority": "m1.dcos:2379"
+       "etcd_endpoints": "http://m1.dcos:2379"
    }
    ```
 

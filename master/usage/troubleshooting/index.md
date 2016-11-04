@@ -15,7 +15,7 @@ the `-E` flag to include your environment variables:
 or you can set environment variables for `sudo` commands like this:
 
 ```shell
-    sudo ETCD_AUTHORITY=172.25.0.1:2379 calicoctl node
+    sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node
 ```
 
 ## Ubuntu (or GNOME) NetworkManager

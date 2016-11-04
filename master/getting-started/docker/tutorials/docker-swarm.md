@@ -42,7 +42,8 @@ Now that etcd is running, we can run Calico.
 
 Now, start the Calico node service on each node in the cluster.
 
-    $ sudo ETCD_AUTHORITY=$MANAGER_IP:2379 calicoctl node run --ip=$NODE_IP
+    $ sudo ETCD_ENDPOINTS=http://$MANAGER_IP:2379 calicoctl node run --ip=$NODE_IP
+
 
 ## 4. Configure Swarm Cluster
 
