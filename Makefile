@@ -391,7 +391,7 @@ static-checks: vendor
 
 .PHONY: install
 install:
-	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers
+	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers/calicoctl
 
 ## Build a binary for a release
 release: clean update-tools build-containerized test-containerized
