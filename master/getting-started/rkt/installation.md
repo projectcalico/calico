@@ -7,8 +7,8 @@ It is recommended to use systemd to run the `calico/node` container in productio
 ### 1. Configure environment variables
 To use this unit file,  first open `calico-node.service` and fill in the following environment variables to match your system:
 
-- `ETCD_AUTHORITY`: The ip:port of your etcd cluster.
-- `FELIX_ETCDADDR`: The ip:port of your etcd cluster.
+- `ETCD_ENDPOINTS`: A comma separated list etcd cluster endpoints. 
+- `FELIX_ETCDENDPOINTS`: A comma separated list etcd cluster endpoints.
 - `IP`: The IPv4 address of this node.
 - `IP6`: The IPv6 address of this node if one exists.  Otherwise, leave this blank.
 
