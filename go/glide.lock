@@ -1,5 +1,5 @@
-hash: 1cbc9d360a9bf525760bb8bc7d2a7f34bfb818336df4cc8d488a279a1393e74d
-updated: 2016-11-04T12:19:57.168696921-07:00
+hash: 056d2d13213dc4f003011e53ff6ece8772ee42a397719ee25c3ab18197a68953
+updated: 2016-11-04T13:23:44.691289872-07:00
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -176,7 +176,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: d26492970760ca5d33129d2d799e34be5c4782eb
+  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
