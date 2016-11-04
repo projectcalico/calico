@@ -3,7 +3,7 @@ default: help
 all: test                                 ## Run all the tests
 test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
-all: vendor build-containerized test-containerized
+all: dist/calicoctl test-containerized
 
 ###############################################################################
 # Common build variables
@@ -189,7 +189,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: build-containerized busybox.tar routereflector.tar calico-node.tar #run-etcd-st
+st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar #run-etcd-st
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -344,7 +344,7 @@ $(BUILD_CALICOCTL_CONTAINER_MARKER): Dockerfile.calicoctl.build
 	touch $@
 
 # build calico_ctl image
-$(CTL_CONTAINER_CREATED): Dockerfile.calicoctl build-containerized
+$(CTL_CONTAINER_CREATED): Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f Dockerfile.calicoctl .
 	touch $@
 
@@ -405,7 +405,7 @@ install:
 	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers/calicoctl
 
 ## Build a binary for a release
-release: clean update-tools build-containerized test-containerized
+release: clean update-tools dist/calicoctl test-containerized
 	docker tag calico/calicoctl:$(CALICOCTL_VERSION) quay.io/calico/calicoctl:$(CALICOCTL_VERSION)
 	@echo Now attach the binaries to github dist/calicoctl
 	@echo And push the images to Docker Hub and quay.io:
