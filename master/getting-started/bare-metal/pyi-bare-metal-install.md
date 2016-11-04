@@ -28,24 +28,25 @@ The bundle has the following pre-requisites:
 
 -   For IPv4 support, Linux kernel v2.6.32 is required. We have tested
     against v2.6.32-573+. Note: if you intend to run containers, Docker
-    requires kernel v3.10+. The kernel's version can be checked with
+    requires kernel >=v3.10. The kernel's version can be checked with
     `uname -a`.
 -   For IPv6 support, Linux kernel 3.10+ is required (due to the lack of
     reverse path filtering for IPv6 in older versions).
--   glibc v2.12+
+-   glibc >=v2.13 (we build against Debian Wheezy)
 -   [conntrack-tools](http://conntrack-tools.netfilter.org/); in
     particular, the `conntrack` command must be available. We test
-    against v1.4.1+. To check the version, run `conntrack --version`.
+    against >=v1.4.1. To check the version, run `conntrack --version`.
 -   [iptables](http://www.netfilter.org/projects/iptables/index.html);
     for IPv6 support, the `ip6tables` command must be available. We test
-    against v1.4.7+. To check the version, run `iptables --version`.
--   [ipset](http://ipset.netfilter.org/); we test against v6.11+. To
+    against >=v1.4.7. To check the version, run `iptables --version`.
+-   [ipset](http://ipset.netfilter.org/); we test against >=v6.11. To
     check the version, run `ipset --version`.
 -   The conntrack, iptables and ipsets kernel modules must be available
     (or compiled-in).
--   An [etcd](https://github.com/coreos/etcd/releases/) v2+ cluster. We
-    recommend running the latest stable release of etcd v2.x. To check
-    the version, run `etcd --version`
+-   An [etcd](https://github.com/coreos/etcd/releases/) cluster that 
+    supports the etcdv2 protocol.  We recommend running the latest 
+    stable release of etcd v2.x. To check the version, run 
+    `etcd --version`
 
 > **NOTE**
 >
@@ -125,6 +126,11 @@ configuring felix (including environment variables) are described in
 If etcd is not running on the local machine, it's essential to configure
 the `EtcdAddr` or `EtcdEndpoints` setting to tell Felix how to reach
 etcd.
+
+Felix tries to detect whether IPv6 is available on your platform but
+the detection can fail on older (or more unusual) systems.  If Felix
+exits soon after startup with `ipset` or `iptables` errors try 
+setting the `Ipv6Support` setting to `false`.
 
 ## Start Felix
 
