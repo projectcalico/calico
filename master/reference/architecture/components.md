@@ -20,7 +20,7 @@ together.
 > runs, but both BIRD and confd are removed.  This provides policy management
 > without route distribution between hosts.  This mode can be enabled by
 > setting the environment variable `CALICO_NETWORKING=false` before starting
-> the node with `calicoctl node`.
+> the node with `calicoctl node run`.
 
 #### Calico Felix agent
 
