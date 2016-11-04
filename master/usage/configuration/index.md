@@ -2,21 +2,9 @@
 title: Configuring Calico
 ---
 
-This page describes how to configure Calico. We first describe the
-configuration of the core Calico component -- Felix --because this is
-needed, and configured similarly, regardless of the surrounding
-environment (OpenStack, Docker, or whatever). Then, depending on that
-surrounding environment, there will be some further configuration of
-that environment needed, to tell it to talk to the Calico components.
-
-Currently we have detailed environment configuration only for OpenStack.
-Work on other environments is in progress, and this page will be
-extended as that happens.
-
-This page aims to be a complete Calico configuration reference, and
-hence to describe all the possible fields, files etc. For a more
-task-based approach, when installing Calico with OpenStack on Ubuntu or
-Red Hat, please see our [Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/ubuntu) or [Red Hat]({{site.baseurl}}/{{page.version}}/getting-started/openstack/installation/redhat)  installation guides.
+This page describes the configuration options for Calico's per-host agent,
+Felix along with other system configuration parameters that you may wish
+to set.
 
 ## System configuration
 
@@ -59,17 +47,8 @@ The full list of parameters which can be set is as follows.
 
 | Setting                                 | Default                              | Meaning                                 |
 |-----------------------------------------|--------------------------------------|-----------------------------------------|
+| **Global felix configuration**          |                                      |                                                                                                                |
 | DataplaneDriver                         | etcdv2                               | One of "etcdv2" or "kubernetes".  The datastore that Felix should read endpoints and policy information from.  |
-| *etcdv2 datastore*                      |                                      |                                                                                                                |
-| EtcdEndpoints                           | `<EtcdScheme>://<EtcdAuthority>`     | Comma-delimited list of etcd endpoints to connect to; for example `"http://etcd1:2379,http://etcd2:2379"`.     |
-| _Deprecated_ EtcdAddr                   | 127.0.0.1:2379                       | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.                  |
-| _Deprecated_ EtcdScheme                 | http                                 | The protocol type (http or https) of the etcd node or proxy that Felix connects to.                            |
-| EtcdKeyFile                             | None                                 | The full path to the etcd public key file, as described in usingtlswithetcd                                    |
-| EtcdCertFile                            | None                                 | The full path to the etcd certificate file, as described in usingtlswithetcd                                   |
-| EtcdCaFile                              | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".                |
-| *Kubernetes datastore*                  |                                      |  |
-| N/A                                     |                                      | The Kubernetes datastore driver reads its configuration from Kubernetes-provided environmnet variables.  |
-| *Global felix configuration*            |                                      |                                                                                                                |
 | FelixHostname                           | socket.gethostname()                 | The hostname Felix reports to the plugin. Should be used if the hostname  Felix autodetects is incorrect or does  not match what the plugin will expect. |
 | LogFilePath                             | /var/log/calico/felix.log            | The full path to the felix log. Set to "none" to disable file logging. |
 | LogSeveritySys                          | ERROR                                | The log severity above which logs are sent to the syslog. Valid values are  DEBUG, INFO, WARNING, ERROR and       CRITICAL, or NONE for no logging to   syslog (all values case insensitive). |
@@ -79,14 +58,25 @@ The full list of parameters which can be set is as follows.
 | PrometheusMetricsEnabled                | "false"                              | Set to "true" to enable the experimental Prometheus metrics server in Felix. |
 | PrometheusMetricsPort                   | 9091                                 | Experimental: TCP port that the Prometheus metrics server should bind to.                  |
 | FailsafeInboundHostPorts                | 22                                   | Comma-delimited list of TCP ports that   Felix will allow incoming traffic to     host endpoints on irrespective of the    security policy. This is useful to       avoid accidently cutting off a host      with incorrect configuration. The        default value allows ssh access.        |
-| FailsafeOutboundHostPorts               | 2379,2380,4001,7001                  | Comma-delimited list of TCP ports that   Felix will allow outgoing from traffic   from host endpoints to irrespective of   the security policy. This is useful to   avoid accidently cutting off a host      with incorrect configuration. The        default value opens etcd's standard      ports to ensure that Felix does not get  cut off from etcd.                     
-| *iptables dataplane configuration*      |                                      |                                                                                                                |
+| FailsafeOutboundHostPorts               | 2379,2380,4001,7001                  | Comma-delimited list of TCP ports that   Felix will allow outgoing from traffic   from host endpoints to irrespective of   the security policy. This is useful to   avoid accidently cutting off a host      with incorrect configuration. The        default value opens etcd's standard      ports to ensure that Felix does not get  cut off from etcd. |
+| ReportingIntervalSecs                   | 30                                   | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. |
+| ReportingTTLSecs                        | 90                                   | Time-to-live setting for process-wide status reports.  | 
+| **etcdv2 datastore**                    |                                      |                                                                                                                |
+| EtcdEndpoints                           | "EtcdScheme://EtcdAddr"              | Comma-delimited list of etcd endpoints to connect to; for example "http://etcd1:2379,http://etcd2:2379".     |
+| _Deprecated_ EtcdAddr                   | 127.0.0.1:2379                       | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.                  |
+| _Deprecated_ EtcdScheme                 | http                                 | The protocol type (http or https) of the etcd node or proxy that Felix connects to.                            |
+| EtcdKeyFile                             | None                                 | The full path to the etcd public key file, as described in usingtlswithetcd                                    |
+| EtcdCertFile                            | None                                 | The full path to the etcd certificate file, as described in usingtlswithetcd                                   |
+| EtcdCaFile                              | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".                |
+| **Kubernetes datastore**                |                                      |  |
+| N/A                                     |                                      | The Kubernetes datastore driver reads its configuration from Kubernetes-provided environmnet variables.  |
+| **iptables dataplane configuration**    |                                      |                                                                                                                |
 | DefaultEndpointToHostAction             | DROP                                 | By default Calico blocks traffic from   endpoints to the host itself by using   an iptables DROP action. If you want to allow some or all traffic from endpoint to host then set this parameter to "RETURN" (which causes the rest of the  iptables INPUT chain to be processed)   or "ACCEPT" (which immediately accepts  packets). |
 | IptablesMarkMask                        | 0xff000000                           | Mask that Felix selects its IPTables Mark bits from. Should be a 32 bit       hexadecimal number with at least 8 bits  set, none of which clash with any other  mark bits in use on the system. |
 | IptablesRefreshInterval                 | 60                                   | Period, in seconds, at which felix re-applies all iptables state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable iptables refresh. |
 | MaxIpsetSize                            | 1048576                              | Maximum size for the ipsets used by      Felix to implement tags. Should be set   to a number that is greater than the     maximum number of IP addresses that are  ever expected in a tag. |
 | DataplaneDriverPrometheusMetricsPort    | 9092                                 | Experimental: TCP port that the Prometheus metrics server in the dataplane driver driver process should bind to. |
-| *OpenStack-only configuration*          |                                      |                                                                                                                |
+| **OpenStack-only configuration**        |                                      |                                                                                                                |
 | MetadataAddr                            | 127.0.0.1                            | The IP address or domain name of the server that can answer VM queries for  cloud-init metadata. In OpenStack, thiscorresponds to the machine running     nova-api (or in Ubuntu, nova-api-metadata). A value of 'None'  (case insensitive) means that Felix should not set up any NAT rule for the metadata path. |
 | MetadataPort                            | 8775                                 | The port of the metadata server. This, combined with global.MetadataAddr (if  not 'None'), is used to set up a NAT   rule, from 169.254.169.254:80 to       MetadataAddr:MetadataPort. In most cases this should not need to be       changed. |
 
@@ -120,7 +110,8 @@ are set from it.
 >     configuration can be read.
 >
 
-etcd configuration is read from etcd from two places.
+when using the etcd datastore driver, etcd configuration is read from 
+etcd from two places.
 
 1.  For a host of FelixHostname value `HOSTNAME` and a parameter named
     `NAME`, it is read from `/calico/v1/host/HOSTNAME/config/NAME`.
