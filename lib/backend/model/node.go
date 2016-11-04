@@ -30,7 +30,6 @@ import (
 var (
 	typeNode          = reflect.TypeOf(Node{})
 	typeHostMetadata  = reflect.TypeOf(HostMetadata{})
-	typeHostAsn       = reflect.TypeOf(numorstring.ASNumber(0))
 	typeHostIp        = rawIPType
 	matchHostMetadata = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/metadata$`)
 	matchHostIp       = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip$`)
@@ -171,58 +170,5 @@ func (key HostIPKey) valueType() reflect.Type {
 }
 
 func (key HostIPKey) String() string {
-	return fmt.Sprintf("Node(name=%s)", key.Hostname)
-}
-
-// The BGP Host IP Key.
-type HostBGPIPKey struct {
-	Hostname string
-	Version  int8
-}
-
-func (key HostBGPIPKey) defaultPath() (string, error) {
-	return fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v%d",
-		key.Hostname, key.Version), nil
-}
-
-func (key HostBGPIPKey) defaultDeletePath() (string, error) {
-	return key.defaultPath()
-}
-
-func (key HostBGPIPKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, nil
-}
-
-func (key HostBGPIPKey) valueType() reflect.Type {
-	return typeHostIp
-}
-
-func (key HostBGPIPKey) String() string {
-	return fmt.Sprintf("Node(name=%s)", key.Hostname)
-}
-
-// The BGP AS Number Key
-type HostBGPASNumberKey struct {
-	Hostname string
-}
-
-func (key HostBGPASNumberKey) defaultPath() (string, error) {
-	return fmt.Sprintf("/calico/bgp/v1/host/%s/as_num",
-		key.Hostname), nil
-}
-
-func (key HostBGPASNumberKey) defaultDeletePath() (string, error) {
-	return key.defaultPath()
-}
-
-func (key HostBGPASNumberKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, nil
-}
-
-func (key HostBGPASNumberKey) valueType() reflect.Type {
-	return typeHostAsn
-}
-
-func (key HostBGPASNumberKey) String() string {
 	return fmt.Sprintf("Node(name=%s)", key.Hostname)
 }

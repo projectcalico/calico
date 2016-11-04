@@ -42,17 +42,29 @@ func newIPPools(c *Client) IPPoolInterface {
 
 // Create creates a new IP pool.
 func (h *ipPools) Create(a *api.IPPool) (*api.IPPool, error) {
-	return a, h.c.create(*a, h)
+	err := h.c.create(*a, h)
+	if err == nil {
+		err = h.maybeEnableIPIP(a)
+	}
+	return a, err
 }
 
 // Update updates an existing IP pool.
 func (h *ipPools) Update(a *api.IPPool) (*api.IPPool, error) {
-	return a, h.c.update(*a, h)
+	err := h.c.update(*a, h)
+	if err == nil {
+		err = h.maybeEnableIPIP(a)
+	}
+	return a, err
 }
 
 // Apply updates an IP pool if it exists, or creates a new pool if it does not exist.
 func (h *ipPools) Apply(a *api.IPPool) (*api.IPPool, error) {
-	return a, h.c.apply(*a, h)
+	err := h.c.apply(*a, h)
+	if err == nil {
+		err = h.maybeEnableIPIP(a)
+	}
+	return a, err
 }
 
 // Delete deletes an existing IP pool.
@@ -146,4 +158,13 @@ func (h *ipPools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, err
 	}
 
 	return apiPool, nil
+}
+
+// Apply updates an IP pool if it exists, or creates a new pool if it does not exist.
+func (h *ipPools) maybeEnableIPIP(a *api.IPPool) (err error) {
+	// If IPIP is enabled, then make sure we enable globally.
+	if a.Spec.IPIP != nil && a.Spec.IPIP.Enabled {
+		err = h.c.Config().SetGlobalIPIP(true)
+	}
+	return err
 }

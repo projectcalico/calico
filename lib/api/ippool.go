@@ -74,7 +74,7 @@ func NewIPPool() *IPPool {
 type IPPoolList struct {
 	unversioned.TypeMetadata
 	Metadata unversioned.ListMetadata `json:"metadata,omitempty"`
-	Items    []IPPool                   `json:"items" validate:"dive"`
+	Items    []IPPool                 `json:"items" validate:"dive"`
 }
 
 // NewIPPool creates a new (zeroed) PoolList struct with the TypeMetadata initialised to the current
