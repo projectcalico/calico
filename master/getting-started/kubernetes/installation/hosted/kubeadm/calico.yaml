@@ -52,7 +52,9 @@ spec:
         k8s-app: calico-etcd
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: '[{"key":"CriticalAddonsOnly", "operator":"Exists"}]'
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       # Only run this pod on the master.
       nodeSelector:
@@ -119,7 +121,9 @@ spec:
         k8s-app: calico-node
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: '[{"key":"CriticalAddonsOnly", "operator":"Exists"}]'
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
       containers:
@@ -222,7 +226,10 @@ spec:
         k8s-app: calico-policy-controller
     annotations:
       scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: '[{"key":"CriticalAddonsOnly", "operator":"Exists"}]'
+      scheduler.alpha.kubernetes.io/tolerations: |
+        [{"key": "role", "value": "master", "effect": "NoSchedule" },
+         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+
     spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
@@ -264,7 +271,9 @@ spec:
       name: configure-calico
     annotations:
       scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: '[{"key":"CriticalAddonsOnly", "operator":"Exists"}]'
+      scheduler.alpha.kubernetes.io/tolerations: |
+        [{"key": "role", "value": "master", "effect": "NoSchedule" },
+         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
       restartPolicy: OnFailure 
