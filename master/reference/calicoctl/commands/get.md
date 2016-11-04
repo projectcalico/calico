@@ -42,8 +42,8 @@ Options:
                                node.  This is only valid for BGP peers and is
                                used to indicate whether the peer is a global
                                peer or node-specific.
-  -c --config=<CONFIG>         Filename containing connection configuration in
-                               YAML or JSON format.
+  -c --config=<CONFIG>         Path to the file containing connection
+                               configuration in YAML or JSON format.
                                [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -110,8 +110,8 @@ Description:
 ### General options
 
 ```
--c --config=<CONFIG>         Filename containing connection configuration in
-                             YAML or JSON format.
+-c --config=<CONFIG>         Path to the file containing connection
+                             configuration in YAML or JSON format.
                              [default: /etc/calico/calicoctl.cfg]
 ```
 

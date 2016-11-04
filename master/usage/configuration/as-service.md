@@ -50,9 +50,6 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 > inherited from the global defaut value.  Set this if you need to explicitly
 > set the AS Number for this node.
 >
-> If you do not require Calico for Docker networking, you may set the
-> CALICO_LIBNETWORK_ENABLED to false.
->
 > The CALICO_NETWORKING_BACKEND defaults to use Bird as the routing daemon.
 > This may also be set to gobgp (to use gobgp as the routing daemon, but note
 > that this does not support IP in IP), or none (if routing is handled by an

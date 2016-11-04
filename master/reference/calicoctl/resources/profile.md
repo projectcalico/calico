@@ -19,7 +19,7 @@ kind: profile
 metadata:
   name: profile1
   labels:
-  - foo:bar
+   foo: bar
 spec:
   tags:
   - tag1
@@ -28,30 +28,35 @@ spec:
   - action: deny
     protocol: tcp
     icmp:
-      - type: 10
-      - code: 6
-    notProtocol: ipv6
+       type: 10
+       code: 6
+    notProtocol: udp
     notICMP:
-      - type: 19
-      - code: 255
+       type: 19
+       code: 255
     source:
-      tag: group=='production'
+      tag: production
       net: 10.0.0.0/16
       selector: type=='application'
-      ports: [1234,"10:20"]
+      ports: 
+      - 1234
+      - "10:20"
       notTag: bartag
       notNet: 10.1.0.0/16
       notSelector: type=='database'
-      notPorts: [1050]
+      notPorts: 
+      - 1050
     destination:
       tag: alphatag
       net: 10.2.0.0/16
       selector: type=='application'
-      ports: ["100:200"]
-      notTag: type=='bananas'
+      ports: 
+      - "100:200"
+      notTag: bananas
       notNet: 10.3.0.0/16
       notSelector: type=='apples'
-      notPorts: ["1050:110"]
+      notPorts: 
+      - "105:110"
   egress:
   - action: allow
     source:

@@ -97,8 +97,6 @@ toc:
       path: /getting-started/docker/tutorials/basic
     - title: Configuring Policy
       path: /getting-started/docker/tutorials/advanced-policy
-    - title: Using IPv6
-      path: /getting-started/docker/tutorials/ipv6
     - title: Docker Swarm
       path: /getting-started/docker/tutorials/docker-swarm
   - title: Troubleshooting

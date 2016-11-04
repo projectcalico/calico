@@ -35,8 +35,8 @@ Examples:
 
 Options:
   -n --node=<NODE>      The node name.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format.
+  -c --config=<CONFIG>  Path to the file containing connection
+                        configuration in YAML or JSON format.
                         [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -96,8 +96,8 @@ off
 ### General options
 
 ```
--c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                      JSON format.
+-c --config=<CONFIG>  Path to the file containing connection
+                      configuration in YAML or JSON format.
                       [default: /etc/calico/calicoctl.cfg]
 ```
 

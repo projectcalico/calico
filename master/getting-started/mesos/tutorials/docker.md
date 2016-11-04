@@ -36,7 +36,7 @@ own Calico profile.
 Run the following command on any agent to create a Docker network with Calico:
 
 ```shell
-docker network create --driver=calico --ipam-driver=calico my-calico-net
+docker network create --driver=calico --ipam-driver=calico-ipam my-calico-net
 ```
 
 #### View Network Policy

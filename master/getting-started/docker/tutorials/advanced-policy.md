@@ -14,23 +14,16 @@ driver creates a profile object for that network.  The default policy applied
 by Calico when a new network is created allows communication between all 
 containers connected to that network, and no communication from other networks.
 
-Using the standard `calicoctl profile` commands it is possible to manage the
-feature-rich policy associated with a network.
+Using the standard `calicoctl create` to create a `profile` resource, it is possible to 
+manage the feature-rich policy associated with a network.
 
 > Note that if you want to access the feature rich Calico policy, you must use
 > both the Calico Network _and_ Calico IPAM drivers together.  Using the Calico
 > IPAM driver ensures _all_ traffic from the container is routed via the host
-> vRouter and is subject to Calico policy. Using the default IPAM driver 
-> instructs the Calico network driver to route non-network traffic (i.e.
-> destinations outside the network CIDR) via the Docker gateway bridge, and in
-> this case may not be subjected to the policy configured on the host vRouter.
+> vRouter and is subject to Calico policy.
 
 > The profile that is created by the Calico network driver is given the same 
-> name as the Docker-generated network ID.  This can be cumbersome to work
-> with, so the `calicoctl` tool that is used to manage the network policy 
-> handles the mapping between network names and IDs.  For the most part,
-> the detail about network IDs can be ignored, but it is mentioned here as a
-> side note for advanced users and developers,
+> name as the Docker network name.
 
 ## Multiple networks
 
@@ -61,37 +54,134 @@ associated with that network.
 #### Create a Docker network
 
 To create a Docker network using Calico, run the `docker network create`
-command specifying "calico" as both the network and IPAM driver.
+command specifying `calico` as the network driver and `calico-ipam` as the IPAM driver.
 
 For example, suppose we want to provide network policy for a set of database
 containers.  We can create a network called `databases` with the the following
 command:
 
 ```
-docker network create --driver calico --ipam-driver calico databases 
+docker network create --driver calico --ipam-driver calico-ipam databases 
+```
+
+#### Create a profile
+
+To create a profile, we will use `calicoctl create` command with a profile
+configured in the YAML format below. The config can also be a yaml file which 
+can be passed to the command to create the profile. In this case we're feeding
+the config from STDIN.
+
+```
+$ cat << EOF | bin/calicoctl create -f -
+> apiVersion: v1
+> kind: profile
+> metadata:
+>   name: databases
+>   labels:
+>    foo: bar
+> spec:
+>   tags:
+>   - tag1
+>   - tag2s
+>   ingress:
+>   - action: deny
+>     protocol: tcp
+>     icmp:
+>        type: 10
+>        code: 6
+>     notProtocol: udp
+>     notICMP:
+>        type: 19
+>        code: 255
+>     source:
+>       tag: production
+>       net: 10.0.0.0/16
+>       selector: type=='application'
+>       ports:
+>       - 1234
+>       - "10:20"
+>       notTag: bartag
+>       notNet: 10.1.0.0/16
+>       notSelector: type=='database'
+>       notPorts:
+>       - 1050
+>     destination:
+>       tag: alphatag
+>       net: 10.2.0.0/16
+>       selector: type=='application'
+>       ports:
+>       - "100:200"
+>       notTag: bananas
+>       notNet: 10.3.0.0/16
+>       notSelector: type=='apples'
+>       notPorts:
+>       - "105:110"
+>   egress:
+>   - action: allow
+>     source:
+>       selector: type=='application'
+> EOF
 ```
 
 #### View the policy associated with the network
 
-You can use the `calicoctl profile <profile> rule show` to display the
+You can use the `calicoctl get -o yaml profile <profile>` to display the
 rules in the profile associated with the `databases` network.
 
-The network name can be supplied as the profile name and the `calicoctl` tool
-will look up the profile associated with that network.
-
 ```
-$ calicoctl profile databases rule show
-Inbound rules:
-   1 allow from tag databases
-Outbound rules:
-   1 allow
+$ calicoctl get profile databases -o yaml
+- apiVersion: v1
+  kind: profile
+  metadata:
+    labels:
+      foo: bar
+    name: databases
+  spec:
+    egress:
+    - action: allow
+      destination: {}
+      source:
+        selector: type=='application'
+    ingress:
+    - action: deny
+      destination:
+        net: 10.2.0.0/16
+        notNet: 10.3.0.0/16
+        notPorts:
+        - 105:110
+        notSelector: type=='apples'
+        notTag: bananas
+        ports:
+        - 100:200
+        selector: type=='application'
+        tag: alphatag
+      icmp:
+        code: 6
+        type: 10
+      notICMP:
+        code: 255
+        type: 19
+      notProtocol: udp
+      protocol: tcp
+      source:
+        net: 10.0.0.0/16
+        notNet: 10.1.0.0/16
+        notPorts:
+        - 1050
+        notSelector: type=='database'
+        notTag: bartag
+        ports:
+        - 1234
+        - "10:20"
+        selector: type=='application'
+        tag: production
+    tags:
+    - tag1
+    - tag2s
 ```
 
 As you can see, the default rules allow all outbound traffic and accept inbound
 traffic only from containers attached the "databases" network.
-
-> Note that when managing profiles created by the Calico network driver, the
-> tag and network name can be regarded as the same thing.
 
 #### Configuring the network policy
 
@@ -111,7 +201,7 @@ application containers will be attached to.  Then, modify the network policy of
 the databases to allow the appropriate inbound traffic from the applications.
 
 ```
-$ docker network create --driver calico --ipam-driver calico applications
+$ docker network create --driver calico --ipam-driver calico-ipam applications
 $ calicoctl profile databases rule add inbound allow tcp from tag applications to ports 3306
 ```
 

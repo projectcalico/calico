@@ -29,8 +29,8 @@ Options:
                             "-" loads from stdin.
      --skip-exists          Skip over and treat as successful any attempts to
                             create an entry that already exists.
-  -c --config=<CONFIG>      Filename containing connection configuration in
-                            YAML or JSON format.
+  -c --config=<CONFIG>      Path to the file containing connection
+                            configuration in YAML or JSON format.
                             [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -80,8 +80,8 @@ Failed to create any resources: resource already exists: Profile(name=profile1)
 ### General options
 
 ```
--c --config=<CONFIG>      Filename containing connection configuration in
-                          YAML or JSON format.
+-c --config=<CONFIG>      Path to the file containing connection
+                          configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
 

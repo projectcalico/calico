@@ -43,10 +43,8 @@ If you have connectivity between containers on the same host, and between
 containers and the Internet, but not between containers on different hosts, it
 probably indicates a problem in the BIRD setup.
 
-Look at `calicoctl status` on each host.  It should include output like this:
+Look at `calicoctl node status` on each host.  It should include output like this:
 
-	IPv4 BGP status
-	IP: 172.16.8.242    AS Number: 64511 (inherited)
 	+--------------+-------------------+-------+----------+--------------------------+
 	| Peer address |     Peer type     | State |  Since   |           Info           |
 	+--------------+-------------------+-------+----------+--------------------------+
@@ -74,4 +72,4 @@ image is out of date.  Use `vagrant box update` to pull the new version.  I
 recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
 If you hit issues, please raise tickets. Diags can be collected with the
-`sudo ./calicoctl diags` command.
+`sudo ./calicoctl node diags` command.

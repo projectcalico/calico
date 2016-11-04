@@ -68,13 +68,9 @@ sudo -E calicoctl node
 
 Here's a list of commands that must be run as root:
 
-- `calicoctl node`
-- `calicoctl node stop`
-- `calicoctl node remove`
-- `calicoctl container add`
-- `calicoctl container remove`
-- `calicoctl container ip add`
-- `calicoctl container ip remove`
+- `calicoctl node run`
+- `calicoctl node status`
+- `calicoctl node diags`
 
 See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for details on specific 
 calicoctl commands.

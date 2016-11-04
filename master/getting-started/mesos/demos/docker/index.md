@@ -66,10 +66,10 @@ own Calico profile.
 For this demo, we will create a network for each service so that we can specify a unique set of rules for each. Run the following commands on any agent to create the networks:
 
 ```
-docker network create --driver calico --ipam-driver calico --subnet=192.168.0.0/16 management-ui
-docker network create --driver calico --ipam-driver calico client
-docker network create --driver calico --ipam-driver calico frontend
-docker network create --driver calico --ipam-driver calico backend
+docker network create --driver calico --ipam-driver calico-ipam --subnet=192.168.0.0/16 management-ui
+docker network create --driver calico --ipam-driver calico-ipam client
+docker network create --driver calico --ipam-driver calico-ipam frontend
+docker network create --driver calico --ipam-driver calico-ipam backend
 ```
 
 >The subnet is passed in here to ensure that the IP address of the `management-ui`

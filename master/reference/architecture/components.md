@@ -20,7 +20,7 @@ together.
 > runs, but both BIRD and confd are removed.  This provides policy management
 > without route distribution between hosts.  This mode can be enabled by
 > setting the environment variable `CALICO_NETWORKING=false` before starting
-> the node with `calicoctl node`.
+> the node with `calicoctl node run`.
 
 #### Calico Felix agent
 
@@ -66,8 +66,4 @@ Calico uses a fork of the main confd repo which includes an additional change
 to improve performance with the handling of watch prefixes 
 [calico-bird repo](https://github.com/projectcalico/calico-bird) for more details.
 
-## In Practice
-
-For a detailed look at how each component works when adding Docker containers 
-to Calico networking, check out the [Lifecycle of a Docker Default Container]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/docker-container-lifecycle) page.
 

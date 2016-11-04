@@ -18,8 +18,9 @@ Usage:
 Options:
   -h --help             Show this screen.
      --ip=<IP>          IP address to release.
-  -c --config=<CONFIG>  Filename containing connection configuration in YAML or
-                        JSON format. [default: /etc/calico/calicoctl.cfg]
+  -c --config=<CONFIG>  Path to the file containing connection
+                          configuration in YAML or JSON format.
+                          [default: /etc/calico/calicoctl.cfg]
 
 Description:
   The ipam release command releases an IP address from the Calico IP Address
@@ -40,8 +41,8 @@ $ calicoctl ipam release --ip=192.168.1.2
 ### General options
 
 ```
--c --config=<CONFIG>      Filename containing connection configuration in
-                          YAML or JSON format.
+-c --config=<CONFIG>      Path to the file containing connection
+                          configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
 
