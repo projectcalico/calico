@@ -18,7 +18,7 @@ as well as Kubernetes objects to deploy a single node etcd cluster.
 Then use kubectl to create the manifest below using kubectl:
 
 ```shell
-kubectl create -f calico.yaml
+kubectl apply -f calico.yaml
 ```
 
 You can download the addon manfiest [here](calico.yaml)
@@ -34,3 +34,4 @@ recommended you use a secure, replicated etcd cluster.
 
 * This install does not configure etcd TLS
 * This install expects that your Kubernetes master node has been labeled with `kubeadm.alpha.kubernetes.io/role: master`
+* This install assumes no other pod network has been installed.
