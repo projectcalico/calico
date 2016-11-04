@@ -189,7 +189,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar #run-etcd-st
+st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar run-etcd-st
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
