@@ -1,7 +1,6 @@
 .PHONY: all binary calico/node test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl help clean_calico_node
 default: help
 all: test                                 ## Run all the tests
-binary: dist/calicoctl                    ## Create the calicoctl binary
 test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
 all: vendor build-containerized test-containerized
@@ -272,16 +271,29 @@ semaphore: clean
 ###############################################################################
 .PHONY: ut
 ## Run the Unit Tests locally
-ut: binary
-	./run-uts
+ut: dist/calicoctl
+	# Run tests in random order find tests recursively (-r).
+	ginkgo -cover -r --skipPackage vendor
+
+	@echo
+	@echo '+==============+'
+	@echo '| All coverage |'
+	@echo '+==============+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
+
+	@echo
+	@echo '+==================+'
+	@echo '| Missing coverage |'
+	@echo '+==================+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
 
 PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: run-etcd build-containerized
-	docker run --rm --privileged --net=host \
-	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
-	$(BUILD_CALICOCTL_CONTAINER_NAME) bash -c 'make ut && chown $(shell id -u):$(shell id -g) -R ./vendor'
+test-containerized: dist/calicoctl
+	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
+	$(BUILD_CALICOCTL_CONTAINER_NAME) bash -c 'make ut'
 
 ###############################################################################
 # calicoctl build
@@ -312,7 +324,7 @@ calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
 
 ## Use this to populate the vendor directory after checking out the repository.
 ## To update upstream dependencies, delete the glide.lock file first.
-vendor: glide.yaml
+vendor:
 	# To build without Docker just run "glide install -strip-vendor"
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
@@ -324,8 +336,8 @@ vendor: glide.yaml
 	    chown $(shell id -u):$(shell id -u) -R vendor'
 
 ## Build the calicoctl
-dist/calicoctl: $(CALICOCTL_FILES) vendor
-	CGO_ENABLED=0 go build -v -o "$@" $(LDFLAGS) "./calicoctl/calicoctl.go"
+binary: $(CALICOCTL_FILES) vendor
+	CGO_ENABLED=0 go build -v -o dist/calicoctl $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 $(BUILD_CALICOCTL_CONTAINER_MARKER): Dockerfile.calicoctl.build
 	docker build -f Dockerfile.calicoctl.build -t $(BUILD_CALICOCTL_CONTAINER_NAME) .
@@ -337,8 +349,7 @@ $(CTL_CONTAINER_CREATED): Dockerfile.calicoctl build-containerized
 	touch $@
 
 ## Run the build in a container. Useful for CI
-#.PHONY: build-containerized
-build-containerized: $(BUILD_CALICOCTL_CONTAINER_MARKER) vendor
+dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) vendor
 	mkdir -p dist
 	docker run --rm \
 	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
