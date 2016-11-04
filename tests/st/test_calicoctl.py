@@ -66,7 +66,7 @@ class TestPool(TestBase):
             self.writeyaml('ipv6.yaml', ipv6_pool_dict)
 
             # Create the ipv6 network using the Go calicoctl
-            host.calicoctl("create -f ipv6.yaml", new=True)
+            host.calicoctl("create -f ipv6.yaml")
             # And read it back out using the python calicoctl
             pool_out = host.calicoctl("ipPool show")
             # Assert output contains the ipv6 pool, but not the ipv4
@@ -78,7 +78,7 @@ class TestPool(TestBase):
             self.check_data_in_datastore(host, [ipv6_pool_dict], "ipPool")
 
             # Add in the ipv4 network with Go calicoctl
-            host.calicoctl("create -f ipv4.yaml", new=True)
+            host.calicoctl("create -f ipv4.yaml")
             # And read it back out using the python calicoctl
             pool_out = host.calicoctl("ipPool show")
             # Assert output contains both the ipv4 pool and the ipv6
@@ -91,8 +91,8 @@ class TestPool(TestBase):
                 host, [ipv4_pool_dict, ipv6_pool_dict], "ipPool")
 
             # Remove both the ipv4 pool and ipv6 pool
-            host.calicoctl("delete -f ipv6.yaml", new=True)
-            host.calicoctl("delete -f ipv4.yaml", new=True)
+            host.calicoctl("delete -f ipv6.yaml")
+            host.calicoctl("delete -f ipv4.yaml")
             pool_out = host.calicoctl("ipPool show")
             # Assert output contains neither network
             self.assertNotIn(str(ipv4_net), pool_out)
@@ -103,7 +103,7 @@ class TestPool(TestBase):
 
             # Assert that deleting the pool again fails.
             self.assertRaises(CommandExecError,
-                              host.calicoctl, "delete -f ipv4.yaml", new=True)
+                              host.calicoctl, "delete -f ipv4.yaml")
 
 
 class TestCreateFromFile(TestBase):
@@ -268,7 +268,7 @@ class TestCreateFromFile(TestBase):
             # Write out the files to load later
             self.writeyaml('%s-1.yaml' % res_type, data)
 
-            host.calicoctl("create -f %s-1.yaml" % res_type, new=True)
+            host.calicoctl("create -f %s-1.yaml" % res_type)
             # Test use of create with stdin
 
             # Check both come out OK in yaml:
@@ -280,7 +280,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res_type, new=True)
+            host.calicoctl("delete -f %s-1.yaml" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -294,7 +294,7 @@ class TestCreateFromFile(TestBase):
             # Write out the files to load later
             self.writejson('%s-1.json' % res_type, data)
 
-            host.calicoctl("create -f %s-1.json" % res_type, new=True)
+            host.calicoctl("create -f %s-1.json" % res_type)
             # Test use of create with stdin
 
             # Check both come out OK in yaml:
@@ -306,7 +306,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.json" % res_type, new=True)
+            host.calicoctl("delete -f %s-1.json" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -322,7 +322,7 @@ class TestCreateFromFile(TestBase):
 
             # Test use of create with stdin
             host.execute(
-                "cat %s-1.json | /code/dist/calicoctl.go create -f -" %
+                "cat %s-1.json | /code/dist/calicoctl create -f -" %
                 res_type)
 
             # Check both come out OK in yaml:
@@ -334,7 +334,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.json" % res_type, new=True)
+            host.calicoctl("delete -f %s-1.json" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -350,7 +350,7 @@ class TestCreateFromFile(TestBase):
 
             # Test use of create with stdin
             host.execute(
-                "cat %s-1.yaml | /code/dist/calicoctl.go create -f -" %
+                "cat %s-1.yaml | /code/dist/calicoctl create -f -" %
                 res_type)
 
             # Check both come out OK in yaml:
@@ -362,7 +362,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res_type, new=True)
+            host.calicoctl("delete -f %s-1.yaml" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -524,10 +524,10 @@ class TestCreateFromFile(TestBase):
             self.writeyaml('%s-1.yaml' % res, data1)
             self.writejson('%s-2.json' % res, data2)
 
-            host.calicoctl("create -f %s-1.yaml" % res, new=True)
+            host.calicoctl("create -f %s-1.yaml" % res)
             # Test use of create with stdin
             host.execute(
-                "cat %s-2.json | /code/dist/calicoctl.go create -f -" % res)
+                "cat %s-2.json | /code/dist/calicoctl create -f -" % res)
 
             # Check both come out OK in yaml:
             self.check_data_in_datastore(
@@ -538,8 +538,8 @@ class TestCreateFromFile(TestBase):
                 host, [data1, data2], res, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res, new=True)
-            host.calicoctl("delete -f %s-2.json" % res, new=True)
+            host.calicoctl("delete -f %s-1.yaml" % res)
+            host.calicoctl("delete -f %s-2.json" % res)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res)
@@ -607,7 +607,7 @@ class TestCreateFromFile(TestBase):
                                     'net': '1.2.0.0/16',
                                     'ports': [1, 2, 3, 4],
                                     'tag': 'web'}}],
-                   'order': 6543215.321,
+                   'order': 6543215.5,
                    'selector': ''}},
          {'apiVersion': 'v1',
           'kind': 'policy',
@@ -633,6 +633,55 @@ class TestCreateFromFile(TestBase):
                    'order': 100000,
                    'selector': ""}},
          ),
+        #  https://github.com/projectcalico/libcalico-go/issues/230
+        # ("policy",
+        #  {'apiVersion': 'v1',
+        #   'kind': 'policy',
+        #   'metadata': {'name': 'policy1', },
+        #   'spec': {'egress': [{'action': 'deny',
+        #                        'protocol': 'tcp',
+        #                        'destination': {},
+        #                        'source': {
+        #                            'notNet': 'aa:bb:cc:ff::/100',
+        #                            'notPorts': [100],
+        #                            'notTag': 'abcd'}}],
+        #            'ingress': [{'action': 'allow',
+        #                         'destination': {
+        #                             'net': '10.20.30.40/32',
+        #                             'tag': 'database'},
+        #                         'icmp': {'code': 100,
+        #                                  'type': 10},
+        #                         'protocol': 'udp',
+        #                         'source': {
+        #                             'net': '1.2.0.0/16',
+        #                             'ports': [1, 2, 3, 4],
+        #                             'tag': 'web'}}],
+        #            'order': 6543215.321,
+        #            'selector': ''}},
+        #  {'apiVersion': 'v1',
+        #   'kind': 'policy',
+        #   'metadata': {'name': 'policy1'},
+        #   'spec': {'egress': [{'action': 'deny',
+        #                        'protocol': 'tcp',
+        #                        'destination': {},
+        #                        'source': {
+        #                            'notNet': 'aa:bb:cc::/100',
+        #                            'notPorts': [100],
+        #                            'notTag': 'abcd'}}],
+        #            'ingress': [{'action': 'allow',
+        #                         'destination': {
+        #                             'net': '10.20.30.40/32',
+        #                             'tag': 'database'},
+        #                         'icmp': {'code': 100,
+        #                                  'type': 10},
+        #                         'protocol': 'udp',
+        #                         'source': {
+        #                             'net': '1.2.3.0/24',
+        #                             'ports': [1, 2, 3, 4],
+        #                             'tag': 'web'}}],
+        #            'order': 100000,
+        #            'selector': ""}},
+        #  ),
         ("ipPool",
          {'apiVersion': 'v1',
           'kind': 'ipPool',
@@ -690,29 +739,28 @@ class TestCreateFromFile(TestBase):
             self.writeyaml('data1.yaml', data1)
             self.writejson('data2.json', data2)
 
-
             # apply - create when not present
-            host.calicoctl("apply -f data1.yaml", new=True)
+            host.calicoctl("apply -f data1.yaml")
             # Check it went in OK
             self.check_data_in_datastore(host, [data1], res)
 
             # create - skip overwrite with data2
-            host.calicoctl("create -f data2.json --skip-exists", new=True)
+            host.calicoctl("create -f data2.json --skip-exists")
             # Check that nothing's changed
             self.check_data_in_datastore(host, [data1], res)
 
             # replace - overwrite with data2
-            host.calicoctl("replace -f data2.json", new=True)
+            host.calicoctl("replace -f data2.json")
             # Check that we now have data2 in the datastore
             self.check_data_in_datastore(host, [data2], res)
 
             # apply - overwrite with data1
-            host.calicoctl("apply -f data1.yaml", new=True)
+            host.calicoctl("apply -f data1.yaml")
             # Check that we now have data1 in the datastore
             self.check_data_in_datastore(host, [data1], res)
 
             # delete
-            host.calicoctl("delete --filename=data1.yaml", new=True)
+            host.calicoctl("delete --filename=data1.yaml")
             # Check it deleted
             self.check_data_in_datastore(host, [], res)
 
@@ -813,96 +861,95 @@ class InvalidData(TestBase):
                        'metadata': {'node': 'host1',
                                     'labels': {'type': 'database'},
                                     'name': 'endpoint1'},
-                       'spec': {'interfaceName': 'wibblywobblyeth0',
+                       'spec': {'interfaceName': 'wibblywobblyeth0',  # overlength interface name
                                 'profiles': ['prof1',
                                              'prof2']}
                    }),
-                   # See issue https://github.com/projectcalico/libcalico-go/issues/222
-                   # ("policy-invalidHighPortinList", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'policy',
-                   #     'metadata': {'name': 'policy2'},
-                   #     'spec': {'egress': [{'action': 'deny',
-                   #                          'destination': {},
-                   #                          'protocol': 'tcp',
-                   #                          'source': {},
-                   #                          'ports': [10, 90, 65536]  # Max port is 65535
-                   #                          }],
-                   #              'ingress': [{'action': 'allow',
-                   #                           'destination': {},
-                   #                           'protocol': 'udp',
-                   #                           'source': {}}],
-                   #              'order': 100000,
-                   #              'selector': ""}}),
-                   # ("policy-invalidHighPortinRange", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'policy',
-                   #     'metadata': {'name': 'policy2'},
-                   #     'spec': {'egress': [{'action': 'deny',
-                   #                          'destination': {},
-                   #                          'protocol': 'tcp',
-                   #                          'source': {},
-                   #                          'ports': [1-65536]  # Max port is 65535
-                   #                          }],
-                   #              'ingress': [{'action': 'allow',
-                   #                           'destination': {},
-                   #                           'protocol': 'udp',
-                   #                           'source': {}}],
-                   #              'order': 100000,
-                   #              'selector': ""}}),
-                   # ("policy-invalidLowPortinRange", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'policy',
-                   #     'metadata': {'name': 'policy2'},
-                   #     'spec': {'egress': [{'action': 'deny',
-                   #                          'destination': {},
-                   #                          'protocol': 'tcp',
-                   #                          'source': {},
-                   #                          'ports': [0-65535]  # Min port is 1
-                   #                          }],
-                   #              'ingress': [{'action': 'allow',
-                   #                           'destination': {},
-                   #                           'protocol': 'udp',
-                   #                           'source': {}}],
-                   #              'order': 100000,
-                   #              'selector': ""}}),
-                   # ("policy-invalidLowPortinList", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'policy',
-                   #     'metadata': {'name': 'policy2'},
-                   #     'spec': {'egress': [{'action': 'deny',
-                   #                          'destination': {},
-                   #                          'protocol': 'tcp',
-                   #                          'source': {},
-                   #                          'ports': [0, 10, 80]  # Min port is 1
-                   #                          }],
-                   #              'ingress': [{'action': 'allow',
-                   #                           'destination': {},
-                   #                           'protocol': 'udp',
-                   #                           'source': {}}],
-                   #              'order': 100000,
-                   #              'selector': ""}}),
-                   # ("policy-invalidReversedRange", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'policy',
-                   #     'metadata': {'name': 'policy2'},
-                   #     'spec': {'egress': [{'action': 'deny',
-                   #                          'destination': {},
-                   #                          'protocol': 'tcp',
-                   #                          'source': {},
-                   #                          'ports': [65535-1]  # range should be low-high
-                   #                          }],
-                   #              'ingress': [{'action': 'allow',
-                   #                           'destination': {},
-                   #                           'protocol': 'udp',
-                   #                           'source': {}}],
-                   #              'order': 100000,
-                   #              'selector': ""}}),
+                   ("policy-invalidHighPortinList", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'policy2'},
+                       'spec': {'egress': [{'action': 'deny',
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            'ports': [10, 90, 65536]  # Max port is 65535
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
+                   ("policy-invalidHighPortinRange", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'policy2'},
+                       'spec': {'egress': [{'action': 'deny',
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            'ports': [1-65536]  # Max port is 65535
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
+                   ("policy-invalidLowPortinRange", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'policy2'},
+                       'spec': {'egress': [{'action': 'deny',
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            'ports': [0-65535]  # Min port is 1
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
+                   ("policy-invalidLowPortinList", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'policy2'},
+                       'spec': {'egress': [{'action': 'deny',
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            'ports': [0, 10, 80]  # Min port is 1
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
+                   ("policy-invalidReversedRange", {
+                       'apiVersion': 'v1',
+                       'kind': 'policy',
+                       'metadata': {'name': 'policy2'},
+                       'spec': {'egress': [{'action': 'deny',
+                                            'destination': {},
+                                            'protocol': 'tcp',
+                                            'source': {},
+                                            'ports': [65535-1]  # range should be low-high
+                                            }],
+                                'ingress': [{'action': 'allow',
+                                             'destination': {},
+                                             'protocol': 'udp',
+                                             'source': {}}],
+                                'order': 100000,
+                                'selector': ""}}),
                    ("policy-invalidAction", {
                        'apiVersion': 'v1',
                        'kind': 'policy',
                        'metadata': {'name': 'policy2'},
-                       'spec': {'egress': [{'action': 'jumpupanddown',
+                       'spec': {'egress': [{'action': 'jumpupanddown',  # invalid action
                                             'destination': {},
                                             'protocol': 'tcp',
                                             'source': {},
@@ -915,37 +962,33 @@ class InvalidData(TestBase):
                                 'selector': ""}}),
                    ("pool-invalidNet1", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "10.0.1.0/33"},
-                                         # impossible mask
+                                         'metadata': {'cidr': "10.0.1.0/33"},  # impossible mask
                                          'spec': {'ipip': {'enabled': True}}
                                          }),
                    ("pool-invalidNet2", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "10.0.256.0/24"},
-                                         # invalid octet
+                                         'metadata': {'cidr': "10.0.256.0/24"},  # invalid octet
                                          'spec': {'ipip': {'enabled': True}}
                                          }),
                    ("pool-invalidNet3", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "10.0.250.0"},
-                                         # no mask
+                                         'metadata': {'cidr': "10.0.250.0"},  # no mask
                                          'spec': {'ipip': {'enabled': True}}
                                          }),
                    ("pool-invalidNet4", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "fd5f::2::1/32"},
-                                         # too many ::
+                                         'metadata': {'cidr': "fd5f::2::1/32"},  # too many ::
                                          'spec': {'ipip': {'enabled': True}}
                                          }),
                    #  https://github.com/projectcalico/libcalico-go/issues/224
-                   # ("pool-invalidNet5a", {'apiVersion': 'v1',
-                   #                       'kind': 'ipPool',
-                   #                       'metadata': {'cidr': "::/0"},  # HUGE pool
-                   #                       }),
-                   # ("pool-invalidNet5b", {'apiVersion': 'v1',
-                   #                       'kind': 'ipPool',
-                   #                       'metadata': {'cidr': "1.1.1.1/0"},  # BIG pool
-                   #                       }),
+                   ("pool-invalidNet5a", {'apiVersion': 'v1',
+                                         'kind': 'ipPool',
+                                         'metadata': {'cidr': "::/0"},  # HUGE pool
+                                         }),
+                   ("pool-invalidNet5b", {'apiVersion': 'v1',
+                                         'kind': 'ipPool',
+                                         'metadata': {'cidr': "1.1.1.1/0"},  # BIG pool
+                                         }),
                    ("pool-invalidNet6", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
                                          'metadata': {'cidr': "::/128"},
@@ -953,20 +996,17 @@ class InvalidData(TestBase):
                                          }),
                    ("pool-invalidNet7", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "192.168.0.0/27"},
-                                         # invalid mask
+                                         'metadata': {'cidr': "192.168.0.0/27"},  # invalid mask
                                          }),
                    ("pool-invalidNet8", {'apiVersion': 'v1',
                                          'kind': 'ipPool',
-                                         'metadata': {'cidr': "fd5f::1/123"},
-                                         # invalid mask
+                                         'metadata': {'cidr': "fd5f::1/123"}, # invalid mask
                                          }),
 
                    ("pool-invalidIpIp1", {'apiVersion': 'v1',
                                           'kind': 'ipPool',
                                           'metadata': {'cidr': "10.0.1.0/24"},
-                                          'spec': {'ipip': {'enabled': 'True'}}
-                                          # enabled value is bool
+                                          'spec': {'ipip': {'enabled': 'True'}}  # enabled value must be a bool
                                           }),
                    ("pool-invalidIpIp2", {'apiVersion': 'v1',
                                           'kind': 'ipPool',
@@ -981,8 +1021,7 @@ class InvalidData(TestBase):
                                                          'destination': {},
                                                          'source': {}}],
                                              'ingress': [{'ipVersion': 6,
-                                                          'icmp': {'type': 256,
-                                                                   # 1-byte field
+                                                          'icmp': {'type': 256,  # max value 255
                                                                    'code': 255},
                                                           'action': 'deny',
                                                           'destination': {},
@@ -997,8 +1036,7 @@ class InvalidData(TestBase):
                                                          'source': {}}],
                                              'ingress': [{'ipVersion': 6,
                                                           'icmp': {'type': 19,
-                                                                   'code': 256},
-                                                          # 1-byte field
+                                                                   'code': 256},  # max value 255
                                                           'action': 'deny',
                                                           'destination': {},
                                                           'source': {}}],
@@ -1034,7 +1072,7 @@ class InvalidData(TestBase):
         with DockerHost('host', dind=False, start_calico=False) as host:
             def check_no_data_in_store(testdata):
                 out = host.calicoctl(
-                    "get %s --output=yaml" % testdata['kind'], new=True)
+                    "get %s --output=yaml" % testdata['kind'])
                 output = yaml.safe_load(out)
                 assert output == [], "Testdata has left data in datastore " \
                                      "instead of being completely rejected"
@@ -1042,8 +1080,7 @@ class InvalidData(TestBase):
             host.writefile("testfile.yaml", testdata)
             self.assertRaises(CommandExecError,
                               host.calicoctl,
-                              "create -f testfile.yaml",
-                              new=True)
+                              "create -f testfile.yaml")
             if name.startswith('compound'):
                 for data in testdata:
                     check_no_data_in_store(data)
