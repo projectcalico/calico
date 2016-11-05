@@ -100,7 +100,7 @@ with the default NAT IP assignment used by VirtualBox.  Depending on your
 specific environment, you may need to choose different CIDRs.
 
 So, once you have decided which type of network to create, following the
-appropriate instructions for one of *a)*, *b)*, *c)* or *d)*.
+appropriate instructions for one of the sections *a)* or *b)* below
 
 For AWS, omit the `ipip` in the `ipPool` spec below, and `Change Source/Dest. Check` on your instances with
 the following EC2 CLI command or by right clicking the instance in the EC2

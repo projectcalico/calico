@@ -188,7 +188,7 @@ line:
 ### Checking the status of the BGP peers
 
 To display the status of all BGP peerings for a specific node, use the
-`calicoctl status` command.  This displays the status of all BGP peers for
+`calicoctl node status` command.  This displays the status of all BGP peers for
 that node - this includes the peers that are automatically configured as part
 of the full node-to-node mesh and the explicitly configured global peers and
 node specific peers.
@@ -202,21 +202,23 @@ incorrect connectivity between your workloads.
 To check the status of the peerings on Calico node "Node1", run
 the following command from the "Node1" command line:
 
-	Node1$ calicoctl status
-	calico-node container is running. Status: Up 13 minutes
+```
+$ sudo calicoctl node status
+Calico process is running.
 
-	IPv4 BGP status
-	+--------------+-------------------+-------+----------+-------------+
-	| Peer address |     Peer type     | State |  Since   |     Info    |
-	+--------------+-------------------+-------+----------+-------------+
-	| 172.17.42.21 | node-to-node mesh |   up  | 16:17:25 | Established |
-	| 10.20.30.40  |       global      | start | 16:28:38 |   Connect   |
-	|  192.10.0.0  |   node specific   | start | 16:28:57 |   Connect   |
-	+--------------+-------------------+-------+----------+-------------+
+IPv4 BGP status
++--------------+-------------------+-------+----------+-------------+
+| PEER ADDRESS |     PEER TYPE     | STATE |  SINCE   |    INFO     |
++--------------+-------------------+-------+----------+-------------+
+| 172.17.8.102 | node-to-node mesh | up    | 23:30:04 | Established |
+| 10.20.30.40  |       global      | start | 16:28:38 |   Connect   |
+|  192.10.0.0  |   node specific   | start | 16:28:57 |   Connect   |
++--------------+-------------------+-------+----------+-------------+
 
-	IPv6 BGP status
-	+--------------+-------------------+-------+----------+-------------+
-	| Peer address |     Peer type     | State |  Since   |     Info    |
-	+--------------+-------------------+-------+----------+-------------+
-	|   aa:bb::ff  | node-to-node mesh |   up  | 16:17:26 | Established |
-	+--------------+-------------------+-------+----------+-------------+
+IPv6 BGP status
++--------------+-------------------+-------+----------+-------------+
+| PEER ADDRESS |     PEER TYPE     | STATE |  SINCE   |    INFO     |
++--------------+-------------------+-------+----------+-------------+
+| aa:bb::ff    | node-to-node mesh | up    | 16:17:26 | Established |
++--------------+-------------------+-------+----------+-------------+
+```

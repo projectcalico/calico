@@ -9,8 +9,8 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
 
 ### 1.1 Install dependencies
 
-* [VirtualBox][virtualbox] 5.0.22 or greater.
-* [Vagrant][vagrant] 1.8.4 or greater.
+* [VirtualBox][virtualbox] 5.1.8 or greater.
+* [Vagrant][vagrant] 1.8.5 or greater.
 * [Git][git]
 
 ### 1.2 Clone this project
