@@ -25,7 +25,7 @@ of IPs for a particular host.
 
 ## 1. Environment setup
 
-To run through the worked example in this tutorial you will to set up two hosts
+To run through the worked example in this tutorial you will need to set up two hosts
 with a number of installation dependencies.
 
 Follow the instructions in one of the tutorials below to set up a virtualized
@@ -84,7 +84,7 @@ efficient approach for Calico requiring fewer programmed routes.
 
 During Step 2. above when the `calico/node` container starts, a default pool is created (`192.168.0.0/16`).
 
-This can be changed e.g. to choose a different IP range or to enabled IPIP, by creating a Calico
+This can be changed e.g. to choose a different IP range or to enable IPIP, by creating a Calico
 IP Pool using the `calicoctl create` command specifying the `ipip` and
 `nat-outgoing` options in the spec. Here we create a pool with CIDR 10.10.0.0/16.
 
