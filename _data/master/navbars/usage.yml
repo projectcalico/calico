@@ -27,7 +27,5 @@ toc:
   path: /usage/troubleshooting/
 - title: Logging
   path: /usage/troubleshooting/logging
-- title: FAQ for Calico on Openstack
+- title: Frequently Asked Questions 
   path: /usage/troubleshooting/faq
-- title: FAQ for Calico in Containers
-  path: /usage/troubleshooting/faq-2
