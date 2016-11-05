@@ -30,7 +30,7 @@ assignment by Calico.
 
 | name     | description                     | requirements | schema |
 |----------|---------------------------------|--------------|--------|
-| CIDR     | The CIDR of this pool.          |              | string representation of CIDR |
+| cidr     | The CIDR of this pool.          |              | string representation of CIDR |
 
 #### Spec
 
