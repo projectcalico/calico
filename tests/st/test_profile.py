@@ -128,23 +128,25 @@ class MultiHostMainline(TestBase):
                                          pass_list=n1_workloads + n2_workloads)
 
             elif test_type == "rules.ip.addr":
+                prof_n1, prof_n2 = self._get_profiles(new_profiles)
                 for workload in n1_workloads:
                     ip = workload.ip
                     rule = {'action': 'allow',
                             'source':
                                 {'net': '%s/32' % ip}}
-                    new_profiles[0]['spec']['ingress'].append(rule)
+                    prof_n2['spec']['ingress'].append(rule)
                 for workload in n2_workloads:
                     ip = workload.ip
                     rule = {'action': 'allow',
                             'source':
                                 {'net': '%s/32' % ip}}
-                    new_profiles[1]['spec']['ingress'].append(rule)
+                    prof_n1['spec']['ingress'].append(rule)
                 self._apply_new_profile(new_profiles, host1)
                 self.assert_connectivity(retries=2,
                                          pass_list=n1_workloads + n2_workloads)
 
             elif test_type == "rules.ip.net":
+                prof_n1, prof_n2 = self._get_profiles(new_profiles)
                 n1_ips = [workload.ip for workload in n1_workloads]
                 n2_ips = [workload.ip for workload in n2_workloads]
                 n1_subnet = netaddr.spanning_cidr(n1_ips)
@@ -152,11 +154,11 @@ class MultiHostMainline(TestBase):
                 rule = {'action': 'allow',
                         'source':
                             {'net': str(n1_subnet)}}
-                new_profiles[0]['spec']['ingress'].append(rule)
+                prof_n2['spec']['ingress'].append(rule)
                 rule = {'action': 'allow',
                         'source':
                             {'net': str(n2_subnet)}}
-                new_profiles[1]['spec']['ingress'].append(rule)
+                prof_n1['spec']['ingress'].append(rule)
                 self._apply_new_profile(new_profiles, host1)
                 self.assert_connectivity(retries=2,
                                          pass_list=n1_workloads + n2_workloads)
@@ -230,6 +232,24 @@ class MultiHostMainline(TestBase):
             host2.remove_workloads()
             for network in networks:
                 network.delete()
+
+    @staticmethod
+    def _get_profiles(profiles):
+        """
+        Sorts and returns the profiles for the networks.
+        :param profiles: the list of profiles
+        :return: tuple: profile for network1, profile for network2
+        """
+        prof_n1 = None
+        prof_n2 = None
+        for profile in profiles:
+            if profile['metadata']['name'] == "testnet1":
+                prof_n1 = profile
+            elif profile['metadata']['name'] == "testnet2":
+                prof_n2 = profile
+        assert prof_n1 is not None, "Could not find testnet1 profile"
+        assert prof_n2 is not None, "Could not find testnet2 profile"
+        return prof_n1, prof_n2
 
     @staticmethod
     def _apply_new_profile(new_profile, host):
