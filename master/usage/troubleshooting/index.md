@@ -45,11 +45,19 @@ probably indicates a problem in the BIRD setup.
 
 Look at `calicoctl node status` on each host.  It should include output like this:
 
-	+--------------+-------------------+-------+----------+--------------------------+
-	| Peer address |     Peer type     | State |  Since   |           Info           |
-	+--------------+-------------------+-------+----------+--------------------------+
-	| 172.16.8.242 | node-to-node mesh | start | 09:34:09 | Established              |
-	+--------------+-------------------+-------+----------+--------------------------+
+```
+Calico process is running.
+
+IPv4 BGP status
++--------------+-------------------+-------+----------+-------------+
+| PEER ADDRESS |     PEER TYPE     | STATE |  SINCE   |    INFO     |
++--------------+-------------------+-------+----------+-------------+
+| 172.17.8.102 | node-to-node mesh | up    | 23:30:04 | Established |
++--------------+-------------------+-------+----------+-------------+
+
+IPv6 BGP status
+No IPv6 peers found.
+```
 
 If you do not see this, please check the following.
 

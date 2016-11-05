@@ -9,8 +9,8 @@ These instructions allow you to set up an Ubuntu cluster ready to network Docker
 
 ### 1.1 Install dependencies
 
-* [VirtualBox][virtualbox] 5.0.22 or greater.
-* [Vagrant][vagrant] 1.8.4 or greater.
+* [VirtualBox][virtualbox] 5.1.8 or greater.
+* [Vagrant][vagrant] 1.8.5 or greater.
 * [Git][git]
 
 ### 1.2 Clone this project
@@ -52,7 +52,7 @@ help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
 
-    curl -L http://172.18.18.101/version
+    curl -L http://localhost:2379/version
 
 And finally check that Docker is running on both hosts by running
 

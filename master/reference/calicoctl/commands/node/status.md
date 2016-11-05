@@ -27,17 +27,16 @@ Description:
 ### Examples
 
 ```
-$ calicoctl status
-calico-node container is running. Status: Up 5 seconds
+$ sudo calicoctl node status
+Calico process is running.
 
 IPv4 BGP status
-IP: 172.17.8.100    AS Number: 64511 (inherited)
 +--------------+-------------------+-------+----------+-------------+
-| Peer address |     Peer type     | State |  Since   |     Info    |
+| PEER ADDRESS |     PEER TYPE     | STATE |  SINCE   |    INFO     |
 +--------------+-------------------+-------+----------+-------------+
-| 172.17.8.101 | node-to-node mesh |   up  | 17:54:00 | Established |
+| 172.17.8.102 | node-to-node mesh | up    | 23:30:04 | Established |
 +--------------+-------------------+-------+----------+-------------+
 
 IPv6 BGP status
-No IPv6 address configured.
+No IPv6 peers found.
 ```

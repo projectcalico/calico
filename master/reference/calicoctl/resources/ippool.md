@@ -13,15 +13,15 @@ assignment by Calico.
 ### Sample YAML
 
 ```
-apiVersion: v1
-kind: pool
-metadata:
-  cidr: 10.1.0.0/16
-spec:
-  ipip: 
-    enabled: false
-  nat-outgoing: true
-  disabled: false
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 10.1.0.0/16
+  spec:
+    ipip: 
+      enabled: false
+    nat-outgoing: true
+    disabled: false
 ```
 
 ### Definitions
@@ -30,7 +30,7 @@ spec:
 
 | name     | description                     | requirements | schema |
 |----------|---------------------------------|--------------|--------|
-| cidr     | The CIDR of this pool.          |              | string representation of CIDR |
+| CIDR     | The CIDR of this pool.          |              | string representation of CIDR |
 
 #### Spec
 
