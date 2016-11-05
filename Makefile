@@ -328,16 +328,16 @@ calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
 
 ## Use this to populate the vendor directory after checking out the repository.
 ## To update upstream dependencies, delete the glide.lock file first.
-vendor:
+vendor: glide.lock
 	# To build without Docker just run "glide install -strip-vendor"
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
-	    cd /go/src/github.com/projectcalico/calico-containers && \
-	    glide install -strip-vendor && \
-	    chown $(shell id -u):$(shell id -u) -R vendor'
+        cd /go/src/github.com/projectcalico/calico-containers && \
+        glide install -strip-vendor && \
+        chown $(shell id -u):$(shell id -u) -R vendor'
 
 ## Build the calicoctl
 binary: $(CALICOCTL_FILES) vendor
@@ -360,7 +360,7 @@ dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) vendor
 	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
 	  $(BUILD_CALICOCTL_CONTAINER_NAME) bash -c '\
 	    make binary && \
-		chown -R $(shell id -u):$(shell id -u) dist'
+	    chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Etcd is used by the tests
 .PHONY: run-etcd
