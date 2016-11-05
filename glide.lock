@@ -1,5 +1,5 @@
-hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-11-04T15:25:16.21788654Z
+hash: 6522027782f14d95a4eba1f0d143421db73fc63d0444d5fcf570544ef33bffc2
+updated: 2016-11-04T17:19:22.124583155-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -107,7 +107,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 3481b1ea6e5446a0d32c482349af68bcc12461eb
+  version: 5d335f678e2b3e50541d0dc5ab4f43bad35d0f5b
   subpackages:
   - lib
   - lib/api
@@ -167,7 +167,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: c200b10b5d5e122be351b67af224adc6128af5bf
+  version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -206,7 +206,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 - name: k8s.io/kubernetes
-  version: 00269a6c605975d46ab33c50af5e320f75f6735c
+  version: c83a9246281d9eb6915e591673defc05d8590c00
   subpackages:
   - pkg/api
   - pkg/api/errors
@@ -247,7 +247,7 @@ imports:
   - pkg/apis/extensions/v1beta1
   - pkg/apis/policy
   - pkg/apis/policy/install
-  - pkg/apis/policy/v1beta1
+  - pkg/apis/policy/v1alpha1
   - pkg/apis/rbac
   - pkg/apis/rbac/install
   - pkg/apis/rbac/v1alpha1
