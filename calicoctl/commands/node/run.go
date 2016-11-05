@@ -38,10 +38,12 @@ const (
 	ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
 )
 
+var VERSION string
+
 // Run function collects diagnostic information and logs
 func Run(args []string) {
 	var err error
-	doc := `Usage:
+	doc := fmt.Sprintf(`Usage:
   calicoctl node run [--ip=<IP>] [--ip6=<IP6>] [--as=<AS_NUM>]
                      [--name=<NAME>]
                      [--log-dir=<LOG_DIR>]
@@ -69,7 +71,7 @@ Options:
      --node-image=<DOCKER_IMAGE_NAME>
                            Docker image to use for Calico's
                            per-node container.
-                           [default: calico/node:latest]
+                           [default: calico/node:%s]
      --backend=(bird|gobgp|none)
                            Specify which networking backend to use.  When set
                            to "none", Calico node runs in policy only mode.
@@ -96,7 +98,7 @@ Description:
   configuraiton (e.g. systemd).
 
   For quickstart demonstration, this command may be run with no parameters.
-`
+`, VERSION)
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		log.Info(err)

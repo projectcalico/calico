@@ -23,22 +23,22 @@ CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releas
 GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
 
 # we can use "custom" build image name
-BUILD_CONTAINER_NAME?=calico/build:latest
+BUILD_CONTAINER_NAME?=calico/build:v0.18.0
 ###############################################################################
 # calico/node build. Contains the following areas
 # - Populate the calico_node/filesystem
 # - Build the container itself
 ###############################################################################
 NODE_CONTAINER_DIR=calico_node
-NODE_CONTAINER_NAME?=calico/node:latest
+NODE_CONTAINER_NAME?=calico/node:$(CALICOCONTAINERS_VERSION)
 NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 # we can pass --build-arg during node image building
 NODE_CONTAINER_BUILD_ARGS?=
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
-FELIX_CONTAINER_NAME?=calico/felix:latest
-LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:latest
+FELIX_CONTAINER_NAME?=calico/felix:2.0.0-beta.3
+LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.0.0-beta-rc2
 
 calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
@@ -306,11 +306,12 @@ CTL_CONTAINER_NAME?=calico/ctl:latest
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
 
-CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
+CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
+LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
+	-X github.com/projectcalico/calico-containers/calicoctl/commands/node.VERSION=$(CALICOCONTAINERS_VERSION) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
@@ -405,12 +406,20 @@ install:
 	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers/calicoctl
 
 ## Build a binary for a release
-release: clean update-tools dist/calicoctl test-containerized
-	docker tag calico/calicoctl:$(CALICOCTL_VERSION) quay.io/calico/calicoctl:$(CALICOCTL_VERSION)
+release-calicoctl: clean update-tools dist/calicoctl test-containerized
+	docker tag calico/calicoctl:$(CALICOCONTAINERS_VERSION) quay.io/calico/calicoctl:$(CALICOCONTAINERS_VERSION)
 	@echo Now attach the binaries to github dist/calicoctl
 	@echo And push the images to Docker Hub and quay.io:
-	@echo docker push calico/calicoctl:$(CALICOCTL_VERSION)
-	@echo docker push quay.io/calico/calicoctl:$(CALICOCTL_VERSION)
+	@echo docker push calico/calicoctl:$(CALICOCONTAINERS_VERSION)
+	@echo docker push quay.io/calico/calicoctl:$(CALICOCONTAINERS_VERSION)
+
+release-caliconode: calico/node
+	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME)
+	docker run $(NODE_CONTAINER_NAME) calico-felix --version
+	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
+	@echo And push the images to Docker Hub and quay.io:
+	@echo docker push $(NODE_CONTAINER_NAME)
+	@echo docker push quay.io/$(NODE_CONTAINER_NAME)
 
 ## Clean everything (including stray volumes)
 clean: clean_calico_node
