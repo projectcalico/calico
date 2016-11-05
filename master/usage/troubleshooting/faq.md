@@ -4,7 +4,6 @@ layout: docwithnav
 ---
 
 * TOC
-
 {:toc}
 
 ## "Why use Calico?"
