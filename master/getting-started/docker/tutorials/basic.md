@@ -18,7 +18,7 @@ automatically add the container to the Calico network, creating all necessary
 Calico configuration and setting up the interface and routes in the container
 accordingly.
 
-The Calico IPAM driver may be used in addition to the the Calico network
+The Calico IPAM driver must be used in addition to the the Calico network
 driver.  This provides IP address management using the configured Calico IP
 Pools as address pools for the container, preferentially selecting sub-blocks
 of IPs for a particular host.
@@ -77,71 +77,23 @@ The Calico IPAM driver provides address assignment that is geared towards
 a Calico deployment where scaling is important, and port-mapping for the
 containers is not required.
 
-The Calico IPAM driver assigns addresses with host aggregation - this is a more
-efficient approach for Calico requiring fewer programmed routes.  IPv6
-addresses are supported, although with the current Docker API, it is not
-possible to have an IPv6-only network, and (unlike the IPv4 behavior) it is
-necessary to specify a subnet from which to assign addresses.
+The Calico IPAM driver assigns addresses with host aggregation - this is an
+efficient approach for Calico requiring fewer programmed routes.
 
-When running in a cloud environment we need to also set `ipip` and
-`nat-outgoing` options in `ipPool` resource spec in the `yaml` or `json` config file.
+### 3.2 (Optional) Customizing the Calico IP Pool
 
-### 3.2 Create the network
+During Step 2. above when the `calico/node` container starts, a default pool is created (`192.168.0.0/16`).
 
-So, with the Calico IPAM driver configured, we can start creating some networks.
-
-We specify the Calico networking driver (`calico`) when creating the network,
-and specify the Calico IPAM driver (`calico-ipam`). Note: `--ipam-driver calico-ipam`
-is mandatory when using Calico with Docker libnetwork. 
-
-For this worked example, we explicitly choose a CIDR for each network
-rather than using default selections - this is to avoid potential conflicts
-with the default NAT IP assignment used by VirtualBox.  Depending on your
-specific environment, you may need to choose different CIDRs.
-
-So, once you have decided which type of network to create, following the
-appropriate instructions for one of the sections *a)* or *b)* below
-
-For AWS, omit the `ipip` in the `ipPool` spec below, and `Change Source/Dest. Check` on your instances with
-the following EC2 CLI command or by right clicking the instance in the EC2
-console, and selecting it from the Networking submenu.
-
-    aws ec2 modify-instance-attribute --instance-id <instance_id> --source-dest-check "{\"Value\": false}"
-
-#### a) Networking using Calico IPAM in a non-cloud environment
-
-For Calico IPAM in a non-cloud environment, you need to first create a Calico
-IP Pool with no additional options.  Here we create a pool with CIDR
-192.168.0.0/16.
-
-```
-$ cat << EOF | calicoctl create -f -
-> - apiVersion: v1
->   kind: ipPool
->   metadata:
->     cidr: 192.168.0.0/16
-> EOF
-```
-
-To create the networks, run:
-
-    docker network create --driver calico --ipam-driver calico-ipam net1
-    docker network create --driver calico --ipam-driver calico-ipam net2
-    docker network create --driver calico --ipam-driver calico-ipam net3
-
-#### b) Networking using Calico IPAM in a cloud environment
-
-For Calico IPAM in a cloud environment that doesn't enable direct container to
-container communication (DigitalOcean, GCE), you need to first create a Calico
+This can be changed e.g. to choose a different IP range or to enabled IPIP, by creating a Calico
 IP Pool using the `calicoctl create` command specifying the `ipip` and
-`nat-outgoing` options in the spec. Here we create a pool with CIDR 192.168.0.0/16.
+`nat-outgoing` options in the spec. Here we create a pool with CIDR 10.10.0.0/16.
 
 ```
 $ cat << EOF | calicoctl create -f -
 > - apiVersion: v1
 >   kind: ipPool
 >   metadata:
->     cidr: 192.168.0.0/16
+>     cidr: 10.10.0.0/16
 >   spec:
 >     ipip:
 >       enabled: true
@@ -149,12 +101,28 @@ $ cat << EOF | calicoctl create -f -
 > EOF
 ```
 
+IPIP should be enabled when running in a cloud environment that doesn't enable direct container to
+container communication (e.g. DigitalOcean, GCE). On AWS instead of using IPIP you can `Change Source/Dest. Check` 
+on your instances with the following EC2 CLI command or by right clicking the instance in the EC2
+console, and selecting it from the Networking submenu.
+
+    aws ec2 modify-instance-attribute --instance-id <instance_id> --source-dest-check "{\"Value\": false}"
+
+
+### 3.3 Create the network
+
+We specify the Calico networking driver (`calico`) when creating the network,
+and specify the Calico IPAM driver (`calico-ipam`). Note: `--ipam-driver calico-ipam`
+is mandatory when using Calico with Docker libnetwork. 
+
+
 To create the networks, run:
 
     docker network create --driver calico --ipam-driver calico-ipam net1
     docker network create --driver calico --ipam-driver calico-ipam net2
     docker network create --driver calico --ipam-driver calico-ipam net3
 
+To allocate from a specific Calico IP Pool, the `--subnet a.b.c.d/xx` command can be passed to `docker network create`. For more details see below.
 
 ## 4. Create the workloads in the networks
 
@@ -223,8 +191,7 @@ To see the list of networks, use
 With the release of Docker 1.10, support has been added to allow users to
 configure a specific IP address when creating a container.  In order to use
 this feature, Docker requires that you specify the `--subnet` parameter when running
-`docker network create`.  This parameter can be used in any of the four **"Create the
-network"** sets above.
+`docker network create`. 
 
 If you are using the Calico IPAM driver, the `--subnet` value must be the same
 CIDR as an existing Calico IP pool.  So if you create a Calico IP pool for
@@ -240,7 +207,7 @@ $ cat << EOF | calicoctl create -f -
 > - apiVersion: v1
 >   kind: ipPool
 >   metadata:
->     cidr: 192.168.1.0/16
+>     cidr: 192.168.1.0/24
 > EOF
 ```
 ```
@@ -253,11 +220,7 @@ docker run --net my_net --name my_workload --ip 192.168.1.100 -tid busybox
 
 ## Advanced network policy
 
-If you are using both the Calico network driver and the Calico IPAM driver
-it is possible to apply advanced policy to the network.
-
-For more details, read
-[Accessing Calico policy with Calico as a network plugin]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy).
+For more details, read [Advanced Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy).
 
 ## Make a container reachable from the Host-Interface (Internet)
 If you're interested in using port-forwarding, we have a working example on how
