@@ -2,116 +2,91 @@
 title: Profile Resource (profile)
 ---
 
-A Profile resource (profile) can be thought of as describing the properties of 
-an endpoint (virtual interface, or bare metal interface).  Each endpoint can 
-reference zero or more profiles.  A profile encapsulates a specific set of tags,
-labels and ACL rules that are directly applied to the endpoint.  Depending on 
-the use case, profiles may be sufficient to express all policy.
+A Profile resource (profile) represents a set of rules which are applied 
+to the individual endpoints to which this profile has been assigned.
 
-Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) 
+Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
+
+Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) 
 which provides an alternate way to select what policy is applied to an endpoint.
 
 ### Sample YAML
 
-```
+The following sample profile allows all traffic from 10.0.0.0/16, except if the source 
+is within 10.244.0.0/24, or if the source is within the same profile.
+
+```yaml
 apiVersion: v1
 kind: profile
 metadata:
   name: profile1
   labels:
-   foo: bar
+    profile: profile1 
 spec:
-  tags:
-  - tag1
-  - tag2s
   ingress:
   - action: deny
-    protocol: tcp
-    icmp:
-       type: 10
-       code: 6
-    notProtocol: udp
-    notICMP:
-       type: 19
-       code: 255
     source:
-      tag: production
-      net: 10.0.0.0/16
-      selector: type=='application'
-      ports: 
-      - 1234
-      - "10:20"
-      notTag: bartag
-      notNet: 10.1.0.0/16
-      notSelector: type=='database'
-      notPorts: 
-      - 1050
-    destination:
-      tag: alphatag
-      net: 10.2.0.0/16
-      selector: type=='application'
-      ports: 
-      - "100:200"
-      notTag: bananas
-      notNet: 10.3.0.0/16
-      notSelector: type=='apples'
-      notPorts: 
-      - "105:110"
-  egress:
+      net: 10.244.0.0/24
   - action: allow
     source:
-      selector: type=='application'
+      net: 10.0.0.0/16
+  egress:
+  - action: allow 
 ```
 
-> Note: The above YAML spec defines almost all of possible fields for the profile 
-specification, with one exception - the "egress" section has been simplified 
-for readability, despite the fact that it supports all fields that "ingress" does.
-
+### Definition 
 
 #### Metadata
 
-| name   | description  | requirements                  | schema |
-|--------|--------------|-------------------------------|--------|
-| name   | The name of the profile. | Required for `create`/`update`/`apply`/`delete`. If omitted on `get`, calicoctl enumerates over all profiles. | string |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| name   | The name of the profile. | | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
 
-#### PolicySpec
+#### Spec
 
-| name     | description                                                          | requirements | schema |
-|----------|----------------------------------------------------------------------|--------------|--------|
-| tags     | A list of tag names to apply to endpoints using this profile. Note that tags are expected to be deprecated shortly in preference to labels. Label with blank value is equivalent to tags. | | list of strings |
-| ingress  | The ingress rules belonging to this policy.                          | | List of [RuleSpecs](#rulespec) |
-| egress   | The egress rules belonging to this policy.                           | | List of [RuleSpecs](#rulespec)  |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
+| ingress  | The ingress rules belonging to this profile.                          | | List of [Rule](#rule) |
+| egress   | The egress rules belonging to this profile.                           | | List of [Rule](#rule)  |
 
-#### RuleSpec
+#### Rule
 
-| name        | description                                | requirements | schema |
-|-------------|--------------------------------------------|----------------|--------|
-| action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
-| protocol    | Positive protocol match.  | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| icmp        | ICMP match criteria.     | | [ICMPSpec](#icmpspec) |
-| notProtocol | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| notICMP     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
-| source      | Source match parameters. |  | [EntityRule](#entityrule) |
-| destination | Destination match parameters. |  | [EntityRule](#entityrule) |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| action      | Action to perform when matching this rule. | allow, deny, log | string | | 
+| protocol    | Positive protocol match.  | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
+| notProtocol | Negative protocol match. | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
+| icmp        | ICMP match criteria.     | | [ICMP](#icmp) | |
+| notICMP     | Negative match on ICMP. | | [ICMP](#icmp) | |
+| source      | Source match parameters. |  | [EntityRule](#entityrule) | |
+| destination | Destination match parameters. |  | [EntityRule](#entityrule) | |
 
-#### ICMPSpec
+#### ICMP
 
-| name | description                  | requirements         | schema  |
-|------|------------------------------|----------------------|---------|
-| type | Positive match on ICMP type. | Can be integer 1-255 | integer |
-| code | Positive match on ICMP code. | Can be integer 1-255 | integer |
-
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| type | Match on ICMP type. | Can be integer 1-255 | integer |
+| code | Match on ICMP code. | Can be integer 1-255 | integer |
 
 #### EntityRule
 
-| name        | description                                | requirements                           | schema                        |
-|-------------|--------------------------------------------|----------------------------------------|-------------------------------|
-| tag         | Match expression on tags.                  |                                        | string                        |
-| net         | Match on CIDR.                             |                                        | string representation of cidr |
-| selector    | Selector expression.                       |  | string |
-| ports       | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
-| notTag | Negative match on tag. |  | string |
-| notNet | Negative match on CIDR. | | string representation of cidr |
-| notSelector | Negative match on selector expression. | | string |
-| notPorts      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| tag (deprecated)      | Positive match on tag. |  | string | |
+| notTag (deprecated)   | Negative match on tag. |  | string | |
+| net    | Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
+| notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
+| selector    | Positive match on selected endpoints. | | [selector](#selector) | |
+| notSelector | Negative match on selected endpoints. | | [selector](#selector) | |
+| ports | Positive match on the specified ports | | list of [ports](#ports) | |
+| notPorts | Negative match on the specified ports |  | list of [ports](#ports) | |
+
+#### Selector
+
+{% include {{page.version}}/selectors.md %}
+
+#### Ports
+
+{% include {{page.version}}/ports.md %}
