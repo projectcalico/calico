@@ -103,6 +103,38 @@ type testArgsClaimAff struct {
 
 var _ = Describe("IPAM tests", func() {
 
+	Describe("IPAM AutoAssign from any pool", func() {
+		testutils.CleanEtcd()
+		c, _ := testutils.NewClient("")
+		ic := setupIPAMClient(true)
+
+		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
+		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
+
+		// Assign an IP address, don't pass a pool, make sure we can get an
+		// address.
+		Context("AutoAssign 1 IP from any pool", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: "test-host",
+			}
+			// Call once in order to assign an IP address and create a block.
+			v4, _, outErr := ic.AutoAssign(args)
+			It("should have assigned an IP address with no error", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4) == 1).To(BeTrue())
+			})
+
+			// Call again to trigger an assignment from the newly created block.
+			v4, _, outErr = ic.AutoAssign(args)
+			It("should have assigned an IP address with no error", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4) == 1).To(BeTrue())
+			})
+		})
+	})
+
 	Describe("IPAM AutoAssign from different pools", func() {
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
