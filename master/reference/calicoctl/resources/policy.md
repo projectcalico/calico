@@ -2,109 +2,90 @@
 title: Policy Resource (policy)
 ---
 
-A Policy resource (policy) can be thought of as a set of rules that are applied 
-to a set of endpoints (rather than being a property of the endpoint).  These give
-more flexible policy arrangements that can override or augment any ACLs directly 
-associated with an endpoint through a profile.
+A Policy resource (policy) represents an ordered set of rules which are applied 
+to a collection of endpoints which match a [label selector](#selector).  
 
-Each policy has a label/tag based selector predicate, such as 
-`type == webserver && role == frontend`, that selects which endpoints it should 
-apply to, and an order number that specifies the policy’s priority. For each endpoint, 
-Calico applies the security policies that apply to it, in priority order, and 
-then that endpoint’s security profiles.
+Policy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
+take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined. 
 
 ### Sample YAML
 
-```
+This sample policy allows traffic from `frontend` endpoints to `database` endpoints, but only on 
+TCP port 6379.
+
+```yaml
 apiVersion: v1
 kind: policy
 metadata:
-  name: policy1
+  name: allow-tcp-80
 spec:
-  order: 100
-  selector: type=='database'
+  selector: role == 'database'
   ingress:
-  - action: deny
+  - action: allow 
     protocol: tcp
-    icmp:
-      - type: 10
-      - code: 6
-    notProtocol": ipv6
-    notICMP:
-      - type: 19
-      - code: 255
     source:
-      tag: footag
-      net: 10.0.0.0/16
-      selector: type=='application'
-      ports: [1234,"10:20"]
-      notTag: bartag
-      notNet: 10.1.0.0/16
-      notSelector: type=='database'
-      notPorts: [1050]
+      selector: role == 'frontend'
     destination:
-      tag: alphatag
-      net: 10.2.0.0/16
-      selector: type=='application'
-      ports: ["100:200"]
-      notTag: type=='bananas'
-      notNet: 10.3.0.0/16
-      notSelector: type=='apples'
-      notPorts: ["1050:110"]
+      ports:
+      - 6379
   egress:
   - action: allow
-    source:
-      selector: type=='application'
 ```
 
-> Note: The above YAML spec defines almost all of possible fields for the policy 
-specification, with one exception - the "egress" section has been simplified 
-for readability, despite the fact that it supports all fields that "ingress" does.
+### Definition
 
 #### Metadata
 
-| name | description  | requirements                  | schema |
-|------|--------------|-------------------------------|--------|
-| name | The name of the policy. | | string |
+| Field | Description  | Accepted Values   | Schema |
+|-------|--------------|-------------------|--------|
+| name | The name of the policy. |         | string |
 
 
-#### PolicySpec
+#### Spec 
 
-| name     | description                                                          | requirements | schema |
-|----------|----------------------------------------------------------------------|--------------|--------|
-| order    | The order number which indicates the order that this policy is used. | | integer |
-| ingress  | The ingress rules belonging to this policy.                          | | List of [RuleSpecs](#rulespec) |
-| egress   | The egress rules belonging to this policy.                           | | List of [RuleSpecs](#rulespec)  |
-| selector | Selector expression.                                                 | | string |
+| Field    | Description                 | Accepted Values   | Schema | Default    |
+|----------|-----------------------------|-------------------|--------|------------|
+| order    | Indicates priority of this policy, with lower order taking precedence. | | integer | 100 |
+| selector | Selects the endpoints to which this policy applies. | | [selector](#selector)| all() |
+| ingress  | Ordered list of ingress rules applied by policy. | | List of [Rule](#rule)  | |
+| egress   | Ordered list of egress rules applied by this policy. | | List of [Rule](#rule)  | |
 
-#### RuleSpec
+#### Rule
 
-| name        | description                                | requirements | schema |
-|-------------|--------------------------------------------|----------------|--------|
-| action      | Action to perform when matching this rule.  Can be one of: `allow`, `deny`, `log` |  | string |
-| protocol    | Positive protocol match.  | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| notProtocol | Negative protocol match. | Can be one of: `tcp`, `udp`, `icmp`, `icmpv6`, `sctp`, `udplite`, or an integer 1-255. | string |
-| icmp        | ICMP match criteria.     | | [ICMPSpec](#icmpspec) |
-| notICMP     | Negative match on ICMP. | | [ICMPSpec](#icmpspec) |
-| source      | Source match parameters. |  | [EntityRule](#entityrule) |
-| destination | Destination match parameters. |  | [EntityRule](#entityrule) |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| action      | Action to perform when matching this rule. | allow, deny, log | string | | 
+| protocol    | Positive protocol match.  | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
+| notProtocol | Negative protocol match. | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
+| icmp        | ICMP match criteria.     | | [ICMP](#icmp) | |
+| notICMP     | Negative match on ICMP. | | [ICMP](#icmp) | |
+| source      | Source match parameters. |  | [EntityRule](#entityrule) | |
+| destination | Destination match parameters. |  | [EntityRule](#entityrule) | |
 
-#### ICMPSpec
+#### ICMP
 
-| name | description                  | requirements         | schema  |
-|------|------------------------------|----------------------|---------|
-| type | Positive match on ICMP type. | Can be integer 1-255 | integer |
-| code | Positive match on ICMP code. | Can be integer 1-255 | integer |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| type | Match on ICMP type. | Can be integer 1-255 | integer |
+| code | Match on ICMP code. | Can be integer 1-255 | integer |
 
 #### EntityRule
 
-| name        | description                                | requirements                  | schema |
-|-------------|--------------------------------------------|----------------|--------|
-| tag      | Match expression on tags.                   |  | string |
-| notTag | Negative match on tag. |  | string |
-| net    | Match on CIDR. |  | string representation of cidr |
-| notNet | Negative match on CIDR. | | string representation of cidr |
-| selector    | Selector expression. | | string |
-| notSelector | Negative match on selector expression. | | string |
-| ports | Restricts the rule to only apply to traffic that has a port that matches one of these ranges/values. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
-| notPorts      | Negative match on ports. | A list of integers and/or strings, where strings can represent a range of ports by joining the range by a colon, e.g. `'1000:2000'` | list of strings and/or integers. |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| tag (deprecated)      | Match on tag. |  | string | |
+| notTag (deprecated)   | Negative match on tag. |  | string | |
+| net    | Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
+| notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
+| selector    | Positive match on selected endpoints. | Valid selector | [selector](#selector) | |
+| notSelector | Negative match on selected endpoints. | Valid selector | [selector](#selector) | |
+| ports | Positive match on the specified ports | | list of [ports](#ports) | | 
+| notPorts | Negative match on the specified ports | | list of [ports](#ports) | |
+
+#### Selector
+
+{% include {{page.version}}/selectors.md %}
+
+#### Ports
+
+{% include {{page.version}}/ports.md %}

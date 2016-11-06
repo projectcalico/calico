@@ -2,47 +2,48 @@
 title: Node Resource (node)
 ---
 
-An Node resource (node) represents a Calico node instance.  When adding a host
-to a Calico node cluster, a Node resource needs to be created which contains the
-starting configuration for the Calico Node instance running on the host.
+An Node resource (node) represents a node running Calico.  When adding a host
+to a Calico cluster, a Node resource needs to be created which contains the
+configuration for the Calico Node instance running on the host.
 
 When starting a Calico node instance, the name supplied to the instance should 
-match then name configured in the Node resource.  By default, starting a Calico
-node instance without explicitly supplying a node, will result in the instance
+match the name configured in the Node resource.  
+
+By default, starting a `calico/node` instance will automatically create a node resource 
 using the `hostname` of the compute host.
 
 ### Sample YAML
 
-```
-- apiVersion: v1
-  kind: node
-  metadata:
-    name: node2
-  spec:
-    bgp:
-      asNumber: 12345
-      ipv4Address: 1.2.3.4
-      ipv6Address: aa::ff
+```yaml
+apiVersion: v1
+kind: node
+metadata:
+  name: node-hostname
+spec:
+  bgp:
+    asNumber: 64511
+    ipv4Address: 10.244.0.1
+    ipv6Address: 2001:db8:85a3::8a2e:370:7334
 ```
 
-### Definitions
+### Definition
 
 #### Metadata
 
-| name     | description                     | requirements | schema |
-|----------|---------------------------------|--------------|--------|
-| name     | The name of this node.          | This must match the name used to start the node instance on the Calico host | string |
+| Field       | Description                 | Accepted Values   | Schema |
+|-------------|-----------------------------|-------------------|--------|
+| name     | The name of this node.          | The value passed to the node instance on the host. | string |
 
 #### Spec
 
-| name     | description                      | requirements | schema  |
-|----------|----------------------------------|--------------|---------|
-| bgp      | BGP configuration for this node  | This can be omitted if your deployment is only using Calico for policy and not for routing | [BGP Configuration](#bgp-configuration) |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| bgp      | BGP configuration for this node.  Omit if using Calico for policy only. | | [BGP](#bgp) |
 
-#### BGP Configuration
+#### BGP 
 
-| name        | description                 | requirements | schema  |
-|-------------|-----------------------------|--------------|---------|
-| asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details on hos to manage the global value).| integer |
-| ipv4Address | The IPv4 address exported as the next-hop of the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | |
-| ipv6Address | The IPv6 address exported as the next-hop of the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details). | integer |
+| ipv4Address | The IPv4 address exported as the next-hop for the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | string |
+| ipv6Address | The IPv6 address exported as the next-hop for the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | string |

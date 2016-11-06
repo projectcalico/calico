@@ -2,46 +2,41 @@
 title: IP Pool Resource (ipPool)
 ---
 
-An IP Pool resource (ipPool) represents an IP address pool which Calico uses 
-to allocate IP addresses to endpoints/containers. The IP Pool is specified by 
-a CIDR (subnet) - this is the set of addresses that may be assigned to 
-endpoints.
-
-The full set of IP addresses in the IP Pool subnet should be available for
-assignment by Calico.
+An IP pool resource (ipPool) represents a collection of IP addresses from which Calico expects
+endpoint IPs to be assigned.
 
 ### Sample YAML
 
-```
-- apiVersion: v1
-  kind: ipPool
-  metadata:
-    cidr: 10.1.0.0/16
-  spec:
-    ipip: 
-      enabled: false
-    nat-outgoing: true
-    disabled: false
+```yaml
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 10.1.0.0/16
+spec:
+  ipip: 
+    enabled: false
+  nat-outgoing: true
+  disabled: false
 ```
 
-### Definitions
+### IP Pool Definition
 
 #### Metadata
 
-| name     | description                     | requirements | schema |
-|----------|---------------------------------|--------------|--------|
-| cidr     | The CIDR of this pool.          |              | string representation of CIDR |
+| Field       | Description                 | Accepted Values   | Schema |
+|-------------|-----------------------------|-------------------|--------|
+| cidr     | IP range to use for this pool.  | A valid IPv4 or IPv6 CIDR. | string |
 
 #### Spec
 
-| name     | description                 | requirements | schema  |
-|----------|-----------------------------|--------------|---------|
-| ipip | Configuration for ipip tunneling for this pool.     | If not specified, ipip tunneling is disabled for this pool. | [IPIP Configuration](#ipip-configuration) |
-| nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | | boolean |
-| disabled | When set to true, Calico IPAM will not assign addresses from this pool. |     | boolean |
+| Field       | Description                 | Accepted Values   | Schema | Default    |
+|-------------|-----------------------------|-------------------|--------|------------|
+| ipip | ipip tunneling configuration for this pool. If not specified, ipip tunneling is disabled for this pool. | | [IPIP](#ipip) |  
+| nat-outgoing | When enabled, packets sent from calico networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | false
+| disabled | When set to true, Calico IPAM will not assign addresses from this pool. | true, false | boolean | false
 
-#### IPIP Configuration
+#### IPIP
 
-| name     | description                 | requirements | schema  |
-|----------|-----------------------------|--------------|---------|
-| enabled   | When set to true, ipip tunneling will be used to deliver packets to desinations within this pool. |              | boolean |
+| Field    | Description                 | Accepted Values | Schema  | Default    |
+|----------|-----------------------------|--------------|---------|------------|
+| enabled   | When set to true, Calico IPAM will assign IPs from this pool. | true, false | boolean | true 
