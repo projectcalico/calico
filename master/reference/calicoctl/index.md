@@ -5,7 +5,7 @@ title: calicoctl user reference
 The command line tool, `calicoctl`, makes it easy to manage Calico network
 and security policy.
 
-Follow the setup in the [Configuing calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/config) section.
+Follow the setup in the [Configuing calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) section.
 This section describes how to do the initial setup of calicoctl, configuring
 the connection information for your Calico datastore.
 
