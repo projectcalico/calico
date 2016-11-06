@@ -150,6 +150,10 @@ routereflector.tar:
 	docker pull calico/routereflector:latest
 	docker save --output routereflector.tar calico/routereflector:latest
 
+workload.tar:
+	cd workload && docker build -t workload .
+	docker save --output workload.tar workload
+
 ## Run etcd in a container. Used by the STs and generally useful.
 run-etcd-st:
 	$(MAKE) stop-etcd
@@ -189,28 +193,27 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar #run-etcd-st
+st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-st
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
 	# HOST_CHECKOUT_DIR is used for volume mounts on containers started by this one.
 	# All of code under test is mounted into the container.
 	#   - This also provides access to calicoctl and the docker client
-	#$(MAKE) st-checks
-	#docker run --uts=host \
-	#           --pid=host \
-	#           --net=host \
-	#           --privileged \
-	#           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
-	#           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
-	#           -e MY_IP=$(LOCAL_IP_ENV) \
-	#           --rm -ti \
-	#           -v /var/run/docker.sock:/var/run/docker.sock \
-	#           -v $(SOURCE_DIR):/code \
-	#           calico/test \
-	#           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
-	#$(MAKE) stop-etcd
-	echo "No STs to run at the moment"
+	# $(MAKE) st-checks
+	docker run --uts=host \
+	           --pid=host \
+	           --net=host \
+	           --privileged \
+	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
+	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           --rm -ti \
+	           -v /var/run/docker.sock:/var/run/docker.sock \
+	           -v $(SOURCE_DIR):/code \
+	           calico/test \
+	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
+	$(MAKE) stop-etcd
 
 ## Run the STs in a container using etcd with SSL certificate/key/CA verification.
 .PHONY: st-ssl
@@ -325,16 +328,16 @@ calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
 
 ## Use this to populate the vendor directory after checking out the repository.
 ## To update upstream dependencies, delete the glide.lock file first.
-vendor:
+vendor: glide.lock
 	# To build without Docker just run "glide install -strip-vendor"
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
-	    cd /go/src/github.com/projectcalico/calico-containers && \
-	    glide install -strip-vendor && \
-	    chown $(shell id -u):$(shell id -u) -R vendor'
+        cd /go/src/github.com/projectcalico/calico-containers && \
+        glide install -strip-vendor && \
+        chown $(shell id -u):$(shell id -u) -R vendor'
 
 ## Build the calicoctl
 binary: $(CALICOCTL_FILES) vendor
@@ -357,7 +360,7 @@ dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) vendor
 	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
 	  $(BUILD_CALICOCTL_CONTAINER_NAME) bash -c '\
 	    make binary && \
-		chown -R $(shell id -u):$(shell id -u) dist'
+	    chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Etcd is used by the tests
 .PHONY: run-etcd
