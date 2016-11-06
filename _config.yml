@@ -38,3 +38,8 @@ defaults:
       path: v1.6
     values:
       version: v1.6
+  -
+    scope:
+      path: v2.0
+    values:
+      version: v2.0
