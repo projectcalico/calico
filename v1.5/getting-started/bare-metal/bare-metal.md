@@ -141,36 +141,28 @@ Therefore, we recommend creating a failsafe Calico security policy that
 is tailored to your environment. The example commands below show one
 example of how you might do that; the commands:
 
--   Create a new policy tier called "failsafe" with `order` 0. When
-    creating other tiers, you should give them a higher `order` value so
-    the failsafe rules get applied first.
--   Add a single policy to that tier, which
-
-    > -   applies to all known endpoints
-    > -   allows inbound ssh access from a defined "management" subnet
-    > -   allows outbound connectivity to etcd on a particular IP; if
-    >     you have multiple etcd servers you should duplicate the rule
-    >     for each destination
-    > -   allows inbound ICMP
-    > -   allows outbound UDP on port 67, for DHCP
-    > -   uses a "next-tier" action to pass any non-matching packets to
-    >     the next tier of policy.
+- Add a single policy, which
+  - applies to all known endpoints
+  - allows inbound ssh access from a defined "management" subnet
+  - allows outbound connectivity to etcd on a particular IP; if
+    you have multiple etcd servers you should duplicate the rule
+    for each destination
+  - allows inbound ICMP
+  - allows outbound UDP on port 67, for DHCP.
 
 <!-- -->
 
-    etcdctl set /calico/v1/policy/tier/failsafe/metadata '{"order": 0}'
-    etcdctl set /calico/v1/policy/tier/failsafe/policy/failsafe \
+    etcdctl set /calico/v1/policy/tier/default/policy/failsafe \
        '{
           "selector": "all()",
-          "order": 100,
+          "order": 0,
 
           "inbound_rules": [
             {"protocol": "tcp",
              "dst_ports": [22],
              "src_net": "<your management CIDR>",
              "action": "allow"},
-            {"protocol": "icmp", "action": "allow"},
-            {"action": "next-tier"}
+            {"protocol": "icmp", "action": "allow"}
           ],
 
           "outbound_rules": [
@@ -178,37 +170,28 @@ example of how you might do that; the commands:
              "dst_ports": [<your etcd ports>],
              "dst_net": "<your etcd IP>/32",
              "action": "allow"},
-            {"protocol": "udp", "dst_ports": [67], "action": "allow"},
-            {"action": "next-tier"}
+            {"protocol": "udp", "dst_ports": [67], "action": "allow"}
           ]
         }'
 
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](#failsafe-rules).
 
-> **NOTE**
+> **NOTE** 
 >
-> The policy ends with a "next-tier" action so that traffic that is
+> Packets that reach the end of the list of rules fall-through to the next policy (sorted by the order field).
 >
-> :   not explicitly matched gets passed to the next tier of policy
->     rather than being dropped at the end of the tier.
+> :   The selector in the policy, `all()`, will match *all* endpoints, 
+>     including any workload endpoints. If you have workload endpoints as 
+>     well as host endpoints then you may wish to use a more restrictive 
+>     selector. For example, you could label management interfaces with 
+>     label `endpoint_type = management` and then use selector 
+>     `endpoint_type == "management"`
 >
-> The selector in the policy, `all()`, will match *all*
+> :   If you are using Calico for networking workloads, you should add
+>     inbound and outbound rules to allow BGP, for example:
 >
-> :   endpoints, including any workload endpoints. If you have workload
->     endpoints as well as host endpoints then you may wish to use a
->     more restrictive selector. For example, you could label management
->     interfaces with label `endpoint_type = management` and then use
->     selector `endpoint_type == "management"`
->
-> If you are using Calico for networking workloads, you should add
->
-> :   inbound and outbound rules to allow BGP, for example:
->
-> `{"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}`
-
-Calico's tiered policy data is described in detail in
-[Tiered security policy]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
+> :   `{"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}`
 
 ## Creating host endpoint objects
 
@@ -257,9 +240,9 @@ the following data:
 
 Where `<list of profile IDs>` is an optional list of security profiles
 to apply to the endpoint and labels contains a set of arbitrary
-key/value pairs that can be used in selector expressions. For more
-information on profile IDs, labels, and selector expressions please see
-[Calico Data Model]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
+key/value pairs that can be used in selector expressions. 
+
+<!-- TODO(smc) data-model: Link to new data model docs. -->
 
 > **Warning**
 >
@@ -282,19 +265,17 @@ of the interface:
       }
     }
 
-The format of a host endpoint object is described in detail in [Calico Data Model]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
-
 After you create host endpoint objects, Felix will start policing
 traffic to/from that interface. If you have no policy or profiles in
 place, then you should see traffic being dropped on the interface.
 
 > **NOTE**
 >
-> By default, Calico has a failsafe in place that whitelists certain
->
-> :   traffic such as ssh. See below for more details on
+> :   By default, Calico has a failsafe in place that whitelists certain
+>     traffic such as ssh. See below for more details on 
 >     disabling/configuring the failsafe rules.
 >
+
 If you don't see traffic being dropped, check the hostname, IP address
 and (if used) the interface name in the configuration. If there was
 something wrong with the endpoint data, Felix will log a validation
@@ -313,20 +294,13 @@ address must be specified.
 
 ## Creating more security policy
 
-The Calico team recommend using tiered policy with bare-metal workloads.
-This allows ordered policy to be applied to endpoints that match
-particular label selectors.
+The Calico team recommend using selector-based security policy with 
+bare-metal workloads. This allows ordered policy to be applied to 
+endpoints that match particular label selectors.
 
-At a minimum, you'll need to create another policy tier. If you used
-`order` 0 for the failsafe tier above, any higher number will do:
++For example, you could add a second policy for webserver access:
 
-    etcdctl set /calico/v1/policy/tier/my-tier/metadata '{"order": 100}'
-
-Then add at least one policy to the tier. The example below allows
-inbound traffic from the network to endpoints labeled with role
-"webserver" on port 80 and all outbound traffic:
-
-    etcdctl set /calico/v1/policy/tier/my-tier/policy/webserver \
+    etcdctl set /calico/v1/policy/tier/default/policy/webserver \
         '{
            "selector": "role==\"webserver\"",
            "order": 100,
@@ -337,9 +311,6 @@ inbound traffic from the network to endpoints labeled with role
              {"action": "allow"}
            ]
          }'
-
-Calico's tiered policy data is described in detail in
-[Tiered security policy]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model).
 
 ## Failsafe rules
 
