@@ -1,5 +1,5 @@
-hash: a77685cf87f1a61704adfb459b39811c30585c8348787f30f91f1d4a869614b3
-updated: 2016-11-02T13:05:55.342531065-07:00
+hash: e2e051f58897fccc64aa106f6c3192f6cb5c25834e9744cd7954b2d70edda6f4
+updated: 2016-11-05T20:24:23.92216431-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -167,7 +167,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 5ac7c81b9a1b422fbc0f6762cd139a7cf324f4f2
+  version: ac7658948424d886ebb34a0205501e74999a482b
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -190,7 +190,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/ugorji/go
@@ -231,7 +231,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: c200b10b5d5e122be351b67af224adc6128af5bf
+  version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -266,7 +266,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/yaml.v2
-  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+  version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 - name: k8s.io/client-go
   version: 93fcd402979cfad8a7151f96e016416947c6a3cb
   subpackages:
@@ -363,7 +363,7 @@ imports:
   - 1.4/tools/metrics
   - 1.4/transport
 - name: k8s.io/kubernetes
-  version: 539165d899021064ceb98ef508756d7482f30035
+  version: c83a9246281d9eb6915e591673defc05d8590c00
   subpackages:
   - pkg/api
   - pkg/api/errors
@@ -379,7 +379,7 @@ imports:
   - pkg/apimachinery/registered
   - pkg/apis/apps
   - pkg/apis/apps/install
-  - pkg/apis/apps/v1alpha1
+  - pkg/apis/apps/v1beta1
   - pkg/apis/authentication
   - pkg/apis/authentication/install
   - pkg/apis/authentication/v1beta1
