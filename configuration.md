@@ -16,7 +16,20 @@ A minimal configuration file that uses Calico for networking and IPAM looks like
 Additional configuration can be added as detailed below.
 
 ## Generic
+
+### Datastore type
+
+The following option allows configuration of the Calico datastore type.
+* `datastore_type` (default: etcdv2)
+
+The Calico CNI plugin supports the following datastore types: 
+* etcdv2 (default)
+* kubernetes (experimental)
+
 ### Etcd location
+
+The following options are valid when `datastore_type` is `etcdv2`.
+
 Configure access to your etcd cluster using the following options
 * `etcd_endpoints` (no default. Format is comma separated list of etcd servers e.g. `http://1.2.3.4:2379,http://5.6.7.8:2379`)
 * `etcd_key_file` (no default. Format is an absolute path to a file)
@@ -29,6 +42,7 @@ The following deprecated options are also supported
 * `etcd_scheme` (default is `http`)
 
 ### Logging
+
 * Logging is always to `stderr`
 * Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
   * `WARNING` - the default.
