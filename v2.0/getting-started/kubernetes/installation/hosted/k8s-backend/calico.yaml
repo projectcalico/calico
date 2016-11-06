@@ -58,7 +58,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:latest 
+          image: calico/node:v1.0.0-beta 
           imagePullPolicy: Always
           env:
             # Use Kubernetes API as the backing datastore.
@@ -88,7 +88,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:latest 
+          image: calico/cni:v1.5.0 
           imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:

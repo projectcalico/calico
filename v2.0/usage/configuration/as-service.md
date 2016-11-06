@@ -85,7 +85,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
  -v /var/run/calico:/var/run/calico \
- calico/node:latest
+ calico/node:v1.0.0-beta
 
 ExecStop=-/usr/bin/docker stop calico-node
 

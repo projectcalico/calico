@@ -55,7 +55,7 @@ This can be done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget http://www.projectcalico.org/builds/calicoctl
+wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-beta/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -79,7 +79,7 @@ Requires=docker.service
 User=root
 Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node -e ETCD_ENDPOINTS= -e HOSTNAME=${HOSTNAME} -e IP= -e NO_DEFAULT_POOLS= -e AS= -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e CALICO_LIBNETWORK_ENABLED=true -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico calico/node:latest
+ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node -e ETCD_ENDPOINTS= -e HOSTNAME=${HOSTNAME} -e IP= -e NO_DEFAULT_POOLS= -e AS= -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e CALICO_LIBNETWORK_ENABLED=true -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico calico/node:v1.0.0-beta
 Restart=always
 RestartSec=10
 
