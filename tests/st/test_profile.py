@@ -41,14 +41,14 @@ else:
 
 class MultiHostMainline(TestBase):
     @parameterized.expand([
-        "tags",
+        #"tags",
         "rules.tags",
-        "rules.protocol.icmp",
-        "rules.ip.addr",
-        "rules.ip.net",
-        "rules.selector",
-        "rules.tcp.port",
-        "rules.udp.port",
+        #"rules.protocol.icmp",
+        #"rules.ip.addr",
+        #"rules.ip.net",
+        #"rules.selector",
+        #"rules.tcp.port",
+        #"rules.udp.port",
     ])
     def test_multi_host(self, test_type):
         """
