@@ -88,16 +88,8 @@ Options:
                            [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  This command is used to start a Calico node container instance.  The
-  Calico node is used to provide Calico networking on your compute host.
-
-  This command is used to quickly start the Calico node container using Docker
-  and by running with the --dryrun option can display the appropriate Docker
-  command without actually running the command - this is useful if you intend
-  to deploy Calico and therefore should include in your system startup
-  configuraiton (e.g. systemd).
-
-  For quickstart demonstration, this command may be run with no parameters.
+  This command is used to start a calico/node container instance which provides
+  Calico networking and network policy on your compute host.
 `, VERSION)
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
@@ -308,7 +300,7 @@ func setNFConntrackMax() {
 	//
 	// To avoid this becoming a problem, we recommend increasing the conntrack
 	// table size. To do so, run the following commands:
-	fmt.Println("Increasing contrack limit")
+	fmt.Println("Increasing conntrack limit")
 	err := ioutil.WriteFile("/proc/sys/net/netfilter/nf_conntrack_max",
 		[]byte("1000000"), 0)
 	if err != nil {
