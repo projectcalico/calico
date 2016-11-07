@@ -140,9 +140,6 @@ default networking (i.e. not libnetwork) it is more common to use the
 command, which can be found in the
 [`calicoctl container` reference documentation](./container).
 
-For more information about policy profiles, check out the section on
-[security profile data in the etcd data model documentation]({{site.baseurl}}/{{page.version}}/reference/etcd/data-model#security-profiles).
-
 This command can be run on any Calico node.
 
 Command syntax:
