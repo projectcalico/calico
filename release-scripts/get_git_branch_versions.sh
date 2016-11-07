@@ -10,7 +10,7 @@
 # duplicating and checking in nearly duplicate documentation subtrees
 # on the 'master' branch.
 
-GIT_MANAGED_VERSIONS=
+GIT_MANAGED_VERSIONS=v2.1
 
 function get_version_from_git {
     # Example usage: get_version_from_git v2.1
