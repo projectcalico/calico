@@ -76,7 +76,8 @@ EOF
 mode=$1				# stack, unstack or clean
 phase=$2			# pre-install, install, post-config or extra
 
-if is_service_enabled calico-felix; then
+if [ "${Q_AGENT}" = calico-felix ]; then
+
     case $mode in
 
 	stack)
@@ -92,7 +93,7 @@ if is_service_enabled calico-felix; then
 		    echo Calico plugin: pre-install
 
 		    # Add Calico PPA as a package source.
-		    sudo apt-add-repository -y ppa:project-calico/calico-1.4
+		    sudo apt-add-repository -y ppa:project-calico/calico-2.0
 		    REPOS_UPDATED=False
 
 		    # Also add BIRD project PPA as a package source.
@@ -117,11 +118,11 @@ if is_service_enabled calico-felix; then
 		    # Install and configure etcd.
 		    install_configure_etcd
 
-		    # Install posix-spawn.
-		    pip_install git+https://github.com/projectcalico/python-posix-spawn.git@1f74fbedb569d4e45f11e9e32d3dca74623f432c#egg=posix-spawn
+		    # Install the Calico agent.
+		    install_package calico-felix
 
-		    # Install the core Calico code.
-		    pip_install git+${FELIX_REPO:-https://github.com/projectcalico/felix.git}@${FELIX_BRANCH:-master}#egg=calico
+		    # Install Calico common code, that includes BIRD templates.
+		    install_package calico-common
 
 		    # Install networking-calico.
 		    pip_install "${GITDIR['networking-calico']}"
@@ -168,18 +169,10 @@ EOF
 		    # have been started.
 		    echo Calico plugin: extra
 
-		    # Run Felix, with logging to screen (stdout).
-		    sudo mkdir /etc/calico || true
-		    sudo bash -c "cat > /etc/calico/felix.cfg" <<EOF
-[global]
-LogSeverityScreen = debug
-EOF
-		    run_process calico-felix "sudo /usr/local/bin/calico-felix"
-
 		    # Run script to automatically generate and
 		    # maintain BIRD config for the cluster.
 		    run_process calico-bird \
-                      "sudo ${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP} ${DEST}"
+                      "sudo ${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP}"
 
 		    # Run the Calico DHCP agent.
 		    sudo mkdir /var/log/neutron || true
