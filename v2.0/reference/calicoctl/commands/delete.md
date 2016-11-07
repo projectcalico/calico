@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl delete' command
 
 Run `calicoctl delete --help` to display the following help menu for the 
-calicoctl delete command.
+command.
 
 ```
 Usage:

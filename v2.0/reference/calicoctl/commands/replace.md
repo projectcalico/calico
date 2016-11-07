@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl replace' command
 
 Run `calicoctl replace --help` to display the following help menu for the 
-calicoctl replace command.
+command.
 
 ```
 Usage:

@@ -2,15 +2,15 @@
 title: calicoctl node status
 ---
 
-This sections describes the `calicoctl node status` commands.
+This sections describes the `calicoctl node status` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl node status' commands
+## Displaying the help text for 'calicoctl node status' command
 
 Run `calicoctl node status --help` to display the following help menu for the
-calicoctl status command.
+command.
 
 ```
 Usage:
