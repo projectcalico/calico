@@ -28,9 +28,9 @@ func init() {
 		[]string{"NAME", "ASN", "IPV4", "IPV6"},
 		map[string]string{
 			"NAME": "{{.Metadata.Name}}",
-			"ASN":  "{{if .Spec.BGP}}{{.Spec.BGP.ASNumber}}{{end}}",
-			"IPV4": "{{if .Spec.BGP}}{{.Spec.BGP.IPv4Address}}{{end}}",
-			"IPV6": "{{if .Spec.BGP}}{{.Spec.BGP.IPv6Address}}{{end}}",
+			"ASN":  "{{if .Spec.BGP}}{{if .Spec.BGP.ASNumber}}{{.Spec.BGP.ASNumber}}{{end}}{{end}}",
+			"IPV4": "{{if .Spec.BGP}}{{if .Spec.BGP.IPv4Address}}{{.Spec.BGP.IPv4Address}}{{end}}{{end}}",
+			"IPV6": "{{if .Spec.BGP}}{{if .Spec.BGP.IPv6Address}}{{.Spec.BGP.IPv6Address}}{{end}}{{end}}",
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Node)
