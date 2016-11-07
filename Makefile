@@ -353,7 +353,7 @@ $(CTL_CONTAINER_CREATED): Dockerfile.calicoctl dist/calicoctl
 	touch $@
 
 ## Run the build in a container. Useful for CI
-dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) vendor
+dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	docker run --rm \
 	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
