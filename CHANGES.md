@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-beta.3
+
+- Pin logrus to 4b6ea73.
+- Pin libcalico-go to v1.0.0-beta-rc2.
+- Use 'glide up' to update other Go dependencies.
+
 ## 2.0.0-beta.2
 
 - Fix that "nat-outgoing" was not being honoured.

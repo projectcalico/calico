@@ -1,3 +1,12 @@
+felix (2.0.0~beta.3-__STREAM__) __STREAM__; urgency=low
+
+  * felix release (from Git commit 2b49e4b).
+    - Pin logrus to 4b6ea73.
+    - Pin libcalico-go to v1.0.0-beta-rc2.
+    - Use 'glide up' to update other Go dependencies.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 07 Nov 2016 12:12:58 +0000
+
 felix (2.0.0~beta.2-__STREAM__) __STREAM__; urgency=low
 
   * fix that net-outgoing was not being honoured.
