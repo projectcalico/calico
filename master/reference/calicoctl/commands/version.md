@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl version' commands
 
 Run `calicoctl version --help` to display the following help menu for the 
-calicoctl version commands.
+commands.
 
 ```
 Usage:

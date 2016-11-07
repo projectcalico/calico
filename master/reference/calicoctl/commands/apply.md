@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl apply' command
 
 Run `calicoctl apply --help` to display the following help menu for the 
-calicoctl apply command.
+command.
 
 ```
 Usage:

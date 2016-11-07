@@ -2,15 +2,15 @@
 title: calicoctl node run
 ---
 
-This sections describes the `calicoctl node run` commands.
+This sections describes the `calicoctl node run` command.
 
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
 for a full list of calicoctl commands.
 
-## Displaying the help text for 'calicoctl node run' commands
+## Displaying the help text for 'calicoctl node run' command
 
 Run `calicoctl node run --help` to display the following help menu for the
-calicoctl run command.
+command.
 
 ```
 Usage:
@@ -59,27 +59,18 @@ Options:
 
 Description:
   This command is used to start a Calico node container instance.  The
-  Calico node is used to provide Calico networking on your compute host.
-
-  This command is used to quickly start the Calico node container using Docker
-  and by running with the --dryrun option can display the appropriate Docker
-  command without actually running the command - this is useful if you intend
-  to deploy Calico and therefore should include in your system startup
-  configuraiton (e.g. systemd).
-
-  For quickstart demonstration, this command may be run with no parameters.
+  Calico node provides Calico networking on your compute host.
 ```
 
 ### Examples
 
 ```
-# Start the Calico node instance, using a specific IPv4 IP address for BGP
-# routing.
+# Start the Calico node with a specific IPv4 address for BGP.
 $ sudo calicoctl node run --ip=10.10.0.12
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
 Enabling IPv6 forwarding
-Increasing contrack limit
+Increasing conntrack limit
 Running the following command:
 
 docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0.0.1:2379 -e CALICO_LIBNETWORK_ENABLED=true -e HOSTNAME=calico -e IP=10.10.0.12 -e AS= -e NO_DEFAULT_POOLS= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico -v /var/run/calico:/var/run/calico calico/node:v1.0.0-beta-rc4-22-gfd4cf3c

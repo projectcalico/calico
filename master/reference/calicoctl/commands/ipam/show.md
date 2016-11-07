@@ -9,7 +9,7 @@ Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calico
 ## Displaying the help text for 'calicoctl ipam show' command
 
 Run `calicoctl ipam show --help` to display the following help menu for the
-calicoctl ipam show command.
+command.
 
 ```
 Usage:
