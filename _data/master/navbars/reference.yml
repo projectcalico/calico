@@ -40,6 +40,8 @@ toc:
       section:
       - title: Overview
         path: /reference/calicoctl/commands/node/
+      - title: run
+        path: /reference/calicoctl/commands/node/run
       - title: status
         path: /reference/calicoctl/commands/node/status
       - title: diags

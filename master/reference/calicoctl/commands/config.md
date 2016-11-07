@@ -12,7 +12,7 @@ Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calico
 ## Displaying the help text for 'calicoctl config' commands
 
 Run `calicoctl config --help` to display the following help menu for the
-calicoctl config commands.
+commands.
 
 ```
 Usage:
