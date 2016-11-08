@@ -37,7 +37,7 @@ from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
 from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
-from calico.felix.profilerules import RulesManager
+from calico.felix.profilerules import RulesManager, is_untracked
 from calico.felix.frules import interface_to_chain_suffix
 
 _log = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ _log = logging.getLogger(__name__)
 class EndpointManager(ReferenceManager):
     def __init__(self, config, ip_type,
                  iptables_updater,
+                 untracked_updater,
                  workload_disp_chains,
                  host_disp_chains,
                  rules_manager,
@@ -60,6 +61,7 @@ class EndpointManager(ReferenceManager):
 
         # Peers/utility classes.
         self.iptables_updater = iptables_updater
+        self.untracked_updater = untracked_updater
         self.workload_disp_chains = workload_disp_chains
         self.host_disp_chains = host_disp_chains
         self.rules_mgr = rules_manager
@@ -117,6 +119,7 @@ class EndpointManager(ReferenceManager):
                                     combined_id,
                                     self.ip_type,
                                     self.iptables_updater,
+                                    None,
                                     self.workload_disp_chains,
                                     self.rules_mgr,
                                     self.fip_manager,
@@ -126,6 +129,7 @@ class EndpointManager(ReferenceManager):
                                 combined_id,
                                 self.ip_type,
                                 self.iptables_updater,
+                                self.untracked_updater,
                                 self.host_disp_chains,
                                 self.rules_mgr,
                                 self.fip_manager,
@@ -585,7 +589,7 @@ class EndpointManager(ReferenceManager):
 
 class LocalEndpoint(RefCountedActor):
 
-    def __init__(self, config, combined_id, ip_type, iptables_updater,
+    def __init__(self, config, combined_id, ip_type, iptables_updater, untracked_updater,
                  dispatch_chains, rules_manager, fip_manager, status_reporter):
         """
         Controls a single local endpoint.
@@ -609,6 +613,7 @@ class LocalEndpoint(RefCountedActor):
 
         # Other actors we need to talk to.
         self.iptables_updater = iptables_updater
+        self.untracked_updater = untracked_updater
         self.dispatch_chains = dispatch_chains
         self.rules_mgr = rules_manager
         self.status_reporter = status_reporter
@@ -620,6 +625,7 @@ class LocalEndpoint(RefCountedActor):
 
         # List of global policies that we care about.
         self._pol_ids_by_tier = OrderedDict()
+        self._raw_pol_ids_by_tier = OrderedDict()
 
         # List of explicit profile IDs that we've processed.
         self._explicit_profile_ids = None
@@ -947,6 +953,33 @@ class LocalEndpoint(RefCountedActor):
                                all_old_ips, all_new_ips)
                     self._removed_ips |= all_old_ips
                     self._removed_ips -= all_new_ips
+<<<<<<< f6ddc11a0b3a3a8269136e9438cc66b4c2be823f:calico/felix/endpoint.py
+=======
+
+            tiers = pending_endpoint.get("tiers", [])
+            tier_dict = OrderedDict()
+            raw_tier_dict = OrderedDict()
+            for tier in tiers or []:
+                pols = []
+                raw_pols = []
+                for pol in tier["policies"] or []:
+                    pol_id = TieredPolicyId(tier["name"], pol)
+                    if is_untracked(pol_id):
+                        raw_pols.append(pol_id)
+                    else:
+                        pols.append(pol_id)
+                tier_dict[tier["name"]] = pols
+                raw_tier_dict[tier["name"]] = raw_pols
+            if self._pol_ids_by_tier.items() != tier_dict.items():
+                self._pol_ids_by_tier = tier_dict
+                self._iptables_in_sync = False
+                self._profile_ids_dirty = True
+            if self._raw_pol_ids_by_tier.items() != raw_tier_dict.items():
+                self._raw_pol_ids_by_tier = raw_tier_dict
+                self._iptables_in_sync = False
+                self._profile_ids_dirty = True
+
+>>>>>>> Add 'untracked' policy field:python/calico/felix/endpoint.py
         else:
             # Delete of the endpoint.  Need to resync everything.
             self._profile_ids_dirty = True
@@ -965,6 +998,8 @@ class LocalEndpoint(RefCountedActor):
             profile_ids = set(self._explicit_profile_ids)
             for pol_ids in self._pol_ids_by_tier.itervalues():
                 profile_ids.update(pol_ids)
+            for pol_ids in self._raw_pol_ids_by_tier.itervalues():
+                profile_ids.update(pol_ids)
         else:
             profile_ids = set()
         # Note: we don't actually need to wait for the activation to finish
@@ -974,8 +1009,14 @@ class LocalEndpoint(RefCountedActor):
 
     def _update_chains(self):
         updates, deps = self._endpoint_updates()
+        if self.untracked_updater:
+            raw_updates, raw_deps = self._endpoint_updates(untracked=True)
         try:
             self.iptables_updater.rewrite_chains(updates, deps, async=False)
+            if self.untracked_updater:
+                self.untracked_updater.rewrite_chains(raw_updates,
+                                                      raw_deps,
+                                                      async=False)
             self.fip_manager.update_endpoint(
                 self.combined_id,
                 self.endpoint.get(self.nat_key, None),
@@ -987,6 +1028,10 @@ class LocalEndpoint(RefCountedActor):
                 self.iptables_updater.delete_chains(
                     self.iptables_generator.endpoint_chain_names(self._suffix),
                     async=False)
+                if self.untracked_updater:
+                    self.untracked_updater.delete_chains(
+                        self.iptables_generator.endpoint_chain_names(self._suffix),
+                        async=False)
                 self.fip_manager.update_endpoint(self.combined_id, None,
                                                  async=True)
             except FailedSystemCall:
@@ -996,7 +1041,7 @@ class LocalEndpoint(RefCountedActor):
             self._iptables_in_sync = True
             self._chains_programmed = True
 
-    def _endpoint_updates(self):
+    def _endpoint_updates(self, untracked=False):
         raise NotImplementedError()  # pragma: no cover
 
     def _remove_chains(self):
@@ -1004,6 +1049,10 @@ class LocalEndpoint(RefCountedActor):
             self.iptables_updater.delete_chains(
                 self.iptables_generator.endpoint_chain_names(self._suffix),
                 async=False)
+            if self.untracked_updater:
+                self.untracked_updater.delete_chains(
+                    self.iptables_generator.endpoint_chain_names(self._suffix),
+                    async=False)
             self.fip_manager.update_endpoint(self.combined_id, None,
                                              async=True)
         except FailedSystemCall:
@@ -1124,7 +1173,8 @@ class WorkloadEndpoint(LocalEndpoint):
             _log.info("Interface %s deconfigured", self._iface_name)
             super(WorkloadEndpoint, self)._deconfigure_interface()
 
-    def _endpoint_updates(self):
+    def _endpoint_updates(self, untracked=False):
+        assert not untracked
         updates, deps = self.iptables_generator.endpoint_updates(
             IP_TYPE_TO_VERSION[self.ip_type],
             self.combined_id.endpoint,
@@ -1136,11 +1186,13 @@ class WorkloadEndpoint(LocalEndpoint):
 
 
 class HostEndpoint(LocalEndpoint):
-    def _endpoint_updates(self):
+    def _endpoint_updates(self, untracked=False):
         return self.iptables_generator.host_endpoint_updates(
             ip_version=IP_TYPE_TO_VERSION[self.ip_type],
             endpoint_id=self.combined_id.endpoint,
             suffix=self._suffix,
-            profile_ids=self.endpoint["profile_ids"],
-            pol_ids_by_tier=self._pol_ids_by_tier,
+            profile_ids=([] if untracked else self.endpoint["profile_ids"]),
+            pol_ids_by_tier=(self._raw_pol_ids_by_tier if untracked
+                             else self._pol_ids_by_tier),
+            default_drop=(not untracked),
         )
