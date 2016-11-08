@@ -84,7 +84,8 @@ class TestRules(BaseTestCase):
                                   "-j MASQUERADE",
                                   async=False),
                 call("PREROUTING --jump felix-PREROUTING", async=False),
-                call("POSTROUTING --jump felix-POSTROUTING", async=False)
+                call("POSTROUTING --jump felix-POSTROUTING", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False)
             ]
         )
 
@@ -105,12 +106,16 @@ class TestRules(BaseTestCase):
             ],
             'felix-POSTROUTING': [
                 '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump felix-FIP-DNAT'
             ]
         }
         m_v4_nat_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
             {'felix-PREROUTING': set(['felix-FIP-DNAT']),
-             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+             'felix-POSTROUTING': set(['felix-FIP-SNAT']),
+             'felix-OUTPUT': set(['felix-FIP-DNAT'])},
             async=False
         )
 
@@ -164,6 +169,7 @@ class TestRules(BaseTestCase):
             [
                 call("PREROUTING --jump felix-PREROUTING", async=False),
                 call("POSTROUTING --jump felix-POSTROUTING", async=False),
+                call("OUTPUT --jump felix-OUTPUT", async=False),
             ]
         )
 
@@ -182,12 +188,16 @@ class TestRules(BaseTestCase):
             ],
             'felix-POSTROUTING': [
                 '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump felix-FIP-DNAT'
             ]
         }
         m_v6_nat_upd.rewrite_chains.assert_called_once_with(
             expected_chains, {
                 'felix-PREROUTING': set(['felix-FIP-DNAT']),
-                'felix-POSTROUTING': set(['felix-FIP-SNAT'])
+                'felix-POSTROUTING': set(['felix-FIP-SNAT']),
+                'felix-OUTPUT': set(['felix-FIP-DNAT'])
             }, async=False
         )
 
@@ -251,7 +261,8 @@ class TestRules(BaseTestCase):
         self.assertEqual(
             m_v4_nat_upd.ensure_rule_inserted.mock_calls,
             [call("PREROUTING --jump felix-PREROUTING", async=False),
-             call("POSTROUTING --jump felix-POSTROUTING", async=False)]
+             call("POSTROUTING --jump felix-POSTROUTING", async=False),
+             call("OUTPUT --jump felix-OUTPUT", async=False)]
         )
 
         m_v4_upd.ensure_rule_inserted.assert_has_calls([
@@ -300,12 +311,16 @@ class TestRules(BaseTestCase):
             ],
             'felix-POSTROUTING': [
                 '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump felix-FIP-DNAT'
             ]
         }
         m_v4_nat_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
             {'felix-PREROUTING': set(['felix-FIP-DNAT']),
-             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+             'felix-POSTROUTING': set(['felix-FIP-SNAT']),
+             'felix-OUTPUT': set(['felix-FIP-DNAT'])},
             async=False
         )
 
@@ -384,7 +399,8 @@ class TestRules(BaseTestCase):
         self.assertEqual(
             m_v4_nat_upd.ensure_rule_inserted.mock_calls,
             [call("PREROUTING --jump felix-PREROUTING", async=False),
-             call("POSTROUTING --jump felix-POSTROUTING", async=False)]
+             call("POSTROUTING --jump felix-POSTROUTING", async=False),
+             call("OUTPUT --jump felix-OUTPUT", async=False)]
         )
 
         m_v4_upd.ensure_rule_inserted.assert_has_calls([
@@ -417,12 +433,16 @@ class TestRules(BaseTestCase):
             ],
             'felix-POSTROUTING': [
                 '--append felix-POSTROUTING --jump felix-FIP-SNAT'
+            ],
+            'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump felix-FIP-DNAT'
             ]
         }
         m_v4_nat_upd.rewrite_chains.assert_called_once_with(
             expected_chains,
             {'felix-PREROUTING': set(['felix-FIP-DNAT']),
-             'felix-POSTROUTING': set(['felix-FIP-SNAT'])},
+             'felix-POSTROUTING': set(['felix-FIP-SNAT']),
+             'felix-OUTPUT': set(['felix-FIP-DNAT'])},
             async=False
         )
 
