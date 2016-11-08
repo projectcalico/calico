@@ -69,8 +69,7 @@ Options:
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
-                           Docker image to use for Calico's
-                           per-node container.
+                           Docker image to use for Calico's per-node container.
                            [default: calico/node:%s]
      --backend=(bird|gobgp|none)
                            Specify which networking backend to use.  When set
@@ -83,8 +82,8 @@ Options:
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
                            and there are no pre-existing Calico IP pools.
-  -c --config=<CONFIG>     Filename containing connection configuration in
-                           YAML or JSON format.
+  -c --config=<CONFIG>     Path to the file containing connection
+                           configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
 
 Description:
