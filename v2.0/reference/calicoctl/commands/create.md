@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl create' command
 
 Run `calicoctl create --help` to display the following help menu for the 
-calicoctl create command.
+command.
 
 ```
 Usage:

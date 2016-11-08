@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl checksystem' command
 
 Run `calicoctl node checksystem --help` to display the following help menu for the
-calicoctl checksystem command.
+command.
 
 ```
 Usage: 

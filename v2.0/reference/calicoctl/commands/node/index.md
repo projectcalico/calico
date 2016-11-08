@@ -10,7 +10,7 @@ for a full list of calicoctl commands.
 ## Displaying the help text for 'calicoctl node' commands
 
 Run `calicoctl node --help` to display the following help menu for the
-calicoctl node commands.
+commands.
 
 ```
 Usage:

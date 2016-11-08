@@ -57,7 +57,7 @@ Options:
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
 
- Description:
+Description:
   This command is used to start a calico/node container instance which provides
   Calico networking and network policy on your compute host.
 ```
@@ -95,7 +95,7 @@ docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0
                          [default: /var/log/calico]
    --node-image=<DOCKER_IMAGE_NAME>
                          Docker image to use for Calico's per-node container.
-                         [default: calico/node:latest]
+                         [default: calico/node:v2.0]
    --backend=(bird|gobgp|none)
                          Specify which networking backend to use.  When set
                          to "none", Calico node runs in policy only mode.
@@ -115,7 +115,7 @@ docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0
 -c --config=<CONFIG>     Path to the file containing connection
                          configuration in YAML or JSON format.
                          [default: /etc/calico/calicoctl.cfg]
-``
+```
 
 ## See also
 
