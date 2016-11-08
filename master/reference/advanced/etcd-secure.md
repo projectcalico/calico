@@ -51,7 +51,7 @@ Some commands are required to be run as root.  The user's environment variables
 specified above will not be recognized by the root user, so the variables must 
 be passed into the Calico command.
 
-For example, to run `calicoctl node`, you would call something like this:
+For example, to run `calicoctl node run`, you would call something like this:
 
 ```shell
 sudo ETCD_KEY_FILE=/path/to/client.key \
@@ -63,14 +63,8 @@ Alternatively, if you have previously defined/exported your environment
 variables, you can run `sudo` with the `-E` flag to pass in your environment:
 
 ```shell
-sudo -E calicoctl node
+sudo -E calicoctl node run
 ```
-
-Here's a list of commands that must be run as root:
-
-- `calicoctl node run`
-- `calicoctl node status`
-- `calicoctl node diags`
 
 See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for details on specific 
 calicoctl commands.
@@ -88,4 +82,3 @@ command line options to the Docker daemon.
      --cluster-store-opt kv.cacertfile=/path/to/ca.crt
      --cluster-store-opt kv.certfile=/path/to/cert.crt
      --cluster-store-opt kv.keyfile=/path/to/key.pem
-
