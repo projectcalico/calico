@@ -10,75 +10,80 @@
 
 # Calico for Containers
 
-Calico provides a highly scalable networking solution for connecting data
-center workloads (containers, VMs, or bare metal).  It is based on the same
-scalable IP networking principles as the internet: providing connectivity using
-a pure Layer 3 approach.  Calico can be deployed without encapsulation or
-overlays to provide high performance at massive scales.
+This repository is the home of `calico/node` and `calicoctl`.
 
-Read more about it on the [Project Calico website](https://www.projectcalico.org).
+#### For information on how to get started using Calico see: https://docs.projectcalico.org
 
-When using Calico networking in containerized environments, each container
-gets its own IP and fine grain security policy.  A `calico-node` service runs
-on each node which handles all of the necessary IP routing, installation of
-policy rules, and distribution of routes across the cluster of nodes.
+- For information on `calico/node`, see [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
 
-This repository contains:
--  The `calico/node` container Dockerfile and build environment.  It contains
-  the configuration and "glue" that pull together four separate processes to
-  provide Calico networking:
-  * Felix, the Calico worker process
-  * BIRD, the route distribution process
-    (there are separate processes for IPv4 and IPv6)
-  * Confd, a templating process to auto-generate configuration for BIRD
--  A command line tool, `calicoctl`, which makes it easy to configure
-   and start the Calico service listed above, and allows you to interact with
-   the datastore (etcd) to define and apply rich security policy to the
-   containers you create.
+- For information on `calicoctl` usage, see [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
 
-Please refer to our [main documentation](http://docs.projectcalico.org) for details on deploying Calico and 
-using `calicoctl`.
+### Developing
 
-## Common set-up
+Calico-containers is a golang project, so assuming you have already installed **go version 1.7.1+**, clone this repository into your Go project path:
 
-Assuming you have already installed **go version 1.7.1+**, perform the following simple steps to get building:
-
-- [Install Glide](https://github.com/Masterminds/glide#install)
-
-- Clone this repository to your Go project path: 
 ```
-git clone git@github.com:projectcalico/calico-containers.git $GOPATH/src/github.com/projectcalico/calico-containers
+git clone https://github.com/projectcalico/calico-containers.git $GOPATH/src/github.com/projectcalico/calico-containers
 ```
 
-- Switch to your project directory:
+Useful actions can be printed by running `make help` in the repo root.
+
+### Building `calico/node`
+
+To build the `calico/node` container, run the `make calico/node` build step from
+the root of the repository.
+
+Use the build variables listed in the `Calico binaries` variable section
+at the top of the Makefile to modify which components are included in the resulting image.
+For example, the following command will produce a docker image called `calico/node:custom`
+which use custom Felix and Libnetwork binaries:
 ```
-cd $GOPATH/src/github.com/projectcalico/calico-containers
+FELIX_CONTAINER_NAME=calico/felix:1.4.3 \
+LIBNETWORK_PLUGIN_CONTAINER_NAME=calico/libnetwork-plugin:v1.0.0-beta \
+BUILD_CONTAINER_NAME=calico/node:custom \
+make calico/node
 ```
 
-- Populate the `vendor/` directory in the project's root with this project's dependencies:
+### Building `calicoctl`
+
+There are two ways to build calicoctl: natively, and dockerized
+
+##### Dockerized Builds
+
+For simplicity, `calicoctl` can be built in a Docker container, eliminating
+the need for any dependencies in your host developer environment, using the following command:
+
 ```
-glide install
+make dist/calicoctl
 ```
 
-## Building calicoctl
+The binary will be put in `./dist`:
 
-### Non-release build
-To do a quick, non-release build of calicoctl, suitable for local testing, run
 ```
-make bin/calicoctl
+./dist/calicoctl --help
 ```
 
-The binary will be put in ./bin:
-```
-./bin/calicoctl --help
-```
+##### Native Builds
 
-### Release build
+1. [Install Glide](https://github.com/Masterminds/glide#install).
 
-For releases, we use a Docker-based build to ensure a clean environment with an appropriate glibc.  Specifically, we use a CentOS 6.6 container image to build against glibc v2.12.  this ensures compatibility with any later glibc.
+2. Populate the `vendor/` directory in the project's root with this project's dependencies:
+   ```
+   glide install
+   ```
 
-To do a release build, run:
+3. Build the binary:
+   ```
+   make binary
+   ```
+
+## Tests
+
+Calico-containers system tests run in a container to ensure all build dependencies are met.
+Specifically, the `calico/test` image produced at https://github.com/projectcalico/libcalico
+is used.
+
+The following Makefile step will use that image to run all local tests:
 ```
-make release/calicoctl
+make st
 ```
-The binary will be emitted to `./release/calicoctl-<version>`
