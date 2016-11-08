@@ -5,4 +5,7 @@ ADD dist/calicoctl ./calicoctl
 
 ENV CALICO_CTL_CONTAINER=TRUE
 
+# libltdl.so is needed by docker command line tool
+RUN apk add --no-cache libltdl
+
 ENTRYPOINT ["./calicoctl"]
