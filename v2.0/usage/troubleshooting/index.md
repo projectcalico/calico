@@ -4,19 +4,24 @@ title: Troubleshooting
 
 ## Running `sudo calicoctl ...` with Environment Variables
 
-If you use `sudo` for commands like `calicoctl node`, remember that your environment
+If you use `sudo` for commands like `calicoctl node run`, remember that your environment
 variables will not be transferred to the `sudo` environment.  You can run `sudo` with
 the `-E` flag to include your environment variables:
 
 ```shell
-    sudo -E calicoctl node
+    sudo -E calicoctl node run
 ```
 
 or you can set environment variables for `sudo` commands like this:
 
 ```shell
-    sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node
+    sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
 ```
+
+Also be aware that connection information can be specified as a config
+file rather than using environment variables.  See the 
+[Calicoctl Configuration Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
+guide for details.
 
 ## Ubuntu (or GNOME) NetworkManager
 
@@ -72,6 +77,7 @@ If you do not see this, please check the following.
   communication between the hosts on TCP port 179.  (179 is the BGP port.)
 
 ## Basic checks
+
 Running `ip route` shows what routes have been programmed. Routes from other hosts
 should show that they are programmed by bird.
 
@@ -80,4 +86,8 @@ image is out of date.  Use `vagrant box update` to pull the new version.  I
 recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
 If you hit issues, please raise tickets. Diags can be collected with the
-`sudo ./calicoctl node diags` command.
+`calicoctl node diags` command.  This should be run with superuser privileges,
+for example:
+
+        sudo calicoctl node diags
+
