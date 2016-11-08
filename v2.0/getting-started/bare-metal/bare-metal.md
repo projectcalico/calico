@@ -2,7 +2,6 @@
 title: Using Calico to Secure Host Interfaces
 ---
 
-
 This guide describes how to use Calico to secure the network interfaces
 of the host itself (as opposed to those of any container/VM workloads
 that are present on the host). We call such interfaces "host endpoints",
@@ -33,12 +32,10 @@ to/from other interfaces is left alone.
 
 > **NOTE**
 >
-> If you have a host with workloads on it then traffic that is
->
-> :   forwarded to workloads bypasses the policy applied to host
->     endpoints. If that weren't the case, the host endpoint policy
->     would need to be very broad to allow all traffic destined for any
->     possible workload.
+> If you have a host with workloads on it then traffic that is forwarded to
+> workloads bypasses the policy applied to host endpoints. If that weren't the 
+> case, the host endpoint policy would need to be very broad to allow all 
+> traffic destined for any possible workload.
 >
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 
@@ -47,6 +44,7 @@ to/from other interfaces is left alone.
 To make use of Calico's host endpoint support, you will need to follow
 these steps, described in more detail below:
 
+-   download the calicoctl binary
 -   create an etcd cluster, if you haven't already
 -   install Calico's Felix daemon on each host
 -   initialise the etcd database
@@ -57,6 +55,16 @@ these steps, described in more detail below:
     every interface)
 -   insert policy into etcd for Calico to apply
 -   decide whether to disable "failsafe SSH/etcd" access.
+
+### Download the calicoctl binary
+
+Download the calicoctl binary onto your host.
+
+	wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-beta/calicoctl
+	chmod +x calicoctl
+
+This binary should be placed in your `$PATH` so it can be run from any
+directory.
 
 ## Creating an etcd cluster
 
@@ -104,6 +112,14 @@ There are several ways to install Felix.
 
 -   if you are running another distribution, follow the instructions in
     [this document](pyi-bare-metal-install) to use our installer bundle.
+    
+-   if you want to run under docker, you can use `calicoctl node run` to start
+    the calico/node container image.  This container packages up the core Calico
+    components to provide both Calico networking and network policy.  Running
+    the container automatically pre-initialises the etcd database (which the
+    other installations methods do not).  See the 
+    [`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
+    guide for details.
 
 Until you initialise the database, Felix will make a regular log that it
 is in state "wait-for-ready". The default location for the log file is
@@ -111,8 +127,9 @@ is in state "wait-for-ready". The default location for the log file is
 
 ## Initialising the etcd database
 
-Calico doesn't (yet) have a tool to initialise the database for
-bare-metal only deplyments. To initialise the database manually, make
+If you are not using the container-based installation (see above), Calico
+doesn't (yet) have a tool to initialise the database for
+bare-metal only deployments. To initialise the database manually, make
 sure the `etcdctl` tool (which ships with etcd) is available, then
 execute the following command on one of your etcd hosts:
 
@@ -121,6 +138,10 @@ execute the following command on one of your etcd hosts:
 If you check the felix logfile after this step, the logs should
 transition from periodic notifications that felix is in state
 "wait-for-ready" to a stream of initialisation messages.
+
+> Note that if you are using the container-based installation, using the 
+> calico/node image, then the initialisation of the etcd database is handled
+> automatically for you.
 
 ## Creating basic connectivity and Calico policy
 
@@ -138,10 +159,10 @@ connectivity to a host,
     or DHCP.
 
 Therefore, we recommend creating a failsafe Calico security policy that
-is tailored to your environment. The example commands below show one
-example of how you might do that; the commands:
+is tailored to your environment. The example command below shows one
+example of how you might do that; the command uses `calicoctl` to:
 
-- Add a single policy, which
+- Create a single policy resource, which
   - applies to all known endpoints
   - allows inbound ssh access from a defined "management" subnet
   - allows outbound connectivity to etcd on a particular IP; if
@@ -150,29 +171,40 @@ example of how you might do that; the commands:
   - allows inbound ICMP
   - allows outbound UDP on port 67, for DHCP.
 
+When running this command, replace the placeholders in angle brackets with
+appropriate values for your deployment.
 <!-- -->
 
-    etcdctl set /calico/v1/policy/tier/default/policy/failsafe \
-       '{
-          "selector": "all()",
-          "order": 0,
-
-          "inbound_rules": [
-            {"protocol": "tcp",
-             "dst_ports": [22],
-             "src_net": "<your management CIDR>",
-             "action": "allow"},
-            {"protocol": "icmp", "action": "allow"}
-          ],
-
-          "outbound_rules": [
-            {"protocol": "tcp",
-             "dst_ports": [<your etcd ports>],
-             "dst_net": "<your etcd IP>/32",
-             "action": "allow"},
-            {"protocol": "udp", "dst_ports": [67], "action": "allow"}
-          ]
-        }'
+```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: failsafe
+  spec:
+    selector: "all()"
+    order: 0
+    ingress:
+    - action: allow
+      protocol: tcp
+      source:
+        net: "<your management CIDR>"
+      destination:
+        ports: [22]
+    - action: allow
+      protocol: icmp
+    egress:
+    - action: allow
+      protocol: tcp
+      destination:
+        net: "<your etcd IP>/32"
+        ports: [<your etcd ports>]
+    - action: allow
+      protocol: udp
+      destination:
+        ports: [67]  
+EOF
+```
 
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](#failsafe-rules).
@@ -181,57 +213,61 @@ Once you have such a policy in place, you may want to disable the
 >
 > Packets that reach the end of the list of rules fall-through to the next policy (sorted by the order field).
 >
-> :   The selector in the policy, `all()`, will match *all* endpoints, 
->     including any workload endpoints. If you have workload endpoints as 
->     well as host endpoints then you may wish to use a more restrictive 
->     selector. For example, you could label management interfaces with 
->     label `endpoint_type = management` and then use selector 
->     `endpoint_type == "management"`
+> The selector in the policy, `all()`, will match *all* endpoints, 
+> including any workload endpoints. If you have workload endpoints as 
+> well as host endpoints then you may wish to use a more restrictive 
+> selector. For example, you could label management interfaces with 
+> label `endpoint_type = management` and then use selector 
+> `endpoint_type == "management"`
 >
-> :   If you are using Calico for networking workloads, you should add
->     inbound and outbound rules to allow BGP, for example:
->
-> :   `{"protocol": "tcp", "dst\_ports": \[179\], "action": "allow"}`
+> If you are using Calico for networking workloads, you should add
+> inbound and outbound rules to allow BGP:  add an ingress and egress rule
+> to allow TCP traffic to destination port 179.
 
 ## Creating host endpoint objects
 
 For each host endpoint that you want Calico to secure, you'll need to
-create a host endpoint object in etcd. At present, this must be done
-manually using `etcdctl set <key> <value>`.
+create a host endpoint object in etcd.  Use the `calicoctl create` command
+to create a host endpoint resource (hostEndpoint).
 
 There are two ways to specify the interface that a host endpoint should
 refer to. You can either specify the name of the interface or its
-expected IP address. In either case, you'll also need to know the
-hostname of the host that owns the interface.
+expected IP address. In either case, you'll also need to know the name given to
+the Calico node running on the host that owns the interface; in most cases this
+will be the same as the hostname of the host.
 
 For example, to secure the interface named `eth0` with IP 10.0.0.1 on
-host `my-host`, you could create a host endpoint object at
-`/calico/v1/host/<hostname>/endpoint/<endpoint-id>` (where `<hostname>`
-is the hostname of the host with the endpoint and `<endpoint-id>` is an
-arbitrary name for the interface, such as "data-1" or "management") with
-the following data:
+host `my-host`, run the command below.  The name of the endpoint is an 
+arbitrary name required for endpoint identification.
 
-    {
-      "name": "eth0",
-      "expected_ipv4_addrs": ["10.0.0.1"],
-      "profile_ids": [<list of profile IDs>],
-      "labels": {
-        "role": "webserver",
-        "environment": "production",
-      }
-    }
+When running this command, replace the placeholders in angle brackets with
+appropriate values for your deployment.
+
+```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: hostEndpoint
+  metadata:
+    name: <name of endpoint>
+    node: <node name or hostname>
+    labels:
+      role: webserver
+      environment: production
+  spec:
+    interfaceName: eth0
+    profiles: [<list of profile IDs>]
+    expectedIPs: ["10.0.0.1"]
+EOF
+```
 
 > **NOTE**
 >
 > Felix tries to detect the correct hostname for a system. It logs
+> out the value it has determined at start-of-day in the following
+> format:
 >
-> :   out the value it has determined at start-of-day in the following
->     format:
+> `2015-10-20 17:42:09,813 \[INFO\]\[30149/5\] calico.felix.config 285: Parameter FelixHostname (Felix compute host hostname) has value 'my-hostname' read from None`
 >
-> 2015-10-20 17:42:09,813 \[INFO\]\[30149/5\] calico.felix.config 285:
-> Parameter FelixHostname (Felix compute host hostname) has value
-> 'my-hostname' read from None
-
 > The value (in this case "my-hostname") needs to match the hostname
 > used in etcd. Ideally, the host's system hostname should be set
 > correctly but if that's not possible, the Felix value can be
@@ -246,24 +282,30 @@ key/value pairs that can be used in selector expressions.
 
 > **Warning**
 >
-> When rendering security rules on other hosts, Calico uses the
->
-> :   `expected_ipvX_addrs` fields to resolve tags and label selectors
->     to IP addresses. If the `expected_ipvX_addrs` fields are omitted
->     then security rules that use labels and tags will fail to match
->     this endpoint.
->
+> When rendering security rules on other hosts, Calico uses the 
+> `expected_ipvX_addrs` fields to resolve tags and label selectors
+> to IP addresses. If the `expected_ipvX_addrs` fields are omitted
+> then security rules that use labels and tags will fail to match
+> this endpoint.
+
 Or, if you knew that the IP address should be 10.0.0.1, but not the name
 of the interface:
 
-    {
-      "expected_ipv4_addrs": ["10.0.0.1"],
-      "profile_ids": [<list of profile IDs>],
-      "labels": {
-        "role": "webserver",
-        "environment": "production",
-      }
-    }
+```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: hostEndpoint
+  metadata:
+    name: <name of endpoint>
+    node: <node name or hostname>
+    labels:
+      role: webserver
+      environment: production
+  spec:
+    profiles: [<list of profile IDs>]
+    expectedIPs: ["10.0.0.1"]
+EOF
+```
 
 After you create host endpoint objects, Felix will start policing
 traffic to/from that interface. If you have no policy or profiles in
@@ -271,9 +313,9 @@ place, then you should see traffic being dropped on the interface.
 
 > **NOTE**
 >
-> :   By default, Calico has a failsafe in place that whitelists certain
->     traffic such as ssh. See below for more details on 
->     disabling/configuring the failsafe rules.
+> By default, Calico has a failsafe in place that whitelists certain
+> traffic such as ssh. See below for more details on 
+> disabling/configuring the failsafe rules.
 >
 
 If you don't see traffic being dropped, check the hostname, IP address
@@ -294,23 +336,30 @@ address must be specified.
 
 ## Creating more security policy
 
-The Calico team recommend using selector-based security policy with 
+We recommend using selector-based security policy with 
 bare-metal workloads. This allows ordered policy to be applied to 
 endpoints that match particular label selectors.
 
 +For example, you could add a second policy for webserver access:
 
-    etcdctl set /calico/v1/policy/tier/default/policy/webserver \
-        '{
-           "selector": "role==\"webserver\"",
-           "order": 100,
-           "inbound_rules": [
-             {"protocol": "tcp", "dst_ports": [80], "action": "allow"}
-           ],
-           "outbound_rules": [
-             {"action": "allow"}
-           ]
-         }'
+```
+cat << EOF | dist/calicoctl create -f -
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: webserver
+  spec:
+    selector: "role==\"webserver\""
+    order: 100
+    ingress:
+    - action: allow
+      protocol: tcp
+      destination:
+        ports: [80]
+    egress:
+    - action: allow
+EOF
+```
 
 ## Failsafe rules
 
@@ -323,7 +372,8 @@ which allows access to ssh; as well as outbound communication to ports
 2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration
-parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration). They can be disabled by setting each configuration value to an empty string.
+parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration). 
+They can be disabled by setting each configuration value to an empty string.
 
 > **WARNING**
 >

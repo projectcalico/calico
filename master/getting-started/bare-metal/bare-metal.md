@@ -44,6 +44,7 @@ to/from other interfaces is left alone.
 To make use of Calico's host endpoint support, you will need to follow
 these steps, described in more detail below:
 
+-   download the calicoctl binary
 -   create an etcd cluster, if you haven't already
 -   install Calico's Felix daemon on each host
 -   initialise the etcd database
@@ -54,6 +55,16 @@ these steps, described in more detail below:
     every interface)
 -   insert policy into etcd for Calico to apply
 -   decide whether to disable "failsafe SSH/etcd" access.
+
+### Download the calicoctl binary
+
+Download the calicoctl binary onto your host.
+
+	wget http://www.projectcalico.org/builds/calicoctl
+	chmod +x calicoctl
+
+This binary should be placed in your `$PATH` so it can be run from any
+directory.
 
 ## Creating an etcd cluster
 
