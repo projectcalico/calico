@@ -2,11 +2,11 @@
 title: Policy Resource (policy)
 ---
 
-A Policy resource (policy) represents an ordered set of rules which are applied 
-to a collection of endpoints which match a [label selector](#selector).  
+A Policy resource (policy) represents an ordered set of rules which are applied
+to a collection of endpoints which match a [label selector](#selector).
 
 Policy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
-take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined. 
+take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
 
 For `calicoctl` commands that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `policy`, `policies`, `pol`, `pols`.
@@ -24,7 +24,7 @@ metadata:
 spec:
   selector: role == 'database'
   ingress:
-  - action: allow 
+  - action: allow
     protocol: tcp
     source:
       selector: role == 'frontend'
@@ -44,20 +44,26 @@ spec:
 | name | The name of the policy. |         | string |
 
 
-#### Spec 
+#### Spec
 
-| Field    | Description                 | Accepted Values   | Schema | Default    |
-|----------|-----------------------------|-------------------|--------|------------|
-| order    | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence) | | float |  |
-| selector | Selects the endpoints to which this policy applies. | | [selector](#selector)| all() |
-| ingress  | Ordered list of ingress rules applied by policy. | | List of [Rule](#rule)  | |
-| egress   | Ordered list of egress rules applied by this policy. | | List of [Rule](#rule)  | |
+| Field      | Description                                                                                                                                                         | Accepted Values | Schema                | Default |
+|------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------+---------|
+| order      | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence)                             |                 | float                 |         |
+| selector   | Selects the endpoints to which this policy applies.                                                                                                                 |                 | [selector](#selector) | all()   |
+| ingress    | Ordered list of ingress rules applied by policy.                                                                                                                    |                 | List of [Rule](#rule) |         |
+| egress     | Ordered list of egress rules applied by this policy.                                                                                                                |                 | List of [Rule](#rule) |         |
+| doNotTrack | Indicates that the rules in this policy should be applied before any data plane connection tracking, and that packets allowed by these rules should not be tracked. | true, false     | boolean               | false   |
+
+The `doNotTrack` field is meaningful for [host
+endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
+only.  Connection tracking is always used for flows to and from [workload
+endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint).
 
 #### Rule
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| action      | Action to perform when matching this rule. | allow, deny, log | string | | 
+| action      | Action to perform when matching this rule. | allow, deny, log | string | |
 | protocol    | Positive protocol match.  | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
 | notProtocol | Negative protocol match. | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
 | icmp        | ICMP match criteria.     | | [ICMP](#icmp) | |
@@ -82,7 +88,7 @@ spec:
 | notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
 | selector    | Positive match on selected endpoints. | Valid selector | [selector](#selector) | |
 | notSelector | Negative match on selected endpoints. | Valid selector | [selector](#selector) | |
-| ports | Positive match on the specified ports | | list of [ports](#ports) | | 
+| ports | Positive match on the specified ports | | list of [ports](#ports) | |
 | notPorts | Negative match on the specified ports | | list of [ports](#ports) | |
 
 #### Selector
