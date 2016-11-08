@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.0.0
-Release:        0.3.beta3%{?dist}
+Release:        0.4.dev__SNAPSHOT__%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -164,6 +164,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Nov 07 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.4.dev__SNAPSHOT__
+  - Development release.
+
 * Mon Nov 07 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.3.beta3
   - felix version 2.0.0-0.3.beta3 release
     - Pin logrus to 4b6ea73.
