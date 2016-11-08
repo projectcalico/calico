@@ -89,16 +89,16 @@ IP Pool using the `calicoctl create` command specifying the `ipip` and
 `nat-outgoing` options in the spec. Here we create a pool with CIDR 10.10.0.0/16.
 
 ```
-$ cat << EOF | calicoctl create -f -
-> - apiVersion: v1
->   kind: ipPool
->   metadata:
->     cidr: 10.10.0.0/16
->   spec:
->     ipip:
->       enabled: true
->     nat-outgoing: true
-> EOF
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 10.10.0.0/16
+  spec:
+    ipip:
+      enabled: true
+    nat-outgoing: true
+EOF
 ```
 
 IPIP should be enabled when running in a cloud environment that doesn't enable direct container to
@@ -203,17 +203,14 @@ For example, the following commands:
  - create a container using a specific IP address from the pool
 
 ```
-$ cat << EOF | calicoctl create -f -
-> - apiVersion: v1
->   kind: ipPool
->   metadata:
->     cidr: 192.168.1.0/24
-> EOF
-```
-```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 192.168.1.0/24
+EOF
+
 docker network create --driver calico --ipam-driver calico-ipam --subnet=192.168.1.0/24 my_net
-```
-```
 docker run --net my_net --name my_workload --ip 192.168.1.100 -tid busybox
 ```
 

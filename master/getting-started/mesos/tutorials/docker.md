@@ -19,7 +19,7 @@ This guide assumes you have a running Mesos Cluster that meets the following spe
   - Docker 1.9+ installed with a configured cluster store
   - calico-node service running
 
-To quickly generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
+To generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
 
 For info on upgrading an Agent to meet the above requirements and be ready for Calico, see the [Manual Install Docker Containerizer Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
 
@@ -28,44 +28,20 @@ For info on upgrading an Agent to meet the above requirements and be ready for C
 
 Before we can start launching tasks, we must first create a docker network with Calico.
 
-With Calico, a Docker network represents a logical set of rules that defines the
-allowed traffic in and out of containers assigned to that network.  The rules
-are encapsulated in a Calico "profile".  Each Docker network is assigned its
-own Calico profile.
-
 Run the following command on any agent to create a Docker network with Calico:
 
 ```shell
 docker network create --driver=calico --ipam-driver=calico-ipam my-calico-net
 ```
 
-#### View Network Policy
+By default, Calico will apply policy to allow full communication between endpoints
+within the network, and no  communication from other networks.  However,
+Calico allows richly configurable policy, which can be managed using the `calicoctl`
+command line tool.
 
-You can use the `calicoctl profile <profile> rule show` to display the
-rules in the profile associated with the `my-calico-net` network.
-
-The network name can be supplied as the profile name and the `calicoctl` tool
-will look up the profile associated with that network.
-
-Be sure to replace `<etcd-ip:port>` with the address and port at which etcd
-is listening.
-
-```shell
-$ export ETCD_ENDPOINTS=http://<etcd-ip:port>
-$ calicoctl profile my-calico-net rule show
-Inbound rules:
-   1 allow from tag my-calico-net
-Outbound rules:
-   1 allow
-```
-
-The default rules allow all outbound traffic and accept inbound
-traffic only from containers attached the "my-calico-net" network.
-
-> Note that when managing profiles created by the Calico network driver, the
-> profile tag and network name can be regarded as the same thing.
-
-For more information no how to configure your Calico profiles, see [Configuring Advanced Network Policy Guide]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy#configuring-the-network-policy).
+Please refer to the [Configuring Policy guide]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy)
+in the Docker section for details on configuring advanced policy when using
+Calico with Docker networks.
 
 ## Launching Containers
 With your networks configured, it is trivial to launch a calico-networked Docker container using the standard Marathon API.

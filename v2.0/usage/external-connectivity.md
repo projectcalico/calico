@@ -22,16 +22,14 @@ calicoctl get ipPool
 
 # For each pool that needs connectivity:
 ```
-$ cat << EOF | calicoctl create -f -
-> - apiVersion: v1
->   kind: ipPool
->   metadata:
->     cidr: 192.168.0.0/16
->   spec:
->     ipip:
->       enabled: false
->     nat-outgoing: true
-> EOF
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 192.168.0.0/16
+  spec:
+    nat-outgoing: true
+EOF
 ```
 [set `ipip:` `enabled:true` if needed]
 
