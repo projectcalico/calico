@@ -10,10 +10,8 @@ to represent each Docker network.  This profile is applied to each container
 in that network and the profile is used by Calico to configure access policy
 for that container.  By default, the profile contains rules that allow full
 egress traffic but allow ingress traffic only from containers within the same
-network and no other source.
-
-> Custom policy for a network can be configured by creating in advance, or editing,
-> the profile associated with the Docker network.
+network and no other source.  Custom policy for a network can be configured by 
+creating in advance, or editing, the profile associated with the Docker network.
 
 There are two ways in which the policy that defines the Docker network can be modified:
 
@@ -24,9 +22,9 @@ There are two ways in which the policy that defines the Docker network can be mo
 -  Assign labels to the profile, and define global selector based policy.  The 
    (Calico-specific) labels are assigned to containers in the associated Docker network. 
    The globally defined policy uses selectors to determine which subset of the policy 
-   is applied to each containers based on their labels.  This approach provides a powerful
+   is applied to each container based on their labels.  This approach provides a powerful
    way to group together all of your network Policy, makes it easy to reuse policy in
-   different networks and makes it easier to define policy that extends across 
+   different networks, and makes it easier to define policy that extends across 
    different orchestration systems that use Calico.
 
 ## Managing Calico policy for a network
@@ -37,37 +35,46 @@ described above.
 In both cases we create a Calico-Docker network and use the `calicoctl` tool to
 achieve the required isolation.
 
-The example we consider is this:  We want to provide isolation between a set of 
-database containers and a set of app containers, allowing only inbound
-TCP connections from the app containers to the database containers on
-port 3306.  We also want to allow all traffic between database containers.
+For the worked examples let's assume that we want to provide the following 
+isolation between a set of database containers and a set of frontend containers:
 
-### Policy applied directly by the profile
+-  Frontend containers can only access the Database containers over TCP to port
+   3306.  For now we'll assume no other connectivity is allowed to/from the frontend.
+-  Database containers have no isolation between themselves (to handle synchronization
+   within a cluster).  This could be improved by locking down the port ranges and 
+   protocols, but for brevity we'll just allow full access between database
+   containers.
 
-An approach, which may be sufficient for certain scenarios is to apply
-policy directly through the profile.  In this case we do the following:
+### a) Policy applied directly by the profile
 
--  create two Docker networks, one for apps and the other for databases
--  configure the profiles associated with each network to include:
-   -  labels which will be applied to the containers in the network
-   -  policy rules which will be applied to the containers in the network.
+In this example we apply the policy for containers in both networks just using
+profiles.  Each network has associated an identically named profile that consists
+of a set of labels and policy rules.  We set the labels and policy rules for each
+of the two network profiles to provide the required isolation.
 
-#### 1. Create the Docker networks
+#### a.1 Create the Docker networks
 
 On any host in your Calico / Docker network, run the following commands:
 
 ```
-docker network create --driver calico --ipam-driver calico-ipam databases 
-docker network create --driver calico --ipam-driver calico-ipam apps 
+docker network create --driver calico --ipam-driver calico-ipam database 
+docker network create --driver calico --ipam-driver calico-ipam frontend 
 ```
 
-#### 2. Create the profiles
+#### a.2 Create the profiles
 
-Create the profiles for each of these networks.  The profile may contains a set 
-of labels and a set of ingress and egress rules and actions where each rule can 
-filter packets based on a variety of source or destination attributes (including 
-selector based filtering using label selection).  The labels and rules are applied
-directly to each container in the corresponding network.  
+Create the profiles for each of these networks.
+
+We set labels on each profile indicating the network role, in our case frontend
+or database.  Each profile also includes a set of ingress and egress rules and 
+actions, where each rule can filter packets based on a variety of source or 
+destination attributes (which includes selector based filtering using label 
+selection).  The labels and rules are applied directly to each container in the 
+corresponding network. 
+
+The labels themselves are arbitrary key/value pairs, and we have decided here to
+use the key `role` indicating the network role and a value of either `frontend`
+or `database`.
 
 Use `calicoctl apply` to create or update the profiles:
 
@@ -76,7 +83,7 @@ cat << EOF | dist/calicoctl apply -f -
 - apiVersion: v1
   kind: profile
   metadata:
-    name: databases
+    name: database
     labels:
       role: database
   spec:
@@ -84,7 +91,7 @@ cat << EOF | dist/calicoctl apply -f -
     - action: allow
       protocol: tcp
       source:
-        selector: role == 'app'
+        selector: role == 'frontend'
       destination:
         ports:
         -  3306
@@ -98,95 +105,109 @@ cat << EOF | dist/calicoctl apply -f -
 - apiVersion: v1
   kind: profile
   metadata:
-    name: apps
+    name: frontend
     labels:
-      role: app
+      role: frontend
   spec:
     egress:
     - action: allow
+      protocol: tcp
+      destination:
+        selector: role == 'database'
+        ports:
+        -  3306
 EOF
 ```
 
-The above policy demonstrates profile based policy to lock down the database 
-containers.  The policy allows all traffic between database containers, 
-and allows inbound TCP connections on port 3306 from app containers.  All 
-other traffic to and from the database containers is locked down.  The app 
-containers are open to allow all egress traffic.
+The above profiles provide the required isolation between the frontend and database
+containers.  This works as follows:
 
-This works as follows:
-
--  Containers in the "databases" Docker network are assigned the "databases"
-   Calico profile.  Containers in the "apps" Docker network are assigned the 
-   "apps" Calico profile.
--  The "databases" profile assigns the Calico label `role = database` to each
-   database container.  The "apps" profile assigns the Calico label `role = app`
-   to each app container.
--  The "databases" profile assigns ingress and egress policy as follows:
+-  Containers in the "database" Docker network are assigned the "database"
+   Calico profile.
+-  Containers in the "frontend" Docker network are assigned the "frontend"
+   Calico profile.
+-  Each container in the "database" network inherits the label `role = database`
+   from its profile.
+-  Each container in the "frontend" network inherits the label `role = frontend`
+   from its profile.
+-  The "database" profile applies ingress and egress policy:
    -  An ingress rule to allow TCP traffic to port 3306 from endpoints that have
-      the label `role = app` (i.e. from app containers since they are the only
-      ones with the `role = app` assignment)
+      the label `role = frontend` (i.e. from frontend containers since they are 
+      the only ones with the label `role = frontend`)
    -  An ingress and egress rule to allow all traffic from and to endpoints that
       have the label `role = database` (i.e. from database containers).
--  The "apps" profile assigns a single rule to allow all egress traffic.
+-  The "frontend" profile applies a single egress rule to allow all TCP traffic 
+   to port 3306 on endpoints that have the label `role = database` (i.e. to
+   database containers)
 
-### Global policy applied through label selection
+For details on all of the possible match criteria, see the
+[profile resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+documentation.
+
+### b) Global policy applied through label selection
 
 The same example can be demonstrated using global selector-based policy.
-In this case we need to do the following:
-
--  create two Docker networks, one for apps and the other for databases
--  configure the profiles associated with each network to include labels which
-   will be applied to containers in the network
--  create global policy that uses selectors to determine which subset of the 
-   policy applies to which container.
+In this case we use the network profiles to apply labels (as in the previous
+example), but define a set of global policy resources that use selectors to 
+determine which subset of the policy applies to each container based on the
+labels applied by the profile.
 
 > The advantage of using this approach is that by sharing the same labels 
 > across different Docker networks, we can re-use globally defined policy without
 > having to re-specify it.
 
-#### 1. Create the Docker networks
+#### b.1 Create the Docker networks
 
 On any host in your Calico / Docker network, run the following commands:
 
 ```
-docker network create --driver calico --ipam-driver calico-ipam databases 
-docker network create --driver calico --ipam-driver calico-ipam apps 
+docker network create --driver calico --ipam-driver calico-ipam database 
+docker network create --driver calico --ipam-driver calico-ipam frontend 
 ```
 
-#### 2. Create the profiles
+#### b.2 Create the profiles
 
-Create the profiles for each of these networks to add a "role" label that
-specifies the role of the entities on the network.  Use `calicoctl apply` to 
-create or update these profiles:
+Create the profiles for each of these networks.
+
+We set labels on each profile indicating the network role, in our case frontend
+or database.  The labels are applied directly to each container in the 
+corresponding network. 
+
+As with the previous example we have decided to use the key `role` indicating
+the network role and a value of either `frontend` or `database`.  Unlike the 
+previous, we do not define any policy rules within the profile.
+
+Use `calicoctl apply` to create or update the profiles:
 
 ```
 cat << EOF | calicoctl apply -f -
 - apiVersion: v1
   kind: profile
   metadata:
-    name: databases
+    name: database
     labels:
       role: database
 - apiVersion: v1
   kind: profile
   metadata:
-    name: apps
+    name: frontend
     labels:
-      role: app
+      role: frontend
 EOF
 ```
 
-These profiles only contain labels.  The labels will be applied to each container
-in the corresponding network.  So, for example, containers in the `databases` 
-network will have the Calico label `role = database` applied to them.
+#### b.3 Create policy
 
-#### 3. Create policy
+Create the global policy to provide the required network isolation.
 
-Policy resources are defined globally.  The selector in a policy resource selects which
-endpoints the policy applies to based on the Calico labels assigned to each endpoint.
-Each policy contains a set of ingress and egress rules and actions where each rule can 
-filter packets based on a variety of source or destination attributes (including selector
-based filtering using label based selection).
+Policy resources are defined globally, and like profile includes a set of ingress
+and egress rules and actions, where each rule can filter packets based on a variety 
+of source or destination attributes (which includes selector based filtering using label 
+selection).
+
+Each policy resource also has a "main" selector that is used to determine which
+endpoints the policy is applied to based on the labels applied by the network
+profiles.
 
 We can use `calicoctl create` to create two new policies for this:
 
@@ -195,15 +216,16 @@ cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: policy
   metadata:
-    name: databases
+    name: database
   spec:
     order: 0
     selector: role == 'database'
     ingress:
+    ingress:
     - action: allow
       protocol: tcp
       source:
-        selector: role == 'app'
+        selector: role == 'frontend'
       destination:
         ports:
         -  3306
@@ -217,43 +239,47 @@ cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: policy
   metadata:
-    name: apps
+    name: frontend
   spec:
     order: 0
-    selector: role == 'app'
+    selector: role == 'frontend'
     egress:
     - action: allow
+      protocol: tcp
+      destination:
+        selector: role == 'database'
+        ports:
+        -  3306
 EOF
 ```
 
-The above policy demonstrates globally defined selector based policy to lock 
-down the database containers.  It is functionally equivalent to the previous example.
-The policy allows all traffic between database containers, and allows inbound 
-TCP connections on port 3306 from app containers.  All other traffic to and from 
-the database containers is locked down.  The app containers are open to allow all 
-egress traffic.
-
+The above policies provide the same isolation as the previous example.  
 This works as follows:
 
--  Containers in the "databases" Docker network are assigned the "databases"
-   Calico profile.  Containers in the "apps" Docker network are assigned the 
-   "apps" Calico profile.
--  The "databases" profile assigns the Calico label `role = database` to each
-   database container.  The "apps" profile assigns the Calico label `role = app`
-   to each app container.
--  The global policy resource "databases" uses the selector to select which
-   containers to apply the policy to - in this case those that have the 
-   `role = database` label.  The ingress and egress policy applied to these
-   containers is as follows:
+-  Containers in the "database" Docker network are assigned the "database"
+   Calico profile.
+-  Containers in the "frontend" Docker network are assigned the "frontend"
+   Calico profile.
+-  Each container in the "database" network inherits the label `role = database`
+   from its profile.
+-  Each container in the "frontend" network inherits the label `role = frontend`
+   from its profile.
+-  The global policy resource "database" uses the selector `role == database` to
+   select containers with label `role = database` and applies ingress and egress
+   policy:
    -  An ingress rule to allow TCP traffic to port 3306 from endpoints that have
-      the label `role = app` (i.e. from app containers since they are the only
-      ones with the `role = app` assignment)
+      the label `role = frontend` (i.e. from frontend containers since they are 
+      the only ones with the label `role = frontend`)
    -  An ingress and egress rule to allow all traffic from and to endpoints that
       have the label `role = database` (i.e. from database containers).
--  The global policy resource "apps" uses the selector to select which
-   containers to apply the policy to - in this case those that have the 
-   `role = app` label.  The policy applied to these containers is a single rule 
-   to allow all egress traffic.
+-  The global policy resource "frontend" uses the selector `role == frontend` to
+   select containers with label `role = frontend` and applies a single egress 
+   rule to allow all TCP traffic to port 3306 on endpoints that have the label 
+   `role = database` (i.e. to database containers)
+
+For details on all of the possible match criteria, see the
+[policy resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+documentation.
 
 ## Multiple networks
 
@@ -277,7 +303,7 @@ One approach for doing this is as follows:
    components with the  `backup = true` label.
 -  Create a Docker network "backups" for backups and update the associated 
    profile to assign the `backup = true` label
--  Create a Docker network "database-backup" for databases _and_ backup access,
+-  Create a Docker network "database-backup" for database _and_ backup access,
    and update the associated profile to assign both the `backup = true` and 
    `role = database` labels.
    
