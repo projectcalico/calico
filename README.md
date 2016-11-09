@@ -22,12 +22,6 @@ To build the Calico Networking Plugin for CNI locally, clone this repository and
 - To just build the binaries, with no tests, run `make binary`. This will produce `dist/calico` and `dist/calico-ipam`.
 - To only run the tests, simply run `make test`.
 
-## Release process
-* Create a release on Github and use it to create a tag
-* Check the tag out locally and run
-    * `make release`
-* Attach `dist/calico` and `dist/calico-ipam` to the Github release
-
 [cni]: https://github.com/appc/cni
 [config]: configuration.md
 [calico-containers]: https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/README.md
