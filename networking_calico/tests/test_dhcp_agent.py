@@ -64,6 +64,8 @@ class TestDhcpAgent(base.BaseTestCase):
         super(TestDhcpAgent, self).setUp()
         register_options(cfg.CONF)
         calico_config.register_options(cfg.CONF)
+        self.mock_makedirs_p = mock.patch("os.makedirs")
+        self.mock_makedirs = self.mock_makedirs_p.start()
 
     @mock.patch('etcd.Client')
     def test_mainline(self, etcd_client_cls):
@@ -538,6 +540,8 @@ class TestDnsmasqRouted(base.BaseTestCase):
             'interface_driver',
             'networking_calico.agent.linux.interface.RoutedInterfaceDriver'
         )
+        self.mock_makedirs_p = mock.patch("os.makedirs")
+        self.mock_makedirs = self.mock_makedirs_p.start()
 
     @mock.patch('neutron.agent.linux.dhcp.DeviceManager')
     @mock.patch(commonutils)
