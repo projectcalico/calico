@@ -138,7 +138,7 @@ Download the file `loopback` and cp it to CNI binary dir.
 ```bash
 wget https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
 tar -zxvf cni-v0.3.0.tgz
-sudo cp loopback /opt/cin/bin/
+sudo cp loopback /opt/cni/bin/
 ```
 
 ### 4. Deploy the Calico network policy controller
