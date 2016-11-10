@@ -2,12 +2,12 @@
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: calico-config 
+  name: calico-config
   namespace: kube-system
 data:
   # The location of your etcd cluster.  This uses the Service clusterIP
   # defined below.
-  etcd_endpoints: "http://100.78.232.136:6666"
+  etcd_endpoints: "http://10.96.232.136:6666"
 
   # True enables BGP networking, false tells Calico to enforce
   # policy only, using native networking.
@@ -37,9 +37,9 @@ data:
 
 # This manifest installs the Calico etcd on the kubeadm master.  This uses a DaemonSet
 # to force it to run on the master even when the master isn't schedulable, and uses
-# nodeSelector to ensure it only runs on the master. 
-apiVersion: extensions/v1beta1 
-kind: DaemonSet 
+# nodeSelector to ensure it only runs on the master.
+apiVersion: extensions/v1beta1
+kind: DaemonSet
 metadata:
   name: calico-etcd
   namespace: kube-system
@@ -94,15 +94,15 @@ spec:
   selector:
     k8s-app: calico-etcd
   # This ClusterIP needs to be known in advance, since we cannot rely
-  # on DNS to get access to etcd. 
-  clusterIP: 100.78.232.136
+  # on DNS to get access to etcd.
+  clusterIP: 10.96.232.136
   ports:
     - port: 6666
 
 ---
 
 # This manifest installs the calico/node container, as well
-# as the Calico CNI plugins and network config on 
+# as the Calico CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
 apiVersion: extensions/v1beta1
@@ -127,7 +127,7 @@ spec:
     spec:
       hostNetwork: true
       containers:
-        # Runs calico/node container on each Kubernetes node.  This 
+        # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
@@ -139,7 +139,7 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
-            # Enable BGP.  Disable to enforce policy only. 
+            # Enable BGP.  Disable to enforce policy only.
             - name: CALICO_NETWORKING
               valueFrom:
                 configMapKeyRef:
@@ -209,7 +209,7 @@ spec:
 # This manifest deploys the Calico policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
 apiVersion: extensions/v1beta1
-kind: ReplicaSet 
+kind: ReplicaSet
 metadata:
   name: calico-policy-controller
   namespace: kube-system
@@ -224,11 +224,11 @@ spec:
       namespace: kube-system
       labels:
         k8s-app: calico-policy-controller
-    annotations:
-      scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: |
-        [{"key": "role", "value": "master", "effect": "NoSchedule" },
-         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
 
     spec:
       # The policy controller must run in the host network namespace so that
@@ -248,7 +248,7 @@ spec:
             # service for API access.
             - name: K8S_API
               value: "https://kubernetes.default:443"
-            # Since we're running in the host namespace and might not have KubeDNS 
+            # Since we're running in the host namespace and might not have KubeDNS
             # access, configure the container's /etc/hosts to resolve
             # kubernetes.default to the correct service clusterIP.
             - name: CONFIGURE_ETC_HOSTS
@@ -256,40 +256,38 @@ spec:
 
 ---
 
-## This manifest deploys a Job which performs one time 
-# configuration of Calico 
+## This manifest deploys a Job which performs one time
+# configuration of Calico
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: configure-calico
   namespace: kube-system
   labels:
-    k8s-app: calico 
+    k8s-app: calico
 spec:
   template:
     metadata:
       name: configure-calico
-    annotations:
-      scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: |
-        [{"key": "role", "value": "master", "effect": "NoSchedule" },
-         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
-      restartPolicy: OnFailure 
+      restartPolicy: OnFailure
       containers:
-        # Writes basic configuration to datastore. 
+        # Writes basic configuration to datastore.
         - name: configure-calico
           image: calico/ctl:latest
-          args: 
-          - "pool"
-          - "add"
-          - "192.168.0.0/16"
-          - "--ipip"
-          - "--nat-outgoing"
+          args:
+          - “apply”
+          - “-f”
+          - “ippool.yaml”
           env:
             # The location of the etcd cluster.
-            - name: ETCD_ENDPOINTS 
+            - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
