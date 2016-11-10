@@ -24,7 +24,7 @@ write_files:
 coreos:
   etcd2:
     proxy: on 
-    listen-client-urls: http://127.0.0.1:1234
+    listen-client-urls: http://127.0.0.1:2379
     initial-cluster: etcdserver=http://172.18.18.101:2380
   update:
     reboot-strategy: off
