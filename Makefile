@@ -10,4 +10,4 @@ clean:
 	
 
 htmlproofer: _site
-	docker run --rm -v $$PWD/_site:/_site/ 18fgsa/html-proofer /_site --assume-extension --check-html --empty-alt-ignore
+	docker run --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore
