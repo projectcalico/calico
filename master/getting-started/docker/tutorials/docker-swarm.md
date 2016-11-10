@@ -103,12 +103,12 @@ IPAM drivers. Note that we need to first create a pool of allowable IP
 addresses for the containers. Here we create a pool with CIDR 192.168.0.0/16.
 
 ```
-$ cat << EOF | calicoctl create -f -
-> - apiVersion: v1
->   kind: ipPool
->   metadata:
->     cidr: 192.168.0.0/16
-> EOF
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: ipPool
+  metadata:
+    cidr: 192.168.0.0/16
+EOF
 ```
 
 To create the networks, run:

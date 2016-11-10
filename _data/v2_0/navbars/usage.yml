@@ -7,8 +7,6 @@ toc:
   path: /usage/
 - title: Configuration
   path: /usage/configuration/
-- title: Advanced Network Policy
-  path: /usage/configuration/advanced-network-policy
 - title: Calico and Systemd
   path: /usage/configuration/as-service
 - title: BGP Peering

@@ -250,8 +250,8 @@ node on which each container is hosted.
 Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the
-internet as well. You can read about how to configure security profiles in the
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy).
+internet as well.  Refer to the appropriate guide for your orchestration
+system for details on how to configure policy.
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
 As discussed, the recommended way to get traffic to containers that
@@ -271,7 +271,8 @@ iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.
 ```
 The command will need to be run each time the host is restarted.
 
-Remember: the security profile for the container will need to allow traffic to the exposed port as well.  You can read about how to configure security profiles in the [Advanced Network Policy]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy) guide.
+Remember: the security profile for the container will need to allow traffic to the exposed port as well.
+Refer to the appropriate guide for your orchestration system for details on how to configure policy.
 
 ### Can I run Calico in a public cloud environment?
 Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between Calico hosts then you can specify the `--ipip` flag your Calico IP pool:

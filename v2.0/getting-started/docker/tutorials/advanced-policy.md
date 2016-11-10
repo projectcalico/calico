@@ -2,229 +2,318 @@
 title: Accessing Calico policy with Calico as a network plugin
 ---
 
-
 ## Background
 
-With Calico, a Docker network represents a logical set of rules that define the 
-allowed traffic in and out of containers assigned to that network.  The rules
-are encapsulated in a Calico "profile".
+With Calico as a Docker network plugin, Calico will create an identically named 
+[profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+to represent each Docker network.  This profile is applied to each container 
+in that network and the profile is used by Calico to configure access policy
+for that container.  By default, the profile contains rules that allow full
+egress traffic but allow ingress traffic only from containers within the same
+network and no other source.  Custom policy for a network can be configured by 
+creating in advance, or editing, the profile associated with the Docker network.
 
-When creating a Docker network using the Calico network driver, the Calico 
-driver creates a profile object for that network.  The default policy applied 
-by Calico when a new network is created allows communication between all 
-containers connected to that network, and no communication from other networks.
+There are two ways in which the policy that defines the Docker network can be modified:
 
-Using the standard `calicoctl create` to create a `profile` resource, it is possible to 
-manage the feature-rich policy associated with a network.
+-  Modify the profile policy rules.  This policy is applied directly to each container 
+   in the associated Docker network.  This approach is simple, but not very flexible, 
+   as the profile must describe the full set of rules that apply to the containers in
+   the network.
+-  Assign labels to the profile, and define global selector based policy.  The 
+   (Calico-specific) labels are assigned to containers in the associated Docker network. 
+   The globally defined policy uses selectors to determine which subset of the policy 
+   is applied to each container based on their labels.  This approach provides a powerful
+   way to group together all of your network Policy, makes it easy to reuse policy in
+   different networks, and makes it easier to define policy that extends across 
+   different orchestration systems that use Calico.
 
-> Note that if you want to access the feature rich Calico policy, you must use
-> both the Calico Network _and_ Calico IPAM drivers together.  Using the Calico
-> IPAM driver ensures _all_ traffic from the container is routed via the host
-> vRouter and is subject to Calico policy.
+## Managing Calico policy for a network
 
-> The profile that is created by the Calico network driver is given the same 
-> name as the Docker network name.
+This section provides a worked examples applying policy using the two approaches
+described above.
+
+In both cases we create a Calico-Docker network and use the `calicoctl` tool to
+achieve the required isolation.
+
+For the worked examples let's assume that we want to provide the following 
+isolation between a set of database containers and a set of frontend containers:
+
+-  Frontend containers can only access the Database containers over TCP to port
+   3306.  For now we'll assume no other connectivity is allowed to/from the frontend.
+-  Database containers have no isolation between themselves (to handle synchronization
+   within a cluster).  This could be improved by locking down the port ranges and 
+   protocols, but for brevity we'll just allow full access between database
+   containers.
+
+### a) Policy applied directly by the profile
+
+In this example we apply the policy for containers in both networks just using
+profiles.  Each network has associated an identically named profile that consists
+of a set of labels and policy rules.  We set the labels and policy rules for each
+of the two network profiles to provide the required isolation.
+
+#### a.1 Create the Docker networks
+
+On any host in your Calico / Docker network, run the following commands:
+
+```
+docker network create --driver calico --ipam-driver calico-ipam database 
+docker network create --driver calico --ipam-driver calico-ipam frontend 
+```
+
+#### a.2 Create the profiles
+
+Create the profiles for each of these networks.
+
+We set labels on each profile indicating the network role, in our case frontend
+or database.  Each profile also includes a set of ingress and egress rules and 
+actions, where each rule can filter packets based on a variety of source or 
+destination attributes (which includes selector based filtering using label 
+selection).  The labels and rules are applied directly to each container in the 
+corresponding network. 
+
+The labels themselves are arbitrary key/value pairs, and we have decided here to
+use the key `role` indicating the network role and a value of either `frontend`
+or `database`.
+
+Use `calicoctl apply` to create or update the profiles:
+
+```
+cat << EOF | dist/calicoctl apply -f -
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: database
+    labels:
+      role: database
+  spec:
+    ingress:
+    - action: allow
+      protocol: tcp
+      source:
+        selector: role == 'frontend'
+      destination:
+        ports:
+        -  3306
+    - action: allow
+      source:
+        selector: role == 'database'
+    egress:
+    - action: allow
+      destination:
+        selector: role == 'database'
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: frontend
+    labels:
+      role: frontend
+  spec:
+    egress:
+    - action: allow
+      protocol: tcp
+      destination:
+        selector: role == 'database'
+        ports:
+        -  3306
+EOF
+```
+
+The above profiles provide the required isolation between the frontend and database
+containers.  This works as follows:
+
+-  Containers in the "database" Docker network are assigned the "database"
+   Calico profile.
+-  Containers in the "frontend" Docker network are assigned the "frontend"
+   Calico profile.
+-  Each container in the "database" network inherits the label `role = database`
+   from its profile.
+-  Each container in the "frontend" network inherits the label `role = frontend`
+   from its profile.
+-  The "database" profile applies ingress and egress policy:
+   -  An ingress rule to allow TCP traffic to port 3306 from endpoints that have
+      the label `role = frontend` (i.e. from frontend containers since they are 
+      the only ones with the label `role = frontend`)
+   -  An ingress and egress rule to allow all traffic from and to endpoints that
+      have the label `role = database` (i.e. from database containers).
+-  The "frontend" profile applies a single egress rule to allow all TCP traffic 
+   to port 3306 on endpoints that have the label `role = database` (i.e. to
+   database containers)
+
+For details on all of the possible match criteria, see the
+[profile resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+documentation.
+
+### b) Global policy applied through label selection
+
+The same example can be demonstrated using global selector-based policy.
+In this case we use the network profiles to apply labels (as in the previous
+example), but define a set of global policy resources that use selectors to 
+determine which subset of the policy applies to each container based on the
+labels applied by the profile.
+
+> The advantage of using this approach is that by sharing the same labels 
+> across different Docker networks, we can re-use globally defined policy without
+> having to re-specify it.
+
+#### b.1 Create the Docker networks
+
+On any host in your Calico / Docker network, run the following commands:
+
+```
+docker network create --driver calico --ipam-driver calico-ipam database 
+docker network create --driver calico --ipam-driver calico-ipam frontend 
+```
+
+#### b.2 Create the profiles
+
+Create the profiles for each of these networks.
+
+We set labels on each profile indicating the network role, in our case frontend
+or database.  The labels are applied directly to each container in the 
+corresponding network. 
+
+As with the previous example we have decided to use the key `role` indicating
+the network role and a value of either `frontend` or `database`.  Unlike the 
+previous, we do not define any policy rules within the profile.
+
+Use `calicoctl apply` to create or update the profiles:
+
+```
+cat << EOF | calicoctl apply -f -
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: database
+    labels:
+      role: database
+- apiVersion: v1
+  kind: profile
+  metadata:
+    name: frontend
+    labels:
+      role: frontend
+EOF
+```
+
+#### b.3 Create policy
+
+Create the global policy to provide the required network isolation.
+
+Policy resources are defined globally, and like profile includes a set of ingress
+and egress rules and actions, where each rule can filter packets based on a variety 
+of source or destination attributes (which includes selector based filtering using label 
+selection).
+
+Each policy resource also has a "main" selector that is used to determine which
+endpoints the policy is applied to based on the labels applied by the network
+profiles.
+
+We can use `calicoctl create` to create two new policies for this:
+
+```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: database
+  spec:
+    order: 0
+    selector: role == 'database'
+    ingress:
+    ingress:
+    - action: allow
+      protocol: tcp
+      source:
+        selector: role == 'frontend'
+      destination:
+        ports:
+        -  3306
+    - action: allow
+      source:
+        selector: role == 'database'
+    egress:
+    - action: allow
+      destination:
+        selector: role == 'database'
+- apiVersion: v1
+  kind: policy
+  metadata:
+    name: frontend
+  spec:
+    order: 0
+    selector: role == 'frontend'
+    egress:
+    - action: allow
+      protocol: tcp
+      destination:
+        selector: role == 'database'
+        ports:
+        -  3306
+EOF
+```
+
+The above policies provide the same isolation as the previous example.  
+This works as follows:
+
+-  Containers in the "database" Docker network are assigned the "database"
+   Calico profile.
+-  Containers in the "frontend" Docker network are assigned the "frontend"
+   Calico profile.
+-  Each container in the "database" network inherits the label `role = database`
+   from its profile.
+-  Each container in the "frontend" network inherits the label `role = frontend`
+   from its profile.
+-  The global policy resource "database" uses the selector `role == database` to
+   select containers with label `role = database` and applies ingress and egress
+   policy:
+   -  An ingress rule to allow TCP traffic to port 3306 from endpoints that have
+      the label `role = frontend` (i.e. from frontend containers since they are 
+      the only ones with the label `role = frontend`)
+   -  An ingress and egress rule to allow all traffic from and to endpoints that
+      have the label `role = database` (i.e. from database containers).
+-  The global policy resource "frontend" uses the selector `role == frontend` to
+   select containers with label `role = frontend` and applies a single egress 
+   rule to allow all TCP traffic to port 3306 on endpoints that have the label 
+   `role = database` (i.e. to database containers)
+
+For details on all of the possible match criteria, see the
+[policy resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+documentation.
 
 ## Multiple networks
 
 Whilst the Docker API supports the ability to attach a container to multiple
-networks, it is not possible to use this feature of Docker when using Calico
-as the networking and IPAM provider.
+networks, it is not possible to use this feature of Docker when using the Calico.
 
-However, by defining multiple networks and modifying the Calico policy 
-associated with those networks it is possible to achieve the same isolation 
-that you would have if using multiple networks, with the additional bonus of a
-much richer policy set.
+However, using the selector-based approach for defining network policy it is
+possible to achieve the same effect of overlapping networks but with a far 
+richer policy set.
 
-For example, suppose with a standard Docker network approach you have two 
-networks A and B, and you have set of containers on network A, some on network
-B, and some on both networks A and B.  When using Calico as a Docker network
-plugin, you would configure networks A and B and then configure a third network
-(lets call it AB) to represent the "A and B" group where the policy would be
-modified to allow ingress traffic from both A and B.  Rather than attaching a
-container to network A and network B, with this model you would attach the 
-container to network AB.
+Extending the previous example, suppose we introduce another network that is
+used for system backups and that we want some of our database containers to be
+on both the database network and the backup network (so that they are able to 
+back up the database).  
 
-## Managing Calico policy for a network
+One approach for doing this is as follows:
 
-This section walks through an example of creating a docker network (with
-Calico) and using the `calicoctl` command line interface to modify the policy
-associated with that network.
+-  Define a new label, say `backup = true` to indicate that a particular
+   endpoint should be allowed access to the backup network.
+-  Define global policy "backupnetwork" that allows full access between all 
+   components with the  `backup = true` label.
+-  Create a Docker network "backups" for backups and update the associated 
+   profile to assign the `backup = true` label
+-  Create a Docker network "database-backup" for database _and_ backup access,
+   and update the associated profile to assign both the `backup = true` and 
+   `role = database` labels.
+   
+For your database containers that also need to be on the backup network, use the 
+"database-backup" network.  Since containers in this network will have the two
+labels assigned to it, they will pick up policy that selects both labels - in
+other words they will have the locked down database access plus access to the
+backup network.
 
-#### Create a Docker network
-
-To create a Docker network using Calico, run the `docker network create`
-command specifying `calico` as the network driver and `calico-ipam` as the IPAM driver.
-
-For example, suppose we want to provide network policy for a set of database
-containers.  We can create a network called `databases` with the the following
-command:
-
-```
-docker network create --driver calico --ipam-driver calico-ipam databases 
-```
-
-#### Create a profile
-
-To create a profile, we will use `calicoctl create` command with a profile
-configured in the YAML format below. The config can also be a yaml file which 
-can be passed to the command to create the profile. In this case we're feeding
-the config from STDIN.
-
-```
-$ cat << EOF | bin/calicoctl create -f -
-> apiVersion: v1
-> kind: profile
-> metadata:
->   name: databases
->   labels:
->    foo: bar
-> spec:
->   tags:
->   - tag1
->   - tag2s
->   ingress:
->   - action: deny
->     protocol: tcp
->     icmp:
->        type: 10
->        code: 6
->     notProtocol: udp
->     notICMP:
->        type: 19
->        code: 255
->     source:
->       tag: production
->       net: 10.0.0.0/16
->       selector: type=='application'
->       ports:
->       - 1234
->       - "10:20"
->       notTag: bartag
->       notNet: 10.1.0.0/16
->       notSelector: type=='database'
->       notPorts:
->       - 1050
->     destination:
->       tag: alphatag
->       net: 10.2.0.0/16
->       selector: type=='application'
->       ports:
->       - "100:200"
->       notTag: bananas
->       notNet: 10.3.0.0/16
->       notSelector: type=='apples'
->       notPorts:
->       - "105:110"
->   egress:
->   - action: allow
->     source:
->       selector: type=='application'
-> EOF
-```
-
-#### View the policy associated with the network
-
-You can use the `calicoctl get -o yaml profile <profile>` to display the
-rules in the profile associated with the `databases` network.
-
-```
-$ calicoctl get profile databases -o yaml
-- apiVersion: v1
-  kind: profile
-  metadata:
-    labels:
-      foo: bar
-    name: databases
-  spec:
-    egress:
-    - action: allow
-      destination: {}
-      source:
-        selector: type=='application'
-    ingress:
-    - action: deny
-      destination:
-        net: 10.2.0.0/16
-        notNet: 10.3.0.0/16
-        notPorts:
-        - 105:110
-        notSelector: type=='apples'
-        notTag: bananas
-        ports:
-        - 100:200
-        selector: type=='application'
-        tag: alphatag
-      icmp:
-        code: 6
-        type: 10
-      notICMP:
-        code: 255
-        type: 19
-      notProtocol: udp
-      protocol: tcp
-      source:
-        net: 10.0.0.0/16
-        notNet: 10.1.0.0/16
-        notPorts:
-        - 1050
-        notSelector: type=='database'
-        notTag: bartag
-        ports:
-        - 1234
-        - "10:20"
-        selector: type=='application'
-        tag: production
-    tags:
-    - tag1
-    - tag2s
-```
-
-As you can see, the default rules allow all outbound traffic and accept inbound
-traffic only from containers attached the "databases" network.
-
-#### Configuring the network policy
-
-Calico has a rich set of policy rules that can be leveraged.  Rules can be
-created to allow and disallow packets based on a variety of parameters such
-as source and destination CIDR, port and tag.
-
-The `calicoctl profile <profile> rule add` and `calicoctl profile <profile> rule remove`
-commands can be used to add and remove rules in the profile.
-  
-As an example, suppose the databases network represents a group of MySQL
-databases which should allow TCP traffic to port 3306 from "application" 
-containers.
-
-To achieve that, create a second network called "applications" which the
-application containers will be attached to.  Then, modify the network policy of
-the databases to allow the appropriate inbound traffic from the applications.
-
-```
-$ docker network create --driver calico --ipam-driver calico-ipam applications
-$ calicoctl profile databases rule add inbound allow tcp from tag applications to ports 3306
-```
-
-The second command adds a new rule to the databases network policy that allows
-inbound TCP traffic from the applications.
-
-You can view the updated network policy of the databases to show the newly
-added rule:
-
-```
-$ calicoctl profile databases rule show
-Inbound rules:
-   1 allow from tag databases
-   2 allow tcp from tag applications to ports 3306
-Outbound rules:
-   1 allow
-```
-
-For more details on the syntax of the rules, run `calicoctl profile --help` to
-display the valid profile commands.
-
-## Further reading
-
-For more details about advanced policy options read the 
-[Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy).
-
+Obviously, the example of allowing full access between everything on the "backup"
+network is probably a little too permissive, so you can lock down the access within
+the backup network by modifying the global policy selected by the `backup = true`
+label.
