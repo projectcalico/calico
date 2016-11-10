@@ -15,19 +15,9 @@
 from neutron.db import l3_db
 from neutron.plugins.ml2.plugin import Ml2Plugin
 
-try:
-    # Icehouse, Juno
-    from neutron.openstack.common import log
-except ImportError:
-    # Kilo
-    from oslo_log import log
+from networking_calico.compat import cfg
+from networking_calico.compat import log
 
-try:
-    # Icehouse, Juno
-    from oslo.config import cfg
-except ImportError:
-    # Kilo
-    from oslo_config import cfg
 
 LOG = log.getLogger(__name__)
 

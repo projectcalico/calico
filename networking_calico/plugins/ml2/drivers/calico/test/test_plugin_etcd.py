@@ -32,8 +32,8 @@ from networking_calico import common
 from networking_calico import datamodel_v1
 from networking_calico.etcdutils import ResyncRequired
 from networking_calico.monotonic import monotonic_time
-import networking_calico.plugins.ml2.drivers.calico.mech_calico as mech_calico
-import networking_calico.plugins.ml2.drivers.calico.t_etcd as t_etcd
+from networking_calico.plugins.ml2.drivers.calico import mech_calico
+from networking_calico.plugins.ml2.drivers.calico import t_etcd
 
 _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
@@ -46,7 +46,7 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
     def setUp(self):
         """Setup before each test case."""
         # Do common plugin test setup.
-        lib.m_oslo.config.cfg.CONF.core_plugin = 'ml2'
+        lib.m_compat.cfg.CONF.core_plugin = 'ml2'
         super(TestPluginEtcd, self).setUp()
 
         # Start with an empty etcd database.
@@ -61,12 +61,12 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         )
 
         # Mock out config.
-        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
-        lib.m_oslo.config.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = None
-        lib.m_oslo.config.cfg.CONF.calico.num_port_status_threads = 4
+        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
+        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
+        lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
 
         # Hook the (mock) etcd client.
         lib.m_etcd.Client.reset_mock()
@@ -1007,9 +1007,9 @@ class TestPluginEtcd(lib.Lib, unittest.TestCase):
         """Test that a driver that is not master does not resync."""
         # Initialize the state early to put the elector in place, then override
         # it to claim that the driver is not master.
-        lib.m_oslo.config.cfg.CONF.calico.etcd_cert_file = "cert-file"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = "key-file"
+        lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
+        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
+        lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
         self.driver._init_state()
         self.assertEqual([mock.call(ca_cert='ca-cert-file',
                                     cert=('cert-file', 'key-file'),
@@ -1157,8 +1157,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.driver.transport = mock.Mock(spec=t_etcd.CalicoTransportEtcd)
 
         # Mock out config.
-        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
+        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
 
     def test_felix_agent_state(self):
         self.assertEqual(
@@ -1356,19 +1356,19 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 class TestCalicoEtcdWatcher(unittest.TestCase):
     def setUp(self):
         # Mock out config.
-        lib.m_oslo.config.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_port = 4001
-        lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = None
-        lib.m_oslo.config.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
+        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
+        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
         self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
         lib.m_etcd.Client.reset_mock()
 
     def test_tls(self):
-        lib.m_oslo.config.cfg.CONF.calico.etcd_cert_file = "cert-file"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
-        lib.m_oslo.config.cfg.CONF.calico.etcd_key_file = "key-file"
+        lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
+        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
+        lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
         self.watcher = t_etcd.CalicoEtcdWatcher(self.driver)
         self.assertEqual([mock.call(ca_cert='ca-cert-file',
                                     cert=('cert-file', 'key-file'),

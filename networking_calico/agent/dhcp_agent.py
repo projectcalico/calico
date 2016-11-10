@@ -24,28 +24,20 @@ import sys
 import eventlet
 eventlet.monkey_patch()
 
-from oslo_config import cfg
-
 from neutron.agent.common import config
 from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
 from neutron.common import constants as neutron_constants
-try:
-    from neutron_lib import constants
-except Exception:
-    constants = neutron_constants
-
-from networking_calico.common import mkdir_p
-from networking_calico.datamodel_v1 import dir_for_host
-from networking_calico.datamodel_v1 import key_for_subnet
-from networking_calico.datamodel_v1 import SUBNET_DIR
-from networking_calico.etcdutils import EtcdWatcher
-from networking_calico.etcdutils import safe_decode_json
 
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
+from networking_calico.common import mkdir_p
+from networking_calico.compat import cfg
+from networking_calico.compat import constants
+from networking_calico import datamodel_v1
+from networking_calico import etcdutils
 
 LOG = logging.getLogger(__name__)
 
@@ -157,12 +149,12 @@ def get_etcd_connection_settings():
     return watcher_kwargs
 
 
-class CalicoEtcdWatcher(EtcdWatcher):
+class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, agent):
         watcher_kwargs = get_etcd_connection_settings()
         watcher_kwargs['key_to_poll'] = \
-            dir_for_host(socket.gethostname()) + "/workload"
+            datamodel_v1.dir_for_host(socket.gethostname()) + "/workload"
         super(CalicoEtcdWatcher, self).__init__(**watcher_kwargs)
         self.agent = agent
         self.suppress_dnsmasq_updates = False
@@ -253,7 +245,7 @@ class CalicoEtcdWatcher(EtcdWatcher):
         """
 
         # Get the endpoint data.
-        endpoint = safe_decode_json(response.value, 'endpoint')
+        endpoint = etcdutils.safe_decode_json(response.value, 'endpoint')
         if not (isinstance(endpoint, dict) and
                 'ipv4_nets' in endpoint and
                 'ipv4_subnet_ids' in endpoint and
@@ -420,9 +412,9 @@ class CalicoEtcdWatcher(EtcdWatcher):
         LOG.debug("Read subnet %s from etcd", subnet_id)
         self.dirty_subnets.discard(subnet_id)
 
-        subnet_key = key_for_subnet(subnet_id)
+        subnet_key = datamodel_v1.key_for_subnet(subnet_id)
         response = self.client.read(subnet_key, consistent=True)
-        data = safe_decode_json(response.value, 'subnet')
+        data = etcdutils.safe_decode_json(response.value, 'subnet')
         LOG.debug("Subnet data: %s", data)
 
         if not (isinstance(data, dict) and
@@ -541,16 +533,16 @@ class CalicoEtcdWatcher(EtcdWatcher):
         self.resync_after_current_poll = True
 
 
-class SubnetWatcher(EtcdWatcher):
+class SubnetWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, endpoint_watcher):
         watcher_kwargs = get_etcd_connection_settings()
-        watcher_kwargs['key_to_poll'] = SUBNET_DIR
+        watcher_kwargs['key_to_poll'] = datamodel_v1.SUBNET_DIR
         super(SubnetWatcher, self).__init__(**watcher_kwargs)
 
         self.endpoint_watcher = endpoint_watcher
         self.register_path(
-            SUBNET_DIR + "/<subnet_id>",
+            datamodel_v1.SUBNET_DIR + "/<subnet_id>",
             on_set=self.endpoint_watcher.on_subnet_set
         )
 

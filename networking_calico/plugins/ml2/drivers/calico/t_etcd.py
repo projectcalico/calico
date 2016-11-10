@@ -17,7 +17,6 @@
 
 # Etcd-based transport for the Calico/OpenStack Plugin.
 
-# Standard Python library imports.
 import collections
 import functools
 import json
@@ -27,21 +26,12 @@ import socket
 import uuid
 import weakref
 
-# OpenStack imports.
-try:
-    from oslo.config import cfg
-except ImportError:
-    from oslo_config import cfg
-
-try:  # Icehouse, Juno
-    from neutron.openstack.common import log
-except ImportError:  # Kilo
-    from oslo_log import log
-
-# Calico imports.
 import etcd
 from eventlet.semaphore import Semaphore
+
 from networking_calico.common import config as calico_config
+from networking_calico.compat import cfg
+from networking_calico.compat import log
 from networking_calico import datamodel_v1
 from networking_calico import etcdutils
 from networking_calico.plugins.ml2.drivers.calico.election import Elector

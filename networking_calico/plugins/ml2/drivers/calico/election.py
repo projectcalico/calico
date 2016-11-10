@@ -19,11 +19,11 @@ Calico election code.
 """
 import etcd
 import eventlet
-from greenlet import GreenletExit
+import greenlet
 import os
 import random
 import re
-from urllib3 import Timeout
+import urllib3
 
 # Fix urllib3 unvendoring error so that python-etcd can catch exceptions raised
 # by urllib3.  See networking_calico/agent/__init__.py for the full
@@ -32,10 +32,7 @@ import sys
 if sys.modules["urllib3"].exceptions is not sys.modules["urllib3.exceptions"]:
     sys.modules["urllib3"].exceptions = sys.modules["urllib3.exceptions"]
 
-try:  # Icehouse, Juno
-    from neutron.openstack.common import log
-except ImportError:  # Kilo
-    from oslo_log import log
+from networking_calico.compat import log
 
 LOG = log.getLogger(__name__)
 
@@ -148,7 +145,7 @@ class Elector(object):
                 response = self._etcd_client.read(self._key,
                                                   wait=True,
                                                   waitIndex=index + 1,
-                                                  timeout=Timeout(
+                                                  timeout=urllib3.Timeout(
                                                       connect=self._interval,
                                                       read=self._ttl * 2))
 
@@ -318,7 +315,7 @@ class Elector(object):
                 pass  # Expected
 
 
-class ElectorStopped(GreenletExit):
+class ElectorStopped(greenlet.GreenletExit):
     """ElectorStopped
 
     Custom exception used to stop our Elector.  Used to distinguish our

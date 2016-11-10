@@ -37,24 +37,19 @@ sys.modules['neutron'] = m_neutron = mock.MagicMock()
 sys.modules['neutron.agent'] = m_neutron.agent
 sys.modules['neutron.agent.rpc'] = m_neutron.agent.rpc
 sys.modules['neutron.common'] = m_neutron.common
-sys.modules['neutron.common.constants'] = m_constants = \
-    m_neutron.common.constants
 sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
 sys.modules['neutron.db'] = m_neutron.db
 sys.modules['neutron.openstack'] = m_neutron.openstack
 sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
 sys.modules['neutron.openstack.common.db'] = m_neutron.openstack.common.db
-sys.modules['neutron.openstack.common.db.exception'] = \
-    m_neutron.openstack.common.db.exception
 sys.modules['neutron.plugins'] = m_neutron.plugins
 sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
 sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
 sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
-sys.modules['oslo'] = m_oslo = mock.Mock()
-sys.modules['oslo.config'] = m_oslo.config
 sys.modules['sqlalchemy'] = m_sqlalchemy = mock.Mock()
 sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
 sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc
+sys.modules['networking_calico.compat'] = m_compat = mock.MagicMock()
 
 port1 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -134,7 +129,7 @@ class DBError(Exception):
     pass
 
 
-m_neutron.openstack.common.db.exception.DBError = DBError
+m_compat.db_exc.DBError = DBError
 
 
 class NoResultFound(Exception):

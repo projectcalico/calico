@@ -11,10 +11,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_config import cfg
 import unittest
 
 from networking_calico.common import config
+from networking_calico.compat import cfg
 
 
 class TestConfig(unittest.TestCase):

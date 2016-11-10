@@ -34,18 +34,6 @@ import os
 import eventlet
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
-try:
-    from neutron_lib import constants
-except Exception:
-    from neutron.common import constants
-try:
-    from neutron_lib.exceptions import PortNotFound
-except Exception:
-    from neutron.common.exceptions import PortNotFound
-try:
-    from neutron_lib.exceptions import SubnetNotFound
-except Exception:
-    from neutron.common.exceptions import SubnetNotFound
 from neutron.common import topics
 from neutron import context as ctx
 from neutron.db import l3_db
@@ -58,41 +46,17 @@ from sqlalchemy import exc as sa_exc
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
 
-# OpenStack imports.
-try:
-    from oslo.config import cfg
-except ImportError:
-    from oslo_config import cfg
-
-try:  # Icehouse, Juno
-    from neutron.openstack.common import log
-except ImportError:  # Kilo
-    from oslo_log import log
-
-try:
-    # Icehouse.
-    from neutron.openstack.common.db import exception as db_exc
-except ImportError:
-    try:
-        # Juno.
-        from oslo.db import exception as db_exc
-    except ImportError:
-        # Later.
-        from oslo_db import exception as db_exc
-
-try:
-    # Icehouse/Juno.
-    from neutron.openstack.common import lockutils
-except ImportError:
-    # Later.
-    from oslo_concurrency import lockutils
-
 # Calico imports.
 import etcd
+from networking_calico.compat import cfg
+from networking_calico.compat import constants
+from networking_calico.compat import db_exc
+from networking_calico.compat import lockutils
+from networking_calico.compat import log
+from networking_calico.compat import n_exc
 from networking_calico import datamodel_v1
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
-
 from networking_calico.plugins.ml2.drivers.calico import t_etcd
 
 LOG = log.getLogger(__name__)
@@ -1121,7 +1085,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             with self._txn_from_context(context, tag="resync-subnets-changed"):
                 try:
                     neutron_subnet = self.db.get_subnet(context, subnet.id)
-                except SubnetNotFound:
+                except n_exc.SubnetNotFound:
                     # The subnet got deleted.
                     LOG.info("Failed to resync deleted subnet %s", subnet.id)
                     continue
@@ -1279,7 +1243,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             with self._txn_from_context(context, tag="resync-ports-changed"):
                 try:
                     port = self.db.get_port(context, endpoint.id)
-                except PortNotFound:
+                except n_exc.PortNotFound:
                     # The endpoint got deleted.
                     LOG.info("Failed to update deleted port %s", endpoint.id)
                     continue

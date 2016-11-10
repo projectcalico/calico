@@ -20,24 +20,21 @@ import logging
 import mock
 import socket
 
-LOG = logging.getLogger(__name__)
+from neutron.agent.dhcp_agent import register_options
+from neutron.agent.linux import dhcp
+from neutron.tests import base
 
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
 from networking_calico.agent.dhcp_agent import get_etcd_connection_settings
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
+from networking_calico.compat import cfg
+from networking_calico.compat import constants
 from networking_calico import datamodel_v1
 from networking_calico.etcdutils import EtcdWatcher
-from neutron.agent.dhcp_agent import register_options
-from neutron.agent.linux import dhcp
-try:
-    from neutron_lib import constants
-except Exception:
-    from neutron.common import constants
-from neutron.tests import base
-from oslo_config import cfg
 
+LOG = logging.getLogger(__name__)
 
 EtcdResponse = namedtuple('EtcdResponse', ['value'])
 
