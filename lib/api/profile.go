@@ -36,6 +36,9 @@ type ProfileMetadata struct {
 	// The name of the endpoint.
 	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
+	// A list of tags that are applied to each endpoint that references this profile.
+	Tags []string `json:"tags,omitempty" validate:"omitempty,dive,tag"`
+
 	// The labels to apply to each endpoint that references this profile.  It is expected
 	// that many endpoints share the same labels. For example, they could be used to label all
 	// “production” workloads with “deployment=prod” so that security policy can be applied
@@ -52,9 +55,6 @@ type ProfileSpec struct {
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
 	// a corresponding action to apply.
 	EgressRules []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
-
-	// A list of tags that are applied to each endpoint that references this profile.
-	Tags []string `json:"tags,omitempty" validate:"omitempty,dive,tag"`
 }
 
 // NewProfile creates a new (zeroed) Profile struct with the TypeMetadata initialised to the current

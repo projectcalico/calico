@@ -104,9 +104,9 @@ func init() {
 		Entry("should reject invalid selector", api.EntityRule{Selector: "thing=hello &"}, false),
 
 		// (API) Tags.
-		Entry("should accept a valid tag", api.ProfileSpec{Tags: []string{".My-valid-tag_190"}}, true),
-		Entry("should reject ! in a tag", api.ProfileSpec{Tags: []string{"my!nvalid-tag"}}, false),
-		Entry("should reject $ in a tag", api.ProfileSpec{Tags: []string{"my-invalid-tag$"}}, false),
+		Entry("should accept a valid tag", api.ProfileMetadata{Tags: []string{".My-valid-tag_190"}}, true),
+		Entry("should reject ! in a tag", api.ProfileMetadata{Tags: []string{"my!nvalid-tag"}}, false),
+		Entry("should reject $ in a tag", api.ProfileMetadata{Tags: []string{"my-invalid-tag$"}}, false),
 
 		// (API) Labels.
 		Entry("should accept a valid label", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "gold._0-9"}}, true),

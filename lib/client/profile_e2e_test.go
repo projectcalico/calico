@@ -48,14 +48,14 @@ import (
 var profileSpec1 = api.ProfileSpec{
 	IngressRules: []api.Rule{testutils.InRule1, testutils.InRule2},
 	EgressRules:  []api.Rule{testutils.EgressRule1, testutils.EgressRule2},
-	Tags:         []string{"profile1-tag1", "profile1-tag2"},
 }
+var tags1 = []string{"profile1-tag1", "profile1-tag2"}
 
 var profileSpec2 = api.ProfileSpec{
 	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
 	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
-	Tags:         []string{"profile2-tag1", "profile2-tag2"},
 }
+var tags2 = []string{"profile2-tag1", "profile2-tag2"}
 
 var _ = Describe("Profile tests", func() {
 
@@ -187,6 +187,7 @@ var _ = Describe("Profile tests", func() {
 					"app":  "app-abc",
 					"prod": "yes",
 				},
+				Tags: tags1,
 			},
 			api.ProfileMetadata{
 				Name: "profile2",
@@ -194,6 +195,7 @@ var _ = Describe("Profile tests", func() {
 					"app":  "app-xyz",
 					"prod": "no",
 				},
+				Tags: tags2,
 			},
 			profileSpec1,
 			profileSpec2,
@@ -207,6 +209,7 @@ var _ = Describe("Profile tests", func() {
 					"app":  "app-abc",
 					"prod": "yes",
 				},
+				Tags: tags2,
 			},
 			api.ProfileMetadata{
 				Name: "profile2",
@@ -236,7 +239,7 @@ var _ = Describe("Profile tests", func() {
 				},
 			},
 			api.ProfileSpec{
-				Tags: []string{"profile1-tag1"},
+				IngressRules: []api.Rule{testutils.InRule1},
 			},
 			profileSpec2,
 		),
