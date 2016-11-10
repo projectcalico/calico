@@ -115,7 +115,7 @@ docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0
 -c --config=<CONFIG>     Path to the file containing connection
                          configuration in YAML or JSON format.
                          [default: /etc/calico/calicoctl.cfg]
-``
+```
 
 ## See also
 
