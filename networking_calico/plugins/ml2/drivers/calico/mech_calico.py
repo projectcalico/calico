@@ -604,43 +604,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         port = context._port
 
         # Immediately halt processing if this is not an endpoint port.
-        if not self._port_is_endpoint_port(port):
-            return
-
-        # If the port binding VIF type is 'unbound', this port doesn't actually
-        # need to be networked yet. We can simply return immediately.
-        if port['binding:vif_type'] == 'unbound':
-            LOG.info("Creating unbound port: no work required.")
-            return
-
-        plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="create-port"):
-            # First, regain the current port. This protects against concurrent
-            # writes breaking our state.
-            port = self.db.get_port(plugin_context, port['id'])
-
-            # Next, fill out other information we need on the port.
-            port = self.add_extra_port_information(
-                plugin_context, port
-            )
-
-            # Next, we need to work out what security profiles apply to this
-            # port and grab information about them.
-            profiles = self.get_security_profiles(
-                plugin_context, port
-            )
-
-            # Write data for those profiles into etcd.
-            for profile in profiles:
-                self.transport.write_profile_to_etcd(profile)
-
-            # Pass this to the transport layer.
-            # Implementation note: we could arguably avoid holding the
-            # transaction for this length and instead release it here, then
-            # use atomic CAS. The problem there is that we potentially have to
-            # repeatedly respin and regain the transaction. Let's not do that
-            # for now, and performance test to see if it's a problem later.
-            self.transport.endpoint_created(port)
+        if self._port_is_endpoint_port(port):
+            self._create_endpoint(context, port)
 
     @retry_on_cluster_id_change
     @requires_state
@@ -658,42 +623,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         original = context.original
 
         # Abort early if we're managing non-endpoint ports.
-        if not self._port_is_endpoint_port(port):
-            return
-
-        # If this port update is purely for a status change, don't do anything:
-        # we don't care about port statuses.
-        if port_status_change(port, original):
-            LOG.info('Called for port status change, no action.')
-            return
-
-        # Now, re-read the port.
-        plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="update-port"):
-            port = self.db.get_port(plugin_context, port['id'])
-
-            # Now, fork execution based on the type of update we're performing.
-            # There are a few:
-            # - a port becoming bound (binding vif_type from unbound to bound);
-            # - a port becoming unbound (binding vif_type from bound to
-            #   unbound);
-            # - an Icehouse migration (binding host id changed and port bound);
-            # - an update (port bound at all times);
-            # - a change to an unbound port (which we don't care about, because
-            #   we do nothing with unbound ports).
-            if port_bound(port) and not port_bound(original):
-                self._port_bound_update(context, port)
-            elif port_bound(original) and not port_bound(port):
-                self._port_unbound_update(context, original)
-            elif original['binding:host_id'] != port['binding:host_id']:
-                LOG.info("Icehouse migration")
-                self._icehouse_migration_step(context, port, original)
-            elif port_bound(original) and port_bound(port):
-                LOG.info("Port update")
-                self._update_port(plugin_context, port)
-            else:
-                LOG.info("Update on unbound port: no action")
-                pass
+        if self._port_is_endpoint_port(port):
+            self._update_endpoint(context, port, original)
 
     @retry_on_cluster_id_change
     @requires_state
@@ -788,6 +719,77 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.debug("Not using mysqldb driver, skipping db-access lock")
             with context.session.begin(subtransactions=True) as txn:
                 yield txn
+
+    def _create_endpoint(self, context, port):
+        # If the port binding VIF type is 'unbound', this port doesn't actually
+        # need to be networked yet. We can simply return immediately.
+        if port['binding:vif_type'] == 'unbound':
+            LOG.info("Creating unbound port: no work required.")
+            return
+
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="create-port"):
+            # First, regain the current port. This protects against concurrent
+            # writes breaking our state.
+            port = self.db.get_port(plugin_context, port['id'])
+
+            # Next, fill out other information we need on the port.
+            port = self.add_extra_port_information(
+                plugin_context, port
+            )
+
+            # Next, we need to work out what security profiles apply to this
+            # port and grab information about them.
+            profiles = self.get_security_profiles(
+                plugin_context, port
+            )
+
+            # Write data for those profiles into etcd.
+            for profile in profiles:
+                self.transport.write_profile_to_etcd(profile)
+
+            # Pass this to the transport layer.
+            # Implementation note: we could arguably avoid holding the
+            # transaction for this length and instead release it here, then
+            # use atomic CAS. The problem there is that we potentially have to
+            # repeatedly respin and regain the transaction. Let's not do that
+            # for now, and performance test to see if it's a problem later.
+            self.transport.endpoint_created(port)
+
+    def _update_endpoint(self, context, port, original):
+        # If this port update is purely for a status change, don't do anything:
+        # we don't care about port statuses.
+        if port_status_change(port, original):
+            LOG.info('Called for port status change, no action.')
+            return
+
+        # Now, re-read the port.
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="update-port"):
+            port = self.db.get_port(plugin_context, port['id'])
+
+            # Now, fork execution based on the type of update we're performing.
+            # There are a few:
+            # - a port becoming bound (binding vif_type from unbound to bound);
+            # - a port becoming unbound (binding vif_type from bound to
+            #   unbound);
+            # - an Icehouse migration (binding host id changed and port bound);
+            # - an update (port bound at all times);
+            # - a change to an unbound port (which we don't care about, because
+            #   we do nothing with unbound ports).
+            if port_bound(port) and not port_bound(original):
+                self._port_bound_update(context, port)
+            elif port_bound(original) and not port_bound(port):
+                self._port_unbound_update(context, original)
+            elif original['binding:host_id'] != port['binding:host_id']:
+                LOG.info("Icehouse migration")
+                self._icehouse_migration_step(context, port, original)
+            elif port_bound(original) and port_bound(port):
+                LOG.info("Port update")
+                self._update_port(plugin_context, port)
+            else:
+                LOG.info("Update on unbound port: no action")
+                pass
 
     def _port_unbound_update(self, context, port):
         """_port_unbound_update
