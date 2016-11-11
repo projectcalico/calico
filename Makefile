@@ -1,6 +1,7 @@
 .PHONY: all policy-controller docker-image clean
 
 SRCDIR=.
+CONTAINER_NAME=calico/kube-policy-controller
 
 default: all
 all: policy-controller
@@ -29,11 +30,26 @@ test-circle:
 
 image.created:
 	# Build the docker image for the policy controller.
-	docker build -t calico/kube-policy-controller . 
+	docker build -t $(CONTAINER_NAME) . 
 	touch image.created
+
+release: clean
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+	git tag $(VERSION)
+	$(MAKE) image.created
+# It's not possible to check that the version number is correct in the container
+# The policy controller doesn't self report its version
+	docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$(VERSION)
+	docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$(VERSION)
+
+	@echo "Now push the tag and images."
+	@echo "git push $(VERSION)"
+	@echo "docker push calico/libnetwork-plugin:$(VERSION)"
+	@echo "docker push quay.io/calico/libnetwork-plugin:$(VERSION)"
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
-	-sudo rm -rf dist
-	-docker rmi calico/kube-policy-controller
-	rm -f image.created
+	rm -rf dist image.created
+	-docker rmi $(CONTAINER_NAME)

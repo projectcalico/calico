@@ -1,8 +1,18 @@
-# Releasing a new version
-1. After verifying that "master" is good, create a branch with the version name e.g. `git checkout -b v0.4.0`
-2. Pin libcalico my making a new commit to that branch, e.g. https://github.com/projectcalico/k8s-policy/commit/4f68aa50beeab47dd8ac5639dcb0dd523d765298
-3. Do a clean build (`make clean docker-image`) and then push that docker image e.g. `docker push calico/kube-policy-controller:v0.4.0`
-4. Create a release on Github, using github to create a tag from the release branch
-5. Delete the release branch.
+# Release process
 
+## Resulting artifacts
+Creating a new release creates the following artifact
+* `calico/kube-policy-controller:$VERSION` container images (and the quay.io variant)
+
+## Preparing for a release
+Ensure that the branch you want to release from (typically master) is in a good state.
+e.g. Update the libcalico pins in `build.sh`, create PR, ensure tests pass and merge.
+
+You should have no local changes and tests should be passing.
+
+## Creating the release
+1. Choose a version e.g. `v1.0.0`
+2. Create the release artifacts repositories `make release VERSION=v1.0.0`. 
+3. Follow the instructions from `make release` to push the artifacts and git tag.
+4. Create a release on Github, using the tag which was just pushed.
 
