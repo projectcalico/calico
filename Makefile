@@ -4,6 +4,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 K8S_VERSION=1.3.1
 CALICO_NODE_VERSION=0.20.0
+CALICOCTL_URL?=https://github.com/projectcalico/calico-containers/releases/download/v$(CALICO_NODE_VERSION)/calicoctl
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -154,8 +155,8 @@ dist/calico-ipam-python:
 
 # Retrieve calicoctl for use in tests
 dist/calicoctl:
-	curl -o dist/calicoctl -L https://github.com/projectcalico/calico-containers/releases/download/v$(CALICO_NODE_VERSION)/calicoctl
-	chmod +x dist/calicoctl
+	curl -L $(CALICOCTL_URL) -o $@
+	chmod +x $@
 
 # Copy the plugin into place
 deploy-rkt: binary
