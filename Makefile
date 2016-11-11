@@ -31,6 +31,27 @@ docker-image: $(DEPLOY_CONTAINER_MARKER)
 clean:
 	rm -rf dist vendor $(BUILD_CONTAINER_MARKER) $(DEPLOY_CONTAINER_MARKER)
 
+release: clean
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+	git tag $(VERSION)
+	$(MAKE) build-containerized $(DEPLOY_CONTAINER_MARKER)
+	# Check that the version output appears on a line of its own (the -x option to grep).
+# Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
+	@echo "Checking if the tag made it into the binary"
+	dist/calico -v | grep -x $(VERSION) || echo "Reported version:" `dist/calico -v` "\nExpected version: $(VERSION)" && exit 1
+	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(VERSION)
+	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
+
+	@echo "Now push the tag and images. Then create a release on Github and attach the dist/calico and dist/calico-ipam binaries"
+	@echo "git push origin $(VERSION)"
+	@echo "docker push calico/cni:$(VERSION)"
+	@echo "docker push quay.io/calico/cni:$(VERSION)"
+	@echo "docker push calico/cni:latest"
+	@echo "docker push quay.io/calico/cni:latest"
+
+
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.yaml
@@ -38,7 +59,9 @@ vendor: glide.yaml
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
+	docker run --rm \
+	-v ${HOME}/.glide:/root/.glide:rw \
+	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
 	cd /go/src/github.com/projectcalico/calico-cni && \
 	glide install -strip-vendor && \
@@ -173,15 +196,6 @@ deploy-rkt: binary
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=dev
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
-
-# Build a binary for a release
-release: clean update-tools build-containerized test-containerized
-	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME):$(CALICO_CNI_VERSION) .
-	docker tag calico/cni:$(CALICO_CNI_VERSION) quay.io/calico/cni:$(CALICO_CNI_VERSION)
-	@echo Now attach the binaries to github dist/calico and dist/calico-ipam
-	@echo And push the images to Docker Hub and quay.io:
-	@echo docker push calico/cni:$(CALICO_CNI_VERSION)
-	@echo docker push quay.io/calico/cni:$(CALICO_CNI_VERSION)
 
 run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
