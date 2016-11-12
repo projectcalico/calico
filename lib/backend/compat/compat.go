@@ -17,12 +17,12 @@ package compat
 import (
 	goerrors "errors"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	log "github.com/Sirupsen/logrus"
 )
 
 type ModelAdaptor struct {
@@ -352,7 +352,7 @@ func ensureBlockAffinity(kvp *model.KVPair) *model.KVPair {
 		// Set AllocationBlock.HostAffinity to nil so it's never non-nil for the clients.
 		val.HostAffinity = nil
 	}
-	return &model.KVPair{Key: kvp.Key, Value: val}
+	return &model.KVPair{Key: kvp.Key, Value: val, Revision: kvp.Revision, TTL: kvp.TTL}
 }
 
 // Get the node sub components and fill in the details in the supplied node

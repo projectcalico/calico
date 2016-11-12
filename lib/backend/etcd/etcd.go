@@ -118,6 +118,7 @@ func (c *EtcdClient) Update(d *model.KVPair) (*model.KVPair, error) {
 	options := etcd.SetOptions{PrevExist: etcd.PrevExist}
 	if d.Revision != nil {
 		options.PrevIndex = d.Revision.(uint64)
+		log.Debugf("Performing CAS against etcd index: %v\n", options.PrevIndex)
 	}
 
 	return c.set(d, &options)
