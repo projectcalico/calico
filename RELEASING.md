@@ -21,4 +21,8 @@ You should have no local changes and tests should be passing.
 1. Choose a version e.g. `export VERSION=v1.0.0`
 2. Create the release artifacts repositories `make release VERSION=$VERSION`. 
 3. Follow the instructions to push the artifacts and git tag.
-4. Create a release on Github, using the tag which was just pushed. Attach the `calicoctl` binaries.
+4. Create a release on Github, using the tag which was just pushed. 
+5. Attach the following `calicoctl` binaries:
+   - `calicoctl`
+   - `calicoctl-darwin-amd64`
+   - `calicoctl-windows-amd64`
