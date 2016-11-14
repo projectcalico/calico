@@ -33,6 +33,17 @@ data:
         }
     }
 
+  # The default IP Pool to be created for each node.
+  ippool.yaml: |
+      apiVersion: v1
+      kind: ipPool
+      metadata:
+        cidr: 192.168.0.0/16
+      spec:
+        ipip:
+          enabled: true
+        nat-outgoing: true
+
 ---
 
 # This manifest installs the Calico etcd on the kubeadm master.  This uses a DaemonSet
@@ -282,9 +293,12 @@ spec:
         - name: configure-calico
           image: calico/ctl:latest
           args:
-          - “apply”
-          - “-f”
-          - “ippool.yaml”
+          - apply
+          - -f
+          - /etc/config/calico/ippool.yaml
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -292,3 +306,10 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
+      volumes:
+       - name: config-volume
+         configMap:
+           name: calico-config
+           items:
+            - key: ippool.yaml
+              path: calico/ippool.yaml
