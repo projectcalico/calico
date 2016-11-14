@@ -63,4 +63,4 @@ Q_USE_NAMESPACE=False
 
 # Test Felix floating IP fix.
 FELIX_REPO=https://github.com/neiljerram/felix.git
-FELIX_BRANCH=fip-output-dnat-1.4
+FELIX_BRANCH=fip-output-dnat-1.4-unpin-pycparser
