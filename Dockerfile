@@ -8,7 +8,7 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
     wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.23-r3/glibc-bin-2.23-r3.apk && \
     apk add glibc-2.23-r3.apk glibc-bin-2.23-r3.apk && \
     /usr/glibc-compat/sbin/ldconfig /lib /usr/glibc/usr/lib && \
-    apk del wget ca-certificates && \
+    apk del wget && \
     rm -f glibc-2.23-r3.apk glibc-bin-2.23-r3.apk
 
 RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools 
