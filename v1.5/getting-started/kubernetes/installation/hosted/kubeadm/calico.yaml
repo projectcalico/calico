@@ -7,7 +7,7 @@ metadata:
 data:
   # The location of your etcd cluster.  This uses the Service clusterIP
   # defined below.
-  etcd_endpoints: "http://100.78.232.136:6666"
+  etcd_endpoints: "http://10.96.232.136:6666"
 
   # True enables BGP networking, false tells Calico to enforce
   # policy only, using native networking.
@@ -90,7 +90,7 @@ spec:
     k8s-app: calico-etcd
   # This ClusterIP needs to be known in advance, since we cannot rely
   # on DNS to get access to etcd.
-  clusterIP: 100.78.232.136
+  clusterIP: 10.96.232.136
   ports:
     - port: 6666
 

@@ -7,7 +7,7 @@ metadata:
 data:
   # The location of your etcd cluster.  This uses the Service clusterIP
   # defined below.
-  etcd_endpoints: "http://100.78.232.136:6666"
+  etcd_endpoints: "http://10.96.232.136:6666"
 
   # True enables BGP networking, false tells Calico to enforce
   # policy only, using native networking.
@@ -32,6 +32,17 @@ data:
             "kubeconfig": "/etc/cni/net.d/__KUBECONFIG_FILENAME__"
         }
     }
+
+  # The default IP Pool to be created for each node.
+  ippool.yaml: |
+      apiVersion: v1
+      kind: ipPool
+      metadata:
+        cidr: 192.168.0.0/16
+      spec:
+        ipip:
+          enabled: true
+        nat-outgoing: true
 
 ---
 
@@ -95,7 +106,7 @@ spec:
     k8s-app: calico-etcd
   # This ClusterIP needs to be known in advance, since we cannot rely
   # on DNS to get access to etcd. 
-  clusterIP: 100.78.232.136
+  clusterIP: 10.96.232.136
   ports:
     - port: 6666
 
@@ -224,12 +235,11 @@ spec:
       namespace: kube-system
       labels:
         k8s-app: calico-policy-controller
-    annotations:
-      scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: |
-        [{"key": "role", "value": "master", "effect": "NoSchedule" },
-         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
-
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
@@ -269,11 +279,11 @@ spec:
   template:
     metadata:
       name: configure-calico
-    annotations:
-      scheduler.alpha.kubernetes.io/critical-pod: ''
-      scheduler.alpha.kubernetes.io/tolerations: |
-        [{"key": "role", "value": "master", "effect": "NoSchedule" },
-         {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
       restartPolicy: OnFailure 
@@ -281,16 +291,24 @@ spec:
         # Writes basic configuration to datastore. 
         - name: configure-calico
           image: calico/ctl:v1.0.0-beta
-          args: 
-          - "pool"
-          - "add"
-          - "192.168.0.0/16"
-          - "--ipip"
-          - "--nat-outgoing"
+          args:
+          - apply
+          - -f
+          - /etc/config/calico/ippool.yaml
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
           env:
             # The location of the etcd cluster.
-            - name: ETCD_ENDPOINTS 
+            - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
+      volumes:
+       - name: config-volume
+         configMap:
+           name: calico-config
+           items:
+            - key: ippool.yaml
+              path: calico/ippool.yaml
