@@ -98,12 +98,14 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized
 
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized
-test-containerized: dist/host-local dist/calicoctl run-etcd $(BUILD_CONTAINER_MARKER) build-containerized
-	docker run -ti --rm --privileged --net=host \
+test-containerized: run-etcd build-containerized
+	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
-	$(BUILD_CONTAINER_NAME) ginkgo
+	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+	$(BUILD_CONTAINER_NAME) /bin/sh -e -c \
+        'make dist/host-local dist/calicoctl && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
+	make stop-etcd
 
 # Run the build in a container. Useful for CI
 .PHONY: build-containerized
@@ -117,8 +119,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 		chown -R $(shell id -u):$(shell id -u) dist'
 
 # Etcd is used by the tests
-run-etcd:
-	@-docker rm -f calico-etcd
+run-etcd: stop-etcd
 	docker run --detach \
 	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
@@ -126,13 +127,15 @@ run-etcd:
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 # Etcd is used by the kubernetes
-run-etcd-host:
-	@-docker rm -f calico-etcd
+run-etcd-host: stop-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+stop-etcd:
+	@-docker rm -f calico-etcd
 
 # Install or update the tools used by the build
 .PHONY: update-tools
@@ -157,6 +160,14 @@ static-checks: vendor
 	-golint calico.go
 	-golint utils
 	-golint ipam
+
+
+static-checks-containerized: vendor $(BUILD_CONTAINER_MARKER)
+	docker run --rm \
+        -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+        --entrypoint /bin/sh $(BUILD_CONTAINER_NAME) -e -c ' \
+        cd /go/src/github.com/projectcalico/calico-cni && \
+        make update-tools static-checks'
 
 install:
 	CGO_ENABLED=0 go install github.com/projectcalico/calico-cni
@@ -252,7 +263,7 @@ run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
-ci: clean update-tools static-checks test-containerized docker-image
+ci: clean static-checks-containerized test-containerized docker-image
 # Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \
