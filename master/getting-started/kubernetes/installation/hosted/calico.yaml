@@ -34,15 +34,14 @@ data:
         }
     }
 
-  # The default IP Pool to be created for each node.
+  # The default IP Pool to be created for the cluster.
+  # Pod IP addresses will be assigned from this pool.
   ippool.yaml: |
       apiVersion: v1
       kind: ipPool
       metadata:
         cidr: 192.168.0.0/16
       spec:
-        ipip:
-          enabled: true
         nat-outgoing: true
         
   # If you're using TLS enabled etcd uncomment the following.

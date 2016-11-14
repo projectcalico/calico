@@ -33,7 +33,8 @@ data:
         }
     }
 
-  # The default IP Pool to be created for each node.
+  # The default IP Pool to be created for the cluster.
+  # Pod IP addresses will be assigned from this pool.
   ippool.yaml: |
       apiVersion: v1
       kind: ipPool
