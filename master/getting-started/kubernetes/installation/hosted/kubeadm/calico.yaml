@@ -240,7 +240,6 @@ spec:
         scheduler.alpha.kubernetes.io/tolerations: |
           [{"key": "role", "value": "master", "effect": "NoSchedule" },
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
-
     spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
