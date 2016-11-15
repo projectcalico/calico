@@ -14,7 +14,7 @@
 FROM gliderlabs/alpine:3.4
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
-# Set the minimum Docker API version required for libnetwork. 
+# Set the minimum Docker API version required for libnetwork.
 ENV DOCKER_API_VERSION 1.21
 
 # Download and install glibc for use by non-static binaries that require it.
@@ -32,10 +32,6 @@ RUN apk add --no-cache --repository "http://alpine.gliderlabs.com/alpine/edge/co
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools
-
-# Copy "shared directory" which can be used to pass custom files (local git repos,
-# that can be used by pip install git+file:///)
-COPY node_share /tmp/node_share
 
 # Copy in the filesystem - this contains felix, bird, gobgp etc...
 COPY filesystem /
