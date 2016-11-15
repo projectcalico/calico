@@ -272,6 +272,10 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	"fc00:fe11::2",
 }).withActivePolicies(
 	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{
@@ -293,6 +297,10 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	"fc00:fe11::2",
 }).withActivePolicies(
 	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
 	[]tierInfo{
@@ -309,6 +317,9 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 	"fc00:fe11::3",
 }).withIPSet(bEqBSelectorId, []string{}).withActivePolicies(
 	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
 ).withEndpoint(
 	hostEpNoNameId,
 	[]tierInfo{
@@ -360,6 +371,10 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 		proto.PolicyID{"default", "pol-1"},
 		proto.PolicyID{"default", "pol-2"},
 		proto.PolicyID{"default", "pol-3"},
+	).withActiveProfiles(
+		proto.ProfileID{"prof-1"},
+		proto.ProfileID{"prof-2"},
+		proto.ProfileID{"prof-missing"},
 	).withEndpoint(
 		localWlEp1Id,
 		[]tierInfo{
@@ -382,6 +397,9 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 	bEqBSelectorId, []string{},
 ).withActivePolicies(
 	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
 ).withEndpoint(
 	localWlEp2Id,
 	[]tierInfo{
@@ -410,6 +428,11 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	"fc00:fe11::2",
 }).withActivePolicies(
 	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{
@@ -472,6 +495,9 @@ var localEpsWithProfile = withProfile.withKVUpdates(
 	"fc00:fe11::2",
 }).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{},
@@ -540,6 +566,11 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 	"fc00:fe11::2",
 }).withIPSet(tagFoobarSelectorId, []string{}).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{},
@@ -572,6 +603,9 @@ var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
 	"fc00:fe11::2",
 }).withActiveProfiles(
 	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-3"},
+	proto.ProfileID{"prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]tierInfo{},

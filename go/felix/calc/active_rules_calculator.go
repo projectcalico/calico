@@ -154,7 +154,6 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (filterOut bool) {
 			if arc.policyIDToEndpointKeys.ContainsKey(key) {
 				// If we get here, the selector still matches something,
 				// update the rules.
-				// TODO: squash duplicate update if labelIndex.UpdateSelector already made this active
 				log.Debug("Policy updated while active, telling listener")
 				arc.sendPolicyUpdate(key)
 			}
@@ -226,6 +225,13 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 	arc.PolicyMatchListener.OnPolicyMatchStopped(polKey, labelId)
 }
 
+var (
+	DummyDropRules = model.ProfileRules{
+		InboundRules:  []model.Rule{{Action: "deny"}},
+		OutboundRules: []model.Rule{{Action: "deny"}},
+	}
+)
+
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)
 	rules, known := arc.allProfileRules[profileID]
@@ -233,7 +239,13 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 		profileID, known, active)
 	key := model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: profileID}}
 
-	if known && active {
+	if active {
+		if !known {
+			// Profile is missing from the datastore or it failed validation.
+			log.WithField("profileID", profileID).Warn(
+				"Profile not known or invalid, generating dummy profile that drops all traffic.")
+			rules = &DummyDropRules
+		}
 		arc.RuleScanner.OnProfileActive(key, rules)
 	} else {
 		arc.RuleScanner.OnProfileInactive(key)
@@ -245,7 +257,12 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey) {
 	active := arc.policyIDToEndpointKeys.ContainsKey(policyKey)
 	log.Debugf("Sending policy update for policy %v (known: %v, active: %v)",
 		policyKey, known, active)
-	if known && active {
+	if active {
+		if !known {
+			// This shouldn't happen because a policy can only become active if
+			// we know its selector, which is inside the policy struct.
+			log.WithField("policyKey", policyKey).Panic("Unknown policy became active!")
+		}
 		arc.RuleScanner.OnPolicyActive(policyKey, policy)
 	} else {
 		arc.RuleScanner.OnPolicyInactive(policyKey)
