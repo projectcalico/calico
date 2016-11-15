@@ -42,9 +42,10 @@ class TestWorkloadDispatchChains(BaseTestCase):
 
     def dispatch_chain(self):
         return WorkloadDispatchChains(
-            config=self.config,
-            ip_version=4,
-            iptables_updater=self.iptables_updater
+            self.config,
+            4,
+            self.iptables_updater,
+            None
         )
 
     def assert_iptables_update(self,
@@ -410,6 +411,7 @@ class TestHostDispatchChains(BaseTestCase):
     def setUp(self):
         super(TestHostDispatchChains, self).setUp()
         self.iptables_updater = mock.MagicMock()
+        self.untracked_updater = mock.MagicMock()
         self.config = load_config("felix_default.cfg", global_dict={
             "MetadataPort": "8775"})
 
@@ -417,7 +419,8 @@ class TestHostDispatchChains(BaseTestCase):
         return HostEndpointDispatchChains(
             config=self.config,
             ip_version=4,
-            iptables_updater=self.iptables_updater
+            iptables_updater=self.iptables_updater,
+            untracked_updater=self.untracked_updater
         )
 
     def assert_iptables_update(self,

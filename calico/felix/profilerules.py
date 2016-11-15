@@ -37,12 +37,13 @@ class RulesManager(ReferenceManager):
     This class ensures that rules chains are properly quiesced
     before their Actors are deleted.
     """
-    def __init__(self, config, ip_version, iptables_updater, ipset_manager):
+    def __init__(self, config, ip_version, iptables_updater, ipset_manager, untracked_updater):
         super(RulesManager, self).__init__(qualifier="v%d" % ip_version)
         self.iptables_generator = config.plugins["iptables_generator"]
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
         self.ipset_manager = ipset_manager
+        self.untracked_updater = untracked_updater
         self.rules_by_profile_id = {}
         self._datamodel_in_sync = False
 
@@ -51,7 +52,8 @@ class RulesManager(ReferenceManager):
                             profile_id,
                             self.ip_version,
                             self.iptables_updater,
-                            self.ipset_manager)
+                            self.ipset_manager,
+                            self.untracked_updater)
 
     def _on_object_started(self, profile_id, active_profile):
         profile_or_none = self.rules_by_profile_id.get(profile_id)
@@ -113,7 +115,7 @@ class ProfileRules(RefCountedActor):
     Actor that owns the per-profile rules chains.
     """
     def __init__(self, iptables_generator, profile_id, ip_version,
-                 iptables_updater, ipset_mgr):
+                 iptables_updater, ipset_mgr, untracked_updater):
         super(ProfileRules, self).__init__(qualifier=profile_id)
         assert profile_id is not None
 
@@ -123,6 +125,7 @@ class ProfileRules(RefCountedActor):
         self._ipset_mgr = ipset_mgr
         self._iptables_updater = iptables_updater
         self._ipset_refs = RefHelper(self, ipset_mgr, self._on_ipsets_acquired)
+        self._untracked_updater = untracked_updater
 
         # Latest profile update - a profile dictionary.
         self._pending_profile = None
@@ -130,6 +133,10 @@ class ProfileRules(RefCountedActor):
         self._profile = None
         # The IDs of the tags and selector ipsets it requires.
         self._required_ipsets = set()
+        # Whether the profile is untracked.  We don't support a profile
+        # changing between tracked and untracked, so will assert that this
+        # doesn't change once it has been set for the first time.
+        self._untracked = None
 
         # State flags.
         self._notified_ready = False
@@ -150,6 +157,11 @@ class ProfileRules(RefCountedActor):
         assert not self._dead, "Shouldn't receive updates after we're dead."
         self._pending_profile = profile
         self._dirty |= force_reprogram
+        if profile:
+            if self._untracked is None:
+                self._untracked = profile['untracked']
+            else:
+                assert profile['untracked'] == self._untracked
 
     @actor_message()
     def on_unreferenced(self):
@@ -247,9 +259,11 @@ class ProfileRules(RefCountedActor):
         """
         # Need to block here: have to wait for chains to be deleted
         # before we can decref our ipsets.
-        self._iptables_updater.delete_chains(
-            self.iptables_generator.profile_chain_names(self.id),
-            async=False)
+        chain_names = self.iptables_generator.profile_chain_names(self.id)
+        if self._untracked:
+            self._untracked_updater.delete_chains(chain_names, async=False)
+        else:
+            self._iptables_updater.delete_chains(chain_names, async=False)
 
     def _update_chains(self):
         """
@@ -286,7 +300,10 @@ class ProfileRules(RefCountedActor):
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
 
-        self._iptables_updater.rewrite_chains(updates, deps, async=False)
+        if self._untracked:
+            self._untracked_updater.rewrite_chains(updates, deps, async=False)
+        else:
+            self._iptables_updater.rewrite_chains(updates, deps, async=False)
 
 
 def extract_tags_and_selectors_from_profile(profile):
@@ -306,3 +323,14 @@ def extract_tags_and_selectors_from_profile(profile):
 
 class UnsupportedICMPType(Exception):
     pass
+
+
+policy_id_untracked = {}
+
+
+def is_untracked(policy_id):
+    return policy_id_untracked.get(str(policy_id), False)
+
+
+def set_untracked(policy_id, untracked):
+    policy_id_untracked[str(policy_id)] = untracked

@@ -35,6 +35,7 @@ _log = logging.getLogger(__name__)
 
 INPUT_CHAINS = {
     "Default": [
+        '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
         '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
@@ -46,6 +47,7 @@ INPUT_CHAINS = {
         '--append felix-INPUT --jump DROP -m comment --comment "Drop all packets from endpoints to the host"',
     ],
     "IPIP": [
+        '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
         '--append felix-INPUT --protocol 4 --match set ! --match-set felix-hosts src --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
@@ -58,6 +60,7 @@ INPUT_CHAINS = {
         '--append felix-INPUT --jump DROP -m comment --comment "Drop all packets from endpoints to the host"',
     ],
     "Return": [
+        '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
         '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
         '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
         '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
