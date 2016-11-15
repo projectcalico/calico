@@ -70,6 +70,16 @@ type EventSequencer struct {
 	Callback EventHandler
 }
 
+//func (buf *EventSequencer) HasPendingUpdates() {
+//	return buf.pendingAddedIPSets.Len() > 0 ||
+//		buf.pendingRemovedIPSets.Len() > 0 ||
+//		buf.pendingAddedIPs.Len() > 0 ||
+//		buf.pendingRemovedIPs.Len() > 0 ||
+//		len(buf.pendingPolicyUpdates) > 0 ||
+//		buf.pendingPolicyDeletes.Len() > 0 ||
+//
+//}
+
 func NewEventBuffer(conf configInterface) *EventSequencer {
 	buf := &EventSequencer{
 		config:               conf,

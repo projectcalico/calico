@@ -1,5 +1,5 @@
 // Copyright (c) 2016 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,25 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calc_test
+package iptables_test
 
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/logutils"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"testing"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logrus.AddHook(&logutils.ContextHook{})
-	logrus.SetFormatter(&logutils.Formatter{})
 }
 
-func TestCalculationGraph(t *testing.T) {
+func TestIptables(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Calculation graph Suite")
+	RunSpecs(t, "Iptables Suite")
 }

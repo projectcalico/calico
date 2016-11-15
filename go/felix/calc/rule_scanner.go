@@ -105,7 +105,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 
 	// Figure out which selectors/tags are new.
 	addedUids := set.New()
-	for uid, _ := range currentUIDToTagOrSel {
+	for uid := range currentUIDToTagOrSel {
 		log.Debugf("Checking if UID %v is new.", uid)
 		if !rs.rulesIDToUIDs.Contains(key, uid) {
 			log.Debugf("UID %v is new", uid)
