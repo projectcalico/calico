@@ -1,6 +1,0 @@
-User-agent: *
-
-Disallow: /v1.5/
-Disallow: /v1.6/
-Disallow: 404.html
-Disallow: /master/
