@@ -1,4 +1,4 @@
-.PHONY: all binary calico/node test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl help clean_calico_node
+.PHONY: all binary calico/node test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl help
 default: help
 all: test                                 ## Run all the tests
 test: st test-containerized               ## Run all the tests
@@ -22,15 +22,20 @@ BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.
 CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/calico-bgp-daemon
 GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
 
-# we can use "custom" build image name
-BUILD_CONTAINER_NAME?=calico/build:v0.18.0
+# we can use "custom" build image and test image name
+PYTHON_BUILD_CONTAINER_NAME?=calico/build:v0.18.0
+SYSTEMTEST_CONTAINER?=calico/test
+
+# calicoctl and calico/node current share a single version - this is it.
+CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
+
 ###############################################################################
 # calico/node build. Contains the following areas
 # - Populate the calico_node/filesystem
 # - Build the container itself
 ###############################################################################
 NODE_CONTAINER_DIR=calico_node
-NODE_CONTAINER_NAME?=calico/node:$(CALICOCONTAINERS_VERSION)
+NODE_CONTAINER_NAME?=calico/node
 NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 # we can pass --build-arg during node image building
 NODE_CONTAINER_BUILD_ARGS?=
@@ -58,8 +63,8 @@ $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FIL
 # Build binary from python files, e.g. startup.py or allocate-ipip-addr.py
 $(NODE_CONTAINER_BIN_DIR)/%: $(NODE_CONTAINER_DIR)/%.py
 	-docker run -v $(SOURCE_DIR):/code --rm \
-	 $(BUILD_CONTAINER_NAME) \
-	 sh -c 'pyinstaller -ayF --distpath $(@D) $< && chown $(shell id -u):$(shell id -g) -R $(@D)'
+	 $(PYTHON_BUILD_CONTAINER_NAME) \
+	 sh -c 'pyinstaller -ayF --specpath /tmp/spec --workpath /tmp/build --distpath $(@D) $< && chown $(shell id -u):$(shell id -g) -R $(@D)'
 
 # Get felix binaries
 $(NODE_CONTAINER_BIN_DIR)/calico-felix:
@@ -97,14 +102,6 @@ $(NODE_CONTAINER_BIN_DIR)/bird:
 	curl -L $(BIRD6_URL) -o $(@D)/bird6
 	curl -L $(BIRDCL_URL) -o $(@D)/birdcl
 	chmod +x $(@D)/*
-
-clean_calico_node:
-	# Building the node relies on a few upstream images.
-	# Retag and remove them so that they will be pulled again
-	# We avoid just deleting the image. We didn't build it here so it would be impolite to delete it.
-	-docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME)
-	-docker tag $(BUILD_CONTAINER_NAME) $(BUILD_CONTAINER_NAME)-backup && docker rmi $(BUILD_CONTAINER_NAME)
-	rm -rf $(NODE_CONTAINER_BIN_DIR)
 
 ###############################################################################
 # Tests
@@ -211,7 +208,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
-	           calico/test \
+	           $(SYSTEMTEST_CONTAINER) \
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
@@ -243,7 +240,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
 	           -v $(SOURCE_DIR)/certs:$(SOURCE_DIR)/certs \
-	           calico/test \
+	           $(SYSTEMTEST_CONTAINER) \
 	           sh -c 'cp -ra tests/st/* /tests/st && cd / && nosetests $(ST_TO_RUN) -sv --nologcapture --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
@@ -261,13 +258,22 @@ semaphore: clean
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
 
 	# Actually run the tests (refreshing the images as required)
-	make st
+	CALICOCTL_NODE_VERSION=$$BRANCH_NAME $(MAKE) calico/ctl calico/node st
 
-	bash -c 'if [ -z "$$PULL_REQUEST_NUMBER" ]; then \
-		docker push $(NODE_CONTAINER_NAME) && \
-		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME) && \
-		docker push quay.io/$(NODE_CONTAINER_NAME); \
-	fi'
+	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
+	# If this isn't a PR, then push :BRANCHNAME tagged images to Dockerhub and quay for both calico/node and calico/ctl
+	set -e; \
+	if [ -z $$PULL_REQUEST_NUMBER ]; then \
+		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
+		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push $(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
+		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
+		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push $(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
+	fi
+
 
 ###############################################################################
 # calicoctl UTs
@@ -294,9 +300,9 @@ ut: dist/calicoctl
 
 PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: dist/calicoctl
+test-containerized: dist/calicoctl calicoctl_test_container.created
 	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
-	$(BUILD_CALICOCTL_CONTAINER_NAME) bash -c 'make ut'
+	$(TEST_CALICOCTL_CONTAINER_NAME) bash -c 'make ut'
 
 ###############################################################################
 # calicoctl build
@@ -305,22 +311,22 @@ test-containerized: dist/calicoctl
 # - Building the calico/ctl image
 ###############################################################################
 CALICOCTL_DIR=calicoctl
-CTL_CONTAINER_NAME?=calico/ctl:latest
+CTL_CONTAINER_NAME?=calico/ctl
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
 
-CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
+CALICOCTL_NODE_VERSION?="latest"
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
 LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
-	-X github.com/projectcalico/calico-containers/calicoctl/commands/node.VERSION=$(CALICOCONTAINERS_VERSION) \
+	-X github.com/projectcalico/calico-containers/calicoctl/commands/node.VERSION=$(CALICOCTL_NODE_VERSION) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X github.com/projectcalico/calico-containers/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
-GO_CONTAINER_NAME?=dockerepo/glide
-BUILD_CALICOCTL_CONTAINER_NAME=calico/calicoctl_build_container
-BUILD_CALICOCTL_CONTAINER_MARKER=calicoctl_build_container.created
+GLIDE_CONTAINER_NAME?=dockerepo/glide
+TEST_CALICOCTL_CONTAINER_NAME=calico/calicoctl_test_container
+TEST_CALICOCTL_CONTAINER_MARKER=calicoctl_test_container.created
 
 LIBCALICOGO_PATH?=none
 
@@ -333,8 +339,10 @@ vendor: glide.lock
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
-      --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
+	docker run --rm \
+		-v ${HOME}/.glide:/root/.glide:rw \
+		-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
+      --entrypoint /bin/sh $(GLIDE_CONTAINER_NAME) -e -c ' \
         cd /go/src/github.com/projectcalico/calico-containers && \
         glide install -strip-vendor && \
         chown $(shell id -u):$(shell id -u) -R vendor'
@@ -343,22 +351,23 @@ vendor: glide.lock
 binary: $(CALICOCTL_FILES) vendor
 	CGO_ENABLED=0 go build -v -o dist/calicoctl $(LDFLAGS) "./calicoctl/calicoctl.go"
 
-$(BUILD_CALICOCTL_CONTAINER_MARKER): Dockerfile.calicoctl.build
-	docker build -f Dockerfile.calicoctl.build -t $(BUILD_CALICOCTL_CONTAINER_NAME) .
+$(TEST_CALICOCTL_CONTAINER_MARKER): calicoctl/Dockerfile.calicoctl.build
+	docker build -f calicoctl/Dockerfile.calicoctl.build -t $(TEST_CALICOCTL_CONTAINER_NAME) .
 	touch $@
 
 # build calico_ctl image
-$(CTL_CONTAINER_CREATED): Dockerfile.calicoctl dist/calicoctl
-	docker build -t $(CTL_CONTAINER_NAME) -f Dockerfile.calicoctl .
+$(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
+	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
 	touch $@
 
 ## Run the build in a container. Useful for CI
-dist/calicoctl: $(BUILD_CALICOCTL_CONTAINER_MARKER) $(CALICOCTL_FILES) vendor
+dist/calicoctl: $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	docker run --rm \
 	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
 	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
-	  $(BUILD_CALICOCTL_CONTAINER_NAME) bash -c '\
+	  golang:1.7 bash -c '\
+	    cd /go/src/github.com/projectcalico/calico-containers && \
 	    make binary && \
 	    chown -R $(shell id -u):$(shell id -u) dist'
 
@@ -408,40 +417,61 @@ static-checks: vendor
 install:
 	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers/calicoctl
 
-## Build a binary for a release
-release-calicoctl: clean update-tools dist/calicoctl test-containerized
-	docker tag calico/calicoctl:$(CALICOCONTAINERS_VERSION) quay.io/calico/calicoctl:$(CALICOCONTAINERS_VERSION)
-	@echo Now attach the binaries to github dist/calicoctl
-	@echo And push the images to Docker Hub and quay.io:
-	@echo docker push calico/calicoctl:$(CALICOCONTAINERS_VERSION)
-	@echo docker push quay.io/calico/calicoctl:$(CALICOCONTAINERS_VERSION)
+release: clean
+ifndef VERSION
+	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+	git tag $(VERSION)
 
-release-caliconode: calico/node
-	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME)
+	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl calico/ctl calico/node
+	# Check that the version output includes the version specified.
+# Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
+	if ! dist/calicoctl version | grep -P 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `dist/calicoctl version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+
+	# Retag images with corect version and quay
+	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(VERSION)
+	docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$(VERSION)
+	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(VERSION)
+	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$(VERSION)
+
+
+	# Check that images were created recently and that the IDs of the versioned and latest images match
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME):$(VERSION)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME)
+	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(CTL_CONTAINER_NAME):$(VERSION)
+
+	# Check that the images container the right sub-components
 	docker run $(NODE_CONTAINER_NAME) calico-felix --version
 	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
-	@echo And push the images to Docker Hub and quay.io:
-	@echo docker push $(NODE_CONTAINER_NAME)
-	@echo docker push quay.io/$(NODE_CONTAINER_NAME)
 
-## Clean everything (including stray volumes)
-clean: clean_calico_node
+	@echo "\nNow push the tag and images. Then create a release on Github and attach the dist/calicoctl binary"
+	@echo "git push origin $(VERSION)"
+	@echo "docker push calico/ctl:$(VERSION)"
+	@echo "docker push quay.io/calico/ctl:$(VERSION)"
+	@echo "docker push calico/node:$(VERSION)"
+	@echo "docker push quay.io/calico/node:$(VERSION)"
+	@echo "docker push calico/ctl:latest"
+	@echo "docker push quay.io/calico/ctl:latest"
+	@echo "docker push calico/node:latest"
+	@echo "docker push quay.io/calico/node:latest"
+
+## Clean enough that a new release build will be clean
+clean:
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
-	-rm -r dist
-	-rm -r build
-	-rm -r certs
-	-rm *.tar
-	-rm -r vendor
-	-rm $(BUILD_CALICOCTL_CONTAINER_MARKER)
-	-rm $(CTL_CONTAINER_CREATED)
-	-docker rm -f calico-node
-	-docker rmi $(NODE_CONTAINER_NAME)
-	-docker rmi $(CTL_CONTAINER_NAME)
-	-docker rmi $(BUILD_CALICOCTL_CONTAINER_NAME)
-	-docker tag calico/test:latest calico/test:latest-backup && docker rmi calico/test:latest
-	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
-	-rm -r $(NODE_CONTAINER_DIR)/bin
+	rm -rf dist build certs *.tar vendor $(NODE_CONTAINER_DIR)/filesystem/bin
+
+	# Delete images that we built in this repo
+	docker rmi calico/node:latest || true
+	docker rmi calico/ctl:latest || true
+	docker rmi calico/calicoctl_test_container:latest || true
+
+	# Retag and remove external images so that they will be pulled again
+	# We avoid just deleting the image. We didn't build them here so it would be impolite to delete it.
+	docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME) || true
+	docker tag $(PYTHON_BUILD_CONTAINER_NAME) $(PYTHON_BUILD_CONTAINER_NAME)-backup && docker rmi $(PYTHON_BUILD_CONTAINER_NAME) || true
+	docker tag $(SYSTEMTEST_CONTAINER):latest $(SYSTEMTEST_CONTAINER):latest-backup && docker rmi $(SYSTEMTEST_CONTAINER):latest || true
 
 .PHONY: help
 ## Display this help text
