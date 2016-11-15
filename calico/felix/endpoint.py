@@ -194,7 +194,7 @@ class EndpointManager(ReferenceManager):
         # Store whether the policy is untracked, or remove that mapping if this
         # is a policy being deleted.
         if untracked_or_none is None:
-            self.policy_untracked.pop(policy_id)
+            self.policy_untracked.pop(policy_id, None)
         else:
             self.policy_untracked[policy_id] = untracked_or_none
 
@@ -578,9 +578,9 @@ class EndpointManager(ReferenceManager):
                 continue
             profile_order = self.profile_orders[pol_id]
             if self.policy_untracked[pol_id]:
-                untracked_policies..append((tier_order, pol_id.tier,
-                                            profile_order, pol_id.policy_id,
-                                            pol_id))
+                untracked_policies.append((tier_order, pol_id.tier,
+                                           profile_order, pol_id.policy_id,
+                                           pol_id))
             else:
                 profiles.append((tier_order, pol_id.tier,
                                  profile_order, pol_id.policy_id,

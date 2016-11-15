@@ -216,11 +216,10 @@ class TestProfileRules(BaseTestCase):
 
         self.m_mgr = Mock(spec=RulesManager)
         self.m_ipt_updater = Mock(spec=IptablesUpdater)
-        self.m_raw_updater = Mock(spec=IptablesUpdater)
         self.m_ips_mgr = Mock(spec=IpsetManager)
         self.rules = ProfileRules(self.config.plugins["iptables_generator"],
                                   "prof1", 4, self.m_ipt_updater,
-                                  self.m_ips_mgr, self.m_raw_updater)
+                                  self.m_ips_mgr)
         self.rules._manager = self.m_mgr
         self.rules._id = "prof1"
 
