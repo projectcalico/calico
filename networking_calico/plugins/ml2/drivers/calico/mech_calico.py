@@ -34,9 +34,18 @@ import os
 import eventlet
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
-from neutron.common import constants
-from neutron.common.exceptions import PortNotFound
-from neutron.common.exceptions import SubnetNotFound
+try:
+    from neutron_lib import constants
+except Exception:
+    from neutron.common import constants
+try:
+    from neutron_lib.exceptions import PortNotFound
+except Exception:
+    from neutron.common.exceptions import PortNotFound
+try:
+    from neutron_lib.exceptions import SubnetNotFound
+except Exception:
+    from neutron.common.exceptions import SubnetNotFound
 from neutron.common import topics
 from neutron import context as ctx
 from neutron.db import l3_db

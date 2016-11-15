@@ -1167,7 +1167,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 "binary": "calico-felix",
                 "host": "host",
                 "start_flag": True,
-                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+                'topic': mech_calico.constants.L2_AGENT_TOPIC,
             },
             mech_calico.felix_agent_state("host", True)
         )
@@ -1176,7 +1176,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 "agent_type": "Calico per-host agent (felix)",
                 "binary": "calico-felix",
                 "host": "host2",
-                'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+                'topic': mech_calico.constants.L2_AGENT_TOPIC,
             },
             mech_calico.felix_agent_state("host2", False)
         )
@@ -1233,7 +1233,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                         "binary": "calico-felix",
                         "host": "hostfoo",
                         "start_flag": True,
-                        'topic': lib.m_neutron.common.constants.L2_AGENT_TOPIC,
+                        'topic': mech_calico.constants.L2_AGENT_TOPIC,
                     },
                     use_call=False
                 )
@@ -1314,7 +1314,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual([mock.call(context, "p1",
-                                    lib.m_constants.PORT_STATUS_ERROR)],
+                                    mech_calico.constants.PORT_STATUS_ERROR)],
                          mock_calls)
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
 
@@ -1337,7 +1337,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
             self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual([mock.call(context, "p1",
-                                    lib.m_constants.PORT_STATUS_ACTIVE,
+                                    mech_calico.constants.PORT_STATUS_ACTIVE,
                                     host="host")],
                          mock_calls)
         self.assertEqual(
