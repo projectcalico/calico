@@ -737,7 +737,7 @@ class LocalEndpoint(RefCountedActor):
         _log.debug("New untracked policy IDs for %s: %s", self.combined_id,
                    untracked_pols_by_tier)
         if untracked_pols_by_tier != self._raw_pol_ids_by_tier:
-            self._pol_ids_by_tier = pols_by_tier
+            self._raw_pol_ids_by_tier = untracked_pols_by_tier
             self._iptables_in_sync = False
             self._profile_ids_dirty = True
 
