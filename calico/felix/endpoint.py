@@ -709,7 +709,7 @@ class LocalEndpoint(RefCountedActor):
         # Separate out the normal and untracked policies.
         tier_dict = OrderedDict()
         raw_tier_dict = OrderedDict()
-        for tier in pols_by_tiers or []:
+        for tier in pols_by_tier or []:
             pols = []
             raw_pols = []
             for pol_id in pols_by_tier[tier]:

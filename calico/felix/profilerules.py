@@ -161,7 +161,7 @@ class ProfileRules(RefCountedActor):
             if self._untracked is None:
                 self._untracked = profile.get('untracked', False)
             else:
-                assert profile['untracked'] == self._untracked
+                assert profile.get('untracked', False) == self._untracked
 
     @actor_message()
     def on_unreferenced(self):
