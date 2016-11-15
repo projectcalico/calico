@@ -503,14 +503,6 @@ class FelixIptablesGenerator(FelixPlugin):
                 chain=CHAIN_PREROUTING, goto=CHAIN_FROM_IFACE,
                 mark=self.IPTABLES_MARK_ENDPOINTS)
         )
-        # If the packet is now marked for acceptance, also mark it as not to be
-        # tracked.
-        chain.append(
-            "--append {chain} --jump NOTRACK --match mark "
-            "--mark {mark}/{mark}".format(
-                chain=CHAIN_PREROUTING,
-                mark=self.IPTABLES_MARK_ACCEPT)
-        )
 
         deps.add(CHAIN_FROM_IFACE)
 
@@ -555,14 +547,6 @@ class FelixIptablesGenerator(FelixPlugin):
             "--mark 0/{mark}".format(
                 chain=CHAIN_OUTPUT, goto=CHAIN_TO_IFACE,
                 mark=self.IPTABLES_MARK_ENDPOINTS)
-        )
-        # If the packet is now marked for acceptance, also mark it as not to be
-        # tracked.
-        chain.append(
-            "--append {chain} --jump NOTRACK --match mark "
-            "--mark {mark}/{mark}".format(
-                chain=CHAIN_OUTPUT,
-                mark=self.IPTABLES_MARK_ACCEPT)
         )
         deps.add(CHAIN_TO_IFACE)
 
@@ -891,6 +875,16 @@ class FelixIptablesGenerator(FelixPlugin):
                 # If the policy accepted the packet, it sets the Accept
                 # MARK==1. Immediately RETURN the packet to signal that it's
                 # been accepted.
+                if not default_drop:
+                    chain.append('--append %(chain)s '
+                                 '--match mark --mark %(mark)s/%(mark)s '
+                                 '--match comment '
+                                 '--comment "No track if policy accepted" '
+                                 '--jump NOTRACK' %
+                                 {
+                                     "chain": chain_name,
+                                     "mark": self.IPTABLES_MARK_ACCEPT,
+                                 })
                 chain.append('--append %(chain)s '
                              '--match mark --mark %(mark)s/%(mark)s '
                              '--match comment '

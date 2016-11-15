@@ -205,8 +205,7 @@ class TestRules(BaseTestCase):
                     '--append felix-PREROUTING --jump MARK --set-mark 0/0x1000000',
                     '--append felix-PREROUTING --jump MARK --set-mark 0/0x4000000',
                     '--append felix-PREROUTING --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
-                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000',
-                    '--append felix-PREROUTING --jump NOTRACK --match mark --mark 0x1000000/0x1000000'
+                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000'
                   ],
                   'felix-FAILSAFE-IN': [
                       '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -221,8 +220,7 @@ class TestRules(BaseTestCase):
                       '--append felix-OUTPUT --jump MARK --set-mark 0/0x1000000',
                       '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
                       '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
-                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
-                      '--append felix-OUTPUT --jump NOTRACK --match mark --mark 0x1000000/0x1000000'
+                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000'
                   ]},
                  {
                      'felix-PREROUTING': set(['felix-FROM-HOST-IF']),
@@ -320,8 +318,7 @@ class TestRules(BaseTestCase):
                     '--append felix-PREROUTING --jump MARK --set-mark 0/0x1000000',
                     '--append felix-PREROUTING --jump MARK --set-mark 0/0x4000000',
                     '--append felix-PREROUTING --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
-                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000',
-                    '--append felix-PREROUTING --jump NOTRACK --match mark --mark 0x1000000/0x1000000'
+                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000'
                   ],
                   'felix-FAILSAFE-IN': [
                       '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -336,8 +333,7 @@ class TestRules(BaseTestCase):
                       '--append felix-OUTPUT --jump MARK --set-mark 0/0x1000000',
                       '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
                       '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
-                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
-                      '--append felix-OUTPUT --jump NOTRACK --match mark --mark 0x1000000/0x1000000'
+                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000'
                   ]},
                  {
                      'felix-PREROUTING': set(['felix-FROM-HOST-IF']),
