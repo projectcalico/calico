@@ -272,8 +272,8 @@ semaphore: clean
 		docker push $(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
 
 		# Now build a calico/ctl that points at a calico/node:$(CALICOCONTAINERS_VERSION) image
-		rm dist/calicoctl
-		CALICOCTL_NODE_VERSION=$(CALICOCONTAINERS_VERSION) $(MAKE) calico/ctl
+		rm dist/calicoctl ;\
+		CALICOCTL_NODE_VERSION=$(CALICOCONTAINERS_VERSION) $(MAKE) calico/ctl ;\
 
 		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION) && \
 		docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION); \
