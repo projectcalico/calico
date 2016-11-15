@@ -705,8 +705,27 @@ class LocalEndpoint(RefCountedActor):
         """
         _log.debug("New policy IDs for %s: %s", self.combined_id,
                    pols_by_tier)
-        if pols_by_tier != self._pol_ids_by_tier:
-            self._pol_ids_by_tier = pols_by_tier
+
+        # Separate out the normal and untracked policies.
+        tier_dict = OrderedDict()
+        raw_tier_dict = OrderedDict()
+        for tier in pols_by_tiers or []:
+            pols = []
+            raw_pols = []
+            for pol_id in pols_by_tier[tier]:
+                if is_untracked(pol_id):
+                    raw_pols.append(pol_id)
+                else:
+                    pols.append(pol_id)
+            tier_dict[tier] = pols
+            raw_tier_dict[tier] = raw_pols
+
+        if self._pol_ids_by_tier.items() != tier_dict.items():
+            self._pol_ids_by_tier = tier_dict
+            self._iptables_in_sync = False
+            self._profile_ids_dirty = True
+        if self._raw_pol_ids_by_tier.items() != raw_tier_dict.items():
+            self._raw_pol_ids_by_tier = raw_tier_dict
             self._iptables_in_sync = False
             self._profile_ids_dirty = True
 
@@ -953,33 +972,6 @@ class LocalEndpoint(RefCountedActor):
                                all_old_ips, all_new_ips)
                     self._removed_ips |= all_old_ips
                     self._removed_ips -= all_new_ips
-<<<<<<< f6ddc11a0b3a3a8269136e9438cc66b4c2be823f:calico/felix/endpoint.py
-=======
-
-            tiers = pending_endpoint.get("tiers", [])
-            tier_dict = OrderedDict()
-            raw_tier_dict = OrderedDict()
-            for tier in tiers or []:
-                pols = []
-                raw_pols = []
-                for pol in tier["policies"] or []:
-                    pol_id = TieredPolicyId(tier["name"], pol)
-                    if is_untracked(pol_id):
-                        raw_pols.append(pol_id)
-                    else:
-                        pols.append(pol_id)
-                tier_dict[tier["name"]] = pols
-                raw_tier_dict[tier["name"]] = raw_pols
-            if self._pol_ids_by_tier.items() != tier_dict.items():
-                self._pol_ids_by_tier = tier_dict
-                self._iptables_in_sync = False
-                self._profile_ids_dirty = True
-            if self._raw_pol_ids_by_tier.items() != raw_tier_dict.items():
-                self._raw_pol_ids_by_tier = raw_tier_dict
-                self._iptables_in_sync = False
-                self._profile_ids_dirty = True
-
->>>>>>> Add 'untracked' policy field:python/calico/felix/endpoint.py
         else:
             # Delete of the endpoint.  Need to resync everything.
             self._profile_ids_dirty = True
