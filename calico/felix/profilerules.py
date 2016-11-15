@@ -159,7 +159,7 @@ class ProfileRules(RefCountedActor):
         self._dirty |= force_reprogram
         if profile:
             if self._untracked is None:
-                self._untracked = profile['untracked']
+                self._untracked = profile.get('untracked', False)
             else:
                 assert profile['untracked'] == self._untracked
 
