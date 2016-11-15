@@ -769,12 +769,14 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         if rules is not None:
             selector = rules.pop("selector")
             order = rules.pop("order")
+            untracked = rules.get("untracked", False)
             self.splitter.on_rules_update(policy_id, rules)
             self.splitter.on_policy_selector_update(policy_id, selector,
-                                                     order)
+                                                    order, untracked)
         else:
             self.splitter.on_rules_update(policy_id, None)
-            self.splitter.on_policy_selector_update(policy_id, None, None)
+            self.splitter.on_policy_selector_update(policy_id, None,
+                                                    None, None)
 
     def on_tiered_policy_delete(self, response, tier, policy_id):
         """Handler for tiered rules deletes, passes update to the splitter."""
@@ -782,7 +784,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _stats.increment("tiered rules deleted")
         policy_id = TieredPolicyId(tier, policy_id)
         self.splitter.on_rules_update(policy_id, None)
-        self.splitter.on_policy_selector_update(policy_id, None, None)
+        self.splitter.on_policy_selector_update(policy_id, None, None, None)
 
     def on_host_ip_set(self, response, hostname):
         _stats.increment("Host IP created/updated")
@@ -803,7 +805,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def _update_hosts_ipset(self):
         if not self._config.IP_IN_IP_ENABLED:
             _log.debug("Ignoring update to hosts ipset because IP-in-IP is disabled")
-            return          
+            return
         if not self._been_in_sync:
             _log.debug("Deferring update to hosts ipset until we're in-sync")
             return

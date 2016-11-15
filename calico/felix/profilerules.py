@@ -323,14 +323,3 @@ def extract_tags_and_selectors_from_profile(profile):
 
 class UnsupportedICMPType(Exception):
     pass
-
-
-policy_id_untracked = {}
-
-
-def is_untracked(policy_id):
-    return policy_id_untracked.get(str(policy_id), False)
-
-
-def set_untracked(policy_id, untracked):
-    policy_id_untracked[str(policy_id)] = untracked

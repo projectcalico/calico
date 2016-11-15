@@ -37,7 +37,7 @@ from calico.felix.futils import FailedSystemCall
 from calico.felix.futils import IPV4, IP_TYPE_TO_VERSION
 from calico.felix.labels import LabelValueIndex, LabelInheritanceIndex
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
-from calico.felix.profilerules import RulesManager, is_untracked
+from calico.felix.profilerules import RulesManager
 from calico.felix.frules import interface_to_chain_suffix
 
 _log = logging.getLogger(__name__)
@@ -98,6 +98,8 @@ class EndpointManager(ReferenceManager):
         self.tier_sequence = []
         # And their associated orders.
         self.profile_orders = {}
+        # And whether they are untracked.
+        self.policy_untracked = {}
         # Set of profile IDs to apply to each endpoint ID.
         self.pol_ids_by_ep_id = MultiDict()
         self.endpoints_with_dirty_policy = set()
@@ -181,13 +183,20 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_policy_selector_update(self, policy_id, selector_or_none,
-                                  order_or_none):
+                                  order_or_none, untracked_or_none):
         _log.debug("Policy %s selector updated to %s (%s)", policy_id,
                    selector_or_none, order_or_none)
         # Defer to the label index, which will call us back synchronously
         # via on_policy_match_started and on_policy_match_stopped.
         self.policy_index.on_expression_update(policy_id,
                                                selector_or_none)
+
+        # Store whether the policy is untracked, or remove that mapping if this
+        # is a policy being deleted.
+        if untracked_or_none is None:
+            self.policy_untracked.pop(policy_id)
+        else:
+            self.policy_untracked[policy_id] = untracked_or_none
 
         # Before we update the policies, check if the order has changed,
         # which would mean we need to refresh all endpoints with this policy
@@ -559,6 +568,7 @@ class EndpointManager(ReferenceManager):
         # Order the profiles by tier and profile order, using the name of the
         # tier and profile as a tie-breaker if the orders are the same.
         profiles = []
+        untracked_policies = []
         for pol_id in self.pol_ids_by_ep_id.iter_values(ep_id):
             try:
                 tier_order = self.tier_orders[pol_id.tier]
@@ -567,17 +577,31 @@ class EndpointManager(ReferenceManager):
                           "missing.", pol_id)
                 continue
             profile_order = self.profile_orders[pol_id]
-            profiles.append((tier_order, pol_id.tier,
-                             profile_order, pol_id.policy_id,
-                             pol_id))
-        profiles.sort()
+            if self.policy_untracked[pol_id]:
+                untracked_policies..append((tier_order, pol_id.tier,
+                                            profile_order, pol_id.policy_id,
+                                            pol_id))
+            else:
+                profiles.append((tier_order, pol_id.tier,
+                                 profile_order, pol_id.policy_id,
+                                 pol_id))
+
         # Convert to an ordered dict from tier to list of profiles.
+        profiles.sort()
         pols_by_tier = OrderedDict()
         for _, tier, _, _, pol_id in profiles:
             pols_by_tier.setdefault(tier, []).append(pol_id)
 
+        # Similarly for untracked policies.
+        untracked_policies.sort()
+        untracked_pols_by_tier = OrderedDict()
+        for _, tier, _, _, pol_id in untracked_policies:
+            untracked_pols_by_tier.setdefault(tier, []).append(pol_id)
+
         endpoint = self.objects_by_id[ep_id]
-        endpoint.on_tiered_policy_update(pols_by_tier, async=True)
+        endpoint.on_tiered_policy_update(pols_by_tier,
+                                         untracked_pols_by_tier,
+                                         async=True)
 
     def _on_worker_died(self, watch_greenlet):
         """
@@ -697,7 +721,7 @@ class LocalEndpoint(RefCountedActor):
             self._device_in_sync = False
 
     @actor_message()
-    def on_tiered_policy_update(self, pols_by_tier):
+    def on_tiered_policy_update(self, pols_by_tier, untracked_pols_by_tier):
         """Called to update the ordered set of tiered policies that apply.
 
         :param OrderedDict pols_by_tier: Ordered mapping from tier name to
@@ -705,27 +729,15 @@ class LocalEndpoint(RefCountedActor):
         """
         _log.debug("New policy IDs for %s: %s", self.combined_id,
                    pols_by_tier)
-
-        # Separate out the normal and untracked policies.
-        tier_dict = OrderedDict()
-        raw_tier_dict = OrderedDict()
-        for tier in pols_by_tier or []:
-            pols = []
-            raw_pols = []
-            for pol_id in pols_by_tier[tier]:
-                if is_untracked(pol_id):
-                    raw_pols.append(pol_id)
-                else:
-                    pols.append(pol_id)
-            tier_dict[tier] = pols
-            raw_tier_dict[tier] = raw_pols
-
-        if self._pol_ids_by_tier.items() != tier_dict.items():
-            self._pol_ids_by_tier = tier_dict
+        if pols_by_tier != self._pol_ids_by_tier:
+            self._pol_ids_by_tier = pols_by_tier
             self._iptables_in_sync = False
             self._profile_ids_dirty = True
-        if self._raw_pol_ids_by_tier.items() != raw_tier_dict.items():
-            self._raw_pol_ids_by_tier = raw_tier_dict
+
+        _log.debug("New untracked policy IDs for %s: %s", self.combined_id,
+                   untracked_pols_by_tier)
+        if untracked_pols_by_tier != self._raw_pol_ids_by_tier:
+            self._pol_ids_by_tier = pols_by_tier
             self._iptables_in_sync = False
             self._profile_ids_dirty = True
 
