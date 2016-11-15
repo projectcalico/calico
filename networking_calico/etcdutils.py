@@ -369,7 +369,7 @@ class EtcdWatcher(EtcdClientOwner):
                 # Assume any other errors are fatal to our poll and
                 # do a full resync.
                 _log.exception("Unknown etcd error %r; doing resync.",
-                               e.message)
+                               e.args)
                 # Limit our retry rate in case etcd is down.
                 time.sleep(1)
                 self.reconnect()
