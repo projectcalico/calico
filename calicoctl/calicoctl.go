@@ -91,7 +91,9 @@ Description:
 		case "config":
 			commands.Config(args)
 		default:
+			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
 			fmt.Println(doc)
+			os.Exit(1)
 		}
 	}
 }
