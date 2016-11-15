@@ -905,7 +905,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
 	var calcGraph *dispatcher.Dispatcher
 	var tracker *stateTracker
-	var eventBuf *EventBuffer
+	var eventBuf *EventSequencer
 	var lastState State
 	var state State
 	var sentInSync bool

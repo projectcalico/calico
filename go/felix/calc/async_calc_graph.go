@@ -54,7 +54,7 @@ type AsyncCalcGraph struct {
 	Dispatcher       *dispatcher.Dispatcher
 	inputEvents      chan interface{}
 	outputEvents     chan<- interface{}
-	eventBuffer      *EventBuffer
+	eventBuffer      *EventSequencer
 	beenInSync       bool
 	needToSendInSync bool
 
