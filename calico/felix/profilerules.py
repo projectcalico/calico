@@ -48,12 +48,19 @@ class RulesManager(ReferenceManager):
         self._datamodel_in_sync = False
 
     def _create(self, profile_id):
-        return ProfileRules(self.iptables_generator,
-                            profile_id,
-                            self.ip_version,
-                            self.iptables_updater,
-                            self.ipset_manager,
-                            self.untracked_updater)
+        rules = self.rules_by_profile_id.get(profile_id)
+        if rules and rules.get('untracked', False):
+            return ProfileRules(self.iptables_generator,
+                                profile_id,
+                                self.ip_version,
+                                self.untracked_updater,
+                                self.ipset_manager)
+        else:
+            return ProfileRules(self.iptables_generator,
+                                profile_id,
+                                self.ip_version,
+                                self.iptables_updater,
+                                self.ipset_manager)
 
     def _on_object_started(self, profile_id, active_profile):
         profile_or_none = self.rules_by_profile_id.get(profile_id)
@@ -115,7 +122,7 @@ class ProfileRules(RefCountedActor):
     Actor that owns the per-profile rules chains.
     """
     def __init__(self, iptables_generator, profile_id, ip_version,
-                 iptables_updater, ipset_mgr, untracked_updater):
+                 iptables_updater, ipset_mgr):
         super(ProfileRules, self).__init__(qualifier=profile_id)
         assert profile_id is not None
 
@@ -125,7 +132,6 @@ class ProfileRules(RefCountedActor):
         self._ipset_mgr = ipset_mgr
         self._iptables_updater = iptables_updater
         self._ipset_refs = RefHelper(self, ipset_mgr, self._on_ipsets_acquired)
-        self._untracked_updater = untracked_updater
 
         # Latest profile update - a profile dictionary.
         self._pending_profile = None
@@ -133,10 +139,6 @@ class ProfileRules(RefCountedActor):
         self._profile = None
         # The IDs of the tags and selector ipsets it requires.
         self._required_ipsets = set()
-        # Whether the profile is untracked.  We don't support a profile
-        # changing between tracked and untracked, so will assert that this
-        # doesn't change once it has been set for the first time.
-        self._untracked = None
 
         # State flags.
         self._notified_ready = False
@@ -157,11 +159,6 @@ class ProfileRules(RefCountedActor):
         assert not self._dead, "Shouldn't receive updates after we're dead."
         self._pending_profile = profile
         self._dirty |= force_reprogram
-        if profile:
-            if self._untracked is None:
-                self._untracked = profile.get('untracked', False)
-            else:
-                assert profile.get('untracked', False) == self._untracked
 
     @actor_message()
     def on_unreferenced(self):
@@ -260,10 +257,7 @@ class ProfileRules(RefCountedActor):
         # Need to block here: have to wait for chains to be deleted
         # before we can decref our ipsets.
         chain_names = self.iptables_generator.profile_chain_names(self.id)
-        if self._untracked:
-            self._untracked_updater.delete_chains(chain_names, async=False)
-        else:
-            self._iptables_updater.delete_chains(chain_names, async=False)
+        self._iptables_updater.delete_chains(chain_names, async=False)
 
     def _update_chains(self):
         """
@@ -300,10 +294,7 @@ class ProfileRules(RefCountedActor):
         _log.debug("Queueing programming for rules %s: %s", self.id,
                    updates)
 
-        if self._untracked:
-            self._untracked_updater.rewrite_chains(updates, deps, async=False)
-        else:
-            self._iptables_updater.rewrite_chains(updates, deps, async=False)
+        self._iptables_updater.rewrite_chains(updates, deps, async=False)
 
 
 def extract_tags_and_selectors_from_profile(profile):
