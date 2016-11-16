@@ -6,7 +6,6 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/docopt/docopt-go
-- package: github.com/ghodss/yaml
 - package: github.com/olekukonko/tablewriter
 - package: github.com/docker/engine-api
   version: release/1.12
@@ -21,3 +20,5 @@ import:
 - package: github.com/projectcalico/libcalico-go
   subpackages:
   - lib
+- package: github.com/projectcalico/go-yaml-wrapper
+- package: github.com/projectcalico/go-json

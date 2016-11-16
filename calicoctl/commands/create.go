@@ -78,7 +78,7 @@ Description:
 	log.Infof("results: %+v", results)
 
 	if results.fileInvalid {
-		fmt.Printf("Error processing input file: %v\n", results.err)
+		fmt.Printf("Failed to execute command: %v\n", results.err)
 		os.Exit(1)
 	} else if results.numHandled == 0 {
 		if results.numResources == 0 {

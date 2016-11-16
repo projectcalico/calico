@@ -165,7 +165,7 @@ Description:
 	log.Infof("results: %+v", results)
 
 	if results.err != nil {
-		fmt.Printf("Error getting resources: %v\n", results.err)
+		fmt.Printf("Failed to execute command: %v\n", results.err)
 		os.Exit(1)
 	}
 

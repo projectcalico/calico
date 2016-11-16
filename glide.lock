@@ -1,5 +1,5 @@
-hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-11-22T22:51:07.640806188-08:00
+hash: e32522a5a5e0d481b1d7e76f217dfd701846af7a8f7062ab6c67998f48ab2b72
+updated: 2016-11-23T19:03:55.831120072-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -57,7 +57,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
+  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -102,10 +102,36 @@ imports:
   version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
+- name: github.com/onsi/ginkgo
+  version: 74c678d97c305753605c338c6c78c49ec104b5e7
+  subpackages:
+  - config
+  - extensions/table
+  - internal/codelocation
+  - internal/containernode
+  - internal/failer
+  - internal/leafnodes
+  - internal/remote
+  - internal/spec
+  - internal/specrunner
+  - internal/suite
+  - internal/testingtproxy
+  - internal/writer
+  - reporters
+  - reporters/stenographer
+  - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/projectcalico/go-json
+  version: 52d0fced7a06d33e591e66291b1896f6021d6630
+  subpackages:
+  - json
+- name: github.com/projectcalico/go-yaml
+  version: a24e162d308633fed72ed0ee4fd038570b74e444
+- name: github.com/projectcalico/go-yaml-wrapper
+  version: d8ff4587e9570b667ccc1a4583e3fe9fe3af49e4
 - name: github.com/projectcalico/libcalico-go
-  version: 838a75af2ce9222826c49b76acfa882c697d4886
+  version: ef0ff501cca9fe87dd1580f1f7442884a551dc4b
   subpackages:
   - lib
   - lib/api
@@ -126,6 +152,7 @@ imports:
   - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
+  - lib/testutils
   - lib/validator
 - name: github.com/PuerkitoBio/purell
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
@@ -165,7 +192,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 9c60d1c508f5134d1ca726b4641db998f2523357
+  version: 30237cf4eefd639b184d1f2cb77a581ea0be8947
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -204,7 +231,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 - name: k8s.io/kubernetes
-  version: 5c918def7a61a6882316ba3a385a572d21a94228
+  version: 1dfd64f4378ad9dd974bbfbef8e90127dce6aafe
   subpackages:
   - pkg/api
   - pkg/api/errors
@@ -324,30 +351,6 @@ imports:
   - third_party/forked/golang/reflect
   - third_party/forked/golang/template
 testImports:
-- name: github.com/onsi/ginkgo
-  version: 74c678d97c305753605c338c6c78c49ec104b5e7
-  subpackages:
-  - config
-  - ginkgo
-  - ginkgo/convert
-  - ginkgo/interrupthandler
-  - ginkgo/nodot
-  - ginkgo/testrunner
-  - ginkgo/testsuite
-  - ginkgo/watch
-  - internal/codelocation
-  - internal/containernode
-  - internal/failer
-  - internal/leafnodes
-  - internal/remote
-  - internal/spec
-  - internal/specrunner
-  - internal/suite
-  - internal/testingtproxy
-  - internal/writer
-  - reporters
-  - reporters/stenographer
-  - types
 - name: github.com/onsi/gomega
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
