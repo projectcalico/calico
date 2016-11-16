@@ -155,19 +155,19 @@ class TestEndpointManager(BaseTestCase):
         # Add a profile into the tier so it'll apply to the endpoint.
         pol_id_a = TieredPolicyId("a", "a1")
         self.mgr.on_policy_selector_update(pol_id_a, parse_selector("all()"),
-                                           10, False, async=True)
+                                           10, async=True)
         pol_id_b = TieredPolicyId("b", "b1")
         self.mgr.on_policy_selector_update(pol_id_b, parse_selector("all()"),
-                                           10, False, async=True)
+                                           10, async=True)
         pol_id_c1 = TieredPolicyId("c1", "c1")
         self.mgr.on_policy_selector_update(pol_id_c1, parse_selector("all()"),
-                                           10, False, async=True)
+                                           10, async=True)
         pol_id_c2 = TieredPolicyId("c2", "c2")
         self.mgr.on_policy_selector_update(pol_id_c2, parse_selector("all()"),
-                                           10, False, async=True)
+                                           10, async=True)
         pol_id_c3 = TieredPolicyId("c3", "c3")
         self.mgr.on_policy_selector_update(pol_id_c3, parse_selector("all()"),
-                                           10, False, async=True)
+                                           10, async=True)
         self.step_actor(self.mgr)
         # Since we haven't set the tier ID yet, the policy won't get applied...
         self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
@@ -213,13 +213,13 @@ class TestEndpointManager(BaseTestCase):
         # Check deletion and that it's idempotent.
         self.mgr.on_tier_data_update("b", None, async=True)
         self.step_actor(self.mgr)
-        self.mgr.on_policy_selector_update(pol_id_b, None, None, None, async=True)
-        self.mgr.on_policy_selector_update(pol_id_b, None, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
         self.step_actor(self.mgr)
         self.mgr.on_tier_data_update("b", None, async=True)
         self.step_actor(self.mgr)
-        self.mgr.on_policy_selector_update(pol_id_b, None, None, None, async=True)
-        self.mgr.on_policy_selector_update(pol_id_b, None, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
+        self.mgr.on_policy_selector_update(pol_id_b, None, None, async=True)
         self.step_actor(self.mgr)
         tiers = OrderedDict()
         tiers["a"] = [pol_id_a]
@@ -263,7 +263,6 @@ class TestEndpointManager(BaseTestCase):
         self.mgr.on_policy_selector_update(TieredPolicyId("a", "b"),
                                            parse_selector('a == "b"'),
                                            10,
-                                           False,
                                            async=True)
         self.step_actor(self.mgr)
 

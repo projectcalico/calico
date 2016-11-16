@@ -338,6 +338,9 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self._usage_report_greenlet = gevent.Greenlet(
             self._periodically_usage_report
         )
+        # Mapping from each received TieredPolicyId to the
+        # TieredPolicyId or UntrackedPolicyId that we pass on.
+        self.policies = {}
 
     def estimated_host_count(self):
         """

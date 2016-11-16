@@ -531,7 +531,7 @@ class TestEtcdWatcher(BaseTestCase):
             POLICY_PARSED
         )
         self.m_splitter.on_policy_selector_update.assert_called_once_with(
-            POLICY_ID, SELECTOR, 10, False
+            POLICY_ID, SELECTOR, 10
         )
 
     def test_on_tiered_policy_set_bad_data(self):
@@ -542,7 +542,7 @@ class TestEtcdWatcher(BaseTestCase):
             None
         )
         self.m_splitter.on_policy_selector_update.assert_called_once_with(
-            POLICY_ID, None, None, None
+            POLICY_ID, None, None
         )
 
     def test_on_tiered_policy_del(self):
@@ -553,7 +553,7 @@ class TestEtcdWatcher(BaseTestCase):
             None
         )
         self.m_splitter.on_policy_selector_update.assert_called_once_with(
-            POLICY_ID, None, None, None
+            POLICY_ID, None, None
         )
 
     def test_on_tier_data_set(self):
