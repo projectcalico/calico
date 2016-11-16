@@ -109,7 +109,7 @@ class UpdateSplitter(object):
             mgr.on_tier_data_update(tier, data_or_none, async=True)
 
     def on_policy_selector_update(self, policy_id, selector_or_none,
-                                  order_or_none, untracked_or_none):
+                                  order_or_none):
         """
         Called when the selector for a tiered-policy is updated.
         :param policy_id:
@@ -118,8 +118,7 @@ class UpdateSplitter(object):
         _log.info("Selector for profile %s updated", policy_id)
         for mgr in self.selector_mgrs:
             mgr.on_policy_selector_update(policy_id, selector_or_none,
-                                          order_or_none, untracked_or_none,
-                                          async=True)
+                                          order_or_none, async=True)
 
     def on_interface_update(self, name, iface_up):
         """

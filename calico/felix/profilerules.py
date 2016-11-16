@@ -20,6 +20,7 @@ ProfileRules actor, handles local profile chains.
 """
 import logging
 
+from calico.datamodel_v1 import UntrackedPolicyId
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
@@ -48,8 +49,7 @@ class RulesManager(ReferenceManager):
         self._datamodel_in_sync = False
 
     def _create(self, profile_id):
-        rules = self.rules_by_profile_id.get(profile_id)
-        if rules and rules.get('untracked', False):
+        if isinstance(profile_id, UntrackedPolicyId):
             return ProfileRules(self.iptables_generator,
                                 profile_id,
                                 self.ip_version,
@@ -99,15 +99,7 @@ class RulesManager(ReferenceManager):
     def on_rules_update(self, profile_id, profile, force_reprogram=False):
         if profile is not None:
             _log.info("Rules for profile %s updated.", profile_id)
-            existing_profile = self.rules_by_profile_id.get(profile_id)
             self.rules_by_profile_id[profile_id] = profile
-            untracked_now = profile.get('untracked', False)
-            if existing_profile and (
-                    existing_profile.get('untracked', False) != untracked_now
-            ):
-                _log.debug("Profile %s changing between normal and untracked")
-                self.decref(profile_id)
-                self.get_and_incref(profile_id)
         else:
             _log.debug("Rules for profile %s deleted.", profile_id)
             self.rules_by_profile_id.pop(profile_id, None)

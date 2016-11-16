@@ -30,7 +30,7 @@ from calico.calcollections import MultiDict
 from calico.common import nat_key
 from calico.datamodel_v1 import (
     ENDPOINT_STATUS_UP, ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_ERROR,
-    WloadEndpointId, ResolvedHostEndpointId)
+    WloadEndpointId, ResolvedHostEndpointId, UntrackedPolicyId)
 from calico.felix import devices, futils
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
@@ -98,8 +98,6 @@ class EndpointManager(ReferenceManager):
         self.tier_sequence = []
         # And their associated orders.
         self.profile_orders = {}
-        # And whether they are untracked.
-        self.policy_untracked = {}
         # Set of profile IDs to apply to each endpoint ID.
         self.pol_ids_by_ep_id = MultiDict()
         self.endpoints_with_dirty_policy = set()
@@ -183,20 +181,13 @@ class EndpointManager(ReferenceManager):
 
     @actor_message()
     def on_policy_selector_update(self, policy_id, selector_or_none,
-                                  order_or_none, untracked_or_none):
+                                  order_or_none):
         _log.debug("Policy %s selector updated to %s (%s)", policy_id,
                    selector_or_none, order_or_none)
         # Defer to the label index, which will call us back synchronously
         # via on_policy_match_started and on_policy_match_stopped.
         self.policy_index.on_expression_update(policy_id,
                                                selector_or_none)
-
-        # Store whether the policy is untracked, or remove that mapping if this
-        # is a policy being deleted.
-        if untracked_or_none is None:
-            self.policy_untracked.pop(policy_id, None)
-        else:
-            self.policy_untracked[policy_id] = untracked_or_none
 
         # Before we update the policies, check if the order has changed,
         # which would mean we need to refresh all endpoints with this policy
@@ -577,7 +568,7 @@ class EndpointManager(ReferenceManager):
                           "missing.", pol_id)
                 continue
             profile_order = self.profile_orders[pol_id]
-            if self.policy_untracked[pol_id]:
+            if isinstance(pol_id, UntrackedPolicyId):
                 untracked_policies.append((tier_order, pol_id.tier,
                                            profile_order, pol_id.policy_id,
                                            pol_id))
