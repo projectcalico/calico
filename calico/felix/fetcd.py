@@ -764,10 +764,10 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         _stats.increment("Tier data deleted")
         self.splitter.on_tier_data_update(tier, None)
 
-    def on_tiered_policy_set(self, response, tier, policy_id):
+    def on_tiered_policy_set(self, response, tier, given_policy_id):
         _log.debug("Rules for %s/%s set", tier, policy_id)
         _stats.increment("Tiered rules created/updated")
-        policy_id = TieredPolicyId(tier, policy_id)
+        policy_id = TieredPolicyId(tier, given_policy_id)
         rules = parse_policy(policy_id, response.value)
         if rules is not None:
             selector = rules.pop("selector")
@@ -776,7 +776,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             # If the new content says untracked, we want an
             # UntrackedPolicyId instead of a TieredPolicyId.
             if rules.get("untracked", False):
-                new_policy_id = UntrackedPolicyId(tier, policy_id)
+                new_policy_id = UntrackedPolicyId(tier, given_policy_id)
             else:
                 new_policy_id = policy_id
 
