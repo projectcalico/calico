@@ -2,7 +2,26 @@
 title: Troubleshooting
 ---
 
-## Running `sudo calicoctl ...` with Environment Variables
+
+## Common Installation Issues
+
+#### Ubuntu (or GNOME) NetworkManager
+
+Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
+attempting to use Calico networking.
+
+NetworkManager manipulates the routing table for interfaces in the default network
+namespace where Calico veth pairs are anchored for connections to containers.
+This can interfere with the Calico agent's ability to route correctly.
+
+You can configure interfaces in the `/etc/network/interfaces` file if the
+NetworkManager removes your host's interfaces. See the Debian
+[NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration)
+guide for more information.
+
+## Common etcd Connection Issues
+
+#### Running `sudo calicoctl ...` with Environment Variables
 
 If you use `sudo` for commands like `calicoctl node run`, remember that your environment
 variables will not be transferred to the `sudo` environment.  You can run `sudo` with
@@ -19,36 +38,64 @@ or you can set environment variables for `sudo` commands like this:
 ```
 
 Also be aware that connection information can be specified as a config
-file rather than using environment variables.  See the 
+file rather than using environment variables.  See the
 [Calicoctl Configuration Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
 guide for details.
 
-## Ubuntu (or GNOME) NetworkManager
+## Container Connectivity Issues
 
-Disable [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
-attempting to use Calico networking.
+No matter what kind of connectivity issues you are having, we recommend you
+**run through all of the following checks in order to diagnose the problem.**
 
-NetworkManager manipulates the routing table for interfaces in the default network
-namespace where Calico veth pairs are anchored for connections to containers.
-This can interfere with the Calico agent's ability to route correctly.
+#### Host Can't Communicate with its Containers
 
-You can configure interfaces in the `/etc/network/interfaces` file if the
-NetworkManager removes your host's interfaces. See the Debian
-[NetworkConfiguration](https://wiki.debian.org/NetworkConfiguration)
-guide for more information.
+By default, hosts should be able to reach their running containers (even when policy would
+otherwise prevent it). Test this basic connection by pinging a container IP from its host.
 
-## etcd.EtcdException: No more machines in the cluster
+If this ping was not successful, check [Felix Logs](logging#felix) for issues.
 
-If you see this exception, it means `calicoctl` can't communicate with your etcd 
-cluster.  Ensure etcd is up and listening on `localhost:2379`
+#### Containers on the Same Host Can't Communicate
 
-## No ping between containers on different hosts
+Containers on the same host should be able to ping one another, if policy allows it.
+Testing this connection is usually orchestrator dependent. Browse the
+[orchestrator-specific troubleshooting guides]({{site.baseurl}}/{{page.version}}/getting-started/)
+for more information.
+
+If the previous step was successful, but this step was not, it is likely that
+the implemented policy is blocking the desired connection.
+
+#### Containers Can't Communicate with the Internet
+
+Containers with Calico IP's should be able to communicate with the Internet
+provided that edge routers are correctly configured to NAT traffic from the Calico Pool.
+
+Often in Cloud environments, edge routers will not be configured to perform this NAT,
+and inbound responses will not be routed to the containers.
+
+If you do not have the necessary privilege to enable NAT in your edge router,
+Calico can perform NAT for traffic destined outside of the Calico Network. See
+[Outbound Connectivity]({{site.baseurl}}/{{page.version}}/usage/external-connectivity#outbound-connectivity) for information on how to enable it.
+
+#### Containers on Different Hosts Can't Communicate
 
 If you have connectivity between containers on the same host, and between
 containers and the Internet, but not between containers on different hosts, it
-probably indicates a problem in the BIRD setup.
+often indicates one of two problems:
 
-Look at `calicoctl node status` on each host.  It should include output like this:
+1. Agents aren't sharing routes
+2. Traffic is being dropped by the networking fabric
+
+#### Hosts Aren't Sharing Routes
+
+Each hosts routing table should be populated with routes to other hosts' containers.
+Expect to see a `/26 via <other-host-ip>` on each Host. For example:
+```
+192.168.239.128/26 via 172.17.8.102 dev eth1  proto bird
+```
+
+If you do not see `/26`'s, Check BGP Connection Status by viewing the output of
+`calicoctl node status` on each host.
+Confirm that each host running containers has an "Established" BGP session:
 
 ```
 Calico process is running.
@@ -64,7 +111,7 @@ IPv6 BGP status
 No IPv6 peers found.
 ```
 
-If you do not see this, please check the following.
+If your connections are not Established, diagnose the BGP connection between the hosts.
 
 - Can your hosts ping each other?  There must be IP connectivity between the
   hosts.
@@ -76,18 +123,7 @@ If you do not see this, please check the following.
 - There must not be iptables rules, or any kind of firewall, preventing
   communication between the hosts on TCP port 179.  (179 is the BGP port.)
 
-## Basic checks
+## Further Assistance
 
-Running `ip route` shows what routes have been programmed. Routes from other hosts
-should show that they are programmed by bird.
-
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS
-image is out of date.  Use `vagrant box update` to pull the new version.  I
-recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
-
-If you hit issues, please raise tickets. Diags can be collected with the
-`calicoctl node diags` command.  This should be run with superuser privileges,
-for example:
-
-        sudo calicoctl node diags
-
+Still stuck? Collect diags with `sudo calicoctl node diags`, and raise an issu
+on github or via the Calico Users Slack for further assistance.
