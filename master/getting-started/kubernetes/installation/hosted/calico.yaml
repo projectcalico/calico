@@ -92,7 +92,7 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
         scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
@@ -214,7 +214,7 @@ metadata:
   annotations:
     scheduler.alpha.kubernetes.io/critical-pod: ''
     scheduler.alpha.kubernetes.io/tolerations: |
-      [{"key": "role", "value": "master", "effect": "NoSchedule" },
+      [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
        {"key":"CriticalAddonsOnly", "operator":"Exists"}]
 spec:
   # The policy controller can only have a single active instance.
@@ -294,7 +294,7 @@ spec:
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
         scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "role", "value": "master", "effect": "NoSchedule" },
+          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
