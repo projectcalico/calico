@@ -20,8 +20,22 @@ import (
 	"encoding/base64"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/fasaxc/go/src/os/exec"
 	"github.com/projectcalico/felix/go/felix/set"
+	"os/exec"
+	"reflect"
+	"regexp"
+	"strings"
+)
+
+const (
+	FelixChainNamePrefix = "felix-"
+	FelixHashPrefix      = "felix-id:"
+)
+
+var (
+	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
+	appendRegexp      = regexp.MustCompile(`^-A (\S+)`)
+	commentRegexp     = regexp.MustCompile(`--comment "?` + FelixHashPrefix + `([a-zA-Z0-9_-]+)"?`)
 )
 
 // Table represents a single one of the iptables tables i.e. "raw", "nat", "filter", etc.
@@ -36,37 +50,38 @@ type Table struct {
 	// be removed from that chain.  Used for unhooking top-level chains.  We need to track
 	// removals forever in case another process reinstates an old rule by mistake.  Hence,
 	// only suitable for a static set of top-level rules.
-	chainToRemovedFragments  map[string][]string
-	dirtyRemoves             set.Set
+	chainToRemovedFragments map[string][]string
+	dirtyRemoves            set.Set
 	// chainToRuleFragments contains the desired state of our iptables chains, indexed by
 	// chain name.  The values are slices of iptables fragments, such as
 	// "--match foo --jump DROP" (i.e. omitting the action and chain name, which are calculated
 	// as needed).
-	chainToRuleFragments     map[string][]string
-	dirtyChains              set.Set
+	chainToRuleFragments map[string][]string
+	dirtyChains          set.Set
 
-	inSyncWithDataPlane      bool
+	inSyncWithDataPlane bool
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
 	// to what we calculate from chainToContents.
-	chainToDataplaneHashes   map[string][]string
+	chainToDataplaneHashes map[string][]string
 
-	logCxt                   *log.Entry
+	logCxt *log.Entry
 
-	restoreCmd               string
-	saveCmd                  string
-	iptablesCmd              string
+	restoreCmd  string
+	saveCmd     string
+	iptablesCmd string
 }
 
-func NewTable(name string, ipVersion uint8) {
+func NewTable(name string, ipVersion uint8) *Table {
 	table := &Table{
 		Name: name,
 		chainToInsertedFragments: map[string][]string{},
 		dirtyInserts:             set.New(),
 		chainToRemovedFragments:  map[string][]string{},
 		dirtyRemoves:             set.New(),
-		chainToRuleFragments:          map[string][]string{},
+		chainToRuleFragments:     map[string][]string{},
 		dirtyChains:              set.New(),
+		chainToDataplaneHashes:   map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"table":     name,
@@ -82,6 +97,7 @@ func NewTable(name string, ipVersion uint8) {
 		table.saveCmd = "ip6tables-save"
 		table.iptablesCmd = "ip6tables"
 	}
+	return table
 }
 
 func (t *Table) UpdateChain(name string, ruleFragments []string) {
@@ -95,9 +111,95 @@ func (t *Table) RemoveChain(name string) {
 }
 
 func (t *Table) loadDataplaneState() {
-	// TODO(smc) Run iptables-save for our table.
-	// TODO(smc) Parse out the rule hashes
-	// TODO(smc) Scan for inconsistencies and mark chains as dirty as appropriate.
+	// Load the hashes from the dataplane.
+	dataplaneHashes := t.getHashesFromDataplane()
+
+	// Check that the rules we think we've programmed are still there and mark any inconsistent
+	// chains for refresh.
+	t.logCxt.Info("Scanning for out-of-sync iptables chains")
+	for chainName, expectedHashes := range t.chainToDataplaneHashes {
+		if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
+			t.logCxt.WithField("chainName", chainName).Warn("Detected out-of-sync iptables chain, marking for resync")
+			t.dirtyChains.Add("chainName")
+		}
+	}
+
+	// Now scan for chains that shouldn't be there and mark for deletion.
+	t.logCxt.Info("Scanning for unexpected iptables chains")
+	for chainName := range dataplaneHashes {
+		if strings.Index(chainName, FelixChainNamePrefix) != 0 {
+			// Skip non-felix chain
+			t.logCxt.WithField("chainName", chainName).Debug("Skipping non-calico chain")
+			continue
+		}
+		if _, ok := t.chainToDataplaneHashes[chainName]; ok {
+			// Chain expected, we'll have checked its contents above.
+			t.logCxt.WithField("chainName", chainName).Debug("Skipping expected chain")
+			continue
+		}
+		// Chain exists in dataplane but not in memory, mark as dirty so we'll clean it up.
+		t.logCxt.WithField("chainName", chainName).Info("Found unexpected chain, marking for cleanup")
+		t.dirtyChains.Add(chainName)
+	}
+
+	t.logCxt.Info("Done scanning, in sync with dataplane")
+	t.chainToDataplaneHashes = dataplaneHashes
+}
+
+// getHashesFromDataplane loads the current state of our table and parses out the hashes that we
+// add to rules.  It returns a map with an entry for each chain in the table.  Each entry is a slice
+// containing the hashes for the rules in that table.  Rules with no hashes are represented by
+// an empty string.
+func (t *Table) getHashesFromDataplane() map[string][]string {
+	cmd := exec.Command(t.saveCmd, "-t", t.Name)
+	output, err := cmd.Output()
+	if err != nil {
+		log.WithError(err).Panic("iptables save failed")
+	}
+	buf := bytes.NewBuffer(output)
+	newHashes := map[string][]string{}
+	for {
+		// Read the next line of the output.
+		line, err := buf.ReadString('\n')
+		if err != nil { // EOF
+			break
+		}
+
+		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
+		// for (possibly empty) chains.
+		logCxt := log.WithField("line", line)
+		logCxt.Debug("Parsing line")
+		captures := chainCreateRegexp.FindStringSubmatch(line)
+		if captures != nil {
+			// Chain forward-reference, make sure the chain exists.
+			chainName := captures[1]
+			logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+			newHashes[chainName] = []string{}
+			continue
+		}
+
+		// Look for append lines, such as "-A chain-name -m foo --foo bar"; these are the
+		// actual rules.
+		captures = appendRegexp.FindStringSubmatch(line)
+		if captures == nil {
+			// Skip any non-append lines.
+			logCxt.Debug("Not an append, skipping")
+			continue
+		}
+		chainName := captures[1]
+
+		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
+		// so that they get cleaned up.
+		hash := ""
+		captures = commentRegexp.FindStringSubmatch(line)
+		if captures != nil {
+			hash = captures[1]
+			logCxt.WithField("hash", hash).Debug("Found felix hash")
+		}
+		newHashes[chainName] = append(newHashes[chainName], hash)
+	}
+	log.WithField("newHashes", newHashes).Debug("Read hashes from dataplane")
+	return newHashes
 }
 
 func (t *Table) Flush() {
@@ -105,8 +207,7 @@ func (t *Table) Flush() {
 	// - a concurrent write may invalidate iptables-restore's compare-and-swap
 	// - another process may have clobbered some of our state, resulting in inconsistencies
 	//   in what we try to program.
-	success := false
-	for !success {
+	for {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
 			// sync.  Refresh it.  This may mark more chains as dirty.
@@ -118,6 +219,7 @@ func (t *Table) Flush() {
 			log.WithError(err).Warn("Failed to program iptables, will retry")
 			continue
 		}
+		break
 	}
 }
 
@@ -163,12 +265,12 @@ func (t *Table) flushUpdates() error {
 						// Hash doesn't match, replace the rule.
 						ruleNum := i + 1 // 1-indexed.
 						comment := commentFrag(currentHashes[i])
-						line = fmt.Sprintf("-R %s %s %v %s\n", chainName, comment, ruleNum, rulesFrags[i])
+						line = fmt.Sprintf("-R %s %d %s %s\n", chainName, ruleNum, comment, rulesFrags[i])
 					}
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
-					ruleNum := len(currentHashes) // 1-indexed
-					line = fmt.Sprintf("-D %s %v\n", chainName, ruleNum)
+					ruleNum := len(currentHashes) + 1 // 1-indexed
+					line = fmt.Sprintf("-D %s %d\n", chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
 					comment := commentFrag(currentHashes[i])
@@ -188,10 +290,18 @@ func (t *Table) flushUpdates() error {
 	}
 
 	// Actually execute iptables-restore.
+	var outputBuf, errBuf bytes.Buffer
 	cmd := exec.Command(t.restoreCmd, "--noflush", "--verbose")
 	cmd.Stdin = &inputBuf
+	cmd.Stdout = &outputBuf
+	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
+		log.WithFields(log.Fields{
+			"output":      outputBuf.String(),
+			"errorOutput": errBuf.String(),
+			"error":       err,
+		}).Warn("Failed to execute iptable restore command")
 		t.inSyncWithDataPlane = false
 		return err
 	}
@@ -210,7 +320,7 @@ func (t *Table) flushUpdates() error {
 }
 
 func commentFrag(hash string) string {
-	return fmt.Sprintf(`-m comment --comment "felix-hash:%s"`, hash)
+	return fmt.Sprintf(`-m comment --comment "%s%s"`, FelixHashPrefix, hash)
 }
 
 // RuleHashes hashes the rules of a given chain, generating a hash for each rule.
@@ -238,6 +348,7 @@ func RuleHashes(chainName string, ruleFragments []string) []string {
 				"ruleFragment": frag,
 				"position":     ii,
 				"chain":        chainName,
+				"hash":         hashes[ii],
 			}).Debug("Hashed rule")
 		}
 	}
