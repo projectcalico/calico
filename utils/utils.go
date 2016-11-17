@@ -15,7 +15,6 @@ package utils
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -28,7 +27,6 @@ import (
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/golang/glog"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -212,18 +210,7 @@ func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
 
 // Set up logging for both Calico and libcalico usng the provided log level,
 func ConfigureLogging(logLevel string) {
-	// Debug is _everything_
-	// Info is just CNI info level logs
-	// Warning is the default - and again is just CNI logs
 	if strings.EqualFold(logLevel, "debug") {
-		// Enable glogging for libcalico
-		_ = flag.Set("logtostderr", "true")
-		_ = flag.Set("v", "10")
-		_ = flag.Set("stderrthreshold", "10")
-		flag.Parse()
-		glog.Info("libcalico glog logging configured")
-
-		// Change logging level for CNI plugin
 		log.SetLevel(log.DebugLevel)
 	} else if strings.EqualFold(logLevel, "info") {
 		log.SetLevel(log.InfoLevel)
