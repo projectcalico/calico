@@ -17,6 +17,7 @@ package multidict
 type StringToString interface {
 	Put(key, value string)
 	Discard(key, value string)
+	DiscardKey(key string)
 	Contains(key, value string) bool
 	ContainsKey(key string) bool
 	Iter(key string, f func(value string))
@@ -47,6 +48,10 @@ func (md stringToString) Discard(key, value string) {
 	if len(set) == 0 {
 		delete(md, key)
 	}
+}
+
+func (md stringToString) DiscardKey(key, value string) {
+	delete(md, key)
 }
 
 func (md stringToString) Contains(key, value string) bool {
