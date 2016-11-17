@@ -110,7 +110,7 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 	// Fix up tags and labels so to be empty values rather than nil.  Felix does not
 	// expect a null value in the JSON, so we fix up to make Labels an empty map
 	// and tags an empty slice.
-	tags := ap.Spec.Tags
+	tags := ap.Metadata.Tags
 	if tags == nil {
 		log.Info("Tags is nil - convert to empty map for backend")
 		tags = []string{}
@@ -146,13 +146,13 @@ func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, er
 	ap := api.NewProfile()
 	ap.Metadata.Name = bk.Name
 	ap.Metadata.Labels = bp.Labels
+	if len(bp.Tags) == 0 {
+		ap.Metadata.Tags = nil
+	} else {
+		ap.Metadata.Tags = bp.Tags
+	}
 	ap.Spec.IngressRules = rulesBackendToAPI(bp.Rules.InboundRules)
 	ap.Spec.EgressRules = rulesBackendToAPI(bp.Rules.OutboundRules)
-	if len(bp.Tags) == 0 {
-		ap.Spec.Tags = nil
-	} else {
-		ap.Spec.Tags = bp.Tags
-	}
 
 	return ap, nil
 }
