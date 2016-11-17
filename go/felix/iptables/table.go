@@ -203,7 +203,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 	return newHashes
 }
 
-func (t *Table) Flush() {
+func (t *Table) Apply() {
 	// Retry until we succeed.  There are several reasons that updating iptables may fail:
 	// - a concurrent write may invalidate iptables-restore's compare-and-swap
 	// - another process may have clobbered some of our state, resulting in inconsistencies
@@ -233,13 +233,15 @@ func (t *Table) flushUpdates() error {
 	// be created.
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
-		flushChain := false
+		chainNeedsToBeFlushed := false
 		if _, ok := t.chainToRuleFragments[chainName]; !ok {
-			flushChain = true
+			// About to delete this chain, flush it first to sever dependencies.
+			chainNeedsToBeFlushed = true
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
-			flushChain = true
+			// Chain doesn't exist in dataplane, mark it for creation.
+			chainNeedsToBeFlushed = true
 		}
-		if flushChain {
+		if chainNeedsToBeFlushed {
 			inputBuf.WriteString(fmt.Sprintf(":%s - -\n", chainName))
 		}
 		return nil
@@ -251,6 +253,7 @@ func (t *Table) flushUpdates() error {
 		chainName := item.(string)
 		if rulesFrags, ok := t.chainToRuleFragments[chainName]; !ok {
 			// Chain deletion
+			// TODO(smc) Might need to do deletions in a second pass because can fail if someone else is referencing our chain.
 			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
 			newHashes[chainName] = nil
 		} else {
@@ -286,11 +289,10 @@ func (t *Table) flushUpdates() error {
 	// iptables-restore input ends with a COMMIT.
 	inputBuf.WriteString("COMMIT\n")
 
+	// Actually execute iptables-restore.
 	if log.GetLevel() >= log.DebugLevel {
 		log.WithField("iptablesInput", inputBuf.String()).Debug("Writing to iptables")
 	}
-
-	// Actually execute iptables-restore.
 	var outputBuf, errBuf bytes.Buffer
 	cmd := exec.Command(t.restoreCmd, "--noflush", "--verbose")
 	cmd.Stdin = &inputBuf

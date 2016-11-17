@@ -30,7 +30,7 @@ type IPSets struct {
 
 	// desiredIPSets.
 	activeIPSets          map[string]*IPSet
-	pendingIPSetFlushes   set.Set
+	dirtyIPSets           set.Set
 	pendingIPSetDeletions set.Set
 
 	existenceCache existenceCache
@@ -44,48 +44,48 @@ func NewIPSetsWithOverrides(ipFamily IPFamily, existenceCache existenceCache) *I
 	return &IPSets{
 		ipFamily:              ipFamily,
 		activeIPSets:          map[string]*IPSet{},
-		pendingIPSetFlushes:   set.New(),
+		dirtyIPSets:           set.New(),
 		pendingIPSetDeletions: set.New(),
 		existenceCache:        existenceCache,
 	}
 }
 
-func (s *IPSets) ReplaceIPSet(setMetadata IPSetMetadata, members []string) {
+func (s *IPSets) CreateOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
 	ipSet := NewIPSet(setMetadata, s.existenceCache)
 	ipSet.ReplaceMembers(members)
 	s.activeIPSets[ipSet.SetID] = ipSet
-	s.pendingIPSetFlushes.Add(ipSet.SetID)
+	s.dirtyIPSets.Add(ipSet.SetID)
 	s.pendingIPSetDeletions.Discard(ipSet.SetID)
 }
 
 func (s *IPSets) AddIPsToIPSet(setID string, newMembers []string) {
 	s.activeIPSets[setID].AddMembers(newMembers)
-	s.pendingIPSetFlushes.Add(setID)
+	s.dirtyIPSets.Add(setID)
 }
 
 func (s *IPSets) RemoveIPsFromIPSet(setID string, removedMembers []string) {
 	s.activeIPSets[setID].RemoveMembers(removedMembers)
-	s.pendingIPSetFlushes.Add(setID)
+	s.dirtyIPSets.Add(setID)
 }
 
 func (s *IPSets) RemoveIPSet(setID string) {
 	delete(s.activeIPSets, setID)
-	s.pendingIPSetFlushes.Discard(setID)
+	s.dirtyIPSets.Discard(setID)
 	s.pendingIPSetDeletions.Add(setID)
 }
 
-// FlushUpdates flushes any updates (or creations) to the dataplane.
-// Separate from FlushDeletions to allow for proper sequencing with updates to iptables chains.
-func (s *IPSets) FlushUpdates() {
-	s.pendingIPSetFlushes.Iter(func(item interface{}) error {
-		s.activeIPSets[item.(string)].Flush()
+// ApplyUpdates flushes any updates (or creations) to the dataplane.
+// Separate from ApplyDeletions to allow for proper sequencing with updates to iptables chains.
+func (s *IPSets) ApplyUpdates() {
+	s.dirtyIPSets.Iter(func(item interface{}) error {
+		s.activeIPSets[item.(string)].Apply()
 		return set.RemoveItem
 	})
 }
 
-// FlushDeletions tries to delete any IP sets that are no longer needed.
+// ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time AttemptCleanup() is called.
-func (s *IPSets) FlushDeletions() {
+func (s *IPSets) ApplyDeletions() {
 	reloadCache := false
 	s.pendingIPSetDeletions.Iter(func(item interface{}) error {
 		setID := item.(string)
@@ -221,7 +221,7 @@ func (s *IPSet) RemoveMembers(removedMembers []string) {
 	}
 }
 
-func (s *IPSet) Flush() {
+func (s *IPSet) Apply() {
 	retries := 3
 	for {
 		if s.rewritePending {

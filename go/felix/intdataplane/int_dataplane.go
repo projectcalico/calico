@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
@@ -23,6 +24,9 @@ func StartIntDataplaneDriver() *internalDataplane {
 	dp := &internalDataplane{
 		toDataplane:   make(chan interface{}, 100),
 		fromDataplane: make(chan interface{}, 100),
+
+		ipsetsV4: ipsets.NewIPSets(ipsets.IPFamilyV4),
+		ipsetsV6: ipsets.NewIPSets(ipsets.IPFamilyV6),
 	}
 	go dp.loopUpdatingDataplane()
 	go dp.loopReportingStatus()
@@ -32,6 +36,8 @@ func StartIntDataplaneDriver() *internalDataplane {
 type internalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
+	ipsetsV4      *ipsets.IPSets
+	ipsetsV6      *ipsets.IPSets
 }
 
 func (d *internalDataplane) SendMessage(msg interface{}) error {
