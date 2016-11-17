@@ -124,6 +124,8 @@ toc:
     path: /getting-started/openstack/verification
   - title: IP Addressing and Connectivity
     path: /getting-started/openstack/connectivity
+  - title: Use of the Neutron API
+    path: /getting-started/openstack/neutron-api
 
 - title: rkt
   section:
