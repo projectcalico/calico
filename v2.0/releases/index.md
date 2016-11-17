@@ -15,6 +15,7 @@ Use the version selector at the top-right of this page to view a different relea
 | calico/node            | v1.0.0-beta |
 | calico/cni             | v1.5.0 |
 | libcalico              | v0.18.0 |
+| libcalico-go           | v1.0.0-beta |
 | calico-bird            | v0.1.0  |
 | libnetwork-plugin      | v1.0.0-beta |
 | calico/kube-policy-controller | v0.5.0 |
