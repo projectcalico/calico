@@ -26,14 +26,12 @@ import (
 )
 
 const (
-	FelixChainNamePrefix = "felix-"
-	FelixHashPrefix      = "felix-id:"
+	MaxChainNameLength = 28
 )
 
 var (
 	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
 	appendRegexp      = regexp.MustCompile(`^-A (\S+)`)
-	commentRegexp     = regexp.MustCompile(`--comment "?` + FelixHashPrefix + `([a-zA-Z0-9_-]+)"?`)
 )
 
 // Table represents a single one of the iptables tables i.e. "raw", "nat", "filter", etc.
@@ -66,12 +64,20 @@ type Table struct {
 
 	logCxt *log.Entry
 
+	chainPrefixes   []string
+	hashPrefix      string
+	commentRegexp   *regexp.Regexp
+	ourChainsRegexp *regexp.Regexp
+
 	restoreCmd  string
 	saveCmd     string
 	iptablesCmd string
 }
 
-func NewTable(name string, ipVersion uint8) *Table {
+func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix string) *Table {
+	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
+	ourChainsPattern := "^(" + strings.Join(chainPrefixes, "|") + ")"
+	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
 	table := &Table{
 		Name: name,
 		chainToInsertedFragments: map[string][]string{},
@@ -85,6 +91,10 @@ func NewTable(name string, ipVersion uint8) *Table {
 			"ipVersion": ipVersion,
 			"table":     name,
 		}),
+		chainPrefixes:   chainPrefixes,
+		hashPrefix:      hashPrefix,
+		commentRegexp:   hashCommentRegexp,
+		ourChainsRegexp: ourChainsRegexp,
 	}
 
 	if ipVersion == 4 {
@@ -126,7 +136,7 @@ func (t *Table) loadDataplaneState() {
 	// Now scan for chains that shouldn't be there and mark for deletion.
 	t.logCxt.Info("Scanning for unexpected iptables chains")
 	for chainName := range dataplaneHashes {
-		if strings.Index(chainName, FelixChainNamePrefix) != 0 {
+		if !t.ourChainsRegexp.MatchString(chainName) {
 			// Skip non-felix chain
 			t.logCxt.WithField("chainName", chainName).Debug("Skipping non-calico chain")
 			continue
@@ -190,7 +200,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
 		// so that they get cleaned up.
 		hash := ""
-		captures = commentRegexp.FindStringSubmatch(line)
+		captures = t.commentRegexp.FindStringSubmatch(line)
 		if captures != nil {
 			hash = captures[1]
 			logCxt.WithField("hash", hash).Debug("Found felix hash")
@@ -266,7 +276,7 @@ func (t *Table) flushUpdates() error {
 					if previousHashes[i] != currentHashes[i] {
 						// Hash doesn't match, replace the rule.
 						ruleNum := i + 1 // 1-indexed.
-						comment := commentFrag(currentHashes[i])
+						comment := t.commentFrag(currentHashes[i])
 						line = fmt.Sprintf("-R %s %d %s %s %s\n", chainName, ruleNum, comment,
 							chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
 					}
@@ -276,7 +286,7 @@ func (t *Table) flushUpdates() error {
 					line = fmt.Sprintf("-D %s %d\n", chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
-					comment := commentFrag(currentHashes[i])
+					comment := t.commentFrag(currentHashes[i])
 					line = fmt.Sprintf("-A %s %s %s %s\n", chainName, comment,
 						chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
 				}
@@ -322,6 +332,6 @@ func (t *Table) flushUpdates() error {
 	return nil
 }
 
-func commentFrag(hash string) string {
-	return fmt.Sprintf(`-m comment --comment "%s%s"`, FelixHashPrefix, hash)
+func (t *Table) commentFrag(hash string) string {
+	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashPrefix, hash)
 }

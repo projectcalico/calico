@@ -19,14 +19,15 @@ import (
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/rules"
 )
 
 func StartIntDataplaneDriver() *internalDataplane {
 	dp := &internalDataplane{
 		toDataplane:   make(chan interface{}, 100),
 		fromDataplane: make(chan interface{}, 100),
-		filterTableV4: iptables.NewTable("filter", 4),
-		filterTableV6: iptables.NewTable("filter", 6),
+		filterTableV4: iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix),
+		filterTableV6: iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix),
 		ipsetsV4:      ipsets.NewIPSets(ipsets.IPFamilyV4),
 		ipsetsV6:      ipsets.NewIPSets(ipsets.IPFamilyV6),
 	}
@@ -99,9 +100,18 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 
 		// Local active policy updates.
 		case *proto.ActivePolicyUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
+			in, out := rules.PolicyToIptablesChains(msg.Id, msg.Policy)
+			d.filterTableV4.UpdateChain(in)
+			d.filterTableV4.UpdateChain(out)
+			d.filterTableV6.UpdateChain(in)
+			d.filterTableV6.UpdateChain(out)
 		case *proto.ActivePolicyRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
+			inName := rules.PolicyChainName(rules.InboundPolChainPrefix, msg.Id)
+			outName := rules.PolicyChainName(rules.OutboundPolChainPrefix, msg.Id)
+			d.filterTableV4.RemoveChain(inName)
+			d.filterTableV4.RemoveChain(outName)
+			d.filterTableV6.RemoveChain(inName)
+			d.filterTableV6.RemoveChain(outName)
 
 		case *proto.ActiveProfileUpdate:
 			log.WithField("msg", msg).Warn("Message not implemented")
