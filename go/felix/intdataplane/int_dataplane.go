@@ -17,6 +17,7 @@ package intdataplane
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ipsets"
+	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
@@ -24,9 +25,10 @@ func StartIntDataplaneDriver() *internalDataplane {
 	dp := &internalDataplane{
 		toDataplane:   make(chan interface{}, 100),
 		fromDataplane: make(chan interface{}, 100),
-
-		ipsetsV4: ipsets.NewIPSets(ipsets.IPFamilyV4),
-		ipsetsV6: ipsets.NewIPSets(ipsets.IPFamilyV6),
+		filterTableV4: iptables.NewTable("filter", 4),
+		filterTableV6: iptables.NewTable("filter", 6),
+		ipsetsV4:      ipsets.NewIPSets(ipsets.IPFamilyV4),
+		ipsetsV6:      ipsets.NewIPSets(ipsets.IPFamilyV6),
 	}
 	go dp.loopUpdatingDataplane()
 	go dp.loopReportingStatus()
@@ -36,8 +38,12 @@ func StartIntDataplaneDriver() *internalDataplane {
 type internalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
-	ipsetsV4      *ipsets.IPSets
-	ipsetsV6      *ipsets.IPSets
+
+	filterTableV4 *iptables.Table
+	filterTableV6 *iptables.Table
+
+	ipsetsV4 *ipsets.IPSets
+	ipsetsV6 *ipsets.IPSets
 }
 
 func (d *internalDataplane) SendMessage(msg interface{}) error {
@@ -56,12 +62,28 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 		log.WithField("msg", msg).Info("Received update from calculation graph")
 		switch msg := msg.(type) {
 		// IP set-related messages, these are extremely common.
-		case *proto.IPSetUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
 		case *proto.IPSetDeltaUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
+			// TODO(smc) Feels ugly to do the fan-out here.
+			d.ipsetsV4.AddIPsToIPSet(msg.Id, msg.AddedMembers)
+			d.ipsetsV4.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
+			d.ipsetsV6.AddIPsToIPSet(msg.Id, msg.AddedMembers)
+			d.ipsetsV6.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
+		case *proto.IPSetUpdate:
+			d.ipsetsV4.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
+				Type:     ipsets.IPSetTypeHashIP,
+				SetID:    msg.Id,
+				IPFamily: ipsets.IPFamilyV4,
+				MaxSize:  1024 * 1024,
+			}, msg.Members)
+			d.ipsetsV6.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
+				Type:     ipsets.IPSetTypeHashIP,
+				SetID:    msg.Id,
+				IPFamily: ipsets.IPFamilyV6,
+				MaxSize:  1024 * 1024,
+			}, msg.Members)
 		case *proto.IPSetRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
+			d.ipsetsV4.RemoveIPSet(msg.Id)
+			d.ipsetsV6.RemoveIPSet(msg.Id)
 
 		// Local workload updates.
 		case *proto.WorkloadEndpointUpdate:
@@ -113,7 +135,14 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 }
 
 func (d *internalDataplane) flush() {
+	d.ipsetsV4.ApplyUpdates()
+	d.ipsetsV6.ApplyUpdates()
 
+	d.filterTableV4.Apply()
+	d.filterTableV6.Apply()
+
+	d.ipsetsV4.ApplyDeletions()
+	d.ipsetsV6.ApplyDeletions()
 }
 
 func (d *internalDataplane) loopReportingStatus() {

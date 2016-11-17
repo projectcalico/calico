@@ -50,7 +50,7 @@ func (md stringToString) Discard(key, value string) {
 	}
 }
 
-func (md stringToString) DiscardKey(key, value string) {
+func (md stringToString) DiscardKey(key string) {
 	delete(md, key)
 }
 

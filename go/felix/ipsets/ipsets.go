@@ -51,6 +51,7 @@ func NewIPSetsWithOverrides(ipFamily IPFamily, existenceCache existenceCache) *I
 }
 
 func (s *IPSets) CreateOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
+	members = s.filterMembersByIPVersion(members)
 	ipSet := NewIPSet(setMetadata, s.existenceCache)
 	ipSet.ReplaceMembers(members)
 	s.activeIPSets[ipSet.SetID] = ipSet
@@ -59,13 +60,28 @@ func (s *IPSets) CreateOrReplaceIPSet(setMetadata IPSetMetadata, members []strin
 }
 
 func (s *IPSets) AddIPsToIPSet(setID string, newMembers []string) {
+	newMembers = s.filterMembersByIPVersion(newMembers)
 	s.activeIPSets[setID].AddMembers(newMembers)
 	s.dirtyIPSets.Add(setID)
 }
 
 func (s *IPSets) RemoveIPsFromIPSet(setID string, removedMembers []string) {
+	removedMembers = s.filterMembersByIPVersion(removedMembers)
 	s.activeIPSets[setID].RemoveMembers(removedMembers)
 	s.dirtyIPSets.Add(setID)
+}
+
+func (s *IPSets) filterMembersByIPVersion(members []string) []string {
+	var filtered []string
+	wantIPV6 := s.ipFamily == IPFamilyV6
+	for _, member := range members {
+		isIPV6 := strings.Index(member, ":") >= 0
+		if wantIPV6 != isIPV6 {
+			continue
+		}
+		filtered = append(filtered, member)
+	}
+	return filtered
 }
 
 func (s *IPSets) RemoveIPSet(setID string) {
