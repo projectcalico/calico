@@ -16,8 +16,6 @@ package iptables
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/set"
@@ -57,8 +55,8 @@ type Table struct {
 	// chain name.  The values are slices of iptables fragments, such as
 	// "--match foo --jump DROP" (i.e. omitting the action and chain name, which are calculated
 	// as needed).
-	chainToRuleFragments map[string][]string
-	dirtyChains          set.Set
+	chainNameToChain map[string]*Chain
+	dirtyChains      set.Set
 
 	inSyncWithDataPlane bool
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
@@ -80,7 +78,7 @@ func NewTable(name string, ipVersion uint8) *Table {
 		dirtyInserts:             set.New(),
 		chainToRemovedFragments:  map[string][]string{},
 		dirtyRemoves:             set.New(),
-		chainToRuleFragments:     map[string][]string{},
+		chainNameToChain:         map[string]*Chain{},
 		dirtyChains:              set.New(),
 		chainToDataplaneHashes:   map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
@@ -101,13 +99,13 @@ func NewTable(name string, ipVersion uint8) *Table {
 	return table
 }
 
-func (t *Table) UpdateChain(name string, ruleFragments []string) {
-	t.chainToRuleFragments[name] = ruleFragments
-	t.dirtyChains.Add(name)
+func (t *Table) UpdateChain(chain *Chain) {
+	t.chainNameToChain[chain.Name] = chain
+	t.dirtyChains.Add(chain.Name)
 }
 
 func (t *Table) RemoveChain(name string) {
-	delete(t.chainToRuleFragments, name)
+	delete(t.chainNameToChain, name)
 	t.dirtyChains.Add(name)
 }
 
@@ -234,7 +232,7 @@ func (t *Table) flushUpdates() error {
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		chainNeedsToBeFlushed := false
-		if _, ok := t.chainToRuleFragments[chainName]; !ok {
+		if _, ok := t.chainNameToChain[chainName]; !ok {
 			// About to delete this chain, flush it first to sever dependencies.
 			chainNeedsToBeFlushed = true
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
@@ -251,7 +249,7 @@ func (t *Table) flushUpdates() error {
 	newHashes := map[string][]string{}
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
-		if rulesFrags, ok := t.chainToRuleFragments[chainName]; !ok {
+		if chain, ok := t.chainNameToChain[chainName]; !ok {
 			// Chain deletion
 			// TODO(smc) Might need to do deletions in a second pass because can fail if someone else is referencing our chain.
 			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
@@ -260,7 +258,7 @@ func (t *Table) flushUpdates() error {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
 			previousHashes := t.chainToDataplaneHashes[chainName]
-			currentHashes := RuleHashes(chainName, rulesFrags)
+			currentHashes := chain.RuleHashes()
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
@@ -269,7 +267,8 @@ func (t *Table) flushUpdates() error {
 						// Hash doesn't match, replace the rule.
 						ruleNum := i + 1 // 1-indexed.
 						comment := commentFrag(currentHashes[i])
-						line = fmt.Sprintf("-R %s %d %s %s\n", chainName, ruleNum, comment, rulesFrags[i])
+						line = fmt.Sprintf("-R %s %d %s %s %s\n", chainName, ruleNum, comment,
+							chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
 					}
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
@@ -278,7 +277,8 @@ func (t *Table) flushUpdates() error {
 				} else {
 					// currentHashes was longer.  Append.
 					comment := commentFrag(currentHashes[i])
-					line = fmt.Sprintf("-A %s %s %s\n", chainName, comment, rulesFrags[i])
+					line = fmt.Sprintf("-A %s %s %s %s\n", chainName, comment,
+						chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
 				}
 				inputBuf.WriteString(line)
 			}
@@ -324,36 +324,4 @@ func (t *Table) flushUpdates() error {
 
 func commentFrag(hash string) string {
 	return fmt.Sprintf(`-m comment --comment "%s%s"`, FelixHashPrefix, hash)
-}
-
-// RuleHashes hashes the rules of a given chain, generating a hash for each rule.
-// The hash depends on the name of the chain, the rule itself and the rules that precede it.
-// A secure hash is used so hash collisions should be negligible.
-func RuleHashes(chainName string, ruleFragments []string) []string {
-	hashes := make([]string, len(ruleFragments))
-	// First hash the chain name so that identical rules in different chains will get different
-	// hashes.
-	s := sha256.New224()
-	s.Write([]byte(chainName))
-	hash := s.Sum(nil)
-	for ii, frag := range ruleFragments {
-		// Each hash chains in the previous hash, so that its position in the chain and
-		// the rules before it affect its hash.
-		s.Reset()
-		s.Write(hash)
-		s.Write([]byte(frag))
-		hash = s.Sum(hash[0:0])
-		// Encode the hash using a compact character set.  We use the URL-safe base64
-		// variant because it uses '-' and '_', which are more shell-friendly.
-		hashes[ii] = base64.RawURLEncoding.EncodeToString(hash)
-		if log.GetLevel() >= log.DebugLevel {
-			log.WithFields(log.Fields{
-				"ruleFragment": frag,
-				"position":     ii,
-				"chain":        chainName,
-				"hash":         hashes[ii],
-			}).Debug("Hashed rule")
-		}
-	}
-	return hashes
 }

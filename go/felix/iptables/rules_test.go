@@ -22,42 +22,50 @@ import (
 )
 
 var (
-	rulesFragments1 = []string{
-		"-m foobar --foobar baz --jump biff",
+	rules1 = []Rule{
+		{"-m foobar --foobar baz", "--jump biff"},
 	}
-	rulesFragments2 = []string{
-		"-m foobar --foobar baz --jump boff",
+	rules2 = []Rule{
+		{"-m foobar --foobar baz", "--jump boff"},
 	}
-	rulesFragments3 = []string{
-		"-m foobar --foobar baz --jump biff",
-		"-m foobar --foobar baz --jump boff",
+	rules3 = []Rule{
+		{"-m foobar --foobar baz", "--jump biff"},
+		{"-m foobar --foobar baz", "--jump biff"},
 	}
 )
 
 var _ = Describe("Rule hashing tests", func() {
 	It("should generate different hashes for different rules", func() {
-		hashes1 := RuleHashes("chain", rulesFragments1)
-		hashes2 := RuleHashes("chain", rulesFragments2)
+		hashes1 := calculateHashes("chain", rules1)
+		hashes2 := calculateHashes("chain", rules2)
 		Expect(hashes1).NotTo(Equal(hashes2))
 	})
 	It("should generate same hash for prefix to same chain", func() {
-		hashes1 := RuleHashes("chain", rulesFragments1)
-		hashes2 := RuleHashes("chain", rulesFragments3)
+		hashes1 := calculateHashes("chain", rules1)
+		hashes2 := calculateHashes("chain", rules3)
 		Expect(hashes1[0]).To(Equal(hashes2[0]))
 	})
 	It("should generate different hashes for different chains with same rules", func() {
-		hashes1 := RuleHashes("chain", rulesFragments1)
-		hashes2 := RuleHashes("chain2", rulesFragments1)
+		hashes1 := calculateHashes("chain", rules1)
+		hashes2 := calculateHashes("chain2", rules1)
 		Expect(hashes1).NotTo(Equal(hashes2))
 	})
 	It("should generate different hashes for same rule at different position", func() {
-		hashes2 := RuleHashes("chain", rulesFragments2)
-		hashes3 := RuleHashes("chain", rulesFragments3)
+		hashes2 := calculateHashes("chain", rules2)
+		hashes3 := calculateHashes("chain", rules3)
 		Expect(hashes2[0]).NotTo(Equal(hashes3[1]))
 	})
 	It("should generate a slice of same length as input", func() {
-		Expect(len(RuleHashes("foo", rulesFragments1))).To(Equal(len(rulesFragments1)))
-		Expect(len(RuleHashes("foo", rulesFragments2))).To(Equal(len(rulesFragments2)))
-		Expect(len(RuleHashes("foo", rulesFragments3))).To(Equal(len(rulesFragments3)))
+		Expect(len(calculateHashes("foo", rules1))).To(Equal(len(rules1)))
+		Expect(len(calculateHashes("foo", rules2))).To(Equal(len(rules2)))
+		Expect(len(calculateHashes("foo", rules3))).To(Equal(len(rules3)))
 	})
 })
+
+func calculateHashes(chainName string, rules []Rule) []string {
+	chain := &Chain{
+		Name:  chainName,
+		Rules: rules,
+	}
+	return chain.RuleHashes()
+}
