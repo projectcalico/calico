@@ -39,7 +39,7 @@ var _ = Describe("Usagerep", func() {
 		Expect(q.Get("size")).To(Equal("10"))
 		Expect(q.Get("num_wl_endpoints")).To(Equal("234"))
 		Expect(q.Get("num_host_endpoints")).To(Equal("123"))
-		Expect(q.Get("version")).To(Equal(buildinfo.Version))
+		Expect(q.Get("version")).To(Equal(buildinfo.GitVersion))
 		Expect(q.Get("git_revision")).To(Equal(buildinfo.GitRevision))
 		Expect(q.Get("felix_type")).To(Equal("go"))
 

@@ -84,17 +84,13 @@ After building the docker image (see above), you can run Felix with, for example
 
 ### Debs and RPMs
 
-The `Makefile` has targets for building debs and RPMS for different platforms.
+The `Makefile` has targets for building debs and RPMs for different platforms.
 By using docker, the build does not need to be run on the target platform.
 ```
-make trusty-deb
-make xenial-deb
+make deb
 make rpm
 ```
 The packages (and source packages) are output to the dist directory.
-
-By default, packages are built with a "snapshot" version number that is
-greater than the current release version.
 
 ### Stand-alone bundle
 

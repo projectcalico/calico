@@ -60,8 +60,7 @@ func main() {
 	logutils.ConfigureEarlyLogging()
 
 	// Parse command-line args.
-	version := ("Version:            " + buildinfo.Version + "\n" +
-		"Git tag/commit:     " + buildinfo.GitVersion + "\n" +
+	version := ("Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n")
 	arguments, err := docopt.Parse(usage, nil, true, version, false)
@@ -70,7 +69,7 @@ func main() {
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
 	}
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":   buildinfo.Version,
+		"version":   buildinfo.GitVersion,
 		"buildDate": buildinfo.BuildDate,
 		"gitCommit": buildinfo.GitRevision,
 	})

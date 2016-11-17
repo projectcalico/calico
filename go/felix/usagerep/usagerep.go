@@ -89,7 +89,7 @@ func calculateURL(hostname, clusterGUID, clusterType string, stats calc.StatsUpd
 		"clusterGUID": clusterGUID,
 		"clusterType": clusterType,
 		"stats":       stats,
-		"version":     buildinfo.Version,
+		"version":     buildinfo.GitVersion,
 		"gitRevision": buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
@@ -99,7 +99,7 @@ func calculateURL(hostname, clusterGUID, clusterType string, stats calc.StatsUpd
 		"size":               {fmt.Sprintf("%v", stats.NumHosts)},
 		"num_wl_endpoints":   {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
 		"num_host_endpoints": {fmt.Sprintf("%v", stats.NumHostEndpoints)},
-		"version":            {buildinfo.Version},
+		"version":            {buildinfo.GitVersion},
 		"git_revision":       {buildinfo.GitRevision},
 		"felix_type":         {"go"},
 	}

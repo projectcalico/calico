@@ -20,3 +20,4 @@ nosetests.xml
 version.txt
 bin
 local-utils
+python/version.py
