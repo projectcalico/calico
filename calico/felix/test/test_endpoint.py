@@ -1446,7 +1446,7 @@ class TestHostEndpoint(BaseTestCase):
                     suffix="eth0",
                     profile_ids=["prof1"],
                     pol_ids_by_tier={},
-                    default_drop=True
+                    untracked=False
                 ),
                 mock.call(
                     ip_version=4,  # IP version
@@ -1454,7 +1454,7 @@ class TestHostEndpoint(BaseTestCase):
                     suffix="eth0",
                     profile_ids=[],
                     pol_ids_by_tier={},
-                    default_drop=False
+                    untracked=True
                 ),
             ])
             # Check that the updates are actually committed.
@@ -1541,7 +1541,7 @@ class TestHostEndpoint(BaseTestCase):
                     suffix="eth0",
                     profile_ids=["prof1"],
                     pol_ids_by_tier={},
-                    default_drop=True
+                    untracked=False
                 ),
                 mock.call(
                     ip_version=6,  # IP version
@@ -1549,7 +1549,7 @@ class TestHostEndpoint(BaseTestCase):
                     suffix="eth0",
                     profile_ids=[],
                     pol_ids_by_tier={},
-                    default_drop=False
+                    untracked=True
                 ),
             ])
             # Check that the updates are actually committed.

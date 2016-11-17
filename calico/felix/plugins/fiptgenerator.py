@@ -568,7 +568,7 @@ class FelixIptablesGenerator(FelixPlugin):
 
     def host_endpoint_updates(self, ip_version, endpoint_id, suffix,
                               profile_ids, pol_ids_by_tier,
-                              default_drop=True):
+                              untracked=False):
         return self.endpoint_updates(
             ip_version=ip_version,
             endpoint_id=endpoint_id,
@@ -579,13 +579,13 @@ class FelixIptablesGenerator(FelixPlugin):
             to_direction="outbound",
             from_direction="inbound",
             with_failsafe=True,
-            default_drop=default_drop,
+            untracked=untracked,
         )
 
     def endpoint_updates(self, ip_version, endpoint_id, suffix, mac,
                          profile_ids, pol_ids_by_tier, to_direction="inbound",
                          from_direction="outbound", with_failsafe=False,
-                         default_drop=True):
+                         untracked=False):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given endpoint.
@@ -619,7 +619,7 @@ class FelixIptablesGenerator(FelixPlugin):
             to_chain_name,
             to_direction,
             with_failsafe=with_failsafe,
-            default_drop=default_drop,
+            untracked=untracked,
         )
         from_chain, from_deps = self._build_to_or_from_chain(
             ip_version,
@@ -630,7 +630,7 @@ class FelixIptablesGenerator(FelixPlugin):
             from_direction,
             expected_mac=mac,
             with_failsafe=with_failsafe,
-            default_drop=default_drop,
+            untracked=untracked,
         )
 
         updates = {to_chain_name: to_chain, from_chain_name: from_chain}
@@ -793,7 +793,7 @@ class FelixIptablesGenerator(FelixPlugin):
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
                                 prof_ids_by_tier, chain_name, direction,
                                 expected_mac=None, with_failsafe=False,
-                                default_drop=True):
+                                untracked=False):
         """
         Generate the necessary set of iptables fragments for a to or from
         chain for a given endpoint.
@@ -875,7 +875,7 @@ class FelixIptablesGenerator(FelixPlugin):
                 # If the policy accepted the packet, it sets the Accept
                 # MARK==1. Immediately RETURN the packet to signal that it's
                 # been accepted.
-                if not default_drop:
+                if untracked:
                     chain.append('--append %(chain)s '
                                  '--match mark --mark %(mark)s/%(mark)s '
                                  '--match comment '
@@ -895,7 +895,7 @@ class FelixIptablesGenerator(FelixPlugin):
                                  "mark": self.IPTABLES_MARK_ACCEPT,
                              })
 
-            if default_drop:
+            if not untracked:
                 chain.extend(self.drop_rules(
                     ip_version,
                     chain_name,
@@ -927,7 +927,7 @@ class FelixIptablesGenerator(FelixPlugin):
                 }
             )
 
-        if default_drop:
+        if not untracked:
             # Default drop rule.
             chain.extend(
                 self.drop_rules(

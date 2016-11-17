@@ -1189,5 +1189,5 @@ class HostEndpoint(LocalEndpoint):
             profile_ids=([] if untracked else self.endpoint["profile_ids"]),
             pol_ids_by_tier=(self._raw_pol_ids_by_tier if untracked
                              else self._pol_ids_by_tier),
-            default_drop=(not untracked),
+            untracked=untracked,
         )
