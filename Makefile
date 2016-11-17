@@ -3,7 +3,11 @@ default: help
 all: test                                 ## Run all the tests
 test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
-all: dist/calicoctl test-containerized
+all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64 test-containerized
+
+# Determine which OS / ARCH. 
+OS := $(shell uname -s | tr A-Z a-z)
+ARCH := amd64 
 
 ###############################################################################
 # Common build variables
@@ -355,10 +359,6 @@ vendor: glide.lock
         glide install -strip-vendor && \
         chown $(shell id -u):$(shell id -u) -R vendor'
 
-## Build the calicoctl
-binary: $(CALICOCTL_FILES) vendor
-	CGO_ENABLED=0 go build -v -o dist/calicoctl $(LDFLAGS) "./calicoctl/calicoctl.go"
-
 $(TEST_CALICOCTL_CONTAINER_MARKER): calicoctl/Dockerfile.calicoctl.build
 	docker build -f calicoctl/Dockerfile.calicoctl.build -t $(TEST_CALICOCTL_CONTAINER_NAME) .
 	touch $@
@@ -368,15 +368,34 @@ $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
 	touch $@
 
-## Run the build in a container. Useful for CI
+## Build calicoctl
+binary: $(CALICOCTL_FILES) vendor
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
+
 dist/calicoctl: $(CALICOCTL_FILES) vendor
+	$(MAKE) dist/calicoctl-linux-amd64 
+	mv dist/calicoctl-linux-amd64 dist/calicoctl
+
+dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=linux ARCH=amd64 binary-containerized
+
+dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=darwin ARCH=amd64 binary-containerized
+
+dist/calicoctl-windows-amd64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=windows ARCH=amd64 binary-containerized
+
+
+## Run the build in a container. Useful for CI
+binary-containerized: $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	docker run --rm \
+	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
 	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
 	  golang:1.7 bash -c '\
 	    cd /go/src/github.com/projectcalico/calico-containers && \
-	    make binary && \
+	    make OS=$(OS) ARCH=$(ARCH) binary && \
 	    chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Etcd is used by the tests
@@ -431,10 +450,14 @@ ifndef VERSION
 endif
 	git tag $(VERSION)
 
-	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl calico/ctl calico/node
+	# Build the calicoctl binaries, as well as the calico/ctl and calico/node images.
+	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64 
+	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) calico/ctl calico/node
+
 	# Check that the version output includes the version specified.
-# Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
-	if ! dist/calicoctl version | grep -P 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `dist/calicoctl version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
+# Release is currently supported on darwin / linux only.
+	if ! docker run calico/ctl:$(VERSION) version | grep 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `docker run calico/ctl:$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
 
 	# Retag images with corect version and quay
 	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(VERSION)
