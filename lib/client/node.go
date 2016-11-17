@@ -15,9 +15,13 @@
 package client
 
 import (
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // NodeInterface has methods to work with Node resources.
@@ -57,6 +61,46 @@ func (h *nodes) Apply(a *api.Node) (*api.Node, error) {
 
 // Delete deletes an existing node.
 func (h *nodes) Delete(metadata api.NodeMetadata) error {
+	// Make sure all workload endpoint configuration is deleted, and any IPs
+	// that were assigned to these endpoints are deleted.  We check that the
+	// node name has been specified, otherwise we'd end up listing all
+	// endpoints across all nodes, and delete their config.
+	if metadata.Name == "" {
+		return errors.ErrorInsufficientIdentifiers{Name: "node"}
+	}
+	log.Debugf("Deleting node: %s", metadata.Name)
+
+	// List endpoints.
+	eps, err := h.c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{Node: metadata.Name})
+	if err != nil {
+		return err
+	}
+
+	// Collate all IPs across all endpoints, and then release those IPs.
+	ips := []net.IP{}
+	for _, ep := range(eps.Items) {
+		for _, nw := range(ep.Spec.IPNetworks) {
+			ips = append(ips, net.IP{nw.IP})
+		}
+	}
+
+	log.Debugf("Releasing the following IPs from workload endpoints: %v", ips)
+	_, err = h.c.IPAM().ReleaseIPs(ips)
+	if err != nil {
+		return err
+	}
+
+	// Remove the node from the IPAM data if it exists.
+	log.Debug("Removing IPAM host data")
+	err = h.c.IPAM().RemoveIPAMHost(metadata.Name)
+	if err != nil {
+		log.Debug("Error removing host data: %v", err)
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+			return err
+		}
+	}
+
+	// Finally remove the node.
 	return h.c.delete(metadata, h)
 }
 
