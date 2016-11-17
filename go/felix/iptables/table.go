@@ -42,6 +42,7 @@ var (
 type Table struct {
 	Name string
 
+	// TODO(smc) Implement rule insertions to hook root chains.
 	// chainToInsertedFragments maps from chain name to a list of iptables fragments that should
 	// be inserted into that chain.  Used for hooking top-level chains.
 	chainToInsertedFragments map[string][]string

@@ -87,8 +87,8 @@ func (source Source) Local() bool {
 // We use tags to control the parsing and validation.
 type Config struct {
 	// Configuration parameters.
-
-	DataplaneDriver string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+	UseInternalDataplaneDriver bool   `config:"bool;false"`
+	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv2);etcdv2;non-zero,die-on-fail"`
 
