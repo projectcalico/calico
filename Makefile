@@ -19,7 +19,6 @@ BUILD_CONTAINER_NAME=calico/cni_build_container
 BUILD_CONTAINER_MARKER=cni_build_container.created
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
-TEMP_DIR:=$(shell mktemp -d)
 
 LIBCALICOGO_PATH?=none
 
