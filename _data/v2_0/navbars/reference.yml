@@ -107,8 +107,6 @@ toc:
   section:
   - title: Calico for CNI
     path: /reference/advanced/calico-cni
-  - title: Calico's use of the Neutron API
-    path: /reference/advanced/calico-neutron-api
   - title: Secure etcd
     path: /reference/advanced/etcd-secure
   - title: Overlap IPs

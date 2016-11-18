@@ -191,7 +191,7 @@ again, and again the reachability doesn’t have to change.
 
 ## "How does Calico interact with the Neutron API?"
 
-[This document]({{site.baseurl}}/{{page.version}}/reference/advanced/calico-neutron-api) 
+[This document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/neutron-api) 
 document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.
 
