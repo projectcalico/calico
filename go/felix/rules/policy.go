@@ -22,16 +22,16 @@ import (
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) (inbound, outbound *iptables.Chain) {
-	inbound = &iptables.Chain{
-		Name:  PolicyChainName(InboundPolChainPrefix, policyID),
+func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) []*iptables.Chain {
+	inbound := iptables.Chain{
+		Name:  PolicyChainName(PolicyInboundPfx, policyID),
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules),
 	}
-	outbound = &iptables.Chain{
-		Name:  PolicyChainName(OutboundPolChainPrefix, policyID),
+	outbound := iptables.Chain{
+		Name:  PolicyChainName(PolicyOutboundPfx, policyID),
 		Rules: r.ProtoRulesToIptablesRules(policy.OutboundRules),
 	}
-	return
+	return []*iptables.Chain{&inbound, &outbound}
 }
 
 func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule) []iptables.Rule {
@@ -45,7 +45,7 @@ func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule) []ipt
 func (r *ruleRenderer) ProtoRuleToIptablesRule(protoRule *proto.Rule) []iptables.Rule {
 	return []iptables.Rule{{
 		MatchCriteria: `-m comment --comment "A rule to be"`,
-		Action:        `-j LOG`,
+		Action:        iptables.JumpAction{"LOG"},
 	}}
 }
 

@@ -22,8 +22,17 @@ import (
 const (
 	ChainNamePrefix = "cali"
 
-	InboundPolChainPrefix  = ChainNamePrefix + "i-"
-	OutboundPolChainPrefix = ChainNamePrefix + "o-"
+	PolicyInboundPfx  = ChainNamePrefix + "pi-"
+	PolicyOutboundPfx = ChainNamePrefix + "po-"
+
+	DispatchToWorkloadEndpoint   = ChainNamePrefix + "-to-wl-endpoint"
+	DispatchFromWorkloadEndpoint = ChainNamePrefix + "-from-wl-endpoint"
+
+	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
+	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
+
+	HostToEndpointPfx   = ChainNamePrefix + "th-"
+	HostFromEndpointPfx = ChainNamePrefix + "fh-"
 
 	RuleHashPrefix = "cali:"
 )
@@ -35,13 +44,13 @@ var (
 type RuleRenderer interface {
 	StaticFilterTableChains() []*iptables.Chain
 
-	WorkloadDispatchChains(map[*proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
-	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) (to, from *iptables.Chain)
+	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain
 
-	HostDispatchChains(map[*proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain
-	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) (to, from *iptables.Chain)
+	HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain
 
-	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) (inbound, outbound *iptables.Chain)
+	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) []*iptables.Chain
 }
 
 type ruleRenderer struct {

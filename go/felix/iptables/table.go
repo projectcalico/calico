@@ -112,14 +112,28 @@ func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix s
 	return table
 }
 
+func (t *Table) UpdateChains(chains []*Chain) {
+	for _, chain := range chains {
+		t.UpdateChain(chain)
+	}
+}
+
 func (t *Table) UpdateChain(chain *Chain) {
+	t.logCxt.WithField("chainName", chain.Name).Info("Queueing update of chain.")
 	t.chainNameToChain[chain.Name] = chain
 	t.dirtyChains.Add(chain.Name)
 }
 
-func (t *Table) RemoveChain(name string) {
+func (t *Table) RemoveChainByName(name string) {
+	t.logCxt.WithField("chainName", name).Info("Queing deletion of chain.")
 	delete(t.chainNameToChain, name)
 	t.dirtyChains.Add(name)
+}
+
+func (t *Table) RemoveChains(chains []*Chain) {
+	for _, chain := range chains {
+		t.RemoveChainByName(chain.Name)
+	}
 }
 
 func (t *Table) loadDataplaneState() {
@@ -293,7 +307,7 @@ func (t *Table) flushUpdates() error {
 						ruleNum := i + 1 // 1-indexed.
 						comment := t.commentFrag(currentHashes[i])
 						line = fmt.Sprintf("-R %s %d %s %s %s\n", chainName, ruleNum, comment,
-							chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
+							chain.Rules[i].MatchCriteria, chain.Rules[i].Action.ToFragment())
 					}
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
@@ -303,7 +317,7 @@ func (t *Table) flushUpdates() error {
 					// currentHashes was longer.  Append.
 					comment := t.commentFrag(currentHashes[i])
 					line = fmt.Sprintf("-A %s %s %s %s\n", chainName, comment,
-						chain.Rules[i].MatchCriteria, chain.Rules[i].Action)
+						chain.Rules[i].MatchCriteria, chain.Rules[i].Action.ToFragment())
 				}
 				inputBuf.WriteString(line)
 			}

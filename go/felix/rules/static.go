@@ -17,5 +17,6 @@ package rules
 import "github.com/projectcalico/felix/go/felix/iptables"
 
 func (r *ruleRenderer) StaticFilterTableChains() []*iptables.Chain {
+	panic("Not implemented")
 	return nil
 }

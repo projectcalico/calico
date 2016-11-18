@@ -27,9 +27,29 @@ const (
 	HashLength = 16
 )
 
+type Action interface {
+	ToFragment() string
+}
+
+type GotoAction struct {
+	Target string
+}
+
+func (g GotoAction) ToFragment() string {
+	return "--goto " + g.Target
+}
+
+type JumpAction struct {
+	Target string
+}
+
+func (g JumpAction) ToFragment() string {
+	return "--jump " + g.Target
+}
+
 type Rule struct {
 	MatchCriteria string
-	Action        string
+	Action        Action
 }
 
 type Chain struct {
@@ -51,7 +71,7 @@ func (c *Chain) RuleHashes() []string {
 		s.Write(hash)
 		s.Write([]byte(rule.MatchCriteria))
 		s.Write([]byte(" "))
-		s.Write([]byte(rule.Action))
+		s.Write([]byte(rule.Action.ToFragment()))
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.

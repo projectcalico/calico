@@ -15,22 +15,68 @@
 package rules
 
 import (
+	"fmt"
+	"github.com/projectcalico/felix/go/felix/hashutils"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
-func (r *ruleRenderer) WorkloadDispatchChains(map[*proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain {
+func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain {
+	toEndpointRules := make([]iptables.Rule, 0, len(endpoints))
+	fromEndpointRules := make([]iptables.Rule, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		fromEndpointRules = append(fromEndpointRules, iptables.Rule{
+			MatchCriteria: fmt.Sprintf("--in-interface %s", endpoint.Name),
+			Action: iptables.GotoAction{
+				Target: WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
+			},
+		})
+		toEndpointRules = append(toEndpointRules, iptables.Rule{
+			MatchCriteria: fmt.Sprintf("--out-interface %s", endpoint.Name),
+			Action: iptables.GotoAction{
+				Target: WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
+			},
+		})
+	}
+
+	toEndpointDispatchChain := iptables.Chain{
+		Name:  DispatchToWorkloadEndpoint,
+		Rules: toEndpointRules,
+	}
+	fromEndpointDispatchChain := iptables.Chain{
+		Name:  DispatchFromWorkloadEndpoint,
+		Rules: fromEndpointRules,
+	}
+
+	return []*iptables.Chain{&toEndpointDispatchChain, &fromEndpointDispatchChain}
+}
+
+func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain {
+	toEndpointChain := iptables.Chain{
+		Name: WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
+		// TODO(smc) Fill in rules.
+	}
+	fromEndpointChain := iptables.Chain{
+		Name: WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
+		// TODO(smc) Fill in rules.
+	}
+	return []*iptables.Chain{&toEndpointChain, &fromEndpointChain}
+}
+
+func (r *ruleRenderer) HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain {
+	panic("Not implemented")
 	return nil
 }
 
-func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) (to, from *iptables.Chain) {
-	return
-}
-
-func (r *ruleRenderer) HostDispatchChains(map[*proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain {
+func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain {
+	panic("Not implemented")
 	return nil
 }
 
-func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) (to, from *iptables.Chain) {
-	return
+func WorkloadEndpointChainName(prefix string, endpoint *proto.WorkloadEndpoint) string {
+	return hashutils.GetLengthLimitedID(
+		prefix,
+		endpoint.Name,
+		iptables.MaxChainNameLength,
+	)
 }
