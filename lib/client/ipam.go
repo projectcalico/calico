@@ -689,7 +689,11 @@ func (c ipams) hostBlockPairs(pool net.IPNet) (map[string]string, error) {
 	log.Debugf("Getting block -> host mappings")
 	for _, o := range objs {
 		k := o.Key.(model.BlockAffinityKey)
-		pairs[k.CIDR.String()] = k.Host
+
+		// Only add the pair to the map if the block belongs to the pool.
+		if pool.Contains(k.CIDR.IPNet.IP) {
+			pairs[k.CIDR.String()] = k.Host
+		}
 		log.Debugf("Block %s -> %s", k.CIDR.String(), k.Host)
 	}
 

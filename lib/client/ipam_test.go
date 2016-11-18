@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// AutoAssign one IP which should be from the only ipPool created at the time, second one
+// should be from the same /26 block since they're both from the same host, then delete
+// the ipPool and create a new ipPool, and AutoAssign 1 more IP for the same host - expect the
+// assigned IP to be from the new ipPool that was created, this is to make sure the assigned IP
+// doesn't come from the old affinedBlock even after the ipPool was deleted.
+// Step-1: AutoAssign 1 IP without specifying a pool - expect the assigned IP is from pool1.
+// Step-2: AutoAssign 1 more IP without specifying a pool - expect the assigned IP is from the same /26 block as the previous IP.
+// Step-3: Delete pool1 - expect it to execute without any error.
+// Step-4: Create a new IP Pool.
+// Step-5: AutoAssign 1 IP without specifying a pool - expect the assigned IP is from pool2.
+
 // IPAM AutoAssign from different pools:
 // Step-1: AutoAssign 1 IP from pool1 - expect that the IP is from pool1.
 // Step-2: AutoAssign 1 IP from pool2 - expect that the IP is from pool2.
@@ -102,6 +113,95 @@ type testArgsClaimAff struct {
 }
 
 var _ = Describe("IPAM tests", func() {
+
+	// We're assigning one IP which should be from the only ipPool created at the time, second one
+	// should be from the same /26 block since they're both from the same host, then delete
+	// the ipPool and create a new ipPool, and AutoAssign 1 more IP for the same host - expect the
+	// assigned IP to be from the new ipPool that was created, this is to make sure the assigned IP
+	// doesn't come from the old affinedBlock even after the ipPool was deleted.
+	Describe("IPAM AutoAssign from the default pool then delete the pool and assign again", func() {
+		testutils.CleanEtcd()
+		c, _ := testutils.NewClient("")
+		ic := setupIPAMClient(true)
+
+		host := "host-A"
+		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
+		var block cnet.IPNet
+
+		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
+
+		// Step-1: AutoAssign 1 IP without specifying a pool - expect the assigned IP is from pool1.
+		Context("AutoAssign 1 IP without specifying a pool", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			blocks := getAffineBlocks(host)
+
+			for _, b := range blocks {
+				if pool1.Contains(b.IPNet.IP) {
+					block = b
+				}
+			}
+
+			It("assigned IP should be from pool1", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(pool1.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-2: AutoAssign 1 more IP without specifying a pool - expect the assigned IP
+		// is from the same /26 block as the previous IP.
+		Context("AutoAssign 1 IP without specifying a pool", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			It("assigned IP should be from pool1", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(block.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-3: Delete pool1 - expect it to execute without any error.
+		Context("Delete pool1", func() {
+			outErr := c.IPPools().Delete(api.IPPoolMetadata{
+				CIDR: pool1,
+			})
+
+			It("should delete the ipPool without any error", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+			})
+		})
+
+		// Step-4: Create a new IP Pool.
+		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
+
+		// Step-5: AutoAssign 1 IP without specifying a pool - expect the assigned IP is from pool2.
+		Context("AutoAssign 1 IP without specifying a pool", func() {
+			args := client.AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+
+			It("assigned IP should be from pool2", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(pool2.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+	})
 
 	Describe("IPAM AutoAssign from any pool", func() {
 		testutils.CleanEtcd()

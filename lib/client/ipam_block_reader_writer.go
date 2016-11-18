@@ -239,7 +239,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(host string, blockCIDR cnet.IPN
 
 			// Pass back the original KVPair with the new
 			// block information so we can do a CAS.
-			obj.Value = &b
+			obj.Value = b.AllocationBlock
 			_, err = rw.client.backend.Update(obj)
 			if err != nil {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {

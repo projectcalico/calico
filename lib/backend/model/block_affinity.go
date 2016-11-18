@@ -84,11 +84,11 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 	_, cidr, _ := net.ParseCIDR(cidrStr)
 	host := r[0][1]
 
-	if options.Host != host {
+	if options.Host != "" && options.Host != host {
 		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)
 		return nil
 	}
-	if options.IPVersion != cidr.Version() {
+	if options.IPVersion != 0 && options.IPVersion != cidr.Version() {
 		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
 		return nil
 	}
