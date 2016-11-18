@@ -20,30 +20,29 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
-type Direction string
+// ruleRenderer defined in rules_defs.go.
 
-func PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) (inbound, outbound *iptables.Chain) {
-	inboundName := PolicyChainName(InboundPolChainPrefix, policyID)
-	outboundName := PolicyChainName(OutboundPolChainPrefix, policyID)
-	inbound = rulesToChain(inboundName, policy.InboundRules)
-	outbound = rulesToChain(outboundName, policy.OutboundRules)
+func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) (inbound, outbound *iptables.Chain) {
+	inbound = &iptables.Chain{
+		Name:  PolicyChainName(InboundPolChainPrefix, policyID),
+		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules),
+	}
+	outbound = &iptables.Chain{
+		Name:  PolicyChainName(OutboundPolChainPrefix, policyID),
+		Rules: r.ProtoRulesToIptablesRules(policy.OutboundRules),
+	}
 	return
 }
 
-func rulesToChain(chainName string, protoRules []*proto.Rule) *iptables.Chain {
+func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule) []iptables.Rule {
 	var rules []iptables.Rule
-
 	for _, protoRule := range protoRules {
-		rules = append(rules, ProtoRuleToIptablesRule(protoRule)...)
+		rules = append(rules, r.ProtoRuleToIptablesRule(protoRule)...)
 	}
-
-	return &iptables.Chain{
-		Name:  chainName,
-		Rules: rules,
-	}
+	return rules
 }
 
-func ProtoRuleToIptablesRule(protoRule *proto.Rule) []iptables.Rule {
+func (r *ruleRenderer) ProtoRuleToIptablesRule(protoRule *proto.Rule) []iptables.Rule {
 	return []iptables.Rule{{
 		MatchCriteria: `-m comment --comment "A rule to be"`,
 		Action:        `-j LOG`,

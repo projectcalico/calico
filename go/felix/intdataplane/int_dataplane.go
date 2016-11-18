@@ -22,14 +22,26 @@ import (
 	"github.com/projectcalico/felix/go/felix/rules"
 )
 
-func StartIntDataplaneDriver() *internalDataplane {
+type Config struct {
+	DisableIPv6          bool
+	RuleRendererOverride rules.RuleRenderer
+}
+
+func StartIntDataplaneDriver(config Config) *internalDataplane {
+	ruleRenderer := config.RuleRendererOverride
+	if ruleRenderer == nil {
+		ruleRenderer = rules.NewRenderer()
+	}
 	dp := &internalDataplane{
 		toDataplane:   make(chan interface{}, 100),
 		fromDataplane: make(chan interface{}, 100),
 		filterTableV4: iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix),
-		filterTableV6: iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix),
 		ipsetsV4:      ipsets.NewIPSets(ipsets.IPFamilyV4),
-		ipsetsV6:      ipsets.NewIPSets(ipsets.IPFamilyV6),
+		ruleRenderer:  ruleRenderer,
+	}
+	if !config.DisableIPv6 {
+		dp.filterTableV6 = iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
+		dp.ipsetsV6 = ipsets.NewIPSets(ipsets.IPFamilyV6)
 	}
 	go dp.loopUpdatingDataplane()
 	go dp.loopReportingStatus()
@@ -45,6 +57,8 @@ type internalDataplane struct {
 
 	ipsetsV4 *ipsets.IPSets
 	ipsetsV6 *ipsets.IPSets
+
+	ruleRenderer rules.RuleRenderer
 }
 
 func (d *internalDataplane) SendMessage(msg interface{}) error {
@@ -100,9 +114,10 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 
 		// Local active policy updates.
 		case *proto.ActivePolicyUpdate:
-			in, out := rules.PolicyToIptablesChains(msg.Id, msg.Policy)
+			in, out := d.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy)
 			d.filterTableV4.UpdateChain(in)
 			d.filterTableV4.UpdateChain(out)
+			// TODO(smc) Distinct chains for v6 (need to filter on the IPVersion field)
 			d.filterTableV6.UpdateChain(in)
 			d.filterTableV6.UpdateChain(out)
 		case *proto.ActivePolicyRemove:
@@ -132,6 +147,7 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 			// Since we're in-process, we get our config from the typed config object.
 			log.Debug("Ignoring config update")
 		case *proto.InSync:
+			// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 			log.Info("Datastore in sync, flushing the dataplane for the first time...")
 			inSync = true
 		default:

@@ -14,6 +14,11 @@
 
 package rules
 
+import (
+	"github.com/projectcalico/felix/go/felix/iptables"
+	"github.com/projectcalico/felix/go/felix/proto"
+)
+
 const (
 	ChainNamePrefix = "cali"
 
@@ -26,3 +31,22 @@ const (
 var (
 	AllHistoricChainNamePrefixes = []string{"felix-", "FLX", "cali"}
 )
+
+type RuleRenderer interface {
+	StaticFilterTableChains() []*iptables.Chain
+
+	WorkloadDispatchChains(map[*proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) (to, from *iptables.Chain)
+
+	HostDispatchChains(map[*proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) (to, from *iptables.Chain)
+
+	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) (inbound, outbound *iptables.Chain)
+}
+
+type ruleRenderer struct {
+}
+
+func NewRenderer() RuleRenderer {
+	return &ruleRenderer{}
+}

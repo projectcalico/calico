@@ -20,6 +20,13 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+const (
+	// Compromise: shorter is better for table occupancy and readability. Longer is better for
+	// collision-resistance.  16 chars gives us 96 bits of entropy, which is fairly collision
+	// resistant.
+	HashLength = 16
+)
+
 type Rule struct {
 	MatchCriteria string
 	Action        string
@@ -48,7 +55,7 @@ func (c *Chain) RuleHashes() []string {
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.
-		hashes[ii] = base64.RawURLEncoding.EncodeToString(hash)
+		hashes[ii] = base64.RawURLEncoding.EncodeToString(hash)[:HashLength]
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
 				"ruleFragment": rule.MatchCriteria,

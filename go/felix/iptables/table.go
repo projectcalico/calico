@@ -130,8 +130,14 @@ func (t *Table) loadDataplaneState() {
 	// chains for refresh.
 	t.logCxt.Info("Scanning for out-of-sync iptables chains")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
+		logCxt := t.logCxt.WithField("chainName", chainName)
+		if t.dirtyChains.Contains(chainName) {
+			// Already an update pending for this chain.
+			logCxt.Debug("Skipping known-dirty chain")
+			continue
+		}
 		if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
-			t.logCxt.WithField("chainName", chainName).Warn("Detected out-of-sync iptables chain, marking for resync")
+			logCxt.Warn("Detected out-of-sync iptables chain, marking for resync")
 			t.dirtyChains.Add("chainName")
 		}
 	}
@@ -139,18 +145,24 @@ func (t *Table) loadDataplaneState() {
 	// Now scan for chains that shouldn't be there and mark for deletion.
 	t.logCxt.Info("Scanning for unexpected iptables chains")
 	for chainName := range dataplaneHashes {
+		logCxt := t.logCxt.WithField("chainName", chainName)
+		if t.dirtyChains.Contains(chainName) {
+			// Already an update pending for this chain.
+			logCxt.Debug("Skipping known-dirty chain")
+			continue
+		}
 		if !t.ourChainsRegexp.MatchString(chainName) {
 			// Skip non-felix chain
-			t.logCxt.WithField("chainName", chainName).Debug("Skipping non-calico chain")
+			logCxt.Debug("Skipping non-calico chain")
 			continue
 		}
 		if _, ok := t.chainToDataplaneHashes[chainName]; ok {
 			// Chain expected, we'll have checked its contents above.
-			t.logCxt.WithField("chainName", chainName).Debug("Skipping expected chain")
+			logCxt.Debug("Skipping expected chain")
 			continue
 		}
 		// Chain exists in dataplane but not in memory, mark as dirty so we'll clean it up.
-		t.logCxt.WithField("chainName", chainName).Info("Found unexpected chain, marking for cleanup")
+		logCxt.Info("Found unexpected chain, marking for cleanup")
 		t.dirtyChains.Add(chainName)
 	}
 

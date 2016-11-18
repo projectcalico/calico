@@ -143,7 +143,8 @@ configRetry:
 	var dpConnection dataplaneConnection
 	var dpDriverCmd *exec.Cmd
 	if configParams.UseInternalDataplaneDriver {
-		dpConnection = intdataplane.StartIntDataplaneDriver()
+		dpConfig := intdataplane.Config{}
+		dpConnection = intdataplane.StartIntDataplaneDriver(dpConfig)
 	} else {
 		dpConnection, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
