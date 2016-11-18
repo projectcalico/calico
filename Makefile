@@ -16,6 +16,7 @@ BUILD_CONTAINER_NAME=calico/cni_build_container
 BUILD_CONTAINER_MARKER=cni_build_container.created
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
+TEMP_DIR:=$(shell mktemp -d)
 
 LIBCALICOGO_PATH?=none
 
@@ -89,10 +90,20 @@ test-watch: dist/calico dist/calico-ipam
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
+	mkdir -p dist
+	curl -sSL --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C $(TEMP_DIR)
+	mv ${TEMP_DIR}/flannel dist/flannel
+	mv ${TEMP_DIR}/loopback dist/loopback
+	mv ${TEMP_DIR}/host-local dist/host-local
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
 	touch $@
 
 $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized
+	mkdir -p dist
+	curl -sSL --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C $(TEMP_DIR)
+	mv ${TEMP_DIR}/flannel dist/flannel
+	mv ${TEMP_DIR}/loopback dist/loopback
+	mv ${TEMP_DIR}/host-local dist/host-local
 	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
 

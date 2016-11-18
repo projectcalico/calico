@@ -46,7 +46,7 @@ then
 fi
 
 # Place the new binaries.
-cp /opt/cni/bin/calico /host/opt/cni/bin/calico
+cp /opt/cni/bin/* /host/opt/cni/bin/
 cp /opt/cni/bin/calico-ipam /host/opt/cni/bin/calico-ipam
 echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
 echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
