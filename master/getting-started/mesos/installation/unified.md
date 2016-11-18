@@ -22,7 +22,7 @@ Run the following steps on **each agent**.
 
 ```shell
 curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
-    https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
+    https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico
 chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
 ln -s $NETWORK_CNI_PLUGINS_DIR/calico $NETWORK_CNI_PLUGINS_DIR/calico-ipam
 ```
