@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	log "github.com/Sirupsen/logrus"
 )
 
 // PoolInterface has methods to work with Pool resources.
@@ -69,6 +70,34 @@ func (h *ipPools) Apply(a *api.IPPool) (*api.IPPool, error) {
 
 // Delete deletes an existing IP pool.
 func (h *ipPools) Delete(metadata api.IPPoolMetadata) error {
+	// Deleting a pool requires a little care because of existing endpoints
+	// using IP addresses allocated in the pool.  We do the deletion in
+	// the following steps:
+	// -  disable the pool so no more IPs are assigned from it
+	// -  remove all affinities associated with the pool
+	// -  delete the pool
+
+	// Start by getting the current pool data and then setting the disabled
+	// flag.
+	if pool, err := h.Get(metadata); err != nil {
+		return err
+	} else {
+		log.Debugf("Disabling pool %s", metadata.CIDR)
+		pool.Spec.Disabled = true
+		if _, err := h.Update(pool); err != nil {
+			return err
+		}
+	}
+
+	// Now release pool affinities.
+	log.Debugf("Releasing affinities for pool %s", metadata.CIDR)
+	err := h.c.IPAM().ReleasePoolAffinities(metadata.CIDR)
+	if err != nil {
+		return err
+	}
+
+	// And finally, delete the pool.
+	log.Debugf("Deleting pool %s", metadata.CIDR)
 	return h.c.delete(metadata, h)
 }
 

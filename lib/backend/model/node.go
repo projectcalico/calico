@@ -101,14 +101,14 @@ type HostMetadataKey struct {
 
 func (key HostMetadataKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s/metadata", key.Hostname), nil
 }
 
 func (key HostMetadataKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
-		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	return fmt.Sprintf("/calico/v1/host/%s", key.Hostname), nil
 }
