@@ -15,8 +15,10 @@
 package calc
 
 import (
+	"errors"
 	"github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/validator"
 	"reflect"
 )
@@ -53,6 +55,14 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 						logCxt.WithError(err).Warn("Validation failed; treating as missing")
 						update.Value = nil
 					}
+				}
+			}
+
+			switch v := update.Value.(type) {
+			case *model.WorkloadEndpoint:
+				if v.Name == "" {
+					logCxt.WithError(errors.New("Missing name")).Warn("Validation failed; treating as missing")
+					update.Value = nil
 				}
 			}
 		}
