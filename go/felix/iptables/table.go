@@ -57,21 +57,25 @@ type Table struct {
 	dirtyChains      set.Set
 
 	inSyncWithDataPlane bool
+
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
-	logCxt *log.Entry
-
-	chainPrefixes   []string
-	hashPrefix      string
-	commentRegexp   *regexp.Regexp
+	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
+	hashCommentPrefix string
+	// hashCommentRegexp matches the rule-tracking comment, capturing the rule hash.
+	hashCommentRegexp *regexp.Regexp
+	// ourChainsRegexp matches the names of chains that are "ours", i.e. start with one of our
+	// prefixes.
 	ourChainsRegexp *regexp.Regexp
 
 	restoreCmd  string
 	saveCmd     string
 	iptablesCmd string
+
+	logCxt *log.Entry
 }
 
 func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix string) *Table {
@@ -91,10 +95,9 @@ func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix s
 			"ipVersion": ipVersion,
 			"table":     name,
 		}),
-		chainPrefixes:   chainPrefixes,
-		hashPrefix:      hashPrefix,
-		commentRegexp:   hashCommentRegexp,
-		ourChainsRegexp: ourChainsRegexp,
+		hashCommentPrefix: hashPrefix,
+		hashCommentRegexp: hashCommentRegexp,
+		ourChainsRegexp:   ourChainsRegexp,
 	}
 
 	if ipVersion == 4 {
@@ -200,7 +203,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
 		// so that they get cleaned up.
 		hash := ""
-		captures = t.commentRegexp.FindStringSubmatch(line)
+		captures = t.hashCommentRegexp.FindStringSubmatch(line)
 		if captures != nil {
 			hash = captures[1]
 			logCxt.WithField("hash", hash).Debug("Found felix hash")
@@ -333,5 +336,5 @@ func (t *Table) flushUpdates() error {
 }
 
 func (t *Table) commentFrag(hash string) string {
-	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashPrefix, hash)
+	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashCommentPrefix, hash)
 }
