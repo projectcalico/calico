@@ -139,8 +139,8 @@ can perform the Framework Installation steps manually (etcd, docker cluster-stor
 3. **Install Calico-CNI.**
 
    ```shell
-   curl -L -o /opt/mesosphere/active/cni/calico  https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
-   curl -L -o /opt/mesosphere/active/cni/calico-ipam https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico-ipam
+   curl -L -o /opt/mesosphere/active/cni/calico  https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico
+   curl -L -o /opt/mesosphere/active/cni/calico-ipam https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico-ipam
    cat <<EOF > /opt/mesosphere/etc/dcos/network/cni/calico.conf
    {
        "name": "calico",

@@ -94,8 +94,8 @@ The Kubernetes `kubelet` calls out to the `calico` and `calico-ipam` plugins.
 Download the binaries and make sure they're executable
 
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 
@@ -210,9 +210,9 @@ Requires=calico-node.service
 [Service]
 ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
 ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico
-ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico-ipam
+ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.1/calico-ipam
 ExecStartPre=/usr/bin/chmod +x /opt/cni/bin/calico-ipam
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \
