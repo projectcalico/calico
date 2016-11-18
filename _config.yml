@@ -9,6 +9,7 @@ exclude:
   - LICENSE
   - Makefile
   - README.md
+  - RELEASING.md
 
 # Markdown Processors
 # TODO - we're not entirly sure what these are for

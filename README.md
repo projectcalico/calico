@@ -99,30 +99,7 @@ All links should be absolute links. To link to versioned content, prefix all lin
 
 ## Releases
 
-The following steps detail how to cut a new release:
-
-1. Run the Release Script, which will walk through creation of the necessary release directories,
-and will replace references to nightly artifacts with release ones:
-
-  ```
-  python release-scripts/do_release.py
-  ```
-
-2. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
-
-  ```
-  -
-    scope:
-      path: vX.Y
-    values:
-      version: vX.Y
-  ```
-
-3. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html`. (This step should be replaced by automation ASAP.)
-
-4. Modify the redirect in `/index.html` to point to your new release.
-
-5. Commit the changes for steps 2-4.
+See [RELEASING.md](RELEASING.md)
 
 ## Testing
 
