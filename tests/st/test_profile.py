@@ -85,12 +85,12 @@ class MultiHostMainline(TestBase):
             new_profiles = copy.deepcopy(original_profiles)
 
             if test_type == "tags":
-                profile0_tag = new_profiles[0]['spec']['tags'][0]
-                profile1_tag = new_profiles[1]['spec']['tags'][0]
+                profile0_tag = new_profiles[0]['metadata']['tags'][0]
+                profile1_tag = new_profiles[1]['metadata']['tags'][0]
                 # Make a new profiles dict where the two networks have each
                 # other in their tags list
-                new_profiles[0]['spec']['tags'].append(profile1_tag)
-                new_profiles[1]['spec']['tags'].append(profile0_tag)
+                new_profiles[0]['metadata']['tags'].append(profile1_tag)
+                new_profiles[1]['metadata']['tags'].append(profile0_tag)
 
                 self._apply_new_profile(new_profiles, host1)
                 # Check everything can contact everything else now
@@ -98,8 +98,8 @@ class MultiHostMainline(TestBase):
                                          pass_list=n1_workloads + n2_workloads)
 
             elif test_type == "rules.tags":
-                profile0_tag = new_profiles[0]['spec']['tags'][0]
-                profile1_tag = new_profiles[1]['spec']['tags'][0]
+                profile0_tag = new_profiles[0]['metadata']['tags'][0]
+                profile1_tag = new_profiles[1]['metadata']['tags'][0]
                 rule0 = {'action': 'allow',
                          'source':
                              {'tag': profile1_tag}}

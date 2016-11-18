@@ -2,7 +2,6 @@
   kind: profile
   metadata:
     name: profile1
-  spec:
     tags:
     - profile1
     labels:

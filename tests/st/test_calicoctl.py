@@ -194,8 +194,11 @@ class TestCreateFromFile(TestBase):
                    }),
         ("profile1", {'apiVersion': 'v1',
                       'kind': 'profile',
-                      'metadata': {'labels': {'foo': 'bar'},
-                                   'name': 'profile1'},
+                      'metadata': {
+                          'labels': {'foo': 'bar'},
+                          'tags': ['tag1', 'tag2s'],
+                          'name': 'profile1'
+                      },
                       'spec': {
                           'egress': [{'action': 'allow',
                                       'destination': {},
@@ -224,10 +227,13 @@ class TestCreateFromFile(TestBase):
                                            'ports': [1234, '10:20'],
                                            'selector': "type=='application'",
                                            'tag': "production"}}],
-                          'tags': ['tag1', 'tag2s']}}),
+                      }}),
         ("profile2", {'apiVersion': 'v1',
                       'kind': 'profile',
-                      'metadata': {'name': 'profile2'},
+                      'metadata': {
+                          'name': 'profile2',
+                          'tags': ['tag1', 'tag2s']
+                      },
                       'spec': {
                           'egress': [{'action': 'allow',
                                       'destination': {},
@@ -236,7 +242,7 @@ class TestCreateFromFile(TestBase):
                                        'action': 'deny',
                                        'destination': {},
                                        'source': {}}],
-                          'tags': ['tag1', 'tag2s']}}),
+                      }}),
     ]
 
     @parameterized.expand(testdata)
@@ -452,7 +458,11 @@ class TestCreateFromFile(TestBase):
         ("profile",
          {'apiVersion': 'v1',
           'kind': 'profile',
-          'metadata': {'labels': {'foo': 'bar'}, 'name': 'profile1'},
+          'metadata': {
+              'labels': {'foo': 'bar'},
+              'name': 'profile1',
+              'tags': ['tag1', 'tag2s']
+          },
           'spec': {
               'egress': [{'action': 'allow',
                           'destination': {},
@@ -480,10 +490,13 @@ class TestCreateFromFile(TestBase):
                                       'ports': [1234, '10:20'],
                                       'selector': "type=='application'",
                                       'tag': "production"}}],
-              'tags': ['tag1', 'tag2s']}},
+              }},
          {'apiVersion': 'v1',
           'kind': 'profile',
-          'metadata': {'name': 'profile2'},
+          'metadata': {
+              'name': 'profile2',
+              'tags': ['tag1', 'tag2s']
+          },
           'spec': {
               'egress': [{'action': 'allow',
                           'destination': {},
@@ -492,7 +505,7 @@ class TestCreateFromFile(TestBase):
                            'action': 'deny',
                            'destination': {},
                            'source': {}}],
-              'tags': ['tag1', 'tag2s']}},
+              }},
          )
     ])
     def test_create_from_file(self, res, data1, data2):
@@ -677,7 +690,11 @@ class TestCreateFromFile(TestBase):
         ("profile",
          {'apiVersion': 'v1',
           'kind': 'profile',
-          'metadata': {'name': 'profile1', 'labels': {'type': 'database'}},
+          'metadata': {
+              'name': 'profile1',
+              'labels': {'type': 'database'},
+              'tags': ['tag1', 'tag2s']
+          },
           'spec': {
               'egress': [{
                   'source': {},
@@ -687,10 +704,14 @@ class TestCreateFromFile(TestBase):
                   'source': {},
                   'destination': {},
                   'action': 'deny'}],
-              'tags': ['a', 'b', 'c', 'a1']}, },
+          }, },
          {'apiVersion': 'v1',
           'kind': 'profile',
-          'metadata': {'labels': {'type': 'frontend'}, 'name': 'profile1'},
+          'metadata': {
+              'labels': {'type': 'frontend'},
+              'name': 'profile1',
+              'tags': ['d', 'e', 'f', 'a1']
+          },
           'spec': {
               'egress': [{
                   'source': {},
@@ -700,7 +721,7 @@ class TestCreateFromFile(TestBase):
                   'source': {},
                   'destination': {},
                   'action': 'deny'}],
-              'tags': ['d', 'e', 'f', 'a1']}},
+              }},
          )
     ])
     def test_apply_create_replace(self, res, data1, data2):
@@ -1002,7 +1023,10 @@ class InvalidData(TestBase):
                                           }),
                    ("profile-icmptype", {'apiVersion': 'v1',
                                          'kind': 'profile',
-                                         'metadata': {'name': 'profile2'},
+                                         'metadata': {
+                                             'name': 'profile2',
+                                             'tags': ['tag1', 'tag2s']
+                                         },
                                          'spec': {
                                              'egress': [{'action': 'allow',
                                                          'destination': {},
@@ -1013,10 +1037,13 @@ class InvalidData(TestBase):
                                                           'action': 'deny',
                                                           'destination': {},
                                                           'source': {}}],
-                                             'tags': ['tag1', 'tag2s']}}),
+                                             }}),
                    ("profile-icmpcode", {'apiVersion': 'v1',
                                          'kind': 'profile',
-                                         'metadata': {'name': 'profile2'},
+                                         'metadata': {
+                                             'name': 'profile2',
+                                             'tags': ['tag1', 'tag2s']
+                                         },
                                          'spec': {
                                              'egress': [{'action': 'allow',
                                                          'destination': {},
@@ -1027,7 +1054,7 @@ class InvalidData(TestBase):
                                                           'action': 'deny',
                                                           'destination': {},
                                                           'source': {}}],
-                                             'tags': ['tag1', 'tag2s']}}),
+                                             }}),
                    ("compound-config", [{
                        'apiVersion': 'v1',
                        'kind': 'bgpPeer',
@@ -1037,7 +1064,10 @@ class InvalidData(TestBase):
                        'spec': {'asNumber': 64511}},
                        {'apiVersion': 'v1',
                         'kind': 'profile',
-                        'metadata': {'name': 'profile2'},
+                        'metadata': {
+                            'name': 'profile2',
+                            'tags': ['tag1', 'tag2s']
+                        },
                         'spec': {
                             'egress': [{'action': 'allow',
                                         'destination': {},
@@ -1048,7 +1078,7 @@ class InvalidData(TestBase):
                                          'action': 'deny',
                                          'destination': {},
                                          'source': {}}],
-                            'tags': ['tag1', 'tag2s']},
+                            },
                         }],
                     ),
                ]

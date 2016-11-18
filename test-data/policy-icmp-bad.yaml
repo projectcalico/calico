@@ -49,8 +49,8 @@
   kind: profile
   metadata:
     name: profile1
-  spec:
     tags: [a, b, c, a1]
+  spec:
     ingress:
     - action: deny
     egress:
