@@ -22,8 +22,8 @@ import (
 )
 
 func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain {
-	toEndpointRules := make([]iptables.Rule, 0, len(endpoints))
-	fromEndpointRules := make([]iptables.Rule, 0, len(endpoints))
+	toEndpointRules := make([]iptables.Rule, 0, len(endpoints)+1)
+	fromEndpointRules := make([]iptables.Rule, 0, len(endpoints)+1)
 	for _, endpoint := range endpoints {
 		fromEndpointRules = append(fromEndpointRules, iptables.Rule{
 			MatchCriteria: fmt.Sprintf("--in-interface %s", endpoint.Name),
@@ -38,6 +38,13 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 			},
 		})
 	}
+
+	toEndpointRules = append(fromEndpointRules, iptables.Rule{
+		Action: iptables.DropAction{},
+	})
+	fromEndpointRules = append(fromEndpointRules, iptables.Rule{
+		Action: iptables.DropAction{},
+	})
 
 	toEndpointDispatchChain := iptables.Chain{
 		Name:  DispatchToWorkloadEndpoint,

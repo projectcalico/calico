@@ -47,6 +47,12 @@ func (g JumpAction) ToFragment() string {
 	return "--jump " + g.Target
 }
 
+type DropAction struct{}
+
+func (g DropAction) ToFragment() string {
+	return "--jump DROP"
+}
+
 type Rule struct {
 	MatchCriteria string
 	Action        Action
