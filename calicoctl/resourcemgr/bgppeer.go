@@ -24,8 +24,8 @@ func init() {
 	registerResource(
 		api.NewBGPPeer(),
 		api.NewBGPPeerList(),
-		[]string{"SCOPE", "PEERIP", "HOSTNAME", "ASN"},
-		[]string{"SCOPE", "PEERIP", "HOSTNAME", "ASN"},
+		[]string{"SCOPE", "PEERIP", "NODE", "ASN"},
+		[]string{"SCOPE", "PEERIP", "NODE", "ASN"},
 		map[string]string{
 			"SCOPE":  "{{.Metadata.Scope}}",
 			"PEERIP": "{{.Metadata.PeerIP}}",

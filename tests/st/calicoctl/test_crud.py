@@ -14,9 +14,7 @@
 import json
 import logging
 import yaml
-from unittest import skip
 
-from functools import partial
 from netaddr import IPNetwork
 from nose_parameterized import parameterized
 

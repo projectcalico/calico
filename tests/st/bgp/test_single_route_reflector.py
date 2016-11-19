@@ -19,7 +19,6 @@ from tests.st.utils.route_reflector import RouteReflectorCluster
 
 from .peer import create_bgp_peer, ADDITIONAL_DOCKER_OPTIONS
 
-
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
@@ -40,21 +39,14 @@ class TestSingleRouteReflector(TestBase):
             host1.calicoctl("config set nodeToNodeMesh off")
 
             # Create a workload on each host in the same network.
-            network1 = host1.create_network("subnet1", subnet=subnet1,
-                                            driver="calico",
-                                            ipam_driver="calico-ipam")
+            network1 = host1.create_network("subnet1")
             workload_host1 = host1.create_workload("workload1",
                                                    network=network1)
             workload_host2 = host2.create_workload("workload2",
                                                    network=network1)
 
             # Allow network to converge (which it won't)
-            try:
-                workload_host1.assert_can_ping(workload_host2.ip, retries=5)
-            except AssertionError:
-                pass
-            else:
-                raise AssertionError("Hosts can ping each other")
+            self.assert_false(workload_host1.check_can_ping(workload_host2.ip, retries=5))
 
             # Set global config telling all calico nodes to peer with the
             # route reflector.  This can be run from either host.
@@ -63,7 +55,7 @@ class TestSingleRouteReflector(TestBase):
             create_bgp_peer(host1, "global", rg[0].ip, 64514)
 
             # Allow network to converge (which it now will).
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
 
             # And check connectivity in both directions.
             self.assert_ip_connectivity(workload_list=[workload_host1,

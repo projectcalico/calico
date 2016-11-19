@@ -18,27 +18,10 @@ from nose.plugins.attrib import attr
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
-                                      LARGE_AS_NUM)
+                                      DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.utils import check_bird_status
 
 from .peer import create_bgp_peer, ADDITIONAL_DOCKER_OPTIONS
-
-"""
-Test "calicoctl bgp" and "calicoctl node bgp" commands.
-
-Testing should be focused around the different topologies that we support.
-    Mesh is covered (a little) by existing multi host tests (done)
-    Single RR cluster  (done)
-    AS per ToR
-    AS per calico node
-
-Test IPv4 and IPv6
-Two threads to the testing:
-    Function of the commands (which we already are testing) - see below
-    BGP functionality in the different topologies
-
-TODO - rework BGP tests.
-"""
 
 class TestGlobalPeers(TestBase):
 
@@ -61,16 +44,16 @@ class TestGlobalPeers(TestBase):
             host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
 
             # Create a network and a couple of workloads on each host.
-            network1 = host1.create_network("subnet1", subnet=subnet1, driver="calico", ipam_driver="calico-ipam")
+            network1 = host1.create_network("subnet1", subnet=DEFAULT_IPV4_POOL_CIDR)
             workload_host1 = host1.create_workload("workload1", network=network1, ip=DEFAULT_IPV4_ADDR_1)
             workload_host2 = host2.create_workload("workload2", network=network1, ip=DEFAULT_IPV4_ADDR_2)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+            self.assert_true(workload_host1.check_can_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Turn the node-to-node mesh off and wait for connectivity to drop.
             host1.calicoctl("config set nodeToNodeMesh off")
-            workload_host1.assert_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+            self.assert_true(workload_host1.check_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Configure global peers to explicitly set up a mesh.  This means
             # each node will try to peer with itself which will fail.
@@ -78,7 +61,7 @@ class TestGlobalPeers(TestBase):
             create_bgp_peer(host2, 'global', host1.ip, LARGE_AS_NUM)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+            self.assert_true(workload_host1.check_can_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Check connectivity in both directions
             self.assert_ip_connectivity(workload_list=[workload_host1,

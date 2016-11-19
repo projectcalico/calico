@@ -127,7 +127,9 @@ Description:
 		}
 	}
 	if asNumber != "" {
-		argutils.ValidateASNumber(asNumber)
+		// The calico/node image does not accept dotted notation for
+		// the AS number, so convert.
+		asNumber = argutils.ValidateASNumber(asNumber).String()
 	}
 	backendMatch := regexp.MustCompile("^(none|bird|gobgp)$")
 	if !backendMatch.MatchString(backend) {

@@ -16,10 +16,9 @@ import re
 import subprocess
 
 from netaddr import IPAddress, IPNetwork
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from time import sleep
-from tests.st.utils.utils import retry_until_success
 
 """
 Test calico IPIP behaviour
@@ -28,7 +27,6 @@ This needs to be a multihost test (so there is actually a cross-host tunnel).
 TODO - how do we actually assert that traffic is encapsulated. Maybe packet
 capture?
 """
-
 
 class TestIPIP(TestBase):
     def tearDown(self):

@@ -16,30 +16,13 @@ from nose.plugins.attrib import attr
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
-                                      LARGE_AS_NUM)
+                                      DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.utils import assert_network, assert_profile, \
     assert_number_endpoints, get_profile_name, ETCD_CA, ETCD_CERT, \
     ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip, check_bird_status
 
 from .peer import ADDITIONAL_DOCKER_OPTIONS
-
-"""
-Test "calicoctl bgp" and "calicoctl node bgp" commands.
-
-Testing should be focused around the different topologies that we support.
-    Mesh is covered (a little) by existing multi host tests (done)
-    Single RR cluster  (done)
-    AS per ToR
-    AS per calico node
-
-Test IPv4 and IPv6
-Two threads to the testing:
-    Function of the commands (which we already are testing) - see below
-    BGP functionality in the different topologies
-
-TODO - rework BGP tests.
-"""
 
 class TestBGP(TestBase):
 
@@ -62,7 +45,7 @@ class TestBGP(TestBase):
             host.calicoctl("config set nodeToNodeMesh off")
             self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "off")
             host.calicoctl("config set nodeToNodeMesh on")
-            self.assertEquals(host.calicoctl("config set nodeToNodeMesh"), "on")
+            self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "on")
 
     @attr('slow')
     def test_as_num(self):
@@ -87,12 +70,12 @@ class TestBGP(TestBase):
             host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
 
             # Create a network and a couple of workloads on each host.
-            network1 = host1.create_network("subnet1", subnet=subnet1, driver="calico", ipam_driver="calico-ipam")
+            network1 = host1.create_network("subnet1", subnet=DEFAULT_IPV4_POOL_CIDR)
             workload_host1 = host1.create_workload("workload1", network=network1, ip=DEFAULT_IPV4_ADDR_1)
             workload_host2 = host2.create_workload("workload2", network=network1, ip=DEFAULT_IPV4_ADDR_2)
 
             # Allow network to converge
-            workload_host1.assert_can_ping(DEFAULT_IPV4_ADDR_2, retries=10)
+            self.assert_true(workload_host1.check_can_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
             # Check connectivity in both directions
             self.assert_ip_connectivity(workload_list=[workload_host1,

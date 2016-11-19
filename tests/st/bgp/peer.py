@@ -28,7 +28,7 @@ else:
 
 def create_bgp_peer(host, scope, ip, asNum):
     assert scope in ('node', 'global')
-    node = host.name if scope == 'node' else ""
+    node = host.get_hostname() if scope == 'node' else ""
     testdata = {
         'apiVersion': 'v1',
         'kind': 'bgpPeer',

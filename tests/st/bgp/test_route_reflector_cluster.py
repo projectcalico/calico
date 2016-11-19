@@ -41,20 +41,15 @@ class TestRouteReflectorCluster(TestBase):
             host1.calicoctl("config set nodeToNodeMesh off")
 
             # Create a workload on each host in the same network.
-            network1 = host1.create_network("subnet1", subnet=subnet1, driver="calico", ipam_driver="calico-ipam")
+            network1 = host1.create_network("subnet1")
             workload_host1 = host1.create_workload("workload1", network=network1)
             workload_host2 = host2.create_workload("workload2", network=network1)
             workload_host3 = host3.create_workload("workload3", network=network1)
 
             # Allow network to converge (which it won't)
-            try:
-                workload_host1.assert_can_ping(workload_host2.ip, retries=5)
-            except AssertionError:
-                pass
-            else:
-                raise AssertionError("Hosts can ping each other")
-            workload_host1.assert_cant_ping(workload_host3.ip)
-            workload_host2.assert_cant_ping(workload_host3.ip)
+            self.assert_false(workload_host1.check_can_ping(workload_host2.ip, retries=5))
+            self.assert_true(workload_host1.check_cant_ping(workload_host3.ip))
+            self.assert_true(workload_host2.check_cant_ping(workload_host3.ip))
 
             # Set distributed peerings between the hosts, each host peering
             # with a different set of redundant route reflectors.
@@ -63,9 +58,9 @@ class TestRouteReflectorCluster(TestBase):
                     create_bgp_peer(host, "node", rr.ip, 64513)
 
             # Allow network to converge (which it now will).
-            workload_host1.assert_can_ping(workload_host2.ip, retries=10)
-            workload_host1.assert_can_ping(workload_host3.ip, retries=10)
-            workload_host2.assert_can_ping(workload_host3.ip, retries=10)
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            self.assert_true(workload_host1.check_can_ping(workload_host3.ip, retries=10))
+            self.assert_true(workload_host2.check_can_ping(workload_host3.ip, retries=10))
 
             # And check connectivity in both directions.
             self.assert_ip_connectivity(workload_list=[workload_host1,

@@ -11,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from test_base import TestBase
+from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.exceptions import CommandExecError
 
@@ -42,7 +41,7 @@ class TestNodeStatus(TestBase):
             except CommandExecError as e:
                 self.assertEquals(e.returncode, 1)
                 self.assertEquals(e.output,
-                                  "calico-node container not running\n")
+                                  "Calico process is not running.\n")
             else:
                 raise AssertionError("'calicoctl status' did not exit with "
                                      "code 1 when node was not running")

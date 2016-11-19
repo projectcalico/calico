@@ -258,24 +258,6 @@ class MultiHostMainline(TestBase):
                        yaml.dump(new_profile, default_flow_style=False))
         host.calicoctl("apply -f new_profiles")
 
-    @staticmethod
-    def create_network(host, net_name):
-        """
-        Creates a docker network, deleting any that existed with that name first.
-        :param host: The host (DockerHost object) to run the docker commands on
-        :param net_name: string.  The name of the network to create.
-        :return: the DockerNetwork object created.
-        """
-        # Check if network is present before we create it
-        try:
-            host.execute("docker network inspect %s" % net_name)
-            # Network exists - delete it
-            host.execute("docker network rm " + net_name)
-        except CommandExecError:
-            # Network didn't exist, no problem.
-            pass
-        return host.create_network(net_name, ipam_driver="calico-ipam")
-
     def _setup_workloads(self, host1, host2):
         # TODO work IPv6 into this test too
         host1.start_calico_node()
@@ -284,8 +266,8 @@ class MultiHostMainline(TestBase):
         # Create the networks on host1, but it should be usable from all
         # hosts.  We create one network using the default driver, and the
         # other using the Calico driver.
-        network1 = self.create_network(host1, "testnet1")
-        network2 = self.create_network(host2, "testnet2")
+        network1 = host1.create_network("testnet1")
+        network2 = host1.create_network("testnet2")
         networks = [network1, network2]
 
         # Assert that the networks can be seen on host2
