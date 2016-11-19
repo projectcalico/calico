@@ -66,13 +66,14 @@ import urllib3.exceptions       # noqa
 # raises.  But the monkey-patching performed by distributions' modification of
 # the requests code can mess that up.
 #
-# So, here we check for that mistake, and correct it.  Note that that equally
-# means that we are breaking requests somehow - but that doesn't matter because
-# the Calico DHCP agent doesn't actually execute any requests code.  (To be
-# clear: the Calico DHCP agent imports a slew of Neutron utility modules, which
-# in turn import other Neutron and Oslo and even Keystone modules, and so on,
-# and some of those import requests.  But the Calico DHCP agent actually
-# executes only a small subset of all that code.)
+# So, here we check for that mistake, and correct it.  Note that correcting
+# this mistake equally means that we are breaking requests somehow - but that
+# doesn't matter because the Calico DHCP agent doesn't actually execute any
+# requests code.  (To be clear: the Calico DHCP agent imports a slew of
+# Neutron utility modules, which in turn import other Neutron and Oslo and
+# even Keystone modules, and so on, and some of those import requests.  But
+# the Calico DHCP agent actually executes only a small subset of all that
+# code.)
 
 if sys.modules["urllib3"].exceptions is not sys.modules["urllib3.exceptions"]:
     # So just fix it.
