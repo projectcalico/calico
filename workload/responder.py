@@ -53,7 +53,6 @@ if __name__ == '__main__':
     import socket
     import threading
 
-
     def check_socket(sock):
         # Send the data
         message = 'Hello world'
@@ -64,7 +63,6 @@ if __name__ == '__main__':
         logger.debug('waiting for response')
         response = sock.recv(len_sent)
         logger.debug('response from server: "%s"', response)
-
 
     tcp_addr = "0.0.0.0"
     tcp_port = 80
