@@ -92,7 +92,7 @@ class TestElection(unittest.TestCase):
         # client proceed to raise its exception.
         client.stop.send()
         # Double-check there were no failures.
-        self.assertEqual(None, client.failure, msg=client.failure)
+        self.assertIsNone(client.failure, msg=client.failure)
 
     def test_basic_election(self):
         # Test that not elected using defaults.
