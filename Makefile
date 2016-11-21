@@ -88,13 +88,21 @@ test-watch: dist/calico dist/calico-ipam
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
-$(BUILD_CONTAINER_MARKER): Dockerfile.build
+$(BUILD_CONTAINER_MARKER): Dockerfile.build fetch-cni-bins
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
 	touch $@
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized
+$(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
+
+.PHONY fetch-cni-bins:
+	mkdir -p tmp-cni
+	curl -sSL --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C tmp-cni/
+	mv tmp-cni/flannel dist/flannel
+	mv tmp-cni/loopback dist/loopback
+	mv tmp-cni/host-local dist/host-local
+	rm -rf tmp-cni/
 
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized

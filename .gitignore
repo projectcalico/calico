@@ -8,3 +8,4 @@ addstats
 delstats
 *.pyc
 *.created
+tmp-cni
