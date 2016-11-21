@@ -101,8 +101,9 @@ class TestRulesManager(BaseTestCase):
         super(TestRulesManager, self).setUp()
         self.config = load_config("felix_default.cfg")
         self.m_updater = Mock(spec=IptablesUpdater)
+        self.m_raw_updater = Mock(spec=IptablesUpdater)
         self.m_ipset_mgr = Mock(spec=IpsetManager)
-        self.mgr = RulesManager(self.config, 4, self.m_updater, self.m_ipset_mgr)
+        self.mgr = RulesManager(self.config, 4, self.m_updater, self.m_ipset_mgr, self.m_raw_updater)
 
     def test_create(self):
         pr = self.mgr._create("profile-id")

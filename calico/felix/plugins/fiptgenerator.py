@@ -53,7 +53,7 @@ from calico.felix.frules import (CHAIN_TO_ENDPOINT, CHAIN_FROM_ENDPOINT,
                                  FELIX_PREFIX, CHAIN_FIP_DNAT, CHAIN_FIP_SNAT,
                                  CHAIN_TO_IFACE, CHAIN_FROM_IFACE,
                                  CHAIN_OUTPUT, CHAIN_FAILSAFE_IN,
-                                 CHAIN_FAILSAFE_OUT)
+                                 CHAIN_FAILSAFE_OUT, CHAIN_RPFILTER)
 
 CHAIN_PROFILE_PREFIX = FELIX_PREFIX + "p-"
 
@@ -124,7 +124,7 @@ class FelixIptablesGenerator(FelixPlugin):
         assert ip_version == 6
 
         chain = self.drop_rules(ip_version,
-                                CHAIN_PREROUTING,
+                                CHAIN_RPFILTER,
                                 None,
                                 "IPv6 rpfilter failed")
         return chain, {}
@@ -209,6 +209,16 @@ class FelixIptablesGenerator(FelixPlugin):
 
         chain = []
         deps = set()
+
+        # Accept immediately if packet is already marked for acceptance.  This
+        # will be the case if the packet has already been allowed by rules in
+        # the raw table.
+        chain.append(
+            "--append {chain} --jump ACCEPT --match mark "
+            "--mark {mark}/{mark}".format(
+                chain=CHAIN_INPUT,
+                mark=self.IPTABLES_MARK_ACCEPT)
+        )
 
         if hosts_set_name:
             # IP-in-IP enabled, drop any IP-in-IP packets that are not from
@@ -343,6 +353,16 @@ class FelixIptablesGenerator(FelixPlugin):
         chain = []
         deps = set()
 
+        # Accept immediately if packet is already marked for acceptance.  This
+        # will be the case if the packet has already been allowed by rules in
+        # the raw table.
+        chain.append(
+            "--append {chain} --jump ACCEPT --match mark "
+            "--mark {mark}/{mark}".format(
+                chain=CHAIN_OUTPUT,
+                mark=self.IPTABLES_MARK_ACCEPT)
+        )
+
         # Allow established connections via the conntrack table.
         chain.extend(self.drop_rules(ip_version,
                                      CHAIN_OUTPUT,
@@ -388,6 +408,17 @@ class FelixIptablesGenerator(FelixPlugin):
         :returns Tuple: list of rules, set of deps.
         """
         forward_chain = []
+
+        # Accept immediately if packet is already marked for acceptance.  This
+        # will be the case if the packet has already been allowed by rules in
+        # the raw table.
+        forward_chain.append(
+            "--append {chain} --jump ACCEPT --match mark "
+            "--mark {mark}/{mark}".format(
+                chain=CHAIN_FORWARD,
+                mark=self.IPTABLES_MARK_ACCEPT)
+        )
+
         for iface_match in self.IFACE_MATCH:
             forward_chain.extend(self.drop_rules(
                 ip_version, CHAIN_FORWARD,
@@ -432,6 +463,95 @@ class FelixIptablesGenerator(FelixPlugin):
             ])
         return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
 
+    def raw_prerouting_chain(self, ip_version):
+        """
+        Generate the IPv4/IPv6 RAW felix-PREROUTING chains.
+
+        Returns a list of iptables fragments with which to program the
+        felix-PREROUTING chain that is unconditionally invoked from both the
+        IPv4 and IPv6 RAW PREROUTING kernel chains.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.  Whether this is the IPv4 or IPv6 RAW table.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = []
+        deps = set()
+
+        chain.append(
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_PREROUTING, mark=self.IPTABLES_MARK_ACCEPT)
+        )
+        chain.append(
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_PREROUTING, mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+        for iface_match in self.IFACE_MATCH:
+            chain.append(
+                "--append {chain} --in-interface {iface} "
+                "--jump MARK --set-mark {mark}/{mark}".format(
+                    chain=CHAIN_PREROUTING, iface=iface_match,
+                    mark=self.IPTABLES_MARK_ENDPOINTS)
+            )
+        # Incoming traffic on host endpoints.
+        chain.append(
+            "--append {chain} --goto {goto} --match mark "
+            "--mark 0/{mark}".format(
+                chain=CHAIN_PREROUTING, goto=CHAIN_FROM_IFACE,
+                mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+
+        deps.add(CHAIN_FROM_IFACE)
+
+        return chain, deps
+
+    def raw_output_chain(self, ip_version):
+        """
+        Generate the IPv4/IPv6 RAW felix-OUTPUT chains.
+
+        Returns a list of iptables fragments with which to program the
+        felix-OUTPUT chain that is unconditionally invoked from both the IPv4
+        and IPv6 RAW OUTPUT kernel chains.
+
+        Note that the list returned here should be the complete set of rules
+        required as any existing chain will be overwritten.
+
+        :param ip_version.  Whether this is the IPv4 or IPv6 RAW table.
+        :returns Tuple: list of rules, set of deps.
+        """
+
+        chain = []
+        deps = set()
+
+        chain.append(
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_OUTPUT, mark=self.IPTABLES_MARK_ACCEPT)
+        )
+        chain.append(
+            "--append {chain} --jump MARK --set-mark 0/{mark}".format(
+                chain=CHAIN_OUTPUT, mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+        # Outgoing traffic on host endpoints.
+        for iface_match in self.IFACE_MATCH:
+            chain.append(
+                "--append {chain} --out-interface {iface} "
+                "--jump MARK --set-mark {mark}/{mark}".format(
+                    chain=CHAIN_OUTPUT, iface=iface_match,
+                    mark=self.IPTABLES_MARK_ENDPOINTS)
+            )
+        chain.append(
+            "--append {chain} --goto {goto} --match mark "
+            "--mark 0/{mark}".format(
+                chain=CHAIN_OUTPUT, goto=CHAIN_TO_IFACE,
+                mark=self.IPTABLES_MARK_ENDPOINTS)
+        )
+        deps.add(CHAIN_TO_IFACE)
+
+        return chain, deps
+
     def endpoint_chain_names(self, endpoint_suffix):
         """
         Returns the set of chains belonging to a given endpoint.  This is used
@@ -447,7 +567,8 @@ class FelixIptablesGenerator(FelixPlugin):
         return set([to_chain_name, from_chain_name])
 
     def host_endpoint_updates(self, ip_version, endpoint_id, suffix,
-                              profile_ids, pol_ids_by_tier):
+                              profile_ids, pol_ids_by_tier,
+                              untracked=False):
         return self.endpoint_updates(
             ip_version=ip_version,
             endpoint_id=endpoint_id,
@@ -458,11 +579,13 @@ class FelixIptablesGenerator(FelixPlugin):
             to_direction="outbound",
             from_direction="inbound",
             with_failsafe=True,
+            untracked=untracked,
         )
 
     def endpoint_updates(self, ip_version, endpoint_id, suffix, mac,
                          profile_ids, pol_ids_by_tier, to_direction="inbound",
-                         from_direction="outbound", with_failsafe=False):
+                         from_direction="outbound", with_failsafe=False,
+                         untracked=False):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given endpoint.
@@ -496,6 +619,7 @@ class FelixIptablesGenerator(FelixPlugin):
             to_chain_name,
             to_direction,
             with_failsafe=with_failsafe,
+            untracked=untracked,
         )
         from_chain, from_deps = self._build_to_or_from_chain(
             ip_version,
@@ -506,6 +630,7 @@ class FelixIptablesGenerator(FelixPlugin):
             from_direction,
             expected_mac=mac,
             with_failsafe=with_failsafe,
+            untracked=untracked,
         )
 
         updates = {to_chain_name: to_chain, from_chain_name: from_chain}
@@ -667,7 +792,8 @@ class FelixIptablesGenerator(FelixPlugin):
 
     def _build_to_or_from_chain(self, ip_version, endpoint_id, profile_ids,
                                 prof_ids_by_tier, chain_name, direction,
-                                expected_mac=None, with_failsafe=False):
+                                expected_mac=None, with_failsafe=False,
+                                untracked=False):
         """
         Generate the necessary set of iptables fragments for a to or from
         chain for a given endpoint.
@@ -749,6 +875,16 @@ class FelixIptablesGenerator(FelixPlugin):
                 # If the policy accepted the packet, it sets the Accept
                 # MARK==1. Immediately RETURN the packet to signal that it's
                 # been accepted.
+                if untracked:
+                    chain.append('--append %(chain)s '
+                                 '--match mark --mark %(mark)s/%(mark)s '
+                                 '--match comment '
+                                 '--comment "No track if policy accepted" '
+                                 '--jump NOTRACK' %
+                                 {
+                                     "chain": chain_name,
+                                     "mark": self.IPTABLES_MARK_ACCEPT,
+                                 })
                 chain.append('--append %(chain)s '
                              '--match mark --mark %(mark)s/%(mark)s '
                              '--match comment '
@@ -759,12 +895,13 @@ class FelixIptablesGenerator(FelixPlugin):
                                  "mark": self.IPTABLES_MARK_ACCEPT,
                              })
 
-            chain.extend(self.drop_rules(
-                ip_version,
-                chain_name,
-                "--match mark --mark 0/%s" % self.IPTABLES_MARK_NEXT_TIER,
-                comment="Drop if no policy in tier passed"
-            ))
+            if not untracked:
+                chain.extend(self.drop_rules(
+                    ip_version,
+                    chain_name,
+                    "--match mark --mark 0/%s" % self.IPTABLES_MARK_NEXT_TIER,
+                    comment="Drop if no policy in tier passed"
+                ))
 
         # Then, jump to each directly-referenced profile in turn.  The profile
         # will do one of the following:
@@ -790,15 +927,17 @@ class FelixIptablesGenerator(FelixPlugin):
                 }
             )
 
-        # Default drop rule.
-        chain.extend(
-            self.drop_rules(
-                ip_version,
-                chain_name,
-                None,
-                "Packet did not match any profile (endpoint %s)" % endpoint_id
+        if not untracked:
+            # Default drop rule.
+            chain.extend(
+                self.drop_rules(
+                    ip_version,
+                    chain_name,
+                    None,
+                    "Packet did not match any profile (endpoint %s)" % endpoint_id
+                )
             )
-        )
+
         return chain, deps
 
     def _profile_to_chain_name(self, inbound_or_outbound, profile_id):

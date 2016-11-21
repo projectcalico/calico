@@ -114,6 +114,7 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
+                '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
@@ -125,6 +126,7 @@ class TestRules(BaseTestCase):
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
             ],
             'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
@@ -132,6 +134,7 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
@@ -189,16 +192,44 @@ class TestRules(BaseTestCase):
             }, async=False
         )
 
-        m_v6_raw_upd.rewrite_chains.assert_called_once_with(
-            {'felix-PREROUTING': [
-                '--append felix-PREROUTING --jump DROP -m comment '
-                '--comment "IPv6 rpfilter failed"'
-            ]},
-            {
-                'felix-PREROUTING': {}
-            },
-            async=False
-        )
+        m_v6_raw_upd.rewrite_chains.assert_has_calls([
+            call({'felix-RPFILTER': [
+                    '--append felix-RPFILTER --jump DROP -m comment '
+                    '--comment "IPv6 rpfilter failed"'
+                 ]},
+                 {
+                    'felix-RPFILTER': {}
+                 },
+                 async=False),
+            call({'felix-PREROUTING': [
+                    '--append felix-PREROUTING --jump MARK --set-mark 0/0x1000000',
+                    '--append felix-PREROUTING --jump MARK --set-mark 0/0x4000000',
+                    '--append felix-PREROUTING --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000'
+                  ],
+                  'felix-FAILSAFE-IN': [
+                      '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
+                  ],
+                  'felix-FAILSAFE-OUT': [
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 2379 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 2380 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 4001 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 7001 --jump ACCEPT'
+                  ],
+                  'felix-OUTPUT': [
+                      '--append felix-OUTPUT --jump MARK --set-mark 0/0x1000000',
+                      '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
+                      '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000'
+                  ]},
+                 {
+                     'felix-PREROUTING': set(['felix-FROM-HOST-IF']),
+                     'felix-FAILSAFE-IN': set([]),
+                     'felix-FAILSAFE-OUT': set([]),
+                     'felix-OUTPUT': set(['felix-TO-HOST-IF'])
+                 },
+                 async=False),
+        ])
 
         m_ipset.ensure_exists.assert_called_once_with()
         self.assertEqual(
@@ -267,21 +298,51 @@ class TestRules(BaseTestCase):
                   async=False)]
         )
 
-        m_v6_raw_upd.ensure_rule_inserted.assert_called_once_with(
-            'PREROUTING --in-interface tap+ --match rpfilter --invert --jump '
-            'felix-PREROUTING',
-            async=False,
-        )
-        m_v6_raw_upd.rewrite_chains.assert_called_once_with(
-            {'felix-PREROUTING': [
-                '--append felix-PREROUTING --jump DROP -m comment '
-                '--comment "IPv6 rpfilter failed"'
-            ]},
-            {
-                'felix-PREROUTING': {}
-            },
-            async=False
-        )
+        m_v6_raw_upd.ensure_rule_inserted.assert_has_calls([
+            call('PREROUTING --in-interface tap+ --match rpfilter --invert '
+                 '--jump felix-RPFILTER',
+                 async=False),
+            call('PREROUTING --jump felix-PREROUTING', async=False),
+            call('OUTPUT --jump felix-OUTPUT', async=False),
+        ])
+        m_v6_raw_upd.rewrite_chains.assert_has_calls([
+            call({'felix-RPFILTER': [
+                    '--append felix-RPFILTER --jump DROP -m comment '
+                    '--comment "IPv6 rpfilter failed"'
+                 ]},
+                 {
+                    'felix-RPFILTER': {}
+                 },
+                 async=False),
+            call({'felix-PREROUTING': [
+                    '--append felix-PREROUTING --jump MARK --set-mark 0/0x1000000',
+                    '--append felix-PREROUTING --jump MARK --set-mark 0/0x4000000',
+                    '--append felix-PREROUTING --in-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                    '--append felix-PREROUTING --goto felix-FROM-HOST-IF --match mark --mark 0/0x4000000'
+                  ],
+                  'felix-FAILSAFE-IN': [
+                      '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
+                  ],
+                  'felix-FAILSAFE-OUT': [
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 2379 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 2380 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 4001 --jump ACCEPT',
+                      '--append felix-FAILSAFE-OUT --protocol tcp --dport 7001 --jump ACCEPT'
+                  ],
+                  'felix-OUTPUT': [
+                      '--append felix-OUTPUT --jump MARK --set-mark 0/0x1000000',
+                      '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
+                      '--append felix-OUTPUT --out-interface tap+ --jump MARK --set-mark 0x4000000/0x4000000',
+                      '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000'
+                  ]},
+                 {
+                     'felix-PREROUTING': set(['felix-FROM-HOST-IF']),
+                     'felix-FAILSAFE-IN': set([]),
+                     'felix-FAILSAFE-OUT': set([]),
+                     'felix-OUTPUT': set(['felix-TO-HOST-IF'])
+                 },
+                 async=False),
+        ])
 
         self.assertFalse(m_ipset.ensure_exists.called)
         self.assertFalse(m_check_call.called)
@@ -308,6 +369,7 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
+                '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
@@ -319,6 +381,7 @@ class TestRules(BaseTestCase):
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
             ],
             'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
@@ -326,6 +389,7 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
@@ -424,6 +488,7 @@ class TestRules(BaseTestCase):
 
         expected_chains = {
             'felix-INPUT': [
+                '--append felix-INPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-INPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-INPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-INPUT --jump MARK --set-mark 0/0x4000000',
@@ -435,6 +500,7 @@ class TestRules(BaseTestCase):
                 '--append felix-INPUT --jump felix-FROM-ENDPOINT'
             ],
             'felix-OUTPUT': [
+                '--append felix-OUTPUT --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-OUTPUT --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-OUTPUT --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-OUTPUT --jump MARK --set-mark 0/0x4000000',
@@ -442,6 +508,7 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
                 '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',

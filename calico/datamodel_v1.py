@@ -316,9 +316,8 @@ class TieredPolicyId(object):
     def __eq__(self, other):
         if other is self:
             return True
-        if not isinstance(other, TieredPolicyId):
-            return False
-        return (other.tier == self.tier and
+        return (type(other) == type(self) and
+                other.tier == self.tier and
                 other.policy_id == self.policy_id)
 
     def __ne__(self, other):
@@ -326,3 +325,9 @@ class TieredPolicyId(object):
 
     def __hash__(self):
         return hash(self.tier) * 37 + hash(self.policy_id)
+
+
+class UntrackedPolicyId(TieredPolicyId):
+
+    def __hash__(self):
+        return super(UntrackedPolicyId, self).__hash__() * 37 + 1

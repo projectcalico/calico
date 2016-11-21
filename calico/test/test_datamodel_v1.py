@@ -186,6 +186,7 @@ class TestTieredPolicyId(unittest.TestCase):
         super(TestTieredPolicyId, self).setUp()
         self.tp_id = TieredPolicyId("a", "b")
         self.tp_id = TieredPolicyId("a", "b")
+        self.up_id = UntrackedPolicyId("a", "b")
 
     def test_str(self):
         self.assertEqual(str(self.tp_id), "a/b")
@@ -201,3 +202,18 @@ class TestTieredPolicyId(unittest.TestCase):
         self.assertNotEqual(self.tp_id, TieredPolicyId("c", "b"))
         self.assertNotEqual(self.tp_id, None)
         self.assertNotEqual(self.tp_id, 1234)
+
+    def test_untracked(self):
+        self.assertEqual(self.up_id, self.up_id)
+        self.assertEqual(self.up_id, UntrackedPolicyId("a", "b"))
+        self.assertEqual(hash(self.up_id), hash(UntrackedPolicyId("a", "b")))
+        self.assertNotEqual(self.up_id, UntrackedPolicyId("a", "c"))
+        self.assertNotEqual(self.up_id, UntrackedPolicyId("c", "b"))
+        self.assertNotEqual(self.up_id, None)
+        self.assertNotEqual(self.up_id, 1234)
+        self.assertNotEqual(self.up_id, self.tp_id)
+        d = {}
+        d[self.tp_id] = 'tiered'
+        d[self.up_id] = 'untracked'
+        self.assertEqual(d[self.tp_id], 'tiered')
+        self.assertEqual(d[self.up_id], 'untracked')

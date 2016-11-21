@@ -108,20 +108,23 @@ def _main_greenlet(config):
         v4_filter_updater = IptablesUpdater("filter", ip_version=4,
                                             config=config)
         v4_nat_updater = IptablesUpdater("nat", ip_version=4, config=config)
+        v4_raw_updater = IptablesUpdater("raw", ip_version=4, config=config)
         v4_ipset_mgr = IpsetManager(IPV4, config)
         v4_masq_manager = MasqueradeManager(IPV4, v4_nat_updater)
         v4_rules_manager = RulesManager(config,
                                         4,
                                         v4_filter_updater,
-                                        v4_ipset_mgr)
+                                        v4_ipset_mgr,
+                                        v4_raw_updater)
         v4_ep_dispatch_chains = WorkloadDispatchChains(
-            config, 4, v4_filter_updater)
+            config, 4, v4_filter_updater, None)
         v4_if_dispatch_chains = HostEndpointDispatchChains(
-            config, 4, v4_filter_updater)
+            config, 4, v4_filter_updater, v4_raw_updater)
         v4_fip_manager = FloatingIPManager(config, 4, v4_nat_updater)
         v4_ep_manager = EndpointManager(config,
                                         IPV4,
                                         v4_filter_updater,
+                                        v4_raw_updater,
                                         v4_ep_dispatch_chains,
                                         v4_if_dispatch_chains,
                                         v4_rules_manager,
@@ -134,11 +137,13 @@ def _main_greenlet(config):
                     v4_rules_manager,
                     v4_ep_manager,
                     v4_masq_manager,
+                    v4_raw_updater,
                     v4_nat_updater]
 
         actors_to_start = [
             hosts_ipset_v4,
 
+            v4_raw_updater,
             v4_filter_updater,
             v4_nat_updater,
             v4_ipset_mgr,
@@ -169,15 +174,17 @@ def _main_greenlet(config):
             v6_rules_manager = RulesManager(config,
                                             6,
                                             v6_filter_updater,
-                                            v6_ipset_mgr)
+                                            v6_ipset_mgr,
+                                            v6_raw_updater)
             v6_ep_dispatch_chains = WorkloadDispatchChains(
-                config, 6, v6_filter_updater)
+                config, 6, v6_filter_updater, None)
             v6_if_dispatch_chains = HostEndpointDispatchChains(
-                config, 6, v6_filter_updater)
+                config, 6, v6_filter_updater, v6_raw_updater)
             v6_fip_manager = FloatingIPManager(config, 6, v6_nat_updater)
             v6_ep_manager = EndpointManager(config,
                                             IPV6,
                                             v6_filter_updater,
+                                            v6_raw_updater,
                                             v6_ep_dispatch_chains,
                                             v6_if_dispatch_chains,
                                             v6_rules_manager,
@@ -236,7 +243,7 @@ def _main_greenlet(config):
         # top-level chains.
         v4_if_dispatch_chains.configure_iptables(async=False)
         install_global_rules(config, v4_filter_updater, v4_nat_updater,
-                             ip_version=4)
+                             ip_version=4, raw_updater=v4_raw_updater)
         if v6_enabled:
             # Dispatch chain needs to make its configuration before we insert
             # the top-level chains.

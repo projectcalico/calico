@@ -64,12 +64,14 @@ class TestEndpointManager(BaseTestCase):
         self.config = load_config("felix_default.cfg", env_dict={
             "FELIX_FELIXHOSTNAME": "hostname"})
         self.m_updater = Mock(spec=IptablesUpdater)
+        self.m_raw_updater = Mock(spec=IptablesUpdater)
         self.m_wl_dispatch = Mock(spec=WorkloadDispatchChains)
         self.m_host_dispatch = Mock(spec=HostEndpointDispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
         self.m_fip_manager = Mock(spec=FloatingIPManager)
         self.m_status_reporter = Mock(spec=EtcdStatusReporter)
         self.mgr = EndpointManager(self.config, "IPv4", self.m_updater,
+                                   self.m_raw_updater,
                                    self.m_wl_dispatch, self.m_host_dispatch,
                                    self.m_rules_mgr, self.m_fip_manager,
                                    self.m_status_reporter)
@@ -169,7 +171,7 @@ class TestEndpointManager(BaseTestCase):
         self.step_actor(self.mgr)
         # Since we haven't set the tier ID yet, the policy won't get applied...
         self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
-                         [mock.call(OrderedDict(), async=True)] * 5)
+                         [mock.call(OrderedDict(), OrderedDict(), async=True)] * 5)
         m_endpoint.on_tiered_policy_update.reset_mock()
 
         # Adding a tier should trigger an update, adding the tier and policy.
@@ -179,7 +181,7 @@ class TestEndpointManager(BaseTestCase):
         tiers = OrderedDict()
         tiers["a"] = [pol_id_a]
         self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
-                         [mock.call(tiers, async=True)])
+                         [mock.call(tiers, OrderedDict(), async=True)])
         m_endpoint.on_tiered_policy_update.reset_mock()
 
         # Idempotent update should get squashed.
@@ -195,7 +197,7 @@ class TestEndpointManager(BaseTestCase):
         tiers["a"] = [pol_id_a]
         tiers["b"] = [pol_id_b]
         self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
-                         [mock.call(tiers, async=True)])
+                         [mock.call(tiers, OrderedDict(), async=True)])
         m_endpoint.on_tiered_policy_update.reset_mock()
 
         # Swapping the order should trigger an update.
@@ -205,7 +207,7 @@ class TestEndpointManager(BaseTestCase):
         tiers["b"] = [pol_id_b]
         tiers["a"] = [pol_id_a]
         self.assertEqual(m_endpoint.on_tiered_policy_update.mock_calls,
-                         [mock.call(tiers, async=True)])
+                         [mock.call(tiers, OrderedDict(), async=True)])
         m_endpoint.on_tiered_policy_update.reset_mock()
 
         # Check deletion and that it's idempotent.
@@ -223,7 +225,7 @@ class TestEndpointManager(BaseTestCase):
         tiers["a"] = [pol_id_a]
         self.assertEqual(
             m_endpoint.on_tiered_policy_update.mock_calls,
-            [mock.call(tiers, async=True)] * 2  # One for policy, one for tier.
+            [mock.call(tiers, OrderedDict(), async=True)] * 2  # One for policy, one for tier.
         )
         m_endpoint.on_tiered_policy_update.reset_mock()
 
@@ -240,7 +242,7 @@ class TestEndpointManager(BaseTestCase):
         tiers["c3"] = [pol_id_c3]
         tiers["a"] = [pol_id_a]
         actual_call = m_endpoint.on_tiered_policy_update.mock_calls[-1]
-        expected_call = mock.call(tiers, async=True)
+        expected_call = mock.call(tiers, OrderedDict(), async=True)
         self.assertEqual(actual_call, expected_call,
                          msg="\nExpected: %s\n Got:     %s" %
                              (expected_call, actual_call))
@@ -597,6 +599,7 @@ class TestWorkloadEndpoint(BaseTestCase):
                                                    combined_id,
                                                    ip_type,
                                                    self.m_iptables_updater,
+                                                   None,
                                                    self.m_dispatch_chains,
                                                    self.m_rules_mgr,
                                                    self.m_fip_manager,
@@ -1093,7 +1096,7 @@ class TestWorkloadEndpoint(BaseTestCase):
         tiers["t1"] = [t1_1, t1_2]
         t2_1 = TieredPolicyId("t2", "t2_1")
         tiers["t2"] = [t2_1]
-        ep.on_tiered_policy_update(tiers, async=True)
+        ep.on_tiered_policy_update(tiers, OrderedDict(), async=True)
         self.step_actor(ep)
 
         self.assertEqual(
@@ -1370,6 +1373,7 @@ class TestHostEndpoint(BaseTestCase):
         self.chain_names = {"foo", "bar"}
         self.m_ipt_gen.endpoint_chain_names.return_value = self.chain_names
         self.m_iptables_updater = Mock(spec=IptablesUpdater)
+        self.m_raw_updater = Mock(spec=IptablesUpdater)
         self.m_dispatch_chains = Mock(spec=WorkloadDispatchChains)
         self.m_host_dispatch_chains = Mock(spec=HostEndpointDispatchChains)
         self.m_rules_mgr = Mock(spec=RulesManager)
@@ -1386,6 +1390,7 @@ class TestHostEndpoint(BaseTestCase):
                                                resolved_id,
                                                ip_type,
                                                self.m_iptables_updater,
+                                               self.m_raw_updater,
                                                self.m_dispatch_chains,
                                                self.m_rules_mgr,
                                                self.m_fip_manager,
@@ -1434,13 +1439,24 @@ class TestHostEndpoint(BaseTestCase):
 
             # Check that the iptables generator is called with the direction
             # arguments.  (Host endpoint chain directions are flipped.)
-            self.m_ipt_gen.host_endpoint_updates.assert_called_once_with(
-                ip_version=4,  # IP version
-                endpoint_id="endpoint_id",
-                suffix="eth0",
-                profile_ids=["prof1"],
-                pol_ids_by_tier={},
-            )
+            self.m_ipt_gen.host_endpoint_updates.assert_has_calls([
+                mock.call(
+                    ip_version=4,  # IP version
+                    endpoint_id="endpoint_id",
+                    suffix="eth0",
+                    profile_ids=["prof1"],
+                    pol_ids_by_tier={},
+                    untracked=False
+                ),
+                mock.call(
+                    ip_version=4,  # IP version
+                    endpoint_id="endpoint_id",
+                    suffix="eth0",
+                    profile_ids=[],
+                    pol_ids_by_tier={},
+                    untracked=True
+                ),
+            ])
             # Check that the updates are actually committed.
             self.m_iptables_updater.rewrite_chains.assert_called_once_with(
                 *self.updates, async=False
@@ -1518,13 +1534,24 @@ class TestHostEndpoint(BaseTestCase):
 
             # Check that the iptables generator is called with the direction
             # arguments.  (Host endpoint chain directions are flipped.)
-            self.m_ipt_gen.host_endpoint_updates.assert_called_once_with(
-                ip_version=6,  # IP version
-                endpoint_id="endpoint_id",
-                suffix="eth0",
-                profile_ids=["prof1"],
-                pol_ids_by_tier={},
-            )
+            self.m_ipt_gen.host_endpoint_updates.assert_has_calls([
+                mock.call(
+                    ip_version=6,  # IP version
+                    endpoint_id="endpoint_id",
+                    suffix="eth0",
+                    profile_ids=["prof1"],
+                    pol_ids_by_tier={},
+                    untracked=False
+                ),
+                mock.call(
+                    ip_version=6,  # IP version
+                    endpoint_id="endpoint_id",
+                    suffix="eth0",
+                    profile_ids=[],
+                    pol_ids_by_tier={},
+                    untracked=True
+                ),
+            ])
             # Check that the updates are actually committed.
             self.m_iptables_updater.rewrite_chains.assert_called_once_with(
                 *self.updates, async=False

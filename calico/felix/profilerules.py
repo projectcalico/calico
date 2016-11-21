@@ -20,6 +20,7 @@ ProfileRules actor, handles local profile chains.
 """
 import logging
 
+from calico.datamodel_v1 import UntrackedPolicyId
 from calico.felix.actor import actor_message
 from calico.felix.futils import FailedSystemCall
 from calico.felix.refcount import ReferenceManager, RefCountedActor, RefHelper
@@ -37,21 +38,29 @@ class RulesManager(ReferenceManager):
     This class ensures that rules chains are properly quiesced
     before their Actors are deleted.
     """
-    def __init__(self, config, ip_version, iptables_updater, ipset_manager):
+    def __init__(self, config, ip_version, iptables_updater, ipset_manager, untracked_updater):
         super(RulesManager, self).__init__(qualifier="v%d" % ip_version)
         self.iptables_generator = config.plugins["iptables_generator"]
         self.ip_version = ip_version
         self.iptables_updater = iptables_updater
         self.ipset_manager = ipset_manager
+        self.untracked_updater = untracked_updater
         self.rules_by_profile_id = {}
         self._datamodel_in_sync = False
 
     def _create(self, profile_id):
-        return ProfileRules(self.iptables_generator,
-                            profile_id,
-                            self.ip_version,
-                            self.iptables_updater,
-                            self.ipset_manager)
+        if isinstance(profile_id, UntrackedPolicyId):
+            return ProfileRules(self.iptables_generator,
+                                profile_id,
+                                self.ip_version,
+                                self.untracked_updater,
+                                self.ipset_manager)
+        else:
+            return ProfileRules(self.iptables_generator,
+                                profile_id,
+                                self.ip_version,
+                                self.iptables_updater,
+                                self.ipset_manager)
 
     def _on_object_started(self, profile_id, active_profile):
         profile_or_none = self.rules_by_profile_id.get(profile_id)
@@ -247,9 +256,8 @@ class ProfileRules(RefCountedActor):
         """
         # Need to block here: have to wait for chains to be deleted
         # before we can decref our ipsets.
-        self._iptables_updater.delete_chains(
-            self.iptables_generator.profile_chain_names(self.id),
-            async=False)
+        chain_names = self.iptables_generator.profile_chain_names(self.id)
+        self._iptables_updater.delete_chains(chain_names, async=False)
 
     def _update_chains(self):
         """

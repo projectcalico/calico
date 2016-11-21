@@ -39,7 +39,7 @@ from calico.datamodel_v1 import (
     WloadEndpointId, key_for_last_status, key_for_status, FELIX_STATUS_DIR,
     get_endpoint_id_from_key, dir_for_felix_status, ENDPOINT_STATUS_ERROR,
     ENDPOINT_STATUS_DOWN, ENDPOINT_STATUS_UP,
-    POLICY_DIR, TieredPolicyId, HostEndpointId, EndpointId)
+    POLICY_DIR, TieredPolicyId, HostEndpointId, EndpointId, UntrackedPolicyId)
 from calico.etcddriver.protocol import (
     MessageReader, MSG_TYPE_INIT, MSG_TYPE_CONFIG, MSG_TYPE_RESYNC,
     MSG_KEY_ETCD_URLS, MSG_KEY_HOSTNAME, MSG_KEY_LOG_FILE, MSG_KEY_SEV_FILE,
@@ -338,6 +338,9 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         self._usage_report_greenlet = gevent.Greenlet(
             self._periodically_usage_report
         )
+        # Mapping from each received TieredPolicyId to the
+        # TieredPolicyId or UntrackedPolicyId that we pass on.
+        self.policies = {}
 
     def estimated_host_count(self):
         """
@@ -764,25 +767,60 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def on_tiered_policy_set(self, response, tier, policy_id):
         _log.debug("Rules for %s/%s set", tier, policy_id)
         _stats.increment("Tiered rules created/updated")
+        given_policy_id = policy_id
         policy_id = TieredPolicyId(tier, policy_id)
         rules = parse_policy(policy_id, response.value)
         if rules is not None:
             selector = rules.pop("selector")
             order = rules.pop("order")
-            self.splitter.on_rules_update(policy_id, rules)
-            self.splitter.on_policy_selector_update(policy_id, selector,
-                                                     order)
+
+            # If the new content says untracked, we want an
+            # UntrackedPolicyId instead of a TieredPolicyId.
+            if rules.get("untracked", False):
+                new_policy_id = UntrackedPolicyId(tier, given_policy_id)
+            else:
+                new_policy_id = policy_id
+
+            # See if we already have this policy, possibly with
+            # different untracked setting.
+            existing_policy_id = self.policies.get(policy_id,
+                                                   new_policy_id)
+
+            # Store mapping to the new policy ID.
+            self.policies[policy_id] = new_policy_id
+
+            if (existing_policy_id != new_policy_id):
+                # Delete the old ID.
+                self.splitter.on_rules_update(existing_policy_id, None)
+                self.splitter.on_policy_selector_update(existing_policy_id,
+                                                        None, None)
+
+            # Now signal the new policy ID and content.
+            self.splitter.on_rules_update(new_policy_id, rules)
+            self.splitter.on_policy_selector_update(new_policy_id,
+                                                    selector, order)
         else:
-            self.splitter.on_rules_update(policy_id, None)
-            self.splitter.on_policy_selector_update(policy_id, None, None)
+            # See if we know this policy - it could be an untracked
+            # one.  If not, signal deletion of the TieredPolicyId
+            # anyway, as that's what we've always done.
+            existing_policy_id = self.policies.pop(policy_id, policy_id)
+            self.splitter.on_rules_update(existing_policy_id, None)
+            self.splitter.on_policy_selector_update(existing_policy_id,
+                                                    None, None)
 
     def on_tiered_policy_delete(self, response, tier, policy_id):
         """Handler for tiered rules deletes, passes update to the splitter."""
         _log.debug("Rules for %s/%s deleted", tier, policy_id)
         _stats.increment("tiered rules deleted")
         policy_id = TieredPolicyId(tier, policy_id)
-        self.splitter.on_rules_update(policy_id, None)
-        self.splitter.on_policy_selector_update(policy_id, None, None)
+
+        # See if we know this policy - it could be an untracked one.
+        # If not, signal deletion of the TieredPolicyId anyway, as
+        # that's what we've always done.
+        existing_policy_id = self.policies.pop(policy_id, policy_id)
+        self.splitter.on_rules_update(existing_policy_id, None)
+        self.splitter.on_policy_selector_update(existing_policy_id,
+                                                None, None)
 
     def on_host_ip_set(self, response, hostname):
         _stats.increment("Host IP created/updated")
@@ -803,7 +841,7 @@ class _FelixEtcdWatcher(gevent.Greenlet):
     def _update_hosts_ipset(self):
         if not self._config.IP_IN_IP_ENABLED:
             _log.debug("Ignoring update to hosts ipset because IP-in-IP is disabled")
-            return          
+            return
         if not self._been_in_sync:
             _log.debug("Deferring update to hosts ipset until we're in-sync")
             return
