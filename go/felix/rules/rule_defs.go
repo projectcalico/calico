@@ -22,11 +22,18 @@ import (
 const (
 	ChainNamePrefix = "cali"
 
+	InputChainName   = ChainNamePrefix + "-INPUT"
+	ForwardChainName = ChainNamePrefix + "-FORWARD"
+	OutputChainName  = ChainNamePrefix + "-OUTPUT"
+
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
 
 	DispatchToWorkloadEndpoint   = ChainNamePrefix + "-to-wl-endpoint"
 	DispatchFromWorkloadEndpoint = ChainNamePrefix + "-from-wl-endpoint"
+
+	DispatchToHostEndpoint   = ChainNamePrefix + "-to-host-endpoint"
+	DispatchFromHostEndpoint = ChainNamePrefix + "-from-host-endpoint"
 
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -38,6 +45,8 @@ const (
 )
 
 var (
+	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
+	// track of the old names lets us clean them up.
 	AllHistoricChainNamePrefixes = []string{"felix-", "FLX", "cali"}
 )
 
@@ -54,8 +63,17 @@ type RuleRenderer interface {
 }
 
 type ruleRenderer struct {
+	Config
 }
 
-func NewRenderer() RuleRenderer {
-	return &ruleRenderer{}
+type Config struct {
+	WorkloadIfacePrefixes []string
+
+	IptablesMarkAccept    uint32
+	IptablesMarkNextTier  uint32
+	IptablesMarkEndpoints uint32
+}
+
+func NewRenderer(config Config) RuleRenderer {
+	return &ruleRenderer{config}
 }

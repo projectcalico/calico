@@ -30,6 +30,13 @@ const (
 )
 
 var (
+	tableToKernelChains = map[string][]string{
+		"filter": []string{"INPUT", "FORWARD", "OUTPUT"},
+		"nat":    []string{"PREROUTING", "INPUT", "OUTPUT", "POSTROUTING"},
+		"mangle": []string{"PREROUTING", "INPUT", "FORWARD", "OUTPUT", "POSTROUTING"},
+		"raw":    []string{"PREROUTING", "OUTPUT"},
+	}
+
 	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
 	appendRegexp      = regexp.MustCompile(`^-A (\S+)`)
 )
@@ -38,17 +45,12 @@ var (
 type Table struct {
 	Name string
 
-	// TODO(smc) Implement rule insertions to hook root chains.
-	// chainToInsertedFragments maps from chain name to a list of iptables fragments that should
-	// be inserted into that chain.  Used for hooking top-level chains.
-	chainToInsertedFragments map[string][]string
-	dirtyInserts             set.Set
-	// chainToRemovedFragments maps from chain name to a list of iptables fragments that should
-	// be removed from that chain.  Used for unhooking top-level chains.  We need to track
-	// removals forever in case another process reinstates an old rule by mistake.  Hence,
-	// only suitable for a static set of top-level rules.
-	chainToRemovedFragments map[string][]string
-	dirtyRemoves            set.Set
+	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
+	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
+	// rules with unknown hashes.
+	chainToInsertedRules map[string][]Rule
+	dirtyInserts         set.Set
+
 	// chainToRuleFragments contains the desired state of our iptables chains, indexed by
 	// chain name.  The values are slices of iptables fragments, such as
 	// "--match foo --jump DROP" (i.e. omitting the action and chain name, which are calculated
@@ -82,15 +84,23 @@ func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix s
 	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
 	ourChainsPattern := "^(" + strings.Join(chainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
+
+	// Pre-populate the insert table with empty lists for each kernel chain.  Ensures that we
+	// clean up any chains that we hooked on a previous run.
+	inserts := map[string][]Rule{}
+	dirtyInserts := set.New()
+	for _, kernelChain := range tableToKernelChains[name] {
+		inserts[kernelChain] = []Rule{}
+		dirtyInserts.Add(kernelChain)
+	}
+
 	table := &Table{
-		Name: name,
-		chainToInsertedFragments: map[string][]string{},
-		dirtyInserts:             set.New(),
-		chainToRemovedFragments:  map[string][]string{},
-		dirtyRemoves:             set.New(),
-		chainNameToChain:         map[string]*Chain{},
-		dirtyChains:              set.New(),
-		chainToDataplaneHashes:   map[string][]string{},
+		Name:                   name,
+		chainToInsertedRules:   inserts,
+		dirtyInserts:           dirtyInserts,
+		chainNameToChain:       map[string]*Chain{},
+		dirtyChains:            set.New(),
+		chainToDataplaneHashes: map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"table":     name,
@@ -112,6 +122,12 @@ func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix s
 	return table
 }
 
+func (t *Table) SetRuleInsertions(chainName string, rules []Rule) {
+	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
+	t.chainToInsertedRules[chainName] = rules
+	t.dirtyInserts.Add(chainName)
+}
+
 func (t *Table) UpdateChains(chains []*Chain) {
 	for _, chain := range chains {
 		t.UpdateChain(chain)
@@ -124,16 +140,16 @@ func (t *Table) UpdateChain(chain *Chain) {
 	t.dirtyChains.Add(chain.Name)
 }
 
-func (t *Table) RemoveChainByName(name string) {
-	t.logCxt.WithField("chainName", name).Info("Queing deletion of chain.")
-	delete(t.chainNameToChain, name)
-	t.dirtyChains.Add(name)
-}
-
 func (t *Table) RemoveChains(chains []*Chain) {
 	for _, chain := range chains {
 		t.RemoveChainByName(chain.Name)
 	}
+}
+
+func (t *Table) RemoveChainByName(name string) {
+	t.logCxt.WithField("chainName", name).Info("Queing deletion of chain.")
+	delete(t.chainNameToChain, name)
+	t.dirtyChains.Add(name)
 }
 
 func (t *Table) loadDataplaneState() {
@@ -150,17 +166,37 @@ func (t *Table) loadDataplaneState() {
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
 		}
-		if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
-			logCxt.Warn("Detected out-of-sync iptables chain, marking for resync")
-			t.dirtyChains.Add("chainName")
+		if !t.ourChainsRegexp.MatchString(chainName) {
+			// Not one of our chains.  See if we've inserted any rules into it.
+			containsInserts := false
+			for _, hash := range dataplaneHashes[chainName] {
+				if hash != "" {
+					containsInserts = true
+				}
+			}
+			shouldContainInserts := len(t.chainToInsertedRules) > 0
+			if containsInserts && !shouldContainInserts {
+				logCxt.WithField("chainName", chainName).Warn("Found unexpected rule, marking for cleanup")
+				t.dirtyInserts.Add(chainName)
+			} else if containsInserts || shouldContainInserts {
+				// TODO(smc) for now, always mark for refresh.  The re-write logic will spot if there's no change.
+				t.dirtyInserts.Add(chainName)
+			}
+		} else {
+			// One of our chains, should match exactly.
+			if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
+				logCxt.Warn("Detected out-of-sync iptables chain, marking for resync")
+				t.dirtyChains.Add(chainName)
+			}
 		}
+
 	}
 
 	// Now scan for chains that shouldn't be there and mark for deletion.
 	t.logCxt.Info("Scanning for unexpected iptables chains")
 	for chainName := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) {
+		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
 			// Already an update pending for this chain.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
@@ -322,7 +358,61 @@ func (t *Table) flushUpdates() error {
 				inputBuf.WriteString(line)
 			}
 		}
-		return nil
+		return nil // Delay clearing the set until we've programmed iptables.
+	})
+
+	t.dirtyInserts.Iter(func(item interface{}) error {
+		chainName := item.(string)
+		previousHashes := t.chainToDataplaneHashes[chainName]
+
+		// Form a temporary chain containing our expected insertions.  We'll use it to
+		// calculate the hashes that we need to compare against those in the dataplane.
+		rules := t.chainToInsertedRules[chainName]
+		chain := &Chain{
+			Name:  chainName,
+			Rules: rules,
+		}
+		currentHashes := chain.RuleHashes()
+
+		needsRewrite := len(previousHashes) < len(currentHashes) ||
+			!reflect.DeepEqual(currentHashes, previousHashes[:len(currentHashes)])
+		if !needsRewrite {
+			for i := len(currentHashes); i < len(previousHashes); i++ {
+				if previousHashes[i] != "" {
+					log.WithField("chainName", chainName).Info("Chain contains old rule insertion, updating.")
+					needsRewrite = true
+					break
+				}
+			}
+		} else {
+			log.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
+		}
+		if !needsRewrite {
+			return nil
+		}
+
+		// For simplicity, if we've discovered that we're out-of-sync, remove all our
+		// inserts from this chain and re-insert them.  Need to remove/insert in reverse
+		// order to preserve rule numbers until we're finished.
+		for i := len(previousHashes) - 1; i >= 0; i-- {
+			if previousHashes[i] != "" {
+				ruleNum := i + 1
+				line := fmt.Sprintf("-D %s %d\n", chainName, ruleNum)
+				inputBuf.WriteString(line)
+			} else {
+				// Make sure currentHashes ends up the right length.
+				currentHashes = append(currentHashes, "")
+			}
+		}
+		for i := len(rules) - 1; i >= 0; i-- {
+			comment := t.commentFrag(currentHashes[i])
+			line := fmt.Sprintf("-I %s %s %s %s\n", chainName, comment,
+				chain.Rules[i].MatchCriteria, rules[i].Action.ToFragment())
+			inputBuf.WriteString(line)
+		}
+		newHashes[chainName] = currentHashes
+
+		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
 	// iptables-restore input ends with a COMMIT.
@@ -347,8 +437,10 @@ func (t *Table) flushUpdates() error {
 		t.inSyncWithDataPlane = false
 		return err
 	}
-	// Clear the dirty set.
+
+	// Now we've successfully updated iptables, clear the dirty sets.
 	t.dirtyChains = set.New()
+	t.dirtyInserts = set.New()
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {

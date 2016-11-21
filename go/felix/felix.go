@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/logutils"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/statusrep"
 	"github.com/projectcalico/felix/go/felix/usagerep"
 	"github.com/projectcalico/libcalico-go/lib/backend"
@@ -39,6 +40,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"reflect"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -143,8 +145,14 @@ configRetry:
 	var dpConnection dataplaneConnection
 	var dpDriverCmd *exec.Cmd
 	if configParams.UseInternalDataplaneDriver {
-		dpConfig := intdataplane.Config{}
-		dpConnection = intdataplane.StartIntDataplaneDriver(dpConfig)
+		dpConfig := intdataplane.Config{
+			RulesConfig: rules.Config{
+				WorkloadIfacePrefixes: strings.Split(configParams.InterfacePrefix, ","),
+			},
+		}
+		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
+		intDP.Start()
+		dpConnection = intDP
 	} else {
 		dpConnection, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}

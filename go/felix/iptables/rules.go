@@ -53,6 +53,12 @@ func (g DropAction) ToFragment() string {
 	return "--jump DROP"
 }
 
+type AcceptAction struct{}
+
+func (g AcceptAction) ToFragment() string {
+	return "--jump ACCEPT"
+}
+
 type Rule struct {
 	MatchCriteria string
 	Action        Action

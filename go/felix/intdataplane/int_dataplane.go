@@ -27,12 +27,14 @@ import (
 type Config struct {
 	DisableIPv6          bool
 	RuleRendererOverride rules.RuleRenderer
+
+	RulesConfig rules.Config
 }
 
-func StartIntDataplaneDriver(config Config) *internalDataplane {
+func NewIntDataplaneDriver(config Config) *internalDataplane {
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
-		ruleRenderer = rules.NewRenderer()
+		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
 	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
 	dp := &internalDataplane{
@@ -48,8 +50,6 @@ func StartIntDataplaneDriver(config Config) *internalDataplane {
 		dp.ipsetsV6 = ipsets.NewIPSets(ipsets.IPFamilyV6)
 		dp.endpointManagerV6 = newEndpointManager(dp.filterTableV6, ruleRenderer)
 	}
-	go dp.loopUpdatingDataplane()
-	go dp.loopReportingStatus()
 	return dp
 }
 
@@ -69,6 +69,11 @@ type internalDataplane struct {
 	ruleRenderer rules.RuleRenderer
 }
 
+func (d *internalDataplane) Start() {
+	go d.loopUpdatingDataplane()
+	go d.loopReportingStatus()
+}
+
 func (d *internalDataplane) SendMessage(msg interface{}) error {
 	d.toDataplane <- msg
 	return nil
@@ -80,6 +85,12 @@ func (d *internalDataplane) RecvMessage() (interface{}, error) {
 
 func (d *internalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver")
+
+	d.filterTableV4.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
+	d.filterTableV4.SetRuleInsertions("FORWARD", []iptables.Rule{{
+		Action: iptables.JumpAction{rules.ForwardChainName},
+	}})
+
 	inSync := false
 	for msg := range d.toDataplane {
 		log.WithField("msg", msg).Info("Received update from calculation graph")
