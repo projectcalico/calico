@@ -4,3 +4,4 @@ release
 *.coverprofile
 vendor
 libcalico_test_container.created
+.idea

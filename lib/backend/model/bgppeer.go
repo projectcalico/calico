@@ -155,6 +155,12 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type BGPPeer struct {
+	// PeerIP is the IP address of the BGP peer.
 	PeerIP net.IP               `json:"ip"`
-	ASNum  numorstring.ASNumber `json:"as_num"`
+
+	// ASNum is the AS number of the peer.  Note that we write out the
+	// value as a string in to the backend, because confd templating
+	// converts large uints to float e notation which breaks the BIRD
+	// configuration.
+	ASNum  numorstring.ASNumber `json:"as_num,string"`
 }
