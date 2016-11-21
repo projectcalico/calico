@@ -14,6 +14,7 @@
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.utils import retry_until_success
 
 """
 Test calicoctl status
@@ -29,7 +30,9 @@ class TestNodeStatus(TestBase):
         Test that the status command can be executed.
         """
         with DockerHost('host', dind=False, start_calico=True) as host:
-            host.calicoctl("node status")
+            def node_status():
+                host.calicoctl("node status")
+            retry_until_success(node_status, retries=10, ex_class=Exception)
 
     def test_node_status_fails(self):
         """
