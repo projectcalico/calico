@@ -66,6 +66,8 @@ type ConfigInterface interface {
 	SetNodeLogLevel(string, string) error
 	SetNodeLogLevelUseGlobal(string) error
 	GetNodeLogLevel(string) (string, ConfigLocation, error)
+	GetFelixConfig(string) (*string, error)
+	SetFelixConfig(string, *string) error
 }
 
 // config implements ConfigInterface
@@ -249,6 +251,26 @@ func (c *config) GetNodeLogLevel(node string) (string, ConfigLocation, error) {
 	} else {
 		return *s, ConfigLocationNode, nil
 	}
+}
+
+// GetFelixConfig provides a mechanism for getting arbitrary Felix configuration
+// in the datastore.
+func (c *config) GetFelixConfig(name string) (*string, error) {
+	return c.getValue(model.GlobalConfigKey{Name: name})
+}
+
+// SetFelixConfig provides a mechanism for setting arbitrary Felix configuration
+// in the datastore.  A nil value will remove the entry from the datastore.
+func (c *config) SetFelixConfig(name string, value *string) error {
+	key := model.GlobalConfigKey{Name: name}
+	if value == nil {
+		return c.deleteConfig(key)
+	}
+	_, err := c.c.backend.Apply(&model.KVPair{
+		Key:   key,
+		Value: *value,
+	})
+	return err
 }
 
 // setLogLevel sets the log level fields with the appropriate log string value.

@@ -17,6 +17,8 @@ package k8s
 import (
 	"time"
 
+	"reflect"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
@@ -24,7 +26,6 @@ import (
 	k8sapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/watch"
-	"reflect"
 )
 
 func newSyncer(kc KubeClient, callbacks api.SyncerCallbacks) *kubeSyncer {

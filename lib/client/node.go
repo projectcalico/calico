@@ -15,6 +15,8 @@
 package client
 
 import (
+	"encoding/hex"
+
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -22,6 +24,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/satori/go.uuid"
 )
 
 // NodeInterface has methods to work with Node resources.
@@ -46,6 +49,12 @@ func newNodes(c *Client) NodeInterface {
 
 // Create creates a new node.
 func (h *nodes) Create(a *api.Node) (*api.Node, error) {
+	// When creating a new node, initialize global defaults if they are
+	// not yet initiaized.
+	err := h.initGlobalDefaults()
+	if err != nil {
+		return nil, err
+	}
 	return a, h.c.create(*a, h)
 }
 
@@ -56,6 +65,12 @@ func (h *nodes) Update(a *api.Node) (*api.Node, error) {
 
 // Apply updates a node if it exists, or creates a new node if it does not exist.
 func (h *nodes) Apply(a *api.Node) (*api.Node, error) {
+	// When creating a new node, initialize global defaults if they are
+	// not yet initiaized.
+	err := h.initGlobalDefaults()
+	if err != nil {
+		return nil, err
+	}
 	return a, h.c.apply(*a, h)
 }
 
@@ -78,8 +93,8 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 
 	// Collate all IPs across all endpoints, and then release those IPs.
 	ips := []net.IP{}
-	for _, ep := range(eps.Items) {
-		for _, nw := range(ep.Spec.IPNetworks) {
+	for _, ep := range eps.Items {
+		for _, nw := range ep.Spec.IPNetworks {
 			ips = append(ips, net.IP{nw.IP})
 		}
 	}
@@ -180,4 +195,32 @@ func (h *nodes) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error
 	}
 
 	return apiNode, nil
+}
+
+// initGlobalDefaults initializes any global default value that is not yet
+// initialized, this processing will not overwrite keys that are already
+// present in the datastore.
+func (h *nodes) initGlobalDefaults() error {
+	// Make sure the Ready flag is initialized in the datastore
+	_, err := h.c.backend.Create(&model.KVPair{
+		Key:   model.ReadyFlagKey{},
+		Value: true,
+	})
+	if err != nil {
+		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			return err
+		}
+	}
+
+	// Make sure we have a global cluster ID set.
+	_, err = h.c.backend.Create(&model.KVPair{
+		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
+		Value: hex.EncodeToString(uuid.NewV4().Bytes()),
+	})
+	if err != nil {
+		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			return err
+		}
+	}
+	return nil
 }
