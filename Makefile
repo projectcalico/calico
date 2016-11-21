@@ -28,10 +28,14 @@ test-circle:
 	--with-xunit --xunit-file=/circle_output/output.xml; RC=$$?;\
 	[[ ! -z "$$COVERALLS_REPO_TOKEN" ]] && coveralls || true; exit $$RC'
 
-image.created:
+image.created: update-version
 	# Build the docker image for the policy controller.
 	docker build -t $(CONTAINER_NAME) . 
 	touch image.created
+
+# Update the version file.
+update-version:
+	echo "VERSION='`git describe --tags --dirty`'" > version.py
 
 release: clean
 ifndef VERSION
@@ -66,6 +70,3 @@ ci: clean docker-image
 			docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$$VERSION && docker push quay.io/$(CONTAINER_NAME):$$VERSION; \
 		fi; \
 	fi
-
-
-
