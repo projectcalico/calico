@@ -42,12 +42,12 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | name   | The name of the profile. | | string |
 | labels | A set of labels to apply to endpoints using this profile. |  | map of string key to string values |
+| tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 
 #### Spec
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| tags (deprecated) | A list of tag names to apply to endpoints using this profile.        | | list of strings |
 | ingress  | The ingress rules belonging to this profile.                          | | List of [Rule](#rule) |
 | egress   | The egress rules belonging to this profile.                           | | List of [Rule](#rule)  |
 
