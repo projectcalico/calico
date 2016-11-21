@@ -9,6 +9,10 @@ Calico can enforce NetworkPolicy on top of:
 
 See the documentation on [network policy in Kubernetes](http://kubernetes.io/docs/user-guide/networkpolicies/) for more information on how to use NetworkPolicy. 
 
+Calico also supports an [experimental mode](http://docs.projectcalico.org/v2.0/getting-started/kubernetes/installation/hosted/k8s-backend/) which 
+uses the Kubernetes API directly without the need for its own
+etcd cluster. When running in this mode, the policy controller is not required.
+
 ### Resources
 
 * [Configuration guide](configuration.md)
