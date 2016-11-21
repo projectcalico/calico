@@ -1,15 +1,13 @@
 ---
-title: Calico without etcd
+title: Etcdless Hosted Install 
 ---
 
-This document describes a way of installing Calico on Kubernetes without requiring access to an etcd cluster for Calico.  Note that this feature is
+This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  Note that this feature is
 still experimental and currently comes with a number of limitations, namely:
 
 - Calico without etcd performs policy enforcement only and does not yet support Calico BGP networking.
 - Calico without etcd does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - Calico without etcd does not yet support the full set of `calicoctl` commands.
-
-[`calico.yaml`](calico.yaml) deploys Calico for network policy on Kubernetes without an etcd cluster.
 
 ## Try it out
 
@@ -24,17 +22,19 @@ First, ensure the following:
 
 For example, you could install Kubernetes with Flannel using [kubeadm](http://kubernetes.io/docs/getting-started-guides/kubeadm/) and [kube-flannel](https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml).
 
-Then to install Calico, download [calico.yaml](calico.yaml) and run the following command:
+Then to install Calico, run the following command:
 
-```shell
-kubectl apply -f calico.yaml
 ```
+kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+```
+
+You download the manifest [here](calico.yaml) 
 
 You can try out policy by following the [simple policy guide](../../../tutorials/simple-policy).
 
 ## Configuration details
 
-The following environment variable configuration options are supported by the various Calico components when running without etcd.
+The following environment variable configuration options are supported by the various Calico components **when running without etcd**.
 
 | Option                 | Description    | Examples
 |------------------------|----------------|----------
