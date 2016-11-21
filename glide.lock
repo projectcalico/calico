@@ -1,5 +1,5 @@
-hash: 4047d7b46746169bbc17ef0e064313dc4707bd4c8f50646eb28c4a845899f968
-updated: 2016-11-14T15:48:17.902508256-08:00
+hash: a77685cf87f1a61704adfb459b39811c30585c8348787f30f91f1d4a869614b3
+updated: 2016-11-20T21:03:29.352674788-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -68,7 +68,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: bea76d6a4713e18b7f5321a2b020738552def3ea
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -167,7 +167,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 7fe78bddb69c99b5838d37307e3737c9b15d0f7d
+  version: c3038033665942c39cf958a6e145267eb1157ca3
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -192,7 +192,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/pflag
-  version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
+  version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
   version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
@@ -231,7 +231,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 9c60d1c508f5134d1ca726b4641db998f2523357
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -363,7 +363,7 @@ imports:
   - 1.4/tools/metrics
   - 1.4/transport
 - name: k8s.io/kubernetes
-  version: c83a9246281d9eb6915e591673defc05d8590c00
+  version: 0042ce56848e5d7363f3995a155df3435c9b532d
   subpackages:
   - pkg/api
   - pkg/api/errors
@@ -404,7 +404,7 @@ imports:
   - pkg/apis/extensions/v1beta1
   - pkg/apis/policy
   - pkg/apis/policy/install
-  - pkg/apis/policy/v1alpha1
+  - pkg/apis/policy/v1beta1
   - pkg/apis/rbac
   - pkg/apis/rbac/install
   - pkg/apis/rbac/v1alpha1
@@ -461,10 +461,12 @@ imports:
   - pkg/util/integer
   - pkg/util/intstr
   - pkg/util/json
+  - pkg/util/jsonpath
   - pkg/util/labels
   - pkg/util/net
   - pkg/util/parsers
   - pkg/util/rand
+  - pkg/util/ratelimit
   - pkg/util/runtime
   - pkg/util/sets
   - pkg/util/uuid
@@ -479,4 +481,5 @@ imports:
   - plugin/pkg/client/auth/gcp
   - plugin/pkg/client/auth/oidc
   - third_party/forked/golang/reflect
+  - third_party/forked/golang/template
 testImports: []

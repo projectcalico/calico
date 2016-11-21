@@ -230,11 +230,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Tag: conf.Name}}}
 			}
 
-			profile := api.NewProfile()
-			profile.Metadata.Name = conf.Name
-			profile.Spec.Tags = []string{conf.Name}
-			profile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
-			profile.Spec.IngressRules = inboundRules
+			profile := &api.Profile{
+				Metadata: api.ProfileMetadata{
+					Name: conf.Name,
+					Tags: []string{conf.Name},
+				},
+				Spec: api.ProfileSpec{
+					EgressRules: []api.Rule{{Action: "allow"}},
+					IngressRules: inboundRules,
+				},
+			}
 
 			logger.WithField("profile", profile).Info("Creating profile")
 
