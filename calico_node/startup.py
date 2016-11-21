@@ -273,7 +273,7 @@ def main():
 
     # Get IP address of host, if none was specified
     if not ip:
-        ips = get_host_ips(exclude=["^docker.*", "^cbr.*",
+        ips = get_host_ips(exclude=["^docker.*", "^cbr.*", "dummy.*",
                                     "virbr.*", "lxcbr.*", "veth.*",
                                     "cali.*", "tunl.*", "flannel.*"])
         try:
