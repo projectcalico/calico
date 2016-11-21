@@ -31,9 +31,15 @@ import (
 
 func Config(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl config set <NAME> <VALUE> [--node=<NODE>] [--config=<CONFIG>]
-  calicoctl config unset <NAME> [--node=<NODE>] [--config=<CONFIG>]
-  calicoctl config get <NAME> [--node=<NODE>] [--config=<CONFIG>]
+  calicoctl config set <NAME> <VALUE> [--node=<NODE>]
+                                      [--raw=(bgp|felix)]
+                                      [--config=<CONFIG>]
+  calicoctl config unset <NAME> [--node=<NODE>]
+                                [--raw=(bgp|felix)]
+                                [--config=<CONFIG>]
+  calicoctl config get <NAME> [--node=<NODE>]
+                              [--raw=(bgp|felix)]
+                              [--config=<CONFIG>]
 
 Examples:
   # Turn off the full BGP node-to-node mesh
@@ -50,6 +56,11 @@ Examples:
 
 Options:
   -n --node=<NODE>      The node name.
+     --raw=(bgp|felix)  Apply raw configuration for the specified component.
+                        This option should be used with care; the data is not
+                        validated and it is possible to configure or remove
+                        data that may prevent the component from working as
+                        expected.
   -c --config=<CONFIG>  Path to the file containing connection configuration in
                         YAML or JSON format.
                         [default: /etc/calico/calicoctl.cfg]
@@ -64,7 +75,7 @@ that is specific to a particular node.
 
 For configuration that has both global values and node-specific values, the
 --node parameter is optional:  including the parameter will manage the
-node-specific value,  not including it will manage the global value.  For these
+node-specific value,  excluding it will manage the global value.  For these
 options, if the node-specific value is unset, the global value will be used on
 the node.
 
@@ -103,6 +114,7 @@ The table below details the valid config options.
 
 	// From the command line arguments construct the Config object to send to the client.
 	node := argutils.ArgStringOrBlank(parsedArgs, "--node")
+	raw := argutils.ArgStringOrBlank(parsedArgs, "--raw")
 	name := argutils.ArgStringOrBlank(parsedArgs, "<NAME>")
 	value := argutils.ArgStringOrBlank(parsedArgs, "<VALUE>")
 
@@ -110,17 +122,28 @@ The table below details the valid config options.
 	// eventually we'll aim to have a config style resource and this will
 	// become more generic.
 	var ct configType
-	switch strings.ToLower(name) {
-	case "loglevel":
-		ct = loglevel{client.Config()}
-	case "nodetonodemesh":
-		ct = nodemesh{client.Config()}
-	case "asnumber":
-		ct = asnum{client.Config()}
-	case "ipip":
-		ct = ipip{client.Config()}
+	switch raw {
+	case "felix":
+		ct = rawFelixConfig{name: name, c: client.Config()}
+	case "bgp":
+		ct = rawBGPConfig{name: name, c: client.Config()}
+	case "":
+		switch strings.ToLower(name) {
+		case "loglevel":
+			ct = loglevel{client.Config()}
+		case "nodetonodemesh":
+			ct = nodemesh{client.Config()}
+		case "asnumber":
+			ct = asnum{client.Config()}
+		case "ipip":
+			ct = ipip{client.Config()}
+		default:
+			fmt.Printf("Error executing command: unrecognised config name '%s'\n", name)
+			os.Exit(1)
+		}
+
 	default:
-		fmt.Printf("Error executing command: unrecognised config name '%s'\n", name)
+		fmt.Printf("Error executing command: unrecognised component '%s'\n", raw)
 		os.Exit(1)
 	}
 
@@ -315,5 +338,61 @@ func (a asnum) get(node string) error {
 		return err
 	}
 	fmt.Println(asn.String())
+	return nil
+}
+
+// rawFelixConfig implements the configType interface, and is used for setting
+// raw Felix configuration.
+type rawFelixConfig struct {
+	name string
+	c    client.ConfigInterface
+}
+
+func (r rawFelixConfig) set(value, node string) error {
+	return r.c.SetFelixConfig(r.name, node, value)
+}
+
+func (r rawFelixConfig) unset(node string) error {
+	return r.c.UnsetFelixConfig(r.name, node)
+}
+
+func (r rawFelixConfig) get(node string) error {
+	value, set, err := r.c.GetFelixConfig(r.name, node)
+	if err != nil {
+		return err
+	}
+	if !set {
+		fmt.Println("(unset)")
+	} else {
+		fmt.Println(value)
+	}
+	return nil
+}
+
+// rawBGPConfig implements the configType interface, and is used for setting
+// raw BGP configuration.
+type rawBGPConfig struct {
+	name string
+	c    client.ConfigInterface
+}
+
+func (r rawBGPConfig) set(value, node string) error {
+	return r.c.SetBGPConfig(r.name, node, value)
+}
+
+func (r rawBGPConfig) unset(node string) error {
+	return r.c.UnsetBGPConfig(r.name, node)
+}
+
+func (r rawBGPConfig) get(node string) error {
+	value, set, err := r.c.GetBGPConfig(r.name, node)
+	if err != nil {
+		return err
+	}
+	if !set {
+		fmt.Println("(unset)")
+	} else {
+		fmt.Println(value)
+	}
 	return nil
 }
