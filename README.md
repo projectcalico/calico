@@ -12,31 +12,32 @@
 
 This repository is the home of `calico/node` and `calicoctl`.
 
-#### For information on how to get started using Calico see: https://docs.projectcalico.org
+<blockquote><h1>Project Calico documentation: <a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1></blockquote>
 
-- For information on `calico/node`, see [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
 
-- For information on `calicoctl` usage, see [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
+
+For information on `calico/node`, see the [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
+
+For information on `calicoctl` usage, see the [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
 
 ### Developing
 
-Calico-containers is a golang project, so assuming you have already installed **go version 1.7.1+**, clone this repository into your Go project path:
-
-```
-git clone https://github.com/projectcalico/calico-containers.git $GOPATH/src/github.com/projectcalico/calico-containers
-```
-
-Useful actions can be printed by running `make help` in the repo root.
+Print useful actions with `make help`.
 
 ### Building `calico/node`
 
-To build the `calico/node` container, run the `make calico/node` build step from
-the root of the repository.
+To build the `calico/node` container, run the following build step from
+the root of the repository:
+
+```
+make calico/node
+```
 
 Use the build variables listed in the `Calico binaries` variable section
 at the top of the Makefile to modify which components are included in the resulting image.
 For example, the following command will produce a docker image called `calico/node:custom`
-which use custom Felix and Libnetwork binaries:
+which uses custom Felix and Libnetwork binaries:
+
 ```
 FELIX_CONTAINER_NAME=calico/felix:1.4.3 \
 LIBNETWORK_PLUGIN_CONTAINER_NAME=calico/libnetwork-plugin:v1.0.0-beta \
@@ -65,11 +66,19 @@ The binary will be put in `./dist`:
 
 ##### Native Builds
 
+1. Assuming you have already installed **go version 1.7.1+**,
+   ensure you've cloned this repository into your Go project path.
+
+   ```
+   git clone https://github.com/projectcalico/calico-containers.git $GOPATH/src/github.com/projectcalico/calico-containers
+   ```
+
 1. [Install Glide](https://github.com/Masterminds/glide#install).
 
 2. Populate the `vendor/` directory in the project's root with this project's dependencies:
+
    ```
-   glide install
+   glide install -strip-vendor
    ```
 
 3. Build the binary:
@@ -84,6 +93,7 @@ Specifically, the `calico/test` image produced at https://github.com/projectcali
 is used.
 
 The following Makefile step will use that image to run all local tests:
+
 ```
 make st
 ```
