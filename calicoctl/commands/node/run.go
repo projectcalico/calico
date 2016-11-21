@@ -15,6 +15,7 @@
 package node
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -39,6 +40,10 @@ const (
 	ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
 )
 
+var (
+	checkLogTimeout = 10 * time.Second
+)
+
 var VERSION string
 
 // Run function collects diagnostic information and logs
@@ -53,6 +58,7 @@ func Run(args []string) {
                      [--config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
+                     [--init-system]
                      [--disable-docker-networking]
 
 Options:
@@ -243,8 +249,16 @@ Description:
 	cmd = append(cmd, img)
 
 	if dryrun {
-		fmt.Println("Use the following command to run Calico node:")
+		fmt.Println("Use the following command to start the calico/node container:")
 		fmt.Printf("\n%s\n\n", strings.Join(cmd, " "))
+
+		if !initSystem {
+			fmt.Println("If you are running calico/node in an init system, use the --init-system flag")
+			fmt.Println("to display the appropriate start and stop commands.")
+		} else {
+			fmt.Println("Use the following command to stop the calico/node container:")
+			fmt.Printf("\ndocker stop calico-node\n\n")
+		}
 		return
 	}
 
@@ -269,8 +283,7 @@ Description:
 
 	err = exec.Command(cmd[0], cmd[1:]...).Run()
 	if err != nil {
-		fmt.Println("Error executing command:")
-		fmt.Println(err)
+		fmt.Printf("Error executing command: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -280,51 +293,45 @@ Description:
 	// Get the stdout pipe
 	outPipe, err := logCmd.StdoutPipe()
 	if err != nil {
-		fmt.Println("Error querying calico/node logs:")
-		fmt.Println(err)
+		fmt.Printf("Error executing command:  unable to check calico/node logs: %v\n", err)
 		os.Exit(1)
 	}
+	outScanner := bufio.NewScanner(outPipe)
 
 	// Start following the logs.
 	err = logCmd.Start()
 	if err != nil {
-		fmt.Println("Error querying calico/node logs:")
+		fmt.Printf("Error executing command:  unable to check calico/node logs: %v\n", err)
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
+	// Protect against calico/node taking too long to start, or docker
+	// logs hanging without output.
+	time.AfterFunc(checkLogTimeout, func() {
+		logCmd.Process.Kill()
+	})
+
 	// Read stdout until the node fails, or until we see the output
 	// indicating success.
-	stdout := ""
-	txt := make([]byte, 1000)
-	var n int
-	for {
-		n, err = outPipe.Read(txt)
-		if err != nil {
+	started := false
+	for outScanner.Scan() {
+		line := outScanner.Text()
+		fmt.Println(line)
+		if line == "Calico node started successfully" {
+			started = true
 			break
 		}
-		if n == 0 {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
+	}
 
-		outStr := string(txt[:n])
-		stdout += outStr
-		fmt.Print(outStr)
-
-		if strings.Contains(stdout, "Calico node started successfully\n") {
-			break
-		}
+	// If we didn't successfully start then notify the user.
+	if !started {
+		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
 	}
 
 	// Kill the process if it is still running.
 	logCmd.Process.Kill()
 	logCmd.Wait()
-
-	if err != nil {
-		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
-		os.Exit(1)
-	}
 }
 
 // runningInContainer returns whether we are running calicoctl within a container.

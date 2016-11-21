@@ -261,8 +261,10 @@ semaphore: clean
 	# Clean up unwanted files to free disk space.
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
 
-	# Actually run the tests (refreshing the images as required)
-	CALICOCTL_NODE_VERSION=$$BRANCH_NAME $(MAKE) calico/ctl calico/node st st-ssl
+	# Actually run the tests (refreshing the images as required), we only run a
+	# small subset of the tests for testing SSL support.
+	CALICOCTL_NODE_VERSION=$$BRANCH_NAME $(MAKE) calico/ctl calico/node st
+	CALICOCTL_NODE_VERSION=$$BRANCH_NAME ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	# If this isn't a PR, then push :BRANCHNAME tagged images to Dockerhub and quay for both calico/node and calico/ctl
