@@ -36,6 +36,7 @@ from networking_calico.common import config as calico_config
 from networking_calico.common import mkdir_p
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
+from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
 from networking_calico import etcdutils
 
@@ -435,8 +436,8 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
                   'host_routes': data.get('host_routes', []),
                   'network_id': data.get('network_id', NETWORK_ID)}
         if ip_version == 6:
-            subnet['ipv6_address_mode'] = constants.DHCPV6_STATEFUL
-            subnet['ipv6_ra_mode'] = constants.DHCPV6_STATEFUL
+            subnet['ipv6_address_mode'] = DHCPV6_STATEFUL
+            subnet['ipv6_ra_mode'] = DHCPV6_STATEFUL
 
         return dhcp.DictModel(subnet)
 

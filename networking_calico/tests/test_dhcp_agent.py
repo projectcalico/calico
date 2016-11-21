@@ -30,7 +30,7 @@ from networking_calico.agent.dhcp_agent import get_etcd_connection_settings
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
-from networking_calico.compat import constants
+from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
 from networking_calico.etcdutils import EtcdWatcher
 
@@ -556,8 +556,8 @@ class TestDnsmasqRouted(base.BaseTestCase):
         v6subnet.enable_dhcp = True
         v6subnet.ip_version = 6
         v6subnet.cidr = '2001:db8:1::/80'
-        v6subnet.ipv6_ra_mode = constants.DHCPV6_STATEFUL
-        v6subnet.ipv6_address_mode = constants.DHCPV6_STATEFUL
+        v6subnet.ipv6_ra_mode = DHCPV6_STATEFUL
+        v6subnet.ipv6_address_mode = DHCPV6_STATEFUL
         network = mock.Mock()
         network.id = 'calico'
         network.subnets = [v4subnet, v6subnet]

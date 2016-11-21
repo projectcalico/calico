@@ -46,3 +46,9 @@ try:
 except ImportError:
     # Icehouse, Juno
     from neutron.openstack.common import lockutils
+
+try:
+    from neutron_lib.constants import DHCPV6_STATEFUL
+except ImportError:
+    # Mitaka and earlier
+    from neutron.common.constants import DHCPV6_STATEFUL
