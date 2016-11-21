@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const (
@@ -281,6 +282,8 @@ func (t *Table) Apply() {
 	// - a concurrent write may invalidate iptables-restore's compare-and-swap
 	// - another process may have clobbered some of our state, resulting in inconsistencies
 	//   in what we try to program.
+	retries := 10
+	backoffTime := 1 * time.Millisecond
 	for {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
@@ -289,15 +292,22 @@ func (t *Table) Apply() {
 			t.loadDataplaneState()
 		}
 
-		if err := t.flushUpdates(); err != nil {
-			log.WithError(err).Warn("Failed to program iptables, will retry")
-			continue
+		if err := t.applyUpdates(); err != nil {
+			if retries > 0 {
+				retries--
+				log.WithError(err).Warn("Failed to program iptables, will retry")
+				time.Sleep(backoffTime)
+				backoffTime *= 2
+				continue
+			} else {
+				log.WithError(err).Panic("Failed to program iptables, giving up after retries")
+			}
 		}
 		break
 	}
 }
 
-func (t *Table) flushUpdates() error {
+func (t *Table) applyUpdates() error {
 	var inputBuf bytes.Buffer
 	// iptables-restore input starts with a line indicating the table name.
 	inputBuf.WriteString(fmt.Sprintf("*%s\n", t.Name))
