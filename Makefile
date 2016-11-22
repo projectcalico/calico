@@ -51,8 +51,8 @@ endif
 
 	@echo "Now push the tag and images."
 	@echo "git push $(VERSION)"
-	@echo "docker push calico/libnetwork-plugin:$(VERSION)"
-	@echo "docker push quay.io/calico/libnetwork-plugin:$(VERSION)"
+	@echo "docker push calico/kube-policy-controller:$(VERSION)"
+	@echo "docker push quay.io/calico/kube-policy-controller:$(VERSION)"
 
 clean:
 	find . -name '*.pyc' -exec rm -f {} +
