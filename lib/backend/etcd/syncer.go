@@ -226,7 +226,7 @@ func sendSnapshotNode(node *client.Node, snapshotUpdates chan<- interface{}, res
 	if !node.Dir {
 		snapshotUpdates <- snapshotUpdate{
 			snapshotIndex: resp.Index,
-			kvPair: kvPair{
+			kv: kvPair{
 				key:           node.Key,
 				value:         node.Value,
 				modifiedIndex: node.ModifiedIndex,
@@ -302,7 +302,7 @@ func (syn *etcdSyncer) watchEtcd(watcherUpdateC chan<- interface{}) {
 			}
 
 			if actionType == actionSetOrUpdate {
-				watcherUpdateC <- watcherUpdate{kvPair: kvPair{
+				watcherUpdateC <- watcherUpdate{kv: kvPair{
 					modifiedIndex: node.ModifiedIndex,
 					key:           resp.Node.Key,
 					value:         node.Value,
@@ -479,6 +479,9 @@ func (syn *etcdSyncer) mergeUpdates(
 				"Deleted old keys that weren't seen in snapshot.")
 			syn.sendDeletions(deletedKeys, event.snapshotIndex)
 
+			if event.snapshotIndex > highestCompletedSnapshotIndex {
+				highestCompletedSnapshotIndex = event.snapshotIndex
+			}
 			if event.snapshotIndex >= minRequiredSnapshotIndex {
 				// Now in sync.
 				logCxt.Info("Snapshot brought us into sync.")
@@ -585,14 +588,10 @@ type kvPair struct {
 	value         string
 }
 
-func (k kvPair) kvPair() kvPair {
-	return k
-}
-
 // snapshotUpdate is the event sent by the snapshot thread when it find a key/value in the
 // snapshot.
 type snapshotUpdate struct {
-	kvPair
+	kv            kvPair
 	snapshotIndex uint64
 }
 
@@ -600,19 +599,30 @@ func (u snapshotUpdate) lastSeenIndex() uint64 {
 	return u.snapshotIndex
 }
 
+func (u snapshotUpdate) kvPair() kvPair {
+	return u.kv
+}
+
 // watcherUpdate is sent by the watcher thread to the merge thread when a key is updated.
 type watcherUpdate struct {
-	kvPair
+	kv kvPair
 }
 
 func (u watcherUpdate) lastSeenIndex() uint64 {
-	return u.modifiedIndex
+	return u.kv.modifiedIndex
+}
+
+func (u watcherUpdate) kvPair() kvPair {
+	return u.kv
 }
 
 type update interface {
 	lastSeenIndex() uint64
 	kvPair() kvPair
 }
+
+var _ update = (*watcherUpdate)(nil)
+var _ update = (*snapshotUpdate)(nil)
 
 // watcherDeletion is sent by the watcher thread to the merge thread when a key is removed.
 type watcherDeletion struct {
