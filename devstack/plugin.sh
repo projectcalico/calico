@@ -27,11 +27,24 @@ function install_configure_etcd {
     # and <controller_ip> appropriately.
     if $CALICO_COMPUTE_ONLY; then
 	# Configure an etcd proxy.
-	sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --proxy on \
+	if test -f /etc/init/etcd.conf; then
+	    # upstart configuration
+	    sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --proxy on \
   --initial-cluster \"$SERVICE_HOST=http:\/\/$SERVICE_HOST:2380\"/" /etc/init/etcd.conf
+	else
+	    # systemd configuration
+	    etcd_cfg=`mktemp -t etcd.XXXXXX`
+	    cat >${etcd_cfg} <<EOF
+ETCD_PROXY=on
+ETCD_INITIAL_CLUSTER="$SERVICE_HOST=http://$SERVICE_HOST:2380"
+EOF
+	    sudo mv -f ${etcd_cfg} /etc/default/etcd
+	fi
     else
 	# Configure an etcd master node.
-	sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --name=\"$HOSTNAME\" \
+	if test -f /etc/init/etcd.conf; then
+	    # upstart configuration
+	    sudo sed -i "s/exec.*/exec \/usr\/bin\/etcd --name=\"$HOSTNAME\" \
   --advertise-client-urls=\"http:\/\/$IP:2379,http:\/\/$IP:4001\" \
   --listen-client-urls=\"http:\/\/0.0.0.0:2379,http:\/\/0.0.0.0:4001\" \
   --listen-peer-urls \"http:\/\/0.0.0.0:2380\" \
@@ -39,6 +52,21 @@ function install_configure_etcd {
   --initial-cluster-token \"$TOKEN\" \
   --initial-cluster \"$HOSTNAME=http:\/\/$IP:2380\" \
   --initial-cluster-state \"new\"/" /etc/init/etcd.conf
+	else
+	    # systemd configuration
+	    etcd_cfg=`mktemp -t etcd.XXXXXX`
+	    cat >${etcd_cfg} <<EOF
+ETCD_NAME="$HOSTNAME"
+ETCD_ADVERTISE_CLIENT_URLS="http://$IP:2379,http://$IP:4001"
+ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
+ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
+ETCD_INITIAL_ADVERTISE_PEER_URLS="http://$IP:2380"
+ETCD_INITIAL_CLUSTER="$HOSTNAME=http://$IP:2380"
+ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_INITIAL_CLUSTER_TOKEN="$TOKEN"
+EOF
+	    sudo mv -f ${etcd_cfg} /etc/default/etcd
+	fi
     fi
 
     # Start the etcd service:
