@@ -31,7 +31,7 @@ func NewClient(cf string) (*client.Client, error) {
 		log.Info("Error loading config")
 		return nil, err
 	}
-	log.Infof("Loaded client config: type=%v %#v", cfg.BackendType, cfg.BackendConfig)
+	log.Infof("Loaded client config: %#v", cfg.Spec)
 
 	c, err := client.New(*cfg)
 	if err != nil {
@@ -43,7 +43,7 @@ func NewClient(cf string) (*client.Client, error) {
 
 // LoadClientConfig loads the client config from file if the file exists,
 // otherwise will load from environment variables.
-func LoadClientConfig(cf string) (*api.ClientConfig, error) {
+func LoadClientConfig(cf string) (*api.CalicoAPIConfig, error) {
 	if _, err := os.Stat(cf); err != nil {
 		log.Infof("Config file cannot be read - reading config from environment")
 		cf = ""
