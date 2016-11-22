@@ -26,4 +26,4 @@ RUN ln -s /lib/libc.musl-x86_64.so.1 ldd
 RUN ln -s /lib /lib64
 RUN ln -s /lib/ld-musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
 
-CMD ["/dist/controller"]
+ENTRYPOINT ["/dist/controller"]

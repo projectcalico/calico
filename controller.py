@@ -17,6 +17,7 @@ from handlers.namespace import add_update_namespace, delete_namespace
 from handlers.pod import add_pod, update_pod, delete_pod
 
 from constants import *
+from version import VERSION
 
 _log = logging.getLogger(__name__)
 
@@ -491,6 +492,11 @@ def configure_etc_hosts():
 
 
 if __name__ == '__main__':
+    # Check if asking for version command.
+    if len(sys.argv) > 1 and sys.argv[1] == "version":
+        print(VERSION)
+        sys.exit(0)
+
     # Configure logging.
     log_level = os.environ.get("LOG_LEVEL", "info").upper()
     formatter = logging.Formatter(LOG_FORMAT)

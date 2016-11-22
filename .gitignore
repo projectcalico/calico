@@ -6,3 +6,4 @@ dist/
 *.created
 *.coverage
 .idea/
+version.py
