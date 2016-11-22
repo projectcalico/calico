@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 )
 
 const (
@@ -151,11 +150,11 @@ Description:
 		fmt.Println("Error executing command: invalid config file")
 		os.Exit(1)
 	}
-	if cfg.BackendType != api.EtcdV2 {
+	if cfg.Spec.DatastoreType != api.EtcdV2 {
 		fmt.Println("Error executing command: unsupported backend specified in config")
 		os.Exit(1)
 	}
-	etcdcfg := cfg.BackendConfig.(*etcd.EtcdConfig)
+	etcdcfg := cfg.Spec.EtcdConfig
 
 	// Convert the nopools boolean to either an empty string or "true".
 	noPoolsString := ""

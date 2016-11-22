@@ -1,5 +1,5 @@
 hash: 148e2e335fe5f25a6ba24c8fef221c3be382ffbdd6d757ab36c69bbeb2a68b51
-updated: 2016-11-18T10:24:35.318708334-08:00
+updated: 2016-11-22T09:07:17.225339661-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -105,7 +105,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: c3038033665942c39cf958a6e145267eb1157ca3
+  version: da19d9756da21db74ce805b8cfa9b13f89c84a29
   subpackages:
   - lib
   - lib/api
@@ -204,7 +204,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: a5b47d31c556af34a302ce5d659e6fea44d90de0
 - name: k8s.io/kubernetes
-  version: 9d4f94dcec42e9d79b09e0108acc77986c683f02
+  version: 1a377f1bc2ef9277d2531a858c72605e9e45c2da
   subpackages:
   - pkg/api
   - pkg/api/errors
