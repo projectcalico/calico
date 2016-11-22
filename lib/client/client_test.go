@@ -154,6 +154,23 @@ kind: notCalicoApiConfig
 		},
 	}
 
+	// Environments should work with CALICO_ prefix too.
+	env3 := map[string]string {
+		"CALICO_ETCD_AUTHORITY": "123.123.123.123:2344",
+		"CALICO_ETCD_USERNAME": "userbar",
+		"CALICO_ETCD_PASSWORD": "passbaz",
+	}
+	cfg3env := api.NewCalicoAPIConfig()
+	cfg3env.Spec = api.CalicoAPIConfigSpec{
+		DatastoreType: api.EtcdV2,
+		EtcdConfig: etcd.EtcdConfig{
+			EtcdScheme: "http",
+			EtcdAuthority: "123.123.123.123:2344",
+			EtcdUsername: "userbar",
+			EtcdPassword: "passbaz",
+		},
+	}
+
 	DescribeTable("Load client config",
 		func(data string, expected *api.CalicoAPIConfig, expectedErr error) {
 			By("Loading client config and checking results")
@@ -199,5 +216,6 @@ kind: notCalicoApiConfig
 
 		Entry("valid etcd configuration", env1, cfg1env, nil),
 		Entry("valid k8s configuration", env2, cfg2env, nil),
+		Entry("valid etcd configuration with CALICO_ prefix", env3, cfg3env, nil),
 	)
 })
