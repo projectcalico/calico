@@ -93,6 +93,10 @@ type PolicySpec struct {
 	// 	deployment != "dev"
 	// 	! has(label_name)
 	Selector string `json:"selector" validate:"selector"`
+
+	// Indicates, if True, that the rules in this policy should be applied before any data plane
+	// connection tracking, and that packets allowed by these rules should not be tracked.
+	Untracked bool `json:"untracked,omitempty" validate:"omitempty"`
 }
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current
