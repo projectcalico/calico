@@ -27,16 +27,16 @@ import (
 )
 
 // NewClient creates a new backend datastore client.
-func NewClient(config api.ClientConfig) (c bapi.Client, err error) {
-	log.Debugf("Using datastore type '%s'", config.BackendType)
-	switch config.BackendType {
+func NewClient(config api.CalicoAPIConfig) (c bapi.Client, err error) {
+	log.Debugf("Using datastore type '%s'", config.Spec.DatastoreType)
+	switch config.Spec.DatastoreType {
 	case api.EtcdV2:
-		c, err = etcd.NewEtcdClient(config.BackendConfig.(*etcd.EtcdConfig))
+		c, err = etcd.NewEtcdClient(&config.Spec.EtcdConfig)
 	case api.Kubernetes:
-		c, err = k8s.NewKubeClient(config.BackendConfig.(*k8s.KubeConfig))
+		c, err = k8s.NewKubeClient(&config.Spec.KubeConfig)
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
-			config.BackendType))
+			config.Spec.DatastoreType))
 	}
 	if c != nil {
 		// Wrap the backend, which deals only in raw KV pairs with an

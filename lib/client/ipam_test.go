@@ -96,7 +96,7 @@ import (
 )
 
 // Setting BackendType to etcdv2 which is the only supported backend at the moment.
-var etcdType api.BackendType = "etcdv2"
+var etcdType api.DatastoreType = "etcdv2"
 
 // Setting localhost as the etcd endpoint location since that's where `make run-etcd` runs it.
 var etcdConfig = etcd.EtcdConfig{
@@ -122,7 +122,7 @@ var _ = Describe("IPAM tests", func() {
 	Describe("IPAM AutoAssign from the default pool then delete the pool and assign again", func() {
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
-		ic := setupIPAMClient(true)
+		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
 		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
@@ -206,7 +206,7 @@ var _ = Describe("IPAM tests", func() {
 	Describe("IPAM AutoAssign from any pool", func() {
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
-		ic := setupIPAMClient(true)
+		ic := setupIPAMClient(c, true)
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
@@ -238,7 +238,7 @@ var _ = Describe("IPAM tests", func() {
 	Describe("IPAM AutoAssign from different pools", func() {
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
-		ic := setupIPAMClient(true)
+		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
 		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
@@ -435,17 +435,17 @@ var _ = Describe("IPAM tests", func() {
 	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
 		func(args testArgsClaimAff) {
 			inIPNet := testutils.MustParseCIDR(args.inNet)
+			c, _ := testutils.NewClient("")
 
 			// Wipe clean etcd, create a new client, and pools when cleanEnv flag is true.
 			if args.cleanEnv {
 				testutils.CleanEtcd()
-				c, _ := testutils.NewClient("")
 				for _, v := range args.pool {
 					testutils.CreateNewIPPool(*c, v, false, false, true)
 				}
 			}
 
-			ic := setupIPAMClient(args.cleanEnv)
+			ic := setupIPAMClient(c, args.cleanEnv)
 
 			assignIPutil(ic, args.assignIP, "Host-A")
 
@@ -499,7 +499,8 @@ func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignI
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPAMClient(cleanEnv)
+	c, _ := testutils.NewClient("")
+	ic := setupIPAMClient(c, cleanEnv)
 
 	if len(assignIP) != 0 {
 		err := ic.AssignIP(client.AssignIPArgs{
@@ -544,7 +545,8 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPAMClient(cleanEnv)
+	c, _ := testutils.NewClient("")
+	ic := setupIPAMClient(c, cleanEnv)
 	outErr := ic.AssignIP(args)
 
 	if outErr != nil {
@@ -571,7 +573,8 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	ic := setupIPAMClient(cleanEnv)
+	c, _ := testutils.NewClient("")
+	ic := setupIPAMClient(c, cleanEnv)
 	v4, v6, outErr := ic.AutoAssign(args)
 
 	if outErr != nil {
@@ -583,15 +586,8 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 
 // setupIPAMClient sets up a client, and returns IPAMInterface.
 // It also resets IPAM config if cleanEnv is true.
-func setupIPAMClient(cleanEnv bool) client.IPAMInterface {
-	ac := api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig}
-
-	bc, err := client.New(ac)
-	if err != nil {
-		panic(err)
-	}
-
-	ic := bc.IPAM()
+func setupIPAMClient(c *client.Client, cleanEnv bool) client.IPAMInterface {
+	ic := c.IPAM()
 	if cleanEnv {
 		ic.SetIPAMConfig(client.IPAMConfig{
 			StrictAffinity:     false,
@@ -618,7 +614,8 @@ func assignIPutil(ic client.IPAMInterface, assignIP net.IP, host string) {
 // getAffineBlocks gets all the blocks affined to the host passed in.
 func getAffineBlocks(host string) []cnet.IPNet {
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: 4}
-	compatClient, err := backend.NewClient(api.ClientConfig{BackendType: etcdType, BackendConfig: &etcdConfig})
+	c, _ := client.LoadClientConfig("")
+	compatClient, err := backend.NewClient(*c)
 
 	datastoreObjs, err := compatClient.List(opts)
 	if err != nil {

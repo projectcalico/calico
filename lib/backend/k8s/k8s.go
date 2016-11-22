@@ -33,12 +33,12 @@ type KubeClient struct {
 }
 
 type KubeConfig struct {
-	KubeconfigFile       string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
-	Server               string `json:"server" envconfig:"K8S_API_ENDPOINT" default:""`
-	ClientCertificate    string `json:"clientCertificate" envconfig:"K8S_CERT_FILE" default:""`
-	ClientKey            string `json:"clientKey" envconfig:"K8S_KEY_FILE" default:""`
-	CertificateAuthority string `json:"certificateAuthority" envconfig:"K8S_CA_FILE" default:""`
-	Token                string `json:"token" envconfig:"K8S_API_TOKEN" default:""`
+	K8sKubeconfigFile       string `json:"k8sKubeconfig" envconfig:"KUBECONFIG" default:""`
+	K8sServer               string `json:"k8sServer" envconfig:"K8S_API_ENDPOINT" default:""`
+	K8sClientCertificate    string `json:"k8sClientCertificate" envconfig:"K8S_CERT_FILE" default:""`
+	K8sClientKey            string `json:"k8sClientKey" envconfig:"K8S_KEY_FILE" default:""`
+	K8sCertificateAuthority string `json:"k8sCertificateAuthority" envconfig:"K8S_CA_FILE" default:""`
+	K8sToken                string `json:"k8sToken" envconfig:"K8S_API_TOKEN" default:""`
 }
 
 func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
@@ -49,17 +49,17 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 		variable *string
 		value    string
 	}{
-		{&configOverrides.ClusterInfo.Server, kc.Server},
-		{&configOverrides.AuthInfo.ClientCertificate, kc.ClientCertificate},
-		{&configOverrides.AuthInfo.ClientKey, kc.ClientKey},
-		{&configOverrides.ClusterInfo.CertificateAuthority, kc.CertificateAuthority},
-		{&configOverrides.AuthInfo.Token, kc.Token},
+		{&configOverrides.ClusterInfo.Server, kc.K8sServer},
+		{&configOverrides.AuthInfo.ClientCertificate, kc.K8sClientCertificate},
+		{&configOverrides.AuthInfo.ClientKey, kc.K8sClientKey},
+		{&configOverrides.ClusterInfo.CertificateAuthority, kc.K8sCertificateAuthority},
+		{&configOverrides.AuthInfo.Token, kc.K8sToken},
 	}
 
 	// Using the override map above, populate any non-empty values.
 	loadingRules := clientcmd.ClientConfigLoadingRules{}
-	if kc.KubeconfigFile != "" {
-		loadingRules.ExplicitPath = kc.KubeconfigFile
+	if kc.K8sKubeconfigFile != "" {
+		loadingRules.ExplicitPath = kc.K8sKubeconfigFile
 		for _, override := range overridesMap {
 			if override.value != "" {
 				*override.variable = override.value

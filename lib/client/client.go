@@ -19,7 +19,6 @@ import (
 	"reflect"
 
 	"errors"
-	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/ghodss/yaml"
@@ -39,7 +38,7 @@ type Client struct {
 // New returns a connected Client.  This is the only mechanism by which to create a
 // Client.  The ClientConfig can either be created explicitly, or can be loaded from
 // a config file or environment variables using the LoadClientConfig() function.
-func New(config api.ClientConfig) (*Client, error) {
+func New(config api.CalicoAPIConfig) (*Client, error) {
 	var err error
 	cc := Client{}
 	if cc.backend, err = backend.NewClient(config); err != nil {
@@ -95,8 +94,7 @@ func (c *Client) Config() ConfigInterface {
 
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)
 // or from environment variables (if the file is not specified).
-func LoadClientConfig(filename string) (*api.ClientConfig, error) {
-	var c api.ClientConfig
+func LoadClientConfig(filename string) (*api.CalicoAPIConfig, error) {
 
 	// Override / merge with values loaded from the specified file.
 	if filename != "" {
@@ -104,41 +102,54 @@ func LoadClientConfig(filename string) (*api.ClientConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		// Default the backend type to be etcd v2.  This will be overridden if
-		// explicitly specified in the file.
-		c = api.ClientConfig{BackendType: api.EtcdV2}
-
-		// First unmarshal should fill in the BackendType field only.
-		if err := yaml.Unmarshal(b, &c); err != nil {
-			return nil, err
-		}
-		log.Info("Datastore type: ", c.BackendType)
-		c.BackendConfig = c.BackendType.NewConfig()
-		if c.BackendConfig == nil {
-			return nil, errors.New(fmt.Sprintf("Unknown datastore type: %v", c.BackendType))
-		}
-		// Now unmarshal into the store-specific config struct.
-		if err := yaml.Unmarshal(b, c.BackendConfig); err != nil {
-			return nil, err
-		}
-		return &c, nil
+		return LoadClientConfigFromBytes(b)
+	} else {
+		return LoadClientConfigFromEnvironment()
 	}
+}
+
+// LoadClientConfig loads the ClientConfig from the supplied bytes containing
+// YAML or JSON format data.
+func LoadClientConfigFromBytes(b []byte) (*api.CalicoAPIConfig, error) {
+	var c api.CalicoAPIConfig
+
+	// Default the backend type to be etcd v2.  This will be overridden if
+	// explicitly specified in the file.
+	log.Info("Loading config from JSON or YAML data")
+	c = api.CalicoAPIConfig{
+		Spec: api.CalicoAPIConfigSpec{
+			DatastoreType: api.EtcdV2,
+		},
+	}
+
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+
+	// Validate the version and kind.
+	if c.APIVersion != unversioned.VersionCurrent {
+		return nil, errors.New("unknown APIVersion '" + c.APIVersion + "'")
+	}
+	if c.Kind != "calicoApiConfig" {
+		return nil, errors.New("expected kind 'calicoApiConfig', got '" + c.Kind + "'")
+	}
+
+	log.Info("Datastore type: ", c.Spec.DatastoreType)
+	return &c, nil
+}
+
+// LoadClientConfig loads the ClientConfig from the specified file (if specified)
+// or from environment variables (if the file is not specified).
+func LoadClientConfigFromEnvironment() (*api.CalicoAPIConfig, error) {
+	c := api.NewCalicoAPIConfig()
 
 	// Load client config from environment variables.
-	log.Info("No config file specified, loading config from environment")
-	if err := envconfig.Process("calico", &c); err != nil {
+	log.Info("Loading config from environment")
+	if err := envconfig.Process("calico", c); err != nil {
 		return nil, err
 	}
-	c.BackendConfig = c.BackendType.NewConfig()
-	log.Info("Datastore type: ", c.BackendType)
-	if c.BackendConfig == nil {
-		return nil, errors.New(fmt.Sprintf("Unknown datastore type: %v", c.BackendType))
-	}
-	if err := envconfig.Process("calico", c.BackendConfig); err != nil {
-		return nil, err
-	}
-	return &c, nil
+
+	return c, nil
 }
 
 // Interface used to convert between backend and API representations of our
