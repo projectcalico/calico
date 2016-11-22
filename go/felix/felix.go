@@ -100,6 +100,12 @@ configRetry:
 		}
 		// Parse and merge the local config.
 		configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
+		if configParams.Err != nil {
+			log.WithError(configParams.Err).WithField("configFile", configFile).Error(
+				"Failed to parse configuration environment variable")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
 		configParams.UpdateFrom(fileConfig, config.ConfigFile)
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).WithField("configFile", configFile).Error(
