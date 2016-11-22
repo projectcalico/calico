@@ -64,7 +64,7 @@ if is_service_enabled calico-felix; then
 		    echo Calico plugin: pre-install
 
 		    # Add Calico PPA as a package source.
-		    sudo apt-add-repository -y ppa:project-calico/kilo-testing
+		    sudo apt-add-repository -y ppa:project-calico/calico-1.4
 		    REPOS_UPDATED=False
 
 		    # Also add BIRD project PPA as a package source.
