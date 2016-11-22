@@ -128,7 +128,7 @@ type SyncerCallbacks interface {
 // by a Syncer callback.  Datastores that support it can report a failure to
 // parse a particular key or value.
 type SyncerParseFailCallbacks interface {
-	ParseFailed(rawKey string, rawValue *string)
+	ParseFailed(rawKey string, rawValue string)
 }
 
 // Update from the Syncer.  A KV pair plus extra metadata.
