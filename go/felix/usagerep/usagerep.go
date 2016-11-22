@@ -55,11 +55,34 @@ func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clus
 }
 
 func ReportUsage(hostname, clusterGUID, clusterType string, stats calc.StatsUpdate) {
+	fullURL := calculateURL(hostname, clusterGUID, clusterType, stats)
+	resp, err := http.Get(fullURL)
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		log.WithError(err).Info("Failed to report usage/get deprecation warnings.")
+		return
+	}
+	jsonResp := map[string]interface{}{}
+	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
+		log.WithError(err).Warn(
+			"Failed to decode report server response")
+		return
+	} else {
+		log.WithField("json", jsonResp).Debug("Response")
+	}
+	if warn, ok := jsonResp["usage_warning"]; ok {
+		log.Warnf("Usage warning: %v", warn)
+	}
+}
+
+func calculateURL(hostname, clusterGUID, clusterType string, stats calc.StatsUpdate) string {
 	if clusterType == "" {
 		clusterType = "unknown"
 	}
 	if clusterGUID == "" {
-		clusterType = "baddecaf"
+		clusterGUID = "baddecaf"
 	}
 	log.WithFields(log.Fields{
 		"hostname":    hostname,
@@ -82,23 +105,5 @@ func ReportUsage(hostname, clusterGUID, clusterType string, stats calc.StatsUpda
 	}
 	fullURL := baseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")
-	resp, err := http.Get(fullURL)
-	if resp != nil && resp.Body != nil {
-		defer resp.Body.Close()
-	}
-	if err != nil {
-		log.WithError(err).Info("Failed to report usage/get deprecation warnings.")
-		return
-	}
-	jsonResp := map[string]interface{}{}
-	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
-		log.WithError(err).Warn(
-			"Failed to decode report server response")
-		return
-	} else {
-		log.WithField("json", jsonResp).Debug("Response")
-	}
-	if warn, ok := jsonResp["usage_warning"]; ok {
-		log.Warnf("Usage warning: %v", warn)
-	}
+	return fullURL
 }
