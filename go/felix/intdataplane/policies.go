@@ -36,19 +36,25 @@ func newPolicyManager(filterTable *iptables.Table, ruleRenderer rules.RuleRender
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
+		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy)
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
+		log.WithField("id", msg.Id).Debug("Removing policy chains")
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
 		outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
 	case *proto.ActiveProfileUpdate:
-		// TODO(smc) Profile updates
-		log.WithField("msg", msg).Warn("Message not implemented")
+		log.WithField("id", msg.Id).Debug("Updating profile chains")
+		chains := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile)
+		m.filterTable.UpdateChains(chains)
 	case *proto.ActiveProfileRemove:
-		// TODO(smc) Profile updates
-		log.WithField("msg", msg).Warn("Message not implemented")
+		log.WithField("id", msg.Id).Debug("Removing profile chains")
+		inName := rules.ProfileChainName(rules.PolicyInboundPfx, msg.Id)
+		outName := rules.ProfileChainName(rules.PolicyOutboundPfx, msg.Id)
+		m.filterTable.RemoveChainByName(inName)
+		m.filterTable.RemoveChainByName(outName)
 	}
 }
 

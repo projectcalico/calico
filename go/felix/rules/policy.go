@@ -34,6 +34,18 @@ func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *
 	return []*iptables.Chain{&inbound, &outbound}
 }
 
+func (r *ruleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile) []*iptables.Chain {
+	inbound := iptables.Chain{
+		Name:  ProfileChainName(PolicyInboundPfx, profileID),
+		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules),
+	}
+	outbound := iptables.Chain{
+		Name:  ProfileChainName(PolicyInboundPfx, profileID),
+		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules),
+	}
+	return []*iptables.Chain{&inbound, &outbound}
+}
+
 func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule) []iptables.Rule {
 	var rules []iptables.Rule
 	for _, protoRule := range protoRules {
@@ -53,6 +65,14 @@ func PolicyChainName(prefix string, polID *proto.PolicyID) string {
 	return hashutils.GetLengthLimitedID(
 		prefix,
 		polID.Tier+"/"+polID.Name,
+		iptables.MaxChainNameLength,
+	)
+}
+
+func ProfileChainName(prefix string, profID *proto.ProfileID) string {
+	return hashutils.GetLengthLimitedID(
+		prefix,
+		profID.Name,
 		iptables.MaxChainNameLength,
 	)
 }

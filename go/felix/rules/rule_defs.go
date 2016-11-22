@@ -60,6 +60,7 @@ type RuleRenderer interface {
 	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) []*iptables.Chain
+	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile) []*iptables.Chain
 }
 
 type ruleRenderer struct {
