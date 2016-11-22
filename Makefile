@@ -85,16 +85,6 @@ test: ut
 # re-define default --compare-branch=origin/master to some custom name
 UT_COMPARE_BRANCH?=
 
-# Extract current version from the debian-style changelog and replace the
-# placeholders with the stream name.
-DEB_VERSION:=$(shell grep felix debian/changelog | \
-                     head -n 1 | cut -d '(' -f 2 | cut -d ')' -f 1 | \
-                     cut -d '-' -f 1)
-DEB_VERSION_TRUSTY:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/trusty/g")
-DEB_VERSION_XENIAL:=$(shell echo $(DEB_VERSION) | sed "s/__STREAM__/xenial/g")
-DEB_TRUSTY:=dist/trusty/calico-felix_$(DEB_VERSION_TRUSTY)_amd64.deb
-DEB_XENIAL:=dist/xenial/calico-felix_$(DEB_VERSION_XENIAL)_amd64.deb
-
 # Generate and return the python package version.
 PY_VERSION:=$(shell utils/gen-version.sh)
 
@@ -202,31 +192,16 @@ DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 
 # Build all the debs.
 .PHONY: deb
-deb: $(DEB_TRUSTY) $(DEB_XENIAL)
-
-$(DEB_TRUSTY): dist/calico-felix/calico-iptables-plugin \
-               dist/calico-felix/calico-felix \
-               debian/*
+deb: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
 	$(MAKE) calico-build/trusty
-	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_TRUSTY) \
-	              calico-build/trusty debian/build-debs
-
-
-$(DEB_XENIAL): dist/calico-felix/calico-iptables-plugin \
-               dist/calico-felix/calico-felix \
-               debian/*
 	$(MAKE) calico-build/xenial
-	$(DOCKER_RUN_RM) -e DEB_VERSION=$(DEB_VERSION_XENIAL) \
-	              calico-build/xenial debian/build-debs
+	utils/make-packages.sh deb
 
 # Build RPMs.
 .PHONY: rpm
-rpm: dist/calico-felix/calico-iptables-plugin \
-     dist/calico-felix/calico-felix \
-     rpm/*
+rpm: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
 	$(MAKE) calico-build/centos7
-	$(DOCKER_RUN_RM) -e RPM_VERSION=$(RPM_VERSION) \
-	              calico-build/centos7 rpm/build-rpms
+	utils/make-packages.sh rpm
 
 .PHONY: protobuf
 protobuf: python/calico/felix/felixbackend_pb2.py go/felix/proto/felixbackend.pb.go

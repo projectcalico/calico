@@ -19,12 +19,8 @@ if git status >/dev/null 2>&1; then
     # Ensure we're in the root of the Git repository.
     cd `git_repo_root`
 
-    # Get the last tag, and the number of commits since that tag.
-    last_tag=`git describe --tags --abbrev=0`
-    commits_since=`git cherry -v $last_tag | wc -l`
-
-    # Generate corresponding PEP 440 version number.
-    version=${last_tag}.post${commits_since}
+    # Get the PEP 440 version based on Git state.
+    version=`git_auto_version`
 
     # Write out the version file.
     cat >${version_file} <<EOF

@@ -18,7 +18,7 @@ cd `git_repo_root`
 
 # Generate raw material for release notes as the list of changes - from Git
 # commit messages - since the last release.
-last_tag=`git describe --tags --abbrev=0`
+last_tag=`git_last_tag`
 release_notes=`mktemp -t felix-release-notes.XXXXXXXXXX`
 git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' > $release_notes
 
