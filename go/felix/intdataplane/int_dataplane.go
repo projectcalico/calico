@@ -20,8 +20,6 @@ import (
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/rules"
-	"github.com/projectcalico/felix/go/felix/set"
-	"reflect"
 )
 
 type Config struct {
@@ -31,146 +29,118 @@ type Config struct {
 	RulesConfig rules.Config
 }
 
-func NewIntDataplaneDriver(config Config) *internalDataplane {
+func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
-	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
-	dp := &internalDataplane{
-		toDataplane:       make(chan interface{}, 100),
-		fromDataplane:     make(chan interface{}, 100),
-		filterTableV4:     filterTableV4,
-		ipsetsV4:          ipsets.NewIPSets(ipsets.IPFamilyV4),
-		ruleRenderer:      ruleRenderer,
-		endpointManagerV4: newEndpointManager(filterTableV4, ruleRenderer),
+	dp := &InternalDataplane{
+		toDataplane:   make(chan interface{}, 100),
+		fromDataplane: make(chan interface{}, 100),
+		ruleRenderer:  ruleRenderer,
 	}
+
+	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
+	ipSetsV4 := ipsets.NewIPSets(ipsets.IPFamilyV4)
+	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
+	dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV4)
+
+	dp.RegisterManager(newIPSetsManager(ipSetsV4))
+	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer))
+	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer))
+
 	if !config.DisableIPv6 {
-		dp.filterTableV6 = iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
-		dp.ipsetsV6 = ipsets.NewIPSets(ipsets.IPFamilyV6)
-		dp.endpointManagerV6 = newEndpointManager(dp.filterTableV6, ruleRenderer)
+		filterTableV6 := iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
+		ipSetsV6 := ipsets.NewIPSets(ipsets.IPFamilyV6)
+		dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV6)
+		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
+
+		dp.RegisterManager(newIPSetsManager(ipSetsV6))
+		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer))
+		dp.RegisterManager(newEndpointManager(filterTableV6, ruleRenderer))
 	}
 	return dp
 }
 
-type internalDataplane struct {
+type Manager interface {
+	// TODO(smc) add machinery to send only the required messages to each Manager.
+
+	// OnUpdate is called for each protobuf message from the datastore.  May either directly
+	// send updates to the IPSets and iptables.Table objects (which will queue the updates
+	// until the main loop instructs them to act) or (for efficiency) may wait until
+	// a call to CompleteDeferredWork() to flush updates to the dataplane.
+	OnUpdate(protoBufMsg interface{})
+	// Called before the main loop flushes updates to the dataplane to allow for batched
+	// work to be completed.
+	CompleteDeferredWork()
+}
+
+type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
 
-	filterTableV4 *iptables.Table
-	filterTableV6 *iptables.Table
+	iptablesFilterTables []*iptables.Table
+	ipsetsWriters        []*ipsets.IPSets
 
-	ipsetsV4 *ipsets.IPSets
-	ipsetsV6 *ipsets.IPSets
-
-	endpointManagerV4 *endpointManager
-	endpointManagerV6 *endpointManager
+	allManagers []Manager
 
 	ruleRenderer rules.RuleRenderer
 }
 
-func (d *internalDataplane) Start() {
+func (d *InternalDataplane) RegisterManager(mgr Manager) {
+	d.allManagers = append(d.allManagers, mgr)
+}
+
+func (d *InternalDataplane) Start() {
 	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
 }
 
-func (d *internalDataplane) SendMessage(msg interface{}) error {
+func (d *InternalDataplane) SendMessage(msg interface{}) error {
 	d.toDataplane <- msg
 	return nil
 }
 
-func (d *internalDataplane) RecvMessage() (interface{}, error) {
+func (d *InternalDataplane) RecvMessage() (interface{}, error) {
 	return <-d.fromDataplane, nil
 }
 
-func (d *internalDataplane) loopUpdatingDataplane() {
+func (d *InternalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver")
 
-	d.filterTableV4.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
-	d.filterTableV4.SetRuleInsertions("FORWARD", []iptables.Rule{{
-		Action: iptables.JumpAction{rules.ForwardChainName},
-	}})
+	for _, t := range d.iptablesFilterTables {
+		t.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
+		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.ForwardChainName},
+		}})
+	}
 
 	inSync := false
 	for msg := range d.toDataplane {
 		log.WithField("msg", msg).Info("Received update from calculation graph")
-		switch msg := msg.(type) {
-		// IP set-related messages, these are extremely common.
-		case *proto.IPSetDeltaUpdate:
-			// TODO(smc) Feels ugly to do the fan-out here.
-			d.ipsetsV4.AddIPsToIPSet(msg.Id, msg.AddedMembers)
-			d.ipsetsV4.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
-			d.ipsetsV6.AddIPsToIPSet(msg.Id, msg.AddedMembers)
-			d.ipsetsV6.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
-		case *proto.IPSetUpdate:
-			d.ipsetsV4.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
-				Type:     ipsets.IPSetTypeHashIP,
-				SetID:    msg.Id,
-				IPFamily: ipsets.IPFamilyV4,
-				MaxSize:  1024 * 1024,
-			}, msg.Members)
-			d.ipsetsV6.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
-				Type:     ipsets.IPSetTypeHashIP,
-				SetID:    msg.Id,
-				IPFamily: ipsets.IPFamilyV6,
-				MaxSize:  1024 * 1024,
-			}, msg.Members)
-		case *proto.IPSetRemove:
-			d.ipsetsV4.RemoveIPSet(msg.Id)
-			d.ipsetsV6.RemoveIPSet(msg.Id)
 
-		// Local workload updates.
-		case *proto.WorkloadEndpointUpdate:
-			d.endpointManagerV4.OnUpdate(msg)
-			d.endpointManagerV6.OnUpdate(msg)
-		case *proto.WorkloadEndpointRemove:
-			d.endpointManagerV4.OnRemove(msg)
-			d.endpointManagerV6.OnRemove(msg)
+		for _, mgr := range d.allManagers {
+			mgr.OnUpdate(msg)
+		}
 
-		// Local host endpoint updates.
-		case *proto.HostEndpointUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
-		case *proto.HostEndpointRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
+		switch msg.(type) {
 
-		// Local active policy updates.
-		case *proto.ActivePolicyUpdate:
-			chains := d.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy)
-			d.filterTableV4.UpdateChains(chains)
-			// TODO(smc) Distinct chains for v6 (need to filter on the IPVersion field)
-			d.filterTableV6.UpdateChains(chains)
-		case *proto.ActivePolicyRemove:
-			inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
-			outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
-			d.filterTableV4.RemoveChainByName(inName)
-			d.filterTableV4.RemoveChainByName(outName)
-			d.filterTableV6.RemoveChainByName(inName)
-			d.filterTableV6.RemoveChainByName(outName)
+		//
+		//// Less common cluster config updates.
+		//case *proto.HostMetadataUpdate:
+		//	log.WithField("msg", msg).Warn("Message not implemented")
+		//case *proto.HostMetadataRemove:
+		//	log.WithField("msg", msg).Warn("Message not implemented")
+		//case *proto.IPAMPoolUpdate:
+		//	log.WithField("msg", msg).Warn("Message not implemented")
+		//case *proto.IPAMPoolRemove:
+		//	log.WithField("msg", msg).Warn("Message not implemented")
+		//
 
-		case *proto.ActiveProfileUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
-		case *proto.ActiveProfileRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
-
-		// Less common cluster config updates.
-		case *proto.HostMetadataUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
-		case *proto.HostMetadataRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
-		case *proto.IPAMPoolUpdate:
-			log.WithField("msg", msg).Warn("Message not implemented")
-		case *proto.IPAMPoolRemove:
-			log.WithField("msg", msg).Warn("Message not implemented")
-
-		case *proto.ConfigUpdate:
-			// Since we're in-process, we get our config from the typed config object.
-			log.Debug("Ignoring config update")
 		case *proto.InSync:
 			// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 			log.Info("Datastore in sync, flushing the dataplane for the first time...")
 			inSync = true
-		default:
-			log.WithField("msg", msg).Panic("Unknown message type")
 		}
 
 		if inSync {
@@ -179,78 +149,34 @@ func (d *internalDataplane) loopUpdatingDataplane() {
 	}
 }
 
-func (d *internalDataplane) apply() {
-	d.ipsetsV4.ApplyUpdates()
-	d.ipsetsV6.ApplyUpdates()
+func (d *InternalDataplane) apply() {
+	// Update sequencing is important here because iptables rules have dependencies on ipsets.
+	// Creating a rule that references an unknown IP set fails, as does deleting an IP set that
+	// is in use.
 
-	d.endpointManagerV4.Apply()
-	d.endpointManagerV6.Apply()
+	// First, give the managers a chance to update IP sets and iptables.
+	for _, mgr := range d.allManagers {
+		mgr.CompleteDeferredWork()
+	}
 
-	d.filterTableV4.Apply()
-	d.filterTableV6.Apply()
+	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
+	// iptables.
+	for _, w := range d.ipsetsWriters {
+		w.ApplyUpdates()
+	}
 
-	d.ipsetsV4.ApplyDeletions()
-	d.ipsetsV6.ApplyDeletions()
+	// Update iptables, this should sever any references to no-unused IP sets.
+	for _, t := range d.iptablesFilterTables {
+		t.Apply()
+	}
+
+	// Now clean up any left-over IP sets.
+	for _, w := range d.ipsetsWriters {
+		w.ApplyDeletions()
+	}
 }
 
-func (d *internalDataplane) loopReportingStatus() {
+func (d *InternalDataplane) loopReportingStatus() {
 	log.Info("Started internal status report thread")
 	// TODO(smc) Implement status reporting.
-}
-
-type endpointManager struct {
-	filterTable    *iptables.Table
-	allEndpoints   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	idToChains     map[proto.WorkloadEndpointID][]*iptables.Chain
-	dispatchChains []*iptables.Chain
-	dirtyEndpoints set.Set
-	ruleRenderer   rules.RuleRenderer
-}
-
-func newEndpointManager(filterTable *iptables.Table, ruleRenderer rules.RuleRenderer) *endpointManager {
-	return &endpointManager{
-		filterTable:    filterTable,
-		allEndpoints:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		idToChains:     map[proto.WorkloadEndpointID][]*iptables.Chain{},
-		dirtyEndpoints: set.New(),
-		ruleRenderer:   ruleRenderer,
-	}
-}
-
-func (m *endpointManager) OnUpdate(msg *proto.WorkloadEndpointUpdate) {
-	m.allEndpoints[*msg.Id] = msg.Endpoint
-	m.dirtyEndpoints.Add(*msg.Id)
-}
-
-func (m *endpointManager) OnRemove(msg *proto.WorkloadEndpointRemove) {
-	delete(m.allEndpoints, *msg.Id)
-	m.dirtyEndpoints.Add(*msg.Id)
-}
-
-func (m *endpointManager) Apply() {
-	// Rewrite the dispatch chains if they've changed.
-	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
-	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
-	newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.allEndpoints)
-	if !reflect.DeepEqual(newDispatchChains, m.dispatchChains) {
-		log.Info("Workloads changed, updating dispatch chains.")
-		m.filterTable.RemoveChains(m.dispatchChains)
-		m.filterTable.UpdateChains(newDispatchChains)
-		m.dispatchChains = newDispatchChains
-	}
-
-	// Rewrite the chains of any dirty endpoints.
-	m.dirtyEndpoints.Iter(func(item interface{}) error {
-		id := item.(proto.WorkloadEndpointID)
-		if workload := m.allEndpoints[id]; workload != nil {
-			log.WithField("id", id).Info("Workload updated, updating its chains.")
-			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(&id, workload)
-			m.filterTable.UpdateChains(chains)
-			m.idToChains[id] = chains
-		} else {
-			log.WithField("id", id).Info("Workload removed, deleting its chains.")
-			m.filterTable.RemoveChains(m.idToChains[id])
-		}
-		return set.RemoveItem
-	})
 }
