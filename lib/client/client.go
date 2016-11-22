@@ -145,7 +145,7 @@ func LoadClientConfigFromEnvironment() (*api.CalicoAPIConfig, error) {
 
 	// Load client config from environment variables.
 	log.Info("Loading config from environment")
-	if err := envconfig.Process("calico", c); err != nil {
+	if err := envconfig.Process("calico", &c.Spec); err != nil {
 		return nil, err
 	}
 
