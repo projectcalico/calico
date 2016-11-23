@@ -8,6 +8,9 @@ to a collection of endpoints which match a [label selector](#selector).
 Policy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
 take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined. 
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `policy`, `policies`, `pol`, `pols`.
+
 ### Sample YAML
 
 This sample policy allows traffic from `frontend` endpoints to `database` endpoints, but only on 

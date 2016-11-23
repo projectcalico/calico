@@ -8,6 +8,9 @@ Each host endpoint may include a set of labels and list of profiles that Calico 
 to the interface.  If no profiles or labels are applied, Calico will 
 not apply any policy.
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
+
 ### Sample YAML
 
 ```yaml

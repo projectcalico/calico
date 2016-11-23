@@ -12,6 +12,9 @@ match the name configured in the Node resource.
 By default, starting a `calico/node` instance will automatically create a node resource 
 using the `hostname` of the compute host.
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
+
 ### Sample YAML
 
 ```yaml

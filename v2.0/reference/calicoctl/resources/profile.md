@@ -10,6 +10,9 @@ Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
 Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) 
 which provides an alternate way to select what policy is applied to an endpoint.
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pros`.
+
 ### Sample YAML
 
 The following sample profile allows all traffic from 10.0.0.0/16, except if the source 

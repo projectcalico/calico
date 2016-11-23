@@ -8,6 +8,9 @@ connecting a Calico networked container or VM to its host.
 Each endpoint may specify a set of labels and list of profiles that Calico will use 
 to apply policy to the interface.
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
+
 > **Note**
 >
 > While `calicoctl` allows the user to fully manage Workload Endpoint resources,

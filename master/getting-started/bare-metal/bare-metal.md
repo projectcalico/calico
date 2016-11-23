@@ -47,7 +47,7 @@ these steps, described in more detail below:
 -   download the calicoctl binary
 -   create an etcd cluster, if you haven't already
 -   install Calico's Felix daemon on each host
--   initialise the etcd database
+-   initialize the etcd database
 -   add policy to allow basic connectivity and Calico function
 -   create host endpoint objects in etcd for each interface you want
     Calico to police (in a later release, we plan to support interface
@@ -116,32 +116,40 @@ There are several ways to install Felix.
 -   if you want to run under docker, you can use `calicoctl node run` to start
     the calico/node container image.  This container packages up the core Calico
     components to provide both Calico networking and network policy.  Running
-    the container automatically pre-initialises the etcd database (which the
+    the container automatically pre-initializes the etcd database (which the
     other installations methods do not).  See the 
     [`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
     guide for details.
 
-Until you initialise the database, Felix will make a regular log that it
+Until you initialize the database, Felix will make a regular log that it
 is in state "wait-for-ready". The default location for the log file is
 `/var/log/calico/felix.log`.
 
 ## Initialising the etcd database
 
-If you are not using the container-based installation (see above), Calico
-doesn't (yet) have a tool to initialise the database for
-bare-metal only deployments. To initialise the database manually, make
-sure the `etcdctl` tool (which ships with etcd) is available, then
-execute the following command on one of your etcd hosts:
+If you are using the container-based installation (using the calico/node
+container image), the database is initialized as soon as you start the first
+node instance.
 
-    etcdctl set /calico/v1/Ready true
+If you are self-installed you should configure a `node` resource for each
+host running Felix.  In this case, the database is initialized after 
+creating the first `node` resource.  For a deployment that does not include 
+the Calico/BGP integration, the specification of a node resource just requires
+the name of the node;  for most deployments this will be the same as the
+hostname.
+
+```
+cat << EOF | calicoctl create -f -
+- apiVersion: v1
+  kind: node
+  metadata:
+    name: <node name or hostname>
+EOF
+```
 
 If you check the felix logfile after this step, the logs should
 transition from periodic notifications that felix is in state
 "wait-for-ready" to a stream of initialisation messages.
-
-> Note that if you are using the container-based installation, using the 
-> calico/node image, then the initialisation of the etcd database is handled
-> automatically for you.
 
 ## Creating basic connectivity and Calico policy
 

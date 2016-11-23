@@ -16,9 +16,15 @@ commands.
 
 ```
 Usage:
-  calicoctl config set <NAME> <VALUE> [--node=<NODE>] [--config=<CONFIG>]
-  calicoctl config unset <NAME> [--node=<NODE>] [--config=<CONFIG>]
-  calicoctl config get <NAME> [--node=<NODE>] [--config=<CONFIG>]
+  calicoctl config set <NAME> <VALUE> [--node=<NODE>]
+                                      [--raw=(bgp|felix)]
+                                      [--config=<CONFIG>]
+  calicoctl config unset <NAME> [--node=<NODE>]
+                                [--raw=(bgp|felix)]
+                                [--config=<CONFIG>]
+  calicoctl config get <NAME> [--node=<NODE>]
+                              [--raw=(bgp|felix)]
+                              [--config=<CONFIG>]
 
 Examples:
   # Turn off the full BGP node-to-node mesh
@@ -35,8 +41,13 @@ Examples:
 
 Options:
   -n --node=<NODE>      The node name.
-  -c --config=<CONFIG>  Path to the file containing connection
-                        configuration in YAML or JSON format.
+     --raw=(bgp|felix)  Apply raw configuration for the specified component.
+                        This option should be used with care; the data is not
+                        validated and it is possible to configure or remove
+                        data that may prevent the component from working as
+                        expected.
+  -c --config=<CONFIG>  Path to the file containing connection configuration in
+                        YAML or JSON format.
                         [default: /etc/calico/calicoctl.cfg]
 
 Description:
@@ -49,7 +60,7 @@ that is specific to a particular node.
 
 For configuration that has both global values and node-specific values, the
 --node parameter is optional:  including the parameter will manage the
-node-specific value,  not including it will manage the global value.  For these
+node-specific value,  excluding it will manage the global value.  For these
 options, if the node-specific value is unset, the global value will be used on
 the node.
 
@@ -91,6 +102,11 @@ off
 
 ```
 -n --node=<NODE>      The node name.
+   --raw=(bgp|felix)  Apply raw configuration for the specified component.
+                      This option should be used with care; the data is not
+                      validated and it is possible to configure or remove
+                      data that may prevent the component from working as
+                      expected.
 ```
 
 ### General options
