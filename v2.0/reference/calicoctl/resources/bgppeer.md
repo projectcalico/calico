@@ -8,6 +8,9 @@ Calico network with your datacenter fabric (e.g. ToR). For more
 information on cluster layouts, see Calico's documentation on 
 [L3 Topologies]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric).
 
+For `calicoctl` commands that specify a resource type on the CLI, the following
+aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bgpps`, `bp`, `bps`.
+
 ### Sample YAML
 
 ```yaml

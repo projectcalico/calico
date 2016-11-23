@@ -5,6 +5,9 @@ layout: docwithnav
 
 This document covers the configuration options for calicoctl when using an etcdv2 datastore.
 
+There are two ways to configure calicoctl with your etcdv2 cluster details: 
+configuration file or environment variables.
+
 ## Configuration file 
 
 By default `calicoctl` looks for a configuration file at `/etc/calico/calicoctl.cfg`.
@@ -12,31 +15,70 @@ By default `calicoctl` looks for a configuration file at `/etc/calico/calicoctl.
 The file location may be overridden using the `--config` option on commands that required
 datastore access.
 
-The config file is a yaml map, with the following supported fields: 
+The config file is a yaml or json document in the following format:
 
-| Field           | Description                                | Examples
-|-----------------|--------------------------------------------|----------
-| etcdEndpoints   | A comma separated list of etcd endpoints.  | http://etcd1:2379 
-| etcdUsername    | Username for RBAC (optional)               | "user" 
-| etcdPassword    | Password for the given username (optional) | "password"
-| etcdKeyFile     | Path to the etcd key file (optional)       | /etc/calico/key.pem
-| etcdCertFile    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem
-| etcdCACertFile  | Path to the etcd CA file (optional)        | /etc/calico/ca.pem
+```
+apiVersion: v1
+kind: calicoApiConfig
+metadata:
+spec:
+  datastoreType: "etcdv2"
+  etcdEndpoints: "http://etcd1:2379,http://etcd2:2379"
+  ...
+```
 
-> **NOTE** 
+See table below for details on the etcdv2 specific fields that may be included in
+the spec section.
+
+If the file exists, then it must be valid and readable by calicoctl.  If the file
+does not exist, calicoctl will read access details from the environment variables.
+
+## Environment variables
+
+If you are not using a config file to specify your access information, calicoctl
+will check a particular set of environment variables.
+
+See the table below for details on the etcdv2 specific environment variables.
+
+>  Note that if neither file nor environment variables are set, calicoctl defaults to
+>  using etcdv2 with a single endpoint of http://127.0.0.1:2379.
+
+## Complete list of etcdv2 connection configuration
+
+| Spec field      | Environment       | Description                                | Examples
+|-----------------|----------------------------------------------------------------|----------
+| datastoreType   | DATASTORE_TYPE    | Indicates the datastore to use (optional, defaults to etcdv2) | etcdv2
+| etcdEndpoints   | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional, defaults to http://127.0.0.1:2379) | http://etcd1:2379 
+| etcdUsername    | ETCD_USERNAME     | Username for RBAC (optional)               | "user" 
+| etcdPassword    | ETCD_PASSWORD     | Password for the given username (optional) | "password"
+| etcdKeyFile     | ETCD_KEY_FILE     | Path to the etcd key file (optional)       | /etc/calico/key.pem
+| etcdCertFile    | ETCD_CERT_FILE    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem
+| etcdCACertFile  | ETCD_CA_CERT_FILE | Path to the etcd CA file (optional)        | /etc/calico/ca.pem
+
+> **NOTES** 
 > 
-> If you are running with TLS enabled, ensure your endpoint addresses use https
+> 1. If you are running with TLS enabled, ensure your endpoint addresses use https
+> 2. When specifying through environment variables, the DATASTORE_TYPE environment
+>    is not required for etcdv2.
+> 3. All environment variables may also be prefixed with "CALICO_", for example 
+>    "CALICO_DATASTORE_TYPE" and "CALICO_END_ENDPOINTS" etc. may also be used.
+> 4. Previous versions of calicoctl supported ETCD_SCHEME and ETC_AUTHORITY environment
+>    variables as a mechanism for specifying the etcd endpoints.  These variables are
+>    deprecated in favor of the ETCD_ENDPOINTS list.
 
-Each of the above configuration options can also be set through environment variables.  For example,
-`etcdEndpoints` can also be represented as `ETCD_ENDPOINTS`.
+## Examples
 
 #### Example configuration file
 
 ```yaml
-etcdEndpoints: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379 
-etcdKeyFile: /etc/calico/key.pem 
-etcdCertFile: /etc/calico/cert.pem 
-etcdCACertFile: /etc/calico/ca.pem 
+apiVersion: v1
+kind: calicoApiConfig
+metadata:
+spec:
+  etcdEndpoints: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379 
+  etcdKeyFile: /etc/calico/key.pem 
+  etcdCertFile: /etc/calico/cert.pem 
+  etcdCACertFile: /etc/calico/ca.pem 
 ```
 
 #### Example using environment variables 

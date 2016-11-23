@@ -43,12 +43,12 @@ spec:
 
 The following resources are supported:
 
-- [bgppeer]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer)
-- [hostendpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
+- [bgpPeer]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer)
+- [hostEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
 - [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy)
-- [ippool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
+- [ipPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
 - [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
-- [workloadendpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+- [workloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
 
 ### Multiple resources in a single file
 

@@ -22,6 +22,8 @@ Usage:
                      [--config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
+                     [--init-system]
+                     [--disable-docker-networking]
 
 Options:
   -h --help                Show this screen.
@@ -39,8 +41,7 @@ Options:
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
-                           Docker image to use for Calico's
-                           per-node container.
+                           Docker image to use for Calico's per-node container.
                            [default: calico/node:%s]
      --backend=(bird|gobgp|none)
                            Specify which networking backend to use.  When set
@@ -48,11 +49,15 @@ Options:
                            The option to run with gobgp is currently
                            experimental.
                            [default: bird]
-     --dryrun              Output the appropriate Docker command, without
-                           starting the container.
+     --dryrun              Output the appropriate command, without starting the
+                           container.
+     --init-system         Run the appropriate command to use with an init
+                           system.
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
                            and there are no pre-existing Calico IP pools.
+     --disable-docker-networking
+                           Disable Docker networking.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -95,18 +100,22 @@ docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0
                          [default: /var/log/calico]
    --node-image=<DOCKER_IMAGE_NAME>
                          Docker image to use for Calico's per-node container.
-                         [default: calico/node:v2.0]
+                         [default: calico/node:%s]
    --backend=(bird|gobgp|none)
                          Specify which networking backend to use.  When set
                          to "none", Calico node runs in policy only mode.
                          The option to run with gobgp is currently
                          experimental.
                          [default: bird]
-   --dryrun              Output the appropriate Docker command, without
-                         starting the container.
+   --dryrun              Output the appropriate command, without starting the
+                         container.
+   --init-system         Run the appropriate command to use with an init
+                         system.
    --no-default-ippools  Do not create default pools upon startup.
                          Default IP pools will be created if this is not set
                          and there are no pre-existing Calico IP pools.
+   --disable-docker-networking
+                         Disable Docker networking.
 ```
 
 ### General options
