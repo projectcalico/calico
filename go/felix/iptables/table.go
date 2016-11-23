@@ -393,21 +393,6 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	// Do deletions in another pass.  This ensures that we don't try to delete any chains that
-	// are still referenced (because we'll have removed the references in the modify pass
-	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
-	// then we'll issue a create+flush instruction in the very first pass, which will sever the
-	// references.
-	t.dirtyChains.Iter(func(item interface{}) error {
-		chainName := item.(string)
-		if _, ok := t.chainNameToChain[chainName]; !ok {
-			// Chain deletion
-			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
-			newHashes[chainName] = nil
-		}
-		return nil // Delay clearing the set until we've programmed iptables.
-	})
-
 	// Now calculate iptables updates for our inserted rules, which are used to hook top-level
 	// chains.
 	t.dirtyInserts.Iter(func(item interface{}) error {
@@ -469,6 +454,21 @@ func (t *Table) applyUpdates() error {
 		}
 		newHashes[chainName] = currentHashes
 
+		return nil // Delay clearing the set until we've programmed iptables.
+	})
+
+	// Do deletions at the end.  This ensures that we don't try to delete any chains that
+	// are still referenced (because we'll have removed the references in the modify pass
+	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
+	// then we'll issue a create+flush instruction in the very first pass, which will sever the
+	// references.
+	t.dirtyChains.Iter(func(item interface{}) error {
+		chainName := item.(string)
+		if _, ok := t.chainNameToChain[chainName]; !ok {
+			// Chain deletion
+			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
+			newHashes[chainName] = nil
+		}
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
