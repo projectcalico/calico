@@ -1,5 +1,5 @@
-hash: e1203965daf503a8191e3c6f06eb923fa835b98a683f3d0c2202de6ee46b1e6e
-updated: 2016-11-23T09:29:18.902272725-08:00
+hash: 5f25e5f7bc5ec5621cfafd62391ebecf01bc5be93d8afcc22ff469c669761df0
+updated: 2016-11-23T14:35:58.361665456Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -34,9 +34,7 @@ imports:
 - name: github.com/coreos/go-systemd
   version: bfdc81d0d7e0fb19447b08571f63b774495251ce
   subpackages:
-  - daemon
   - journal
-  - util
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
@@ -183,11 +181,11 @@ imports:
   version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
   - codec
+- name: github.com/vishvananda/netlink
+  version: a4f22d8ad2327663017dbb309b5e3f8b6f348020
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
-  - bcrypt
-  - blowfish
   - ssh/terminal
 - name: golang.org/x/net
   version: 6acef71eb69611914f7a30939ea9f6e194c78172
@@ -368,8 +366,6 @@ testImports:
   version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
   - format
-  - gstruct
-  - gstruct/errors
   - internal/assertion
   - internal/asyncassertion
   - internal/oraclematcher

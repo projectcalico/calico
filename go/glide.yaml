@@ -32,3 +32,4 @@ import:
   version: c5b7fccd204277076155f10851dad72b76a49317
 - package: github.com/gogo/protobuf
   version: ^0.3.0
+- package: github.com/vishvananda/netlink
