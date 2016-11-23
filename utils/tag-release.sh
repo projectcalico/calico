@@ -13,6 +13,13 @@ scriptdir=$(dirname $(readlink -f $0))
 # Include function library.
 . ${scriptdir}/lib.sh
 
+# Validate the specified new version.
+validate_version $nextrel || {
+    echo "Version $nextrel is not valid."
+    echo "See 'validate_version' in ${scriptdir}/lib.sh for guidance."
+    exit 1
+}
+
 # Ensure we're in the root of the Git repository.
 cd `git_repo_root`
 

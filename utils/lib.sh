@@ -44,10 +44,76 @@ function git_commit_id {
 
 # Convert PEP 440 version to Debian.
 function git_version_to_deb {
-    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\)/\1~\2/'
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1~\2/'
 }
 
 # Convert PEP 440 version to RPM.
 function git_version_to_rpm {
-    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\)/\1_\2/'
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1_\2/'
+}
+
+# Check that version is valid.
+function validate_version {
+    version=$1
+
+    # We allow.
+    REGEX="^[0-9]+\.[0-9]+\.[0-9]+(-?(a|b|rc|pre).*)?$"
+
+    if [[ $version =~ $REGEX ]]; then
+	return 0
+    else
+	return 1
+    fi
+}
+
+function test_validate_version {
+
+    function expect_valid {
+	validate_version $1 || echo $1 wrongly deemed invalid
+    }
+
+    function expect_invalid {
+	validate_version $1 && echo $1 wrongly deemed valid
+    }
+
+    # Test cases.
+    expect_valid 1.2.3
+    expect_invalid 1.2.3.4
+    expect_invalid .2.3.4
+    expect_invalid abc
+    expect_invalid 1.2.3.beta
+    expect_valid 1.2.3-beta.2
+    expect_valid 1.2.3-beta
+    expect_valid 1.2.3-alpha
+    expect_valid 1.2.3-rc2
+    expect_invalid 1:2.3-rc2
+    expect_invalid 1.2:3-rc2
+    expect_invalid 1.2.3:rc2
+
+    # All Felix tags since 1.0.0:
+    expect_valid 1.0.0
+    expect_valid 1.1.0
+    expect_valid 1.2.0
+    expect_valid 1.2.0-pre2
+    expect_valid 1.2.1
+    expect_valid 1.2.2
+    expect_valid 1.3.0
+    expect_valid 1.3.0-pre5
+    expect_valid 1.3.0a5
+    expect_valid 1.3.0a6
+    expect_valid 1.3.1
+    expect_valid 1.4.0
+    expect_valid 1.4.0b1
+    expect_valid 1.4.0b2
+    expect_valid 1.4.0b3
+    expect_valid 1.4.1b1
+    expect_valid 1.4.1b2
+    expect_valid 1.4.2
+    expect_valid 1.4.3
+    expect_valid 1.4.4
+    expect_valid 2.0.0-beta
+    expect_valid 2.0.0-beta-rc2
+    expect_valid 2.0.0-beta.2
+    expect_valid 2.0.0-beta.3
+    expect_invalid v2.0.0-beta-rc1
 }
