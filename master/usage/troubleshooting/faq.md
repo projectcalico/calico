@@ -68,6 +68,13 @@ In container deployments, Calico only uses proxy ARP for resolving the
 that all traffic goes via the 169.245.1.1 gateway so that is the only
 IP that will be ARPed by the container.
 
+## "Why containers are still unconnected even with `proxy_arp=1`"
+
+Route for `169.254.1.1` on host is also necessary, since the traffic
+should be forwarded to the default route, or somewhere connected.
+Please check your route table for making sure. Adding a default one is
+fine if absent.
+
 ## "Is Calico compliant with PCI/DSS requirements?"
 
 PCI certification applies to the whole end-to-end system, of which
