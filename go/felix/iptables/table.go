@@ -229,7 +229,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 	cmd := exec.Command(t.saveCmd, "-t", t.Name)
 	output, err := cmd.Output()
 	if err != nil {
-		log.WithError(err).Panic("iptables save failed")
+		t.logCxt.WithError(err).Panic("iptables save failed")
 	}
 	buf := bytes.NewBuffer(output)
 	newHashes := map[string][]string{}
@@ -242,7 +242,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
 		// for (possibly empty) chains.
-		logCxt := log.WithField("line", line)
+		logCxt := t.logCxt.WithField("line", line)
 		logCxt.Debug("Parsing line")
 		captures := chainCreateRegexp.FindStringSubmatch(line)
 		if captures != nil {
@@ -273,7 +273,7 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		}
 		newHashes[chainName] = append(newHashes[chainName], hash)
 	}
-	log.WithField("newHashes", newHashes).Debug("Read hashes from dataplane")
+	t.logCxt.WithField("newHashes", newHashes).Debug("Read hashes from dataplane")
 	return newHashes
 }
 
@@ -284,6 +284,7 @@ func (t *Table) Apply() {
 	//   in what we try to program.
 	retries := 10
 	backoffTime := 1 * time.Millisecond
+	failedAtLeastOnce := false
 	for {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
@@ -295,13 +296,18 @@ func (t *Table) Apply() {
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
 				retries--
-				log.WithError(err).Warn("Failed to program iptables, will retry")
+				t.logCxt.WithError(err).Warn("Failed to program iptables, will retry")
 				time.Sleep(backoffTime)
 				backoffTime *= 2
+				t.logCxt.WithError(err).Warn("Retrying...")
+				failedAtLeastOnce = true
 				continue
 			} else {
-				log.WithError(err).Panic("Failed to program iptables, giving up after retries")
+				t.logCxt.WithError(err).Panic("Failed to program iptables, giving up after retries")
 			}
+		}
+		if failedAtLeastOnce {
+			t.logCxt.Warn("Succeeded after retry.")
 		}
 		break
 	}
@@ -313,7 +319,7 @@ func (t *Table) applyUpdates() error {
 	inputBuf.WriteString(fmt.Sprintf("*%s\n", t.Name))
 
 	// Make a pass over the dirty chains and generate a forward reference for any that need to
-	// be created.
+	// be created or flushed.
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		chainNeedsToBeFlushed := false
@@ -334,12 +340,7 @@ func (t *Table) applyUpdates() error {
 	newHashes := map[string][]string{}
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
-		if chain, ok := t.chainNameToChain[chainName]; !ok {
-			// Chain deletion
-			// TODO(smc) Might need to do deletions in a second pass because can fail if someone else is referencing our chain.
-			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
-			newHashes[chainName] = nil
-		} else {
+		if chain, ok := t.chainNameToChain[chainName]; ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
 			previousHashes := t.chainToDataplaneHashes[chainName]
@@ -370,6 +371,21 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
+	// Do deletions in another pass.  This ensures that we don't try to delete any chains that
+	// are still referenced (because we'll have removed the references in the modify pass
+	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
+	// then we'll issue a create+flush instruction in the very first pass, which will sever the
+	// references.
+	t.dirtyChains.Iter(func(item interface{}) error {
+		chainName := item.(string)
+		if _, ok := t.chainNameToChain[chainName]; !ok {
+			// Chain deletion
+			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
+			newHashes[chainName] = nil
+		}
+		return nil // Delay clearing the set until we've programmed iptables.
+	})
+
 	t.dirtyInserts.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
@@ -388,13 +404,13 @@ func (t *Table) applyUpdates() error {
 		if !needsRewrite {
 			for i := len(currentHashes); i < len(previousHashes); i++ {
 				if previousHashes[i] != "" {
-					log.WithField("chainName", chainName).Info("Chain contains old rule insertion, updating.")
+					t.logCxt.WithField("chainName", chainName).Info("Chain contains old rule insertion, updating.")
 					needsRewrite = true
 					break
 				}
 			}
 		} else {
-			log.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
+			t.logCxt.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
 		}
 		if !needsRewrite {
 			return nil
@@ -430,7 +446,7 @@ func (t *Table) applyUpdates() error {
 	// Annoying to have to copy the buffer here but reading from a buffer is destructive so
 	// if we want to trace out the contents after a failure, we have to take a copy.
 	input := inputBuf.String()
-	log.WithField("iptablesInput", input).Debug("Writing to iptables")
+	t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
 
 	var outputBuf, errBuf bytes.Buffer
 	cmd := exec.Command(t.restoreCmd, "--noflush", "--verbose")
@@ -439,7 +455,7 @@ func (t *Table) applyUpdates() error {
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	if err != nil {
-		log.WithFields(log.Fields{
+		t.logCxt.WithFields(log.Fields{
 			"output":      outputBuf.String(),
 			"errorOutput": errBuf.String(),
 			"error":       err,
