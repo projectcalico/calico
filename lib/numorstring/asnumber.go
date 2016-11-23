@@ -17,6 +17,7 @@ package numorstring
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -32,13 +33,16 @@ func ASNumberFromString(s string) (ASNumber, error) {
 
 	parts := strings.Split(s, ".")
 	if len(parts) != 2 {
-		return 0, errors.New("invalid AS Number format")
+		msg := fmt.Sprintf("invalid AS Number format (%s)", s)
+		return 0, errors.New(msg)
 	}
 
 	if num1, err := strconv.ParseUint(parts[0], 10, 16); err != nil {
-		return 0, errors.New("invalid AS Number format")
+		msg := fmt.Sprintf("invalid AS Number format (%s)", s)
+		return 0, errors.New(msg)
 	} else if num2, err := strconv.ParseUint(parts[1], 10, 16); err != nil {
-		return 0, errors.New("invalid AS Number format")
+		msg := fmt.Sprintf("invalid AS Number format (%s)", s)
+		return 0, errors.New(msg)
 	} else {
 		return ASNumber((num1 << 16) + num2), nil
 	}

@@ -36,7 +36,8 @@ func SinglePort(port uint16) Port {
 func PortFromRange(minPort, maxPort uint16) (Port, error) {
 	port := Port{minPort, maxPort}
 	if minPort > maxPort {
-		return port, errors.New("minimum port number is greater than maximum port number in port range")
+		msg := fmt.Sprintf("minimum port number (%d) is greater than maximum port number (%d) in port range", minPort, maxPort)
+		return port, errors.New(msg)
 	}
 	return port, nil
 }
@@ -50,13 +51,16 @@ func PortFromString(s string) (Port, error) {
 
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 {
-		return Port{}, errors.New("invalid port format")
+		msg := fmt.Sprintf("invalid port format (%s)", s)
+		return Port{}, errors.New(msg)
 	}
 
 	if pmin, err := strconv.ParseUint(parts[0], 10, 16); err != nil {
-		return Port{}, errors.New("invalid minimum port number in range")
+		msg := fmt.Sprintf("invalid minimum port number in range (%s)", s)
+		return Port{}, errors.New(msg)
 	} else if pmax, err := strconv.ParseUint(parts[1], 10, 16); err != nil {
-		return Port{}, errors.New("invalid maximum port number in range")
+		msg := fmt.Sprintf("invalid maximum port number in range (%s)", s)
+		return Port{}, errors.New(msg)
 	} else {
 		return PortFromRange(uint16(pmin), uint16(pmax))
 	}

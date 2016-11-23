@@ -65,23 +65,33 @@ type ErrorValidation struct {
 }
 
 type ErroredField struct {
-	Name  string
-	Value interface{}
+	Name   string
+	Value  interface{}
+	Reason string
 }
 
 func (e ErrorValidation) Error() string {
 	if len(e.ErroredFields) == 0 {
 		return "unknown validation error"
 	} else if len(e.ErroredFields) == 1 {
-		return fmt.Sprintf("error with field %s = '%v'",
-			e.ErroredFields[0].Name,
-			e.ErroredFields[0].Value)
+		f := e.ErroredFields[0]
+		if f.Reason == "" {
+			return fmt.Sprintf("error with field %s = '%v'",
+				f.Name, f.Value)
+		} else {
+			return fmt.Sprintf("error with field %s = '%v' (%s)",
+				f.Name, f.Value, f.Reason)
+		}
 	} else {
 		s := "error with the following fields:\n"
 		for _, f := range e.ErroredFields {
-			s = s + fmt.Sprintf("-  %s = '%v'\n",
-				f.Name,
-				f.Value)
+			if f.Reason == "" {
+				s = s + fmt.Sprintf("-  %s = '%v'\n",
+					f.Name, f.Value)
+			} else {
+				s = s + fmt.Sprintf("-  %s = '%v' (%s)\n",
+					f.Name, f.Value, f.Reason)
+			}
 		}
 		return s
 	}
