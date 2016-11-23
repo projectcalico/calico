@@ -57,6 +57,7 @@ coreos:
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
         --config=/etc/kubernetes/manifests \
+        --hostname-override=$private_ipv4 \
         --logtostderr=true \
         --network-plugin=cni \
         --network-plugin-dir=/etc/cni/net.d
