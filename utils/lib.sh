@@ -21,12 +21,13 @@ function git_auto_version {
     # Get the last tag, and the number of commits since that tag.
     last_tag=`git_last_tag`
     commits_since=`git cherry -v ${last_tag} | wc -l`
+    sha=`git_commit_id`
 
     # Generate corresponding PEP 440 version number.
     if [ ${commits_since} -eq 0 ]; then
 	version=${last_tag}
     else
-	version=${last_tag}.post${commits_since}
+	version=${last_tag}.post${commits_since}+${sha}
     fi
 
     echo $version
