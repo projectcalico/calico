@@ -306,7 +306,7 @@ Description:
 		os.Exit(1)
 	}
 
-	// Protect against calico/node taking too long to start, or docker
+	// Protect against calico processes taking too long to start, or docker
 	// logs hanging without output.
 	time.AfterFunc(checkLogTimeout, func() {
 		logCmd.Process.Kill()
@@ -325,7 +325,9 @@ Description:
 	}
 
 	// If we didn't successfully start then notify the user.
-	if !started {
+	if outScanner.Err() != nil {
+		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
+	} else if !started {
 		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
 	}
 
