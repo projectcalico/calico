@@ -32,12 +32,13 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"errors"
 	"os"
+
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 var _ = Describe("Client config tests", func() {
@@ -58,11 +59,11 @@ spec:
 	cfg1data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		EtcdConfig: etcd.EtcdConfig{
-			EtcdEndpoints: "https://1.2.3.4:1234,https://10.20.30.40:1234",
-			EtcdUsername: "bar",
-			EtcdPassword: "baz",
-			EtcdKeyFile: "foo",
-			EtcdCertFile: "foobar",
+			EtcdEndpoints:  "https://1.2.3.4:1234,https://10.20.30.40:1234",
+			EtcdUsername:   "bar",
+			EtcdPassword:   "baz",
+			EtcdKeyFile:    "foo",
+			EtcdCertFile:   "foobar",
 			EtcdCACertFile: "foobarbaz",
 		},
 	}
@@ -84,12 +85,12 @@ spec:
 	cfg2data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		KubeConfig: k8s.KubeConfig{
-			K8sKubeconfigFile: "filename",
-			K8sServer: "bar",
-			K8sClientCertificate: "baz",
-			K8sClientKey: "foo",
+			K8sKubeconfigFile:       "filename",
+			K8sServer:               "bar",
+			K8sClientCertificate:    "baz",
+			K8sClientKey:            "foo",
 			K8sCertificateAuthority: "foobar",
-			K8sToken: "foobarbaz",
+			K8sToken:                "foobarbaz",
 		},
 	}
 
@@ -104,70 +105,70 @@ kind: notCalicoApiConfig
 `
 
 	// Environments to test ETCD parameters
-	env1 := map[string]string {
-		"ETCD_ENDPOINTS": "https://1.2.3.4:1234,https://10.20.30.40:1234",
-		"ETCD_USERNAME": "bar",
-		"ETCD_PASSWORD": "baz",
-		"ETCD_KEY_FILE": "foo",
-		"ETCD_CERT_FILE": "foobar",
+	env1 := map[string]string{
+		"ETCD_ENDPOINTS":    "https://1.2.3.4:1234,https://10.20.30.40:1234",
+		"ETCD_USERNAME":     "bar",
+		"ETCD_PASSWORD":     "baz",
+		"ETCD_KEY_FILE":     "foo",
+		"ETCD_CERT_FILE":    "foobar",
 		"ETCD_CA_CERT_FILE": "foobarbaz",
 	}
 	cfg1env := api.NewCalicoAPIConfig()
 	cfg1env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		EtcdConfig: etcd.EtcdConfig{
-			EtcdScheme: "http",
-			EtcdAuthority: "127.0.0.1:2379",
-			EtcdEndpoints: "https://1.2.3.4:1234,https://10.20.30.40:1234",
-			EtcdUsername: "bar",
-			EtcdPassword: "baz",
-			EtcdKeyFile: "foo",
-			EtcdCertFile: "foobar",
+			EtcdScheme:     "http",
+			EtcdAuthority:  "127.0.0.1:2379",
+			EtcdEndpoints:  "https://1.2.3.4:1234,https://10.20.30.40:1234",
+			EtcdUsername:   "bar",
+			EtcdPassword:   "baz",
+			EtcdKeyFile:    "foo",
+			EtcdCertFile:   "foobar",
 			EtcdCACertFile: "foobarbaz",
 		},
 	}
 
 	// Environments to test k8s parameters
-	env2 := map[string]string {
-		"DATASTORE_TYPE": string(api.Kubernetes),
-		"KUBECONFIG": "filename",
+	env2 := map[string]string{
+		"DATASTORE_TYPE":   string(api.Kubernetes),
+		"KUBECONFIG":       "filename",
 		"K8S_API_ENDPOINT": "bar",
-		"K8S_CERT_FILE": "baz",
-		"K8S_KEY_FILE": "foo",
-		"K8S_CA_FILE": "foobar",
-		"K8S_API_TOKEN": "foobarbaz",
+		"K8S_CERT_FILE":    "baz",
+		"K8S_KEY_FILE":     "foo",
+		"K8S_CA_FILE":      "foobar",
+		"K8S_API_TOKEN":    "foobarbaz",
 	}
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.Kubernetes,
 		EtcdConfig: etcd.EtcdConfig{
-			EtcdScheme: "http",
+			EtcdScheme:    "http",
 			EtcdAuthority: "127.0.0.1:2379",
 		},
 		KubeConfig: k8s.KubeConfig{
-			K8sKubeconfigFile: "filename",
-			K8sServer: "bar",
-			K8sClientCertificate: "baz",
-			K8sClientKey: "foo",
+			K8sKubeconfigFile:       "filename",
+			K8sServer:               "bar",
+			K8sClientCertificate:    "baz",
+			K8sClientKey:            "foo",
 			K8sCertificateAuthority: "foobar",
-			K8sToken: "foobarbaz",
+			K8sToken:                "foobarbaz",
 		},
 	}
 
 	// Environments should work with CALICO_ prefix too.
-	env3 := map[string]string {
+	env3 := map[string]string{
 		"CALICO_ETCD_AUTHORITY": "123.123.123.123:2344",
-		"CALICO_ETCD_USERNAME": "userbar",
-		"CALICO_ETCD_PASSWORD": "passbaz",
+		"CALICO_ETCD_USERNAME":  "userbar",
+		"CALICO_ETCD_PASSWORD":  "passbaz",
 	}
 	cfg3env := api.NewCalicoAPIConfig()
 	cfg3env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		EtcdConfig: etcd.EtcdConfig{
-			EtcdScheme: "http",
+			EtcdScheme:    "http",
 			EtcdAuthority: "123.123.123.123:2344",
-			EtcdUsername: "userbar",
-			EtcdPassword: "passbaz",
+			EtcdUsername:  "userbar",
+			EtcdPassword:  "passbaz",
 		},
 	}
 

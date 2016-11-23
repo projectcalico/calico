@@ -66,8 +66,12 @@ type ConfigInterface interface {
 	SetNodeLogLevel(string, string) error
 	SetNodeLogLevelUseGlobal(string) error
 	GetNodeLogLevel(string) (string, ConfigLocation, error)
-	GetFelixConfig(string) (*string, error)
-	SetFelixConfig(string, *string) error
+	GetFelixConfig(string, string) (string, bool, error)
+	SetFelixConfig(string, string, string) error
+	UnsetFelixConfig(string, string) error
+	GetBGPConfig(string, string) (string, bool, error)
+	SetBGPConfig(string, string, string) error
+	UnsetBGPConfig(string, string) error
 }
 
 // config implements ConfigInterface
@@ -254,23 +258,97 @@ func (c *config) GetNodeLogLevel(node string) (string, ConfigLocation, error) {
 }
 
 // GetFelixConfig provides a mechanism for getting arbitrary Felix configuration
-// in the datastore.
-func (c *config) GetFelixConfig(name string) (*string, error) {
-	return c.getValue(model.GlobalConfigKey{Name: name})
+// in the datastore.  A blank value for the node will get the global
+// configuration.  If the boolean value returned is false, the configurations
+// is unset and the return value should be ignored.
+func (c *config) GetFelixConfig(name, node string) (string, bool, error) {
+	value, err := c.getValue(getFelixConfigKey(name, node))
+	if err != nil {
+		return "", false, err
+	} else if value == nil {
+		return "", false, nil
+	} else {
+		return *value, true, nil
+	}
 }
 
 // SetFelixConfig provides a mechanism for setting arbitrary Felix configuration
-// in the datastore.  A nil value will remove the entry from the datastore.
-func (c *config) SetFelixConfig(name string, value *string) error {
-	key := model.GlobalConfigKey{Name: name}
-	if value == nil {
-		return c.deleteConfig(key)
-	}
+// in the datastore.  A blank value for the node will set the global
+// configuration.
+//
+// Caution should be observed using this method as no validation is performed
+// and changing arbitrary configuration may have unexpected consequences.
+func (c *config) SetFelixConfig(name, node string, value string) error {
 	_, err := c.c.backend.Apply(&model.KVPair{
-		Key:   key,
-		Value: *value,
+		Key:   getFelixConfigKey(name, node),
+		Value: value,
 	})
 	return err
+}
+
+// UnsetFelixConfig provides a mechanism for unsetting arbitrary Felix
+// configuration in the datastore.  A blank value for the node will unset the
+// global configuration.
+//
+// Caution should be observed using this method as no validation is performed
+// and changing arbitrary configuration may have unexpected consequences.
+func (c *config) UnsetFelixConfig(name, node string) error {
+	return c.deleteConfig(getFelixConfigKey(name, node))
+}
+
+// GetBGPConfig provides a mechanism for getting arbitrary BGP configuration
+// in the datastore.  A blank value for the node will get the global
+// configuration.  If the boolean value returned is false, the configurations
+// is unset and the return value should be ignored.
+func (c *config) GetBGPConfig(name, node string) (string, bool, error) {
+	value, err := c.getValue(getBGPConfigKey(name, node))
+	if err != nil {
+		return "", false, err
+	} else if value == nil {
+		return "", false, nil
+	} else {
+		return *value, true, nil
+	}
+}
+
+// SetBGPConfig provides a mechanism for setting arbitrary BGP configuration
+// in the datastore.  A blank value for the node will set the global
+// configuration.
+//
+// Caution should be observed using this method as no validation is performed
+// and changing arbitrary configuration may have unexpected consequences.
+func (c *config) SetBGPConfig(name, node string, value string) error {
+	_, err := c.c.backend.Apply(&model.KVPair{
+		Key:   getBGPConfigKey(name, node),
+		Value: value,
+	})
+	return err
+}
+
+// UnsetBGPConfig provides a mechanism for unsetting arbitrary BGP
+// configuration in the datastore.  A blank value for the node will unset the
+// global configuration.
+//
+// Caution should be observed using this method as no validation is performed
+// and changing arbitrary configuration may have unexpected consequences.
+func (c *config) UnsetBGPConfig(name, node string) error {
+	return c.deleteConfig(getBGPConfigKey(name, node))
+}
+
+// getFelixConfigKey returns the model.Key interface for the Felix config.
+func getFelixConfigKey(name, node string) model.Key {
+	if node == "" {
+		return model.GlobalConfigKey{Name: name}
+	}
+	return model.HostConfigKey{Hostname: node, Name: name}
+}
+
+// getBGPConfigKey returns the model.Key interface for the BGP config.
+func getBGPConfigKey(name, node string) model.Key {
+	if node == "" {
+		return model.GlobalBGPConfigKey{Name: name}
+	}
+	return model.HostBGPConfigKey{Hostname: node, Name: name}
 }
 
 // setLogLevel sets the log level fields with the appropriate log string value.

@@ -19,6 +19,8 @@ import (
 
 	"math/rand"
 
+	"net"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
@@ -26,7 +28,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hwm"
 	"golang.org/x/net/context"
-	"net"
 )
 
 // defaultEtcdClusterID is default value that an etcd cluster uses if it

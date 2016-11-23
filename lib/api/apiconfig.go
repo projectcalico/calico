@@ -23,7 +23,7 @@ import (
 type DatastoreType string
 
 const (
-	EtcdV2 DatastoreType = "etcdv2"
+	EtcdV2     DatastoreType = "etcdv2"
 	Kubernetes DatastoreType = "kubernetes"
 )
 

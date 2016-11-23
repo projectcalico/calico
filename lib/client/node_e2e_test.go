@@ -191,11 +191,14 @@ var _ = Describe("Node tests", func() {
 	Describe("Checking global config is set only once", func() {
 		testutils.CleanEtcd()
 		c, _ := testutils.NewClient("")
-		var guid string
+		var guidOrig string
+		var guidNew string
+		var set bool
+		var err error
 
 		// Step-1: Create node 1.
 		Context("Create node1", func() {
-			_, err := c.Nodes().Create(&api.Node{
+			_, err = c.Nodes().Create(&api.Node{
 				Metadata: api.NodeMetadata{Name: "node1"},
 				Spec:     api.NodeSpec{},
 			})
@@ -204,17 +207,16 @@ var _ = Describe("Node tests", func() {
 			})
 
 			It("should create the global GUID", func() {
-				guidp, err := c.Config().GetFelixConfig("ClusterGUID")
+				guidOrig, set, err = c.Config().GetFelixConfig("ClusterGUID", "")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(guidp).NotTo(BeNil())
-				Expect(*guidp).NotTo(Equal(""))
-				guid = *guidp
+				Expect(set).To(BeTrue())
+				Expect(guidOrig).NotTo(Equal(""))
 			})
 		})
 
 		// Step-2: Create node 2.
 		Context("Create node 2", func() {
-			_, err := c.Nodes().Create(&api.Node{
+			_, err = c.Nodes().Create(&api.Node{
 				Metadata: api.NodeMetadata{Name: "node2"},
 				Spec:     api.NodeSpec{},
 			})
@@ -223,10 +225,11 @@ var _ = Describe("Node tests", func() {
 			})
 
 			It("should not change the global GUID", func() {
-				guidp, err := c.Config().GetFelixConfig("ClusterGUID")
+				guidNew, set, err = c.Config().GetFelixConfig("ClusterGUID", "")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(guidp).NotTo(BeNil())
-				Expect(*guidp).To(Equal(guid))
+				Expect(set).To(BeTrue())
+				Expect(guidNew).NotTo(Equal(""))
+				Expect(guidNew).To(Equal(guidOrig))
 			})
 		})
 	})
