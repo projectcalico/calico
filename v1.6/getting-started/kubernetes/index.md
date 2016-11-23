@@ -10,6 +10,11 @@ Calico allows you to enforce fine-grained network security policy natively in Ku
 
 The following guides help you get started with Calico.
 
+Integration guide
+------------------
+
+- [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/): Discusses adding Calico to an existing cluster, or integrating Calico with your own install scripts.
+
 Quick-start guides
 ------------------
 These guides let you get a cluster set up quickly, and walk you through using Calico for networking and network policy.
@@ -18,13 +23,6 @@ These guides let you get a cluster set up quickly, and walk you through using Ca
 - [CoreOS on GCE]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/gce)
 - [CoreOS on AWS]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/aws)
 
-Bare-metal guides
------------------
-These guides walk you through setting up a Kubernetes cluster with Calico.
-
-- [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/) (Recommended) - Discusses adding Calico to an existing cluster.
-- [CoreOS bare-metal](http://kubernetes.io/docs/getting-started-guides/coreos/bare_metal_calico/)
-- [Ubuntu bare-metal](http://kubernetes.io/docs/getting-started-guides/ubuntu-calico/)
 
 ## Requirements
 
