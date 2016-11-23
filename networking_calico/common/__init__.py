@@ -22,6 +22,7 @@ import netaddr
 import netaddr.core
 import os
 import re
+import six
 
 # White-list for the --protocol match criteria.  We allow the guaranteed
 # string shortcuts as well as int/string versions of the raw IDs.  We disallow
@@ -250,7 +251,7 @@ def _validate_rule_match_criteria(rule, issues, neg_pfx):
 
     if "log_prefix" in rule:
         log_pfx = rule["log_prefix"]
-        if not isinstance(log_pfx, basestring):
+        if not isinstance(log_pfx, six.string_types):
             issues.append("Log prefix should be a string")
         else:
             # Sanitize the log prefix.  iptables length limit is 29 chars but
