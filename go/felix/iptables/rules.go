@@ -91,6 +91,12 @@ func (r Rule) RenderAppend(chainName, prefixFragment string) string {
 	return r.renderInner(fragments, prefixFragment)
 }
 
+func (r Rule) RenderInsert(chainName, prefixFragment string) string {
+	fragments := make([]string, 0, 6)
+	fragments = append(fragments, "-I", chainName)
+	return r.renderInner(fragments, prefixFragment)
+}
+
 func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))

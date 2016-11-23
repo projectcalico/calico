@@ -349,16 +349,17 @@ func (t *Table) applyUpdates() error {
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
 				if i < len(previousHashes) && i < len(currentHashes) {
-					if previousHashes[i] != currentHashes[i] {
-						// Hash doesn't match, replace the rule.
-						ruleNum := i + 1 // 1-indexed.
-						hashComment := t.commentFrag(currentHashes[i])
-						line = chain.Rules[i].RenderReplace(chainName, ruleNum, hashComment)
+					if previousHashes[i] == currentHashes[i] {
+						continue
 					}
+					// Hash doesn't match, replace the rule.
+					ruleNum := i + 1 // 1-indexed.
+					hashComment := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, hashComment)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
-					line = fmt.Sprintf("-D %s %d", chainName, ruleNum)
+					line = deleteRule(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
 					hashComment := t.commentFrag(currentHashes[i])
@@ -386,6 +387,8 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
+	// Now calculate iptables updates for our inserted rules, which are used to hook top-level
+	// chains.
 	t.dirtyInserts.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
@@ -399,31 +402,39 @@ func (t *Table) applyUpdates() error {
 		}
 		currentHashes := chain.RuleHashes()
 
-		needsRewrite := len(previousHashes) < len(currentHashes) ||
-			!reflect.DeepEqual(currentHashes, previousHashes[:len(currentHashes)])
-		if !needsRewrite {
+		needsRewrite := false
+		if len(previousHashes) < len(currentHashes) ||
+			!reflect.DeepEqual(currentHashes, previousHashes[:len(currentHashes)]) {
+			// Hashes are wrong, rules need to be re-inserted.
+			t.logCxt.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
+			needsRewrite = true
+		} else {
+			// Hashes were correct for the first few rules, check whether there are any
+			// stray rules further down the chain.
 			for i := len(currentHashes); i < len(previousHashes); i++ {
 				if previousHashes[i] != "" {
-					t.logCxt.WithField("chainName", chainName).Info("Chain contains old rule insertion, updating.")
+					t.logCxt.WithField("chainName", chainName).Info(
+						"Chain contains old rule insertion, updating.")
 					needsRewrite = true
 					break
 				}
 			}
-		} else {
-			t.logCxt.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
 		}
 		if !needsRewrite {
+			// Chain is in sync, skip to next one.
 			return nil
 		}
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
 		// inserts from this chain and re-insert them.  Need to remove/insert in reverse
-		// order to preserve rule numbers until we're finished.
+		// order to preserve rule numbers until we're finished.  This clobbers rule counters
+		// but it should be very rare (startup-only unless someone is altering our rules).
 		for i := len(previousHashes) - 1; i >= 0; i-- {
 			if previousHashes[i] != "" {
 				ruleNum := i + 1
-				line := fmt.Sprintf("-D %s %d\n", chainName, ruleNum)
+				line := deleteRule(chainName, ruleNum)
 				inputBuf.WriteString(line)
+				inputBuf.WriteString("\n")
 			} else {
 				// Make sure currentHashes ends up the right length.
 				currentHashes = append(currentHashes, "")
@@ -431,9 +442,9 @@ func (t *Table) applyUpdates() error {
 		}
 		for i := len(rules) - 1; i >= 0; i-- {
 			comment := t.commentFrag(currentHashes[i])
-			line := fmt.Sprintf("-I %s %s %s %s\n", chainName, comment,
-				chain.Rules[i].Match, rules[i].Action.ToFragment())
+			line := chain.Rules[i].RenderInsert(chainName, comment)
 			inputBuf.WriteString(line)
+			inputBuf.WriteString("\n")
 		}
 		newHashes[chainName] = currentHashes
 
@@ -482,4 +493,8 @@ func (t *Table) applyUpdates() error {
 
 func (t *Table) commentFrag(hash string) string {
 	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashCommentPrefix, hash)
+}
+
+func deleteRule(chainName string, ruleNum int) string {
+	return fmt.Sprintf("-D %s %d", chainName, ruleNum)
 }
