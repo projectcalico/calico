@@ -15,6 +15,7 @@
 package node
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +24,8 @@ import (
 	"regexp"
 
 	"io/ioutil"
+
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
@@ -35,6 +38,10 @@ const (
 	ETCD_KEY_NODE_FILE     = "/etc/calico/certs/key.pem"
 	ETCD_CERT_NODE_FILE    = "/etc/calico/certs/cert.crt"
 	ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
+)
+
+var (
+	checkLogTimeout = 10 * time.Second
 )
 
 var VERSION string
@@ -51,6 +58,8 @@ func Run(args []string) {
                      [--config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
+                     [--init-system]
+                     [--disable-docker-networking]
 
 Options:
   -h --help                Show this screen.
@@ -76,11 +85,15 @@ Options:
                            The option to run with gobgp is currently
                            experimental.
                            [default: bird]
-     --dryrun              Output the appropriate Docker command, without
-                           starting the container.
+     --dryrun              Output the appropriate command, without starting the
+                           container.
+     --init-system         Run the appropriate command to use with an init
+                           system.
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
                            and there are no pre-existing Calico IP pools.
+     --disable-docker-networking
+                           Disable Docker networking.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -110,6 +123,8 @@ Description:
 	name := argutils.ArgStringOrBlank(arguments, "--name")
 	nopools := argutils.ArgBoolOrFalse(arguments, "--no-default-ippools")
 	config := argutils.ArgStringOrBlank(arguments, "--config")
+	disableDockerNw := argutils.ArgBoolOrFalse(arguments, "--disable-docker-networking")
+	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
 
 	// Validate parameters.
 	if ipv4 != "" {
@@ -127,7 +142,9 @@ Description:
 		}
 	}
 	if asNumber != "" {
-		argutils.ValidateASNumber(asNumber)
+		// The calico/node image does not accept dotted notation for
+		// the AS number, so convert.
+		asNumber = argutils.ValidateASNumber(asNumber).String()
 	}
 	backendMatch := regexp.MustCompile("^(none|bird|gobgp)$")
 	if !backendMatch.MatchString(backend) {
@@ -170,16 +187,20 @@ Description:
 		"CALICO_NETWORKING_BACKEND": backend,
 		"AS":                        asNumber,
 		"NO_DEFAULT_POOLS":          noPoolsString,
-		"CALICO_LIBNETWORK_ENABLED": "true",
+		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
 	}
 
 	// Create a map of read only bindings.
 	vols := map[string]string{
-		logDir:                 "/var/log/calico",
-		"/var/run/calico":      "/var/run/calico",
-		"/lib/modules":         "/lib/modules",
-		"/run/docker/plugins":  "/run/docker/plugins",
-		"/var/run/docker.sock": "/var/run/docker.sock",
+		logDir:            "/var/log/calico",
+		"/var/run/calico": "/var/run/calico",
+		"/lib/modules":    "/lib/modules",
+	}
+
+	if !disableDockerNw {
+		log.Info("Include docker networking volume mounts")
+		vols["/run/docker/plugins"] = "/run/docker/plugins"
+		vols["/var/run/docker.sock"] = "/var/run/docker.sock"
 	}
 
 	if etcdcfg.EtcdEndpoints == "" {
@@ -203,9 +224,16 @@ Description:
 	}
 
 	// Create the Docker command to execute (or display).  Start with the
-	// fixed parts.
-	cmd := []string{"docker", "run", "-d", "--net=host", "--privileged",
+	// fixed parts.  If this is a dry-run, then don't include the "detach"
+	// flag of the "restart" flag since we write out the command for use
+	// in an init system.
+	cmd := []string{"docker", "run", "--net=host", "--privileged",
 		"--name=calico-node"}
+	if initSystem {
+		cmd = append(cmd, "--rm")
+	} else {
+		cmd = append(cmd, "-d", "--restart=always")
+	}
 
 	// Add the environment variable pass-through.
 	for k, v := range envs {
@@ -221,10 +249,16 @@ Description:
 	cmd = append(cmd, img)
 
 	if dryrun {
-		fmt.Println("Use the following command to run Calico node:")
+		fmt.Println("Use the following command to start the calico/node container:")
 		fmt.Printf("\n%s\n\n", strings.Join(cmd, " "))
-		fmt.Println("If you intend to run Calico node in an init system, such as systemd, remove")
-		fmt.Println("the -d option so that the commands does not detach from the process.")
+
+		if !initSystem {
+			fmt.Println("If you are running calico/node in an init system, use the --init-system flag")
+			fmt.Println("to display the appropriate start and stop commands.")
+		} else {
+			fmt.Println("Use the following command to stop the calico/node container:")
+			fmt.Printf("\ndocker stop calico-node\n\n")
+		}
 		return
 	}
 
@@ -249,10 +283,57 @@ Description:
 
 	err = exec.Command(cmd[0], cmd[1:]...).Run()
 	if err != nil {
-		fmt.Println("Error executing command:")
+		fmt.Printf("Error executing command: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create the command to follow the docker logs for the calico/node
+	logCmd := exec.Command("docker", "logs", "calico-node", "--follow")
+
+	// Get the stdout pipe
+	outPipe, err := logCmd.StdoutPipe()
+	if err != nil {
+		fmt.Printf("Error executing command:  unable to check calico/node logs: %v\n", err)
+		os.Exit(1)
+	}
+	outScanner := bufio.NewScanner(outPipe)
+
+	// Start following the logs.
+	err = logCmd.Start()
+	if err != nil {
+		fmt.Printf("Error executing command:  unable to check calico/node logs: %v\n", err)
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
+	// Protect against calico processes taking too long to start, or docker
+	// logs hanging without output.
+	time.AfterFunc(checkLogTimeout, func() {
+		logCmd.Process.Kill()
+	})
+
+	// Read stdout until the node fails, or until we see the output
+	// indicating success.
+	started := false
+	for outScanner.Scan() {
+		line := outScanner.Text()
+		fmt.Println(line)
+		if line == "Calico node started successfully" {
+			started = true
+			break
+		}
+	}
+
+	// If we didn't successfully start then notify the user.
+	if outScanner.Err() != nil {
+		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
+	} else if !started {
+		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
+	}
+
+	// Kill the process if it is still running.
+	logCmd.Process.Kill()
+	logCmd.Wait()
 }
 
 // runningInContainer returns whether we are running calicoctl within a container.
