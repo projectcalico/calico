@@ -19,9 +19,6 @@ cd /tmp/rpmbuild
 spec=`basename ${repo}/rpm/*.spec`
 cd SPECS
 cp -a ${repo}/rpm/$spec .
-snapshot=$(date -u '+SNAPSHOT%Y%m%d%H%M%S+0000')
-sed -i "s/__SNAPSHOT__/${snapshot}/g" $spec
-
 
 # Infer the version that the spec wants to build.
 version=`grep Version: $spec | awk '{print $2;}'`
