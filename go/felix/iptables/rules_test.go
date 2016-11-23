@@ -23,14 +23,14 @@ import (
 
 var (
 	rules1 = []Rule{
-		{"-m foobar --foobar baz", "--jump biff"},
+		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
 	}
 	rules2 = []Rule{
-		{"-m foobar --foobar baz", "--jump boff"},
+		{MatchCriteria{"-m foobar --foobar baz"}, "--jump boff"},
 	}
 	rules3 = []Rule{
-		{"-m foobar --foobar baz", "--jump biff"},
-		{"-m foobar --foobar baz", "--jump biff"},
+		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
+		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
 	}
 )
 

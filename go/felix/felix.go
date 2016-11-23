@@ -154,6 +154,11 @@ configRetry:
 		dpConfig := intdataplane.Config{
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: strings.Split(configParams.InterfacePrefix, ","),
+
+				// TODO(smc) honour config of iptables mark marks.
+				IptablesMarkAccept:    0x1,
+				IptablesMarkNextTier:  0x2,
+				IptablesMarkEndpoints: 0x4,
 			},
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)

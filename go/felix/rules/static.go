@@ -15,75 +15,72 @@
 package rules
 
 import (
-	"fmt"
 	"github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/iptables"
+	. "github.com/projectcalico/felix/go/felix/iptables"
 )
 
-func (r *ruleRenderer) StaticFilterTableChains() (chains []*iptables.Chain) {
+func (r *ruleRenderer) StaticFilterTableChains() (chains []*Chain) {
 	chains = append(chains, r.StaticFilterForwardChains()...)
 	chains = append(chains, r.StaticFilterInputChains()...)
 	chains = append(chains, r.StaticFilterOutputChains()...)
 	return
 }
 
-func (r *ruleRenderer) StaticFilterInputChains() []*iptables.Chain {
+func (r *ruleRenderer) StaticFilterInputChains() []*Chain {
 	// TODO(smc) fitler input chain
-	return []*iptables.Chain{}
+	return []*Chain{}
 }
 
-func (r *ruleRenderer) StaticFilterForwardChains() []*iptables.Chain {
-	rules := []iptables.Rule{}
+func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
+	rules := []Rule{}
 
 	for _, prefix := range r.WorkloadIfacePrefixes {
 		logrus.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
 		ifaceMatch := prefix + "+"
-		rules = append(rules, r.DropRules(
-			fmt.Sprintf("--in-interface %s --match conntrack --ctstate INVALID", ifaceMatch))...)
-
+		rules = append(rules, r.DropRules(Match().InInterface(ifaceMatch).ConntrackState("INVALID"))...)
 		rules = append(rules,
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--in-interface %s --match conntrack --ctstate RELATED,ESTABLISHED", ifaceMatch),
-				Action:        iptables.AcceptAction{},
+			Rule{
+				Match:  Match().InInterface(ifaceMatch).ConntrackState("RELATED,ESTABLISHED"),
+				Action: AcceptAction{},
 			},
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--out-interface %s --match conntrack --ctstate RELATED,ESTABLISHED", ifaceMatch),
-				Action:        iptables.AcceptAction{},
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch).ConntrackState("RELATED,ESTABLISHED"),
+				Action: AcceptAction{},
 			},
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--in-interface %s", ifaceMatch),
-				Action:        iptables.JumpAction{Target: DispatchFromWorkloadEndpoint},
+			Rule{
+				Match:  Match().InInterface(ifaceMatch),
+				Action: JumpAction{Target: DispatchFromWorkloadEndpoint},
 			},
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--out-interface %s", ifaceMatch),
-				Action:        iptables.JumpAction{Target: DispatchToWorkloadEndpoint},
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch),
+				Action: JumpAction{Target: DispatchToWorkloadEndpoint},
 			},
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--in-interface %s", ifaceMatch),
-				Action:        iptables.AcceptAction{},
+			Rule{
+				Match:  Match().InInterface(ifaceMatch),
+				Action: AcceptAction{},
 			},
-			iptables.Rule{
-				MatchCriteria: fmt.Sprintf("--out-interface %s", ifaceMatch),
-				Action:        iptables.AcceptAction{},
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch),
+				Action: AcceptAction{},
 			})
 	}
 
-	return []*iptables.Chain{{
+	return []*Chain{{
 		Name:  ForwardChainName,
 		Rules: rules,
 	}}
 }
 
-func (r *ruleRenderer) StaticFilterOutputChains() []*iptables.Chain {
-	// TODO(smc) fitler output chain
-	return []*iptables.Chain{}
+func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
+	// TODO(smc) filter output chain
+	return []*Chain{}
 }
 
-func (t ruleRenderer) DropRules(matchCriteria string) []iptables.Rule {
-	return []iptables.Rule{
+func (t ruleRenderer) DropRules(matchCriteria MatchCriteria) []Rule {
+	return []Rule{
 		{
-			MatchCriteria: matchCriteria,
-			Action:        iptables.DropAction{},
+			Match:  matchCriteria,
+			Action: DropAction{},
 		},
 	}
 }

@@ -17,7 +17,9 @@ package iptables
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"strings"
 )
 
 const (
@@ -47,6 +49,12 @@ func (g JumpAction) ToFragment() string {
 	return "--jump " + g.Target
 }
 
+type ReturnAction struct{}
+
+func (r ReturnAction) ToFragment() string {
+	return "--jump RETURN"
+}
+
 type DropAction struct{}
 
 func (g DropAction) ToFragment() string {
@@ -59,9 +67,53 @@ func (g AcceptAction) ToFragment() string {
 	return "--jump ACCEPT"
 }
 
+type ClearMarkAction struct {
+	Mask uint32
+}
+
+func (c ClearMarkAction) ToFragment() string {
+	return fmt.Sprintf("--jump MARK --set-mark 0/%x", c.Mask)
+}
+
+type SetMarkAction struct {
+	Mask uint32
+}
+
 type Rule struct {
-	MatchCriteria string
-	Action        Action
+	Match   MatchCriteria
+	Action  Action
+	Comment string
+}
+
+func (r Rule) RenderAppend(chainName, prefixFragment string) string {
+	fragments := make([]string, 0, 6)
+	fragments = append(fragments, "-A", chainName)
+	return r.renderInner(fragments, prefixFragment)
+}
+
+func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string) string {
+	fragments := make([]string, 0, 7)
+	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))
+	return r.renderInner(fragments, prefixFragment)
+}
+
+func (r Rule) renderInner(fragments []string, prefixFragment string) string {
+	if prefixFragment != "" {
+		fragments = append(fragments, prefixFragment)
+	}
+	if r.Comment != "" {
+		commentFragment := fmt.Sprintf("-m comment --comment \"%s\"", r.Comment)
+		fragments = append(fragments, commentFragment)
+	}
+	matchFragment := r.Match.Render()
+	if matchFragment != "" {
+		fragments = append(fragments, matchFragment)
+	}
+	actionFragment := r.Action.ToFragment()
+	if actionFragment != "" {
+		fragments = append(fragments, actionFragment)
+	}
+	return strings.Join(fragments, " ")
 }
 
 type Chain struct {
@@ -81,16 +133,15 @@ func (c *Chain) RuleHashes() []string {
 		// the rules before it affect its hash.
 		s.Reset()
 		s.Write(hash)
-		s.Write([]byte(rule.MatchCriteria))
-		s.Write([]byte(" "))
-		s.Write([]byte(rule.Action.ToFragment()))
+		ruleForHashing := rule.RenderAppend(c.Name, "HASH")
+		s.Write([]byte(ruleForHashing))
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.
 		hashes[ii] = base64.RawURLEncoding.EncodeToString(hash)[:HashLength]
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
-				"ruleFragment": rule.MatchCriteria,
+				"ruleFragment": ruleForHashing,
 				"action":       rule.Action,
 				"position":     ii,
 				"chain":        c.Name,

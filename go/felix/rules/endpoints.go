@@ -15,68 +15,142 @@
 package rules
 
 import (
-	"fmt"
 	"github.com/projectcalico/felix/go/felix/hashutils"
-	"github.com/projectcalico/felix/go/felix/iptables"
+	. "github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
-func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain {
-	toEndpointRules := make([]iptables.Rule, 0, len(endpoints)+1)
-	fromEndpointRules := make([]iptables.Rule, 0, len(endpoints)+1)
+func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*Chain {
+	toEndpointRules := make([]Rule, 0, len(endpoints)+1)
+	fromEndpointRules := make([]Rule, 0, len(endpoints)+1)
 	for _, endpoint := range endpoints {
-		fromEndpointRules = append(fromEndpointRules, iptables.Rule{
-			MatchCriteria: fmt.Sprintf("--in-interface %s", endpoint.Name),
-			Action: iptables.GotoAction{
+		fromEndpointRules = append(fromEndpointRules, Rule{
+			Match: Match().InInterface(endpoint.Name),
+			Action: GotoAction{
 				Target: WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
 			},
 		})
-		toEndpointRules = append(toEndpointRules, iptables.Rule{
-			MatchCriteria: fmt.Sprintf("--out-interface %s", endpoint.Name),
-			Action: iptables.GotoAction{
+		toEndpointRules = append(toEndpointRules, Rule{
+			Match: Match().OutInterface(endpoint.Name),
+			Action: GotoAction{
 				Target: WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
 			},
 		})
 	}
 
-	toEndpointRules = append(fromEndpointRules, iptables.Rule{
-		Action: iptables.DropAction{},
+	toEndpointRules = append(fromEndpointRules, Rule{
+		Action: DropAction{},
 	})
-	fromEndpointRules = append(fromEndpointRules, iptables.Rule{
-		Action: iptables.DropAction{},
+	fromEndpointRules = append(fromEndpointRules, Rule{
+		Action: DropAction{},
 	})
 
-	toEndpointDispatchChain := iptables.Chain{
+	toEndpointDispatchChain := Chain{
 		Name:  DispatchToWorkloadEndpoint,
 		Rules: toEndpointRules,
 	}
-	fromEndpointDispatchChain := iptables.Chain{
+	fromEndpointDispatchChain := Chain{
 		Name:  DispatchFromWorkloadEndpoint,
 		Rules: fromEndpointRules,
 	}
 
-	return []*iptables.Chain{&toEndpointDispatchChain, &fromEndpointDispatchChain}
+	return []*Chain{&toEndpointDispatchChain, &fromEndpointDispatchChain}
 }
 
-func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain {
-	toEndpointChain := iptables.Chain{
-		Name: WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
-		// TODO(smc) Fill in rules.
+func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*Chain {
+	inRules := []Rule{}
+	outRules := []Rule{}
+
+	// Start by ensuring that the accept mark bit is clear, policies set that bit to indicate
+	// that they accepted the packet.
+	inRules = append(inRules, Rule{
+		Action: ClearMarkAction{
+			Mask: r.IptablesMarkAccept,
+		},
+	})
+	outRules = append(outRules, Rule{
+		Action: ClearMarkAction{
+			Mask: r.IptablesMarkAccept,
+		},
+	})
+
+	// TODO(smc) Police the MAC?
+
+	for _, tier := range endpoint.Tiers {
+		// For each tier,  clear the "accepted by tier" mark.
+		inRules = append(inRules, Rule{
+			Comment: "Start of tier " + tier.Name,
+			Action: ClearMarkAction{
+				Mask: r.IptablesMarkNextTier,
+			},
+		})
+		outRules = append(outRules, Rule{
+			Comment: "Start of tier " + tier.Name,
+			Action: ClearMarkAction{
+				Mask: r.IptablesMarkNextTier,
+			},
+		})
+		// Then, jump to each policy in turn.
+		for _, polID := range tier.Policies {
+			inPolChainName := PolicyChainName(
+				PolicyInboundPfx,
+				&proto.PolicyID{Tier: tier.Name, Name: polID},
+			)
+			inRules = append(inRules,
+				Rule{
+					Match:  Match().MarkClear(r.IptablesMarkNextTier),
+					Action: JumpAction{Target: inPolChainName},
+				},
+				// If policy marked packet as accepted, it returns, setting the
+				// accept mark bit.  If that is set, return from this chain.
+				Rule{
+					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Action:  ReturnAction{},
+					Comment: "Return if policy accepted",
+				})
+			outPolChainName := PolicyChainName(
+				PolicyOutboundPfx,
+				&proto.PolicyID{Tier: tier.Name, Name: polID},
+			)
+			outRules = append(outRules,
+				Rule{
+					Match:  Match().MarkClear(r.IptablesMarkNextTier),
+					Action: JumpAction{Target: outPolChainName},
+				},
+				// If policy marked packet as accepted, it returns, setting the
+				// accept mark bit.  If that is set, return from this chain.
+				Rule{
+					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Action:  ReturnAction{},
+					Comment: "Return if policy accepted",
+				})
+		}
+		// If no policy in the tier marked the packet as next-tier, drop the packet.
+		inRules = append(inRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier))...)
+		outRules = append(outRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier))...)
 	}
-	fromEndpointChain := iptables.Chain{
-		Name: WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
-		// TODO(smc) Fill in rules.
+
+	toEndpointChain := Chain{
+		Name:  WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
+		Rules: inRules,
 	}
-	return []*iptables.Chain{&toEndpointChain, &fromEndpointChain}
+	fromEndpointChain := Chain{
+		Name:  WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
+		Rules: outRules,
+	}
+	return []*Chain{&toEndpointChain, &fromEndpointChain}
 }
 
-func (r *ruleRenderer) HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain {
+func (r *ruleRenderer) HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*Chain {
 	panic("Not implemented")
 	return nil
 }
 
-func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain {
+func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*Chain {
 	panic("Not implemented")
+
+	// TODO(smc) Failsafe chains
+
 	return nil
 }
 
@@ -84,6 +158,6 @@ func WorkloadEndpointChainName(prefix string, endpoint *proto.WorkloadEndpoint) 
 	return hashutils.GetLengthLimitedID(
 		prefix,
 		endpoint.Name,
-		iptables.MaxChainNameLength,
+		MaxChainNameLength,
 	)
 }

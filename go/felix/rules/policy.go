@@ -56,8 +56,8 @@ func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule) []ipt
 
 func (r *ruleRenderer) ProtoRuleToIptablesRule(protoRule *proto.Rule) []iptables.Rule {
 	return []iptables.Rule{{
-		MatchCriteria: `-m comment --comment "A rule to be"`,
-		Action:        iptables.JumpAction{"LOG"},
+		Comment: "A rule to be",
+		Action:  iptables.JumpAction{"LOG"},
 	}}
 }
 

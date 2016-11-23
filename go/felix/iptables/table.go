@@ -351,21 +351,20 @@ func (t *Table) applyUpdates() error {
 					if previousHashes[i] != currentHashes[i] {
 						// Hash doesn't match, replace the rule.
 						ruleNum := i + 1 // 1-indexed.
-						comment := t.commentFrag(currentHashes[i])
-						line = fmt.Sprintf("-R %s %d %s %s %s\n", chainName, ruleNum, comment,
-							chain.Rules[i].MatchCriteria, chain.Rules[i].Action.ToFragment())
+						hashComment := t.commentFrag(currentHashes[i])
+						line = chain.Rules[i].RenderReplace(chainName, ruleNum, hashComment)
 					}
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
-					line = fmt.Sprintf("-D %s %d\n", chainName, ruleNum)
+					line = fmt.Sprintf("-D %s %d", chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
-					comment := t.commentFrag(currentHashes[i])
-					line = fmt.Sprintf("-A %s %s %s %s\n", chainName, comment,
-						chain.Rules[i].MatchCriteria, chain.Rules[i].Action.ToFragment())
+					hashComment := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderAppend(chainName, hashComment)
 				}
 				inputBuf.WriteString(line)
+				inputBuf.WriteString("\n")
 			}
 		}
 		return nil // Delay clearing the set until we've programmed iptables.
@@ -417,7 +416,7 @@ func (t *Table) applyUpdates() error {
 		for i := len(rules) - 1; i >= 0; i-- {
 			comment := t.commentFrag(currentHashes[i])
 			line := fmt.Sprintf("-I %s %s %s %s\n", chainName, comment,
-				chain.Rules[i].MatchCriteria, rules[i].Action.ToFragment())
+				chain.Rules[i].Match, rules[i].Action.ToFragment())
 			inputBuf.WriteString(line)
 		}
 		newHashes[chainName] = currentHashes
@@ -428,10 +427,11 @@ func (t *Table) applyUpdates() error {
 	// iptables-restore input ends with a COMMIT.
 	inputBuf.WriteString("COMMIT\n")
 
-	// Actually execute iptables-restore.
-	if log.GetLevel() >= log.DebugLevel {
-		log.WithField("iptablesInput", inputBuf.String()).Debug("Writing to iptables")
-	}
+	// Annoying to have to copy the buffer here but reading from a buffer is destructive so
+	// if we want to trace out the contents after a failure, we have to take a copy.
+	input := inputBuf.String()
+	log.WithField("iptablesInput", input).Debug("Writing to iptables")
+
 	var outputBuf, errBuf bytes.Buffer
 	cmd := exec.Command(t.restoreCmd, "--noflush", "--verbose")
 	cmd.Stdin = &inputBuf
@@ -443,6 +443,7 @@ func (t *Table) applyUpdates() error {
 			"output":      outputBuf.String(),
 			"errorOutput": errBuf.String(),
 			"error":       err,
+			"input":       input,
 		}).Warn("Failed to execute iptable restore command")
 		t.inSyncWithDataPlane = false
 		return err
