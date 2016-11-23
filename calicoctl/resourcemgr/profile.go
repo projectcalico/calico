@@ -28,7 +28,7 @@ func init() {
 		[]string{"NAME", "TAGS"},
 		map[string]string{
 			"NAME": "{{.Metadata.Name}}",
-			"TAGS": "{{join .Spec.Tags \",\"}}",
+			"TAGS": "{{join .Metadata.Tags \",\"}}",
 		},
 		func(client *client.Client, resource unversioned.Resource) (unversioned.Resource, error) {
 			r := resource.(api.Profile)
