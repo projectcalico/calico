@@ -17,6 +17,7 @@ package rules
 import (
 	"github.com/Sirupsen/logrus"
 	. "github.com/projectcalico/felix/go/felix/iptables"
+	"strings"
 )
 
 func (r *ruleRenderer) StaticFilterTableChains() (chains []*Chain) {
@@ -76,11 +77,12 @@ func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
 	return []*Chain{}
 }
 
-func (t ruleRenderer) DropRules(matchCriteria MatchCriteria) []Rule {
+func (t ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
 	return []Rule{
 		{
-			Match:  matchCriteria,
-			Action: DropAction{},
+			Match:   matchCriteria,
+			Action:  DropAction{},
+			Comment: strings.Join(comments, "; "),
 		},
 	}
 }

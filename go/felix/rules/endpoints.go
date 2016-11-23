@@ -126,9 +126,36 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 				})
 		}
 		// If no policy in the tier marked the packet as next-tier, drop the packet.
-		inRules = append(inRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier))...)
-		outRules = append(outRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier))...)
+		inRules = append(inRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
+		outRules = append(outRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
 	}
+
+	// Then, jump to each profile in turn.
+	for _, profileID := range endpoint.ProfileIds {
+		inProfChainName := ProfileChainName(PolicyInboundPfx, &proto.ProfileID{Name: profileID})
+		outProfChainName := ProfileChainName(PolicyOutboundPfx, &proto.ProfileID{Name: profileID})
+		inRules = append(inRules,
+			Rule{Action: JumpAction{Target: inProfChainName}},
+			// If policy marked packet as accepted, it returns, setting the
+			// accept mark bit.  If that is set, return from this chain.
+			Rule{
+				Match:   Match().MarkSet(r.IptablesMarkAccept),
+				Action:  ReturnAction{},
+				Comment: "Return if profile accepted",
+			})
+		outRules = append(outRules,
+			Rule{Action: JumpAction{Target: outProfChainName}},
+			// If policy marked packet as accepted, it returns, setting the
+			// accept mark bit.  If that is set, return from this chain.
+			Rule{
+				Match:   Match().MarkSet(r.IptablesMarkAccept),
+				Action:  ReturnAction{},
+				Comment: "Return if profile accepted",
+			})
+	}
+
+	inRules = append(inRules, r.DropRules(Match(), "Drop if no profiles matched")...)
+	outRules = append(outRules, r.DropRules(Match(), "Drop if no profiles matched")...)
 
 	toEndpointChain := Chain{
 		Name:  WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
