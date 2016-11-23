@@ -73,6 +73,8 @@ type Table struct {
 	// ourChainsRegexp matches the names of chains that are "ours", i.e. start with one of our
 	// prefixes.
 	ourChainsRegexp *regexp.Regexp
+	// oldInsertRegexp matches inserted rules from old pre rule-hash versions of felix.
+	oldInsertRegexp *regexp.Regexp
 
 	restoreCmd  string
 	saveCmd     string
@@ -82,9 +84,17 @@ type Table struct {
 }
 
 func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix string) *Table {
-	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
+	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `:([a-zA-Z0-9_-]+)"?`)
 	ourChainsPattern := "^(" + strings.Join(chainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
+
+	oldInsertRegexpParts := []string{}
+	for _, prefix := range chainPrefixes {
+		part := fmt.Sprintf("-j %s", prefix)
+		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
+	}
+	oldInsertPattern := strings.Join(oldInsertRegexpParts, "|")
+	oldInsertRegexp := regexp.MustCompile(oldInsertPattern)
 
 	// Pre-populate the insert table with empty lists for each kernel chain.  Ensures that we
 	// clean up any chains that we hooked on a previous run.
@@ -109,6 +119,7 @@ func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix s
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
 		ourChainsRegexp:   ourChainsRegexp,
+		oldInsertRegexp:   oldInsertRegexp,
 	}
 
 	if ipVersion == 4 {
@@ -232,6 +243,10 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		t.logCxt.WithError(err).Panic("iptables save failed")
 	}
 	buf := bytes.NewBuffer(output)
+	return t.getHashesFromBuffer(buf)
+}
+
+func (t *Table) getHashesFromBuffer(buf *bytes.Buffer) map[string][]string {
 	newHashes := map[string][]string{}
 	for {
 		// Read the next line of the output.
@@ -269,7 +284,13 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		captures = t.hashCommentRegexp.FindStringSubmatch(line)
 		if captures != nil {
 			hash = captures[1]
-			logCxt.WithField("hash", hash).Debug("Found felix hash")
+			logCxt.WithField("hash", hash).Debug("Found hash in rule")
+		} else if t.oldInsertRegexp.FindString(line) != "" {
+			logCxt.WithFields(log.Fields{
+				"rule":      line,
+				"chainName": chainName,
+			}).Info("Found inserted rule from previous Felix version, marking for cleanup.")
+			hash = "OLD INSERT RULE"
 		}
 		newHashes[chainName] = append(newHashes[chainName], hash)
 	}
@@ -475,6 +496,8 @@ func (t *Table) applyUpdates() error {
 		t.inSyncWithDataPlane = false
 		return err
 	}
+
+	// TODO(smc) check for COMMIT errors vs others and retry or not as appropriate.
 
 	// Now we've successfully updated iptables, clear the dirty sets.
 	t.dirtyChains = set.New()

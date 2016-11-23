@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables_test
+package iptables
 
 import (
-	. "github.com/projectcalico/felix/go/felix/iptables"
-
+	"bytes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var (
 	rules1 = []Rule{
-		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"biff"}},
 	}
 	rules2 = []Rule{
-		{MatchCriteria{"-m foobar --foobar baz"}, "--jump boff"},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"boff"}},
 	}
 	rules3 = []Rule{
-		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
-		{MatchCriteria{"-m foobar --foobar baz"}, "--jump biff"},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"biff"}},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"boff"}},
 	}
 )
 
@@ -59,6 +58,28 @@ var _ = Describe("Rule hashing tests", func() {
 		Expect(len(calculateHashes("foo", rules1))).To(Equal(len(rules1)))
 		Expect(len(calculateHashes("foo", rules2))).To(Equal(len(rules2)))
 		Expect(len(calculateHashes("foo", rules3))).To(Equal(len(rules3)))
+	})
+})
+
+var _ = Describe("Hash extraction tests", func() {
+	var table *Table
+
+	BeforeEach(func() {
+		table = NewTable("filter", 4, []string{"felix-", "cali"}, "cali")
+	})
+
+	It("should extract an old felix rule with no hash", func() {
+		hashes := table.getHashesFromBuffer(bytes.NewBufferString("-A FORWARD -j felix-FORWARD\n"))
+		Expect(hashes).To(Equal(map[string][]string{
+			"FORWARD": []string{"OLD INSERT RULE"},
+		}))
+	})
+	It("should extract a hash", func() {
+		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
+		Expect(hashes).To(Equal(map[string][]string{
+			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
+		}))
 	})
 })
 
