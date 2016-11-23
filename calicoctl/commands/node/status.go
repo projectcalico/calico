@@ -24,18 +24,15 @@ import (
 	"strings"
 	"time"
 
+	"reflect"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	gops "github.com/mitchellh/go-ps"
 	"github.com/olekukonko/tablewriter"
 )
 
-// Check for Word_<IP> where every octate is seperated by "_", regardless of IP protocols
-// Example match: "Mesh_192_168_56_101" or "Mesh_fd80_24e2_f998_72d7__2"
-var bgpPeerRegex, _ = regexp.Compile(`[A-Za-z]+\_\w+\b`)
-var birdCodeRegex, _ = regexp.Compile(`^\d00\d[a-zA-Z0-9\s-]+`)
-
-// Status prings status of the node and returns error (if any)
+// Status prints status of the node and returns error (if any)
 func Status(args []string) {
 	doc := `Usage:
   calicoctl node status
@@ -75,14 +72,14 @@ Description:
 
 	// Check if birdv4 process is running, print the BGP peer table if it is, else print a warning
 	if psContains("bird", processes) {
-		printBGPPeers("4")
+		printBIRDPeers("4")
 	} else {
 		fmt.Printf("\nINFO: BIRDv4 process: 'bird' is not running.\n")
 	}
 
 	// Check if birdv6 process is running, print the BGP peer table if it is, else print a warning
 	if psContains("bird6", processes) {
-		printBGPPeers("6")
+		printBIRDPeers("6")
 	} else {
 		fmt.Printf("\nINFO: BIRDv6 process: 'bird6' is not running.\n")
 	}
@@ -101,156 +98,220 @@ func psContains(proc string, procList []gops.Process) bool {
 	return false
 }
 
-func printBGPPeers(ipv string) {
-	birdSuffix := ""
-	ipSep := "."
-	if ipv == "6" {
-		birdSuffix = "6"
-		ipSep = ":"
+// Check for Word_<IP> where every octate is seperated by "_", regardless of IP protocols
+// Example match: "Mesh_192_168_56_101" or "Mesh_fd80_24e2_f998_72d7__2"
+var birdPeerRegex = regexp.MustCompile(`^(Global|Node|Mesh)_(.+)$`)
+
+// Mapping the BIRD type extracted from the peer name to the display type.
+var birdTypeMap = map[string]string{
+	"Global": "global",
+	"Mesh":   "node-to-node mesh",
+	"Node":   "node specific",
+}
+
+// Timeout for querying BIRD
+var birdTimeOut = 2 * time.Second
+
+// Expected BIRD protocol table columns
+var birdExpectedHeadings = []string{"name", "proto", "table", "state", "since", "info"}
+
+// bgpPeer is a structure containing details about a BGP peer.
+type bgpPeer struct {
+	PeerIP   string
+	PeerType string
+	State    string
+	Since    string
+	BGPState string
+	Info     string
+}
+
+// Unmarshal a peer from a line in the BIRD protocol output.  Returns true if
+// successful, false otherwise.
+func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
+	// Split into fields.  We expect at least 6 columns:
+	// 	name, proto, table, state, since and info.
+	// The info column contains the BGP state plus possibly some additional
+	// info (which will be columns > 6).
+	//
+	// Peer names will be of the format described by birdPeerRegex.
+	log.Debugf("Parsing line: %s", line)
+	columns := strings.Fields(line)
+	if len(columns) < 6 {
+		log.Debugf("Not a valid line: fewer than 6 columns")
+		return false
+	}
+	if columns[1] != "BGP" {
+		log.Debugf("Not a valid line: protocol is not BGP")
+		return false
 	}
 
-	fmt.Printf("\nIPv%s BGP status", ipv)
+	// Check the name of the peer is of the correct format.  This regex
+	// returns two components:
+	// -  A type (Global|Node|Mesh) which we can map to a display type
+	// -  An IP address (with _ separating the octets)
+	sm := birdPeerRegex.FindStringSubmatch(columns[0])
+	if len(sm) != 3 {
+		log.Debugf("Not a valid line: peer name '%s' is not correct format", columns[0])
+		return false
+	}
+	var ok bool
+	b.PeerIP = strings.Replace(sm[2], "_", ipSep, -1)
+	if b.PeerType, ok = birdTypeMap[sm[1]]; !ok {
+		log.Debugf("Not a valid line: peer type '%s' is not recognized", sm[1])
+		return false
+	}
+
+	// Store remaining columns (piecing back together the info string)
+	b.State = columns[3]
+	b.Since = columns[4]
+	b.BGPState = columns[5]
+	if len(columns) > 6 {
+		b.Info = strings.Join(columns[6:], " ")
+	}
+
+	return true
+}
+
+// printBIRDPeers queries BIRD and displays the local peers in table format.
+func printBIRDPeers(ipv string) {
+	log.Debugf("Print BIRD peers for IPv%s", ipv)
+	birdSuffix := ""
+	if ipv == "6" {
+		birdSuffix = "6"
+	}
+
+	fmt.Printf("\nIPv%s BGP status\n", ipv)
 
 	// Try connecting to the bird socket in `/var/run/calico/` first to get the data
 	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
 	if err != nil {
-
 		// If that fails, try connecting to bird socket in `/var/run/bird` (which is the
 		// default socket location for bird install) for non-containerized installs
+		log.Debugln("Failed to connect to BIRD socket in /var/run/calic, trying /var/run/bird")
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
-			fmt.Printf("Error connecting to BIRDv%s socket: %v", ipv, err)
+			fmt.Printf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 			return
 		}
 	}
 	defer c.Close()
 
-	fmt.Println()
-
+	// To query the current state of the BGP peers, we connect to the BIRD
+	// socket and send a "show protocols" message.  BIRD responds with
+	// peer data in a table format.
+	//
+	// Send the request.
 	_, err = c.Write([]byte("show protocols\n"))
 	if err != nil {
-		fmt.Printf("Error writing to BIRD socket: %s\n", err)
+		fmt.Printf("Error executing command: unable to write to BIRD socket: %s\n", err)
 		os.Exit(1)
 	}
 
-	// BIRD socket read timeout.
-	timeOut := 2 * time.Second
-	scanner := bufio.NewScanner(c)
+	// Scan the output and collect parsed BGP peers
+	log.Debugln("Reading output from BIRD")
+	peers, err := scanBIRDPeers(ipv, c)
+	if err != nil {
+		fmt.Printf("Error executing command: %v", err)
+		os.Exit(1)
+	}
 
-	birdOut := []string{}
-	// Reference output from BIRD socket:
-	// 0001 BIRD 1.5.0 ready.
-	// show protocols
-	// 2002-name     proto    table    state  since       info
-	// 1002-kernel1  Kernel   master   up     2016-11-21
-	//  device1  Device   master   up     2016-11-21
-	//  direct1  Direct   master   up     2016-11-21
-	//  Mesh_172_17_8_102 BGP      master   up     2016-11-21  Established
-	// 0000
+	// If no peers were returned then just print a message.
+	if len(peers) == 0 {
+		fmt.Printf("No IPv%s peers found.\n", ipv)
+		return
+	}
+
+	// Finally, print the peers.
+	printPeers(peers)
+}
+
+// scanBIRDPeers scans through BIRD output to return a slice of bgpPeer
+// structs.
+//
+// We split this out from the main printBIRDPeers() function to allow us to
+// test this processing in isolation.
+func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
+	// Determine the separator to use for an IP address, based on the
+	// IP version.
+	ipSep := "."
+	if ipv == "6" {
+		ipSep = ":"
+	}
+
+	// The following is sample output from BIRD
+	//
+	// 	0001 BIRD 1.5.0 ready.
+	// 	2002-name     proto    table    state  since       info
+	// 	1002-kernel1  Kernel   master   up     2016-11-21
+	//  	 device1  Device   master   up     2016-11-21
+	//  	 direct1  Direct   master   up     2016-11-21
+	//  	 Mesh_172_17_8_102 BGP      master   up     2016-11-21  Established
+	// 	0000
+	scanner := bufio.NewScanner(conn)
+	peers := []bgpPeer{}
+
+	// Set a time-out for reading from the socket connection.
+	conn.SetReadDeadline(time.Now().Add(birdTimeOut))
+
 	for scanner.Scan() {
-
-		// Set a time-out for reading from the socket connection.
-		// Read operation will fail if no data is received until the timeout.
-		c.SetReadDeadline(time.Now().Add(timeOut))
-
-		// Read string with \n as delim.
+		// Process the next line that has been read by the scanner.
 		str := scanner.Text()
-		log.Debugf("Read from BIRD: %s\n", str)
+		log.Debugf("Read: %s\n", str)
 
-		if birdCodeRegex.MatchString(str) {
-			// "0000 " output from BIRD means end of output.
-			if str == "0000 " {
-				break
-			} else if strings.HasPrefix(str, "0001") {
-				// "0001" code means BIRD is ready.
-			} else if strings.HasPrefix(str, "2002-") {
-				f := strings.Fields(str[5:])
-				expectedHeader := []string{"name", "proto", "table", "state", "since", "info"}
-				for i, v := range f {
-					if v != expectedHeader[i] {
-						fmt.Println("Error executing command: unknown BIRD table output format")
-						os.Exit(1)
-					}
-				}
-			} else if strings.HasPrefix(str, "1002-") {
-				// Append the line to birdOut slice of strings if it's not the end of the output.
-				birdOut = append(birdOut, str[5:])
-			} else {
-				fmt.Println("Error executing command: unexpected output line from BIRD")
-				os.Exit(1)
+		if strings.HasPrefix(str, "0000") {
+			// "0000" means end of data
+			break
+		} else if strings.HasPrefix(str, "0001") {
+			// "0001" code means BIRD is ready.
+		} else if strings.HasPrefix(str, "2002") {
+			// "2002" code means start of headings
+			f := strings.Fields(str[5:])
+			if !reflect.DeepEqual(f, birdExpectedHeadings) {
+				return nil, errors.New("unknown BIRD table output format")
+			}
+		} else if strings.HasPrefix(str, "1002") {
+			// "1002" code means first row of data.
+			peer := bgpPeer{}
+			if peer.unmarshalBIRD(str[5:], ipSep) {
+				peers = append(peers, peer)
 			}
 		} else if strings.HasPrefix(str, " ") {
-			// Append the line to birdOut slice of strings if it's not the end of the output.
-			birdOut = append(birdOut, str)
+			// Row starting with a " " is another row of data.
+			peer := bgpPeer{}
+			if peer.unmarshalBIRD(str[1:], ipSep) {
+				peers = append(peers, peer)
+			}
+		} else {
+			// Format of row is unexpected.
+			return nil, errors.New("unexpected output line from BIRD")
 		}
+
+		// Before reading the next line, adjust the time-out for
+		// reading from the socket connection.
+		conn.SetReadDeadline(time.Now().Add(birdTimeOut))
 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Error reading data from BIRD socket:", err)
-	}
+	return peers, scanner.Err()
+}
 
-	data := [][]string{}
-
+// printPeers prints out the slice of peers in table format.
+func printPeers(peers []bgpPeer) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Peer address", "Peer type", "State", "Since", "Info"})
 
-	for _, line := range birdOut {
-
-		ipString := bgpPeerRegex.FindString(line)
-
-		if ipString != "" {
-			col := []string{}
-
-			// `f` is a temp []string to hold all the words starting from 3rd to end
-			// Ideally the `line` should be something like "Mesh_172_17_8_102 BGP master up 22:23:45 Established",
-			// but in case of "Mesh_fd80_24e2_f998_72d7__2 BGP  master   start  17:56:21 Active Socket: Connection closed"
-			// providing only "Active" in the Info section is not enough, so we append rest of the info into the last field
-			f := strings.Fields(line)[3:]
-			fields := make([]string, 3)
-			copy(fields, f[0:3])
-
-			if len(f) > 3 {
-				// We are appending all the extra fields to the last element in the slice.
-				// This is to include the extra info when the "Info" field is other than "Established"
-				for _, e := range f[3:] {
-					fields[2] = fields[2] + " " + e
-				}
-			}
-
-			if strings.HasPrefix(ipString, "Mesh_") {
-				ipString = ipString[5:]
-				ipString = strings.Replace(ipString, "_", ipSep, -1)
-				col = append(col, ipString)
-				col = append(col, "node-to-node mesh")
-				col = append(col, fields...)
-			} else if strings.HasPrefix(ipString, "Node_") {
-				ipString = ipString[5:]
-				ipString = strings.Replace(ipString, "_", ipSep, -1)
-				col = append(col, ipString)
-				col = append(col, "node specific")
-				col = append(col, fields...)
-			} else if strings.HasPrefix(ipString, "Global_") {
-				ipString = ipString[7:]
-				ipString = strings.Replace(ipString, "_", ipSep, -1)
-				col = append(col, ipString)
-				col = append(col, "global")
-				col = append(col, fields...)
-			} else {
-				// Did not match any of the pre-defined options for BIRD
-				fmt.Println(errors.New("Error: Did not match any of the predefined options for BIRD"))
-				break
-			}
-			data = append(data, col)
+	for _, peer := range peers {
+		info := peer.BGPState
+		if peer.Info != "" {
+			info += " " + peer.Info
 		}
-	}
-
-	for _, v := range data {
-		table.Append(v)
-	}
-
-	if len(data) == 0 {
-		fmt.Printf("No IPv%s peers found.\n", ipv)
-		return
+		row := []string{
+			peer.PeerIP,
+			peer.PeerType,
+			peer.State,
+			peer.Since,
+			info,
+		}
+		table.Append(row)
 	}
 
 	table.Render()
