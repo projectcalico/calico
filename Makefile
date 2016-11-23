@@ -5,10 +5,12 @@ test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
 all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64 test-containerized
 
-# Determine which OS / ARCH. 
+# Determine which OS / ARCH.
 OS := $(shell uname -s | tr A-Z a-z)
-ARCH := amd64 
+ARCH := amd64
 
+# curl should failed on 404
+CURL=curl -sSf
 ###############################################################################
 # Common build variables
 # Path to the sources.
@@ -88,21 +90,21 @@ $(NODE_CONTAINER_BIN_DIR)/libnetwork-plugin:
 
 # Get the confd binary
 $(NODE_CONTAINER_BIN_DIR)/confd:
-	curl -L $(CONFD_URL) -o $@
+	$(CURL) -L $(CONFD_URL) -o $@
 	chmod +x $@
 
 # Get the calico-bgp-daemon binary
 $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
-	curl -L $(CALICO_BGP_DAEMON_URL) -o $@
+	$(CURL) -L $(CALICO_BGP_DAEMON_URL) -o $@
 	chmod +x $@
 
 # Get bird binaries
 $(NODE_CONTAINER_BIN_DIR)/bird:
 	# This make target actually downloads the bird6 and birdcl binaries too
 	# Copy patched BIRD daemon with tunnel support.
-	curl -L $(BIRD_URL) -o $@
-	curl -L $(BIRD6_URL) -o $(@D)/bird6
-	curl -L $(BIRDCL_URL) -o $(@D)/birdcl
+	$(CURL) -L $(BIRD_URL) -o $@
+	$(CURL) -L $(BIRD6_URL) -o $(@D)/bird6
+	$(CURL) -L $(BIRDCL_URL) -o $(@D)/birdcl
 	chmod +x $(@D)/*
 
 ###############################################################################
@@ -122,8 +124,8 @@ HOST_CHECKOUT_DIR?=$(shell pwd)
 ## Generate the keys and certificates for running etcd with SSL.
 certs/.certificates.created:
 	mkdir -p certs
-	curl -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
-	curl -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
+	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssl" -o certs/cfssl
+	$(CURL) -L "https://github.com/projectcalico/cfssl/releases/download/1.2.1/cfssljson" -o certs/cfssljson
 	chmod a+x certs/cfssl
 	chmod a+x certs/cfssljson
 
