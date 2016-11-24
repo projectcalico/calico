@@ -44,7 +44,7 @@ var logToBgp = map[string]string{
 }
 
 const (
-	GlobalDefaultASNumber       = 64511
+	GlobalDefaultASNumber       = 64512
 	GlobalDefaultLogLevel       = "info"
 	GlobalDefaultIPIP           = false
 	GlobalDefaultNodeToNodeMesh = true

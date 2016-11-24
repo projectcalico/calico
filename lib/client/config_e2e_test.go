@@ -125,7 +125,7 @@ var _ = Describe("with config option API tests", func() {
 		By("checking default unset value")
 		asn, err = config.GetGlobalASNumber()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(asn).To(Equal(numorstring.ASNumber(64511)))
+		Expect(asn).To(Equal(numorstring.ASNumber(64512)))
 
 		By("checking default set value to true")
 		err = config.SetGlobalASNumber(11111)
