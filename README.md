@@ -12,7 +12,10 @@
 
 This repository is the home of `calico/node` and `calicoctl`.
 
-<blockquote><h1>Project Calico documentation: <a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1></blockquote>
+<blockquote>
+Note that the documentation in this repo is targeted at Calico contributors.
+<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
+</blockquote>
 
 
 
