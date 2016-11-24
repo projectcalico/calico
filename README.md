@@ -4,33 +4,19 @@
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 # Project Calico
 
-Project Calico provides
-
-- A simple, pure layer 3 networking approach with no overlays for networking
-  "workloads" such as VMs and containers.
-- A distributed firewall implementing rich and flexible network policy,
-  imposed at ingress/egress to each workload.
-
-For more information see [the Project Calico website](http://www.projectcalico.org/learn/).
+<blockquote>
+Note that the documentation in this repo is targeted at Calico contributors.
+<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
+</blockquote>
 
 This repository contains the source code for Project Calico's per-host
 daemon, Felix.
 
-## How do I get started with Project Calico?
-
-Follow one of our [getting started guides](http://docs.projectcalico.org/master/getting-started/).
-
-Calico can be used with a range of orchestrators including Docker, rkt,
-Kubernetes, OpenStack and Mesos.
-
-## How can I get support for Project Calico?
+## How can I get support for contributing to Project Calico?
 
 The best place to ask a question or get help from the community is the
 [calico-users #slack](https://slack.projectcalico.org).  We also have
 [an IRC channel](https://kiwiirc.com/client/irc.freenode.net/#calico).
-
-In addition, the company behind Project Calico,
-[Tigera, Inc.](https://www.tigera.io/) offers commercial support.
 
 ## Who is behind Project Calico?
 
@@ -38,9 +24,6 @@ In addition, the company behind Project Calico,
 and is responsible for the ongoing management of the project. However, it
 is open to any members of the community – individuals or organizations –
 to get involved and contribute code.
-
-Please [contact us](http://www.projectcalico.org/contact/) if you are
-interested in getting involved and contributing to the project.
 
 ## Contributing
 
