@@ -2,6 +2,9 @@ SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
+# fail if unable to download
+CURL=curl -sSf
+
 K8S_VERSION=1.3.1
 CALICO_NODE_VERSION=0.20.0
 CALICOCTL_URL?=https://github.com/projectcalico/calico-containers/releases/download/v$(CALICO_NODE_VERSION)/calicoctl
@@ -96,9 +99,11 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 	docker build -f Dockerfile -t $(DEPLOY_CONTAINER_NAME) .
 	touch $@
 
-.PHONY fetch-cni-bins:
+.PHONY: fetch-cni-bins
+fetch-cni-bins:
+	mkdir -p dist
 	mkdir -p tmp-cni
-	curl -sSL --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C tmp-cni/
+	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C tmp-cni/
 	mv tmp-cni/flannel dist/flannel
 	mv tmp-cni/loopback dist/loopback
 	mv tmp-cni/host-local dist/host-local
@@ -183,21 +188,21 @@ install:
 # Retrieve a host-local plugin for use in the tests
 dist/host-local:
 	mkdir -p dist
-	curl -L https://github.com/containernetworking/cni/releases/download/v0.2.2/cni-v0.2.2.tgz | tar -zxv -C dist
+	$(CURL) -L https://github.com/containernetworking/cni/releases/download/v0.2.2/cni-v0.2.2.tgz | tar -zxv -C dist
 
 # Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-python:
-	curl -L -o dist/calico-python https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
-	chmod +x dist/calico-python
+	$(CURL) -L https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico -o $@
+	chmod +x $@
 
 # Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-ipam-python:
-	curl -L -o $@ https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam
+	$(CURL) -L https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam -o $@
 	chmod +x $@
 
 # Retrieve calicoctl for use in tests
 dist/calicoctl:
-	curl -L $(CALICOCTL_URL) -o $@
+	$(CURL) -L $(CALICOCTL_URL) -o $@
 	chmod +x $@
 
 # Copy the plugin into place
