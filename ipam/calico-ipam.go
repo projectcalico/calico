@@ -114,7 +114,24 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request count IPv4=%d IPv6=%d\n", num4, num6)
 
-		assignArgs := client.AutoAssignArgs{Num4: num4, Num6: num6, HandleID: &workloadID, Hostname: conf.Hostname}
+		v4pools, err := utils.ParsePools(conf.IPAM.IPv4Pools, true)
+		if err != nil {
+			return err
+		}
+
+		v6pools, err := utils.ParsePools(conf.IPAM.IPv6Pools, false)
+		if err != nil {
+			return err
+		}
+
+		assignArgs := client.AutoAssignArgs{
+			Num4:      num4,
+			Num6:      num6,
+			HandleID:  &workloadID,
+			Hostname:  conf.Hostname,
+			IPv4Pools: v4pools,
+			IPv6Pools: v6pools,
+		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
 		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(assignArgs)
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v\n", assignedV4, assignedV6)

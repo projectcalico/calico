@@ -232,3 +232,23 @@ func CreateContextLogger(workload string) *log.Entry {
 
 	return contextLogger
 }
+
+// Takes as array of IPv4 or IPv6 pools and parses them into an array of IPnet's
+func ParsePools(pools []string, isv4 bool) ([]cnet.IPNet, error) {
+	result := []cnet.IPNet{}
+	for _, p := range pools {
+		_, cidr, err := net.ParseCIDR(p)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing pool %q: %s", p, err)
+		}
+		ip := cidr.IP
+		if isv4 && ip.To4() == nil {
+			return nil, fmt.Errorf("%q isn't a IPv4 address", ip)
+		}
+		if !isv4 && ip.To4() != nil {
+			return nil, fmt.Errorf("%q isn't a IPv6 address", ip)
+		}
+		result = append(result, cnet.IPNet{*cidr})
+	}
+	return result, nil
+}

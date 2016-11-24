@@ -70,7 +70,7 @@ func WipeK8sPods() {
 	}
 }
 
-func RunIPAMPlugin(netconf, command, args string) (types.Result, int) {
+func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(fmt.Errorf("failed to load netconf: %v", err))
@@ -97,17 +97,21 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, int) {
 	session.Wait(5)
 	exitCode := session.ExitCode()
 	result := types.Result{}
+	error := types.Error{}
 	stdout := session.Out.Contents()
 	if exitCode == 0 {
-
 		if command == "ADD" {
 			if err := json.Unmarshal(stdout, &result); err != nil {
 				panic(fmt.Errorf("failed to load result: %s %v", stdout, err))
 			}
 		}
+	} else {
+		if err := json.Unmarshal(stdout, &error); err != nil {
+			panic(fmt.Errorf("failed to load error: %s %v", stdout, err))
+		}
 	}
 
-	return result, exitCode
+	return result, error, exitCode
 }
 
 func CreateContainer(netconf string, k8sName string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {

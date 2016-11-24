@@ -47,10 +47,12 @@ type NetConf struct {
 	Type string `json:"type"`
 	IPAM struct {
 		Name       string
-		Type       string  `json:"type"`
-		Subnet     string  `json:"subnet"`
-		AssignIpv4 *string `json:"assign_ipv4"`
-		AssignIpv6 *string `json:"assign_ipv6"`
+		Type       string   `json:"type"`
+		Subnet     string   `json:"subnet"`
+		AssignIpv4 *string  `json:"assign_ipv4"`
+		AssignIpv6 *string  `json:"assign_ipv6"`
+		IPv4Pools  []string `json:"ipv4_pools"`
+		IPv6Pools  []string `json:"ipv6_pools"`
 	} `json:"ipam,omitempty"`
 	MTU            int        `json:"mtu"`
 	Hostname       string     `json:"hostname"`

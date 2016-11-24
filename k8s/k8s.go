@@ -103,6 +103,54 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 		}
 
+		// Only used by K8s so if its null then we're not doing k8s stuff
+		var labels map[string]string
+		var annot map[string]string
+
+		// Only attempt to fetch the labels and annotations from Kubernetes
+		// if the policy type has been set to "k8s". This allows users to
+		// run the plugin under Kubernetes without needing it to access the
+		// Kubernetes API
+		if conf.Policy.PolicyType == "k8s" {
+			var err error
+
+			labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
+			if err != nil {
+				// Cleanup IP allocation and return the error.
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				return nil, err
+			}
+			logger.WithField("labels", labels).Debug("Fetched K8s labels")
+			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
+
+			v4pools := annot["ipam.cni.projectcalico.org/ipv4pools"]
+			v6pools := annot["ipam.cni.projectcalico.org/ipv6pools"]
+
+			if len(v4pools) != 0 || len(v6pools) != 0 {
+				var stdinData map[string]interface{}
+				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+					return nil, err
+				}
+				stdinData["ipam"].(map[string]interface{})["ipv4pools"] = v4pools
+				stdinData["ipam"].(map[string]interface{})["ipv6pools"] = v6pools
+
+				if len(v4pools) > 0 {
+					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv4pools to %q", v4pools)
+				}
+				if len(v6pools) > 0 {
+					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv6pools to %q", v6pools)
+				}
+				newData, err := json.Marshal(stdinData)
+				if err != nil {
+					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+					return nil, err
+				}
+				args.StdinData = newData
+				logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
+			}
+		}
+
 		// Run the IPAM plugin
 		logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
 		result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
@@ -117,7 +165,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Node = hostname
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
-		endpoint.Metadata.Labels = make(map[string]string)
+		endpoint.Metadata.Labels = labels // Only when policy type == k8s
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)
@@ -135,19 +183,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			return nil, err
 		}
 		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
-
-		// Only attempt to fetch the labels from Kubernetes if the policy type has been set to "k8s"
-		// This allows users to run the plugin under Kubernetes without needing it to access the Kubernetes API
-		if conf.Policy.PolicyType == "k8s" {
-			labels, err := getK8sLabels(client, k8sArgs)
-			if err != nil {
-				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return nil, err
-			}
-			logger.WithField("labels", labels).Info("Fetched K8s labels")
-			endpoint.Metadata.Labels = labels
-		}
 	}
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
@@ -232,20 +267,20 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sLabels(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, error) {
-	pods, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
+func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, map[string]string, error) {
+	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	labels := pods.Labels
+	labels := pod.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels["calico/k8s_ns"] = fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)
 
-	return labels, nil
+	return labels, pod.Annotations, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, hostname string) (string, error) {
