@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/set"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
+	"net"
 	"regexp"
 	"strings"
 	"sync"
@@ -104,6 +105,11 @@ func (r *RouteTable) resync() error {
 		linkAttrs := link.Attrs()
 		ifaceName := linkAttrs.Name
 		logCxt := log.WithField("ifaceName", ifaceName)
+		logCxt.WithField("flags", linkAttrs.Flags).Debug("Interface flags")
+		if linkAttrs.Flags&net.FlagUp == 0 {
+			logCxt.Debug("Interface is down, skipping")
+			continue
+		}
 		logCxt.Debug("Examining interface")
 		if r.ifacePrefixRegexp.MatchString(ifaceName) {
 			expectedRoutes := r.ifaceNameToRoutes[ifaceName]
