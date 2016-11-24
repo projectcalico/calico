@@ -123,6 +123,9 @@ func (d *InternalDataplane) RecvMessage() (interface{}, error) {
 func (d *InternalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver")
 
+	// TODO Check RPF check value.
+	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+
 	for _, t := range d.iptablesFilterTables {
 		t.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
 		t.SetRuleInsertions("FORWARD", []iptables.Rule{{

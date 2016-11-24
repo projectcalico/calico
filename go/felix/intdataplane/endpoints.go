@@ -15,12 +15,15 @@
 package intdataplane
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
+	"io"
+	"os"
 	"reflect"
 )
 
@@ -88,6 +91,7 @@ func (m *endpointManager) CompleteDeferredWork() {
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(&id, workload)
 			m.filterTable.UpdateChains(chains)
 			m.idToChains[id] = chains
+
 			logCxt.Info("Updating endpoint routes.")
 			var ipStrings []string
 			if m.ipVersion == 4 {
@@ -104,6 +108,7 @@ func (m *endpointManager) CompleteDeferredWork() {
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			}
 			m.routeTable.SetRoutes(workload.Name, ipNets)
+			m.configureInterface(workload.Name)
 		} else {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.idToChains[id])
@@ -114,4 +119,46 @@ func (m *endpointManager) CompleteDeferredWork() {
 		}
 		delete(m.pendingUpdates, id)
 	}
+}
+
+func (m *endpointManager) configureInterface(name string) {
+	if m.ipVersion == 4 {
+		// TODO(smc) Retry, don't panic!
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
+		if err != nil {
+			log.WithError(err).Panic("Failed to configure interface")
+		}
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		if err != nil {
+			log.WithError(err).Panic("Failed to configure interface")
+		}
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		if err != nil {
+			log.WithError(err).Panic("Failed to configure interface")
+		}
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		if err != nil {
+			log.WithError(err).Panic("Failed to configure interface")
+		}
+	} else {
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		if err != nil {
+			log.WithError(err).Panic("Failed to configure interface")
+		}
+	}
+}
+
+func writeProcSys(path, value string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	n, err := f.Write([]byte(value))
+	if err == nil && n < len(value) {
+		err = io.ErrShortWrite
+	}
+	if err1 := f.Close(); err == nil {
+		err = err1
+	}
+	return err
 }
