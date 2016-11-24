@@ -22,12 +22,16 @@ function git_auto_version {
     last_tag=`git_last_tag`
     commits_since=`git cherry -v ${last_tag} | wc -l`
     sha=`git_commit_id`
+    timestamp=`date -u '+%Y%m%d%H%M%S+0000'`
 
     # Generate corresponding PEP 440 version number.
-    if [ ${commits_since} -eq 0 ]; then
+    if test ${commits_since} -eq 0 && \
+       git diff-index --quiet --cached HEAD && \
+       git diff-files --quiet; then
+	# There are no commits since the last tag, and no uncommitted changes.
 	version=${last_tag}
     else
-	version=${last_tag}.post${commits_since}+${sha}
+	version=${last_tag}.post${commits_since}+${timestamp}+${sha}
     fi
 
     echo $version
