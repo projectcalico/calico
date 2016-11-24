@@ -64,7 +64,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostEndpointRemove:
 		// TODO(smc) Host endpoint updates
 		log.WithField("msg", msg).Warn("Message not implemented")
-
 	}
 }
 

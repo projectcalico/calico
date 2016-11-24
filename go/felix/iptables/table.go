@@ -84,7 +84,7 @@ type Table struct {
 }
 
 func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix string) *Table {
-	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `:([a-zA-Z0-9_-]+)"?`)
+	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
 	ourChainsPattern := "^(" + strings.Join(chainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
 
@@ -230,6 +230,7 @@ func (t *Table) loadDataplaneState() {
 
 	t.logCxt.Info("Done scanning, in sync with dataplane")
 	t.chainToDataplaneHashes = dataplaneHashes
+	t.inSyncWithDataPlane = true
 }
 
 // getHashesFromDataplane loads the current state of our table and parses out the hashes that we

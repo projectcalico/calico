@@ -28,7 +28,8 @@ import (
 )
 
 var (
-	listFailed = errors.New("netlink list operation failed")
+	ListFailed   = errors.New("netlink list operation failed")
+	UpdateFailed = errors.New("netlink update operation failed")
 )
 
 type RouteTable struct {
@@ -38,6 +39,8 @@ type RouteTable struct {
 	ifacePrefixRegexp *regexp.Regexp
 
 	ifaceNameToRoutes map[string]set.Set
+
+	inSync bool
 }
 
 func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
@@ -82,21 +85,25 @@ func (r *RouteTable) Apply() error {
 	links, err := netlink.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces, retrying...")
-		return listFailed
+		return ListFailed
 	}
+
+	updatesFailed := false
 
 	for _, link := range links {
 		linkAttrs := link.Attrs()
 		ifaceName := linkAttrs.Name
 		logCxt := log.WithField("ifaceName", ifaceName)
 		logCxt.WithField("flags", linkAttrs.Flags).Debug("Interface flags")
-		if linkAttrs.Flags&net.FlagUp == 0 {
-			logCxt.Debug("Interface is down, skipping")
-			continue
-		}
 		logCxt.Debug("Examining interface")
 		if r.ifacePrefixRegexp.MatchString(ifaceName) {
 			// One of our interfaces.
+			if linkAttrs.Flags&net.FlagUp == 0 {
+				logCxt.Debug("Interface is down, skipping")
+				// TODO(smc) monitor interface up/down so we can trigger retry rather than poll
+				updatesFailed = true
+				continue
+			}
 			logCxt.Debug("Interface matches our prefixes")
 			expectedRoutes := r.ifaceNameToRoutes[ifaceName]
 			if expectedRoutes == nil {
@@ -106,7 +113,7 @@ func (r *RouteTable) Apply() error {
 			if err != nil {
 				logCxt.WithError(err).WithField("link", ifaceName).Error(
 					"Failed to list routes, retrying...")
-				return listFailed
+				return ListFailed
 			}
 
 			seenRoutes := set.New()
@@ -122,6 +129,7 @@ func (r *RouteTable) Apply() error {
 						// Probably a race with the interface being deleted.
 						logCxt.WithError(err).Info(
 							"Route deletion failed, assuming someone got there first.")
+						updatesFailed = true
 					}
 				}
 				seenRoutes.Add(dest)
@@ -139,11 +147,17 @@ func (r *RouteTable) Apply() error {
 						Type:      syscall.RTN_UNICAST,
 						Protocol:  syscall.RTPROT_BOOT,
 					}
-					netlink.RouteAdd(&route)
+					if err := netlink.RouteAdd(&route); err != nil {
+						logCxt.WithError(err).Warn("Failed to add route")
+						updatesFailed = true
+					}
 				}
 				return nil
 			})
 		}
+	}
+	if updatesFailed {
+		return UpdateFailed
 	}
 	return nil
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
+	"time"
 )
 
 type Config struct {
@@ -97,6 +98,8 @@ type InternalDataplane struct {
 	interfacePrefixes []string
 
 	routeTables []*routetable.RouteTable
+
+	dataplaneNeedsSync bool
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
@@ -127,35 +130,41 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}})
 	}
 
-	inSync := false
-	for msg := range d.toDataplane {
-		log.WithField("msg", msg).Info("Received update from calculation graph")
+	retryTicker := time.NewTicker(100 * time.Millisecond)
 
-		for _, mgr := range d.allManagers {
-			mgr.OnUpdate(msg)
+	datastoreInSync := false
+	for {
+		select {
+		case msg := <-d.toDataplane:
+			log.WithField("msg", msg).Info("Received update from calculation graph")
+			for _, mgr := range d.allManagers {
+				mgr.OnUpdate(msg)
+			}
+
+			switch msg.(type) {
+
+			//
+			//// Less common cluster config updates.
+			//case *proto.HostMetadataUpdate:
+			//	log.WithField("msg", msg).Warn("Message not implemented")
+			//case *proto.HostMetadataRemove:
+			//	log.WithField("msg", msg).Warn("Message not implemented")
+			//case *proto.IPAMPoolUpdate:
+			//	log.WithField("msg", msg).Warn("Message not implemented")
+			//case *proto.IPAMPoolRemove:
+			//	log.WithField("msg", msg).Warn("Message not implemented")
+			//
+
+			case *proto.InSync:
+				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
+				log.Info("Datastore in sync, flushing the dataplane for the first time...")
+				datastoreInSync = true
+			}
+			d.dataplaneNeedsSync = true
+		case <-retryTicker.C:
 		}
 
-		switch msg.(type) {
-
-		//
-		//// Less common cluster config updates.
-		//case *proto.HostMetadataUpdate:
-		//	log.WithField("msg", msg).Warn("Message not implemented")
-		//case *proto.HostMetadataRemove:
-		//	log.WithField("msg", msg).Warn("Message not implemented")
-		//case *proto.IPAMPoolUpdate:
-		//	log.WithField("msg", msg).Warn("Message not implemented")
-		//case *proto.IPAMPoolRemove:
-		//	log.WithField("msg", msg).Warn("Message not implemented")
-		//
-
-		case *proto.InSync:
-			// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
-			log.Info("Datastore in sync, flushing the dataplane for the first time...")
-			inSync = true
-		}
-
-		if inSync {
+		if datastoreInSync && d.dataplaneNeedsSync {
 			d.apply()
 		}
 	}
@@ -165,6 +174,9 @@ func (d *InternalDataplane) apply() {
 	// Update sequencing is important here because iptables rules have dependencies on ipsets.
 	// Creating a rule that references an unknown IP set fails, as does deleting an IP set that
 	// is in use.
+
+	// Unset the needs-sync flag, we'll set it again if something fails.
+	d.dataplaneNeedsSync = false
 
 	// First, give the managers a chance to update IP sets and iptables.
 	for _, mgr := range d.allManagers {
@@ -184,7 +196,11 @@ func (d *InternalDataplane) apply() {
 
 	// Update the routing table.
 	for _, r := range d.routeTables {
-		r.Apply()
+		err := r.Apply()
+		if err != nil {
+			log.Warn("Failed to synchronize routing table, will retry...")
+			d.dataplaneNeedsSync = true
+		}
 	}
 
 	// Now clean up any left-over IP sets.
