@@ -47,9 +47,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV4)
 
+	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
+	dp.routeTables = append(dp.routeTables, routeTableV4)
+
 	dp.RegisterManager(newIPSetsManager(ipSetsV4))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer))
-	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer))
+	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer, routeTableV4, 4))
 
 	if !config.DisableIPv6 {
 		filterTableV6 := iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
@@ -57,9 +60,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
+		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
+		dp.routeTables = append(dp.routeTables, routeTableV6)
+
 		dp.RegisterManager(newIPSetsManager(ipSetsV6))
 		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer))
-		dp.RegisterManager(newEndpointManager(filterTableV6, ruleRenderer))
+		dp.RegisterManager(newEndpointManager(filterTableV6, ruleRenderer, routeTableV6, 6))
 	}
 	return dp
 }
@@ -89,6 +95,8 @@ type InternalDataplane struct {
 	ruleRenderer rules.RuleRenderer
 
 	interfacePrefixes []string
+
+	routeTables []*routetable.RouteTable
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
@@ -98,7 +106,6 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 func (d *InternalDataplane) Start() {
 	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
-	routetable.New(d.interfacePrefixes, 4).Start()
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -170,9 +177,14 @@ func (d *InternalDataplane) apply() {
 		w.ApplyUpdates()
 	}
 
-	// Update iptables, this should sever any references to no-unused IP sets.
+	// Update iptables, this should sever any references to now-unused IP sets.
 	for _, t := range d.iptablesFilterTables {
 		t.Apply()
+	}
+
+	// Update the routing table.
+	for _, r := range d.routeTables {
+		r.Apply()
 	}
 
 	// Now clean up any left-over IP sets.

@@ -41,6 +41,10 @@ func New() Set {
 	return make(mapSet)
 }
 
+func Empty() Set {
+	return mapSet(nil)
+}
+
 type mapSet map[interface{}]empty
 
 func (set mapSet) Len() int {

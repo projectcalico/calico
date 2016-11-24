@@ -16,40 +16,48 @@ package intdataplane
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
-	"github.com/projectcalico/felix/go/felix/set"
 	"reflect"
 )
 
 type endpointManager struct {
+	ipVersion      int
 	filterTable    *iptables.Table
 	allEndpoints   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	idToChains     map[proto.WorkloadEndpointID][]*iptables.Chain
 	dispatchChains []*iptables.Chain
-	dirtyEndpoints set.Set
 	ruleRenderer   rules.RuleRenderer
+	routeTable     *routetable.RouteTable
 }
 
-func newEndpointManager(filterTable *iptables.Table, ruleRenderer rules.RuleRenderer) *endpointManager {
+func newEndpointManager(
+	filterTable *iptables.Table,
+	ruleRenderer rules.RuleRenderer,
+	routeTable *routetable.RouteTable,
+	ipVersion int,
+) *endpointManager {
 	return &endpointManager{
+		ipVersion:      ipVersion,
 		filterTable:    filterTable,
 		allEndpoints:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingUpdates: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		idToChains:     map[proto.WorkloadEndpointID][]*iptables.Chain{},
-		dirtyEndpoints: set.New(),
 		ruleRenderer:   ruleRenderer,
+		routeTable:     routeTable,
 	}
 }
 
 func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
-		m.allEndpoints[*msg.Id] = msg.Endpoint
-		m.dirtyEndpoints.Add(*msg.Id)
+		m.pendingUpdates[*msg.Id] = msg.Endpoint
 	case *proto.WorkloadEndpointRemove:
-		delete(m.allEndpoints, *msg.Id)
-		m.dirtyEndpoints.Add(*msg.Id)
+		m.pendingUpdates[*msg.Id] = nil
 	case *proto.HostEndpointUpdate:
 		// TODO(smc) Host endpoint updates
 		log.WithField("msg", msg).Warn("Message not implemented")
@@ -72,18 +80,39 @@ func (m *endpointManager) CompleteDeferredWork() {
 		m.dispatchChains = newDispatchChains
 	}
 
-	// Rewrite the chains of any dirty endpoints.
-	m.dirtyEndpoints.Iter(func(item interface{}) error {
-		id := item.(proto.WorkloadEndpointID)
-		if workload := m.allEndpoints[id]; workload != nil {
-			log.WithField("id", id).Info("Workload updated, updating its chains.")
+	// Update any dirty endpoints.
+	for id, workload := range m.pendingUpdates {
+		logCxt := log.WithField("id", id)
+		oldWorkload := m.allEndpoints[id]
+		if workload != nil {
+			logCxt.Info("Updating per-endpoint chains.")
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(&id, workload)
 			m.filterTable.UpdateChains(chains)
 			m.idToChains[id] = chains
+			logCxt.Info("Updating endpoint routes.")
+			var ipStrings []string
+			if m.ipVersion == 4 {
+				ipStrings = workload.Ipv4Nets
+			} else {
+				ipStrings = workload.Ipv6Nets
+			}
+			ipNets := make([]ip.CIDR, len(ipStrings))
+			for i, s := range ipStrings {
+				ipNets[i] = ip.MustParseCIDR(s)
+			}
+			if oldWorkload != nil && oldWorkload.Name != workload.Name {
+				logCxt.Debug("Interface name changed, cleaning up old routes")
+				m.routeTable.SetRoutes(oldWorkload.Name, nil)
+			}
+			m.routeTable.SetRoutes(workload.Name, ipNets)
 		} else {
-			log.WithField("id", id).Info("Workload removed, deleting its chains.")
+			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.idToChains[id])
+			if oldWorkload := m.allEndpoints[id]; oldWorkload != nil {
+				logCxt.Info("Workload removed, deleting its routes.")
+				m.routeTable.SetRoutes(oldWorkload.Name, nil)
+			}
 		}
-		return set.RemoveItem
-	})
+		delete(m.pendingUpdates, id)
+	}
 }

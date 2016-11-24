@@ -18,16 +18,13 @@ import (
 	"errors"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ip"
-	"github.com/projectcalico/felix/go/felix/jitter"
 	"github.com/projectcalico/felix/go/felix/set"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 	"net"
 	"regexp"
 	"strings"
-	"sync"
 	"syscall"
-	"time"
 )
 
 var (
@@ -35,11 +32,11 @@ var (
 )
 
 type RouteTable struct {
-	ipVersion         int
+	netlinkFamily int
+
 	ifacePrefixes     set.Set
 	ifacePrefixRegexp *regexp.Regexp
 
-	lock              sync.Mutex
 	ifaceNameToRoutes map[string]set.Set
 }
 
@@ -54,47 +51,34 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 	ifaceNamePattern := strings.Join(regexpParts, "|")
 	log.WithField("regex", ifaceNamePattern).Info("Calculated interface name regexp")
 
+	family := netlink.FAMILY_V4
+	if ipVersion == 6 {
+		family = netlink.FAMILY_V6
+	} else if ipVersion != 4 {
+		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
+	}
+
 	return &RouteTable{
+		netlinkFamily:     family,
 		ifacePrefixes:     prefixSet,
 		ifacePrefixRegexp: regexp.MustCompile(ifaceNamePattern),
 		ifaceNameToRoutes: map[string]set.Set{},
 	}
 }
 
-func (r *RouteTable) Start() {
-	log.Info("Starting routing table syncer")
-	go r.loopKeepingRoutesInSync()
-}
-
 func (r *RouteTable) SetRoutes(ifaceName string, routes []ip.CIDR) {
+	if len(routes) == 0 {
+		delete(r.ifaceNameToRoutes, ifaceName)
+		return
+	}
 	routesSet := set.New()
 	for _, route := range routes {
 		routesSet.Add(route)
 	}
-
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	r.ifaceNameToRoutes[ifaceName] = routesSet
 }
 
-func (r *RouteTable) loopKeepingRoutesInSync() {
-	log.Info("Started routing table syncer")
-	// TODO Monitor for changes!
-	ticker := jitter.NewTicker(100*time.Millisecond, 10*time.Millisecond)
-	for {
-		if err := r.resync(); err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		<-ticker.C
-	}
-}
-
-func (r *RouteTable) resync() error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
+func (r *RouteTable) Apply() error {
 	links, err := netlink.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces, retrying...")
@@ -112,13 +96,13 @@ func (r *RouteTable) resync() error {
 		}
 		logCxt.Debug("Examining interface")
 		if r.ifacePrefixRegexp.MatchString(ifaceName) {
+			// One of our interfaces.
+			logCxt.Debug("Interface matches our prefixes")
 			expectedRoutes := r.ifaceNameToRoutes[ifaceName]
 			if expectedRoutes == nil {
-				expectedRoutes = set.New()
+				expectedRoutes = set.Empty()
 			}
-			// One of our interfaces.
-			logCxt.Debug("Interface matches prefixes")
-			routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
+			routes, err := netlink.RouteList(link, r.netlinkFamily)
 			if err != nil {
 				logCxt.WithError(err).WithField("link", ifaceName).Error(
 					"Failed to list routes, retrying...")
