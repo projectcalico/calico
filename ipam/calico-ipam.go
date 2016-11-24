@@ -52,10 +52,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := utils.AddIgnoreUnknownArgs(); err != nil {
-		os.Exit(1)
-	}
-
 	skel.PluginMain(cmdAdd, cmdDel)
 }
 
