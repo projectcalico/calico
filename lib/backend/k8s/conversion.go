@@ -79,29 +79,6 @@ func (c converter) parseProfileName(profileName string) (string, error) {
 	return splits[1], nil
 }
 
-func (c converter) namespaceToIPPool(ns *k8sapi.Namespace) (*model.KVPair, error) {
-	if ns.ObjectMeta.Name != "kube-system" {
-		return nil, goerrors.New("Invalid namespace, must be kube-system")
-	}
-
-	// Get the serialized KVPair.
-	poolStr, ok := ns.ObjectMeta.Annotations["projectcalico.org/ipPool"]
-	if !ok {
-		// No pools exist.
-		return nil, goerrors.New("No Kubernetes Pod IP Pool configured")
-	}
-	pool := model.IPPool{}
-	err := json.Unmarshal([]byte(poolStr), &pool)
-	if err != nil {
-		return nil, err
-	}
-	return &model.KVPair{
-		Key:      model.IPPoolKey{CIDR: pool.CIDR},
-		Value:    &pool,
-		Revision: ns.ObjectMeta.ResourceVersion,
-	}, nil
-}
-
 func (c converter) namespaceToProfile(ns *k8sapi.Namespace) (*model.KVPair, error) {
 	// Determine the ingress action based off the DefaultDeny annotation.
 	ingressAction := "allow"

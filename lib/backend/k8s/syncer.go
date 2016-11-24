@@ -281,16 +281,6 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 
 			snap = append(snap, *rules, *tags, *labels)
 			keys = map[model.Key]bool{rules.Key: true, tags.Key: true, labels.Key: true}
-
-			// If this is the kube-system Namespace, also send
-			// the pool through. // TODO: Hacky.
-			if ns.ObjectMeta.Name == "kube-system" {
-				pool, _ := syn.kc.converter.namespaceToIPPool(&ns)
-				if pool != nil {
-					snap = append(snap, *pool)
-					keys[pool.Key] = true
-				}
-			}
 		}
 
 		// Get NetworkPolicies (Policies)
@@ -384,16 +374,6 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	tags.Revision = profile.Revision
 	labels.Revision = profile.Revision
 
-	// If this is the kube-system Namespace, it also houses Pool
-	// information, so send a pool update. FIXME: Make this better.
-	var pool *model.KVPair
-	if ns.ObjectMeta.Name == "kube-system" {
-		pool, err = syn.kc.converter.namespaceToIPPool(ns)
-		if err != nil {
-			log.Panicf("%s", err)
-		}
-	}
-
 	// For deletes, we need to nil out the Value part of the KVPair.
 	if e.Type == watch.Deleted {
 		rules.Value = nil
@@ -402,11 +382,7 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	}
 
 	// Return the updates.
-	updates := []model.KVPair{*rules, *tags, *labels}
-	if pool != nil {
-		updates = append(updates, *pool)
-	}
-	return updates
+	return []model.KVPair{*rules, *tags, *labels}
 }
 
 // parsePodEvent returns a KVPair for the given event.  If the event isn't
