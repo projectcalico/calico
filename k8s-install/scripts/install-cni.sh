@@ -81,6 +81,7 @@ EOF
 SERVICEACCOUNT_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
 sed -i s/__KUBERNETES_SERVICE_HOST__/${KUBERNETES_SERVICE_HOST:-}/g calico.conf.tmp
 sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT:-}/g calico.conf.tmp
+sed -i s/__KUBERNETES_NODE_NAME__/${KUBERNETES_NODE_NAME:-$(hostname)}/g calico.conf.tmp
 sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g calico.conf.tmp
 sed -i s/__KUBECONFIG_FILENAME__/calico-kubeconfig/g calico.conf.tmp
 
