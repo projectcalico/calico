@@ -164,8 +164,11 @@ Description:
 	results := executeConfigCommand(parsedArgs, actionList)
 	log.Infof("results: %+v", results)
 
-	if results.err != nil {
+	if results.fileInvalid {
 		fmt.Printf("Failed to execute command: %v\n", results.err)
+		os.Exit(1)
+	} else if results.err != nil {
+		fmt.Printf("Failed to get resources: %v\n", results.err)
 		os.Exit(1)
 	}
 
