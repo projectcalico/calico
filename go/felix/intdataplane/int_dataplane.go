@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
 )
 
@@ -35,9 +36,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
 	dp := &InternalDataplane{
-		toDataplane:   make(chan interface{}, 100),
-		fromDataplane: make(chan interface{}, 100),
-		ruleRenderer:  ruleRenderer,
+		toDataplane:       make(chan interface{}, 100),
+		fromDataplane:     make(chan interface{}, 100),
+		ruleRenderer:      ruleRenderer,
+		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
 	}
 
 	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
@@ -85,6 +87,8 @@ type InternalDataplane struct {
 	allManagers []Manager
 
 	ruleRenderer rules.RuleRenderer
+
+	interfacePrefixes []string
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
@@ -94,6 +98,7 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 func (d *InternalDataplane) Start() {
 	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
+	routetable.New(d.interfacePrefixes, 4).Start()
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {

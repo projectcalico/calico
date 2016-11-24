@@ -1,5 +1,5 @@
 hash: 5f25e5f7bc5ec5621cfafd62391ebecf01bc5be93d8afcc22ff469c669761df0
-updated: 2016-11-23T14:35:58.361665456Z
+updated: 2016-11-24T09:24:03.3155755Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -183,6 +183,10 @@ imports:
   - codec
 - name: github.com/vishvananda/netlink
   version: a4f22d8ad2327663017dbb309b5e3f8b6f348020
+  subpackages:
+  - nl
+- name: github.com/vishvananda/netns
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:

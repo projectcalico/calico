@@ -22,6 +22,7 @@ package ip
 
 import (
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"net"
 )
@@ -78,6 +79,7 @@ type CIDR interface {
 	Addr() Addr
 	Prefix() uint8
 	String() string
+	ToIPNet() net.IPNet
 }
 
 type V4CIDR struct {
@@ -95,6 +97,13 @@ func (c V4CIDR) Addr() Addr {
 
 func (c V4CIDR) Prefix() uint8 {
 	return c.prefix
+}
+
+func (c V4CIDR) ToIPNet() net.IPNet {
+	return net.IPNet{
+		IP:   c.Addr().AsNetIP(),
+		Mask: net.CIDRMask(int(c.Prefix()), 32),
+	}
 }
 
 func (c V4CIDR) String() string {
@@ -116,6 +125,13 @@ func (c V6CIDR) Addr() Addr {
 
 func (c V6CIDR) Prefix() uint8 {
 	return c.prefix
+}
+
+func (c V6CIDR) ToIPNet() net.IPNet {
+	return net.IPNet{
+		IP:   c.Addr().AsNetIP(),
+		Mask: net.CIDRMask(int(c.Prefix()), 128),
+	}
 }
 
 func (c V6CIDR) String() string {
@@ -152,4 +168,12 @@ func CIDRFromIPNet(ipNet calinet.IPNet) CIDR {
 			prefix: uint8(ones),
 		}
 	}
+}
+
+func MustParseCIDR(s string) CIDR {
+	_, ipNet, err := net.ParseCIDR(s)
+	if err != nil {
+		log.WithError(err).WithField("cidr", s).Panic("Failed to parse CIDR")
+	}
+	return CIDRFromIPNet(calinet.IPNet{*ipNet})
 }

@@ -246,6 +246,12 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 	return t.getHashesFromBuffer(buf)
 }
 
+// getHashesFromBuffer parses a buffer containing iptables-save output for this table, extracting
+// our rule hashes.  Entries in the returned map are indexed by chain name.  For rules that we
+// wrote, the hash is extracted from a comment that we added to the rule.  For rules written by
+// previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
+// returns a zero string.  Hence, the lengths of the returned values are the lengths of the chains
+// whether written by Felix or not.
 func (t *Table) getHashesFromBuffer(buf *bytes.Buffer) map[string][]string {
 	newHashes := map[string][]string{}
 	for {
