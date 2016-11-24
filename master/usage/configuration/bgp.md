@@ -47,7 +47,7 @@ the node.  If no AS number if specified, the node will use the global default
 value.
 
 Use the `calicoctl config set asNumber` command to set the global default AS
-number.  If no value is configured, the default AS number is 64511.
+number.  If no value is configured, the default AS number is 64512.
 
 If all of your Calico nodes are within the same AS, but you require a
 different AS number to be used (e.g because you are peering with a border
@@ -57,18 +57,23 @@ complicated topologies where you are explicitly setting the AS number on each
 node, the default value will not be used and therefore using this command is
 not necessary.
 
+> Prior to version 2.0.0, calicoctl and calico/node set the global default
+> AS number to 64511.  Updating your deployment from a pre-2.0.0 version to use
+> the 2.0.0+ calicoctl and calico/node container images will not affect the 
+> global value that was previously set.
+
 #### Example
 
-To set the default AS number to 64512, run the following calicoctl command on
+To set the default AS number to 64513, run the following calicoctl command on
 any node:
 
-	$ calicoctl config set asNumber 64512
+	$ calicoctl config set asNumber 64513
 
 To view the current default value, run the command without specifying an AS
 number, the command will output the current value.
 
 	$ calicoctl config get asNumber
-	64512
+	64513
 
 
 ### Disabling the full node-to-node BGP mesh
