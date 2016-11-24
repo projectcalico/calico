@@ -12,7 +12,7 @@ This repository includes a top-level CNI networking plugin, as well as a CNI IPA
 
 For details of configuration, see the [configuration.md][config] file.
 
-The [calico-containers repository][calico-containers] contains getting started guides for a number of scenarios, as well as more detailed documentation regarding our CNI integration.
+The docs website, [docs.projectcalico.org][calico-docs], contains getting started guides for a number of scenarios, as well as more detailed documentation regarding our CNI integration.
 
 To learn more about CNI, visit the [appc/cni][cni] repo.
 
@@ -24,6 +24,6 @@ To build the Calico Networking Plugin for CNI locally, clone this repository and
 
 [cni]: https://github.com/appc/cni
 [config]: configuration.md
-[calico-containers]: https://github.com/projectcalico/calico-containers/blob/master/docs/cni/kubernetes/README.md
+[calico-docs]: http://docs.projectcalico.org/
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
