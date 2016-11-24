@@ -40,7 +40,7 @@ func (d *ipSetsManager) OnUpdate(msg interface{}) {
 		d.ipsets.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
 			Type:     ipsets.IPSetTypeHashIP,
 			SetID:    msg.Id,
-			IPFamily: ipsets.IPFamilyV4,
+			IPFamily: d.ipsets.Family,
 			MaxSize:  1024 * 1024,
 		}, msg.Members)
 	case *proto.IPSetRemove:
@@ -48,6 +48,7 @@ func (d *ipSetsManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *ipSetsManager) CompleteDeferredWork() {
+func (m *ipSetsManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
+	return nil
 }

@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ip"
@@ -70,7 +71,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	}
 }
 
-func (m *endpointManager) CompleteDeferredWork() {
+func (m *endpointManager) CompleteDeferredWork() error {
 	// Rewrite the dispatch chains if they've changed.
 	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
 	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
@@ -108,7 +109,13 @@ func (m *endpointManager) CompleteDeferredWork() {
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			}
 			m.routeTable.SetRoutes(workload.Name, ipNets)
-			m.configureInterface(workload.Name)
+			err := m.configureInterface(workload.Name)
+			if err != nil {
+				log.WithError(err).Warn("Failed to configure interface, will retry")
+			} else {
+				m.allEndpoints[id] = workload
+				delete(m.pendingUpdates, id)
+			}
 		} else {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.idToChains[id])
@@ -116,36 +123,43 @@ func (m *endpointManager) CompleteDeferredWork() {
 				logCxt.Info("Workload removed, deleting its routes.")
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			}
+			delete(m.allEndpoints, id)
+			delete(m.pendingUpdates, id)
 		}
-		delete(m.pendingUpdates, id)
 	}
+
+	if len(m.pendingUpdates) > 0 {
+		return errors.New("Failed to sync some endpoints")
+	}
+	return nil
 }
 
-func (m *endpointManager) configureInterface(name string) {
+func (m *endpointManager) configureInterface(name string) error {
 	if m.ipVersion == 4 {
 		// TODO(smc) Retry, don't panic!
 		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
 		if err != nil {
-			log.WithError(err).Panic("Failed to configure interface")
+			return err
 		}
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
 		if err != nil {
-			log.WithError(err).Panic("Failed to configure interface")
+			return err
 		}
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
 		if err != nil {
-			log.WithError(err).Panic("Failed to configure interface")
+			return err
 		}
 		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
 		if err != nil {
-			log.WithError(err).Panic("Failed to configure interface")
+			return err
 		}
 	} else {
 		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
 		if err != nil {
-			log.WithError(err).Panic("Failed to configure interface")
+			return err
 		}
 	}
+	return nil
 }
 
 func writeProcSys(path, value string) error {

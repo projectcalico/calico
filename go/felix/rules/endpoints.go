@@ -65,12 +65,12 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 	// that they accepted the packet.
 	inRules = append(inRules, Rule{
 		Action: ClearMarkAction{
-			Mask: r.IptablesMarkAccept,
+			Mark: r.IptablesMarkAccept,
 		},
 	})
 	outRules = append(outRules, Rule{
 		Action: ClearMarkAction{
-			Mask: r.IptablesMarkAccept,
+			Mark: r.IptablesMarkAccept,
 		},
 	})
 
@@ -81,13 +81,13 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 		inRules = append(inRules, Rule{
 			Comment: "Start of tier " + tier.Name,
 			Action: ClearMarkAction{
-				Mask: r.IptablesMarkNextTier,
+				Mark: r.IptablesMarkNextTier,
 			},
 		})
 		outRules = append(outRules, Rule{
 			Comment: "Start of tier " + tier.Name,
 			Action: ClearMarkAction{
-				Mask: r.IptablesMarkNextTier,
+				Mark: r.IptablesMarkNextTier,
 			},
 		})
 		// Then, jump to each policy in turn.

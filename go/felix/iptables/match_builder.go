@@ -17,6 +17,7 @@ package iptables
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/proto"
 	"strings"
 )
 
@@ -58,4 +59,63 @@ func (m MatchCriteria) OutInterface(ifaceMatch string) MatchCriteria {
 
 func (m MatchCriteria) ConntrackState(stateNames string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m conntrack --ctstate %s", stateNames))
+}
+
+func (m MatchCriteria) Protocol(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-p %s", name))
+}
+
+func (m MatchCriteria) SourceNet(net string) MatchCriteria {
+	return append(m, fmt.Sprintf("--source %s", net))
+}
+
+func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
+}
+
+func (m MatchCriteria) SourcePorts(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
+}
+
+func (m MatchCriteria) DestNet(net string) MatchCriteria {
+	return append(m, fmt.Sprintf("--destination %s", net))
+}
+
+func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set --match-set %s dst", name))
+}
+
+func (m MatchCriteria) DestPorts(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
+}
+
+func (m MatchCriteria) ICMPType(t uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("--match icmp --icmp-type %d", t))
+}
+
+func (m MatchCriteria) ICMPTypeAndCode(t, c uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("--match icmp --icmp-type %d/%d", t, c))
+}
+
+func (m MatchCriteria) ICMPV6Type(t uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("--match icmp6 --icmp-type %d", t))
+}
+
+func (m MatchCriteria) ICMPV6TypeAndCode(t, c uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("--match icmp6 --icmpv6-type %d/%d", t, c))
+}
+
+func PortsToMultiport(ports []*proto.PortRange) string {
+	portFragments := make([]string, len(ports))
+	for i, port := range ports {
+		if port.First == port.Last {
+			portFragments[i] = fmt.Sprintf("%d", port.First)
+		} else {
+			portFragments[i] = fmt.Sprintf("%d:%d", port.First, port.Last)
+		}
+	}
+	portsString := strings.Join(portFragments, ",")
+	return portsString
 }

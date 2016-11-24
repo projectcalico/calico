@@ -52,7 +52,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4))
-	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer))
+	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer, routeTableV4, 4))
 
 	if !config.DisableIPv6 {
@@ -65,7 +65,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6))
-		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer))
+		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(filterTableV6, ruleRenderer, routeTableV6, 6))
 	}
 	return dp
@@ -81,7 +81,7 @@ type Manager interface {
 	OnUpdate(protoBufMsg interface{})
 	// Called before the main loop flushes updates to the dataplane to allow for batched
 	// work to be completed.
-	CompleteDeferredWork()
+	CompleteDeferredWork() error
 }
 
 type InternalDataplane struct {
@@ -183,7 +183,10 @@ func (d *InternalDataplane) apply() {
 
 	// First, give the managers a chance to update IP sets and iptables.
 	for _, mgr := range d.allManagers {
-		mgr.CompleteDeferredWork()
+		err := mgr.CompleteDeferredWork()
+		if err != nil {
+			d.dataplaneNeedsSync = true
+		}
 	}
 
 	// Next, create/update IP sets.  We defer deletions of IP sets until after we update

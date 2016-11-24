@@ -68,15 +68,19 @@ func (g AcceptAction) ToFragment() string {
 }
 
 type ClearMarkAction struct {
-	Mask uint32
+	Mark uint32
 }
 
 func (c ClearMarkAction) ToFragment() string {
-	return fmt.Sprintf("--jump MARK --set-mark 0/%x", c.Mask)
+	return fmt.Sprintf("--jump MARK --set-mark 0/%x", c.Mark)
 }
 
 type SetMarkAction struct {
-	Mask uint32
+	Mark uint32
+}
+
+func (c SetMarkAction) ToFragment() string {
+	return fmt.Sprintf("--jump MARK --set-mark %x/%x", c.Mark, c.Mark)
 }
 
 type Rule struct {

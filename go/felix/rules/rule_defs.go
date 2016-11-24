@@ -59,8 +59,8 @@ type RuleRenderer interface {
 	HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*iptables.Chain
 	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain
 
-	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy) []*iptables.Chain
-	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile) []*iptables.Chain
+	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
+	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
 }
 
 type ruleRenderer struct {
@@ -68,6 +68,8 @@ type ruleRenderer struct {
 }
 
 type Config struct {
+	IPVersion uint8
+
 	WorkloadIfacePrefixes []string
 
 	IptablesMarkAccept    uint32

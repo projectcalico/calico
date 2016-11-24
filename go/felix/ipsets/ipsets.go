@@ -26,7 +26,7 @@ import (
 )
 
 type IPSets struct {
-	ipFamily IPFamily
+	Family IPFamily
 
 	// desiredIPSets.
 	activeIPSets          map[string]*IPSet
@@ -42,7 +42,7 @@ func NewIPSets(ipFamily IPFamily) *IPSets {
 
 func NewIPSetsWithOverrides(ipFamily IPFamily, existenceCache existenceCache) *IPSets {
 	return &IPSets{
-		ipFamily:              ipFamily,
+		Family:                ipFamily,
 		activeIPSets:          map[string]*IPSet{},
 		dirtyIPSets:           set.New(),
 		pendingIPSetDeletions: set.New(),
@@ -73,7 +73,7 @@ func (s *IPSets) RemoveIPsFromIPSet(setID string, removedMembers []string) {
 
 func (s *IPSets) filterMembersByIPVersion(members []string) []string {
 	var filtered []string
-	wantIPV6 := s.ipFamily == IPFamilyV6
+	wantIPV6 := s.Family == IPFamilyV6
 	for _, member := range members {
 		isIPV6 := strings.Index(member, ":") >= 0
 		if wantIPV6 != isIPV6 {
@@ -107,8 +107,8 @@ func (s *IPSets) ApplyDeletions() {
 		setID := item.(string)
 		log.WithField("setID", setID).Info("Deleting IP set (if it exists)")
 		for _, setName := range []string{
-			s.ipFamily.NameForMainIPSet(setID),
-			s.ipFamily.NameForTempIPSet(setID),
+			s.Family.NameForMainIPSet(setID),
+			s.Family.NameForTempIPSet(setID),
 		} {
 			if s.existenceCache.Exists(setName) {
 				cmd := exec.Command("ipset", "destroy", setName)
@@ -172,8 +172,8 @@ func (f IPFamily) NameForMainIPSet(setID string) string {
 }
 
 const (
-	IPFamilyV4 = "inet"
-	IPFamilyV6 = "inet6"
+	IPFamilyV4 = IPFamily("inet")
+	IPFamilyV6 = IPFamily("inet6")
 )
 
 type IPSetMetadata struct {
@@ -334,7 +334,8 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 		buf.WriteString(fmt.Sprintf("destroy %s\n", tempSetName))
 	}
 	// Create the temporary IP set with the current parameters.
-	buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n", tempSetName, s.Type, s.IPFamily, s.MaxSize))
+	buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n",
+		tempSetName, s.Type, s.IPFamily, s.MaxSize))
 	// Write all the members into the temporary IP set.
 	s.desiredMembers.Iter(func(item interface{}) error {
 		member := item.(string)

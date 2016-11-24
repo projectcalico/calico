@@ -24,12 +24,14 @@ import (
 type policyManager struct {
 	filterTable  *iptables.Table
 	ruleRenderer rules.RuleRenderer
+	ipVersion    uint8
 }
 
-func newPolicyManager(filterTable *iptables.Table, ruleRenderer rules.RuleRenderer) *policyManager {
+func newPolicyManager(filterTable *iptables.Table, ruleRenderer rules.RuleRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
+		ipVersion:    ipVersion,
 	}
 }
 
@@ -37,7 +39,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
-		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy)
+		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
@@ -47,7 +49,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.filterTable.RemoveChainByName(outName)
 	case *proto.ActiveProfileUpdate:
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
-		chains := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile)
+		chains := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
@@ -58,6 +60,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *policyManager) CompleteDeferredWork() {
+func (m *policyManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
+	return nil
 }
