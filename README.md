@@ -5,14 +5,15 @@
 
 # Calico Networking for CNI 
 
+<blockquote>
+Note that the documentation in this repo is targeted at Calico contributors.
+<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
+</blockquote>
+
 This repository contains the Project Calico network plugin for CNI.  This plugin allows you to use Calico networking for
 any orchestrator which makes use of the [CNI networking specification][cni].
 
 This repository includes a top-level CNI networking plugin, as well as a CNI IPAM plugin which makes use of Calico IPAM.
-
-For details of configuration, see the [configuration.md][config] file.
-
-The docs website, [docs.projectcalico.org][calico-docs], contains getting started guides for a number of scenarios, as well as more detailed documentation regarding our CNI integration.
 
 To learn more about CNI, visit the [appc/cni][cni] repo.
 
@@ -23,7 +24,5 @@ To build the Calico Networking Plugin for CNI locally, clone this repository and
 - To only run the tests, simply run `make test`.
 
 [cni]: https://github.com/appc/cni
-[config]: configuration.md
-[calico-docs]: http://docs.projectcalico.org/
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
