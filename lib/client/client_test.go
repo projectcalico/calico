@@ -12,19 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Test operations involving node resources.  These tests test a variety of
-// operations to check that each operation returns the expected data.  By
-// writing and reading sets of node data we can check that the data is stored
-// and round trips correctly.  Note that these tests do not actually test the
-// format of the data as it is stored in the underlying datastore.
-//
-// The tests are designed to test standard, Update, Create, Apply, Get, List,
-// and Delete operations in standard operational and failure scenarios -
-// creating and modifying field values and checking that the values hold in
-// subsequent queries.
-//
-// Read the test code for full details of the test.
-
 package client_test
 
 import (
@@ -74,23 +61,23 @@ apiVersion: v1
 kind: calicoApiConfig
 metadata:
 spec:
-  k8sKubeconfig: filename
-  k8sServer: bar
-  k8sClientCertificate: baz
-  k8sClientKey: foo
-  k8sCertificateAuthority: foobar
-  k8sToken: foobarbaz
+  kubeconfig: filename
+  k8sAPIEndpoint: bar
+  k8sCertFile: baz
+  k8sKeyFile: foo
+  k8sCAFile: foobar
+  k8sAPIToken: foobarbaz
 `
 	cfg2data := api.NewCalicoAPIConfig()
 	cfg2data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		KubeConfig: k8s.KubeConfig{
-			K8sKubeconfigFile:       "filename",
-			K8sServer:               "bar",
-			K8sClientCertificate:    "baz",
-			K8sClientKey:            "foo",
-			K8sCertificateAuthority: "foobar",
-			K8sToken:                "foobarbaz",
+			Kubeconfig:     "filename",
+			K8sAPIEndpoint: "bar",
+			K8sCertFile:    "baz",
+			K8sKeyFile:     "foo",
+			K8sCAFile:      "foobar",
+			K8sAPIToken:    "foobarbaz",
 		},
 	}
 
@@ -132,11 +119,11 @@ kind: notCalicoApiConfig
 	env2 := map[string]string{
 		"DATASTORE_TYPE":   string(api.Kubernetes),
 		"KUBECONFIG":       "filename",
-		"K8S_API_ENDPOINT": "bar",
-		"K8S_CERT_FILE":    "baz",
-		"K8S_KEY_FILE":     "foo",
-		"K8S_CA_FILE":      "foobar",
-		"K8S_API_TOKEN":    "foobarbaz",
+		"K8S_API_ENDPOINT": "bar1",
+		"K8S_CERT_FILE":    "baz1",
+		"K8S_KEY_FILE":     "foo1",
+		"K8S_CA_FILE":      "foobar1",
+		"K8S_API_TOKEN":    "foobarbaz1",
 	}
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
@@ -146,12 +133,12 @@ kind: notCalicoApiConfig
 			EtcdAuthority: "127.0.0.1:2379",
 		},
 		KubeConfig: k8s.KubeConfig{
-			K8sKubeconfigFile:       "filename",
-			K8sServer:               "bar",
-			K8sClientCertificate:    "baz",
-			K8sClientKey:            "foo",
-			K8sCertificateAuthority: "foobar",
-			K8sToken:                "foobarbaz",
+			Kubeconfig:     "filename",
+			K8sAPIEndpoint: "bar1",
+			K8sCertFile:    "baz1",
+			K8sKeyFile:     "foo1",
+			K8sCAFile:      "foobar1",
+			K8sAPIToken:    "foobarbaz1",
 		},
 	}
 
@@ -169,6 +156,24 @@ kind: notCalicoApiConfig
 			EtcdAuthority: "123.123.123.123:2344",
 			EtcdUsername:  "userbar",
 			EtcdPassword:  "passbaz",
+		},
+	}
+
+	// Environments to test k8s parameters (preferential naming)
+	env4 := map[string]string{
+		"DATASTORE_TYPE":    string(api.Kubernetes),
+		"KUBECONFIG":        "filename",
+		"CALICO_KUBECONFIG": "filename-preferred",
+	}
+	cfg4env := api.NewCalicoAPIConfig()
+	cfg4env.Spec = api.CalicoAPIConfigSpec{
+		DatastoreType: api.Kubernetes,
+		EtcdConfig: etcd.EtcdConfig{
+			EtcdScheme:    "http",
+			EtcdAuthority: "127.0.0.1:2379",
+		},
+		KubeConfig: k8s.KubeConfig{
+			Kubeconfig: "filename-preferred",
 		},
 	}
 
@@ -218,5 +223,6 @@ kind: notCalicoApiConfig
 		Entry("valid etcd configuration", env1, cfg1env, nil),
 		Entry("valid k8s configuration", env2, cfg2env, nil),
 		Entry("valid etcd configuration with CALICO_ prefix", env3, cfg3env, nil),
+		Entry("valid k8s configuration (preferential naming)", env4, cfg4env, nil),
 	)
 })
