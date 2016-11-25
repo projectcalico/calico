@@ -72,11 +72,13 @@ vendor: glide.yaml
 
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
+	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -o dist/calico \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
 
 # Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
+	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
 
@@ -187,7 +189,7 @@ install:
 
 # Retrieve a host-local plugin for use in the tests
 dist/host-local:
-	mkdir -p dist
+	mkdir -p $(@D)
 	$(CURL) -L https://github.com/containernetworking/cni/releases/download/v0.2.2/cni-v0.2.2.tgz | tar -zxv -C dist
 
 # Retrieve an old version of the Python CNI plugin for use in tests
