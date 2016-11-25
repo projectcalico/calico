@@ -109,7 +109,7 @@ func (c converter) namespaceToProfile(ns *k8sapi.Namespace) (*model.KVPair, erro
 		if k == policyAnnotation {
 			np := namespacePolicy{}
 			if err := json.Unmarshal([]byte(v), &np); err != nil {
-				return nil, err
+				return nil, goerrors.New(fmt.Sprint("Failed to parse annotation: %s", err))
 			}
 			if np.Ingress.Isolation == "DefaultDeny" {
 				ingressAction = "deny"
