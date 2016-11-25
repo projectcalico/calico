@@ -1,3 +1,23 @@
+felix (1.4.5-4~xenial) xenial; urgency=low
+
+  * Felix 1.4.5 (from Git commit fd3f909).
+    - Fix usage reporting
+    - Implement 'untracked' policy
+    - Pin to <=0.0.17 prometheus_client
+    - Tell systemd always to restart Felix
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 28 Nov 2016 11:37:27 +0000
+
+felix (1.4.5-4~trusty) trusty; urgency=low
+
+  * Felix 1.4.5 (from Git commit fd3f909).
+    - Fix usage reporting
+    - Implement 'untracked' policy
+    - Pin to <=0.0.17 prometheus_client
+    - Tell systemd always to restart Felix
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 28 Nov 2016 11:37:27 +0000
+
 felix (1.4.4-1-xenial) xenial; urgency=low
 
   * felix release (from Git commit 567247c).
