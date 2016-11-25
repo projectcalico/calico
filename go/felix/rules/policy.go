@@ -44,7 +44,7 @@ func (r *ruleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profi
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion),
 	}
 	outbound := iptables.Chain{
-		Name:  ProfileChainName(PolicyInboundPfx, profileID),
+		Name:  ProfileChainName(PolicyOutboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules, ipVersion),
 	}
 	return []*iptables.Chain{&inbound, &outbound}
