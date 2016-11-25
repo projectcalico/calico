@@ -123,7 +123,11 @@ func (d *InternalDataplane) RecvMessage() (interface{}, error) {
 func (d *InternalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver")
 
-	// TODO Check RPF check value.
+	// TODO Check global RPF value is sane (can't be "loose").
+
+	// Endure that the default value of rp_filter is set to "strict" for newly-created
+	// interfaces.  This is required to prevent a race between starting an interface and
+	// Felix being able to configure it.
 	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
 
 	for _, t := range d.iptablesFilterTables {
@@ -144,20 +148,25 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				mgr.OnUpdate(msg)
 			}
 
-			switch msg.(type) {
+			switch msg := msg.(type) {
 
-			//
-			//// Less common cluster config updates.
-			//case *proto.HostMetadataUpdate:
-			//	log.WithField("msg", msg).Warn("Message not implemented")
-			//case *proto.HostMetadataRemove:
-			//	log.WithField("msg", msg).Warn("Message not implemented")
-			//case *proto.IPAMPoolUpdate:
-			//	log.WithField("msg", msg).Warn("Message not implemented")
-			//case *proto.IPAMPoolRemove:
-			//	log.WithField("msg", msg).Warn("Message not implemented")
-			//
-
+			case *proto.WorkloadEndpointUpdate:
+				// TODO(smc) For now, report every workload endpoint as "UP".
+				d.fromDataplane <- &proto.FromDataplane_WorkloadEndpointStatusUpdate{
+					WorkloadEndpointStatusUpdate: &proto.WorkloadEndpointStatusUpdate{
+						Id: msg.Id,
+						Status: &proto.EndpointStatus{
+							Status: "up",
+						},
+					},
+				}
+			case *proto.WorkloadEndpointRemove:
+				// TODO(smc) For now, report every workload endpoint as "UP".
+				d.fromDataplane <- &proto.FromDataplane_WorkloadEndpointStatusRemove{
+					WorkloadEndpointStatusRemove: &proto.WorkloadEndpointStatusRemove{
+						Id: msg.Id,
+					},
+				}
 			case *proto.InSync:
 				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 				log.Info("Datastore in sync, flushing the dataplane for the first time...")
