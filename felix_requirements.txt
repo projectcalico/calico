@@ -8,6 +8,6 @@ ijson>=2.2
 msgpack-python>=0.3
 pyparsing>=2.0.0
 pycparser==2.14
-prometheus_client>=0.0.13
+prometheus_client>=0.0.13,<0.0.18
 urllib3>=1.7.1
 setuptools
