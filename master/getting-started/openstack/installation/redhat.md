@@ -45,9 +45,6 @@ here
 [Kilo](http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html)
 / [Liberty](http://docs.openstack.org/liberty/index.html).
 
-At the time of writing the Liberty guide isn't yet available, but you
-can use PackStack instead: <https://www.rdoproject.org/QuickStart>.
-
 ### Configure YUM repositories
 
 The latest version of Calico for OpenStack is 1.4, and we recommend using it
