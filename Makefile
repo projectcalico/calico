@@ -136,8 +136,12 @@ LIBCALICOGO_PATH?=none
 # Build a docker image used for building our go code into a binary.
 .PHONY: calico-build/golang
 calico-build/golang:
-	$(MAKE) docker-build-images/passwd docker-build-images/group
-	cd docker-build-images && docker build -f golang-build.Dockerfile -t calico-build/golang .
+	cd docker-build-images && \
+	  docker build \
+	  --build-arg=UID=$(MY_UID) \
+	  --build-arg=GID=$(MY_GID) \
+	  -f golang-build.Dockerfile \
+	  -t calico-build/golang .
 
 # Build a docker image used for building debs for trusty.
 .PHONY: calico-build/trusty
@@ -149,41 +153,24 @@ calico-build/trusty:
 calico-build/xenial:
 	cd docker-build-images && docker build -f ubuntu-xenial-build.Dockerfile -t calico-build/xenial .
 
-# Construct a passwd file to embed in the centos docker image with the current
-# user's username.  (The RPM build tools fail if they can't find the current
-# user and group.)
-.PHONY: docker-build-images/passwd
-docker-build-images/passwd:
-	echo "user:x:$(MY_UID):$(MY_GID):Build user:/:/bin/bash" > docker-build-images/passwd.new
-	# Only update the file if it has changed to avoid cascading rebuilds.
-	diff -q docker-build-images/passwd.new \
-	        docker-build-images/passwd || \
-	  mv docker-build-images/passwd.new docker-build-images/passwd
-	rm -f docker-build-images/passwd.new
-
-# Construct a group file to embed in the centos docker image with the current
-# user's username.  (The RPM build tools fail if they can't find the current
-# user and group.)
-.PHONY: docker-build-images/group
-docker-build-images/group:
-	echo "user:x:$(MY_GID):" > docker-build-images/group.new
-	# Only update the file if it has changed to avoid cascading rebuilds.
-	diff -q docker-build-images/group.new \
-	        docker-build-images/group || \
-	  mv docker-build-images/group.new docker-build-images/group
-	rm -f docker-build-images/group.new
-
 # Construct a docker image for building Centos 7 RPMs.
 .PHONY: calico-build/centos7
 calico-build/centos7:
-	$(MAKE) docker-build-images/passwd docker-build-images/group
-	cd docker-build-images && docker build -f centos7-build.Dockerfile -t calico-build/centos7 .
+	cd docker-build-images && \
+	  docker build \
+	  --build-arg=UID=$(MY_UID) \
+	  --build-arg=GID=$(MY_GID) \
+	  -f centos7-build.Dockerfile \
+	  -t calico-build/centos7 .
 
 .PHONY: calico-build/python
 calico-build/python:
-	$(MAKE) docker-build-images/passwd docker-build-images/group
 	# Rebuild the container image.  Docker will do its own newness checks.
-	docker build -t calico-build/python -f docker-build-images/pyi/Dockerfile .
+	docker build \
+	  --build-arg=UID=$(MY_UID) \
+	  --build-arg=GID=$(MY_GID) \
+	  -t calico-build/python \
+	  -f docker-build-images/pyi/Dockerfile .
 
 .PHONY: update-frozen-reqs
 update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
@@ -284,7 +271,7 @@ vendor go/vendor go/vendor/.up-to-date: go/glide.lock
 	    -v $$HOME/.glide:/.glide:rw $$EXTRA_DOCKER_BIND \
 	    -w /go/src/github.com/projectcalico/felix/go \
 	    calico-build/golang \
-	    glide install --strip-vcs --strip-vendor
+	    glide install --strip-vendor
 	touch go/vendor/.up-to-date
 
 # Linker flags for building Felix.
@@ -417,8 +404,6 @@ clean:
 	       build \
 	       $(GENERATED_PYTHON_FILES) \
 	       $(GENERATED_GO_FILES) \
-	       docker-build-images/passwd \
-	       docker-build-images/group \
 	       go/docs/calc.pdf \
 	       go/.glide \
 	       go/vendor \

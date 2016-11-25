@@ -19,6 +19,4 @@ site-packages
 nosetests.xml
 version.txt
 bin
-docker-build-images/group
-docker-build-images/passwd
 local-utils
