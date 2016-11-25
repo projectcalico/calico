@@ -363,7 +363,8 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         jitter = random.random() * 0.01 * interval
         try:
             calico_version = str(pkg_resources.require("calico")[0].version)
-        except ResolutionError:
+        except (pkg_resources.ResolutionError, IndexError, AttributeError):
+            _log.exception("Failed to look up calico's version")
             calico_version = "NA"
 
         _log.info("Started usage report thread.  Usage report interval: %s, pre-jitter: %s", interval, jitter)
