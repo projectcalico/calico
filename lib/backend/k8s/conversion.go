@@ -159,7 +159,6 @@ func (c converter) podToWorkloadEndpoint(pod *k8sapi.Pod) (*model.KVPair, error)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 	// If the pod doesn't have an IP address yet, then it hasn't gone through CNI.
-	// Treat this as if it didn't exist.
 	ipNets := []cnet.IPNet{}
 	if c.hasIPAddress(pod) {
 		// Parse the Pod's IP address.

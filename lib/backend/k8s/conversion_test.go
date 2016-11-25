@@ -22,6 +22,7 @@ import (
 	k8sapi "k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/util/intstr"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -49,7 +50,6 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(ns).To(Equal("default"))
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })
 
 var _ = Describe("Test Pod conversion", func() {
@@ -214,6 +214,131 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
 		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
 		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+	})
+
+	It("should parse a NetworkPolicy with no rules", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: unversioned.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.networkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+	})
+
+	It("should parse a NetworkPolicy with empty podSelector", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: unversioned.LabelSelector{},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.networkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+	})
+
+	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: unversioned.LabelSelector{
+					MatchExpressions: []unversioned.LabelSelectorRequirement{
+						unversioned.LabelSelectorRequirement{
+							Key:      "k",
+							Operator: unversioned.LabelSelectorOpIn,
+							Values:   []string{"v1", "v2"},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.networkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && k in { 'v1', 'v2' }"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+	})
+
+	It("should parse a NetworkPolicy with Ports only", func() {
+		protocol := k8sapi.ProtocolTCP
+		port := intstr.FromInt(80)
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: unversioned.LabelSelector{},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Protocol: &protocol,
+								Port:     &port,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.networkPolicyToPolicy(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert key fields are correct.
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+
+		// Assert value fields are correct.
+		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
+		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].Protocol.String()).To(Equal("tcp"))
+		Expect(len(pol.Value.(*model.Policy).InboundRules[0].DstPorts)).To(Equal(1))
+		Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts[0].String()).To(Equal("80"))
 	})
 })
 
