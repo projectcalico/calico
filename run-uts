@@ -3,7 +3,8 @@
 set -e
 
 # Run tests in random order find tests recursively (-r).
-ginkgo -cover -r --skipPackage vendor
+echo $WHAT
+ginkgo -cover -r --skipPackage vendor -regexScansFilePath $WHAT
 
 echo
 echo '+==============+'
