@@ -45,21 +45,25 @@ will check a particular set of environment variables.
 
 See the table below for details on the Kubernetes specific environment variables.
 
->  Note that if neither file nor environment variables are set, calicoctl defaults to
->  using etcdv2 as the datastore with a single endpoint of http://127.0.0.1:2379.
-
+> Note thatif neither file nor environment variables are set, calicoctl defaults to
+> using etcdv2 as the datastore with a single endpoint of http://127.0.0.1:2379.
 
 ## Complete list of Kubernetes API connection configuration
 
-| Spec field              | Environment      | Description                                                        | Examples
-|-------------------------|---------------------------------------------------------------------------------------|----------
-| datastoreType           | DATASTORE_TYPE   | Indicates the datastore to use (required for kubernetes as the default is etcdv2) | kubernetes
-| k8sKubeconfig           | KUBECONFIG       | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config 
-| k8sServer               | K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443 
-| k8sClientCertificate    | K8S_CERT_FILE    | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert 
-| k8sClientKey            | K8S_KEY_FILE     | Location of a client key for accessing the Kubernetes API.         | /path/to/key 
-| k8sCertificateAuthority | K8S_CA_FILE      | Location of a CA for accessing the Kubernetes API.                 | /path/to/ca 
-| k8sToken                | K8S_TOKEN        | Token to be used for accessing the Kubernetes API.                 |  
+| Spec field     | Environment      | Description                                                        | Examples
+|----------------|---------------------------------------------------------------------------------------|----------
+| datastoreType  | DATASTORE_TYPE   | Indicates the datastore to use (required for kubernetes as the default is etcdv2) | kubernetes
+| kubeconfig     | KUBECONFIG       | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config 
+| k8sAPIEndpoint | K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443 
+| k8sCertFile    | K8S_CERT_FILE    | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert 
+| k8sKeyFile     | K8S_KEY_FILE     | Location of a client key for accessing the Kubernetes API.         | /path/to/key 
+| k8sCAFile      | K8S_CA_FILE      | Location of a CA for accessing the Kubernetes API.                 | /path/to/ca 
+| k8sToken       | K8S_TOKEN        | Token to be used for accessing the Kubernetes API.                 |  
+
+> Note that all environment variables may also be prefixed with "CALICO_", for 
+> example "CALICO_DATASTORE_TYPE" and "CALICO_KUBECONFIG" etc. may also be used.
+> This is useful if the non-prefixed names clash with existing environment
+> variables defined on your system
 
 ## Examples
 
@@ -74,7 +78,7 @@ spec:
   k8sKubeconfig: "/path/to/.kube/config"
 ```
 
-#### Example commands
+#### Example using environment variables 
 
 ```shell
 $ export DATASTORE_TYPE=kubernetes 
@@ -82,3 +86,10 @@ $ export KUBECONFIG=~/.kube/config
 $ calicoctl get workloadendpoints
 ```
 
+And using `CALICO_` prefixed names:
+
+```shell
+$ export CALICO_DATASTORE_TYPE=kubernetes 
+$ export CALICO_KUBECONFIG=~/.kube/config 
+$ calicoctl get workloadendpoints
+```
