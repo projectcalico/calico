@@ -94,8 +94,10 @@ type PolicySpec struct {
 	// 	! has(label_name)
 	Selector string `json:"selector" validate:"selector"`
 
-	// Indicates, if True, that the rules in this policy should be applied before any data plane
-	// connection tracking, and that packets allowed by these rules should not be tracked.
+	// Untracked indicates whether packets matched by the rules in this policy should go through
+	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
+	// this policy are applied before any data plane connection tracking, and packets allowed by
+	// this policy are marked as not to be tracked.
 	Untracked bool `json:"untracked,omitempty" validate:"omitempty"`
 }
 
