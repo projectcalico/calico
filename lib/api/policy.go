@@ -94,11 +94,11 @@ type PolicySpec struct {
 	// 	! has(label_name)
 	Selector string `json:"selector" validate:"selector"`
 
-	// Untracked indicates whether packets matched by the rules in this policy should go through
+	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked.
-	Untracked bool `json:"untracked,omitempty" validate:"omitempty"`
+	DoNotTrack bool `json:"doNotTrack,omitempty" validate:"omitempty"`
 }
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current
