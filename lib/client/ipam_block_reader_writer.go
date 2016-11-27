@@ -34,7 +34,7 @@ type blockReaderWriter struct {
 	client *Client
 }
 
-func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *cnet.IPNet) ([]cnet.IPNet, error) {
+func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pools []cnet.IPNet) ([]cnet.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver.Number}
@@ -56,31 +56,40 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pool *cn
 	for _, o := range datastoreObjs {
 		k := o.Key.(model.BlockAffinityKey)
 
-		// Add the block if no IP pool was specified, or if an IP pool was specified
-		// and the block falls within the given IP pool.
-		if pool == nil || pool.Contains(k.CIDR.IPNet.IP) {
+		// Add the block if no IP pools were specified, or if IP pools were specified
+		// and the block falls within the given IP pools.
+		if len(pools) == 0 {
 			ids = append(ids, k.CIDR)
+		} else {
+			for _, pool := range pools {
+				if pool.Contains(k.CIDR.IPNet.IP) {
+					ids = append(ids, k.CIDR)
+					break
+				}
+			}
 		}
 	}
 	return ids, nil
 }
 
 func (rw blockReaderWriter) claimNewAffineBlock(
-	host string, version ipVersion, pool *cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
+	host string, version ipVersion, givenPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 
-	// If pool is not nil, use the given pool.  Otherwise, default to
+	// If givenPools is not empty, use it.  Otherwise, default to
 	// all configured pools.
-	var pools []cnet.IPNet
-	if pool != nil {
-		// Validate the given pool is actually configured and matches the version.
-		if !rw.isConfiguredPool(*pool) {
-			estr := fmt.Sprintf("The given pool (%s) does not exist", pool.String())
-			return nil, goerrors.New(estr)
-		} else if version.Number != pool.Version() {
-			estr := fmt.Sprintf("The given pool (%s) does not match IP version %d", pool.String(), version.Number)
-			return nil, goerrors.New(estr)
+	pools := []cnet.IPNet{}
+	if len(givenPools) != 0 {
+		for _, pool := range givenPools {
+			// Validate the given pool is actually configured and matches the version.
+			if !rw.isConfiguredPool(pool) {
+				estr := fmt.Sprintf("The given pool (%s) does not exist", pool.String())
+				return nil, goerrors.New(estr)
+			} else if version.Number != pool.Version() {
+				estr := fmt.Sprintf("The given pool (%s) does not match IP version %d", pool.String(), version.Number)
+				return nil, goerrors.New(estr)
+			}
+			pools = append(pools, pool)
 		}
-		pools = []cnet.IPNet{*pool}
 	} else {
 		// Default to all configured pools.
 		allPools, err := rw.client.IPPools().List(api.IPPoolMetadata{})

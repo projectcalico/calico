@@ -125,7 +125,7 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	if args.Num4 != 0 {
 		// Assign IPv4 addresses.
 		log.Debugf("Assigning IPv4 addresses")
-		v4list, err = c.autoAssign(args.Num4, args.HandleID, args.Attrs, args.IPv4Pool, ipv4, hostname)
+		v4list, err = c.autoAssign(args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, ipv4, hostname)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %s", err)
 			return nil, nil, err
@@ -135,7 +135,7 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	if args.Num6 != 0 {
 		// If no err assigning V4, try to assign any V6.
 		log.Debugf("Assigning IPv6 addresses")
-		v6list, err = c.autoAssign(args.Num6, args.HandleID, args.Attrs, args.IPv6Pool, ipv6, hostname)
+		v6list, err = c.autoAssign(args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, ipv6, hostname)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %s", err)
 			return nil, nil, err
@@ -145,13 +145,13 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	return v4list, v6list, nil
 }
 
-func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, pool *net.IPNet, version ipVersion, host string) ([]net.IP, error) {
+func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, pools []net.IPNet, version ipVersion, host string) ([]net.IP, error) {
 
 	// Start by trying to assign from one of the host-affine blocks.  We
 	// always do strict checking at this stage, so it doesn't matter whether
 	// globally we have strict_affinity or not.
 	log.Debugf("Looking for addresses in current affine blocks for host '%s'", host)
-	affBlocks, err := c.blockReaderWriter.getAffineBlocks(host, version, pool)
+	affBlocks, err := c.blockReaderWriter.getAffineBlocks(host, version, pools)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 			// Claim a new block.
 			log.Infof("Need to allocate %d more addresses - allocate another block", rem)
 			retries = retries - 1
-			b, err := c.blockReaderWriter.claimNewAffineBlock(host, version, pool, *config)
+			b, err := c.blockReaderWriter.claimNewAffineBlock(host, version, pools, *config)
 			if err != nil {
 				// Error claiming new block.
 				if _, ok := err.(noFreeBlocksError); ok {
@@ -230,8 +230,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 	if config.StrictAffinity != true && rem != 0 {
 		log.Infof("Attempting to assign %d more addresses from non-affine blocks", rem)
 		// Figure out the pools to allocate from.
-		pools := []net.IPNet{}
-		if pool == nil {
+		if len(pools) == 0 {
 			// Default to all configured pools.
 			allPools, err := c.client.IPPools().List(api.IPPoolMetadata{})
 			if err != nil {
@@ -246,9 +245,6 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 					pools = append(pools, p.Metadata.CIDR)
 				}
 			}
-		} else {
-			// Use the given pool.
-			pools = []net.IPNet{*pool}
 		}
 
 		// Iterate over pools and assign addresses until we either run out of pools,

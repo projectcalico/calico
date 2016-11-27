@@ -57,13 +57,13 @@ type AutoAssignArgs struct {
 	// to the value provided by os.Hostname.
 	Hostname string
 
-	// If specified, the previously configured IPv4 pool from which
+	// If specified, the previously configured IPv4 pools from which
 	// to assign IPv4 addresses.  If not specified, this defaults to all IPv4 pools.
-	IPv4Pool *net.IPNet
+	IPv4Pools []net.IPNet
 
-	// If specified, the previously configured IPv6 pool from which
+	// If specified, the previously configured IPv6 pools from which
 	// to assign IPv6 addresses.  If not specified, this defaults to all IPv6 pools.
-	IPv6Pool *net.IPNet
+	IPv6Pools []net.IPNet
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.

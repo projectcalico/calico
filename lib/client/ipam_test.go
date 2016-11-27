@@ -251,10 +251,10 @@ var _ = Describe("IPAM tests", func() {
 		// Step-1: AutoAssign 1 IP from pool1 - expect that the IP is from pool1.
 		Context("AutoAssign 1 IP from pool1", func() {
 			args := client.AutoAssignArgs{
-				Num4:     1,
-				Num6:     0,
-				Hostname: host,
-				IPv4Pool: &pool1,
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1},
 			}
 
 			v4, _, outErr := ic.AutoAssign(args)
@@ -276,10 +276,10 @@ var _ = Describe("IPAM tests", func() {
 		// Step-2: AutoAssign 1 IP from pool2 - expect that the IP is from pool2.
 		Context("AutoAssign 1 IP from pool2", func() {
 			args := client.AutoAssignArgs{
-				Num4:     1,
-				Num6:     0,
-				Hostname: host,
-				IPv4Pool: &pool2,
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool2},
 			}
 
 			v4, _, outErr := ic.AutoAssign(args)
@@ -302,10 +302,10 @@ var _ = Describe("IPAM tests", func() {
 		// IP is from from the same block as the first IP from pool1.
 		Context("AutoAssign 1 IP from pool1 (second time)", func() {
 			args := client.AutoAssignArgs{
-				Num4:     1,
-				Num6:     0,
-				Hostname: host,
-				IPv4Pool: &pool1,
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1},
 			}
 
 			v4, _, outErr := ic.AutoAssign(args)
@@ -320,10 +320,10 @@ var _ = Describe("IPAM tests", func() {
 		// IP is from from the same block as the first IP from pool2.
 		Context("AutoAssign 1 IP from pool2 (second time)", func() {
 			args := client.AutoAssignArgs{
-				Num4:     1,
-				Num6:     0,
-				Hostname: host,
-				IPv4Pool: &pool2,
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool2},
 			}
 
 			v4, _, outErr := ic.AutoAssign(args)
@@ -331,6 +331,57 @@ var _ = Describe("IPAM tests", func() {
 			It("should be a from the same block as the first IP pool2", func() {
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("IPAM AutoAssign from different pools - multi", func() {
+		testutils.CleanEtcd()
+		c, _ := testutils.NewClient("")
+		ic := setupIPAMClient(c, true)
+
+		host := "host-A"
+		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
+		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+
+		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
+		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
+
+		// Step-1: AutoAssign 300 IPs from 2 pools
+		// Expect that the IPs are from both pools
+		Context("AutoAssign 300 IPs from 2 pools", func() {
+			args := client.AutoAssignArgs{
+				Num4:      300,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1, pool2},
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+			log.Println("v4: %d IPs", len(v4))
+
+			It("should not have failed", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(300))
+			})
+		})
+
+		// Step-2: AutoAssign 300 IPs from both pools again.
+		// This time we should run out of IPS
+		Context("AutoAssign 300 IPs from both pools - none left tho", func() {
+			args := client.AutoAssignArgs{
+				Num4:      300,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1, pool2},
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+			log.Println("v4: %d IPs", len(v4))
+
+			It("should have failed with less than 300", func() {
+				Expect(len(v4)).NotTo(Equal(300))
+				Expect(outErr).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -560,10 +611,10 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string, usePool string) (int, int, error) {
 	fromPool := testutils.MustParseCIDR(usePool)
 	args := client.AutoAssignArgs{
-		Num4:     inv4,
-		Num6:     inv6,
-		Hostname: host,
-		IPv4Pool: &fromPool,
+		Num4:      inv4,
+		Num6:      inv6,
+		Hostname:  host,
+		IPv4Pools: []cnet.IPNet{fromPool},
 	}
 
 	if cleanEnv {
