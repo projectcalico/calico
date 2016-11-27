@@ -86,7 +86,30 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 		return nil, k8sErrorToCalico(err, nil)
 	}
 	log.Debugf("Created k8s clientSet: %+v", cs)
-	return &KubeClient{clientSet: cs}, nil
+
+	kc := &KubeClient{clientSet: cs}
+
+	// Ensure the necessary ThirdPartyResources exist in the API.
+	err = kc.ensureThirdPartyResources()
+	if err != nil {
+		return nil, goerrors.New(fmt.Sprintf("Failed to create necessary ThirdPartyResources: %s", err))
+	}
+
+	return kc, nil
+}
+
+func (c *KubeClient) ensureThirdPartyResources() error {
+	// Ensure a resource exists for Calico global configuration.
+	tpr := extensions.ThirdPartyResource{
+		ObjectMeta: k8sapi.ObjectMeta{
+			Name:      "global-config.projectcalico.org",
+			Namespace: "kube-system",
+		},
+		Description: "Calico Global Configuration",
+		Versions:    []extensions.APIVersion{{Name: "v1"}},
+	}
+	_, err := c.clientSet.Extensions().ThirdPartyResources().Update(&tpr)
+	return err
 }
 
 func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
@@ -363,11 +386,39 @@ func (c *KubeClient) getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error)
 }
 
 func (c *KubeClient) getGlobalConfig(k model.GlobalConfigKey) (*model.KVPair, error) {
-	return nil, goerrors.New("Get for GlobalConfig not supported in kubernetes backend")
+	cfg, err := c.listGlobalConfig(model.GlobalConfigListOptions{Name: k.Name})
+	if err != nil {
+		return nil, err
+	}
+	return cfg[0], nil
 }
 
 func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model.KVPair, error) {
-	return []*model.KVPair{}, nil
+	cfgs := []*model.KVPair{
+		// Report a special ClusterType for the k8s backend.
+		&model.KVPair{
+			Key: model.GlobalConfigKey{
+				Name: "ClusterType",
+			},
+			Value: "datastoredriver.k8s",
+		},
+		&model.KVPair{
+			Key: model.GlobalConfigKey{
+				Name: "ClusterGUID",
+			},
+			Value: c.getClusterGUID(),
+		},
+	}
+
+	if l.Name != "" {
+		for _, cfg := range cfgs {
+			if cfg.Key.(GlobalConfigKey).Name == l.Name {
+				return []*model.KVPair{cfg}, nil
+			}
+		}
+		return nil, goerrors.New("No GlobalConfig found for %+v", l)
+	}
+	return cfgs, nil
 }
 
 func (c *KubeClient) getHostConfig(k model.HostConfigKey) (*model.KVPair, error) {
@@ -376,4 +427,8 @@ func (c *KubeClient) getHostConfig(k model.HostConfigKey) (*model.KVPair, error)
 
 func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVPair, error) {
 	return []*model.KVPair{}, nil
+}
+
+func (c *KubeClient) getClusterGUID() string {
+	return "baddecafbad"
 }
