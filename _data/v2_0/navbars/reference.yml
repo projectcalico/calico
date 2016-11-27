@@ -109,8 +109,6 @@ toc:
   path: /reference/addressing
 - title: Advanced
   section:
-  - title: Calico for CNI
-    path: /reference/advanced/calico-cni
   - title: Secure etcd
     path: /reference/advanced/etcd-secure
   - title: Overlap IPs
