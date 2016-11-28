@@ -166,7 +166,7 @@ calico-policy-controller                 2/2       Running   0          1m
 Kubernetes Hosted Installation
 ------------------------------
 This method of installation uses Kubernetes to install Calico.  This method is only supported
-in Kubernetes >= v1.4.0, and is currently considered experimental.
+in Kubernetes >= v1.4.0. 
 
 Since this method uses Kubernetes to install Calico, you must first deploy a standard Kubernetes cluster
 with CNI networking enabled. There are a number of ways to do this and we won't cover them here, but make sure that it meets the
