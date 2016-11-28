@@ -252,28 +252,28 @@ def main():
             print "Connected to etcd"
             break
 
-    # Start node.
-    ip = os.getenv("IP")
-    ip = ip or None
-    if ip and not netaddr.valid_ipv4(ip):
-        print "IP environment (%s) is not a valid IPv4 address." % ip
-        sys.exit(1)
+    # Query the currently configured host IPs
+    try:
+        current_ip, current_ip6 = client.get_host_bgp_ips(hostname)
+    except KeyError:
+        current_ip, current_ip6 = None, None
 
-    ip6 = os.getenv("IP6")
-    ip6 = ip6 or None
-    if ip6 and not netaddr.valid_ipv6(ip6):
-        print "IP6 environment (%s) is not a valid IPv6 address." % ip6
-        sys.exit(1)
+    # Determine the IP addresses and AS Number to use
+    ip = os.getenv("IP") or None
+    if ip == "autodetect":
+        # If explicitly requesting auto-detection, set the ip to None to force
+        # auto-detection.  We print below if we are auto-detecting the IP.
+        ip = None
+    elif ip:
+        if not netaddr.valid_ipv4(ip):
+            print "IP environment (%s) is not a valid IPv4 address." % ip
+            sys.exit(1)
+        print "Using IPv4 address from IP environment: %s" % ip
+    elif current_ip:
+        print "Using configured IPv4 address: %s" % current_ip
+        ip = current_ip
 
-    as_num = os.getenv("AS")
-    if not as_num:
-        as_num = client.get_host_as(hostname)
-
-    if as_num and not validate_asn(as_num):
-        print "AS environment (%s) is not a AS number." % as_num
-        sys.exit(1)
-
-    # Get IP address of host, if none was specified
+    # Get IP address of host, if none was specified or previously configured.
     if not ip:
         ips = get_host_ips(exclude=["^docker.*", "^cbr.*", "dummy.*",
                                     "virbr.*", "lxcbr.*", "veth.*",
@@ -281,12 +281,38 @@ def main():
         try:
             ip = str(ips.pop())
         except IndexError:
-            print "Couldn't autodetect a management IP address. Please " \
-                  "provide an IP address by rerunning the container with the" \
-                  " IP environment variable set."
+            print "Couldn't autodetect a management IPv4 address. Please " \
+                  "provide an IP address either by configuring one in the " \
+                  "node resource, or by re-running the container with the " \
+                  "IP environment variable set."
             sys.exit(1)
         else:
-            print "No IP provided. Using detected IP: %s" % ip
+            print "Using auto-detected IPv4 address: %s" % ip
+
+    ip6 = os.getenv("IP6") or None
+    if ip6:
+        if not netaddr.valid_ipv6(ip6):
+            print "IP6 environment (%s) is not a valid IPv6 address." % ip6
+            sys.exit(1)
+        print "Using IPv6 address from IP6 environment: %s" % ip6
+    elif current_ip6:
+        print "Using configured IPv6 address: %s" % current_ip6
+        ip6 = current_ip6
+    else:
+        print "No IPv6 address configured"
+
+    as_num = os.getenv("AS")
+    if as_num:
+        if not validate_asn(as_num):
+            print "AS environment (%s) is not a valid AS number." % as_num
+            sys.exit(1)
+        print "Using AS number from AS environment: %s" % as_num
+    else:
+        as_num = client.get_host_as(hostname)
+        if as_num:
+            print "Using configured AS number: %s" % as_num
+        else:
+            print "Using global AS number"
 
     # Write a startup environment file containing the IP address that may have
     # just been detected.
@@ -335,11 +361,21 @@ def main():
         # No IPIP pools, clean up any old address.
         _remove_host_tunnel_addr()
 
+    # Tell the user what the name of the node is.
+    print "Calico node name: ", hostname
 
-# Try the HOSTNAME environment variable, but default to
-# the socket.gethostname() value if unset.
-hostname = os.getenv("HOSTNAME")
+
+# Try the NODENAME (preferentially) or HOSTNAME environment variable, but
+# default to the socket.gethostname() value if unset.
+hostname = os.getenv("NODENAME") or os.getenv("HOSTNAME")
 if not hostname:
+    print "******************************************************************************"
+    print "* WARNING                                                                    *"
+    print "* Auto-detecting node name.  It is recommended that an explicit fixed value  *"
+    print "* is supplied using the NODENAME environment variable.  Using a fixed value  *"
+    print "* ensures that any changes to the compute host's hostname will not affect    *"
+    print "* the Calico configuration when the Calico node restarts.                    *"
+    print "******************************************************************************"
     hostname = socket.gethostname()
 
 client = IPAMClient()
