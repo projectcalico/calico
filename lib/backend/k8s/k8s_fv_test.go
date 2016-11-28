@@ -10,9 +10,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/client-go/pkg/api/unversioned"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 // cb implements the callback interface required for the
@@ -167,19 +167,29 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		_, err := c.clientSet.NetworkPolicies("default").Create(&np)
+		res := c.clientSet.Extensions().RESTClient().
+			Post().
+			Resource("networkpolicies").
+			Namespace("default").
+			Body(&np).
+			Do()
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = c.clientSet.NetworkPolicies("default").Delete(np.ObjectMeta.Name, &k8sapi.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			res := c.clientSet.Extensions().RESTClient().
+				Delete().
+				Resource("networkpolicies").
+				Namespace("default").
+				Name(np.ObjectMeta.Name).
+				Do()
+			Expect(res.Error()).NotTo(HaveOccurred())
 		}()
 
 		// Check to see if the create succeeded.
-		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Error()).NotTo(HaveOccurred())
 
 		// Perform a List and ensure it shows up in the Calico API.
-		_, err = c.List(model.PolicyListOptions{})
+		_, err := c.List(model.PolicyListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a Get and ensure no error in the Calico API.
@@ -191,7 +201,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	defer func() {
 		log.Warnf("[TEST] Waiting for policies to tear down")
 		It("should clean up all policies", func() {
-			nps, err := c.clientSet.NetworkPolicies("default").List(k8sapi.ListOptions{})
+			nps := extensions.NetworkPolicyList{}
+			err := c.clientSet.Extensions().RESTClient().
+				Get().
+				Resource("networkpolicies").
+				Namespace("default").
+				Timeout(10 * time.Second).
+				Do().Into(&nps)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Loop until no network policies exist.
@@ -199,7 +215,13 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				if len(nps.Items) == 0 {
 					return
 				}
-				nps, err = c.clientSet.NetworkPolicies("default").List(k8sapi.ListOptions{})
+				nps := extensions.NetworkPolicyList{}
+				err := c.clientSet.Extensions().RESTClient().
+					Get().
+					Resource("networkpolicies").
+					Namespace("default").
+					Timeout(10 * time.Second).
+					Do().Into(&nps)
 				Expect(err).NotTo(HaveOccurred())
 				time.Sleep(1 * time.Second)
 			}

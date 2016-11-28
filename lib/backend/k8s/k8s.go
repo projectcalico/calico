@@ -16,18 +16,21 @@ package k8s
 
 import (
 	goerrors "errors"
+	"fmt"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
-	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
+	"k8s.io/client-go/kubernetes"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type KubeClient struct {
-	clientSet *clientset.Clientset
+	clientSet *kubernetes.Clientset
 	converter converter
 }
 
@@ -79,7 +82,7 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 	}
 
 	// Create the clientset
-	cs, err := clientset.NewForConfig(config)
+	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +288,12 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 	}
 
 	// Otherwise, list all NetworkPolicy objects in all Namespaces.
-	networkPolicies, err := c.clientSet.NetworkPolicies("").List(k8sapi.ListOptions{})
+	networkPolicies := extensions.NetworkPolicyList{}
+	err := c.clientSet.Extensions().RESTClient().
+		Get().
+		Resource("networkpolicies").
+		Timeout(10 * time.Second).
+		Do().Into(&networkPolicies)
 	if err != nil {
 		return nil, err
 	}
@@ -309,11 +317,19 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 		return nil, goerrors.New("Missing policy name")
 	}
 	namespace, policyName := c.converter.parsePolicyName(k.Name)
-	networkPolicy, err := c.clientSet.NetworkPolicies(namespace).Get(policyName)
+
+	networkPolicy := extensions.NetworkPolicy{}
+	err := c.clientSet.Extensions().RESTClient().
+		Get().
+		Resource("networkpolicies").
+		Namespace(namespace).
+		Name(policyName).
+		Timeout(10 * time.Second).
+		Do().Into(&networkPolicy)
 	if err != nil {
 		return nil, err
 	}
-	return c.converter.networkPolicyToPolicy(networkPolicy)
+	return c.converter.networkPolicyToPolicy(&networkPolicy)
 }
 
 func (c *KubeClient) getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error) {

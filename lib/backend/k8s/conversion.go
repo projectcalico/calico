@@ -27,9 +27,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/client-go/pkg/api/unversioned"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 var (
@@ -123,7 +123,7 @@ func (c converter) isCalicoPod(pod *k8sapi.Pod) bool {
 }
 
 func (c converter) isHostNetworked(pod *k8sapi.Pod) bool {
-	return pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.HostNetwork == true
+	return pod.Spec.HostNetwork
 }
 
 func (c converter) hasIPAddress(pod *k8sapi.Pod) bool {

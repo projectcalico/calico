@@ -14,7 +14,7 @@ test: ut
 ## Use this to populate the vendor directory after checking out the repository.
 ## To update upstream dependencies, delete the glide.lock file first.
 vendor: 
-	glide install -strip-vendor -strip-vcs --cache
+	glide install -strip-vendor
 
 .PHONY: ut
 ## Run the UTs locally.  This requires a local etcd to be running.
