@@ -204,13 +204,13 @@ func (c *config) GetNodeIPIPTunnelAddress(node string) (*net.IP, error) {
 func (c *config) SetGlobalLogLevel(level string) error {
 	return c.setLogLevel(
 		level,
-		model.GlobalConfigKey{Name: "LogLevelScreen"},
-		model.GlobalConfigKey{Name: "logLevel"})
+		model.GlobalConfigKey{Name: "LogSeverityScreen"},
+		model.GlobalConfigKey{Name: "loglevel"})
 }
 
 // GetGlobalLogLevel gets the current system global log level.
 func (c *config) GetGlobalLogLevel() (string, error) {
-	s, err := c.getValue(model.GlobalConfigKey{Name: "LogLevelScreen"})
+	s, err := c.getValue(model.GlobalConfigKey{Name: "LogSeverityScreen"})
 	if err != nil {
 		return "", err
 	} else if s == nil {
@@ -224,14 +224,14 @@ func (c *config) GetGlobalLogLevel() (string, error) {
 // log level.
 func (c *config) SetNodeLogLevel(node string, level string) error {
 	return c.setLogLevel(level,
-		model.HostConfigKey{Hostname: node, Name: "LogLevelScreen"},
-		model.HostBGPConfigKey{Hostname: node, Name: "logLevel"})
+		model.HostConfigKey{Hostname: node, Name: "LogSeverityScreen"},
+		model.HostBGPConfigKey{Hostname: node, Name: "loglevel"})
 }
 
 // SetNodeLogLevelUseGlobal sets the node to use the global log level.
 func (c *config) SetNodeLogLevelUseGlobal(node string) error {
-	kf := model.HostConfigKey{Hostname: node, Name: "LogLevelScreen"}
-	kb := model.HostBGPConfigKey{Hostname: node, Name: "logLevel"}
+	kf := model.HostConfigKey{Hostname: node, Name: "LogSeverityScreen"}
+	kb := model.HostBGPConfigKey{Hostname: node, Name: "loglevel"}
 	err1 := c.deleteConfig(kf)
 	err2 := c.deleteConfig(kb)
 
@@ -246,7 +246,7 @@ func (c *config) SetNodeLogLevelUseGlobal(node string) error {
 // second return parameter indicates whether the value is explicitly set on the
 // node or inherited from the system-wide global value.
 func (c *config) GetNodeLogLevel(node string) (string, ConfigLocation, error) {
-	s, err := c.getValue(model.HostConfigKey{Hostname: node, Name: "LogLevelScreen"})
+	s, err := c.getValue(model.HostConfigKey{Hostname: node, Name: "LogSeverityScreen"})
 	if err != nil {
 		return "", ConfigLocationNone, err
 	} else if s == nil {
