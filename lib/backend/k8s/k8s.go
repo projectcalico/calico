@@ -16,6 +16,7 @@ package k8s
 
 import (
 	goerrors "errors"
+	"fmt"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -87,15 +88,15 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 	}
 	log.Debugf("Created k8s clientSet: %+v", cs)
 
-	kc := &KubeClient{clientSet: cs}
+	kubeClient := &KubeClient{clientSet: cs}
 
 	// Ensure the necessary ThirdPartyResources exist in the API.
-	err = kc.ensureThirdPartyResources()
+	err = kubeClient.ensureThirdPartyResources()
 	if err != nil {
 		return nil, goerrors.New(fmt.Sprintf("Failed to create necessary ThirdPartyResources: %s", err))
 	}
 
-	return kc, nil
+	return kubeClient, nil
 }
 
 func (c *KubeClient) ensureThirdPartyResources() error {
@@ -108,8 +109,15 @@ func (c *KubeClient) ensureThirdPartyResources() error {
 		Description: "Calico Global Configuration",
 		Versions:    []extensions.APIVersion{{Name: "v1"}},
 	}
-	_, err := c.clientSet.Extensions().ThirdPartyResources().Update(&tpr)
-	return err
+	_, err := c.clientSet.Extensions().ThirdPartyResources().Get(tpr.ObjectMeta.Name)
+	if err != nil {
+		// The resource needs to be created.
+		_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
@@ -412,11 +420,11 @@ func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model
 
 	if l.Name != "" {
 		for _, cfg := range cfgs {
-			if cfg.Key.(GlobalConfigKey).Name == l.Name {
+			if cfg.Key.(model.GlobalConfigKey).Name == l.Name {
 				return []*model.KVPair{cfg}, nil
 			}
 		}
-		return nil, goerrors.New("No GlobalConfig found for %+v", l)
+		return nil, goerrors.New(fmt.Sprintf("No GlobalConfig found for %+v", l))
 	}
 	return cfgs, nil
 }
