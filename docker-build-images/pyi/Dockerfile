@@ -2,6 +2,9 @@
 FROM python:2.7-wheezy
 MAINTAINER Shaun Crampton shaun@tigera.io
 
+ARG UID
+ARG GID
+
 # Install Calico pre-reqs.
 RUN pip install pyinstaller
 
@@ -12,10 +15,8 @@ RUN pip install -U -r python/requirements_frozen.txt
 
 # To run some commands (git, tox) as non-root user, we need to have a valid
 # passwd/group file.
-ADD docker-build-images/passwd /passwd
-RUN cat /passwd >> /etc/passwd
-ADD docker-build-images/group /group
-RUN cat /group >> /etc/group
+# use `--force` and `-o` since tests can run under root and command will fail with duplicate error
+RUN groupadd --force --gid=$GID user && useradd -o --home=/ --gid=$GID --uid=$UID user
 
 RUN mkdir /code
 WORKDIR /code
