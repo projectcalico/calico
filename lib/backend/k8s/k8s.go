@@ -15,7 +15,6 @@
 package k8s
 
 import (
-	"encoding/json"
 	goerrors "errors"
 
 	log "github.com/Sirupsen/logrus"
@@ -110,10 +109,6 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
-	switch d.Key.(type) {
-	case model.IPPoolKey:
-		return c.applyIPPool(d)
-	}
 	log.Infof("Ignoring 'Apply' for %s", d.Key)
 	return d, nil
 }
@@ -132,8 +127,6 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 		return c.getProfile(k.(model.ProfileKey))
 	case model.WorkloadEndpointKey:
 		return c.getWorkloadEndpoint(k.(model.WorkloadEndpointKey))
-	case model.IPPoolKey:
-		return c.getIPPool(k.(model.IPPoolKey))
 	case model.PolicyKey:
 		return c.getPolicy(k.(model.PolicyKey))
 	case model.HostConfigKey:
@@ -159,8 +152,6 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listProfiles(l.(model.ProfileListOptions))
 	case model.WorkloadEndpointListOptions:
 		return c.listWorkloadEndpoints(l.(model.WorkloadEndpointListOptions))
-	case model.IPPoolListOptions:
-		return c.listIPPools(l.(model.IPPoolListOptions))
 	case model.PolicyListOptions:
 		return c.listPolicies(l.(model.PolicyListOptions))
 	case model.GlobalConfigListOptions:
@@ -277,54 +268,6 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 		return nil, nil
 	}
 	return c.converter.podToWorkloadEndpoint(pod)
-}
-
-// listIPPools lists Pools thus the k8s API based on kube-system Namespace annotations.
-func (c *KubeClient) listIPPools(l model.IPPoolListOptions) ([]*model.KVPair, error) {
-	// Kubernetes backend only supports a single pool.
-	kvp, err := c.getIPPool(model.IPPoolKey{})
-	if err != nil {
-		return []*model.KVPair{}, nil
-	}
-	return []*model.KVPair{kvp}, nil
-}
-
-// getIPPool gets the IPPool from the k8s API based on kube-system Namespace annotations.
-func (c *KubeClient) getIPPool(k model.IPPoolKey) (*model.KVPair, error) {
-	ns, err := c.clientSet.Namespaces().Get("kube-system")
-	if err != nil {
-		return nil, err
-	}
-	return c.converter.namespaceToIPPool(ns)
-}
-
-func (c *KubeClient) applyIPPool(kvp *model.KVPair) (*model.KVPair, error) {
-	// The Kubernetes backend only supports a single pool, which is stored
-	// as an annotation on the Kubernetes kube-system Namespace.
-	ns, err := c.clientSet.Namespaces().Get("kube-system")
-	if err != nil {
-		return nil, err
-	}
-
-	// Serialize the pool.
-	k := "projectcalico.org/ipPool"
-	bytes, err := json.Marshal(kvp.Value)
-	if err != nil {
-		return nil, err
-	}
-	value := string(bytes)
-
-	// Store the pool.
-	if ns.ObjectMeta.Annotations == nil {
-		ns.ObjectMeta.Annotations = map[string]string{}
-	}
-	ns.ObjectMeta.Annotations[k] = value
-	updated, err := c.clientSet.Namespaces().Update(ns)
-	if err != nil {
-		return nil, err
-	}
-	kvp.Revision = updated.ObjectMeta.ResourceVersion
-	return kvp, nil
 }
 
 // listPolicies lists the Policies from the k8s API based on NetworkPolicy objects.
