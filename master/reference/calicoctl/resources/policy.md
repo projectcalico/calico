@@ -13,14 +13,14 @@ aliases are supported (all case insensitive): `policy`, `policies`, `pol`, `pols
 
 ### Sample YAML
 
-This sample policy allows traffic from `frontend` endpoints to `database` endpoints, but only on 
-TCP port 6379.
+This sample policy allows TCP traffic from `frontend` endpoints to port 6379 on
+`database` endpoints.
 
 ```yaml
 apiVersion: v1
 kind: policy
 metadata:
-  name: allow-tcp-80
+  name: allow-tcp-6379
 spec:
   selector: role == 'database'
   ingress:
@@ -48,7 +48,7 @@ spec:
 
 | Field    | Description                 | Accepted Values   | Schema | Default    |
 |----------|-----------------------------|-------------------|--------|------------|
-| order    | Indicates priority of this policy, with lower order taking precedence. | | integer | 100 |
+| order    | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence) | | float |  |
 | selector | Selects the endpoints to which this policy applies. | | [selector](#selector)| all() |
 | ingress  | Ordered list of ingress rules applied by policy. | | List of [Rule](#rule)  | |
 | egress   | Ordered list of egress rules applied by this policy. | | List of [Rule](#rule)  | |

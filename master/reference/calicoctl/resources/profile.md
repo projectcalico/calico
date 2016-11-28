@@ -15,8 +15,9 @@ aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pro
 
 ### Sample YAML
 
-The following sample profile allows all traffic from 10.0.0.0/16, except if the source 
-is within 10.244.0.0/24, or if the source is within the same profile.
+The following sample profile allows all traffic from endpoints that
+have the profile label set to `profile1` (i.e. endpoints that reference this profile),
+except that *all* traffic from 10.0.20.0/24 is denied.
 
 ```yaml
 apiVersion: v1
@@ -29,10 +30,10 @@ spec:
   ingress:
   - action: deny
     source:
-      net: 10.244.0.0/24
+      net: 10.0.20.0/24
   - action: allow
     source:
-      net: 10.0.0.0/16
+      selector: profile == 'profile1'
   egress:
   - action: allow 
 ```
