@@ -62,6 +62,8 @@ See the table below for details on the etcdv2 specific environment variables.
 >    is not required for etcdv2.
 > 3. All environment variables may also be prefixed with "CALICO_", for example 
 >    "CALICO_DATASTORE_TYPE" and "CALICO_END_ENDPOINTS" etc. may also be used.
+>    This is useful if the non-prefixed names clash with existing environment
+>    variables defined on your system
 > 4. Previous versions of calicoctl supported ETCD_SCHEME and ETC_AUTHORITY environment
 >    variables as a mechanism for specifying the etcd endpoints.  These variables are
 >    deprecated in favor of the ETCD_ENDPOINTS list.
