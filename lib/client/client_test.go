@@ -72,12 +72,12 @@ spec:
 	cfg2data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		KubeConfig: k8s.KubeConfig{
-			Kubeconfig:     "filename",
-			K8sAPIEndpoint: "bar",
-			K8sCertFile:    "baz",
-			K8sKeyFile:     "foo",
-			K8sCAFile:      "foobar",
-			K8sAPIToken:    "foobarbaz",
+			K8sKubeconfigFile: "filename",
+			K8sAPIEndpoint:    "bar",
+			K8sCertFile:       "baz",
+			K8sKeyFile:        "foo",
+			K8sCAFile:         "foobar",
+			K8sAPIToken:       "foobarbaz",
 		},
 	}
 
@@ -133,12 +133,12 @@ kind: notCalicoApiConfig
 			EtcdAuthority: "127.0.0.1:2379",
 		},
 		KubeConfig: k8s.KubeConfig{
-			Kubeconfig:     "filename",
-			K8sAPIEndpoint: "bar1",
-			K8sCertFile:    "baz1",
-			K8sKeyFile:     "foo1",
-			K8sCAFile:      "foobar1",
-			K8sAPIToken:    "foobarbaz1",
+			K8sKubeconfigFile: "filename",
+			K8sAPIEndpoint:    "bar1",
+			K8sCertFile:       "baz1",
+			K8sKeyFile:        "foo1",
+			K8sCAFile:         "foobar1",
+			K8sAPIToken:       "foobarbaz1",
 		},
 	}
 
@@ -173,7 +173,7 @@ kind: notCalicoApiConfig
 			EtcdAuthority: "127.0.0.1:2379",
 		},
 		KubeConfig: k8s.KubeConfig{
-			Kubeconfig: "filename-preferred",
+			K8sKubeconfigFile: "filename-preferred",
 		},
 	}
 

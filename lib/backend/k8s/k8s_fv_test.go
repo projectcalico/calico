@@ -60,7 +60,7 @@ func (c cb) OnUpdates(updates []api.Update) {
 func CreateClientAndStartSyncer() *KubeClient {
 	// First create the client.
 	cfg := KubeConfig{
-		K8sServer: "http://localhost:8080",
+		K8sAPIEndpoint: "http://localhost:8080",
 	}
 	c, err := NewKubeClient(&cfg)
 	if err != nil {

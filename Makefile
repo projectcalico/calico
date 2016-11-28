@@ -42,27 +42,21 @@ update-tools:
 run-etcd:
 	@-docker rm -f calico-etcd
 	docker run --detach \
-	-p 2379:2379 \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
-	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
-
-run-etcd-host:
-	@-docker rm -f calico-etcd
-	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-run-kubernetes-master: stop-kubernetes-master run-etcd-host
+run-kubernetes-master: stop-kubernetes-master run-etcd
 	# Run the kubelet which will launch the master components in a pod.
+	docker pull gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION}
 	docker run \
                 -v /:/rootfs:ro \
 	        -v /sys:/sys:ro \
 	        -v /var/run:/var/run:rw \
+	        -v /var/lib/docker/:/var/lib/docker:rw \
 	        -v /var/lib/kubelet/:/var/lib/kubelet:rw \
-	        -v ${PWD}/kubernetes-manifests:/etc/kubernetes/manifests-multi:rw \
+	        -v ${PWD}/kubernetes-manifests:/etc/kubernetes/:rw \
 	        --net=host \
 		--pid=host \
 		--privileged=true \

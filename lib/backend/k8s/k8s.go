@@ -33,12 +33,12 @@ type KubeClient struct {
 }
 
 type KubeConfig struct {
-	Kubeconfig     string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
-	K8sAPIEndpoint string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
-	K8sKeyFile     string `json:"k8sKeyFile" envconfig:"K8S_KEY_FILE" default:""`
-	K8sCertFile    string `json:"k8sCertFile" envconfig:"K8S_CERT_FILE" default:""`
-	K8sCAFile      string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
-	K8sAPIToken    string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
+	K8sKubeconfigFile string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
+	K8sAPIEndpoint    string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
+	K8sKeyFile        string `json:"k8sKeyFile" envconfig:"K8S_KEY_FILE" default:""`
+	K8sCertFile       string `json:"k8sCertFile" envconfig:"K8S_CERT_FILE" default:""`
+	K8sCAFile         string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
+	K8sAPIToken       string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
 }
 
 func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
