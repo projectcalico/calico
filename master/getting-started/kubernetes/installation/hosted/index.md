@@ -2,7 +2,7 @@
 title: Calico Kubernetes Hosted Install
 ---
 
-This document describes deploying Calico on Kubernetes using Kubernetes manifests.  Note that the Kubernetes hosted installation method is experimental and subject to change, and requires Kubernetes v1.4.0+.
+This document describes deploying Calico on Kubernetes using Kubernetes manifests. 
 
 - [`calico.yaml`](calico.yaml): Deploys Calico on Kubernetes.  Assumes an etcd cluster is available - modify `etcd_endpoints` to direct Calico at the correct cluster.
 
