@@ -98,7 +98,7 @@ type PolicySpec struct {
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked.
-	DoNotTrack bool `json:"doNotTrack,omitempty" validate:"omitempty"`
+	DoNotTrack bool `json:"doNotTrack,omitempty"`
 }
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current
