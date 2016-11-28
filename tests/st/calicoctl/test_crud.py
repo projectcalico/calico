@@ -625,54 +625,54 @@ class TestCreateFromFile(TestBase):
                    'selector': ""}},
          ),
         #  https://github.com/projectcalico/libcalico-go/issues/230
-        # ("policy",
-        #  {'apiVersion': 'v1',
-        #   'kind': 'policy',
-        #   'metadata': {'name': 'policy1', },
-        #   'spec': {'egress': [{'action': 'deny',
-        #                        'protocol': 'tcp',
-        #                        'destination': {},
-        #                        'source': {
-        #                            'notNet': 'aa:bb:cc:ff::/100',
-        #                            'notPorts': [100],
-        #                            'notTag': 'abcd'}}],
-        #            'ingress': [{'action': 'allow',
-        #                         'destination': {
-        #                             'net': '10.20.30.40/32',
-        #                             'tag': 'database'},
-        #                         'icmp': {'code': 100,
-        #                                  'type': 10},
-        #                         'protocol': 'udp',
-        #                         'source': {
-        #                             'net': '1.2.0.0/16',
-        #                             'ports': [1, 2, 3, 4],
-        #                             'tag': 'web'}}],
-        #            'order': 6543215.321,
-        #            'selector': ''}},
-        #  {'apiVersion': 'v1',
-        #   'kind': 'policy',
-        #   'metadata': {'name': 'policy1'},
-        #   'spec': {'egress': [{'action': 'deny',
-        #                        'protocol': 'tcp',
-        #                        'destination': {},
-        #                        'source': {
-        #                            'notNet': 'aa:bb:cc::/100',
-        #                            'notPorts': [100],
-        #                            'notTag': 'abcd'}}],
-        #            'ingress': [{'action': 'allow',
-        #                         'destination': {
-        #                             'net': '10.20.30.40/32',
-        #                             'tag': 'database'},
-        #                         'icmp': {'code': 100,
-        #                                  'type': 10},
-        #                         'protocol': 'udp',
-        #                         'source': {
-        #                             'net': '1.2.3.0/24',
-        #                             'ports': [1, 2, 3, 4],
-        #                             'tag': 'web'}}],
-        #            'order': 100000,
-        #            'selector': ""}},
-        #  ),
+        ("policy",
+          {'apiVersion': 'v1',
+           'kind': 'policy',
+           'metadata': {'name': 'policy1', },
+           'spec': {'egress': [{'action': 'deny',
+                                'protocol': 'tcp',
+                                'destination': {},
+                                'source': {
+                                    'notNet': 'aa:bb:cc:ff::/100',
+                                    'notPorts': [100],
+                                    'notTag': 'abcd'}}],
+                    'ingress': [{'action': 'allow',
+                                 'destination': {
+                                     'net': '10.20.30.40/32',
+                                     'tag': 'database'},
+                                 'icmp': {'code': 100,
+                                          'type': 10},
+                                 'protocol': 'udp',
+                                 'source': {
+                                     'net': '1.2.0.0/16',
+                                     'ports': [1, 2, 3, 4],
+                                     'tag': 'web'}}],
+                    'order': 6543215.321,
+                    'selector': ''}},
+          {'apiVersion': 'v1',
+           'kind': 'policy',
+           'metadata': {'name': 'policy1'},
+           'spec': {'egress': [{'action': 'deny',
+                                'protocol': 'tcp',
+                                'destination': {},
+                                'source': {
+                                    'notNet': 'aa:bb:cc::/100',
+                                    'notPorts': [100],
+                                    'notTag': 'abcd'}}],
+                    'ingress': [{'action': 'allow',
+                                 'destination': {
+                                     'net': '10.20.30.40/32',
+                                     'tag': 'database'},
+                                 'icmp': {'code': 100,
+                                          'type': 10},
+                                 'protocol': 'udp',
+                                 'source': {
+                                     'net': '1.2.3.0/24',
+                                     'ports': [1, 2, 3, 4],
+                                     'tag': 'web'}}],
+                    'order': 100000,
+                    'selector': ""}},
+        ),
         ("ipPool",
          {'apiVersion': 'v1',
           'kind': 'ipPool',
@@ -791,7 +791,7 @@ class InvalidData(TestBase):
                        'metadata': {'node': 'Node1',
                                     'peerIP': '192.168.0.250',
                                     'scope': 'node'},
-                       'spec': {'asNumber': 64511}
+                       'spec': {'asNumber': 64513}
                    }),
                    ("bgpPeer-invalidASnum", {
                        'apiVersion': 'v1',
@@ -808,7 +808,7 @@ class InvalidData(TestBase):
                        'metadata': {'node': 'Node1',
                                     'peerIP': '192.168.0.256',
                                     'scope': 'node'},
-                       'spec': {'asNumber': 64511}
+                       'spec': {'asNumber': 64513}
                    }),
                    ("bgpPeer-apiversion", {
                        'apiVersion': 'v7',
@@ -816,7 +816,7 @@ class InvalidData(TestBase):
                        'metadata': {'node': 'Node1',
                                     'peerIP': '192.168.0.250',
                                     'scope': 'node'},
-                       'spec': {'asNumber': 64511}
+                       'spec': {'asNumber': 64513}
                    }),
                    ("bgpPeer-invalidIpv6", {
                        'apiVersion': 'v1',
@@ -834,26 +834,36 @@ class InvalidData(TestBase):
                                     'scope': 'node'},
                        'spec': {'asNumber': 64590}
                    }),
+                   # See issue https://github.com/projectcalico/libcalico-go/issues/248
+                   ("bgpPeer-unrecognisedfield", {
+                       'apiVersion': 'v1',
+                       'kind': 'bgpPeer',
+                       'metadata': {'node': 'Node2',
+                                    'peerIP': 'fd5f::6:ee',
+                                    'scope': 'node'},
+                       'spec': {'asNumber': 64590,
+                                'unknown': 'thing'}
+                   }),
                    # See issue https://github.com/projectcalico/libcalico-go/issues/222
-                   # ("bgpPeer-longname", {
-                   #     'apiVersion': 'v1',
-                   #     'kind': 'bgpPeer',
-                   #     'metadata': {'node':
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest'
-                   #                      'TestTestTestTestTestTestTestTestTestTestTest',
-                   #                  'peerIP': 'fd5f::6:ee',
-                   #                  'scope': 'node'},
-                   #     'spec': {'asNumber': 64590}
-                   # }),
+                   ("bgpPeer-longname", {
+                       'apiVersion': 'v1',
+                       'kind': 'bgpPeer',
+                       'metadata': {'node':
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest'
+                                        'TestTestTestTestTestTestTestTestTestTestTest',
+                                    'peerIP': 'fd5f::6:ee',
+                                    'scope': 'node'},
+                       'spec': {'asNumber': 64590}
+                   }),
                    ("hostEndpoint-invalidInterface", {
                        'apiVersion': 'v1',
                        'kind': 'hostEndpoint',
@@ -1059,7 +1069,7 @@ class InvalidData(TestBase):
                        'metadata': {'node': 'Node1',
                                     'peerIP': '192.168.0.250',
                                     'scope': 'node'},
-                       'spec': {'asNumber': 64511}},
+                       'spec': {'asNumber': 64513}},
                        {'apiVersion': 'v1',
                         'kind': 'profile',
                         'metadata': {

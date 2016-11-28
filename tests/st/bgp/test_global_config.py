@@ -32,7 +32,7 @@ class TestBGP(TestBase):
         """
         with DockerHost('host', start_calico=False, dind=False) as host:
             # Check default AS command
-            self.assertEquals(host.calicoctl("config get asNumber"), "64511")
+            self.assertEquals(host.calicoctl("config get asNumber"), "64512")
             host.calicoctl("config set asNumber 12345")
             self.assertEquals(host.calicoctl("config get asNumber"), "12345")
             with self.assertRaises(CommandExecError):

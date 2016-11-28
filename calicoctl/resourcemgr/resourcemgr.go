@@ -29,7 +29,7 @@ import (
 	"bytes"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/ghodss/yaml"
+	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/validator"
 )
@@ -171,7 +171,7 @@ func unmarshalResource(tm unversioned.TypeMetadata, b []byte) ([]unversioned.Res
 		return nil, err
 	}
 
-	if err = yaml.Unmarshal(b, unpacked); err != nil {
+	if err = yaml.UnmarshalStrict(b, unpacked); err != nil {
 		return nil, err
 	}
 
@@ -202,7 +202,7 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 		unpacked[i] = r
 	}
 
-	if err := yaml.Unmarshal(b, &unpacked); err != nil {
+	if err := yaml.UnmarshalStrict(b, &unpacked); err != nil {
 		return nil, err
 	}
 

@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/ghodss/yaml"
+	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"

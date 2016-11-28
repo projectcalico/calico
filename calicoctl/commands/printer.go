@@ -21,13 +21,13 @@ import (
 	"strings"
 
 	"bytes"
-	"encoding/json"
 	"os"
 	"text/tabwriter"
 	"text/template"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/ghodss/yaml"
+	"github.com/projectcalico/go-yaml-wrapper"
+	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 )
@@ -174,7 +174,7 @@ func (r resourcePrinterTemplate) print(resources []unversioned.Resource) error {
 }
 
 // join is similar to strings.Join() but takes an arbitrary slice of interfaces and converts
-// each to its string represenation and joins them together with the provided separator
+// each to its string representation and joins them together with the provided separator
 // string.
 func join(items interface{}, separator string) string {
 	// If this is a slice of strings - just use the strings.Join function.
