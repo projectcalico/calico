@@ -111,7 +111,7 @@ toc:
   section:
   - title: Secure etcd
     path: /reference/advanced/etcd-secure
-  - title: Overlap IPs
+  - title: Overlapping IP Support
     path: /reference/advanced/overlap-ips
 - title: Repo Structure
   path: /reference/repo-structure

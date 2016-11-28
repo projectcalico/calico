@@ -1,41 +1,52 @@
 ---
 title: Overlapping IPv4 address ranges
 ---
+
 This document describes how we can use 464XLAT to allow multiple tenants within the same data center to use the same IPv4 address ranges (including actually using the same IPv4 addresses). This is known as “overlapping” IPv4 addresses, and also as “address space isolation”, because it means that an IP address such as 10.10.0.2 (for example) for one tenant has nothing to do with the same IP address being used by a different tenant.
 
 ## RFC 6877
+
 464XLAT is specified by [RFC 6877](https://tools.ietf.org/html/rfc6877) and describes how an IPv4-based application on a client device can access IPv4-based services somewhere in the Internet, via an IPv6 network.
 
 - An IPv4 packet sent from the client’s application is translated (statelessly, per [RFC 6145](https://tools.ietf.org/html/rfc6145) into an IPv6 packet.
+
 ```
 IPv4 packet           IPv6 packet
 SRC 192.168.0.2 ----> SRC 2001:db8:a41:23::192.168.0.2
 DST 72.51.34.34       DST 2001:db8:a41:23::72.51.34.34
 ```
+
 - The IPv6 packet is routed over the IPv6 network to the relevant server.
 - The IPv6 packet is translated back into an IPv4 packet. This step needs to be stateful (per [RFC 6146](https://tools.ietf.org/html/rfc6146)) because an arbitrary number of clients can connect to the server, and it isn’t possible to map all their possible IPv6 addresses onto a range of IPv4 addresses in any way that’s reversible without state.
+
 ```
 IPv6 packet                            IPv4 packet
 SRC 2001:db8:a41:23::192.168.0.2 ----> SRC 192.168.11.5
 DST 2001:db8:a41:23::72.51.34.34       DST 72.51.34.34
 ```
+
 - The IPv4 packet is delivered to the server application, and the server application responds.
 - The response IPv4 packet is translated into an IPv6 packet. This uses the state established by the incoming packet, in particular to translate the response packet’s destination IPv4 address to an IPv6 address.
+
 ```
 IPv4 packet            IPv6 packet
 SRC 72.51.34.34  ----> SRC 2001:db8:a41:23::72.51.34.34
 DST 192.168.11.5       DST 2001:db8:a41:23::192.168.0.2
 ```
+
 - The response IPv6 packet is routed over the IPv6 network back to the client.
 - The response IPv6 packet is translated back into an IPv4 packet.
+
 ```
 IPv6 packet                            IPv4 packet
 SRC 2001:db8:a41:23::72.51.34.34 ----> SRC 72.51.34.34
 DST 2001:db8:a41:23::192.168.0.2       DST 192.168.0.2
 ```
+
 - The response IPv4 packet is delivered to the client application.
 
 ## Data center usage
+
 The use of 464XLAT for overlapping IPv4 addresses in a data center is largely similar. In particular:
 
 - An IPv4 packet coming from an instance is translated to IPv6 by the compute host.
@@ -66,6 +77,7 @@ Routing namespaces may be needed, as the compute host may have VMs using the sam
 To route translated packets across the network between compute hosts, BGP must distribute IPv6-translated addresses for instances, instead of the original IPv4 addresses.
 
 So the picture for processing a packet from a VM looks like this:
+
 ```
                    +---------------------+
                    | Compute Host        |
@@ -86,12 +98,15 @@ So the picture for processing a packet from a VM looks like this:
                    |  +---------------+  |
                    |                     |
                    +---------------------+
+
 ```
+
 For a packet received on a compute host, the first step is to decide whether the packet’s destination IPv6 address maps to one of that compute host’s VMs, and if so directing it into the TAYGA device for translation. This can be done with routing table entries like those that Calico programs today, but with IPv6 addresses and pointing to TAYGA instead of down TAP interfaces.
 
 After translation back to IPv4, the traditional Calico routing rules will route down the correct TAP interface. Except that we have the namespace problem again: if there are two local VMs with the same address, which of them should get the packet?
 
 ## Further study and questions
+
 Further work will be needed on (at least) the following points.
 
 Pin down the use of namespaces and/or an alternative marking scheme, on the compute host. If multiple namespaces are used, does this require a separate TAYGA device in each namespace?
