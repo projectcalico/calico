@@ -25,8 +25,8 @@ CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scal
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/birdcl
-CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/calico-bgp-daemon
-GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
+CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc1/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc1/gobgp
 
 # we can use "custom" build image and test image name
 PYTHON_BUILD_CONTAINER_NAME?=calico/build:v0.18.0
@@ -95,16 +95,17 @@ $(NODE_CONTAINER_BIN_DIR)/confd:
 
 # Get the calico-bgp-daemon binary
 $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
+	$(CURL) -L $(GOBGP_URL) -o $(@D)/gobgp
 	$(CURL) -L $(CALICO_BGP_DAEMON_URL) -o $@
-	chmod +x $@
+	chmod +x $(@D)/*
 
 # Get bird binaries
 $(NODE_CONTAINER_BIN_DIR)/bird:
 	# This make target actually downloads the bird6 and birdcl binaries too
 	# Copy patched BIRD daemon with tunnel support.
-	$(CURL) -L $(BIRD_URL) -o $@
-	$(CURL) -L $(BIRD6_URL) -o $(@D)/bird6
+	$(CURL) -L $(BIRD6_URL) -o bird6
 	$(CURL) -L $(BIRDCL_URL) -o $(@D)/birdcl
+	$(CURL) -L $(BIRD_URL) -o $@
 	chmod +x $(@D)/*
 
 ###############################################################################
