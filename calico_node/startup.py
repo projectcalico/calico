@@ -266,7 +266,9 @@ def main():
         sys.exit(1)
 
     as_num = os.getenv("AS")
-    as_num = as_num or None
+    if not as_num:
+        as_num = client.get_host_as(hostname)
+
     if as_num and not validate_asn(as_num):
         print "AS environment (%s) is not a AS number." % as_num
         sys.exit(1)
