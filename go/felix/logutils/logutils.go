@@ -196,7 +196,16 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 		if key == "__file__" || key == "__line__" {
 			continue
 		}
-		b.WriteString(fmt.Sprintf(" %v=%#v", key, entry.Data[key]))
+		var value interface{} = entry.Data[key]
+		var stringifiedValue string
+		if stringer, ok := value.(fmt.Stringer); ok {
+			// Trust the value's String() method.
+			stringifiedValue = stringer.String()
+		} else {
+			// No string method, use %#v to get a more thorough dump.
+			stringifiedValue = fmt.Sprintf("%#v", value)
+		}
+		b.WriteString(fmt.Sprintf(" %v=%v", key, stringifiedValue))
 	}
 
 	b.WriteByte('\n')

@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/ifacemonitor"
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
@@ -42,7 +43,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer:      ruleRenderer,
 		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
 		cleanupPending:    true,
+		ifaceMonitor:      ifacemonitor.New(),
+		ifaceUpdates:      make(chan *ifaceUpdate, 100),
 	}
+
+	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
 
 	natTableV4 := iptables.NewTable("nat", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
 	rawTableV4 := iptables.NewTable("raw", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
@@ -59,7 +64,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
-	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer, routeTableV4, 4))
+	dp.RegisterManager(newEndpointManager(
+		filterTableV4,
+		ruleRenderer,
+		routeTableV4,
+		4,
+		config.RulesConfig.WorkloadIfacePrefixes))
 
 	if !config.DisableIPv6 {
 		natTableV6 := iptables.NewTable("nat", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
@@ -78,7 +88,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6))
 		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
-		dp.RegisterManager(newEndpointManager(filterTableV6, ruleRenderer, routeTableV6, 6))
+		dp.RegisterManager(newEndpointManager(
+			filterTableV6,
+			ruleRenderer,
+			routeTableV6,
+			6,
+			config.RulesConfig.WorkloadIfacePrefixes))
 	}
 	return dp
 }
@@ -105,6 +120,9 @@ type InternalDataplane struct {
 	iptablesFilterTables []*iptables.Table
 	ipsetsWriters        []*ipsets.IPSets
 
+	ifaceMonitor *ifacemonitor.InterfaceMonitor
+	ifaceUpdates chan *ifaceUpdate
+
 	allManagers []Manager
 
 	ruleRenderer rules.RuleRenderer
@@ -124,6 +142,24 @@ func (d *InternalDataplane) RegisterManager(mgr Manager) {
 func (d *InternalDataplane) Start() {
 	go d.loopUpdatingDataplane()
 	go d.loopReportingStatus()
+	go d.ifaceMonitor.MonitorInterfaces()
+}
+
+// onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
+func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State) {
+	log.WithFields(log.Fields{
+		"ifaceName": ifaceName,
+		"state":     state,
+	}).Info("Linux interface state changed.")
+	d.ifaceUpdates <- &ifaceUpdate{
+		Name:  ifaceName,
+		State: state,
+	}
+}
+
+type ifaceUpdate struct {
+	Name  string
+	State ifacemonitor.State
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {
@@ -152,7 +188,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}})
 	}
 
-	retryTicker := time.NewTicker(100 * time.Millisecond)
+	// Retry any failed operations every 10s.
+	retryTicker := time.NewTicker(10 * time.Second)
 
 	datastoreInSync := false
 	for {
@@ -186,6 +223,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 				log.Info("Datastore in sync, flushing the dataplane for the first time...")
 				datastoreInSync = true
+			}
+			d.dataplaneNeedsSync = true
+		case ifaceUpdate := <-d.ifaceUpdates:
+			log.WithField("msg", ifaceUpdate).Info("Received interface update")
+			for _, mgr := range d.allManagers {
+				mgr.OnUpdate(ifaceUpdate)
 			}
 			d.dataplaneNeedsSync = true
 		case <-retryTicker.C:
@@ -248,6 +291,7 @@ func (d *InternalDataplane) apply() {
 		for _, w := range d.ipsetsWriters {
 			w.AttemptCleanup()
 		}
+		d.cleanupPending = false
 	}
 }
 
