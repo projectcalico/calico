@@ -102,6 +102,10 @@ func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
 	return &EtcdClient{etcdClient: client, etcdKeysAPI: keys}, nil
 }
 
+func (c *EtcdClient) EnsureInitialized() error {
+	return nil
+}
+
 func (c *EtcdClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return newSyncer(c.etcdKeysAPI, callbacks)
 }

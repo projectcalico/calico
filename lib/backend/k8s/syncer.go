@@ -22,7 +22,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/pkg/fields"
@@ -53,6 +55,7 @@ type resourceVersions struct {
 	podVersion           string
 	namespaceVersion     string
 	networkPolicyVersion string
+	globalConfigVersion  string
 }
 
 func (syn *kubeSyncer) Start() {
@@ -124,7 +127,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	latestVersions := resourceVersions{}
 
 	// Other watcher vars.
-	var nsChan, poChan, npChan <-chan watch.Event
+	var nsChan, poChan, npChan, gcChan <-chan watch.Event
 	var event watch.Event
 	var kvp *model.KVPair
 	var opts k8sapi.ListOptions
@@ -142,6 +145,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 			// Get snapshot from datastore.
 			snap, existingKeys, latestVersions := syn.performSnapshot()
+			log.Debugf("Snapshot: %+v, keys: %+v, versions: %+v", snap, existingKeys, latestVersions)
 
 			// Go through and delete anything that existed before, but doesn't anymore.
 			syn.performSnapshotDeletes(existingKeys)
@@ -156,27 +160,41 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
 			nsWatch, err := syn.kc.clientSet.Namespaces().Watch(opts)
 			if err != nil {
-				log.Warn("Failed to connect to API, retrying")
+				log.Warn("Failed to watch Namespaces, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.podVersion}
 			poWatch, err := syn.kc.clientSet.Pods("").Watch(opts)
 			if err != nil {
-				log.Warn("Failed to connect to API, retrying")
+				log.Warn("Failed to watch Pods, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
 
-			listWatcher := cache.NewListWatchFromClient(
+			// Create watcher for NetworkPolicy objects.
+			netpolListWatcher := cache.NewListWatchFromClient(
 				syn.kc.clientSet.Extensions().RESTClient(),
 				"networkpolicies",
 				"",
 				fields.Everything())
-			npWatch, err := listWatcher.WatchFunc(opts)
+			npWatch, err := netpolListWatcher.WatchFunc(opts)
 			if err != nil {
-				log.Warnf("Failed to connect to API, retrying: %s", err)
+				log.Warnf("Failed to watch NetworkPolicies, retrying: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// Create watcher for Calico global config resources.
+			tprListWatcher := cache.NewListWatchFromClient(
+				syn.kc.tprClient,
+				"globalconfigs",
+				"kube-system",
+				fields.Everything())
+			tprWatch, err := tprListWatcher.WatchFunc(opts)
+			if err != nil {
+				log.Warnf("Failed to watch GlobalConfig, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
@@ -184,6 +202,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			nsChan = nsWatch.ResultChan()
 			poChan = poWatch.ResultChan()
 			npChan = npWatch.ResultChan()
+			gcChan = tprWatch.ResultChan()
 
 			// Success - reset the flag.
 			needsResync = false
@@ -236,6 +255,18 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			kvp = syn.parseNetworkPolicyEvent(event)
 			latestVersions.networkPolicyVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
+		case event = <-gcChan:
+			log.Debugf("Incoming GlobalConfig watch event. Type=%s", event.Type)
+			if needsResync = syn.eventTriggersResync(event); needsResync {
+				// We need to resync.  Break out into the sync loop.
+				log.Warn("Event triggered resync: %+v", event)
+				continue
+			}
+
+			// Event is OK - parse it and send it over the channel.
+			kvp = syn.parseGlobalConfigEvent(event)
+			latestVersions.globalConfigVersion = kvp.Revision.(string)
+			syn.sendUpdates([]model.KVPair{*kvp})
 		}
 	}
 }
@@ -243,10 +274,12 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 func (syn *kubeSyncer) performSnapshotDeletes(exists map[model.Key]bool) {
 	log.Info("Checking for any deletes for snapshot")
 	deletes := []model.KVPair{}
+	log.Debugf("Keys in snapshot: %+v", exists)
 	for cachedKey, _ := range syn.tracker {
 		// Check each cached key to see if it exists in the snapshot.  If it doesn't,
 		// we need to send a delete for it.
 		if _, stillExists := exists[cachedKey]; !stillExists {
+			log.Debugf("Cached key not in snapshot: %+v", cachedKey)
 			deletes = append(deletes, model.KVPair{Key: cachedKey, Value: nil})
 		}
 	}
@@ -259,13 +292,14 @@ func (syn *kubeSyncer) performSnapshotDeletes(exists map[model.Key]bool) {
 // populates the provided resourceVersions with the latest k8s resource version
 // for each.
 func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, resourceVersions) {
-	var snap []model.KVPair
-	var keys map[model.Key]bool
 	opts := k8sapi.ListOptions{}
 	versions := resourceVersions{}
+	var snap []model.KVPair
+	var keys map[model.Key]bool
 
 	// Loop until we successfully are able to accesss the API.
 	for {
+		// Initialize the values to return.
 		snap = []model.KVPair{}
 		keys = map[model.Key]bool{}
 
@@ -273,7 +307,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 		log.Info("Syncing Namespaces")
 		nsList, err := syn.kc.clientSet.Namespaces().List(opts)
 		if err != nil {
-			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
+			log.Warnf("Error syncing Namespaces, retrying: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -305,7 +339,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 			Timeout(10 * time.Second).
 			Do().Into(&npList)
 		if err != nil {
-			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
+			log.Warnf("Error syncing NetworkPolicies, retrying: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -321,7 +355,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 		log.Info("Syncing Pods")
 		poList, err := syn.kc.clientSet.Pods("").List(opts)
 		if err != nil {
-			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
+			log.Warnf("Error syncing Pods, retrying: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -338,7 +372,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 		// Sync GlobalConfig.
 		confList, err := syn.kc.listGlobalConfig(model.GlobalConfigListOptions{})
 		if err != nil {
-			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
+			log.Warnf("Error syncing GlobalConfig, retrying: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -351,7 +385,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 		// Include ready state.
 		ready, err := syn.kc.getReadyStatus(model.ReadyFlagKey{})
 		if err != nil {
-			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
+			log.Warnf("Error getting ready status, retrying: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -470,6 +504,24 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 	if err != nil {
 		log.Panicf("%s", err)
 	}
+
+	// For deletes, we need to nil out the Value part of the KVPair
+	if e.Type == watch.Deleted {
+		kvp.Value = nil
+	}
+	return kvp
+}
+
+func (syn *kubeSyncer) parseGlobalConfigEvent(e watch.Event) *model.KVPair {
+	log.Debug("Parsing GlobalConfig watch event")
+	// First, check the event type.
+	gc, ok := e.Object.(*thirdparty.GlobalConfig)
+	if !ok {
+		log.Panicf("Invalid GlobalConfig event. Type: %s, Object: %+v", e.Type, e.Object)
+	}
+
+	// Convert the received GlobalConfig into a KVPair.
+	kvp := syn.kc.converter.tprToGlobalConfig(gc)
 
 	// For deletes, we need to nil out the Value part of the KVPair
 	if e.Type == watch.Deleted {

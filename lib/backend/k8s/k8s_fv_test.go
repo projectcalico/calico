@@ -67,6 +67,12 @@ func CreateClientAndStartSyncer() *KubeClient {
 		panic(err)
 	}
 
+	// Ensure the backend is initialized.
+	err = c.EnsureInitialized()
+	if err != nil {
+		panic(err)
+	}
+
 	// Start the syncer.
 	callback := cb{
 		status: api.WaitForDatastore,
@@ -313,5 +319,87 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		objs, err := c.List(model.BGPPeerListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(objs)).To(Equal(0))
+	})
+
+	It("should support setting and getting GlobalConfig", func() {
+		gc := &model.KVPair{
+			Key: model.GlobalConfigKey{
+				Name: "ClusterGUID",
+			},
+			Value: "someguid",
+		}
+		var updGC *model.KVPair
+		var err error
+
+		By("creating a new object", func() {
+			updGC, err = c.Create(gc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
+			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
+			Expect(updGC.Revision).NotTo(BeNil())
+		})
+
+		By("getting an existing object", func() {
+			updGC, err = c.Get(gc.Key)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
+			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
+			Expect(updGC.Revision).NotTo(BeNil())
+		})
+
+		By("updating an existing object", func() {
+			updGC.Value = "someotherguid"
+			updGC, err = c.Update(updGC)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal("someotherguid"))
+		})
+
+		By("getting the updated object", func() {
+			updGC, err = c.Get(gc.Key)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal("someotherguid"))
+			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
+			Expect(updGC.Revision).NotTo(BeNil())
+		})
+
+		By("applying an existing object", func() {
+			updGC.Value = "somenewguid"
+			updGC, err = c.Apply(updGC)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal("somenewguid"))
+		})
+
+		By("getting the applied object", func() {
+			updGC, err = c.Get(gc.Key)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal("somenewguid"))
+			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
+			Expect(updGC.Revision).NotTo(BeNil())
+		})
+
+		By("deleting an existing object", func() {
+			err = c.Delete(gc)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("getting a non-existing object", func() {
+			updGC, err = c.Get(gc.Key)
+			Expect(err).To(HaveOccurred())
+			Expect(updGC).To(BeNil())
+		})
+
+		By("applying a new object", func() {
+			updGC, err = c.Apply(gc)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
+		})
+
+		By("getting the applied object", func() {
+			updGC, err = c.Get(gc.Key)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
+			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
+			Expect(updGC.Revision).NotTo(BeNil())
+		})
 	})
 })

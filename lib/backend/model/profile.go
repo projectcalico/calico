@@ -77,7 +77,7 @@ func (key ProfileRulesKey) valueType() reflect.Type {
 }
 
 func (key ProfileRulesKey) String() string {
-	return fmt.Sprintf("Profile(name=%s)", key.Name)
+	return fmt.Sprintf("ProfileRules(name=%s)", key.Name)
 }
 
 // ProfileTagsKey implements the KeyInterface for the profile tags
@@ -95,7 +95,7 @@ func (key ProfileTagsKey) valueType() reflect.Type {
 }
 
 func (key ProfileTagsKey) String() string {
-	return fmt.Sprintf("Profile(name=%s)", key.Name)
+	return fmt.Sprintf("ProfileTags(name=%s)", key.Name)
 }
 
 // ProfileLabelsKey implements the KeyInterface for the profile labels
@@ -113,7 +113,7 @@ func (key ProfileLabelsKey) valueType() reflect.Type {
 }
 
 func (key ProfileLabelsKey) String() string {
-	return fmt.Sprintf("Profile(name=%s)", key.Name)
+	return fmt.Sprintf("ProfileLabels(name=%s)", key.Name)
 }
 
 type ProfileListOptions struct {

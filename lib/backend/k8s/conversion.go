@@ -24,11 +24,13 @@ import (
 	"encoding/json"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
+	kapi "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/unversioned"
-	k8sapi "k8s.io/client-go/pkg/api/v1"
+	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
@@ -79,7 +81,7 @@ func (c converter) parseProfileName(profileName string) (string, error) {
 	return splits[1], nil
 }
 
-func (c converter) namespaceToProfile(ns *k8sapi.Namespace) (*model.KVPair, error) {
+func (c converter) namespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, error) {
 	// Determine the ingress action based off the DefaultDeny annotation.
 	ingressAction := "allow"
 	for k, v := range ns.ObjectMeta.Annotations {
@@ -116,21 +118,49 @@ func (c converter) namespaceToProfile(ns *k8sapi.Namespace) (*model.KVPair, erro
 	return &kvp, nil
 }
 
+func (c converter) tprToGlobalConfig(tpr *thirdparty.GlobalConfig) *model.KVPair {
+	kvp := &model.KVPair{
+		Key: model.GlobalConfigKey{
+			Name: tpr.Spec.Name,
+		},
+		Value:    tpr.Spec.Value,
+		Revision: tpr.Metadata.ResourceVersion,
+	}
+	return kvp
+}
+
+func (c converter) globalConfigToTPR(kvp *model.KVPair) thirdparty.GlobalConfig {
+	tpr := thirdparty.GlobalConfig{
+		Metadata: kapi.ObjectMeta{
+			// Names in Kubernetes must be lower-case.
+			Name: strings.ToLower(kvp.Key.(model.GlobalConfigKey).Name),
+		},
+		Spec: thirdparty.GlobalConfigSpec{
+			Name:  kvp.Key.(model.GlobalConfigKey).Name,
+			Value: kvp.Value.(string),
+		},
+	}
+	if kvp.Revision != nil {
+		tpr.Metadata.ResourceVersion = kvp.Revision.(string)
+	}
+	return tpr
+}
+
 // isCalicoPod returns true if the pod should be shown as a workloadEndpoint
 // in the Calico API and false otherwise.
-func (c converter) isCalicoPod(pod *k8sapi.Pod) bool {
+func (c converter) isCalicoPod(pod *kapiv1.Pod) bool {
 	return !c.isHostNetworked(pod) && c.hasIPAddress(pod)
 }
 
-func (c converter) isHostNetworked(pod *k8sapi.Pod) bool {
+func (c converter) isHostNetworked(pod *kapiv1.Pod) bool {
 	return pod.Spec.HostNetwork
 }
 
-func (c converter) hasIPAddress(pod *k8sapi.Pod) bool {
+func (c converter) hasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != ""
 }
 
-func (c converter) podToWorkloadEndpoint(pod *k8sapi.Pod) (*model.KVPair, error) {
+func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
 	profile := fmt.Sprintf("k8s_ns.%s", pod.ObjectMeta.Namespace)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
@@ -297,7 +327,7 @@ func (c converter) buildRule(port *extensions.NetworkPolicyPort, peer *extension
 	}
 }
 
-func (c converter) k8sProtocolToCalico(protocol *k8sapi.Protocol) *numorstring.Protocol {
+func (c converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	if protocol != nil {
 		p := numorstring.ProtocolFromString(strings.ToLower(string(*protocol)))
 		return &p

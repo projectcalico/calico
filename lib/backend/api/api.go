@@ -101,6 +101,10 @@ type Client interface {
 	// the datastore and then generates subsequent KVPair updates for
 	// changes to the datastore.
 	Syncer(callbacks SyncerCallbacks) Syncer
+
+	// EnsureInitialized ensures that the backend is initialized
+	// any ready to be used.
+	EnsureInitialized() error
 }
 
 type Syncer interface {
