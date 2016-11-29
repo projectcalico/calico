@@ -18,7 +18,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/hashutils"
-	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"strings"
@@ -88,9 +87,9 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 	for _, ipsetID := range protoRule.SrcIpSetIds {
 		ipsetName := ""
 		if ipVersion == 4 {
-			ipsetName = ipsets.IPFamilyV4.NameForMainIPSet(ipsetID)
+			ipsetName = r.IPSetConfigV4.NameForMainIPSet(ipsetID)
 		} else {
-			ipsetName = ipsets.IPFamilyV6.NameForMainIPSet(ipsetID)
+			ipsetName = r.IPSetConfigV6.NameForMainIPSet(ipsetID)
 		}
 		match = match.SourceIPSet(ipsetName)
 	}
@@ -112,9 +111,9 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 	for _, ipsetID := range protoRule.DstIpSetIds {
 		ipsetName := ""
 		if ipVersion == 4 {
-			ipsetName = ipsets.IPFamilyV4.NameForMainIPSet(ipsetID)
+			ipsetName = r.IPSetConfigV4.NameForMainIPSet(ipsetID)
 		} else {
-			ipsetName = ipsets.IPFamilyV6.NameForMainIPSet(ipsetID)
+			ipsetName = r.IPSetConfigV6.NameForMainIPSet(ipsetID)
 		}
 		match = match.DestIPSet(ipsetName)
 	}

@@ -15,12 +15,14 @@
 package rules
 
 import (
+	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
 const (
 	ChainNamePrefix = "cali"
+	IPSetNamePrefix = "cali"
 
 	InputChainName   = ChainNamePrefix + "-INPUT"
 	ForwardChainName = ChainNamePrefix + "-FORWARD"
@@ -47,7 +49,13 @@ const (
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
 	// track of the old names lets us clean them up.
-	AllHistoricChainNamePrefixes = []string{"felix-", "FLX", "cali"}
+	AllHistoricChainNamePrefixes = []string{"felix-", "cali"}
+	// AllHistoricIPSetNamePrefixes, similarly contains all the prefixes we've ever used for IP
+	// sets.
+	AllHistoricIPSetNamePrefixes = []string{"felix-", "cali"}
+	// LegacyV4IPSetNames contains some extra IP set names that were used in older versions of
+	// Felix and don't fit our versioned pattern.
+	LegacyV4IPSetNames = []string{"felix-masq-ipam-pools", "felix-all-ipam-pools"}
 )
 
 type RuleRenderer interface {
@@ -68,7 +76,8 @@ type ruleRenderer struct {
 }
 
 type Config struct {
-	IPVersion uint8
+	IPSetConfigV4 *ipsets.IPVersionConfig
+	IPSetConfigV6 *ipsets.IPVersionConfig
 
 	WorkloadIfacePrefixes []string
 

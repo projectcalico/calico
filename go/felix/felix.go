@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/extdataplane"
 	"github.com/projectcalico/felix/go/felix/intdataplane"
 	"github.com/projectcalico/felix/go/felix/ip"
+	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/logutils"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/rules"
@@ -154,6 +155,19 @@ configRetry:
 		dpConfig := intdataplane.Config{
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: strings.Split(configParams.InterfacePrefix, ","),
+
+				IPSetConfigV4: ipsets.NewIPSetConfig(
+					ipsets.IPFamilyV4,
+					rules.IPSetNamePrefix,
+					rules.AllHistoricIPSetNamePrefixes,
+					rules.LegacyV4IPSetNames,
+				),
+				IPSetConfigV6: ipsets.NewIPSetConfig(
+					ipsets.IPFamilyV6,
+					rules.IPSetNamePrefix,
+					rules.AllHistoricIPSetNamePrefixes,
+					nil,
+				),
 
 				// TODO(smc) honour config of iptables mark marks.
 				IptablesMarkAccept:    0x1,

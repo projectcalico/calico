@@ -83,13 +83,18 @@ type Table struct {
 	logCxt *log.Entry
 }
 
-func NewTable(name string, ipVersion uint8, chainPrefixes []string, hashPrefix string) *Table {
+func NewTable(
+	name string,
+	ipVersion uint8,
+	historicChainPrefixes []string,
+	hashPrefix string,
+) *Table {
 	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
-	ourChainsPattern := "^(" + strings.Join(chainPrefixes, "|") + ")"
+	ourChainsPattern := "^(" + strings.Join(historicChainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
 
 	oldInsertRegexpParts := []string{}
-	for _, prefix := range chainPrefixes {
+	for _, prefix := range historicChainPrefixes {
 		part := fmt.Sprintf("-j %s", prefix)
 		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
 	}

@@ -38,10 +38,9 @@ func (d *ipSetsManager) OnUpdate(msg interface{}) {
 		d.ipsets.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
 		d.ipsets.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
-			Type:     ipsets.IPSetTypeHashIP,
-			SetID:    msg.Id,
-			IPFamily: d.ipsets.Family,
-			MaxSize:  1024 * 1024,
+			Type:    ipsets.IPSetTypeHashIP,
+			SetID:   msg.Id,
+			MaxSize: 1024 * 1024,
 		}, msg.Members)
 	case *proto.IPSetRemove:
 		d.ipsets.RemoveIPSet(msg.Id)

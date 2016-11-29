@@ -41,10 +41,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fromDataplane:     make(chan interface{}, 100),
 		ruleRenderer:      ruleRenderer,
 		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
+		cleanupPending:    true,
 	}
 
+	natTableV4 := iptables.NewTable("nat", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
+	rawTableV4 := iptables.NewTable("raw", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
 	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
-	ipSetsV4 := ipsets.NewIPSets(ipsets.IPFamilyV4)
+	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
+	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
+	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
+	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV4)
 
@@ -56,9 +62,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newEndpointManager(filterTableV4, ruleRenderer, routeTableV4, 4))
 
 	if !config.DisableIPv6 {
+		natTableV6 := iptables.NewTable("nat", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
+		rawTableV6 := iptables.NewTable("raw", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
 		filterTableV6 := iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix)
-		ipSetsV6 := ipsets.NewIPSets(ipsets.IPFamilyV6)
+
+		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
+		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6)
 		dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV6)
+		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
+		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
@@ -88,6 +100,8 @@ type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
 
+	iptablesNATTables    []*iptables.Table
+	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
 	ipsetsWriters        []*ipsets.IPSets
 
@@ -100,6 +114,7 @@ type InternalDataplane struct {
 	routeTables []*routetable.RouteTable
 
 	dataplaneNeedsSync bool
+	cleanupPending     bool
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
@@ -208,6 +223,12 @@ func (d *InternalDataplane) apply() {
 	for _, t := range d.iptablesFilterTables {
 		t.Apply()
 	}
+	for _, t := range d.iptablesNATTables {
+		t.Apply()
+	}
+	for _, t := range d.iptablesRawTables {
+		t.Apply()
+	}
 
 	// Update the routing table.
 	for _, r := range d.routeTables {
@@ -221,6 +242,12 @@ func (d *InternalDataplane) apply() {
 	// Now clean up any left-over IP sets.
 	for _, w := range d.ipsetsWriters {
 		w.ApplyDeletions()
+	}
+
+	if d.cleanupPending {
+		for _, w := range d.ipsetsWriters {
+			w.AttemptCleanup()
+		}
 	}
 }
 
