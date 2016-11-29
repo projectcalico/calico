@@ -63,17 +63,25 @@ func Run(args []string) {
 
 Options:
   -h --help                Show this screen.
-     --as=<AS_NUM>         The default AS number for this node.  If this is not
-                           specified, the node will use the global AS number
-                           (see 'calicoctl config' for details).
      --name=<NAME>         The name of the Calico node.  If this is not
                            supplied it defaults to the host name.
-     --ip=<IP>             The local management address to use.  If this is not
-                           specified, the node will attempt to auto-discover
-                           the local IP address to use - however, it is
-                           recommended to specify the required address to use.
-     --ip6=<IP6>           The local IPv6 management address to use.  If this
-                           is not specified, the node will not route IPv6.
+     --as=<AS_NUM>         Set the AS number for this node.  If omitted, it
+                           will use the value configured on the node resource.
+                           If there is no configured value and --as option is
+                           omitted, the node will inherit the global AS number
+                           (see 'calicoctl config' for details).
+     --ip=<IP>             Set the local IPv4 routing address for this node.
+                           If omitted, it will use the value configured on the
+                           node resource.  If there is no configured value
+                           and the --ip option is omitted, the node will
+                           attempt to autodetect an IP address to use.  Use a
+                           value of 'autodetect' to always force autodetection
+                           of the IP each time the node starts.
+     --ip6=<IP6>           Set the local IPv6 routing address for this node.
+                           If omitted, it will use the value configured on the
+                           node resource.  If there is no configured value
+                           and the --ip6 option is omitted, the node will not
+                           route IPv6.
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
@@ -127,7 +135,7 @@ Description:
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
 
 	// Validate parameters.
-	if ipv4 != "" {
+	if ipv4 != "" && ipv4 != "autodetect" {
 		ip := argutils.ValidateIP(ipv4)
 		if ip.Version() != 4 {
 			fmt.Println("Error executing command: --ip is wrong IP version")
@@ -152,7 +160,10 @@ Description:
 		os.Exit(1)
 	}
 
-	// Use the hostname if a name is not specified.
+	// Use the hostname if a name is not specified.  We should always
+	// pass in a fixed value to the node container so that if the user
+	// changes the hostname, the calico/node won't start using a different
+	// name.
 	if name == "" {
 		name, err = os.Hostname()
 		if err != nil || name == "" {
@@ -181,13 +192,21 @@ Description:
 
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
-		"HOSTNAME": name,
-		"IP":       ipv4,
-		"IP6":      ipv6,
+		"NODENAME": name,
 		"CALICO_NETWORKING_BACKEND": backend,
-		"AS":                        asNumber,
 		"NO_DEFAULT_POOLS":          noPoolsString,
 		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
+	}
+
+	// Add in optional environments.
+	if asNumber != "" {
+		envs["AS"] = asNumber
+	}
+	if ipv4 != "" {
+		envs["IP"] = ipv4
+	}
+	if ipv6 != "" {
+		envs["IP6"] = ipv6
 	}
 
 	// Create a map of read only bindings.
@@ -224,9 +243,11 @@ Description:
 	}
 
 	// Create the Docker command to execute (or display).  Start with the
-	// fixed parts.  If this is a dry-run, then don't include the "detach"
-	// flag of the "restart" flag since we write out the command for use
-	// in an init system.
+	// fixed parts.  If this is not for an init system, we'll include the
+	// detach flag (to prevent the command blocking), and use Dockers built
+	// in restart mechanism.  If this is for an init-system we want the
+	// command to remain attached and for Docker to remove the dead
+	// container so that it can be restarted by the init system.
 	cmd := []string{"docker", "run", "--net=host", "--privileged",
 		"--name=calico-node"}
 	if initSystem {
