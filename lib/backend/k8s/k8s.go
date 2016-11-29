@@ -55,14 +55,17 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 		{&configOverrides.AuthInfo.Token, kc.K8sAPIToken},
 	}
 
-	// Using the override map above, populate any non-empty values.
+	// Set an explicit path to the kubeconfig if one
+	// was provided.
 	loadingRules := clientcmd.ClientConfigLoadingRules{}
 	if kc.Kubeconfig != "" {
 		loadingRules.ExplicitPath = kc.Kubeconfig
-		for _, override := range overridesMap {
-			if override.value != "" {
-				*override.variable = override.value
-			}
+	}
+
+	// Using the override map above, populate any non-empty values.
+	for _, override := range overridesMap {
+		if override.value != "" {
+			*override.variable = override.value
 		}
 	}
 	log.Infof("Config overrides: %+v", configOverrides)

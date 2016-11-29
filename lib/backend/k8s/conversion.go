@@ -86,7 +86,7 @@ func (c converter) namespaceToProfile(ns *k8sapi.Namespace) (*model.KVPair, erro
 		if k == policyAnnotation {
 			np := namespacePolicy{}
 			if err := json.Unmarshal([]byte(v), &np); err != nil {
-				return nil, err
+				return nil, goerrors.New(fmt.Sprint("failed to parse annotation: %s", err))
 			}
 			if np.Ingress.Isolation == "DefaultDeny" {
 				ingressAction = "deny"
@@ -136,7 +136,6 @@ func (c converter) podToWorkloadEndpoint(pod *k8sapi.Pod) (*model.KVPair, error)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
 	// If the pod doesn't have an IP address yet, then it hasn't gone through CNI.
-	// Treat this as if it didn't exist.
 	ipNets := []cnet.IPNet{}
 	if c.hasIPAddress(pod) {
 		// Parse the Pod's IP address.
