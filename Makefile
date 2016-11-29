@@ -113,7 +113,7 @@ $(NODE_CONTAINER_BIN_DIR)/bird:
 # - Running UTs and STs
 ###############################################################################
 # These variables can be overridden by setting an environment variable.
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 ST_TO_RUN?=tests/st/
 UT_TO_RUN?=tests/unit/
 
