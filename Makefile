@@ -49,29 +49,28 @@ run-etcd:
 
 run-kubernetes-master: stop-kubernetes-master run-etcd
 	# Run the kubelet which will launch the master components in a pod.
-	docker pull gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION}
 	docker run \
-                -v /:/rootfs:ro \
-	        -v /sys:/sys:ro \
-	        -v /var/run:/var/run:rw \
-	        -v /var/lib/docker/:/var/lib/docker:rw \
-	        -v /var/lib/kubelet/:/var/lib/kubelet:rw \
-	        -v ${PWD}/kubernetes-manifests:/etc/kubernetes/:rw \
-	        --net=host \
-		--pid=host \
-		--privileged=true \
-		--name calico-kubelet-master \
-		-d \
-		gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
-		/hyperkube kubelet \
-			--containerized \
-			--hostname-override="127.0.0.1" \
-			--address="0.0.0.0" \
-			--api-servers=http://localhost:8080 \
-			--config=/etc/kubernetes/manifests-multi \
-			--cluster-dns=10.0.0.10 \
-			--cluster-domain=cluster.local \
-			--allow-privileged=true --v=2
+                 -v /:/rootfs:ro \
+                 -v /sys:/sys:ro \
+                 -v /var/run:/var/run:rw \
+                 -v /var/lib/docker/:/var/lib/docker:rw \
+                 -v /var/lib/kubelet/:/var/lib/kubelet:rw \
+                 -v ${PWD}/kubernetes-manifests:/etc/kubernetes/:rw \
+                 --net=host \
+                 --pid=host \
+                 --privileged=true \
+                 --name calico-kubelet-master \
+                 -d \
+                 gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+                 /hyperkube kubelet \
+                 	--containerized \
+                 	--hostname-override="127.0.0.1" \
+                 	--address="0.0.0.0" \
+                 	--api-servers=http://localhost:8080 \
+                 	--config=/etc/kubernetes/manifests-multi \
+                 	--cluster-dns=10.0.0.10 \
+                 	--cluster-domain=cluster.local \
+                 	--allow-privileged=true --v=2
 
 stop-kubernetes-master:
 	# Stop any existing kubelet that we started

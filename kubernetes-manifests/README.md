@@ -1,6 +1,6 @@
-## Kubermenets manifests for FV tests.
+## Kubernetes manifests for FV tests.
 
-These maniests are used by the hyperkube image for the FV tests to run 
+These manifests are used by the hyperkube image for the FV tests to run 
 a single node Kubernetes cluster.
 
 They are essentially the same as the ones that ship in the hyperkube image,
