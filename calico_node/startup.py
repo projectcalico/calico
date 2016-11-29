@@ -232,8 +232,8 @@ def main():
     if os.getenv("DATASTORE_TYPE", "") == "kubernetes":
         print "Using k8s backend"
         with open('startup.env', 'w') as f:
-            f.write("DATASTORE_TYPE=kubernetes\n")
-            f.write("HOSTNAME=%s\n" % hostname)
+            f.write("export DATASTORE_TYPE=kubernetes\n")
+            f.write("export HOSTNAME=%s\n" % hostname)
         return
 
     # Check to see if etcd is available.  If not, wait until it is before
@@ -291,8 +291,8 @@ def main():
     # This is required because the confd templates expect to be able to fill in
     # some templates by fetching them from the environment.
     with open('startup.env', 'w') as f:
-        f.write("IP=%s\n" % ip)
-        f.write("HOSTNAME=%s\n" % hostname)
+        f.write("export IP=%s\n" % ip)
+        f.write("export HOSTNAME=%s\n" % hostname)
 
     warn_if_hostname_conflict(ip)
 
