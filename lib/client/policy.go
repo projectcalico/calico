@@ -114,7 +114,6 @@ func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 			InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
 			OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
 			Selector:      ap.Spec.Selector,
-			DoNotTrack:    ap.Spec.DoNotTrack,
 		},
 	}
 
@@ -134,7 +133,6 @@ func (h *policies) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, er
 	ap.Spec.IngressRules = rulesBackendToAPI(bp.InboundRules)
 	ap.Spec.EgressRules = rulesBackendToAPI(bp.OutboundRules)
 	ap.Spec.Selector = bp.Selector
-	ap.Spec.DoNotTrack = bp.DoNotTrack
 
 	return ap, nil
 }

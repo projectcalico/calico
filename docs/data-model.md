@@ -379,7 +379,6 @@ own:
         "order": <number>|"default",
         "inbound_rules": [{<rule>}, ...],
         "outbound_rules": [{<rule>}, ...]
-        "untracked": <boolean>
     }
 
 > **NOTE**
