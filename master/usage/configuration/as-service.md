@@ -9,8 +9,8 @@ daemons such as upstart as well.
 
 ## Running the Calico Node Container as a Service
 This section describes how to run the Calico node as a Docker container
-in Systemd.  Included here is an EnvironmentFile that defines the Environment 
-variables for Calico and a sample systemd service file that uses the 
+in Systemd.  Included here is an EnvironmentFile that defines the Environment
+variables for Calico and a sample systemd service file that uses the
 environment file and starts the Calico node image as a service.
 
 `calico.env` - the EnvironmentFile:
@@ -29,15 +29,13 @@ CALICO_LIBNETWORK_ENABLED=true
 CALICO_NETWORKING_BACKEND=bird
 ```
 
-Be sure to update this environment file as necessary, such as modifying 
-ETCD_ENDPOINTS to point at the correct etcd cluster endpoints. 
+Be sure to update this environment file as necessary, such as modifying
+ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
 > Note: The ETCD_CA_FILE, ETCD_CERT_FILE, and ETCD_KEY_FILE
 > environment variables are required when using Etcd with SSL/TLS.  The values
 > here are standard values for a non-SSL version of Etcd, but you can use this
-> template to define your SSL values if desired.  For more details about running
-> Calico with Etcd using SSL/TLS, check out the
-> [Etcd Secure Cluster guide]({{site.baseurl}}/{{page.version}}/reference/advanced/etcd-secure).
+> template to define your SSL values if desired.
 >
 > If CALICO_HOSTNAME is blank, the compute server hostname will be used
 > to identify the Calico node.
@@ -104,4 +102,3 @@ The script will also stop the calico-node container when the service is stopped.
 **Note**: Depending on how you've installed Docker, the name of the Docker service
 under the `[Unit]` section may be different (such as `docker-engine.service`).
 Be sure to check this before starting the service.
-

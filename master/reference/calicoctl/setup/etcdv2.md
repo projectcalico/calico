@@ -1,14 +1,14 @@
 ---
-title: Configuring calicoctl - etcdv2 datastore 
-layout: docwithnav
+title: Configuring calicoctl - etcdv2 datastore
 ---
 
 This document covers the configuration options for calicoctl when using an etcdv2 datastore.
 
-There are two ways to configure calicoctl with your etcdv2 cluster details: 
+There are two ways to configure calicoctl with your etcdv2 cluster details:
 configuration file or environment variables.
 
-## Configuration file 
+
+## Configuration File
 
 By default `calicoctl` looks for a configuration file at `/etc/calico/calicoctl.cfg`.
 
@@ -48,19 +48,19 @@ See the table below for details on the etcdv2 specific environment variables.
 | Spec field      | Environment       | Description                                | Examples
 |-----------------|----------------------------------------------------------------|----------
 | datastoreType   | DATASTORE_TYPE    | Indicates the datastore to use (optional, defaults to etcdv2) | etcdv2
-| etcdEndpoints   | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional, defaults to http://127.0.0.1:2379) | http://etcd1:2379 
-| etcdUsername    | ETCD_USERNAME     | Username for RBAC (optional)               | "user" 
+| etcdEndpoints   | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional, defaults to http://127.0.0.1:2379) | http://etcd1:2379
+| etcdUsername    | ETCD_USERNAME     | Username for RBAC (optional)               | "user"
 | etcdPassword    | ETCD_PASSWORD     | Password for the given username (optional) | "password"
 | etcdKeyFile     | ETCD_KEY_FILE     | Path to the etcd key file (optional)       | /etc/calico/key.pem
 | etcdCertFile    | ETCD_CERT_FILE    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem
 | etcdCACertFile  | ETCD_CA_CERT_FILE | Path to the etcd CA file (optional)        | /etc/calico/ca.pem
 
-> **NOTES** 
-> 
+> **NOTES**
+>
 > 1. If you are running with TLS enabled, ensure your endpoint addresses use https
 > 2. When specifying through environment variables, the DATASTORE_TYPE environment
 >    is not required for etcdv2.
-> 3. All environment variables may also be prefixed with "CALICO_", for example 
+> 3. All environment variables may also be prefixed with "CALICO_", for example
 >    "CALICO_DATASTORE_TYPE" and "CALICO_END_ENDPOINTS" etc. may also be used.
 >    This is useful if the non-prefixed names clash with existing environment
 >    variables defined on your system
@@ -77,100 +77,28 @@ apiVersion: v1
 kind: calicoApiConfig
 metadata:
 spec:
-  etcdEndpoints: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379 
-  etcdKeyFile: /etc/calico/key.pem 
-  etcdCertFile: /etc/calico/cert.pem 
-  etcdCACertFile: /etc/calico/ca.pem 
+  etcdEndpoints: http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+  etcdKeyFile: /etc/calico/key.pem
+  etcdCertFile: /etc/calico/cert.pem
+  etcdCACertFile: /etc/calico/ca.pem
 ```
 
-#### Example using environment variables 
+#### Example using environment variables
 
 ```
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
 ```
 
-# Additional information
+## Environment Variables
 
-## Configure role based access for etcd v2
+Each of the above configuration options can also be set through environment variables.  For example,
+`etcdEndpoints` can also be represented as `ETCD_ENDPOINTS`.
 
-The section describes how to configure your etcd v2 cluster to have role-based access 
-control to require password authentication when modifying calico configuration.  This covers:
+## calico/node
 
-- Creating a read/write user for modification of Calico configuration
-- Setting up the guest user (no authentication) for read-only access
-- Creating a full access root user
-- Turnin on role based access control
+It is important to note that not only will calicoctl will use the specified keys directly
+on the host to access etcd, **it will also pass on these environment variables
+and volume mount the keys into the started calico-node container.**
 
-For more details, see the main etcd documentation.
-
-To configure the roles in etcd, we use the etcdctl command line tool - 
-this is packaged up alongside the etcd binary downloads.
-
-### Configure roles
-
-#### Read-write calico configuration
-
-Create a write role that allows full read/write access of the calico portion of the etcd tree
-
-```
-$ etcdctl role add calico-readwrite
-$ etcdctl role grant calico-readwrite -path '/calico' -readwrite
-$ etcdctl role grant calico-readwrite -path '/calico/*' -readwrite
-```
-
-#### Revoke write access for the guest user
-
-Revoke write access for the guest user.  This means the non-authenticated user of
-the etcd cluster will have read-only access.
-
-```
-$ etcdctl role revoke guest -path '/*' -write
-```
-
-### Configure users
-
-#### Configure calicooctl user
-Create a calicoctl user and enter your chosen password.
-
-```
-$ etcdctl user add calicoctl
-New password:
-```
-
-#### Assign the calicoctl role to this user
-
-```
-$ etcdctl user grant calicoctl -roles calico-readwrite
-```
-
-#### Create the root user
-Before enabling authentication, it is also necessary to create a root user for the
-cluster.  
-
-Create the root user and enter your chosen password
-
-```
-$ etcdctl user add root 
-New password:
-```
-
-### Enable authentication
-
-Finally enable authentication
-
-```
-$ etcdctl auth enable
-```
-
-Your etcd is now running with authentication enabled. To disable it for any reason, 
-use the reciprocal command:
-
-```
-$ etcdctl -u root:<rootpw> auth disable
-```
-
-### Configuring calicoctl to use authenticated etcd access
-To allow calicoctl to use the new calicoctl user, ensure you specify the username 
-and password either in environment variables or in the calicoctl config file as 
-described above.
-
+Therefore, configuring calico-node for etcd is easily accomplished by running
+`calicoctl node run` with the parameters set correctly.

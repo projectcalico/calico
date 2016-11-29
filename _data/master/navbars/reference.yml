@@ -71,8 +71,8 @@ toc:
         path: /reference/calicoctl/resources/workloadendpoint
   - title: Setup
     section:
-      - title: Overview 
-        path: /reference/calicoctl/setup
+      - title: Overview
+        path: /reference/calicoctl/setup/
       - title: etcdv2 datastore
         path: /reference/calicoctl/setup/etcdv2
       - title: kubernetes api datastore
@@ -109,8 +109,8 @@ toc:
   path: /reference/addressing
 - title: Advanced
   section:
-  - title: Secure etcd
-    path: /reference/advanced/etcd-secure
+  - title: RBAC for etcdv2
+    path: /reference/advanced/etcd-rbac
   - title: Overlapping IP Support
     path: /reference/advanced/overlap-ips
 - title: Repo Structure
