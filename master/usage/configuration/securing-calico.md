@@ -156,17 +156,17 @@ To enable TLS support:
     -   Restart neutron-server.
 
 -   Unless your Calico system uses the `calico/node` container image to configure
-    and launch Felix (this includes the `calicoctl node run` command), configure 
+    and launch Felix (this includes the `calicoctl node run` command), configure
     each Felix with its own key and certificate:
 
     > **NOTE**
     >
-    > In systems that use the `calico/node` container image, including those 
+    > In systems that use the `calico/node` container image, including those
     > that use `calicoctl node run` (such as Docker, Kubernetes
     > and other container orchestrators), you should pass in the appropriate environment
-    > variables to configure TLS. See the [Etcd Secure
-    >  Cluster]({{site.baseurl}}/{{page.version}}/reference/advanced/etcd-secure)
-    >  guide for details.
+    > variables to configure TLS. See the [calicoctl configuration
+    >  guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
+    >  for details.
     >
 
     -   Generate a certificate and key pair for each Felix.
