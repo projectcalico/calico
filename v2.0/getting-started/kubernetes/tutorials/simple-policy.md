@@ -3,7 +3,7 @@ title: Simple Policy Demo
 ---
 This guide provides a simple way to try out Kubernetes NetworkPolicy with Calico.  It requires a Kubernetes cluster configured with Calico networking, and expects that you have `kubectl` configured to interact with the cluster.
 
-You can quickly and easily deploy such a cluster by following one of the [getting started guides](../#getting-started)
+You can quickly and easily deploy such a cluster by following one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes#installation-guides)
 
 ### Configure Namespaces
 This guide will deploy pods in a Kubernetes Namespaces.  Let's create the `Namespace` object for this guide.
