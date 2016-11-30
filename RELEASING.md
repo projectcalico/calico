@@ -1,10 +1,16 @@
+# Felix release artifacts
+
+The artifacts of a Felix release are a tarball (aka PyInstaller
+bundle) and a Docker container image, both containing the Felix
+executable(s) .
+
 # Felix release process
 
 In a nutshell:
 
 - We make a Felix release by creating and pushing an annotated Git tag.  The
   name of the tag is the Felix version for that release, and the tag content is
-  the release notes.  (Tag names must be monotonically increasing!)
+  the release notes.
 
 - There are no hardcoded version numbers anywhere in the codebase (except in
   packaging files, as described next).  Instead, build processes generate a
