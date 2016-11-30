@@ -16,7 +16,6 @@ package k8s
 
 import (
 	goerrors "errors"
-	"fmt"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
