@@ -25,8 +25,8 @@ CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scal
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/birdcl
-CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc1/calico-bgp-daemon
-GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc1/gobgp
+CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc2/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc2/gobgp
 
 # we can use "custom" build image and test image name
 PYTHON_BUILD_CONTAINER_NAME?=calico/build:v0.18.0
