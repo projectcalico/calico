@@ -27,17 +27,25 @@ Usage:
 
 Options:
   -h --help                Show this screen.
-     --as=<AS_NUM>         The default AS number for this node.  If this is not
-                           specified, the node will use the global AS number
-                           (see 'calicoctl config' for details).
      --name=<NAME>         The name of the Calico node.  If this is not
                            supplied it defaults to the host name.
-     --ip=<IP>             The local management address to use.  If this is not
-                           specified, the node will attempt to auto-discover
-                           the local IP address to use - however, it is
-                           recommended to specify the required address to use.
-     --ip6=<IP6>           The local IPv6 management address to use.  If this
-                           is not specified, the node will not route IPv6.
+     --as=<AS_NUM>         Set the AS number for this node.  If omitted, it
+                           will use the value configured on the node resource.
+                           If there is no configured value and --as option is
+                           omitted, the node will inherit the global AS number
+                           (see 'calicoctl config' for details).
+     --ip=<IP>             Set the local IPv4 routing address for this node.
+                           If omitted, it will use the value configured on the
+                           node resource.  If there is no configured value
+                           and the --ip option is omitted, the node will
+                           attempt to autodetect an IP address to use.  Use a
+                           value of 'autodetect' to always force autodetection
+                           of the IP each time the node starts.
+     --ip6=<IP6>           Set the local IPv6 routing address for this node.
+                           If omitted, it will use the value configured on the
+                           node resource.  If there is no configured value
+                           and the --ip6 option is omitted, the node will not
+                           route IPv6.
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
@@ -70,32 +78,48 @@ Description:
 ### Examples
 
 ```
-# Start the Calico node with a specific IPv4 address for BGP.
-$ sudo calicoctl node run --ip=10.10.0.12
+# Start the Calico node with a pre-configured IPv4 address for BGP.
+$ sudo calicoctl node run
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
 Enabling IPv6 forwarding
 Increasing conntrack limit
 Running the following command:
 
-docker run -d --net=host --privileged --name=calico-node -e ETCD_AUTHORITY=127.0.0.1:2379 -e CALICO_LIBNETWORK_ENABLED=true -e HOSTNAME=calico -e IP=10.10.0.12 -e AS= -e NO_DEFAULT_POOLS= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico -v /var/run/calico:/var/run/calico calico/node:v1.0.0-beta-rc4-22-gfd4cf3c
+docker run --net=host --privileged --name=calico-node -d --restart=always -e ETCD_SCHEME=http -e HOSTNAME=calico -e CALICO_LIBNETWORK_ENABLED=true -e ETCD_AUTHORITY=127.0.0.1:2379 -e AS= -e NO_DEFAULT_POOLS= -e ETCD_ENDPOINTS= -e IP= -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/docker.sock:/var/run/docker.sock -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins calico/node:latest
 
+Waiting for etcd connection...
+Using configured IPv4 address: 192.0.2.0
+No IPv6 address configured
+Using global AS number
+WARNING: Could not confirm that the provided IPv4 address is assigned to this host.
+Calico node name:  calico
+CALICO_LIBNETWORK_ENABLED is true - start libnetwork service
+Calico node started successfully
 ```
 
 ### Options
 
 ```
-   --as=<AS_NUM>         The default AS number for this node.  If this is not
-                         specified, the node will use the global AS number
-                         (see 'calicoctl config' for details).
    --name=<NAME>         The name of the Calico node.  If this is not
                          supplied it defaults to the host name.
-   --ip=<IP>             The local management address to use.  If this is not
-                         specified, the node will attempt to auto-discover
-                         the local IP address to use - however, it is
-                         recommended to specify the required address to use.
-   --ip6=<IP6>           The local IPv6 management address to use.  If this
-                         is not specified, the node will not route IPv6.
+   --as=<AS_NUM>         Set the AS number for this node.  If omitted, it
+                         will use the value configured on the node resource.
+                         If there is no configured value and --as option is
+                         omitted, the node will inherit the global AS number
+                         (see 'calicoctl config' for details).
+   --ip=<IP>             Set the local IPv4 routing address for this node.
+                         If omitted, it will use the value configured on the
+                         node resource.  If there is no configured value
+                         and the --ip option is omitted, the node will
+                         attempt to autodetect an IP address to use.  Use a
+                         value of 'autodetect' to always force autodetection
+                         of the IP each time the node starts.
+   --ip6=<IP6>           Set the local IPv6 routing address for this node.
+                         If omitted, it will use the value configured on the
+                         node resource.  If there is no configured value
+                         and the --ip6 option is omitted, the node will not
+                         route IPv6.
    --log-dir=<LOG_DIR>   The directory containing Calico logs.
                          [default: /var/log/calico]
    --node-image=<DOCKER_IMAGE_NAME>
