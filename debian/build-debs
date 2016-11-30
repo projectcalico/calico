@@ -13,8 +13,6 @@ if [ -z "${STREAM}" ]; then
 fi
 
 deb_dir=dist/$STREAM
-snapshot=$(date -u '+SNAPSHOT%Y%m%d%H%M%S+0000')
-DEB_VERSION=$(echo ${DEB_VERSION} | sed "s/__SNAPSHOT__/${snapshot}/g")
 unpacked_src_dir=${deb_dir}/calico-${DEB_VERSION}
 
 rm -rf ${deb_dir}
@@ -29,7 +27,6 @@ cp -r etc \
 cp -r debian ${unpacked_src_dir}
 
 head -n 1 "${unpacked_src_dir}/debian/changelog" | grep -q "__STREAM__" || exit 1
-sed -i "s/__SNAPSHOT__/${snapshot}/g" "${unpacked_src_dir}/debian/changelog"
 sed -i "s/__STREAM__/${STREAM}/g" "${unpacked_src_dir}/debian/changelog"
 
 cd ${unpacked_src_dir}
