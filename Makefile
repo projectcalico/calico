@@ -92,7 +92,7 @@ PY_VERSION:=$(shell utils/gen-version.sh)
 # executable.
 GIT_COMMIT:=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT:=$(shell git rev-parse --short HEAD)
-GIT_DESCRIPTION:=$(shell git describe --tags --dirty)
+GIT_DESCRIPTION:=$(shell git describe --tags)
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')

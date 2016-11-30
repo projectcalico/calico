@@ -25,10 +25,8 @@ function git_auto_version {
     timestamp=`date -u '+%Y%m%d%H%M%S+0000'`
 
     # Generate corresponding PEP 440 version number.
-    if test ${commits_since} -eq 0 && \
-       git diff-index --quiet --cached HEAD && \
-       git diff-files --quiet; then
-	# There are no commits since the last tag, and no uncommitted changes.
+    if test ${commits_since} -eq 0; then
+	# There are no commits since the last tag.
 	version=${last_tag}
     else
 	version=${last_tag}.post${commits_since}+${timestamp}+${sha}
