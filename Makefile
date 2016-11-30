@@ -22,9 +22,9 @@ SOURCE_DIR:=$(abspath $(SOURCE_DIR))
 # confd binary
 CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static
 # bird binaries
-BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird
-BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/bird6
-BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.1.0/birdcl
+BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird
+BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/bird6
+BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0-rc1/birdcl
 CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/calico-bgp-daemon
 GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.0/gobgp
 
