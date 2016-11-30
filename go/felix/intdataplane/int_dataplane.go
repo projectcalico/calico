@@ -297,5 +297,17 @@ func (d *InternalDataplane) apply() {
 
 func (d *InternalDataplane) loopReportingStatus() {
 	log.Info("Started internal status report thread")
-	// TODO(smc) Implement status reporting.
+	start := time.Now()
+	for {
+		time.Sleep(10 * time.Second)
+		now := time.Now()
+		uptimeNanos := float64(now.Sub(start))
+		uptimeSecs := uptimeNanos / 1000000000
+		d.fromDataplane <- &proto.FromDataplane_ProcessStatusUpdate{
+			ProcessStatusUpdate: &proto.ProcessStatusUpdate{
+				IsoTimestamp: now.UTC().Format(time.RFC3339),
+				Uptime:       uptimeSecs,
+			},
+		}
+	}
 }
