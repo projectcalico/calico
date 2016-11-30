@@ -1,5 +1,5 @@
 hash: 3c05531c0d590c16abd195c43c39e2090ca94de48404032f6bb2651158f8f3b9
-updated: 2016-11-28T00:43:53.374678479-05:00
+updated: 2016-11-30T11:07:18.630258453-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -160,7 +160,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 30237cf4eefd639b184d1f2cb77a581ea0be8947
+  version: d5645953809d8b4752afb2c3224b1f1ad73dfa70
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -279,6 +279,7 @@ imports:
   - pkg/util
   - pkg/util/cert
   - pkg/util/clock
+  - pkg/util/diff
   - pkg/util/errors
   - pkg/util/flowcontrol
   - pkg/util/framer
@@ -307,54 +308,13 @@ imports:
   - plugin/pkg/client/auth/oidc
   - rest
   - tools/auth
+  - tools/cache
   - tools/clientcmd
   - tools/clientcmd/api
   - tools/clientcmd/api/latest
   - tools/clientcmd/api/v1
   - tools/metrics
   - transport
-- name: k8s.io/kubernetes
-  version: 545f749a0deb8535656ce93ac1f35a59887839bf
-  subpackages:
-  - pkg/api
-  - pkg/api/meta
-  - pkg/api/meta/metatypes
-  - pkg/api/resource
-  - pkg/api/unversioned
-  - pkg/apis/autoscaling
-  - pkg/apis/batch
-  - pkg/apis/extensions
-  - pkg/auth/user
-  - pkg/conversion
-  - pkg/conversion/queryparams
-  - pkg/fields
-  - pkg/genericapiserver/openapi/common
-  - pkg/labels
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
-  - pkg/runtime/serializer/json
-  - pkg/runtime/serializer/protobuf
-  - pkg/runtime/serializer/recognizer
-  - pkg/runtime/serializer/versioning
-  - pkg/selection
-  - pkg/types
-  - pkg/util/errors
-  - pkg/util/framer
-  - pkg/util/intstr
-  - pkg/util/json
-  - pkg/util/labels
-  - pkg/util/net
-  - pkg/util/rand
-  - pkg/util/runtime
-  - pkg/util/sets
-  - pkg/util/uuid
-  - pkg/util/validation
-  - pkg/util/validation/field
-  - pkg/util/wait
-  - pkg/util/yaml
-  - pkg/watch
-  - third_party/forked/golang/reflect
 testImports:
 - name: github.com/onsi/gomega
   version: f1f0f388b31eca4e2cbe7a6dd8a3a1dfddda5b1c
