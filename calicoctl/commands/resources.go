@@ -182,6 +182,10 @@ type commandResults struct {
 
 	// The results returned from each invocation
 	resources []unversioned.Resource
+
+	// The Calico API client used for the requests (useful if required
+	// again).
+	client *client.Client
 }
 
 // executeConfigCommand is main function called by all of the resource management commands
@@ -242,7 +246,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).
-	var results commandResults
+	results := commandResults{client: client}
 	var kind string
 	count := make(map[string]int)
 	for _, r := range resources {

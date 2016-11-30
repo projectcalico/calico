@@ -30,17 +30,18 @@ import (
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 type resourcePrinter interface {
-	print(resources []unversioned.Resource) error
+	print(client *client.Client, resources []unversioned.Resource) error
 }
 
 // resourcePrinterJSON implements the resourcePrinter interface and is used to display
 // a slice of resources in JSON format.
 type resourcePrinterJSON struct{}
 
-func (r resourcePrinterJSON) print(resources []unversioned.Resource) error {
+func (r resourcePrinterJSON) print(client *client.Client, resources []unversioned.Resource) error {
 	// The supplied slice of resources may contain actual resource types as well as
 	// resource lists (which themselves contain a slice of actual resources).
 	// For simplicity, expand any resource lists so that we have a flat slice of
@@ -58,7 +59,7 @@ func (r resourcePrinterJSON) print(resources []unversioned.Resource) error {
 // a slice of resources in YAML format.
 type resourcePrinterYAML struct{}
 
-func (r resourcePrinterYAML) print(resources []unversioned.Resource) error {
+func (r resourcePrinterYAML) print(client *client.Client, resources []unversioned.Resource) error {
 	// The supplied slice of resources may contain actual resource types as well as
 	// resource lists (which themselves contain a slice of actual resources).
 	// For simplicity, expand any resource lists so that we have a flat slice of
@@ -85,7 +86,7 @@ type resourcePrinterTable struct {
 	wide bool
 }
 
-func (r resourcePrinterTable) print(resources []unversioned.Resource) error {
+func (r resourcePrinterTable) print(client *client.Client, resources []unversioned.Resource) error {
 	log.Infof("Output in table format (wide=%v)", r.wide)
 	for _, resource := range resources {
 		// Get the resource manager for the resource type.
@@ -108,6 +109,7 @@ func (r resourcePrinterTable) print(resources []unversioned.Resource) error {
 		// function.
 		fns := template.FuncMap{
 			"join": join,
+			"config": config(client),
 		}
 		tmpl, err := template.New("get").Funcs(fns).Parse(tpls)
 		if err != nil {
@@ -140,13 +142,13 @@ type resourcePrinterTemplateFile struct {
 	templateFile string
 }
 
-func (r resourcePrinterTemplateFile) print(resources []unversioned.Resource) error {
+func (r resourcePrinterTemplateFile) print(client *client.Client, resources []unversioned.Resource) error {
 	template, err := ioutil.ReadFile(r.templateFile)
 	if err != nil {
 		return err
 	}
 	rp := resourcePrinterTemplate{template: string(template)}
-	return rp.print(resources)
+	return rp.print(client, resources)
 }
 
 // resourcePrinterTemplate implements the resourcePrinter interface and is used to display
@@ -155,11 +157,12 @@ type resourcePrinterTemplate struct {
 	template string
 }
 
-func (r resourcePrinterTemplate) print(resources []unversioned.Resource) error {
+func (r resourcePrinterTemplate) print(client *client.Client, resources []unversioned.Resource) error {
 	// We include a join function in the template as it's useful for multi
 	// value columns.
 	fns := template.FuncMap{
 		"join": join,
+		"config": config(client),
 	}
 	tmpl, err := template.New("get").Funcs(fns).Parse(r.template)
 	if err != nil {
@@ -200,4 +203,24 @@ func join(items interface{}, separator string) string {
 
 	// The supplied items is not a slice - so just convert to a string.
 	return fmt.Sprint(items)
+}
+
+// config returns a function that returns the current global named config
+// value.
+func config(client *client.Client) func(string) string {
+	var asValue string
+	return func(name string) string {
+		switch strings.ToLower(name) {
+		case "asnumber":
+			if asValue == "" {
+				if asn, err := client.Config().GetGlobalASNumber(); err != nil {
+					asValue = "unknown"
+				} else {
+					asValue = asn.String()
+				}
+			}
+			return asValue
+		}
+		panic("unhandled config type")
+	}
 }

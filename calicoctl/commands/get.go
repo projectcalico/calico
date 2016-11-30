@@ -172,7 +172,7 @@ Description:
 		os.Exit(1)
 	}
 
-	err = rp.print(results.resources)
+	err = rp.print(results.client, results.resources)
 	if err != nil {
 		fmt.Println(err)
 	}
