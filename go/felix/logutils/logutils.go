@@ -255,15 +255,15 @@ func (h *StreamHook) Levels() []log.Level {
 }
 
 func (h *StreamHook) Fire(entry *log.Entry) (err error) {
-	var reader io.Reader
-	if reader, err = entry.Reader(); err != nil {
+	var serialized []byte
+	if serialized, err = entry.Logger.Formatter.Format(entry); err != nil {
 		return
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	_, err = io.Copy(h.writer, reader)
+	_, err = h.writer.Write(serialized)
 	return
 }
 
