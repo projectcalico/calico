@@ -298,10 +298,21 @@ Description:
 		setNFConntrackMax()
 	}
 
-	// Run the docker command.
-	fmt.Println("Running the following command:")
-	fmt.Printf("\n%s\n\n", strings.Join(cmd, " "))
+	// Make sure the calico-node is not already running before we attempt
+	// to start the node.
+	fmt.Println("Removing old calico-node container (if running).")
+	err = exec.Command("docker", "rm", "-f", "calico-node").Run()
+	if err != nil {
+		log.WithError(err).Debug("Unable to remove calico-node container (ok if container was not running)")
+	}
 
+	// Run the docker command.
+	fmt.Println("Running the following command to start calico-node:")
+	fmt.Printf("\n%s\n\n", strings.Join(cmd, " "))
+	fmt.Println("Image may take a short time to download if it is not available locally.")
+
+	// Now execute the actual Docker run command and check for the
+	// unable to find image message.
 	err = exec.Command(cmd[0], cmd[1:]...).Run()
 	if err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
@@ -309,6 +320,7 @@ Description:
 	}
 
 	// Create the command to follow the docker logs for the calico/node
+	fmt.Println("Container started, checking progress logs.")
 	logCmd := exec.Command("docker", "logs", "calico-node", "--follow")
 
 	// Get the stdout pipe
