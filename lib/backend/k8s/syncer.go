@@ -23,9 +23,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	k8sapi "k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apis/extensions"
-	"k8s.io/kubernetes/pkg/watch"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	"k8s.io/client-go/pkg/fields"
+	"k8s.io/client-go/pkg/watch"
+	"k8s.io/client-go/tools/cache"
 )
 
 func newSyncer(kc KubeClient, callbacks api.SyncerCallbacks) *kubeSyncer {
@@ -166,9 +168,15 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
-			npWatch, err := syn.kc.clientSet.NetworkPolicies("").Watch(opts)
+
+			listWatcher := cache.NewListWatchFromClient(
+				syn.kc.clientSet.Extensions().RESTClient(),
+				"networkpolicies",
+				"",
+				fields.Everything())
+			npWatch, err := listWatcher.WatchFunc(opts)
 			if err != nil {
-				log.Warn("Failed to connect to API, retrying")
+				log.Warnf("Failed to connect to API, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
@@ -285,7 +293,12 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 
 		// Get NetworkPolicies (Policies)
 		log.Info("Syncing NetworkPolicy")
-		npList, err := syn.kc.clientSet.NetworkPolicies("").List(opts)
+		npList := extensions.NetworkPolicyList{}
+		err = syn.kc.clientSet.Extensions().RESTClient().
+			Get().
+			Resource("networkpolicies").
+			Timeout(10 * time.Second).
+			Do().Into(&npList)
 		if err != nil {
 			log.Warnf("Error accessing Kubernetes API, retrying: %s", err)
 			time.Sleep(1 * time.Second)
