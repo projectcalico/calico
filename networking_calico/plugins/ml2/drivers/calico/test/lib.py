@@ -207,7 +207,7 @@ class Lib(object):
         self.driver = mech_calico.CalicoMechanismDriver()
 
         # Hook the (mock) Neutron database.
-        self.db = mech_calico.manager.NeutronManager.get_plugin()
+        self.db = mech_calico.plugin_dir.get_plugin()
         self.db_context = mech_calico.ctx.get_admin_context()
 
         self.db_context.session.query.return_value.filter_by.side_effect = (

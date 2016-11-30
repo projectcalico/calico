@@ -52,3 +52,10 @@ try:
 except ImportError:
     # Mitaka and earlier
     from neutron.common.constants import DHCPV6_STATEFUL
+
+try:
+    # Introduced during Ocata development cycle.
+    from neutron_lib.plugins import directory as plugin_dir
+except ImportError:
+    # Pre-Ocata.
+    from neutron.manager import NeutronManager as plugin_dir

@@ -38,7 +38,6 @@ from neutron.common import topics
 from neutron import context as ctx
 from neutron.db import l3_db
 from neutron.db import models_v2
-from neutron import manager
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
 from sqlalchemy import exc as sa_exc
@@ -54,6 +53,7 @@ from networking_calico.compat import db_exc
 from networking_calico.compat import lockutils
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
+from networking_calico.compat import plugin_dir
 from networking_calico import datamodel_v1
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
@@ -475,7 +475,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def _get_db(self):
         if not self.db:
-            self.db = manager.NeutronManager.get_plugin()
+            self.db = plugin_dir.get_plugin()
             LOG.info("db = %s" % self.db)
 
             # Update the reference to ourselves.
