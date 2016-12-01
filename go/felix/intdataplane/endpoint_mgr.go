@@ -106,17 +106,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 }
 
 func (m *endpointManager) CompleteDeferredWork() error {
-	// Rewrite the dispatch chains if they've changed.
-	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
-	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
-	newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeEndpoints)
-	if !reflect.DeepEqual(newDispatchChains, m.activeDispatchChains) {
-		log.Info("Workloads changed, updating dispatch chains.")
-		m.filterTable.RemoveChains(m.activeDispatchChains)
-		m.filterTable.UpdateChains(newDispatchChains)
-		m.activeDispatchChains = newDispatchChains
-	}
-
 	for ifaceName, state := range m.pendingIfaceUpdates {
 		if state == ifacemonitor.StateUp {
 			m.activeUpIfaces.Add(ifaceName)
@@ -180,6 +169,17 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			delete(m.activeEndpoints, id)
 			delete(m.pendingEndpointUpdates, id)
 		}
+	}
+
+	// Rewrite the dispatch chains if they've changed.
+	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
+	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
+	newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeEndpoints)
+	if !reflect.DeepEqual(newDispatchChains, m.activeDispatchChains) {
+		log.Info("Workloads changed, updating dispatch chains.")
+		m.filterTable.RemoveChains(m.activeDispatchChains)
+		m.filterTable.UpdateChains(newDispatchChains)
+		m.activeDispatchChains = newDispatchChains
 	}
 
 	m.activeIfacesNeedingConfig.Iter(func(item interface{}) error {
