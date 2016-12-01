@@ -66,15 +66,30 @@ var _ = Describe("Usagerep", func() {
 		Expect(calculateInitialDelay(1)).To(BeNumerically(">=", 5*time.Minute))
 		Expect(calculateInitialDelay(1000)).To(BeNumerically(">=", 5*time.Minute))
 	})
+	It("should delay at most 10000 seconds", func() {
+		Expect(calculateInitialDelay(10000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(calculateInitialDelay(100000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(calculateInitialDelay(1000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+		Expect(calculateInitialDelay(10000000)).To(BeNumerically("<=", 5*time.Minute+10000*time.Second))
+	})
 	It("should have a random component", func() {
-		Expect(calculateInitialDelay(1000000)).ToNot(Equal(calculateInitialDelay(1000000)))
+		firstDelay := calculateInitialDelay(1000)
+		for i := 0; i < 10; i++ {
+			if calculateInitialDelay(1000) != firstDelay {
+				return // Success
+			}
+		}
+		Fail("Generated 10 delays but they were all the same")
 	})
 	It("should have an average close to expected value", func() {
 		var total time.Duration
-		for i := int64(0); i < 1000000; i++ {
+		// Give it a high but bounded number of iterations to converge.
+		for i := int64(0); i < 100000; i++ {
 			total += calculateInitialDelay(60)
 			if i > 100 {
 				average := time.Duration(int64(total) / (i + 1))
+				// Delay should an average of 0.5s per host so the average should
+				// be close to 5min30s.
 				if average > (5*time.Minute+20*time.Second) &&
 					average < (5*time.Minute+40*time.Second) {
 					// Pass!
