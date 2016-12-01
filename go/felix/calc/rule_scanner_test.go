@@ -180,8 +180,12 @@ var _ = Describe("ParsedRule", func() {
 		protoFields := set.New()
 		for i := 0; i < numMRFields; i++ {
 			name := strings.ToLower(protoType.Field(i).Name)
-			if strings.Index(name, "icmp") >= 0 {
+			if strings.Contains(name, "icmp") {
 				// ICMP fields expected to differ.
+				continue
+			}
+			if strings.Contains(name, "ruleid") {
+				// RuleId only in proto rule.
 				continue
 			}
 			protoFields.Add(name)

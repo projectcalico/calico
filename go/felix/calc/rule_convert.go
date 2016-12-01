@@ -15,18 +15,65 @@
 package calc
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
-func parsedRulesToProtoRules(in []*ParsedRule) (out []*proto.Rule) {
+const (
+	// Compromise: shorter is better for occupancy and readability. Longer is better for
+	// collision-resistance.  16 chars gives us 96 bits of entropy, which is fairly collision
+	// resistant.
+	RuleIDLength = 16
+)
+
+func parsedRulesToProtoRules(in []*ParsedRule, ruleIDSeed string) (out []*proto.Rule) {
 	out = make([]*proto.Rule, len(in))
 	for ii, inRule := range in {
 		out[ii] = parsedRuleToProtoRule(inRule)
 	}
+	fillInRuleIDs(out, ruleIDSeed)
 	return
+}
+
+func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
+	s := sha256.New224()
+	s.Write([]byte(ruleIDSeed))
+	hash := s.Sum(nil)
+	for ii, rule := range rules {
+		// Each hash chains in the previous hash, so that its position in the chain and
+		// the rules before it affect its hash.
+		s.Reset()
+		s.Write(hash)
+
+		// Wee need a form of the rule that we can hash.  Convert it to the protobuf
+		// binary representation, which is deterministic, at least ofr a given rev of the
+		// library.
+		// TODO(smc) Can we do better here?
+		rule.RuleId = ""
+		data, err := rule.Marshal()
+		if err != nil {
+			log.WithError(err).WithField("rule", rule).Panic("Failed to marshal rule")
+		}
+		s.Write(data)
+		hash = s.Sum(hash[0:0])
+		// Encode the hash using a compact character set.  We use the URL-safe base64
+		// variant because it uses '-' and '_', which are more shell-friendly.
+		ruleID := base64.RawURLEncoding.EncodeToString(hash)[:RuleIDLength]
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithFields(log.Fields{
+				"rule":     rule,
+				"action":   rule.Action,
+				"position": ii,
+				"seed":     ruleIDSeed,
+				"ruleID":   ruleID,
+			}).Debug("Calculated rule ID")
+		}
+		rule.RuleId = ruleID
+	}
 }
 
 func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {

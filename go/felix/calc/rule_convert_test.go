@@ -15,6 +15,7 @@
 package calc
 
 import (
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/go/felix/proto"
@@ -33,10 +34,93 @@ var icmpCode13 = 13
 var proto123 = numorstring.ProtocolFromInt(uint8(123))
 var protoTCP = numorstring.ProtocolFromString("tcp")
 
+var fullyLoadedParsedRule = ParsedRule{
+	Action:    "allow",
+	IPVersion: &ipv4,
+
+	Protocol: &proto123,
+
+	SrcNet:   mustParseCalicoIPNet("10.0.0.0/8"),
+	SrcPorts: []numorstring.Port{numorstring.SinglePort(10)},
+	DstNet:   mustParseCalicoIPNet("11.0.0.0/16"),
+	DstPorts: []numorstring.Port{portFromRange(123, 456)},
+
+	ICMPType: &icmpType10,
+	ICMPCode: &icmpCode12,
+
+	SrcIPSetIDs: []string{"srcID1", "srcID2"},
+	DstIPSetIDs: []string{"dstID1", "dstID2"},
+
+	NotProtocol: &protoTCP,
+
+	NotSrcNet:   mustParseCalicoIPNet("12.0.0.0/8"),
+	NotSrcPorts: []numorstring.Port{numorstring.SinglePort(11)},
+	NotDstNet:   mustParseCalicoIPNet("13.0.0.0/16"),
+	NotDstPorts: []numorstring.Port{portFromRange(678, 910)},
+
+	NotICMPType: &icmpType11,
+	NotICMPCode: &icmpCode13,
+
+	NotSrcIPSetIDs: []string{"srcID3", "srcID4"},
+	NotDstIPSetIDs: []string{"dstID3", "dstID4"},
+
+	LogPrefix: "foobar",
+}
+
+var fullyLoadedProtoRule = proto.Rule{
+	Action:    "allow",
+	IpVersion: proto.IPVersion_IPV4,
+
+	Protocol: &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{123},
+	},
+
+	SrcNet:   "10.0.0.0/8",
+	SrcPorts: []*proto.PortRange{{First: 10, Last: 10}},
+	DstNet:   "11.0.0.0/16",
+	DstPorts: []*proto.PortRange{{First: 123, Last: 456}},
+
+	Icmp: &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{
+		Type: 10,
+		Code: 12,
+	}},
+
+	SrcIpSetIds: []string{"srcID1", "srcID2"},
+	DstIpSetIds: []string{"dstID1", "dstID2"},
+
+	NotProtocol: &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{"tcp"},
+	},
+
+	NotSrcNet:   "12.0.0.0/8",
+	NotSrcPorts: []*proto.PortRange{{First: 11, Last: 11}},
+	NotDstNet:   "13.0.0.0/16",
+	NotDstPorts: []*proto.PortRange{{First: 678, Last: 910}},
+
+	NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{
+		Type: 11,
+		Code: 13,
+	}},
+
+	NotSrcIpSetIds: []string{"srcID3", "srcID4"},
+	NotDstIpSetIds: []string{"dstID3", "dstID4"},
+
+	LogPrefix: "foobar",
+}
+
 var _ = DescribeTable("ParsedRulesToProtoRules",
 	func(in ParsedRule, expected proto.Rule) {
-		out := parsedRulesToProtoRules([]*ParsedRule{&in})
-		Expect(*out[0]).To(Equal(expected))
+		out := parsedRulesToProtoRules(
+			[]*ParsedRule{&in},
+			"test",
+		)
+		rule := *out[0]
+		// Zero the rule ID so we can compare the other fields.
+		ruleID := rule.RuleId
+		rule.RuleId = ""
+		Expect(rule).To(Equal(expected))
+		Expect(len(ruleID)).To(Equal(16))
+		Expect(ruleID).To(MatchRegexp("^[a-zA-Z0-9_-]+$"))
 	},
 	Entry("empty", ParsedRule{}, proto.Rule{}),
 	Entry("IPv4",
@@ -75,79 +159,55 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 			},
 		}),
 	Entry("fully-loaded rule",
-		ParsedRule{
-			Action:    "allow",
-			IPVersion: &ipv4,
-
-			Protocol: &proto123,
-
-			SrcNet:   mustParseCalicoIPNet("10.0.0.0/8"),
-			SrcPorts: []numorstring.Port{numorstring.SinglePort(10)},
-			DstNet:   mustParseCalicoIPNet("11.0.0.0/16"),
-			DstPorts: []numorstring.Port{portFromRange(123, 456)},
-
-			ICMPType: &icmpType10,
-			ICMPCode: &icmpCode12,
-
-			SrcIPSetIDs: []string{"srcID1", "srcID2"},
-			DstIPSetIDs: []string{"dstID1", "dstID2"},
-
-			NotProtocol: &protoTCP,
-
-			NotSrcNet:   mustParseCalicoIPNet("12.0.0.0/8"),
-			NotSrcPorts: []numorstring.Port{numorstring.SinglePort(11)},
-			NotDstNet:   mustParseCalicoIPNet("13.0.0.0/16"),
-			NotDstPorts: []numorstring.Port{portFromRange(678, 910)},
-
-			NotICMPType: &icmpType11,
-			NotICMPCode: &icmpCode13,
-
-			NotSrcIPSetIDs: []string{"srcID3", "srcID4"},
-			NotDstIPSetIDs: []string{"dstID3", "dstID4"},
-
-			LogPrefix: "foobar",
-		},
-		proto.Rule{
-			Action:    "allow",
-			IpVersion: proto.IPVersion_IPV4,
-
-			Protocol: &proto.Protocol{
-				NumberOrName: &proto.Protocol_Number{123},
-			},
-
-			SrcNet:   "10.0.0.0/8",
-			SrcPorts: []*proto.PortRange{{First: 10, Last: 10}},
-			DstNet:   "11.0.0.0/16",
-			DstPorts: []*proto.PortRange{{First: 123, Last: 456}},
-
-			Icmp: &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{
-				Type: 10,
-				Code: 12,
-			}},
-
-			SrcIpSetIds: []string{"srcID1", "srcID2"},
-			DstIpSetIds: []string{"dstID1", "dstID2"},
-
-			NotProtocol: &proto.Protocol{
-				NumberOrName: &proto.Protocol_Name{"tcp"},
-			},
-
-			NotSrcNet:   "12.0.0.0/8",
-			NotSrcPorts: []*proto.PortRange{{First: 11, Last: 11}},
-			NotDstNet:   "13.0.0.0/16",
-			NotDstPorts: []*proto.PortRange{{First: 678, Last: 910}},
-
-			NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{
-				Type: 11,
-				Code: 13,
-			}},
-
-			NotSrcIpSetIds: []string{"srcID3", "srcID4"},
-			NotDstIpSetIds: []string{"dstID3", "dstID4"},
-
-			LogPrefix: "foobar",
-		}),
+		fullyLoadedParsedRule,
+		fullyLoadedProtoRule),
 )
+
+var _ = Describe("rule ID tests", func() {
+	It("should generate different IDs for different rules", func() {
+		id1 := calculateRuleID("test", fullyLoadedParsedRule)
+		id2 := calculateRuleID("test", ParsedRule{})
+		Expect(id1).ToNot(Equal(id2))
+	})
+	It("should generate different IDs for different seeds", func() {
+		id1 := calculateRuleID("test", fullyLoadedParsedRule)
+		id2 := calculateRuleID("test2", fullyLoadedParsedRule)
+		Expect(id1).ToNot(Equal(id2))
+	})
+	It("should generate the same ID for the same rule", func() {
+		id1 := calculateRuleID("test", fullyLoadedParsedRule)
+		id2 := calculateRuleID("test", fullyLoadedParsedRule)
+		Expect(id1).To(Equal(id2))
+	})
+	It("should generate different IDs for different positions in chain", func() {
+		out1 := parsedRulesToProtoRules(
+			[]*ParsedRule{
+				&fullyLoadedParsedRule,
+				&fullyLoadedParsedRule,
+			},
+			"test",
+		)
+		out2 := parsedRulesToProtoRules(
+			[]*ParsedRule{
+				&ParsedRule{},
+				&fullyLoadedParsedRule,
+			},
+			"test",
+		)
+		Expect(out1[0].RuleId).ToNot(Equal(out1[1].RuleId))
+		Expect(out1[1].RuleId).ToNot(Equal(out2[1].RuleId))
+	})
+})
+
+func calculateRuleID(seed string, in ParsedRule) string {
+	out := parsedRulesToProtoRules(
+		[]*ParsedRule{&in},
+		seed,
+	)
+	ruleID := out[0].RuleId
+	Expect(ruleID).To(MatchRegexp("^[a-zA-Z0-9_-]{16}$"))
+	return ruleID
+}
 
 func portFromRange(minPort, maxPort uint16) numorstring.Port {
 	port, _ := numorstring.PortFromRange(minPort, maxPort)

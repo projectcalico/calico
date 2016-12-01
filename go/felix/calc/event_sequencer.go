@@ -220,8 +220,14 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 				Name: key.Name,
 			},
 			Policy: &proto.Policy{
-				InboundRules:  parsedRulesToProtoRules(rulesOrNil.InboundRules),
-				OutboundRules: parsedRulesToProtoRules(rulesOrNil.OutboundRules),
+				InboundRules: parsedRulesToProtoRules(
+					rulesOrNil.InboundRules,
+					"pol-in-default/"+key.Name,
+				),
+				OutboundRules: parsedRulesToProtoRules(
+					rulesOrNil.OutboundRules,
+					"pol-out-default/"+key.Name,
+				),
 			},
 		})
 		buf.sentPolicies.Add(key)
@@ -260,8 +266,14 @@ func (buf *EventSequencer) flushProfileUpdates() {
 				Name: key.Name,
 			},
 			Profile: &proto.Profile{
-				InboundRules:  parsedRulesToProtoRules(rulesOrNil.InboundRules),
-				OutboundRules: parsedRulesToProtoRules(rulesOrNil.OutboundRules),
+				InboundRules: parsedRulesToProtoRules(
+					rulesOrNil.InboundRules,
+					"prof-in-"+key.Name,
+				),
+				OutboundRules: parsedRulesToProtoRules(
+					rulesOrNil.OutboundRules,
+					"prof-out-"+key.Name,
+				),
 			},
 		})
 		buf.sentProfiles.Add(key)
