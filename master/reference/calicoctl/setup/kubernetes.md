@@ -45,7 +45,7 @@ will check a particular set of environment variables.
 
 See the table below for details on the Kubernetes specific environment variables.
 
-> Note thatif neither file nor environment variables are set, calicoctl defaults to
+> Note that if neither file nor environment variables are set, calicoctl defaults to
 > using etcdv2 as the datastore with a single endpoint of http://127.0.0.1:2379.
 
 ## Complete list of Kubernetes API connection configuration
