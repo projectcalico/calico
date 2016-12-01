@@ -1,3 +1,20 @@
+felix (2.0.0~rc2~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.0.0-rc2 (from Git commit a98a7a5).
+    - Improve early logging configuration (fixes #1156)
+      - Default to logging errors.
+      - Provide an override environment variable that allows early logging
+        to be turned off or increased. (FELIX_EARLYLOGSEVERITYSCREEN)
+    - Allow access to floating IPs from the Calico host as well as from
+      further afield.
+    - Fix that clusterType was being defaulted when clusterGUID was missing.
+    - Incorporate latest libcalico-go improvements (v1.0.0-rc1)
+    - Update for current logrus API (fixes #1162)
+    - Improve release process for Felix
+    - Update libcalico-go to v1.0.0-rc2
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 01 Dec 2016 11:29:35 +0000
+
 felix (2.0.0~beta.3-__STREAM__) __STREAM__; urgency=low
 
   * felix release (from Git commit 2b49e4b).
