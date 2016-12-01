@@ -27,7 +27,10 @@ cd `git_repo_root`
 # commit messages - since the last release.
 last_tag=`git_last_tag`
 release_notes=`mktemp -t felix-release-notes.XXXXXXXXXX`
-git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' > $release_notes
+echo "Felix version $nextrel" > $release_notes
+echo >> $release_notes
+
+git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' >> $release_notes
 
 # Open the release notes file in $EDITOR and ask the user to edit it into a
 # more appropriate form.
