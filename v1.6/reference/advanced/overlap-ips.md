@@ -66,6 +66,7 @@ Routing namespaces may be needed, as the compute host may have VMs using the sam
 To route translated packets across the network between compute hosts, BGP must distribute IPv6-translated addresses for instances, instead of the original IPv4 addresses.
 
 So the picture for processing a packet from a VM looks like this:
+
 ```
                    +---------------------+
                    | Compute Host        |
@@ -87,6 +88,7 @@ So the picture for processing a packet from a VM looks like this:
                    |                     |
                    +---------------------+
 ```
+
 For a packet received on a compute host, the first step is to decide whether the packet’s destination IPv6 address maps to one of that compute host’s VMs, and if so directing it into the TAYGA device for translation. This can be done with routing table entries like those that Calico programs today, but with IPv6 addresses and pointing to TAYGA instead of down TAP interfaces.
 
 After translation back to IPv4, the traditional Calico routing rules will route down the correct TAP interface. Except that we have the namespace problem again: if there are two local VMs with the same address, which of them should get the packet?

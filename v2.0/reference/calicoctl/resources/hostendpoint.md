@@ -22,7 +22,7 @@ metadata:
   labels:
     type: production
 spec:
-  interface: eth0
+  interfaceName: eth0
   expectedIPs: 
   - 192.168.0.1
   - 192.168.0.2
