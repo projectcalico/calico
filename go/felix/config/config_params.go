@@ -281,7 +281,7 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 			EtcdCACertFile: config.EtcdCaFile,
 		}
 		return api.CalicoAPIConfig{
-			Spec: api.CalicoAPIConfigSpec {
+			Spec: api.CalicoAPIConfigSpec{
 				DatastoreType: api.EtcdV2,
 				EtcdConfig:    etcdCfg,
 			},

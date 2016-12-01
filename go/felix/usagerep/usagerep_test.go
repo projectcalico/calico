@@ -20,10 +20,11 @@ import (
 	"github.com/projectcalico/felix/go/felix/buildinfo"
 	"github.com/projectcalico/felix/go/felix/calc"
 	"net/url"
+	"time"
 )
 
 var _ = Describe("Usagerep", func() {
-	It("should caluculate correct URL mainline", func() {
+	It("should calculate correct URL mainline", func() {
 		rawURL := calculateURL("myhost", "theguid", "atype", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
@@ -59,5 +60,28 @@ var _ = Describe("Usagerep", func() {
 		Expect(len(q)).To(Equal(9))
 		Expect(q.Get("guid")).To(Equal("baddecaf"))
 		Expect(q.Get("cluster_type")).To(Equal("unknown"))
+	})
+	It("should delay at least 5 minutes", func() {
+		Expect(calculateInitialDelay(0)).To(BeNumerically(">=", 5*time.Minute))
+		Expect(calculateInitialDelay(1)).To(BeNumerically(">=", 5*time.Minute))
+		Expect(calculateInitialDelay(1000)).To(BeNumerically(">=", 5*time.Minute))
+	})
+	It("should have a random component", func() {
+		Expect(calculateInitialDelay(1000000)).ToNot(Equal(calculateInitialDelay(1000000)))
+	})
+	It("should have an average close to expected value", func() {
+		var total time.Duration
+		for i := int64(0); i < 1000000; i++ {
+			total += calculateInitialDelay(60)
+			if i > 100 {
+				average := time.Duration(int64(total) / (i + 1))
+				if average > (5*time.Minute+20*time.Second) &&
+					average < (5*time.Minute+40*time.Second) {
+					// Pass!
+					return
+				}
+			}
+		}
+		Fail("Average of initial delay failed to converge after many iterations")
 	})
 })
