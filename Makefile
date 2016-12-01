@@ -460,9 +460,9 @@ endif
 	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) calico/ctl calico/node
 
 	# Check that the version output includes the version specified.
-# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
-# Release is currently supported on darwin / linux only.
-	if ! docker run calico/ctl:$(VERSION) version | grep 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `docker run calico/ctl:$(VERSION) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
+	# Release is currently supported on darwin / linux only.
+	if ! docker run $(CTL_CONTAINER_NAME) version | grep 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `docker run $(CTL_CONTAINER_NAME) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
 
 	# Retag images with corect version and quay
 	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(VERSION)
