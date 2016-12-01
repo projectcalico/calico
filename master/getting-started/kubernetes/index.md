@@ -1,45 +1,42 @@
 ---
-title: Kubernetes
+title: Calico for Kubernetes
 ---
 
-Calico drives pod connectivity and implements network policy for Kubernetes clusters.
-Calico allows you to enforce fine-grained network security policy natively in Kubernetes.
+Calico enables first-class networking and network policy in Kubernetes clusters across the cloud.  Calico works 
+everywhere - on all major public cloud providers and private clouds as well. 
+
+Calico supports the Kubernetes [NetworkPolicy API](http://kubernetes.io/docs/user-guide/networkpolicies/),
+and can also be used to implement even [more fine-grained policy](tutorials/advanced-policy) 
+using the Calico APIs directly.
 
 Use the navigation bar on the left to view information on Calico for Kubernetes,
 or continue reading for recommended guides to get started.
 
-## Requirements
-
-- The kube-proxy must be started in `iptables` proxy mode.  This is the default as of Kubernetes v1.2.0.
-
 ## Installation Guides
 
-There are two ways to install Calico in Kubernetes.
+There are two main ways to install Calico on Kubernetes.
 
 #### [Hosted Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted)
 
-Calico's Hosted Install uses Kubernetes Manifests to install Calico for Kubernetes, using Kubernetes.
-Calico manifests ensure the necessary artifacts and configurations are added to each host, and the necessary services are started.
+This method uses Kubernetes manifests to install Calico for Kubernetes, using Kubernetes.
+Calico manifests ensure the necessary components are installed and run on each node in the cluster. 
 
-#### [Manual Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/)
+#### [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/integration)
 
-This guide details how to add manually add Calico to an existing, stock Kubernetes cluster.
+This method walks through the necessary manual steps to integrate Calico with your own deployment scripts and tools.  Follow 
+this guide if you're integrating Calico with your own configuration management tools.
 
+## Quick Start Guides 
 
-## Quickstart with "Calico-Ready" Clusters
-
-Calico maintains sample cloud-config files which can be used to launch a Calico-ready Kubernetes cluster.
-
-The following guides walk through launching a CoreOS cluster using these
-cloud-config scripts (locally and on various cloud providers), and then
-perform a Calico hosted installation on top.
+The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a 
+Calico self-hosted installation. 
 
 #### [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
 
 This guide uses Vagrant and VirtualBox to locally run a Kubernetes
 cluster with Calico.
 
-#### [AWS Tutorial]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/aws)
+#### [AWS]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/aws)
 
 This guide covers launching a Kubernetes cluster on AWS with Calico.
 
@@ -62,6 +59,22 @@ The Simple Policy Demo shows how to use Calico to secure a simple two-tier appli
 
 The Stars Demo features a UI which actively shows blocked and allowed
 connections as policy is implemented.
+
+#### [Advanced Policy Demo](tutorials/advanced-policy)
+
+The advanced policy demo walks through using Calico to provide policy features beyond 
+what can be done with the Kubernetes NetworkPolicy API like egress and CIDR based policy.
+
+## Third Party Integrations
+
+A number of popular Kubernetes installers use Calico to provide networking and/or network policy.  
+Here are a few, listed alphabetically.
+
+- [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
+- [CoreOS](https://coreos.com/kubernetes/docs/latest/)
+- [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
+- [Kargo](https://github.com/kubernetes-incubator/kargo)
+- [StackPointCloud](https://stackpoint.io)
 
 ## Troubleshooting
 

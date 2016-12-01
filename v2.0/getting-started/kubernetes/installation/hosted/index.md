@@ -2,25 +2,33 @@
 title: Calico Kubernetes Hosted Install
 ---
 
-This document describes deploying Calico on Kubernetes using Kubernetes manifests. 
+Calico can be installed on a Kubernetes cluster with a single command.  
 
-- [`calico.yaml`](calico.yaml): Deploys Calico on Kubernetes.  Assumes an etcd cluster is available - modify `etcd_endpoints` to direct Calico at the correct cluster.
-
-- [`kubeadm/calico.yaml`](kubeadm/calico.yaml):  Installs Calico as well as a single node etcd cluster for cases where etcd is not already available (e.g kubeadm clusters).  See [here](kubeadm) for more information.
-
-To install Calico, download one of the above manifests depending on your deployment, and run the following command:
-
-```shell
+```
 kubectl apply -f calico.yaml
 ```
 
-> **NOTE**
->
-> If using your own etcd cluster, make sure you configure the provided ConfigMap with the location of the cluster before running the above command. 
+We maintain several manifests.  Which one you use depends on the specific 
+requirements of your Calico installation:
+
+#### [Standard Hosted Install](hosted)
+
+This manifest installs Calico for use with an existing etcd cluster.  This is 
+the recommended hosted approach for deploying Calico in production.
+
+#### [Kubeadm Hosted Install](kubeadm/)
+
+This manifest installs Calico as well as a single node etcd cluster.  This is the recommended hosted approach
+for getting started quickly with Calico in conjunction with tools like kubeadm.
+
+#### [Etcdless Hosted Install](k8s-backend/)
+
+This manifest installs Calico in a mode where it does not require its own etcd cluster.  This is an experimental
+mode in which the Kubernetes API is used by Calico as its datastore. 
 
 ## How it works
 
-The `calico.yaml` file contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
+Each manifest contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
 
 It installs the following Kubernetes resources: 
 
@@ -29,6 +37,24 @@ It installs the following Kubernetes resources:
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
 - Runs the `calico/kube-policy-controller` pod as a ReplicaSet.
 - The `calico-etcd-secrets` Secret, which optionally allows for providing etcd TLS assets.
+
+## Upgrade
+
+There are two parts to upgrading a Calico hosted installation.
+
+##### Upgrading the Calico policy controller
+
+The policy controller is installed as a ReplicaSet, and thus supports standard Kubernetes [rolling updates](http://kubernetes.io/docs/user-guide/rolling-updates/).
+
+##### Upgrading the Calico DaemonSet
+
+Upgrading the CNI plugin or calico/node image is done through a DaemonSet, and as such does not yet support rolling updates.
+
+To upgrade the DaemonSet:
+
+1. Apply changes to the existing DaemonSet via kubectl apply.
+2. Manually perform the upgrade by deleting pods and allowing the DaemonSet controller to recreate them 
+with the new images and configuration.
 
 ## Configuration options
 
@@ -60,7 +86,6 @@ To use these manifests with a TLS enabled etcd cluster you must do the following
   - `etcd_key: /calico-secrets/etcd-key`
   - `etcd_cert: /calico-secrets/etcd-cert`
 
-
 ## Other Configuration Options
 
 The following table outlines the remaining supported ConfigMap options: 
@@ -69,7 +94,6 @@ The following table outlines the remaining supported ConfigMap options:
 |------------------------|---------------------|----------
 | calico_backend         | The backend to use. | bird 
 | cni_network_config     | The CNI Network config to install on each node.  Supports templating as described below. | 
-
 
 ### CNI Network Config Template Support
 
