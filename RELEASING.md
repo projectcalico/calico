@@ -10,8 +10,9 @@ through creating and distributing the following artifacts:
   Github release.
 - Docker container images: `calico/felix:$VERSION` and 
   `quay.io/calico/felix:$VERSION` containing the Felix binaries.  These
-  are ready to push to Dockerhub and Quay.  They also form the input
-  to the downstream `calico/node` build process.
+  are ready to push to Dockerhub and Quay.  They primarily form the input
+  to the downstream `calico/node` build process but they could also
+  be used to run Felix as a stand-alone container.
   
 As a second step, running `make deb rpm` after `make release`, produces
 debs and RPMs for the release which can be uploaded to our PPAs and 
@@ -43,14 +44,15 @@ So, to make a Felix release:
   `glide.lock` file.  Be wary of any additional libraries that get 
   revved if they aren't being pulled in by the libcalico-go update. At 
   this late stage, it's safer to only update commit IDs that you're
-  explictly expecting (i.e. undo any changes that `make update-vendor`
-  makes that you weren't expecting).
+  explicitly expecting (i.e. undo any changes that `make update-vendor`
+  makes that you weren't expecting).  If in doubt consult a Felix/glide 
+  expert!
 
 - Run `make release VERSION=<new version>` and follow the instructions.  This
   creates the annotated release tag, builds the release artifacts, and tells
   you what else you need to do to publish those.  The release script
   expects a version number of the form "2.0.0", with optional suffixes
-  such as "-beta.1-rc3".
+  such as "-beta1-rc3".
 
 To build Debian and RPM packages for a release:
 
