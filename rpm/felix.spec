@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.4
-Release:        1%{?dist}
+Version:        1.4.5
+Release:        4%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -148,6 +148,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Nov 28 2016 Neil Jerram <neil@tigera.io> 1.4.5-4
+  - Felix 1.4.5 (from Git commit fd3f909).
+    - Fix usage reporting
+    - Implement 'untracked' policy
+    - Pin to <=0.0.17 prometheus_client
+    - Tell systemd always to restart Felix
+
 * Mon Oct 31 2016 Neil Jerram <neil@tigera.io> 1.4.4-1
   - felix version 1.4.4 release
     - Add a retry for deleting conntrack entries.
