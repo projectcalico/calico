@@ -103,7 +103,7 @@ $(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
 $(NODE_CONTAINER_BIN_DIR)/bird:
 	# This make target actually downloads the bird6 and birdcl binaries too
 	# Copy patched BIRD daemon with tunnel support.
-	$(CURL) -L $(BIRD6_URL) -o bird6
+	$(CURL) -L $(BIRD6_URL) -o $(@D)/bird6
 	$(CURL) -L $(BIRDCL_URL) -o $(@D)/birdcl
 	$(CURL) -L $(BIRD_URL) -o $@
 	chmod +x $(@D)/*
