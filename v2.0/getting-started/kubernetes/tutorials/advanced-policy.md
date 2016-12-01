@@ -2,7 +2,7 @@
 title: Going Beyond `NetworkPolicy` with Calico 
 ---
 
-The Kubernetes [NetworkPolicy API]() allows users to express ingress policy to Kubernetes pods
+The Kubernetes NetworkPolicy API allows users to express ingress policy to Kubernetes pods
 based on labels and ports.  Calico implements this API, but also supports a number of 
 policy features which are not currently expressble through the NetworkPolicy API such as CIDR 
 and egress policy.
@@ -48,7 +48,7 @@ kubectl expose --namespace=advanced-policy-demo deployment nginx --port=80
 Now that we've created a Namespace and a set of pods, we should see those objects show up in the 
 Calico API using `calicoctl`.
 
-We can see that the Namespace has a corresponding [Profile](). 
+We can see that the Namespace has a corresponding [Profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile). 
 
 ```shell
 $ calicoctl get profile -o wide
@@ -94,7 +94,7 @@ wget: download timed out
 / #
 ```
 
-We can also see that the two nginx pods are represented as [WorkloadEndpoints]() in the Calico API.
+We can also see that the two nginx pods are represented as [WorkloadEndpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in the Calico API.
 
 ```
 calicoctl get workloadendpoint
@@ -155,7 +155,7 @@ spec:
 EOF
 ```
 
-It now shows up as a [Policy]() object in the Calico API.
+It now shows up as a [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) object in the Calico API.
 
 ```shell
 $ calicoctl get policy -o wide
