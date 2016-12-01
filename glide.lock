@@ -1,11 +1,13 @@
-hash: 3dee413ec5d2c756559914f25fc43fac35a371230cdc3cf8f378f93fabd3f5d5
-updated: 2016-11-30T14:55:45.740432024-08:00
+hash: 8b4e9e59a3dca81cd420f17e6cd31e19ba6225de68195a68b6e75a0cc1b36a18
+updated: 2016-11-30T21:07:23.434463698-05:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
   subpackages:
   - compute/metadata
   - internal
+- name: github.com/armon/go-radix
+  version: 4239b77079c7b5d1243b7b4736304ce8ddb6f0f2
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
@@ -51,13 +53,19 @@ imports:
   version: 3d1601b9d2436a70b0dfc045a23f6503d19195df
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
+- name: github.com/eapache/channels
+  version: 47238d5aae8c0fefd518ef2bee46290909cf8263
+- name: github.com/eapache/queue
+  version: 44cc805cf13205b55f69e14bcb69867d1ae92f98
 - name: github.com/emicklei/go-restful
   version: 89ef8af493ab468a45a42bb0d89a06fccdd2fb22
   subpackages:
   - log
   - swagger
+- name: github.com/fsnotify/fsnotify
+  version: f12c6236fe7b5cf6bcf30e5935d08cb079d78334
 - name: github.com/ghodss/yaml
-  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -74,20 +82,40 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
-  - jsonpb
   - proto
 - name: github.com/google/gofuzz
   version: bbcb9da2d746f8bdbd6a936686a0a6067ada0ec5
+- name: github.com/hashicorp/hcl
+  version: d8c773c4cba11b11539e3d45f93daeaa5dcf1fa1
+  subpackages:
+  - hcl/ast
+  - hcl/parser
+  - hcl/scanner
+  - hcl/strconv
+  - hcl/token
+  - json/parser
+  - json/scanner
+  - json/token
 - name: github.com/howeyc/gopass
   version: 3ca23474a7c7203e0a0a070fd33508f6efdb9b3d
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
+- name: github.com/influxdata/influxdb
+  version: 383332daed5595926c235f250b11433f67229c35
+  subpackages:
+  - client/v2
+  - models
+  - pkg/escape
 - name: github.com/jonboulle/clockwork
   version: 2eee05ed794112d45db504eb05aa693efd2b8b09
 - name: github.com/kelseyhightower/envconfig
   version: 9aca109c9aec4633fced9717c4a09ecab3d33111
+- name: github.com/kr/fs
+  version: 2788f0dbd16903de03cb8186e5c7d97b69ad387b
+- name: github.com/magiconair/properties
+  version: 61b492c03cf472e0c6419be5899b8e0dc28b1b88
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -100,6 +128,8 @@ imports:
   version: 257f7b9a7d87427c8d7f89469a5958d57f8abd7c
 - name: github.com/mitchellh/go-ps
   version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
+- name: github.com/mitchellh/mapstructure
+  version: f3009df150dadf309fdee4a54ed65c124afad715
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
 - name: github.com/onsi/ginkgo
@@ -120,16 +150,37 @@ imports:
   - reporters
   - reporters/stenographer
   - types
+- name: github.com/osrg/gobgp
+  version: 38c47609a2eeae67c2c9cc042adea60484c2f481
+  subpackages:
+  - api
+  - client
+  - config
+  - packet/bgp
+  - packet/bmp
+  - packet/mrt
+  - packet/rtr
+  - server
+  - table
+  - zebra
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/pelletier/go-buffruneio
+  version: df1e16fde7fc330a0ca68167c23bf7ed6ac31d6d
+- name: github.com/pelletier/go-toml
+  version: 0049ab3dc4c4c70a9eee23087437b69c0dde2130
+- name: github.com/pkg/errors
+  version: a22138067af1c4942683050411a841ade67fe1eb
+- name: github.com/pkg/sftp
+  version: 4d0e916071f68db74f8a73926335f809396d6b42
 - name: github.com/projectcalico/go-json
-  version: 52d0fced7a06d33e591e66291b1896f6021d6630
+  version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
   - json
 - name: github.com/projectcalico/go-yaml
-  version: a24e162d308633fed72ed0ee4fd038570b74e444
+  version: 5aed7f19bc56354d859b8802f337258939ee5325
 - name: github.com/projectcalico/go-yaml-wrapper
-  version: d8ff4587e9570b667ccc1a4583e3fe9fe3af49e4
+  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
   version: d1901d62e520449b2fffd6281909c470d3adf44e
   subpackages:
@@ -162,19 +213,35 @@ imports:
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
   version: d26492970760ca5d33129d2d799e34be5c4782eb
+- name: github.com/spf13/afero
+  version: b28a7effac979219c2a2ed6205a4d70e4b1bcd02
+  subpackages:
+  - mem
+  - sftp
+- name: github.com/spf13/cast
+  version: e31f36ffc91a2ba9ddb72a4b6a607ff9b3d3cb63
+- name: github.com/spf13/jwalterweatherman
+  version: 33c24e77fb80341fe7130ee7c594256ff08ccc46
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
+- name: github.com/spf13/viper
+  version: 651d9d916abc3c3d6a91a12549495caba5edffd2
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
   version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
   - codec
+- name: github.com/vishvananda/netlink
+  version: 1e2e08e8a2dcdacaae3f14ac44c5cfa31361f270
+  subpackages:
+  - nl
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - bcrypt
   - blowfish
+  - ssh
   - ssh/terminal
 - name: golang.org/x/net
   version: 6acef71eb69611914f7a30939ea9f6e194c78172
@@ -184,6 +251,8 @@ imports:
   - http2
   - http2/hpack
   - idna
+  - internal/timeseries
+  - trace
 - name: golang.org/x/oauth2
   version: 3c3a985cb79f52a3190fbc056984415ca6763d01
   subpackages:
@@ -192,7 +261,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 30237cf4eefd639b184d1f2cb77a581ea0be8947
+  version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -220,6 +289,19 @@ imports:
   - internal/remote_api
   - internal/urlfetch
   - urlfetch
+- name: google.golang.org/grpc
+  version: eca2ad68af4d7bf894ada6bd263133f069a441d5
+  subpackages:
+  - codes
+  - credentials
+  - grpclog
+  - internal
+  - metadata
+  - naming
+  - peer
+  - stats
+  - tap
+  - transport
 - name: gopkg.in/go-playground/validator.v8
   version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
@@ -228,6 +310,8 @@ imports:
   version: 666120de432aea38ab06bd5c818f04f4129882c9
   subpackages:
   - patricia
+- name: gopkg.in/tomb.v2
+  version: 9dde971544235898fc9720ed594059f79fd3273c
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go

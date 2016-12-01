@@ -70,11 +70,11 @@ class TestBGPBackends(TestBase):
                                                       workload_host2.ip,
                                                       workload_host3.ip])
 
-            # Check the BGP status on the BIRD host.
-            check_bird_status(host3, [("node-to-node mesh", host1.ip, "Established"),
-                                      ("node-to-node mesh", host2.ip, "Established")])
+            # Check the BGP status on the BIRD/GoBGP host.
+            hosts = [host1, host2, host3]
+            for target in hosts:
+                expected = [("node-to-node mesh", h.ip, "Established") for h in hosts if h is not target]
+                check_bird_status(target, expected)
 
-            # TODO Need to check the status of the GoBGP status
-            # see https://github.com/projectcalico/calico-containers/issues/1258
             # TODO Need to test when IPs across hosts are in the same /26
             # see https://github.com/projectcalico/calico-containers/issues/1362

@@ -23,3 +23,12 @@ import:
   - lib
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/go-json
+- package: github.com/osrg/gobgp
+  version: 38c47609a2eeae67c2c9cc042adea60484c2f481
+  subpackages:
+  - client
+  - packet/bgp
+- package: github.com/mitchellh/mapstructure
+  version: f3009df150dadf309fdee4a54ed65c124afad715
+- package: google.golang.org/grpc
+  version: eca2ad68af4d7bf894ada6bd263133f069a441d5
