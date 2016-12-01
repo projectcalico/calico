@@ -85,12 +85,12 @@ EOF
 	    rpm_spec=rpm/felix.spec
 
 	    # Generate RPM version and release.
-	    IFS=_ read version qualifier <<< ${debver}
-	    if test "${qualifier}"; then
-		rpmver=${version}
-		rpmrel=0.1.${qualifier}
+	    IFS=_ read ver qual <<< ${debver}
+	    if test "${qual}"; then
+		rpmver=${ver}
+		rpmrel=0.1.${qual}
 	    else
-		rpmver=${version}
+		rpmver=${ver}
 		rpmrel=1
 	    fi
 
