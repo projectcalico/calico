@@ -18,15 +18,18 @@ import (
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"net"
 )
 
 const (
 	ChainNamePrefix = "cali"
 	IPSetNamePrefix = "cali"
 
-	InputChainName   = ChainNamePrefix + "-INPUT"
-	ForwardChainName = ChainNamePrefix + "-FORWARD"
-	OutputChainName  = ChainNamePrefix + "-OUTPUT"
+	FilterInputChainName   = ChainNamePrefix + "-INPUT"
+	FilterForwardChainName = ChainNamePrefix + "-FORWARD"
+	FilterOutputChainName  = ChainNamePrefix + "-OUTPUT"
+
+	NATPreroutingChainName = ChainNamePrefix + "-PREROUTING"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
@@ -60,6 +63,7 @@ var (
 
 type RuleRenderer interface {
 	StaticFilterTableChains() []*iptables.Chain
+	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain
@@ -84,6 +88,10 @@ type Config struct {
 	IptablesMarkAccept    uint32
 	IptablesMarkNextTier  uint32
 	IptablesMarkEndpoints uint32
+
+	WhitelistDHCPToHost   bool
+	OpenStackMetadataIP   net.IP
+	OpenStackMetadataPort uint16
 }
 
 func NewRenderer(config Config) RuleRenderer {

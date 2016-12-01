@@ -67,7 +67,7 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	}
 
 	return []*Chain{{
-		Name:  ForwardChainName,
+		Name:  FilterForwardChainName,
 		Rules: rules,
 	}}
 }
@@ -75,6 +75,33 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
 	// TODO(smc) filter output chain
 	return []*Chain{}
+}
+
+func (r *ruleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
+	chains = append(chains, r.StaticNATPreroutingChains(ipVersion)...)
+	return
+}
+
+func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
+	rules := []Rule{}
+
+	if ipVersion == 4 && r.OpenStackMetadataIP != nil {
+		rules = append(rules, Rule{
+			Match: Match().
+				Protocol("tcp").
+				DestPorts(80).
+				DestNet("169.254.169.254/32"),
+			Action: DNATAction{
+				DestAddr: r.OpenStackMetadataIP.String(),
+				DestPort: r.OpenStackMetadataPort,
+			},
+		})
+	}
+
+	return []*Chain{{
+		Name:  NATPreroutingChainName,
+		Rules: rules,
+	}}
 }
 
 func (t ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {

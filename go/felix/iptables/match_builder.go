@@ -73,8 +73,13 @@ func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
 }
 
-func (m MatchCriteria) SourcePorts(ports []*proto.PortRange) MatchCriteria {
+func (m MatchCriteria) SourcePorts(ports ...uint16) MatchCriteria {
 	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
+}
+
+func (m MatchCriteria) SourcePortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
 }
 
@@ -86,8 +91,13 @@ func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s dst", name))
 }
 
-func (m MatchCriteria) DestPorts(ports []*proto.PortRange) MatchCriteria {
+func (m MatchCriteria) DestPorts(ports ...uint16) MatchCriteria {
 	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
+}
+
+func (m MatchCriteria) DestPortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
 }
 
@@ -107,7 +117,16 @@ func (m MatchCriteria) ICMPV6TypeAndCode(t, c uint8) MatchCriteria {
 	return append(m, fmt.Sprintf("--match icmp6 --icmpv6-type %d/%d", t, c))
 }
 
-func PortsToMultiport(ports []*proto.PortRange) string {
+func PortsToMultiport(ports []uint16) string {
+	portFragments := make([]string, len(ports))
+	for i, port := range ports {
+		portFragments[i] = fmt.Sprintf("%d", port)
+	}
+	portsString := strings.Join(portFragments, ",")
+	return portsString
+}
+
+func PortRangessToMultiport(ports []*proto.PortRange) string {
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
 		if port.First == port.Last {

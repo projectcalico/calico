@@ -44,7 +44,8 @@ var (
 
 // Table represents a single one of the iptables tables i.e. "raw", "nat", "filter", etc.
 type Table struct {
-	Name string
+	Name      string
+	IPVersion uint8
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -112,6 +113,7 @@ func NewTable(
 
 	table := &Table{
 		Name:                   name,
+		IPVersion:              ipVersion,
 		chainToInsertedRules:   inserts,
 		dirtyInserts:           dirtyInserts,
 		chainNameToChain:       map[string]*Chain{},

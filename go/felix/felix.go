@@ -36,6 +36,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -168,6 +169,9 @@ configRetry:
 					rules.AllHistoricIPSetNamePrefixes,
 					nil,
 				),
+
+				OpenStackMetadataIP:   net.ParseIP(configParams.MetadataAddr),
+				OpenStackMetadataPort: uint16(configParams.MetadataPort),
 
 				// TODO(smc) honour config of iptables mark marks.
 				IptablesMarkAccept:    0x1,

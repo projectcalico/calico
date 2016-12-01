@@ -67,6 +67,15 @@ func (g AcceptAction) ToFragment() string {
 	return "--jump ACCEPT"
 }
 
+type DNATAction struct {
+	DestAddr string
+	DestPort uint16
+}
+
+func (g DNATAction) ToFragment() string {
+	return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
+}
+
 type ClearMarkAction struct {
 	Mark uint32
 }

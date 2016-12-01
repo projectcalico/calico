@@ -184,7 +184,14 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	for _, t := range d.iptablesFilterTables {
 		t.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
 		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ForwardChainName},
+			Action: iptables.JumpAction{rules.FilterForwardChainName},
+		}})
+	}
+
+	for _, t := range d.iptablesNATTables {
+		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion))
+		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.NATPreroutingChainName},
 		}})
 	}
 

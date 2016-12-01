@@ -95,7 +95,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 	}
 
 	if len(protoRule.SrcPorts) > 0 {
-		match = match.SourcePorts(protoRule.SrcPorts)
+		match = match.SourcePortRanges(protoRule.SrcPorts)
 	}
 
 	if protoRule.DstNet != "" {
@@ -119,7 +119,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 	}
 
 	if len(protoRule.DstPorts) > 0 {
-		match = match.DestPorts(protoRule.DstPorts)
+		match = match.DestPortRanges(protoRule.DstPorts)
 	}
 
 	if ipVersion == 4 {

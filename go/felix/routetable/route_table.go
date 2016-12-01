@@ -34,6 +34,11 @@ var (
 	IfaceDown    = errors.New("interface was down")
 )
 
+type Target struct {
+	CIDR    ip.CIDR
+	DestMAC net.HardwareAddr
+}
+
 type RouteTable struct {
 	netlinkFamily int
 
@@ -86,7 +91,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	}
 }
 
-func (r *RouteTable) SetRoutes(ifaceName string, routes []ip.CIDR) {
+func (r *RouteTable) SetRoutes(ifaceName string, routes []Target) {
 	if len(routes) == 0 {
 		delete(r.ifaceNameToRoutes, ifaceName)
 		return
