@@ -1,8 +1,14 @@
 # Felix 1.4 branch release process
 
-## Prepare Calico release candidate
+## Prerequisites
 
-To prepare the Calico release candidate, get a clone of
+Get (or update to) the latest code from
+https://github.com/tigera/process, in <process_dir>.  This repo
+contains scripts to automate some of the process.
+
+## Prepare Felix 1.4.x release candidate
+
+To prepare a Felix 1.4.x release candidate, get a clone of
 https://github.com/projectcalico/felix master, and in the root of that
 clone:
 
@@ -22,11 +28,16 @@ clone:
   (In case it needs tweaking, it’s cheaper to do that now before all
   the package building and testing.)
 
-- Run ‘make deb rpm’ to build Debian and RPM packages for the release
-  candidate.
+- Use ‘dpkg-buildpackage -S -kCalico’ and ‘dput ...’ to build source
+  packages for Xenial and upload the release candidate Debian source
+  packages them to a release testing PPA.
 
-- Use ‘dput ...’ to upload the release candidate Debian source
-  packages to a release testing PPA.
+- Delete the top stanza from debian/changelog (which has a version
+  with ‘-xenial’) and do that again, to build and upload packages for
+  Trusty.
+
+- Run ‘<process_dir>/build-rpm.sh’ to build RPMs - which will appear
+  in the ‘rpm’ directory.
 
 ## Publish candidate RPMs to testing repository on binaries.projectcalico.org
 
@@ -53,29 +64,24 @@ Run ‘createrepo .’ in the repo on binaries.
 
 ## Release testing
 
-Once the PPA packages have been built and published, run tests against
-the testing PPA/repo.
-
-- run-gce-fv with calico-1.4-testing
-
-- nj-juju-bundle-fv with ppa:project-calico/calico-1.4-testing
+Once release candidate packages have been built and published, run
+tests against the testing PPA/repo.
 
 ## Good to release?
 
 Publish packages to the release PPA and RPM repo.
 
-For PPA packages, use Launchpad to copy from calico-1.4-testing to calico-1.4.
+- For PPA packages, use Launchpad to copy from calico-1.4-testing to
+  calico-1.4.
 
-For RPMs, on binaries, sync from calico-1.4-testing to calico-1.4.
+- For RPMs, on binaries, sync from calico-1.4-testing to calico-1.4.
 
     gcloud compute ssh ubuntu@binaries-projectcalico-org --zone=us-east1-c
     cd /usr/share/nginx/html/rpm/calico-1.4
     rsync -av --delete ../calico-1.4-testing/* ./
 
-Tag and publish the Calico release.  Note that this will send
-announcements to people subscribed to github, and it’s difficult to
-change the documentation after this (moving the tag has unpleasant
-side effects):
+Tag and publish the Calico release.  (Note that this will send
+announcements to people subscribed to GitHub.)
 
 - Merge the release commit.
 
