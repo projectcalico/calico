@@ -23,7 +23,7 @@ toc:
         path: /getting-started/kubernetes/installation/hosted/kubeadm/
       - title: Etcdless Hosted Install
         path: /getting-started/kubernetes/installation/hosted/k8s-backend/
-    - title: Integration Guide 
+    - title: Integration Guide
       path: /getting-started/kubernetes/installation/integration
     - title: AWS
       path: /getting-started/kubernetes/installation/aws
@@ -85,6 +85,8 @@ toc:
     path: /getting-started/docker/
   - title: Installation
     section:
+    - title: Prerequisites
+      path: /getting-started/docker/installation/prerequisites
     - title: Manual
       path: /getting-started/docker/installation/manual
     - title: AWS
