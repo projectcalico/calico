@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.5
+
+- Fix usage reporting
+- Implement 'untracked' policy
+- Pin to <=0.0.17 prometheus_client
+- Tell systemd always to restart Felix
+
 ## 1.4.4
 
 - Add a retry for deleting conntrack entries.
