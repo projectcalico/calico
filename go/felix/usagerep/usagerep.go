@@ -36,13 +36,10 @@ func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clus
 	log.Info("Usage reporting thread started, waiting for size estimate")
 	stats := <-statsUpdateC
 	log.WithField("stats", stats).Info("Initial stats read")
-	if stats.NumHosts > 25 {
-		// Avoid thundering herd by adding jitter to startup for a large
-		// cluster.
-		preJitter := time.Duration(rand.Intn(stats.NumHosts)) * time.Second
-		log.WithField("delay", preJitter).Info("Waiting before first check-in")
-		time.Sleep(preJitter)
-	}
+	// To avoid thundering herd, inject some startup jitter.
+	initialDelay := calculateInitialDelay(stats.NumHosts)
+	log.WithField("delay", initialDelay).Info("Waiting before first check-in")
+	time.Sleep(initialDelay)
 	ReportUsage(hostname, clusterGUID, clusterType, stats)
 	ticker := jitter.NewTicker(interval, interval/10)
 	for {
@@ -52,6 +49,21 @@ func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clus
 			ReportUsage(hostname, clusterGUID, clusterType, stats)
 		}
 	}
+}
+
+func calculateInitialDelay(numHosts int) time.Duration {
+	// Clamp numHosts so that we don't pass anything out-of-range to rand.Intn().
+	if numHosts <= 0 {
+		numHosts = 1
+	}
+	if numHosts > 10000 {
+		numHosts = 10000
+	}
+	initialJitter := time.Duration(rand.Intn(numHosts*1000)) * time.Millisecond
+	// To avoid spamming the server if we're in a cyclic restart, delay the first report by
+	// a few minutes.
+	initialDelay := 5*time.Minute + initialJitter
+	return initialDelay
 }
 
 func ReportUsage(hostname, clusterGUID, clusterType string, stats calc.StatsUpdate) {
