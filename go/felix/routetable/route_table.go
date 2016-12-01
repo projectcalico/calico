@@ -23,6 +23,7 @@ import (
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 	"net"
+	"os/exec"
 	"regexp"
 	"strings"
 	"syscall"
@@ -48,7 +49,7 @@ type RouteTable struct {
 	ifacePrefixes     set.Set
 	ifacePrefixRegexp *regexp.Regexp
 
-	ifaceNameToRoutes map[string]set.Set
+	ifaceNameToTargets map[string][]Target
 
 	inSync bool
 }
@@ -72,12 +73,12 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 	}
 
 	return &RouteTable{
-		netlinkFamily:     family,
-		ifacePrefixes:     prefixSet,
-		ifacePrefixRegexp: regexp.MustCompile(ifaceNamePattern),
-		ifaceNameToRoutes: map[string]set.Set{},
-		activeUpIfaces:    set.New(),
-		dirtyIfaces:       set.New(),
+		netlinkFamily:      family,
+		ifacePrefixes:      prefixSet,
+		ifacePrefixRegexp:  regexp.MustCompile(ifaceNamePattern),
+		ifaceNameToTargets: map[string][]Target{},
+		activeUpIfaces:     set.New(),
+		dirtyIfaces:        set.New(),
 	}
 }
 
@@ -91,16 +92,12 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	}
 }
 
-func (r *RouteTable) SetRoutes(ifaceName string, routes []Target) {
-	if len(routes) == 0 {
-		delete(r.ifaceNameToRoutes, ifaceName)
+func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
+	if len(targets) == 0 {
+		delete(r.ifaceNameToTargets, ifaceName)
 		return
 	}
-	routesSet := set.New()
-	for _, route := range routes {
-		routesSet.Add(route)
-	}
-	r.ifaceNameToRoutes[ifaceName] = routesSet
+	r.ifaceNameToTargets[ifaceName] = targets
 	r.dirtyIfaces.Add(ifaceName)
 }
 
@@ -180,10 +177,7 @@ func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 		logCxt.Debug("Interface is down, skipping")
 		return IfaceDown
 	}
-	expectedRoutes := r.ifaceNameToRoutes[ifaceName]
-	if expectedRoutes == nil {
-		expectedRoutes = set.Empty()
-	}
+
 	routes, err := netlink.RouteList(link, r.netlinkFamily)
 	if err != nil {
 		logCxt.WithError(err).WithField("link", ifaceName).Error(
@@ -191,14 +185,20 @@ func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 		return ListFailed
 	}
 
+	expectedTargets := r.ifaceNameToTargets[ifaceName]
+	expectedCIDRs := set.New()
+	for _, t := range expectedTargets {
+		expectedCIDRs.Add(t.CIDR)
+	}
+
 	updatesFailed := false
-	seenRoutes := set.New()
+	seenCIDRs := set.New()
 	for _, route := range routes {
 		var dest ip.CIDR
 		if route.Dst != nil {
 			dest = ip.CIDRFromIPNet(calinet.IPNet{*route.Dst})
 		}
-		if !expectedRoutes.Contains(dest) {
+		if !expectedCIDRs.Contains(dest) {
 			logCxt := logCxt.WithField("dest", dest)
 			logCxt.Debug("Found unexpected route, deleting it")
 			if err := netlink.RouteDel(&route); err != nil {
@@ -208,13 +208,13 @@ func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 				updatesFailed = true
 			}
 		}
-		seenRoutes.Add(dest)
+		seenCIDRs.Add(dest)
 	}
 
-	expectedRoutes.Iter(func(item interface{}) error {
-		cidr := item.(ip.CIDR)
-		if !seenRoutes.Contains(cidr) {
-			logCxt := logCxt.WithField("dest", cidr)
+	for _, target := range expectedTargets {
+		cidr := target.CIDR
+		if !seenCIDRs.Contains(cidr) {
+			logCxt := logCxt.WithField("dest", target)
 			logCxt.Debug("Adding missing route")
 			ipNet := cidr.ToIPNet()
 			route := netlink.Route{
@@ -222,14 +222,25 @@ func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 				Dst:       &ipNet,
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  syscall.RTPROT_BOOT,
+				Scope:     netlink.SCOPE_LINK,
 			}
 			if err := netlink.RouteAdd(&route); err != nil {
 				logCxt.WithError(err).Warn("Failed to add route")
 				updatesFailed = true
 			}
 		}
-		return nil
-	})
+		if target.DestMAC != nil {
+			// TODO(smc) clean up/sync old ARP entries
+			cmd := exec.Command("arp",
+				"-s", cidr.Addr().String(), target.DestMAC.String(),
+				"-i", ifaceName)
+			err := cmd.Run()
+			if err != nil {
+				logCxt.WithError(err).Warn("Failed to set ARP entry")
+				updatesFailed = true
+			}
+		}
+	}
 
 	if updatesFailed {
 		return UpdateFailed

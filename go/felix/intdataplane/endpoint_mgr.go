@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/set"
 	"io"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -142,16 +143,29 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			} else {
 				ipStrings = workload.Ipv6Nets
 			}
-			ipNets := make([]ip.CIDR, len(ipStrings))
-			for i, s := range ipStrings {
-				ipNets[i] = ip.MustParseCIDR(s)
-			}
+
 			if oldWorkload != nil && oldWorkload.Name != workload.Name {
 				logCxt.Debug("Interface name changed, cleaning up old routes")
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 				m.activeIfacesNeedingConfig.Discard(oldWorkload.Name)
 			}
-			m.routeTable.SetRoutes(workload.Name, ipNets)
+			var mac net.HardwareAddr
+			if workload.Mac != "" {
+				var err error
+				mac, err = net.ParseMAC(workload.Mac)
+				if err != nil {
+					logCxt.WithError(err).Error(
+						"Failed to parse endpoint's MAC address")
+				}
+			}
+			routeTargets := make([]routetable.Target, len(ipStrings))
+			for i, s := range ipStrings {
+				routeTargets[i] = routetable.Target{
+					CIDR:    ip.MustParseCIDR(s),
+					DestMAC: mac,
+				}
+			}
+			m.routeTable.SetRoutes(workload.Name, routeTargets)
 			m.activeIfacesNeedingConfig.Add(workload.Name)
 			m.activeEndpoints[id] = workload
 			delete(m.pendingEndpointUpdates, id)
