@@ -29,7 +29,7 @@ To connect to your servers
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows
-    * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
+    * Follow instructions from [https://github.com/nickryand/vagrant-multi-putty](https://github.com/nickryand/vagrant-multi-putty)
     * run `vagrant putty <hostname>`
 
 ### 1.4 Verify environment

@@ -195,7 +195,7 @@ this feature, Docker requires that you specify the `--subnet` parameter when run
 
 If you are using the Calico IPAM driver, the `--subnet` value must be the same
 CIDR as an existing Calico IP pool.  So if you create a Calico IP pool for
-`192.168.1.0/24`, you can use `--subnet=192.168.1.0/24` as a valid subnet.
+`192.0.2.0/24`, you can use `--subnet=192.0.2.0/24` as a valid subnet.
 
 For example, the following commands:
  - create a Calico IP pool
@@ -207,11 +207,12 @@ cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: ipPool
   metadata:
-    cidr: 192.168.1.0/24
+    cidr: 192.0.2.0/24
 EOF
-
-docker network create --driver calico --ipam-driver calico-ipam --subnet=192.168.1.0/24 my_net
-docker run --net my_net --name my_workload --ip 192.168.1.100 -tid busybox
+```
+```
+docker network create --driver calico --ipam-driver calico-ipam --subnet=192.0.2.0/24 my_net
+docker run --net my_net --name my_workload --ip 192.0.2.100 -tid busybox
 ```
 
 
