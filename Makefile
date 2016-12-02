@@ -263,14 +263,19 @@ semaphore: clean
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
 
 	# Actually run the tests (refreshing the images as required), we only run a
-	# small subset of the tests for testing SSL support.
-	CALICOCTL_NODE_VERSION=$$BRANCH_NAME $(MAKE) calico/ctl calico/node st
-	CALICOCTL_NODE_VERSION=$$BRANCH_NAME ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
+	# small subset of the tests for testing SSL support.  These tests are run
+	# using "latest" tagged images.
+	$(MAKE) calico/ctl calico/node st
+	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
-	# If this isn't a PR, then push :BRANCHNAME tagged images to Dockerhub and quay for both calico/node and calico/ctl
+	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICOCONTAINERS_VERSION
+	# tagged images to Dockerhub and quay for both calico/node and calico/ctl.  This
+	# requires a rebuild of calico/ctl in both cases.
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \
+		rm dist/calicoctl ;\
+		CALICOCTL_NODE_VERSION=$$BRANCHNAME $(MAKE) calico/ctl ;\
 		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
 		docker push quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
 		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
@@ -390,18 +395,22 @@ dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
 dist/calicoctl-windows-amd64: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=windows ARCH=amd64 binary-containerized
 
-
 ## Run the build in a container. Useful for CI
 binary-containerized: $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	docker run --rm \
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
+	  -e CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) -e CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	  -e CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
 	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
 	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
 	  golang:1.7 bash -c '\
 	    cd /go/src/github.com/projectcalico/calico-containers && \
-	    make OS=$(OS) ARCH=$(ARCH) binary && \
-	    chown -R $(shell id -u):$(shell id -u) dist'
+	    make OS=$(OS) ARCH=$(ARCH) \
+	         CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	         CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
+	         binary && \
+	      chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Etcd is used by the tests
 .PHONY: run-etcd
@@ -471,7 +480,6 @@ endif
 	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$(VERSION)
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
 	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):latest
-
 
 	# Check that images were created recently and that the IDs of the versioned and latest images match
 	@docker images --format "{{.CreatedAt}}\tID:{{.ID}}\t{{.Repository}}:{{.Tag}}" $(NODE_CONTAINER_NAME)
