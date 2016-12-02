@@ -79,7 +79,7 @@ or `database`.
 Use `calicoctl apply` to create or update the profiles:
 
 ```
-cat << EOF | dist/calicoctl apply -f -
+cat << EOF | calicoctl apply -f -
 - apiVersion: v1
   kind: profile
   metadata:
