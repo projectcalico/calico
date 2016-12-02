@@ -259,13 +259,16 @@ func (syn *kubeSyncer) performSnapshotDeletes(exists map[model.Key]bool) {
 // populates the provided resourceVersions with the latest k8s resource version
 // for each.
 func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, resourceVersions) {
-	snap := []model.KVPair{}
-	keys := map[model.Key]bool{}
+	var snap []model.KVPair
+	var keys map[model.Key]bool
 	opts := k8sapi.ListOptions{}
 	versions := resourceVersions{}
 
 	// Loop until we successfully are able to accesss the API.
 	for {
+		snap = []model.KVPair{}
+		keys = map[model.Key]bool{}
+
 		// Get Namespaces (Profiles)
 		log.Info("Syncing Namespaces")
 		nsList, err := syn.kc.clientSet.Namespaces().List(opts)
@@ -288,7 +291,9 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[model.Key]bool, re
 			labels.Revision = profile.Revision
 
 			snap = append(snap, *rules, *tags, *labels)
-			keys = map[model.Key]bool{rules.Key: true, tags.Key: true, labels.Key: true}
+			keys[rules.Key] = true
+			keys[tags.Key] = true
+			keys[labels.Key] = true
 		}
 
 		// Get NetworkPolicies (Policies)
