@@ -65,7 +65,7 @@ spec:
             - name: DATASTORE_TYPE
               value: "kubernetes"
             # Enable felix debug logging.
-            - name: FELIX_LOGSEVERITYSYS 
+            - name: FELIX_LOGSEVERITYSCREEN 
               value: "debug"
             # Don't enable BGP. 
             - name: CALICO_NETWORKING_BACKEND 
