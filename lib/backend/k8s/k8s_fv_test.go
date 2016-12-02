@@ -283,7 +283,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(len(weps)).To(Equal(1))
 
 		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(model.WorkloadEndpointKey{WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name)})
+		wep, err := c.Get(model.WorkloadEndpointKey{WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name)})
+		Expect(err).NotTo(HaveOccurred())
+		_, err = c.Apply(wep)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

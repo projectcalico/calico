@@ -114,8 +114,13 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
-	log.Infof("Ignoring 'Apply' for %s", d.Key)
-	return d, nil
+	switch d.Key.(type) {
+	case model.WorkloadEndpointKey:
+		return c.applyWorkloadEndpoint(d)
+	default:
+		log.Infof("Ignoring 'Apply' for %s", d.Key)
+		return d, nil
+	}
 }
 
 // Delete an entry in the datastore. This is a no-op when using the k8s backend.
@@ -212,6 +217,27 @@ func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 	}
 
 	return c.converter.namespaceToProfile(namespace)
+}
+
+// applyWorkloadEndpoint patches the existing Pod to include an IP address, if
+// one has been set on the workload endpoint.
+func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
+	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
+	if len(ips) > 0 {
+		ns, name := c.converter.parseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
+		pod, err := c.clientSet.Pods(ns).Get(name)
+		if err != nil {
+			return nil, err
+		}
+		pod.Status.PodIP = ips[0].IP.String()
+		pod, err = c.clientSet.Pods(ns).Update(pod)
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("Successfully applied pod: %+v", pod)
+		return c.converter.podToWorkloadEndpoint(pod)
+	}
+	return k, nil
 }
 
 // listWorkloadEndpoints lists WorkloadEndpoints from the k8s API based on existing Pods.
