@@ -83,20 +83,20 @@ func (options HostEndpointListOptions) defaultPathRoot() string {
 }
 
 func (options HostEndpointListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get HostEndpoint key from %s", path)
+	log.Debugf("Get HostEndpoint key from %s", path)
 	r := matchHostEndpoint.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
 	endpointID := r[0][2]
 	if options.Hostname != "" && hostname != options.Hostname {
-		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.EndpointID != "" && endpointID != options.EndpointID {
-		log.Infof("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
+		log.Debugf("Didn't match endpointID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
 	return HostEndpointKey{Hostname: hostname, EndpointID: endpointID}

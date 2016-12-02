@@ -112,10 +112,10 @@ func (options WorkloadEndpointListOptions) defaultPathRoot() string {
 }
 
 func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get WorkloadEndpoint key from %s", path)
+	log.Debugf("Get WorkloadEndpoint key from %s", path)
 	r := matchWorkloadEndpoint.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
@@ -123,19 +123,19 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 	workload := r[0][3]
 	endpointID := r[0][4]
 	if options.Hostname != "" && hostname != options.Hostname {
-		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.OrchestratorID != "" && orch != options.OrchestratorID {
-		log.Infof("Didn't match orchestrator %s != %s", options.OrchestratorID, orch)
+		log.Debugf("Didn't match orchestrator %s != %s", options.OrchestratorID, orch)
 		return nil
 	}
 	if options.WorkloadID != "" && workload != options.WorkloadID {
-		log.Infof("Didn't match workload %s != %s", options.WorkloadID, workload)
+		log.Debugf("Didn't match workload %s != %s", options.WorkloadID, workload)
 		return nil
 	}
 	if options.EndpointID != "" && endpointID != options.EndpointID {
-		log.Infof("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
+		log.Debugf("Didn't match endpoint ID %s != %s", options.EndpointID, endpointID)
 		return nil
 	}
 	return WorkloadEndpointKey{

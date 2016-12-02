@@ -74,10 +74,10 @@ func (options BlockAffinityListOptions) defaultPathRoot() string {
 }
 
 func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get Block affinity key from %s", path)
+	log.Debugf("Get Block affinity key from %s", path)
 	r := matchBlockAffinity.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][2], "-", "/", 1)

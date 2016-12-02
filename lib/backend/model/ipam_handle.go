@@ -63,10 +63,10 @@ func (options IPAMHandleListOptions) defaultPathRoot() string {
 }
 
 func (options IPAMHandleListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get IPAM handle key from %s", path)
+	log.Debugf("Get IPAM handle key from %s", path)
 	r := matchBlock.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 	return IPAMHandleKey{HandleID: r[0][1]}

@@ -130,16 +130,16 @@ func (options ProfileListOptions) defaultPathRoot() string {
 }
 
 func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get Profile key from %s", path)
+	log.Debugf("Get Profile key from %s", path)
 	r := matchProfile.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	kind := r[0][2]
 	if options.Name != "" && name != options.Name {
-		log.Infof("Didn't match name %s != %s", options.Name, name)
+		log.Debugf("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	pk := ProfileKey{Name: name}
@@ -194,7 +194,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		// Get the KVPair for the profile, initialising if just created.
 		pd, ok := profiles[name]
 		if !ok {
-			log.Infof("Initialise profile %v", name)
+			log.Debugf("Initialise profile %v", name)
 			pd = &KVPair{
 				Value: &Profile{},
 				Key:   ProfileKey{Name: name},
@@ -205,14 +205,14 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		p := pd.Value.(*Profile)
 		switch t := d.Value.(type) {
 		case []string: // must be tags #TODO should type these
-			log.Infof("Store tags %v", t)
+			log.Debugf("Store tags %v", t)
 			p.Tags = t
 			pd.Revision = d.Revision
 		case map[string]string: // must be labels
-			log.Infof("Store labels %v", t)
+			log.Debugf("Store labels %v", t)
 			p.Labels = t
 		case *ProfileRules: // must be rules
-			log.Infof("Store rules %v", t)
+			log.Debugf("Store rules %v", t)
 			p.Rules = *t
 		default:
 			panic(fmt.Errorf("Unexpected type: %v", t))
@@ -220,7 +220,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		pd.Value = p
 	}
 
-	log.Infof("Map of profiles: %v", profiles)
+	log.Debugf("Map of profiles: %v", profiles)
 
 	// To store the keys in slice in sorted order
 	var keys []string
@@ -234,7 +234,7 @@ func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 		out[i] = profiles[k]
 	}
 
-	log.Infof("Sorted groups of profiles: %v", out)
+	log.Debugf("Sorted groups of profiles: %v", out)
 
 	return out
 }

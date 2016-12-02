@@ -125,7 +125,7 @@ func (options BGPPeerListOptions) defaultPathRoot() string {
 }
 
 func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get BGPPeer key from %s", path)
+	log.Debugf("Get BGPPeer key from %s", path)
 	hostname := ""
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
@@ -139,16 +139,16 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		_ = peerIP.UnmarshalText(r[0][2])
 		peerScope = scope.Node
 	} else {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 
 	if options.PeerIP.IP != nil && !options.PeerIP.Equal(peerIP.IP) {
-		log.Infof("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
+		log.Debugf("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
 		return nil
 	}
 	if options.Hostname != "" && hostname != options.Hostname {
-		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	return BGPPeerKey{Scope: peerScope, PeerIP: peerIP, Hostname: hostname}

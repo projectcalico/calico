@@ -68,10 +68,10 @@ func (options BlockListOptions) defaultPathRoot() string {
 }
 
 func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get Block key from %s", path)
+	log.Debugf("Get Block key from %s", path)
 	r := matchBlock.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)

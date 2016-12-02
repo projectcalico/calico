@@ -138,11 +138,11 @@ func (options HostMetadataListOptions) defaultPathRoot() string {
 }
 
 func (options HostMetadataListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get Node key from %s", path)
+	log.Debugf("Get Node key from %s", path)
 	if r := matchHostMetadata.FindAllStringSubmatch(path, -1); len(r) == 1 {
 		return HostMetadataKey{Hostname: r[0][1]}
 	} else {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 }

@@ -71,15 +71,15 @@ func (options ActiveStatusReportListOptions) defaultPathRoot() string {
 }
 
 func (options ActiveStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
-	log.Infof("Get StatusReport key from %s", ekey)
+	log.Debugf("Get StatusReport key from %s", ekey)
 	r := matchActiveStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Hostname != "" && name != options.Hostname {
-		log.Infof("Didn't match name %s != %s", options.Hostname, name)
+		log.Debugf("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
 	return ActiveStatusReportKey{Hostname: name}
@@ -127,15 +127,15 @@ func (options LastStatusReportListOptions) defaultPathRoot() string {
 }
 
 func (options LastStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
-	log.Infof("Get StatusReport key from %s", ekey)
+	log.Debugf("Get StatusReport key from %s", ekey)
 	r := matchLastStatusReport.FindAllStringSubmatch(ekey, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Hostname != "" && name != options.Hostname {
-		log.Infof("Didn't match name %s != %s", options.Hostname, name)
+		log.Debugf("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
 	return LastStatusReportKey{Hostname: name}

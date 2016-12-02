@@ -140,7 +140,7 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 	if d.Revision != nil {
 		etcdDeleteOpts.PrevIndex = d.Revision.(uint64)
 	}
-	log.Infof("Delete Key: %s", key)
+	log.Debugf("Delete Key: %s", key)
 	_, err = c.etcdKeysAPI.Delete(context.Background(), key, etcdDeleteOpts)
 	if err != nil {
 		return convertEtcdError(err, d.Key)
@@ -153,10 +153,10 @@ func (c *EtcdClient) Delete(d *model.KVPair) error {
 		return err
 	}
 	for _, parent := range parents {
-		log.Infof("Delete empty Key: %s", parent)
+		log.Debugf("Delete empty Key: %s", parent)
 		_, err2 := c.etcdKeysAPI.Delete(context.Background(), parent, etcdDeleteEmptyOpts)
 		if err2 != nil {
-			log.Infof("Unable to delete parent: %s", err2)
+			log.Debugf("Unable to delete parent: %s", err2)
 			break
 		}
 	}
@@ -170,7 +170,7 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Get Key: %s", key)
+	log.Debugf("Get Key: %s", key)
 	if r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
 		// Convert the error to our non datastore specific types
 		err = convertEtcdError(err, k)

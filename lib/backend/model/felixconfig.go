@@ -93,15 +93,15 @@ func (options GlobalConfigListOptions) defaultPathRoot() string {
 }
 
 func (options GlobalConfigListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get GlobalConfig key from %s", path)
+	log.Debugf("Get GlobalConfig key from %s", path)
 	r := matchGlobalConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	name := r[0][1]
 	if options.Name != "" && name != options.Name {
-		log.Infof("Didn't match name %s != %s", options.Name, name)
+		log.Debugf("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	return GlobalConfigKey{Name: name}
@@ -158,20 +158,20 @@ func (options HostConfigListOptions) defaultPathRoot() string {
 }
 
 func (options HostConfigListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get HostConfig key from %s", path)
+	log.Debugf("Get HostConfig key from %s", path)
 	r := matchHostConfig.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("Didn't match regex")
+		log.Debugf("Didn't match regex")
 		return nil
 	}
 	hostname := r[0][1]
 	name := r[0][2]
 	if options.Hostname != "" && hostname != options.Hostname {
-		log.Infof("Didn't match hostname %s != %s", options.Hostname, hostname)
+		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
 	if options.Name != "" && name != options.Name {
-		log.Infof("Didn't match name %s != %s", options.Name, name)
+		log.Debugf("Didn't match name %s != %s", options.Name, name)
 		return nil
 	}
 	return HostConfigKey{Hostname: hostname, Name: name}

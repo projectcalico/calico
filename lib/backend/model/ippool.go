@@ -75,16 +75,16 @@ func (options IPPoolListOptions) defaultPathRoot() string {
 }
 
 func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
-	log.Infof("Get Pool key from %s", path)
+	log.Debugf("Get Pool key from %s", path)
 	r := matchIPPool.FindAllStringSubmatch(path, -1)
 	if len(r) != 1 {
-		log.Infof("%s didn't match regex", path)
+		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
 	if options.CIDR.IP != nil && !reflect.DeepEqual(*cidr, options.CIDR) {
-		log.Infof("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
+		log.Debugf("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
 		return nil
 	}
 	return IPPoolKey{CIDR: *cidr}
