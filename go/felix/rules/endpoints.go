@@ -38,20 +38,20 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 		})
 	}
 
-	toEndpointRules = append(fromEndpointRules, Rule{
-		Action: DropAction{},
-	})
 	fromEndpointRules = append(fromEndpointRules, Rule{
 		Action: DropAction{},
 	})
+	toEndpointRules = append(toEndpointRules, Rule{
+		Action: DropAction{},
+	})
 
-	toEndpointDispatchChain := Chain{
-		Name:  DispatchToWorkloadEndpoint,
-		Rules: toEndpointRules,
-	}
 	fromEndpointDispatchChain := Chain{
 		Name:  DispatchFromWorkloadEndpoint,
 		Rules: fromEndpointRules,
+	}
+	toEndpointDispatchChain := Chain{
+		Name:  DispatchToWorkloadEndpoint,
+		Rules: toEndpointRules,
 	}
 
 	return []*Chain{&toEndpointDispatchChain, &fromEndpointDispatchChain}
