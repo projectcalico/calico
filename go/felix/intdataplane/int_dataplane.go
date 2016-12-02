@@ -223,20 +223,16 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 			case *proto.WorkloadEndpointUpdate:
 				// TODO(smc) For now, report every workload endpoint as "UP".
-				d.fromDataplane <- &proto.FromDataplane_WorkloadEndpointStatusUpdate{
-					WorkloadEndpointStatusUpdate: &proto.WorkloadEndpointStatusUpdate{
-						Id: msg.Id,
-						Status: &proto.EndpointStatus{
-							Status: "up",
-						},
+				d.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
+					Id: msg.Id,
+					Status: &proto.EndpointStatus{
+						Status: "up",
 					},
 				}
 			case *proto.WorkloadEndpointRemove:
 				// TODO(smc) For now, report every workload endpoint as "UP".
-				d.fromDataplane <- &proto.FromDataplane_WorkloadEndpointStatusRemove{
-					WorkloadEndpointStatusRemove: &proto.WorkloadEndpointStatusRemove{
-						Id: msg.Id,
-					},
+				d.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
+					Id: msg.Id,
 				}
 			case *proto.InSync:
 				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
@@ -325,11 +321,9 @@ func (d *InternalDataplane) loopReportingStatus() {
 		now := time.Now()
 		uptimeNanos := float64(now.Sub(start))
 		uptimeSecs := uptimeNanos / 1000000000
-		d.fromDataplane <- &proto.FromDataplane_ProcessStatusUpdate{
-			ProcessStatusUpdate: &proto.ProcessStatusUpdate{
-				IsoTimestamp: now.UTC().Format(time.RFC3339),
-				Uptime:       uptimeSecs,
-			},
+		d.fromDataplane <- &proto.ProcessStatusUpdate{
+			IsoTimestamp: now.UTC().Format(time.RFC3339),
+			Uptime:       uptimeSecs,
 		}
 	}
 }

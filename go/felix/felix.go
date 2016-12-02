@@ -25,7 +25,6 @@ import (
 	_ "github.com/projectcalico/felix/go/felix/config"
 	"github.com/projectcalico/felix/go/felix/extdataplane"
 	"github.com/projectcalico/felix/go/felix/intdataplane"
-	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/logutils"
 	"github.com/projectcalico/felix/go/felix/proto"
@@ -149,9 +148,10 @@ configRetry:
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
-	var dpConnection dataplaneConnection
+	var dpDriver dataplaneDriver
 	var dpDriverCmd *exec.Cmd
 	if configParams.UseInternalDataplaneDriver {
+		log.Info("Using internal dataplane driver.")
 		dpConfig := intdataplane.Config{
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: strings.Split(configParams.InterfacePrefix, ","),
@@ -180,16 +180,17 @@ configRetry:
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
-		dpConnection = intDP
+		dpDriver = intDP
 	} else {
-		dpConnection, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
+		log.WithField("driver", configParams.DataplaneDriver).Info(
+			"Using external dataplane driver.")
+		dpDriver, dpDriverCmd = extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
 
-	// Initialise the glue logic that connects the calculation graph to the dataplane driver.
+	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")
 	failureReportChan := make(chan string)
-	felixConn := NewFelixGlue(configParams,
-		datastore, dpConnection, failureReportChan)
+	dpConnector := newConnector(configParams, datastore, dpDriver, failureReportChan)
 
 	// Now create the calculation graph, which receives updates from the
 	// datastore and outputs dataplane updates for the dataplane driver.
@@ -200,7 +201,7 @@ configRetry:
 	// The output of the calculation graph arrives at the dataplane
 	// connection via channel.
 	//
-	// Syncer -chan-> Validator -chan-> Calc graph -chan-> felixConn
+	// Syncer -chan-> Validator -chan-> Calc graph -chan->   dataplane
 	//        KVPair            KVPair             protobufs
 
 	// Get a Syncer from the datastore, which will feed the calculation
@@ -212,7 +213,7 @@ configRetry:
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies
 	// etc.
-	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, felixConn.ToDataplane)
+	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, dpConnector.ToDataplane)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph and
@@ -251,23 +252,23 @@ configRetry:
 		delay := configParams.EndpointReportingDelay()
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
-		felixConn.statusReporter = statusrep.NewEndpointStatusReporter(
+		dpConnector.statusReporter = statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
-			felixConn.StatusUpdatesFromDataplane,
-			felixConn.InSync,
-			felixConn.datastore,
+			dpConnector.StatusUpdatesFromDataplane,
+			dpConnector.InSync,
+			dpConnector.datastore,
 			delay,
 			delay*180,
 		)
-		felixConn.statusReporter.Start()
+		dpConnector.statusReporter.Start()
 	}
 
 	// Start communicating with the dataplane driver.
-	felixConn.Start()
+	dpConnector.Start()
 
 	// Send the opening message to the dataplane driver, giving it its
 	// config.
-	felixConn.ToDataplane <- &proto.ConfigUpdate{
+	dpConnector.ToDataplane <- &proto.ConfigUpdate{
 		Config: configParams.RawValues(),
 	}
 
@@ -297,7 +298,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	termSignalChan := make(chan os.Signal)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
 
-	// Start a background thread to tell us when the driver stops.
+	// Start a background thread to tell us when the dataplane driver stops.
 	// If the driver stops unexpectedly, we'll terminate this process.
 	// If this process needs to stop, we'll kill the driver and then wait
 	// for the message from the background thread.
@@ -427,40 +428,35 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 	return globalConfig, hostConfig
 }
 
-type ipUpdate struct {
-	ipset string
-	ip    ip.Addr
-}
-
-type dataplaneConnection interface {
+type dataplaneDriver interface {
 	SendMessage(msg interface{}) error
 	RecvMessage() (msg interface{}, err error)
 }
 
-type FelixGlue struct {
+type DataplaneConnector struct {
 	config                     *config.Config
 	ToDataplane                chan interface{}
 	StatusUpdatesFromDataplane chan interface{}
 	InSync                     chan bool
 	failureReportChan          chan<- string
-	dataplane                  dataplaneConnection
+	dataplane                  dataplaneDriver
 	datastore                  bapi.Client
 	statusReporter             *statusrep.EndpointStatusReporter
 
-	datastoreInSync bool
+	datastoreInSync            bool
 
-	firstStatusReportSent bool
+	firstStatusReportSent      bool
 }
 
 type Startable interface {
 	Start()
 }
 
-func NewFelixGlue(configParams *config.Config,
+func newConnector(configParams *config.Config,
 	datastore bapi.Client,
-	dataplane dataplaneConnection,
-	failureReportChan chan<- string) *FelixGlue {
-	felixConn := &FelixGlue{
+	dataplane dataplaneDriver,
+	failureReportChan chan<- string) *DataplaneConnector {
+	felixConn := &DataplaneConnector{
 		config:                     configParams,
 		datastore:                  datastore,
 		ToDataplane:                make(chan interface{}),
@@ -472,7 +468,7 @@ func NewFelixGlue(configParams *config.Config,
 	return felixConn
 }
 
-func (fc *FelixGlue) readMessagesFromDataplane() {
+func (fc *DataplaneConnector) readMessagesFromDataplane() {
 	defer func() {
 		fc.shutDownProcess("Failed to read messages from dataplane")
 	}()
@@ -484,32 +480,32 @@ func (fc *FelixGlue) readMessagesFromDataplane() {
 			fc.shutDownProcess("Failed to read from front-end socket")
 		}
 		switch msg := payload.(type) {
-		case *proto.FromDataplane_ProcessStatusUpdate:
-			fc.handleProcessStatusUpdate(msg.ProcessStatusUpdate)
-		case *proto.FromDataplane_WorkloadEndpointStatusUpdate:
+		case *proto.ProcessStatusUpdate:
+			fc.handleProcessStatusUpdate(msg)
+		case *proto.WorkloadEndpointStatusUpdate:
 			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg.WorkloadEndpointStatusUpdate
+				fc.StatusUpdatesFromDataplane <- msg
 			}
-		case *proto.FromDataplane_WorkloadEndpointStatusRemove:
+		case *proto.WorkloadEndpointStatusRemove:
 			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg.WorkloadEndpointStatusRemove
+				fc.StatusUpdatesFromDataplane <- msg
 			}
-		case *proto.FromDataplane_HostEndpointStatusUpdate:
+		case *proto.HostEndpointStatusUpdate:
 			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg.HostEndpointStatusUpdate
+				fc.StatusUpdatesFromDataplane <- msg
 			}
-		case *proto.FromDataplane_HostEndpointStatusRemove:
+		case *proto.HostEndpointStatusRemove:
 			if fc.statusReporter != nil {
-				fc.StatusUpdatesFromDataplane <- msg.HostEndpointStatusRemove
+				fc.StatusUpdatesFromDataplane <- msg
 			}
 		default:
-			log.Warningf("XXXX Unknown message from felix: %#v", msg)
+			log.WithField("msg", msg).Warning("Unknown message from dataplane")
 		}
 		log.Debug("Finished handling message from front-end")
 	}
 }
 
-func (fc *FelixGlue) handleProcessStatusUpdate(msg *proto.ProcessStatusUpdate) {
+func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatusUpdate) {
 	log.Debugf("Status update from dataplane driver: %v", *msg)
 	statusReport := model.StatusReport{
 		Timestamp:     msg.IsoTimestamp,
@@ -537,7 +533,7 @@ func (fc *FelixGlue) handleProcessStatusUpdate(msg *proto.ProcessStatusUpdate) {
 	}
 }
 
-func (fc *FelixGlue) sendMessagesToDataplaneDriver() {
+func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 	defer func() {
 		fc.shutDownProcess("Failed to send messages to dataplane")
 	}()
@@ -579,7 +575,7 @@ func (fc *FelixGlue) sendMessagesToDataplaneDriver() {
 	}
 }
 
-func (fc *FelixGlue) shutDownProcess(reason string) {
+func (fc *DataplaneConnector) shutDownProcess(reason string) {
 	// Send a failure report to the managed shutdown thread then give it
 	// a few seconds to do the shutdown.
 	fc.failureReportChan <- reason
@@ -588,7 +584,7 @@ func (fc *FelixGlue) shutDownProcess(reason string) {
 	log.Panic("Managed shutdown failed. Panicking.")
 }
 
-func (fc *FelixGlue) Start() {
+func (fc *DataplaneConnector) Start() {
 	// Start a background thread to write to the dataplane driver.
 	go fc.sendMessagesToDataplaneDriver()
 

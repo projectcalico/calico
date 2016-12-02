@@ -96,8 +96,23 @@ func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
 	if err != nil {
 		return
 	}
-	msg = envelope.Payload
-	log.WithField("msg", msg).Debug("Received message from dataplane.")
+	log.WithField("envelope", envelope).Debug("Received message from dataplane.")
+
+	switch payload := envelope.Payload.(type) {
+	case *proto.FromDataplane_ProcessStatusUpdate:
+		msg = payload.ProcessStatusUpdate
+	case *proto.FromDataplane_WorkloadEndpointStatusUpdate:
+		msg = payload.WorkloadEndpointStatusUpdate
+	case *proto.FromDataplane_WorkloadEndpointStatusRemove:
+		msg = payload.WorkloadEndpointStatusRemove
+	case *proto.FromDataplane_HostEndpointStatusUpdate:
+		msg = payload.HostEndpointStatusUpdate
+	case *proto.FromDataplane_HostEndpointStatusRemove:
+		msg = payload.HostEndpointStatusRemove
+	default:
+		log.WithField("payload", payload).Warn("Ignoring unknown message from dataplane")
+	}
+
 	return
 }
 
