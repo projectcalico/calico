@@ -33,7 +33,7 @@ kubectl expose --namespace=policy-demo deployment nginx --port=80
 $ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q nginx -O -
 ```
@@ -55,7 +55,7 @@ This will prevent all access to the nginx Service.  We can see the effect by try
 $ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 wget: download timed out
@@ -69,9 +69,10 @@ The request should time out after 5 seconds.  Be enabling isolation on the Names
 Now, let's enable access to the nginx Service using a NetworkPolicy.  This will allow incoming connections from our `access` Pod, but not
 from anywhere else.
 
-Create a file called `nginx-policy.yaml` with the following contents:
+Create a network policy `access-nginx` with the following contents:
 
-```yaml
+```
+kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: extensions/v1beta1
 metadata:
@@ -86,35 +87,32 @@ spec:
       - podSelector:
           matchLabels:
             run: access
+EOF
 ```
 
 > Notice the NetworkPolicy allows traffic from Pods with the label `run: access` to Pods with the label `run: nginx`.  These are the labels automatically added to Pods started via `kubectl run` based on the name of the `Deployment`.
 
-Then use kubectl to deploy it:
-```
-kubectl create -f nginx-policy.yaml
-```
 
 We should now be able to access the Service from the `access` Pod.
 
-```shell
+```
 # Run a Pod and try to access the `nginx` Service.
 $ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 ```
 
-However, we still cannot access the Service from a Pod without the label `run: access`:
+However, we still cannot access the Service from a Pod without the label `access`:
 
-```shell
+```
 # Run a Pod and try to access the `nginx` Service.
 $ kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/cant-access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 wget: download timed out

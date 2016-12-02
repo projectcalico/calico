@@ -28,7 +28,7 @@ kubectl create -f manifests/
 Wait for all the pods to enter `Running` state.
 
 ```shell
-watch kubectl get pods --all-namespaces
+kubectl get pods --all-namespaces --watch
 ```
 > Note that it may take several minutes to download the necessary Docker images for this demo.
 
@@ -87,3 +87,5 @@ kubectl create -f policies/frontend-policy.yaml
 
 The client can now access the frontend, but not the backend.  Neither the frontend nor the backend
 can initiate connections to the client.  The frontend can still access the backend.
+
+To use Calico to enforce egress policy on Kubernetes pods, see [the advanced policy demo]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/advanced-policy).
