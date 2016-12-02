@@ -12,9 +12,10 @@ in order to define more complex network policies.
 
 ### Requirements
 
-- This guide assumes you have a working Kubernetes cluster with Calico for policy.
+- This guide assumes you have a working Kubernetes cluster with Calico for policy. (See: [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes#installation-guides) for help)
 - This guide assumes that your pods have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
+- This guide assumes you are using etcdv2 as the Calico backend datastore.
 - You must have configured kubectl access to the cluster.
 - You must have installed and [configured the calicoctl tool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
 
@@ -87,7 +88,7 @@ access the nginx Service.
 $ kubectl run --namespace=advanced-policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod advanced-policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 wget: download timed out
@@ -138,7 +139,7 @@ We'll define some network policy through the Kubernetes API.  Run the following 
 a NetworkPolicy which allows traffic to nginx pods from any pods in the advanced-policy-demo Namespace. 
 
 ```shell
-kubectl create -f - <<EOF 
+kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: extensions/v1beta1
 metadata:
@@ -175,7 +176,7 @@ access google.com on the public internet.  This is because we have not defined a
 $ kubectl run --namespace=advanced-policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod advanced-policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 ...
@@ -241,7 +242,7 @@ access the public internet.
 $ kubectl run --namespace=advanced-policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod advanced-policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
-Hit enter for command prompt
+If you don't see a command prompt, try pressing enter.
 
 / # wget -q --timeout=5 nginx -O -
 ...

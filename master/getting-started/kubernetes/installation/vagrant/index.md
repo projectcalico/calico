@@ -69,9 +69,7 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## 2. Configuring the Cluster
-
-### 2.1 Configure `kubectl`
+## 2. Configuring the Cluster and `kubectl`
 
 Let's configure `kubectl` so you can access the cluster from your local machine. Make sure you have `kubectl` installed locally.  The version you choose depends on your host OS.
 
@@ -97,7 +95,7 @@ kubectl config set-context vagrant-system --cluster=vagrant-cluster
 kubectl config use-context vagrant-system
 ```
 
-## 4. Install Addons
+## 3. Install Addons
 
 {% include {{page.version}}/install-k8s-addons.md %}
 

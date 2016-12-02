@@ -29,6 +29,7 @@ coreos:
         Requires=etcd2.service
         After=etcd2.service
         [Service]
+        TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubectl
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kube-apiserver
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubectl
@@ -54,6 +55,7 @@ coreos:
         Requires=kube-apiserver.service
         After=kube-apiserver.service
         [Service]
+        TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kube-controller-manager
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-controller-manager
         ExecStart=/opt/bin/kube-controller-manager \
@@ -73,6 +75,7 @@ coreos:
         Requires=kube-apiserver.service
         After=kube-apiserver.service
         [Service]
+        TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kube-scheduler
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-scheduler
         ExecStart=/opt/bin/kube-scheduler --master=$private_ipv4:8080
@@ -90,6 +93,7 @@ coreos:
         Requires=docker.service
 
         [Service]
+        TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStart=/opt/bin/kubelet \
@@ -118,6 +122,7 @@ coreos:
         Requires=kubelet.service
         After=kubelet.service
         [Service]
+        TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
