@@ -368,6 +368,13 @@ go-cover-report: go/combined.coverprofile
 	  column -t | \
 	  grep -v '100\.0%'
 
+bin/calico-felix.transfer-url: bin/calico-felix
+	curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@
+
+.PHONY: patch-script
+patch-script: bin/calico-felix.transfer-url
+	utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)
+
 # Generate a diagram of Felix's internal calculation graph.
 go/docs/calc.pdf: go/docs/calc.dot
 	cd go/docs/ && dot -Tpdf calc.dot -o calc.pdf
