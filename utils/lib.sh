@@ -1,104 +1,117 @@
-# Library of functions for Calico process and release automation.
+# Library of functions for Felix process and release automation.
 
 # Get the root directory of the Git repository that we are in.
 function git_repo_root {
     git rev-parse --show-toplevel
 }
 
-# Update the RPM spec file for the release.  Environment required: ${package},
-# ${nextrel}.
-function update_rpm_spec {
-
-    origd=`pwd`
-    cd `git_repo_root`/rpm
-
-    rpm_spec=${package}.spec
-
-    # Generate RPM version and release.
-    IFS=- read version qualifier <<< ${nextrel}
-    if test "${qualifier}"; then
-	rpmver=${version}
-	rpmrel=0.1.${qualifier}
-    else
-	rpmver=${version}
-	rpmrel=1
-    fi
-
-    # Update the Version: and Release: lines.
-    sed -i "s/^Version:.*$/Version:        ${rpmver#*:}/" ${rpm_spec}
-    sed -i "s/^Release:.*$/Release:        ${rpmrel}%{?dist}/" ${rpm_spec}
-
-    # Add a stanza to the %changelog section.
-    timestamp=`date "+%a %b %d %Y"`
-    {
-	cat <<EOF
-* ${timestamp} Neil Jerram <neil@tigera.io> ${rpmver}-${rpmrel}
-  - ${package} version ${rpmver#*:}-${rpmrel} release
-EOF
-	set - `grep '##' ../CHANGES.md`
-	this_ver=$2
-	last_ver=$4
-	sed -n "/^## ${this_ver}$/,/^## ${last_ver}$/p" ../CHANGES.md | head -n -2 | tail -n +3 | sed 's/^/    /'
-	echo
-    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
-
-    cd ${origd}
+# Get the current Git branch.
+function git_current_branch {
+    git rev-parse --abbrev-ref HEAD
 }
 
-# Update the Debian changelog for the release.  Environment required:
-# ${package}, ${nextrel}, ${series}.
-function update_debian_changelog {
+# Get the last tag.
+function git_last_tag {
+    git describe --tags --abbrev=0
+}
 
-    origd=`pwd`
-    cd `git_repo_root`/debian
+# Autogenerate PEP 440 version based on current Git state.
+function git_auto_version {
 
-    # If the first changelog entry includes __SNAPSHOT__, delete it.
-    if sed '/^ -- / q' changelog | grep __SNAPSHOT__; then
-	sed -i '1,/ --/d' changelog
-	sed -i '1d' changelog
-    fi
+    # Get the last tag, and the number of commits since that tag.
+    last_tag=`git_last_tag`
+    commits_since=`git cherry -v ${last_tag} | wc -l`
+    sha=`git_commit_id`
+    timestamp=`date -u '+%Y%m%d%H%M%S+0000'`
 
-    mv changelog changelog.committed
-
-    # Get the current Git commit ID.
-    sha=`git rev-parse HEAD | cut -c-7`
-
-    # Current time in Debian changelog format; e.g. Wed, 02 Mar 2016 14:08:51
-    # +0000.
-    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-
-    # Generate Debian version.  If the version number has a -part, convert it
-    # to ~part for Debian.
-    IFS=- read version qualifier <<< ${nextrel}
-    if test "${qualifier}"; then
-	debver=${version}~${qualifier}
+    # Generate corresponding PEP 440 version number.
+    if test ${commits_since} -eq 0; then
+	# There are no commits since the last tag.
+	version=${last_tag}
     else
-	debver=${version}
+	version=${last_tag}.post${commits_since}+${timestamp}+${sha}
     fi
 
-    {
-	cat <<EOF
-${package} (${debver}-${series}) ${series}; urgency=low
+    echo $version
+}
 
-EOF
-	cat <<EOF
-  * ${package} release (from Git commit ${sha}).
-EOF
-	set - `grep '##' ../CHANGES.md`
-	this_ver=$2
-	last_ver=$4
-	sed -n "/^## ${this_ver}$/,/^## ${last_ver}$/p" ../CHANGES.md | head -n -2 | tail -n +3 | sed 's/^/    /'
+# Get the current Git commit ID.
+function git_commit_id {
+    git rev-parse HEAD | cut -c-7
+}
 
-	cat <<EOF
+# Convert PEP 440 version to Debian.
+function git_version_to_deb {
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1~\2/'
+}
 
- -- Neil Jerram <neil@tigera.io>  ${timestamp}
+# Convert PEP 440 version to RPM.
+function git_version_to_rpm {
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1_\2/'
+}
 
-EOF
-	cat changelog.committed
+# Check that version is valid.
+function validate_version {
+    version=$1
 
-    } > changelog
+    # We allow.
+    REGEX="^[0-9]+\.[0-9]+\.[0-9]+(-?(a|b|rc|pre).*)?$"
 
-    rm changelog.committed
+    if [[ $version =~ $REGEX ]]; then
+	return 0
+    else
+	return 1
+    fi
+}
 
-    cd ${origd}
+function test_validate_version {
+
+    function expect_valid {
+	validate_version $1 || echo $1 wrongly deemed invalid
+    }
+
+    function expect_invalid {
+	validate_version $1 && echo $1 wrongly deemed valid
+    }
+
+    # Test cases.
+    expect_valid 1.2.3
+    expect_invalid 1.2.3.4
+    expect_invalid .2.3.4
+    expect_invalid abc
+    expect_invalid 1.2.3.beta
+    expect_valid 1.2.3-beta.2
+    expect_valid 1.2.3-beta
+    expect_valid 1.2.3-alpha
+    expect_valid 1.2.3-rc2
+    expect_invalid 1:2.3-rc2
+    expect_invalid 1.2:3-rc2
+    expect_invalid 1.2.3:rc2
+
+    # All Felix tags since 1.0.0:
+    expect_valid 1.0.0
+    expect_valid 1.1.0
+    expect_valid 1.2.0
+    expect_valid 1.2.0-pre2
+    expect_valid 1.2.1
+    expect_valid 1.2.2
+    expect_valid 1.3.0
+    expect_valid 1.3.0-pre5
+    expect_valid 1.3.0a5
+    expect_valid 1.3.0a6
+    expect_valid 1.3.1
+    expect_valid 1.4.0
+    expect_valid 1.4.0b1
+    expect_valid 1.4.0b2
+    expect_valid 1.4.0b3
+    expect_valid 1.4.1b1
+    expect_valid 1.4.1b2
+    expect_valid 1.4.2
+    expect_valid 1.4.3
+    expect_valid 1.4.4
+    expect_valid 2.0.0-beta
+    expect_valid 2.0.0-beta-rc2
+    expect_valid 2.0.0-beta.2
+    expect_valid 2.0.0-beta.3
+    expect_invalid v2.0.0-beta-rc1
 }

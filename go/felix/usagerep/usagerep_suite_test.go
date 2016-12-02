@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package buildinfo
+package usagerep
 
-// Filled in by the build process.
-var (
-	GitVersion  string
-	BuildDate   string
-	GitRevision string
+import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"testing"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
+
+func TestUsagerep(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Usagerep Suite")
+}

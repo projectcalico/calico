@@ -20,6 +20,7 @@ import os
 import os.path
 import setuptools
 
+from version import auto_version
 
 def collect_requirements():
     # This monstrosity is the only way to definitely get the location of
@@ -45,7 +46,7 @@ requirements = collect_requirements()
 
 setuptools.setup(
     name="felix",
-    version="2.0.0.dev1",
+    version=auto_version,
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [
