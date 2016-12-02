@@ -41,6 +41,9 @@ type Target struct {
 }
 
 type RouteTable struct {
+	logCxt *log.Entry
+
+	ipVersion uint8
 	netlinkFamily int
 
 	activeUpIfaces set.Set
@@ -73,6 +76,10 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 	}
 
 	return &RouteTable{
+		logCxt: log.WithFields(log.Fields{
+			"ipVersion": ipVersion,
+		}),
+		ipVersion: ipVersion,
 		netlinkFamily:      family,
 		ifacePrefixes:      prefixSet,
 		ifacePrefixRegexp:  regexp.MustCompile(ifaceNamePattern),
@@ -84,9 +91,11 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
 	if state == ifacemonitor.StateUp {
+		r.logCxt.WithField("ifaceName", ifaceName).Debug("Interface up, marking for route sync")
 		r.activeUpIfaces.Add(ifaceName)
 		r.dirtyIfaces.Add(ifaceName)
 	} else {
+		r.logCxt.WithField("ifaceName", ifaceName).Debug("Interface down, blacklisting from route sync")
 		r.activeUpIfaces.Discard(ifaceName)
 		r.dirtyIfaces.Discard(ifaceName) // Can't update routes if it's down.
 	}
@@ -105,7 +114,7 @@ func (r *RouteTable) Apply() error {
 	if !r.inSync {
 		links, err := netlink.LinkList()
 		if err != nil {
-			log.WithError(err).Error("Failed to list interfaces, retrying...")
+			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
 			return ListFailed
 		}
 		// Clear the dirty set; there's no point trying to update non-existent interfaces.
@@ -117,6 +126,8 @@ func (r *RouteTable) Apply() error {
 			}
 			ifaceName := attrs.Name
 			if r.ifacePrefixRegexp.MatchString(ifaceName) {
+				r.logCxt.WithField("ifaceName", ifaceName	).Debug(
+					"Resync: found calico-owned interface")
 				r.dirtyIfaces.Add(ifaceName)
 			}
 		}
@@ -126,13 +137,13 @@ func (r *RouteTable) Apply() error {
 	r.dirtyIfaces.Iter(func(item interface{}) error {
 		retries := 2
 		ifaceName := item.(string)
-		logCxt := log.WithField("ifaceName", ifaceName)
+		logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 		for retries > 0 {
 			link, err := netlink.LinkByName(ifaceName)
 			if err != nil {
 				if strings.Contains(err.Error(), "not found") {
-					// Interface has been deleted from under us.  Give up.
-					logCxt.Warn("Route sync failed: interface is gone.")
+					// Interface has been deleted from under us (or isn't yet present).  Give up.
+					logCxt.Info("Unable to sync routes: interface not present.")
 					break
 				} else {
 					// Unexpected error, maybe retry.
@@ -159,7 +170,7 @@ func (r *RouteTable) Apply() error {
 	})
 
 	if r.dirtyIfaces.Len() > 0 {
-		log.Warn("Some interfaces still out-of sync.")
+		r.logCxt.Warn("Some interfaces still out-of sync.")
 		r.inSync = false
 		return UpdateFailed
 	}
@@ -170,7 +181,7 @@ func (r *RouteTable) Apply() error {
 func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 	linkAttrs := link.Attrs()
 	ifaceName := linkAttrs.Name
-	logCxt := log.WithField("ifaceName", ifaceName)
+	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")
 	if linkAttrs.Flags&net.FlagUp == 0 || linkAttrs.RawFlags&syscall.IFF_RUNNING == 0 {
 		// Interface must have gone down but the monitoring thread hasn't told us yet.
@@ -229,14 +240,14 @@ func (r *RouteTable) syncRoutesForLink(link netlink.Link) error {
 				updatesFailed = true
 			}
 		}
-		if target.DestMAC != nil {
+		if r.ipVersion == 4 && target.DestMAC != nil {
 			// TODO(smc) clean up/sync old ARP entries
 			cmd := exec.Command("arp",
 				"-s", cidr.Addr().String(), target.DestMAC.String(),
 				"-i", ifaceName)
 			err := cmd.Run()
 			if err != nil {
-				logCxt.WithError(err).Warn("Failed to set ARP entry")
+				logCxt.WithError(err).WithField("cmd", cmd).Warn("Failed to set ARP entry")
 				updatesFailed = true
 			}
 		}

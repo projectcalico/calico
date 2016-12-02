@@ -237,6 +237,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			for _, mgr := range d.allManagers {
 				mgr.OnUpdate(ifaceUpdate)
 			}
+			for _, routeTable := range d.routeTables {
+				routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+			}
 			d.dataplaneNeedsSync = true
 		case <-retryTicker.C:
 		}
