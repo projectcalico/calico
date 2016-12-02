@@ -39,7 +39,7 @@ toc:
       path: /getting-started/kubernetes/tutorials/stars-policy/
     - title: Advanced network policy
       path: /getting-started/kubernetes/tutorials/advanced-policy
-  - title: Troubleshooting
+  - title: Troubleshooting / FAQ
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
     path: /getting-started/kubernetes/upgrade
