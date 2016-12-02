@@ -224,13 +224,15 @@ func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
 	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
 	if len(ips) > 0 {
+		log.Debugf("Applying workload with IPs: %+v", ips)
 		ns, name := c.converter.parseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
 		pod, err := c.clientSet.Pods(ns).Get(name)
 		if err != nil {
 			return nil, err
 		}
 		pod.Status.PodIP = ips[0].IP.String()
-		pod, err = c.clientSet.Pods(ns).Update(pod)
+		log.Debugf("Pod IP: %+v", pod.Status.PodIP)
+		pod, err = c.clientSet.Pods(ns).UpdateStatus(pod)
 		if err != nil {
 			return nil, err
 		}
