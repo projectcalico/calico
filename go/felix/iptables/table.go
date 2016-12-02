@@ -89,6 +89,7 @@ func NewTable(
 	ipVersion uint8,
 	historicChainPrefixes []string,
 	hashPrefix string,
+	extraCleanupRegexPattern string,
 ) *Table {
 	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
 	ourChainsPattern := "^(" + strings.Join(historicChainPrefixes, "|") + ")"
@@ -98,6 +99,9 @@ func NewTable(
 	for _, prefix := range historicChainPrefixes {
 		part := fmt.Sprintf("-j %s", prefix)
 		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
+	}
+	if extraCleanupRegexPattern != "" {
+		oldInsertRegexpParts = append(oldInsertRegexpParts, extraCleanupRegexPattern)
 	}
 	oldInsertPattern := strings.Join(oldInsertRegexpParts, "|")
 	oldInsertRegexp := regexp.MustCompile(oldInsertPattern)
