@@ -45,7 +45,7 @@ NODE_CONTAINER_NAME?=calico/node
 NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
-NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
+NODE_CONTAINER_BINARIES=startup startup-go allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_CONTAINER_NAME?=calico/felix:2.0.0-rc2
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.0.0-rc2
 
@@ -107,6 +107,9 @@ $(NODE_CONTAINER_BIN_DIR)/bird:
 	$(CURL) -L $(BIRDCL_URL) -o $(@D)/birdcl
 	$(CURL) -L $(BIRD_URL) -o $@
 	chmod +x $(@D)/*
+
+$(NODE_CONTAINER_BIN_DIR)/startup-go: dist/startup-go
+	cp dist/startup-go $(NODE_CONTAINER_BIN_DIR)
 
 ###############################################################################
 # Tests
@@ -376,6 +379,20 @@ $(TEST_CALICOCTL_CONTAINER_MARKER): calicoctl/Dockerfile.calicoctl.build
 $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
 	touch $@
+
+## Build startup.go
+startup-go:
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v -o dist/startup-go $(LDFLAGS) "./calico_node/startup.go"
+
+dist/startup-go: $(CALICOCTL_FILES) vendor
+	mkdir -p dist
+	docker run --rm \
+	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
+	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
+	  golang:1.7 bash -c '\
+	    cd /go/src/github.com/projectcalico/calico-containers && \
+	    make startup-go && \
+	    chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Build calicoctl
 binary: $(CALICOCTL_FILES) vendor
