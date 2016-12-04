@@ -22,16 +22,22 @@ from .peer import create_bgp_peer
 class TestSingleRouteReflector(TestBase):
 
     @attr('slow')
-    def test_single_route_reflector(self):
+    def _test_single_route_reflector(self, backend='bird'):
         """
         Run a multi-host test using a single route reflector and global
         peering.
         """
         with DockerHost('host1',
-                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        start_calico=False) as host1, \
              DockerHost('host2',
-                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2, \
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        start_calico=False) as host2, \
              RouteReflectorCluster(1, 1) as rrc:
+
+            # Start both hosts using specific backends.
+            host1.start_calico_node("--backend=%s" % backend)
+            host2.start_calico_node("--backend=%s" % backend)
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
@@ -62,3 +68,11 @@ class TestSingleRouteReflector(TestBase):
                                                        workload_host2],
                                         ip_pass_list=[workload_host1.ip,
                                                       workload_host2.ip])
+
+    @attr('slow')
+    def test_bird_single_route_reflector(self):
+        self._test_single_route_reflector(backend='bird')
+
+    @attr('slow')
+    def test_gobgp_single_route_reflector(self):
+        self._test_single_route_reflector(backend='gobgp')
