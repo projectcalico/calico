@@ -38,24 +38,6 @@ It installs the following Kubernetes resources:
 - Runs the `calico/kube-policy-controller` in a Deployment.
 - The `calico-etcd-secrets` Secret, which optionally allows for providing etcd TLS assets.
 
-## Upgrade
-
-There are two parts to upgrading a Calico hosted installation.
-
-##### Upgrading the Calico policy controller
-
-The policy controller is installed as a Deployment, and thus supports standard Kubernetes [rolling updates](http://kubernetes.io/docs/user-guide/rolling-updates/).
-
-##### Upgrading the Calico DaemonSet
-
-Upgrading the CNI plugin or calico/node image is done through a DaemonSet, and as such does not yet support rolling updates.
-
-To upgrade the DaemonSet:
-
-1. Apply changes to the existing DaemonSet via kubectl apply.
-2. Manually perform the upgrade by deleting pods and allowing the DaemonSet controller to recreate them 
-with the new images and configuration.
-
 ## Configuration options
 
 The ConfigMap in `calico.yaml` provides a way to configure a Calico self-hosted installation.  It exposes

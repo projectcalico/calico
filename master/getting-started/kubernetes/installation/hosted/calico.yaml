@@ -219,6 +219,8 @@ metadata:
 spec:
   # The policy controller can only have a single active instance.
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       name: calico-policy-controller
