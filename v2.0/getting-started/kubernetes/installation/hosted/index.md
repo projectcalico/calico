@@ -35,7 +35,7 @@ It installs the following Kubernetes resources:
 - The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `calico/node` container on each host using a DaemonSet.
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
-- Runs the `calico/kube-policy-controller` pod as a ReplicaSet.
+- Runs the `calico/kube-policy-controller` as a Deployment.
 - The `calico-etcd-secrets` Secret, which optionally allows for providing etcd TLS assets.
 
 ## Upgrade
@@ -44,7 +44,7 @@ There are two parts to upgrading a Calico hosted installation.
 
 ##### Upgrading the Calico policy controller
 
-The policy controller is installed as a ReplicaSet, and thus supports standard Kubernetes [rolling updates](http://kubernetes.io/docs/user-guide/rolling-updates/).
+The policy controller is installed as a Deployment, and thus supports standard Kubernetes [rolling updates](http://kubernetes.io/docs/user-guide/rolling-updates/).
 
 ##### Upgrading the Calico DaemonSet
 

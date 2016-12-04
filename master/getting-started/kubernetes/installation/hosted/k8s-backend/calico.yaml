@@ -12,6 +12,7 @@ data:
         "type": "calico",
         "log_level": "debug",
         "datastore_type": "kubernetes",
+        "hostname": "__KUBERNETES_NODE_NAME__",
         "ipam": {
             "type": "host-local",
             "subnet": "usePodCidr"
@@ -73,6 +74,11 @@ spec:
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
+            # Set the hostname based on the k8s node name.
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             # No IP address needed. 
             - name: IP
               value: ""
@@ -98,6 +104,11 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+            # Set the hostname based on the k8s node name.
+            - name: KUBERNETES_NODE_NAME 
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir

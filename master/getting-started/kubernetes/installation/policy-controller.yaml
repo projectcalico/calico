@@ -2,7 +2,7 @@
 # the Calico policy controller on Kubernetes.
 # It deploys a single instance of the policy controller.
 apiVersion: extensions/v1beta1
-kind: ReplicaSet
+kind: Deployment 
 metadata:
   name: calico-policy-controller
   namespace: kube-system
@@ -10,7 +10,7 @@ metadata:
     k8s-app: calico-policy
 spec:
   # Only a single instance of the policy controller should be 
-  # active at a time.  Since this pod is run as a ReplicaSet,
+  # active at a time.  Since this pod is run as a Deployment,
   # Kubernetes will ensure the pod is recreated in case of failure,
   # removing the need for passive backups.
   replicas: 1

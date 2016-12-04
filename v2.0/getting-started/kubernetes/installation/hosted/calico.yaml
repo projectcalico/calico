@@ -122,6 +122,8 @@ spec:
             # below.
             - name: NO_DEFAULT_POOLS
               value: "true"
+            - name: FELIX_LOGSEVERITYSCREEN
+              value: "info"
             # Location of the CA certificate for etcd.
             - name: ETCD_CA_CERT_FILE
               valueFrom:
@@ -205,7 +207,7 @@ spec:
 # This manifest deploys the Calico policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
 apiVersion: extensions/v1beta1
-kind: ReplicaSet 
+kind: Deployment 
 metadata:
   name: calico-policy-controller
   namespace: kube-system

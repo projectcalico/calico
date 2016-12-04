@@ -59,7 +59,6 @@ spec:
         # host.
         - name: calico-node
           image: calico/node:v1.0.0-beta 
-          imagePullPolicy: Always
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -73,6 +72,11 @@ spec:
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
+            # Set the hostname based on the k8s node name.
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             # No IP address needed. 
             - name: IP
               value: ""
@@ -88,8 +92,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:v1.5.0 
-          imagePullPolicy: Always
+          image: calico/cni:v1.5.0
           command: ["/install-cni.sh"]
           env:
             # The CNI network config to install on each node.
@@ -98,6 +101,11 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: cni_network_config
+            # Set the hostname based on the k8s node name.
+            - name: KUBERNETES_NODE_NAME 
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
