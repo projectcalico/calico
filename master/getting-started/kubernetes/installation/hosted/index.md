@@ -110,3 +110,59 @@ be filled in automatically by the `calico/cni` container:
 | `__ETCD_KEY_FILE__`                   | The path to the etcd key file installed to the host, empty if no key present.
 | `__ETCD_CERT_FILE__`                  | The path to the etcd cert file installed to the host, empty if no cert present.
 | `__ETCD_CA_CERT_FILE__`               | The path to the etcd CA file installed to the host, empty if no CA present.
+
+## Using calicoctl with a self-hosted installation
+
+> **NOTE** 
+>
+> The following information applies to the etcdv2 backend only. See the [etcdless hosted install](k8s-backend/)
+for how to run calicoctl in an etcdless installation.
+
+Using calicoctl is no different on a self-hosted installation.  However, the manifests above do not
+install calicoctl.
+
+You can install calicoctl by [downloading the appropriate release]({{site.baseurl}}/{{page.version}}/releases) to any 
+machine with access to your etcd cluster by setting `ETCD_ENDPOINTS`. For example:
+
+```
+ETCD_ENDPOINTS=http://etcd:2379 calicoctl get profile
+```
+
+You can also run calicoctl as a Kubernetes Pod directly using the following command:
+
+```
+kubectl apply -f -<<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: calicoctl 
+  namespace: kube-system
+spec:
+  hostNetwork: true
+  containers:
+  - name: calicoctl
+    image: calico/ctl:latest
+    command: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
+    env:
+    - name: ETCD_ENDPOINTS
+      valueFrom:
+        configMapKeyRef:
+          name: calico-config
+          key: etcd_endpoints
+EOF
+```
+
+You can then run calicoctl commands through the Pod with kubectl:
+
+```
+$ kubectl exec -ti -n kube-system calicoctl -- /calicoctl get profiles -o wide
+NAME                 TAGS
+k8s_ns.default       k8s_ns.default
+k8s_ns.kube-system   k8s_ns.kube-system
+```
+
+> **NOTE**
+>
+> When calicoctl is run as a Pod, the calicoctl node suite of commands is not available.
+
+See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for more information.
