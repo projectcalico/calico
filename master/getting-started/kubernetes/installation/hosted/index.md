@@ -43,7 +43,25 @@ It installs the following Kubernetes resources:
 The ConfigMap in `calico.yaml` provides a way to configure a Calico self-hosted installation.  It exposes
 the following configuration parameters:
 
-## Etcd Configuration
+### Configuring the Pod IP range
+
+Calico IPAM assigns IP addresses from 
+[IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool). The 
+[standard](hosted) and [kubeadm](kubeadm/) manifests include an `ippool.yaml` file which 
+configures the default IP pool used by Calico.
+
+To change the default IP range used for pods, modify the `cidr` section of the IP pool.
+
+> **NOTE**
+>
+> The etcdless Calico manifest does not include an IP pool configuration, as IP allocation is done based on
+the Kubernetes node.PodCIDR field, not Calico IP pools.
+
+> **NOTE**
+>
+> The kubeadm Calico manifest also configures ipip encapsulation on the pool by default.
+
+### Etcd Configuration
 
 By default, these manifests do not configure secure access to etcd and assume an etcd proxy is running on each host.  The following configuration
 options let you specify custom etcd cluster endpoints as well as TLS.  
@@ -68,7 +86,7 @@ To use these manifests with a TLS enabled etcd cluster you must do the following
   - `etcd_key: /calico-secrets/etcd-key`
   - `etcd_cert: /calico-secrets/etcd-cert`
 
-## Other Configuration Options
+### Other Configuration Options
 
 The following table outlines the remaining supported ConfigMap options: 
 
