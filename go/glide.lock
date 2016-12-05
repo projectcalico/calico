@@ -1,5 +1,5 @@
-hash: 14eb7de3d3a05d8cbfe87512b312dd4e01fb867e37256f647e74355c998e35be
-updated: 2016-11-30T16:25:47.835416757-08:00
+hash: 848f11d7568feab670b4d78c7a008c3050c2c6ef11cdaf0e7cd4f78b85fde8ab
+updated: 2016-12-05T14:48:26.738938576Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -128,7 +128,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: d1901d62e520449b2fffd6281909c470d3adf44e
+  version: 53ab28547fab5e922175596b533a40289f322906
   subpackages:
   - lib
   - lib/api
