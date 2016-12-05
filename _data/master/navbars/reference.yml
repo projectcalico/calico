@@ -87,6 +87,8 @@ toc:
       path: /reference/public-cloud/overview
     - title: AWS
       path: /reference/public-cloud/aws
+    - title: Digital Ocean
+      path: /reference/public-cloud/digital-ocean
 - title: Deploying on Private Cloud
   section:
     - title: Overview
