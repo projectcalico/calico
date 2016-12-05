@@ -146,7 +146,7 @@ sudo cp loopback /opt/cni/bin/
 
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the 
 Kubernetes API for Pod, Namespace, and NetworkPolicy events and configuring Calico in response. It runs as
-a single pod managed by a ReplicaSet.
+a single pod managed by a Deployment.
 
 To install the policy controller:
 

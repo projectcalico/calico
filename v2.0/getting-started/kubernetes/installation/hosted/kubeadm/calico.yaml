@@ -221,7 +221,7 @@ spec:
 # This manifest deploys the Calico policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
 apiVersion: extensions/v1beta1
-kind: ReplicaSet 
+kind: Deployment 
 metadata:
   name: calico-policy-controller
   namespace: kube-system
@@ -230,6 +230,8 @@ metadata:
 spec:
   # The policy controller can only have a single active instance.
   replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       name: calico-policy-controller
