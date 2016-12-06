@@ -1,10 +1,13 @@
 # Project Calico Documentation
 
-![Project Calico logo](http://docs.projectcalico.org/images/felix.png)
-
 This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos.  
 
-**If you are a Calico user, you probably want [the live documentation site](https://projectcalico.github.io/calico/).**
+<blockquote>
+Note that the README in this repo is targeted at Calico docs contributors.
+<h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
+</blockquote>
+
+![Project Calico logo](http://docs.projectcalico.org/images/felix.png)
 
 **If you are looking for the repository formerly known as `projectcalico/calico`,
 it has been renamed to [`projectcalico/felix`](https://github.com/projectcalico/felix).**
