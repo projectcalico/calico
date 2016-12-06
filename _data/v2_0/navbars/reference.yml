@@ -85,6 +85,8 @@ toc:
   section:
     - title: Overview
       path: /reference/public-cloud/overview
+    - title: AWS
+      path: /reference/public-cloud/aws
 - title: Deploying on Private Cloud
   section:
     - title: Overview
