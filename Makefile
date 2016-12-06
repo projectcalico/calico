@@ -362,7 +362,6 @@ vendor: glide.lock
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm \
-		-v ${HOME}/.glide:/root/.glide:rw \
 		-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GLIDE_CONTAINER_NAME) -e -c ' \
         cd /go/src/github.com/projectcalico/calico-containers && \
