@@ -34,12 +34,14 @@ found at <http://docs.openstack.org>.
 
 ### Configuring the APT software sources
 
-The latest version of Calico for OpenStack is 1.4, and we recommend using it
+The latest version of Calico for OpenStack is 2.0, and we recommend using it
 with OpenStack Liberty or later.  Other possible combinations are shown by the
 following table.
 
 | OpenStack release     | Calico version | Ubuntu versions | PPAs             |
 |-----------------------+----------------+-----------------+------------------|
+| Mitaka                |            2.0 | Xenial, Trusty  | calico-2.0       |
+| Liberty               |            2.0 | Xenial, Trusty  | calico-2.0       |
 | Mitaka                |            1.4 | Xenial, Trusty  | calico-1.4       |
 | Liberty               |            1.4 | Xenial, Trusty  | calico-1.4       |
 | Kilo                  |            1.4 | Trusty          | calico-1.4, kilo |
@@ -48,10 +50,10 @@ following table.
 | (deprecated) Icehouse |            1.3 | Trusty          | icehouse         |
 
 For your chosen combination, you need to configure APT to use the corresponding
-PPA(s).  For example, for Calico 1.4 with Liberty or later:
+PPA(s).  For example, for Calico 2.0 with Liberty or later:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/calico-1.4
+    $ sudo apt-add-repository ppa:project-calico/calico-2.0
 ```
 
 Before OpenStack Liberty, Calico needed patched versions of Nova and Neutron.

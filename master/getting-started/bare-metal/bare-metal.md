@@ -33,8 +33,8 @@ to/from other interfaces is left alone.
 > **NOTE**
 >
 > If you have a host with workloads on it then traffic that is forwarded to
-> workloads bypasses the policy applied to host endpoints. If that weren't the 
-> case, the host endpoint policy would need to be very broad to allow all 
+> workloads bypasses the policy applied to host endpoints. If that weren't the
+> case, the host endpoint policy would need to be very broad to allow all
 > traffic destined for any possible workload.
 >
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
@@ -92,7 +92,7 @@ There are several ways to install Felix.
         sudo apt-get upgrade
         sudo apt-get install calico-felix
 
-    As of writing, &lt;version&gt; should be 1.4.
+    As of writing, &lt;version&gt; should be 2.0.
 
 -   if you are running a RedHat 7-derived distribution, you can install
     from our RPM repository:
@@ -112,12 +112,12 @@ There are several ways to install Felix.
 
 -   if you are running another distribution, follow the instructions in
     [this document](pyi-bare-metal-install) to use our installer bundle.
-    
+
 -   if you want to run under docker, you can use `calicoctl node run` to start
     the calico/node container image.  This container packages up the core Calico
     components to provide both Calico networking and network policy.  Running
     the container automatically pre-initializes the etcd database (which the
-    other installations methods do not).  See the 
+    other installations methods do not).  See the
     [`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
     guide for details.
 
@@ -132,8 +132,8 @@ container image), the database is initialized as soon as you start the first
 node instance.
 
 If you are self-installed you should configure a `node` resource for each
-host running Felix.  In this case, the database is initialized after 
-creating the first `node` resource.  For a deployment that does not include 
+host running Felix.  In this case, the database is initialized after
+creating the first `node` resource.  For a deployment that does not include
 the Calico/BGP integration, the specification of a node resource just requires
 the name of the node;  for most deployments this will be the same as the
 hostname.
@@ -210,22 +210,22 @@ cat << EOF | calicoctl create -f -
     - action: allow
       protocol: udp
       destination:
-        ports: [67]  
+        ports: [67]
 EOF
 ```
 
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](#failsafe-rules).
 
-> **NOTE** 
+> **NOTE**
 >
 > Packets that reach the end of the list of rules fall-through to the next policy (sorted by the order field).
 >
-> The selector in the policy, `all()`, will match *all* endpoints, 
-> including any workload endpoints. If you have workload endpoints as 
-> well as host endpoints then you may wish to use a more restrictive 
-> selector. For example, you could label management interfaces with 
-> label `endpoint_type = management` and then use selector 
+> The selector in the policy, `all()`, will match *all* endpoints,
+> including any workload endpoints. If you have workload endpoints as
+> well as host endpoints then you may wish to use a more restrictive
+> selector. For example, you could label management interfaces with
+> label `endpoint_type = management` and then use selector
 > `endpoint_type == "management"`
 >
 > If you are using Calico for networking workloads, you should add
@@ -245,7 +245,7 @@ the Calico node running on the host that owns the interface; in most cases this
 will be the same as the hostname of the host.
 
 For example, to secure the interface named `eth0` with IP 10.0.0.1 on
-host `my-host`, run the command below.  The name of the endpoint is an 
+host `my-host`, run the command below.  The name of the endpoint is an
 arbitrary name required for endpoint identification.
 
 When running this command, replace the placeholders in angle brackets with
@@ -284,13 +284,13 @@ EOF
 
 Where `<list of profile IDs>` is an optional list of security profiles
 to apply to the endpoint and labels contains a set of arbitrary
-key/value pairs that can be used in selector expressions. 
+key/value pairs that can be used in selector expressions.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
 > **Warning**
 >
-> When rendering security rules on other hosts, Calico uses the 
+> When rendering security rules on other hosts, Calico uses the
 > `expected_ipvX_addrs` fields to resolve tags and label selectors
 > to IP addresses. If the `expected_ipvX_addrs` fields are omitted
 > then security rules that use labels and tags will fail to match
@@ -322,7 +322,7 @@ place, then you should see traffic being dropped on the interface.
 > **NOTE**
 >
 > By default, Calico has a failsafe in place that whitelists certain
-> traffic such as ssh. See below for more details on 
+> traffic such as ssh. See below for more details on
 > disabling/configuring the failsafe rules.
 >
 
@@ -344,8 +344,8 @@ address must be specified.
 
 ## Creating more security policy
 
-We recommend using selector-based security policy with 
-bare-metal workloads. This allows ordered policy to be applied to 
+We recommend using selector-based security policy with
+bare-metal workloads. This allows ordered policy to be applied to
 endpoints that match particular label selectors.
 
 +For example, you could add a second policy for webserver access:
@@ -380,7 +380,7 @@ which allows access to ssh; as well as outbound communication to ports
 2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
 
 The lists of failsafe ports can be configured via the configuration
-parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration). 
+parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration).
 They can be disabled by setting each configuration value to an empty string.
 
 > **WARNING**
