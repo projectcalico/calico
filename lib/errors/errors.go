@@ -39,6 +39,16 @@ func (e ErrorResourceDoesNotExist) Error() string {
 	return fmt.Sprintf("resource does not exist: %s", e.Identifier)
 }
 
+// Error indicating an operation is not supported.
+type ErrorOperationNotSupported struct {
+	Operation  string
+	Identifier interface{}
+}
+
+func (e ErrorOperationNotSupported) Error() string {
+	return fmt.Sprintf("operation %s is not supported on %s", e.Operation, e.Identifier)
+}
+
 // Error indicating a resource already exists.  Used when attempting to create a
 // resource that already exists.
 type ErrorResourceAlreadyExists struct {

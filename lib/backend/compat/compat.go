@@ -35,6 +35,10 @@ func NewAdaptor(c api.Client) *ModelAdaptor {
 	return &ModelAdaptor{client: c}
 }
 
+func (c *ModelAdaptor) EnsureInitialized() error {
+	return c.client.EnsureInitialized()
+}
+
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 	var err error

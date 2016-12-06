@@ -1,5 +1,5 @@
 hash: 3c05531c0d590c16abd195c43c39e2090ca94de48404032f6bb2651158f8f3b9
-updated: 2016-11-30T11:07:18.630258453-08:00
+updated: 2016-12-04T14:53:57.09779694-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -57,7 +57,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -87,7 +87,7 @@ imports:
 - name: github.com/jonboulle/clockwork
   version: 2eee05ed794112d45db504eb05aa693efd2b8b09
 - name: github.com/kelseyhightower/envconfig
-  version: 9aca109c9aec4633fced9717c4a09ecab3d33111
+  version: ac879f01990976d36677903ead78ae78dece48f1
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -101,7 +101,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
 - name: github.com/onsi/ginkgo
-  version: 00054c0bb96fc880d4e0be1b90937fad438c5290
+  version: 74c678d97c305753605c338c6c78c49ec104b5e7
   subpackages:
   - config
   - extensions/table
@@ -117,8 +117,6 @@ imports:
   - internal/writer
   - reporters
   - reporters/stenographer
-  - reporters/stenographer/support/go-colorable
-  - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
@@ -127,7 +125,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/Sirupsen/logrus
   version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/pflag
@@ -160,7 +158,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: d5645953809d8b4752afb2c3224b1f1ad73dfa70
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -199,7 +197,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go
-  version: 5d8c36c93cf544e3bde13caa4c6222b65753ec3c
+  version: 41a99d711af778a177f07402217b85d456b50da1
   subpackages:
   - discovery
   - kubernetes
@@ -317,7 +315,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: f1f0f388b31eca4e2cbe7a6dd8a3a1dfddda5b1c
+  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
   subpackages:
   - format
   - internal/assertion
