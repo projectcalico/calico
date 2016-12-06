@@ -704,7 +704,7 @@ class LocalEndpoint(RefCountedActor):
         if not self._device_in_sync and self._iface_name:
             # Try to update the device configuration.  If successful, will set
             # the _device_in_sync flag.
-            if self._admin_up:
+            if self._admin_up and self._device_is_up:
                 # Endpoint is supposed to be live, try to configure it.
                 _log.debug("Device is out-of-sync, trying to configure it")
                 self._configure_interface()
@@ -1012,10 +1012,6 @@ class WorkloadEndpoint(LocalEndpoint):
         """
         Applies sysctls and routes to the interface.
         """
-        if not self._device_is_up:
-            _log.debug("Device is known to be down, skipping attempt to "
-                       "configure it.")
-            return
         try:
             if self.ip_type == IPV4:
                 devices.configure_interface_ipv4(self._iface_name)
