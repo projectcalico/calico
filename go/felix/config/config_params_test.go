@@ -61,8 +61,8 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
 
-  Entry("ChainInsertMode", "ChainInsertMode", "insert", "insert")
-  Entry("ChainInsertMode", "ChainInsertMode", "append", "append")
+	Entry("ChainInsertMode", "ChainInsertMode", "insert", "insert")
+	Entry("ChainInsertMode", "ChainInsertMode", "append", "append")
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"RETURN", "RETURN"),
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
