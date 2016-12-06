@@ -77,13 +77,13 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&loadingRules, configOverrides).ClientConfig()
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, nil)
 	}
 
 	// Create the clientset
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, nil)
 	}
 	log.Debugf("Created k8s clientSet: %+v", cs)
 	return &KubeClient{clientSet: cs}, nil
@@ -114,8 +114,13 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
-	log.Infof("Ignoring 'Apply' for %s", d.Key)
-	return d, nil
+	switch d.Key.(type) {
+	case model.WorkloadEndpointKey:
+		return c.applyWorkloadEndpoint(d)
+	default:
+		log.Infof("Ignoring 'Apply' for %s", d.Key)
+		return d, nil
+	}
 }
 
 // Delete an entry in the datastore. This is a no-op when using the k8s backend.
@@ -182,7 +187,7 @@ func (c *KubeClient) listProfiles(l model.ProfileListOptions) ([]*model.KVPair, 
 	// Otherwise, enumerate all.
 	namespaces, err := c.clientSet.Namespaces().List(k8sapi.ListOptions{})
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, l)
 	}
 
 	// For each Namespace, return a profile.
@@ -208,10 +213,32 @@ func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 	}
 	namespace, err := c.clientSet.Namespaces().Get(namespaceName)
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, k)
 	}
 
 	return c.converter.namespaceToProfile(namespace)
+}
+
+// applyWorkloadEndpoint patches the existing Pod to include an IP address, if
+// one has been set on the workload endpoint.
+func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
+	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
+	if len(ips) > 0 {
+		log.Debugf("Applying workload with IPs: %+v", ips)
+		ns, name := c.converter.parseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
+		pod, err := c.clientSet.Pods(ns).Get(name)
+		if err != nil {
+			return nil, k8sErrorToCalico(err, k.Key)
+		}
+		pod.Status.PodIP = ips[0].IP.String()
+		pod, err = c.clientSet.Pods(ns).UpdateStatus(pod)
+		if err != nil {
+			return nil, k8sErrorToCalico(err, k.Key)
+		}
+		log.Debugf("Successfully applied pod: %+v", pod)
+		return c.converter.podToWorkloadEndpoint(pod)
+	}
+	return k, nil
 }
 
 // listWorkloadEndpoints lists WorkloadEndpoints from the k8s API based on existing Pods.
@@ -237,7 +264,7 @@ func (c *KubeClient) listWorkloadEndpoints(l model.WorkloadEndpointListOptions) 
 	// We don't yet support hostname, orchestratorID, for the k8s backend.
 	pods, err := c.clientSet.Pods("").List(k8sapi.ListOptions{})
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, l)
 	}
 
 	// For each Pod, return a workload endpoint.
@@ -265,7 +292,7 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 
 	pod, err := c.clientSet.Pods(namespace).Get(podName)
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, k)
 	}
 
 	// Decide if this pod should be displayed.
@@ -294,7 +321,7 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 		Timeout(10 * time.Second).
 		Do().Into(&networkPolicies)
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, l)
 	}
 
 	// For each policy, turn it into a Policy and generate the list.
@@ -326,7 +353,7 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 		Timeout(10 * time.Second).
 		Do().Into(&networkPolicy)
 	if err != nil {
-		return nil, err
+		return nil, k8sErrorToCalico(err, k)
 	}
 	return c.converter.networkPolicyToPolicy(&networkPolicy)
 }
