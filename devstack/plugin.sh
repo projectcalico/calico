@@ -124,9 +124,7 @@ if is_service_enabled calico-felix; then
 		    pip_install git+${FELIX_REPO:-https://github.com/projectcalico/felix.git}@${FELIX_BRANCH:-master}#egg=calico
 
 		    # Install networking-calico.
-		    pushd ../networking-calico
-		    pip_install .
-		    popd
+		    pip_install "${GITDIR['networking-calico']}"
 
 		    ;;
 
