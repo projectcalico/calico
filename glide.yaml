@@ -18,7 +18,7 @@ import:
 - package: github.com/termie/go-shutil
 - package: github.com/mitchellh/go-ps
 - package: github.com/projectcalico/libcalico-go
-  version: v1.0.0-rc2
+  version: 00f19d4d4bcccd45310cc150852ca6f31434be35
   subpackages:
   - lib
 - package: github.com/projectcalico/go-yaml-wrapper
