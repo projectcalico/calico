@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.0.0
-Release:        0.1.rc2%{?dist}
+Release:        0.1.rc3%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -164,6 +164,16 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Dec 05 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc3
+  - Felix 2.0.0-rc3 (from Git commit 6bdd086).
+    Felix version 2.0.0-rc3
+    
+    - Add 5 minutes to initial usage reporting delay
+    - Record Felix 2.0.0-rc2 packaging
+    - Clean up some minor release process niggles
+    - Add a make patch-script target
+    - Update to current libcalico-go master
+
 * Thu Dec 01 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc2
   - Felix 2.0.0-rc2 (from Git commit a98a7a5).
     - Improve early logging configuration (fixes #1156)
