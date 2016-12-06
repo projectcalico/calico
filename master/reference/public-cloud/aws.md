@@ -74,10 +74,10 @@ happening:
 
 1. Encapsulate Container Traffic
 
-   Container traffic can be enapsulated with its host IP so that the VPC
+   Container traffic can be encapsulated with its host IP so that the VPC
    never sees the container IPs, allowing standard ec2 routing to take over.
 
-   Turn on traffic masquerading in pool settings by enabling:
+   Turn on traffic encapsulation in pool settings by enabling:
 
    - `ipip` for container-to-container traffic.
    - `nat-outgoing` for container-to-ec2-instance traffic.
