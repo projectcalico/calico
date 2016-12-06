@@ -195,6 +195,10 @@ class Config(object):
                            "One of 'DROP', 'ACCEPT', 'LOG-and-DROP', "
                            "'LOG-and-ACCEPT'.",
                            "DROP")
+        self.add_parameter("LogPrefix",
+                           "Prefix of the iptables logged packets. Defaults to "
+                           "calico-drop",
+                           "calico-drop")
         self.add_parameter("IgnoreLooseRPF",
                            "If set to true, Felix will ignore the kernel's "
                            "RPF check setting.  If set to false, Felix will "
@@ -342,6 +346,7 @@ class Config(object):
         self.FAILSAFE_OUTBOUND_PORTS = \
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
+        self.LOG_PREFIX = self.parameters["LogPrefix"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
         self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
 
@@ -474,6 +479,12 @@ class Config(object):
                                                      self.IP_IN_IP_ADDR)
 
         if self.DEFAULT_INPUT_CHAIN_ACTION not in ("DROP", "RETURN", "ACCEPT"):
+            raise ConfigException(
+                "Invalid field value",
+                self.parameters["DefaultEndpointToHostAction"]
+            )
+
+        if len(self.LOG_PREFIX) < 1:
             raise ConfigException(
                 "Invalid field value",
                 self.parameters["DefaultEndpointToHostAction"]

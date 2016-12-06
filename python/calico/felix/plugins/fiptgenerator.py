@@ -103,6 +103,7 @@ class FelixIptablesGenerator(FelixPlugin):
         self.FAILSAFE_INBOUND_PORTS = config.FAILSAFE_INBOUND_PORTS
         self.FAILSAFE_OUTBOUND_PORTS = config.FAILSAFE_OUTBOUND_PORTS
         self.ACTION_ON_DROP = config.ACTION_ON_DROP
+        self.LOG_PREFIX = config.LOG_PREFIX
 
     def raw_rpfilter_failed_chain(self, ip_version):
         """
@@ -662,7 +663,7 @@ class FelixIptablesGenerator(FelixPlugin):
 
         if self.ACTION_ON_DROP.startswith("LOG-"):
             # log-and-accept, log-and-drop.
-            log_spec = '--jump LOG --log-prefix "calico-drop: " --log-level 4'
+            log_spec = '--jump LOG --log-prefix "%s: " --log-level 4' % self.LOG_PREFIX
             log_rule = " ".join(
                 [p for p in [ipt_action, chain_name, rule_spec, log_spec,
                              comment_str] if p is not None]
