@@ -144,11 +144,13 @@ toc:
   - title: Overview
     path: /getting-started/rkt/
   - title: Installation
-    section:
-    - title: Vagrant
-      path: /getting-started/rkt/vagrant/
+    section: 
+    - title: 'Vagrant/VirtualBox: CoreOS'
+      path: /getting-started/rkt/installation/vagrant-coreos/
   - title: Tutorials
-    path: /getting-started/rkt/tutorials
+    section:
+    - title: Installation & Basic Use
+      path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting
   - title: Upgrade
