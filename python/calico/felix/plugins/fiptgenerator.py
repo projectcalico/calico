@@ -982,10 +982,19 @@ class FelixIptablesGenerator(FelixPlugin):
 
                 # Network (CIDR).
                 net_key = neg_pfx + dirn + "_net"
-                if net_key in rule and rule[net_key] is not None:
+                if rule.get(net_key):
                     ip_or_cidr = rule[net_key]
                     if (":" in ip_or_cidr) == (ip_version == 6):
+                        # The CIDR's version matches the version we're rendering
+                        # for.
                         append(neg_pfx, "--%s" % direction, ip_or_cidr)
+                    else:
+                        # Rule has a CIDR but it's not for this IP version,
+                        # treat different IP versions as impossible to
+                        # match.
+                        _log.debug("Rule has CIDR %s but rendering for IPv%s, "
+                                   "skipping.", ip_or_cidr, ip_version)
+                        return []
 
                 # Pre-calculated ipsets.
                 ipsets_key = neg_pfx + dirn + "_ip_set_ids"

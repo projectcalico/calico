@@ -425,6 +425,56 @@ RULES_TESTS = [
             ]
         },
     },
+
+    # Test that rules with IPv4 CIDRs/IPs are ignored when rendering IPv6 rules.
+    {
+        "ip_version": 6,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "udp",
+                    "src_net": "10.0.0.0/24",
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "udp",
+                    "dst_net": "1.2.3.4",
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [],
+            'felix-p-prof1-o': []
+        },
+    },
+
+    # Test that rules with IPv6 CIDRs/IPs are ignored when rendering IPv4 rules.
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "udp",
+                    "src_net": "fe80::/96",
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "udp",
+                    "dst_net": "fe80::1",
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [],
+            'felix-p-prof1-o': []
+        },
+    },
 ]
 FROM_ENDPOINT_CHAIN = [
     # Always start with a 0 MARK.
