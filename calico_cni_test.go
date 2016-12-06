@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"net"
 
@@ -16,6 +15,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	. "github.com/projectcalico/calico-cni/test_utils"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 )
 
@@ -27,13 +29,25 @@ import (
 // vary the MTU
 // Existing endpoint
 
+var calicoClient *client.Client
+
+func init() {
+	clientConfig, err := client.LoadClientConfig("")
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a new client.
+	calicoClient, err = client.New(*clientConfig)
+	if err != nil {
+		panic(err)
+	}
+}
+
 var _ = Describe("CalicoCni", func() {
 	hostname, _ := os.Hostname()
 	BeforeEach(func() {
-		cmd := fmt.Sprintf("etcdctl --endpoints http://%s:2379 rm /calico --recursive | true", os.Getenv("ETCD_IP"))
-		session, err := gexec.Start(exec.Command("bash", "-c", cmd), GinkgoWriter, GinkgoWriter)
-		Expect(err).ShouldNot(HaveOccurred())
-		Eventually(session).Should(gexec.Exit())
+		WipeEtcd()
 	})
 
 	Describe("Run Calico CNI plugin", func() {
@@ -61,18 +75,34 @@ var _ = Describe("CalicoCni", func() {
 				mac := contVeth.Attrs().HardwareAddr
 
 				ip := result.IP4.IP.IP.String()
+				result.IP4.IP.IP = result.IP4.IP.IP.To4() // Make sure the IP is respresented as 4 bytes
 				Expect(result.IP4.IP.Mask.String()).Should(Equal("ffffffff"))
 
-				// etcd things:
+				// datastore things:
 				// Profile is created with correct details
-				Expect(GetEtcdString("/calico/v1/policy/profile/net1/tags")).Should(MatchJSON(`["net1"]`))
-
-				Expect(GetEtcdString("/calico/v1/policy/profile/net1/rules")).Should(MatchJSON(`{"inbound_rules":[{"action":"allow","src_tag":"net1"}],"outbound_rules":[{"action":"allow"}]}`))
+				profile, err := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "net1"})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(profile.Metadata.Tags).Should(ConsistOf("net1"))
+				Expect(profile.Spec.EgressRules).Should(Equal([]api.Rule{{Action: "allow"}}))
+				Expect(profile.Spec.IngressRules).Should(Equal([]api.Rule{{Action: "allow", Source: api.EntityRule{Tag: "net1"}}}))
 
 				// The endpoint is created in etcd
-				endpoint_path := GetEtcdMostRecentSubdir(fmt.Sprintf("/calico/v1/host/%s/workload/cni/%s", hostname, containerID))
-				Expect(endpoint_path).Should(ContainSubstring(containerID))
-				Expect(GetEtcdString(endpoint_path)).Should(MatchJSON(fmt.Sprintf(`{"state":"active","name":"cali%s","mac":"%s","profile_ids":["net1"],"ipv4_nets":["%s/32"],"ipv6_nets":[]}`, containerID, mac, ip)))
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:         hostname,
+					Name:         "eth0",
+					Workload:     containerID,
+					Orchestrator: "cni",
+				}))
+
+				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+					InterfaceName: fmt.Sprintf("cali%s", containerID),
+					IPNetworks:    []cnet.IPNet{{result.IP4.IP}},
+					MAC:           &cnet.MAC{HardwareAddr: mac},
+					Profiles:      []string{"net1"},
+				}))
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging
@@ -106,10 +136,10 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				// TODO - Should just use the etcd API
-				session, err = gexec.Start(exec.Command("bash", "-c", EtcdGetCommand(endpoint_path)), GinkgoWriter, GinkgoWriter)
+				// Make sure there are no endpoints anymore
+				endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit(4)) //Exit 4 means the key didn't exist
+				Expect(endpoints.Items).Should(HaveLen(0))
 
 				// Make sure the interface has been removed from the namespace
 				targetNs, _ := ns.GetNS(netnspath)

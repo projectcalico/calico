@@ -1,13 +1,11 @@
 SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.go
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -sSf
 
 K8S_VERSION=1.3.1
-CALICO_NODE_VERSION=0.20.0
-CALICOCTL_URL?=https://github.com/projectcalico/calico-containers/releases/download/v$(CALICO_NODE_VERSION)/calicoctl
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -83,7 +81,7 @@ dist/calico-ipam: $(SRCFILES) vendor
 
 .PHONY: test
 # Run the unit tests.
-test: dist/calico dist/calico-ipam dist/calicoctl dist/host-local run-etcd
+test: dist/calico dist/calico-ipam dist/host-local run-etcd
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
@@ -118,7 +116,7 @@ test-containerized: run-etcd build-containerized
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
 	$(BUILD_CONTAINER_NAME) /bin/sh -e -c \
-        'make dist/host-local dist/calicoctl && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
+        'make dist/host-local && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
 	make stop-etcd
 
 # Run the build in a container. Useful for CI
@@ -136,7 +134,8 @@ build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 run-etcd: stop-etcd
 	docker run --detach \
 	-p 2379:2379 \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
@@ -144,7 +143,8 @@ run-etcd: stop-etcd
 run-etcd-host: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
@@ -201,11 +201,6 @@ dist/calico-ipam-python:
 	$(CURL) -L https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam -o $@
 	chmod +x $@
 
-# Retrieve calicoctl for use in tests
-dist/calicoctl:
-	$(CURL) -L $(CALICOCTL_URL) -o $@
-	chmod +x $@
-
 # Copy the plugin into place
 deploy-rkt: binary
 	cp dist/calico /etc/rkt/net.d
@@ -222,7 +217,7 @@ deploy-rkt: binary
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=dev
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
 
-run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoctl
+run-kubernetes-master: stop-kubernetes-master run-etcd-host binary 
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "usePodCidr"}}' >net.d/10-calico.conf
@@ -259,8 +254,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoct
 			--cluster-domain=cluster.local \
 			--allow-privileged=true --v=2
 
-	# Start the Calico node
-	sudo dist/calicoctl node
+	@echo "Now manually start a calico-node container"
 
 stop-kubernetes-master:
 	# Stop any existing kubelet that we started
