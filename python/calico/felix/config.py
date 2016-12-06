@@ -484,12 +484,6 @@ class Config(object):
                 self.parameters["DefaultEndpointToHostAction"]
             )
 
-        if len(self.LOG_PREFIX) < 1:
-            raise ConfigException(
-                "Invalid field value",
-                self.parameters["DefaultEndpointToHostAction"]
-            )
-
         if self.ACTION_ON_DROP not in ("DROP", "LOG-and-DROP", "ACCEPT",
                                        "LOG-and-ACCEPT"):
             log.warning("Unknown setting for DropActionOverride setting: %s, "
