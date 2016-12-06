@@ -103,7 +103,7 @@ AWS drops container traffic when it passes through
 [peered VPCs](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/vpc-peering.html).
 This behavior can not be turned off.
 
-To circumvent this issue, enable `ipip` and `nat-outgoing` on your IP pools ([as discussed above](#allow-traffic-across-different-subnets))
+To circumvent this issue, enable `ipip` and `nat-outgoing` on your IP pools ([as discussed above](#allow-traffic-across-different-vpc-subnets)
 
 #### Allow Workload-to-WAN Traffic
 
@@ -118,5 +118,5 @@ Calico can perform NAT on outbound container traffic on each compute node
 by enabling `nat-outgoing` on each
 [Calico IP pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
-[canal]: [https://github.com/tigera/canal]
-[aws-vpc-backend]: [https://github.com/coreos/flannel#backends]
+[canal]: https://github.com/tigera/canal
+[aws-vpc-backend]: https://github.com/coreos/flannel#backends
