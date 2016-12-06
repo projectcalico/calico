@@ -47,12 +47,14 @@ here
 
 ### Configure YUM repositories
 
-The latest version of Calico for OpenStack is 1.4, and we recommend using it
+The latest version of Calico for OpenStack is 2.0, and we recommend using it
 with OpenStack Liberty or later.  Other possible combinations are shown by the
 following table.
 
 | OpenStack release | Calico version | Repository     |
 |-------------------+----------------+----------------|
+| Mitaka            |            2.0 | rpm/felix-2.0  |
+| Liberty           |            2.0 | rpm/felix-2.0  |
 | Mitaka            |            1.4 | rpm/calico-1.4 |
 | Liberty           |            1.4 | rpm/calico-1.4 |
 | (deprecated) Kilo |            1.3 | rpm_kilo       |
@@ -75,11 +77,11 @@ release.  For example, for Mitaka:
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm/calico-1.4/
+    baseurl=http://binaries.projectcalico.org/rpm/felix-2.0/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/calico-1.4/key
+    gpgkey=http://binaries.projectcalico.org/rpm/felix-2.0/key
     priority=97
     EOF
 ```
