@@ -79,6 +79,12 @@ toc:
         path: /reference/calicoctl/setup/kubernetes
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
+- title: etcd
+  section:
+  - title: Docker Daemon Cluster Store
+    path: /reference/etcd/docker.md
+  - title: Etcd Quickstart
+    path: /reference/etcd/index.md
 - title: Calico Policy Controller
   path: /reference/policy-controller/configuration
 - title: Deploying on Public Cloud
