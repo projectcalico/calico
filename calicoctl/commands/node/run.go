@@ -42,6 +42,8 @@ const (
 
 var (
 	checkLogTimeout = 10 * time.Second
+	ifprefixMatch   = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+	backendMatch    = regexp.MustCompile("^(none|bird|gobgp)$")
 )
 
 var VERSION string
@@ -60,6 +62,7 @@ func Run(args []string) {
                      [--dryrun]
                      [--init-system]
                      [--disable-docker-networking]
+                     [--docker-networking-ifprefix=<IFPREFIX>]
 
 Options:
   -h --help                Show this screen.
@@ -102,6 +105,11 @@ Options:
                            and there are no pre-existing Calico IP pools.
      --disable-docker-networking
                            Disable Docker networking.
+     --docker-networking-ifprefix=<IFPREFIX>
+                           Interface prefix to use for the network interface
+                           within the Docker containers that have been networked
+                           by the Calico driver.
+                           [default: cali]
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -133,6 +141,7 @@ Description:
 	config := argutils.ArgStringOrBlank(arguments, "--config")
 	disableDockerNw := argutils.ArgBoolOrFalse(arguments, "--disable-docker-networking")
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
+	ifprefix := argutils.ArgStringOrBlank(arguments, "--docker-networking-ifprefix")
 
 	// Validate parameters.
 	if ipv4 != "" && ipv4 != "autodetect" {
@@ -154,7 +163,7 @@ Description:
 		// the AS number, so convert.
 		asNumber = argutils.ValidateASNumber(asNumber).String()
 	}
-	backendMatch := regexp.MustCompile("^(none|bird|gobgp)$")
+
 	if !backendMatch.MatchString(backend) {
 		fmt.Printf("Error executing command: unknown backend '%s'\n", backend)
 		os.Exit(1)
@@ -192,10 +201,21 @@ Description:
 
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
-		"NODENAME": name,
+		"NODENAME":                  name,
 		"CALICO_NETWORKING_BACKEND": backend,
 		"NO_DEFAULT_POOLS":          noPoolsString,
 		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
+	}
+
+	// Validate the ifprefix to only allow alphanumeric characters
+	if !ifprefixMatch.MatchString(ifprefix) {
+		fmt.Printf("Error executing command: invalid interface prefix '%s'\n", ifprefix)
+		os.Exit(1)
+	}
+
+	// Set CALICO_LIBNETWORK_IFPREFIX env variable if Docker network is enabled.
+	if !disableDockerNw {
+		envs["CALICO_LIBNETWORK_IFPREFIX"] = ifprefix
 	}
 
 	// Add in optional environments.
