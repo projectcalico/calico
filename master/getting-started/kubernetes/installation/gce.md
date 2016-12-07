@@ -98,19 +98,7 @@ gcloud compute ssh <INSTANCE NAME>
 
 ## Configure the Cluster
 
-### 3.1 Configure Outbound NAT and IP-in-IP
-
-To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
-
-```
-# Log into the master instance.
-gcloud compute ssh kubernetes-master
-
-# Enable outgoing NAT and ipip on the Calico pool.
-docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --ipip --nat-outgoing
-```
-
-### 3.2 Configure kubectl
+### 3.1 Configure kubectl
 
 The following steps configure remote kubectl access to your cluster.
 
@@ -145,6 +133,29 @@ NAME          STATUS                     AGE
 
 {% include {{page.version}}/install-k8s-addons.md %}
 
+## 5. Configure the Calico IP pool
+
+### 5.1 Configure Outbound NAT and IP-in-IP
+
+To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
+
+```
+# Log into the master instance.
+gcloud compute ssh kubernetes-master
+
+# Enable outgoing NAT and ipip on the Calico pool.
+docker run --rm --net=host calico/ctl:latest apply -f -<<EOF
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 192.168.0.0/16
+spec:
+  ipip:
+    enabled: true
+  nat-outgoing: true
+EOF
+```
+
 [calico-cni]: https://github.com/projectcalico/calico-cni
-[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html 
+[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html
 [gcloud-instructions]: https://cloud.google.com/sdk/
