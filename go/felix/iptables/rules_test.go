@@ -65,7 +65,13 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
-		table = NewTable("filter", 4, []string{"felix-", "cali"}, "cali:")
+		table = NewTable(
+			"filter",
+			4,
+			[]string{"felix-", "cali"},
+			"cali:",
+			"",
+		)
 	})
 
 	It("should extract an old felix rule with no hash", func() {
