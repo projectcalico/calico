@@ -9,28 +9,78 @@ still experimental and currently comes with a number of limitations, namely:
 - Calico without etcd does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - Calico without etcd does not yet support the full set of `calicoctl` commands.
 
-## Try it out
+## Requirements 
 
 The provided manifest configures Calico to use host-local IPAM in conjunction with the Kubernetes assigned
 pod CIDRs for each node.
 
-First, ensure the following:
+You must have a cluster which meets the following requirements:
 
-- You have a Kubernetes cluster configured to use CNI network plugins (i.e by passing `--network-plugin=cni`)
-- Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e by passing `--allocate-node-cidrs=true`)
-- You have configured your network to route pod traffic based on pod CIDR allocations, either through static routes or a Kubernetes cloud-provder integration.
+- You have a Kubernetes cluster configured to use CNI network plugins (i.e by passing --network-plugin=cni to the kubelet)
+- Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e by passing --allocate-node-cidrs=true to the controller manager)
+- You have configured your network to route pod traffic based on pod CIDR allocations, either through static routes, a Kubernetes cloud-provider integration, or flannel.
 
-For example, you could install Kubernetes with Flannel using [kubeadm](http://kubernetes.io/docs/getting-started-guides/kubeadm/) and [kube-flannel](https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml).
+## Installation
 
-Then to install Calico, run the following command:
+To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
 
 ```
 kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
-You download the manifest [here](calico.yaml) 
+Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
-You can try out policy by following the [simple policy guide](../../../tutorials/simple-policy).
+Below are a few examples for how to get started.
+
+#### Example: kubeadm + flannel
+
+This example explains how to install Calico on kubeadm with flannel for routing.
+
+Follow the [official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).  For 
+steps that require it, follow the instructions for installing flannel as the pod network.
+
+To initialize the master run 
+
+```
+kubeadm init --pod-network-cidr=10.244.0.0/16
+```
+
+Then run the following command to install Calico.
+
+```
+kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+```
+
+Then continue following the guide, following the instructions for installing flannel as the pod network.
+
+#### Example: kube-up on GCE
+
+This example explains how to install Calico for NetworkPolicy on GCE using kube-up.
+
+See the [GCE documentation](http://kubernetes.io/docs/getting-started-guides/gce/#prerequisites) for 
+a list of requirements before starting.
+
+##### 1) Start a Kubernetes cluster
+
+Run the following commands to start a Kubernetes cluster on GCE configured to use CNI
+network plugins.
+
+```shell
+export NETWORK_PROVIDER=cni
+export KUBE_NODE_OS_DISTRIBUTION=debian
+export KUBE_MASTER_OS_DISTRIBUTION=debian
+curl -sS https://get.k8s.io | bash
+```
+
+##### 2) Install Calico using the etcdless manifest
+
+Once the cluster is running, install Calico:
+
+```
+kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+```
+
+You should see all pods enter "Running" state.
 
 ## Configuration details
 
