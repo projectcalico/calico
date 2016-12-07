@@ -16,11 +16,12 @@ creating in advance, or editing, the profile associated with the Docker network.
 
 There are two ways in which the policy that defines the Docker network can be modified:
 
--  Modify the profile policy rules.  This policy is applied directly to each container 
+1. Modify the profile policy rules.  This policy is applied directly to each container 
    in the associated Docker network.  This approach is simple, but not very flexible, 
    as the profile must describe the full set of rules that apply to the containers in
    the network.
--  Assign labels to the profile, and define global selector based policy.  The 
+
+2. Assign labels to the profile, and define global selector based policy.  The 
    (Calico-specific) labels are assigned to containers in the associated Docker network. 
    The globally defined policy uses selectors to determine which subset of the policy 
    is applied to each container based on their labels.  This approach provides a powerful
@@ -39,8 +40,8 @@ achieve the required isolation.
 For the worked examples let's assume that we want to provide the following 
 isolation between a set of database containers and a set of frontend containers:
 
--  Frontend containers can only access the Database containers over TCP to port
-   3306.  For now we'll assume no other connectivity is allowed to/from the frontend.
+-  Frontend containers can only access the Database containers over TCP to port 3306.
+   For now we'll assume no other connectivity is allowed to/from the frontend.
 -  Database containers have no isolation between themselves (to handle synchronization
    within a cluster).  This could be improved by locking down the port ranges and 
    protocols, but for brevity we'll just allow full access between database
