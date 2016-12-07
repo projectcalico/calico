@@ -54,7 +54,7 @@ func NewIPSetsWithOverrides(ipVersionConfig *IPVersionConfig, existenceCache exi
 	}
 }
 
-func (s *IPSets) CreateOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
+func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
 	members = s.filterMembersByIPVersion(members)
 	ipSet := NewIPSet(s.IPVersionConfig, setMetadata, s.existenceCache)
 	ipSet.ReplaceMembers(members)
@@ -63,13 +63,13 @@ func (s *IPSets) CreateOrReplaceIPSet(setMetadata IPSetMetadata, members []strin
 	s.pendingIPSetDeletions.Discard(ipSet.SetID)
 }
 
-func (s *IPSets) AddIPsToIPSet(setID string, newMembers []string) {
+func (s *IPSets) AddMembers(setID string, newMembers []string) {
 	newMembers = s.filterMembersByIPVersion(newMembers)
 	s.activeIPSets[setID].AddMembers(newMembers)
 	s.dirtyIPSets.Add(setID)
 }
 
-func (s *IPSets) RemoveIPsFromIPSet(setID string, removedMembers []string) {
+func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	removedMembers = s.filterMembersByIPVersion(removedMembers)
 	s.activeIPSets[setID].RemoveMembers(removedMembers)
 	s.dirtyIPSets.Add(setID)
@@ -198,6 +198,7 @@ type IPSetType string
 
 const (
 	IPSetTypeHashIP IPSetType = "hash:ip"
+	IPSetTypeHashNet IPSetType = "hash:net"
 )
 
 type IPVersionConfig struct {

@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"net"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -30,6 +31,11 @@ const (
 	FilterOutputChainName  = ChainNamePrefix + "-OUTPUT"
 
 	NATPreroutingChainName = ChainNamePrefix + "-PREROUTING"
+	NATPostroutingChainName = ChainNamePrefix + "-POSTROUTING"
+	NATOutgoingChainName = ChainNamePrefix + "-nat-outgoing"
+
+	NATOutgoingAllIPsSetID  = "all-ipam-pools"
+	NATOutgoingMasqIPsSetID = "masq-ipam-pools"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
@@ -86,10 +92,23 @@ type RuleRenderer interface {
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
 	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
+
+	NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain
 }
 
 type ruleRenderer struct {
 	Config
+}
+
+func (r *ruleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
+	if ipVersion == 4 {
+		return r.IPSetConfigV4
+	} else if ipVersion == 6 {
+		return r.IPSetConfigV6
+	} else {
+		log.WithField("version", ipVersion).Panic("Unknown IP version")
+		return nil
+	}
 }
 
 type Config struct {

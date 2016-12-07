@@ -73,6 +73,10 @@ func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
 }
 
+func (m MatchCriteria) NotSourceIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set ! --match-set %s src", name))
+}
+
 func (m MatchCriteria) SourcePorts(ports ...uint16) MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
@@ -89,6 +93,10 @@ func (m MatchCriteria) DestNet(net string) MatchCriteria {
 
 func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set --match-set %s dst", name))
+}
+
+func (m MatchCriteria) NotDestIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set ! --match-set %s dst", name))
 }
 
 func (m MatchCriteria) DestPorts(ports ...uint16) MatchCriteria {

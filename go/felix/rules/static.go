@@ -79,6 +79,7 @@ func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
 
 func (r *ruleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
 	chains = append(chains, r.StaticNATPreroutingChains(ipVersion)...)
+	chains = append(chains, r.StaticNATPostroutingChains(ipVersion)...)
 	return
 }
 
@@ -103,6 +104,20 @@ func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 		Rules: rules,
 	}}
 }
+
+
+func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
+	return []*Chain{{
+		Name:  NATPostroutingChainName,
+		Rules: []Rule{
+			{
+				Action: JumpAction{Target:NATOutgoingChainName},
+			},
+		},
+	}}
+}
+
+
 
 func (t ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
 	return []Rule{

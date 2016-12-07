@@ -33,11 +33,10 @@ func (d *ipSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
-		// TODO(smc) Feels ugly to do the fan-out here.
-		d.ipsets.AddIPsToIPSet(msg.Id, msg.AddedMembers)
-		d.ipsets.RemoveIPsFromIPSet(msg.Id, msg.RemovedMembers)
+		d.ipsets.AddMembers(msg.Id, msg.AddedMembers)
+		d.ipsets.RemoveMembers(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
-		d.ipsets.CreateOrReplaceIPSet(ipsets.IPSetMetadata{
+		d.ipsets.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 			Type:    ipsets.IPSetTypeHashIP,
 			SetID:   msg.Id,
 			MaxSize: 1024 * 1024,
