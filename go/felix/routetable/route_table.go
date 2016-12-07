@@ -43,7 +43,7 @@ type Target struct {
 type RouteTable struct {
 	logCxt *log.Entry
 
-	ipVersion uint8
+	ipVersion     uint8
 	netlinkFamily int
 
 	activeUpIfaces set.Set
@@ -79,7 +79,7 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 		}),
-		ipVersion: ipVersion,
+		ipVersion:          ipVersion,
 		netlinkFamily:      family,
 		ifacePrefixes:      prefixSet,
 		ifacePrefixRegexp:  regexp.MustCompile(ifaceNamePattern),
@@ -126,7 +126,7 @@ func (r *RouteTable) Apply() error {
 			}
 			ifaceName := attrs.Name
 			if r.ifacePrefixRegexp.MatchString(ifaceName) {
-				r.logCxt.WithField("ifaceName", ifaceName	).Debug(
+				r.logCxt.WithField("ifaceName", ifaceName).Debug(
 					"Resync: found calico-owned interface")
 				r.dirtyIfaces.Add(ifaceName)
 			}

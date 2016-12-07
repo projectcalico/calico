@@ -197,7 +197,7 @@ func (s *IPSets) AttemptCleanup() {
 type IPSetType string
 
 const (
-	IPSetTypeHashIP IPSetType = "hash:ip"
+	IPSetTypeHashIP  IPSetType = "hash:ip"
 	IPSetTypeHashNet IPSetType = "hash:net"
 )
 

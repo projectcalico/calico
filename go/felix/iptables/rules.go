@@ -76,7 +76,7 @@ func (g DNATAction) ToFragment() string {
 	return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
 }
 
-type MasqAction struct {}
+type MasqAction struct{}
 
 func (g MasqAction) ToFragment() string {
 	return "--jump MASQUERADE"

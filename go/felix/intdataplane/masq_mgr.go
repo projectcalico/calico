@@ -1,3 +1,17 @@
+// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package intdataplane
 
 import (
@@ -13,7 +27,7 @@ import (
 type masqManager struct {
 	ipVersion    uint8
 	ipsets       *ipsets.IPSets
-	filterTable  *iptables.Table
+	natTable     *iptables.Table
 	activePools  map[string]*proto.IPAMPool
 	masqPools    set.Set
 	dirty        bool
@@ -46,12 +60,12 @@ func newMasqManager(
 	return &masqManager{
 		ipVersion:    ipVersion,
 		ipsets:       ipsetsMgr,
-		filterTable:  natTable,
+		natTable:     natTable,
 		activePools:  map[string]*proto.IPAMPool{},
 		masqPools:    set.New(),
 		dirty:        true,
 		ruleRenderer: ruleRenderer,
-		logCxt: log.WithField("ipVersion", ipVersion),
+		logCxt:       log.WithField("ipVersion", ipVersion),
 	}
 }
 
@@ -117,7 +131,7 @@ func (m *masqManager) CompleteDeferredWork() error {
 	// having some or vice-versa.
 	m.logCxt.Info("IPAM pools updated, refreshing iptables rule")
 	chain := m.ruleRenderer.NATOutgoingChain(m.masqPools.Len() > 0, m.ipVersion)
-	m.filterTable.UpdateChain(chain)
+	m.natTable.UpdateChain(chain)
 	m.dirty = false
 
 	return nil

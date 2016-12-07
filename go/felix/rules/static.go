@@ -105,19 +105,16 @@ func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 	}}
 }
 
-
 func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	return []*Chain{{
-		Name:  NATPostroutingChainName,
+		Name: NATPostroutingChainName,
 		Rules: []Rule{
 			{
-				Action: JumpAction{Target:NATOutgoingChainName},
+				Action: JumpAction{Target: NATOutgoingChainName},
 			},
 		},
 	}}
 }
-
-
 
 func (t ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
 	return []Rule{
