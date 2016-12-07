@@ -1,3 +1,17 @@
+felix (2.0.0~rc4~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.0.0-rc4 (from Git commit 706bb9c).
+    Felix version 2.0.0-rc4
+    
+    - Record Deb/RPM packaging for Felix 2.0.0-rc3
+    - If an interface is down, make sure we remove its routes.
+    - Make rule generation tolerate missing IP version for ICMP.
+    - Skip rules that have CIDRs for different IP versions.
+    - Use libcalico-go v1.0.0-rc4
+    - Use realpath instead of readlink -f
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 07 Dec 2016 13:20:09 +0000
+
 felix (2.0.0~rc3~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.0.0-rc3 (from Git commit 6bdd086).

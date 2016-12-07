@@ -6,7 +6,7 @@
 
 # Get the location of this script.  Other scripts that we use must be in the
 # same location.
-scriptdir=$(dirname $(readlink -f $0))
+scriptdir=$(dirname $(realpath $0))
 
 # Include function library.
 . ${scriptdir}/lib.sh
@@ -55,7 +55,7 @@ EOF
 			cat <<EOF
   * Felix ${version} (from Git commit ${sha}).
 EOF
-			git show ${version} --format=oneline -s | head -n -1 | tail -n +3 | sed 's/^/    /'
+			git show ${version} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
 		    else
 			cat <<EOF
   * Development snapshot (from Git commit ${sha}).
@@ -112,7 +112,7 @@ EOF
 			cat <<EOF
   - Felix ${version} (from Git commit ${sha}).
 EOF
-			git show ${version} --format=oneline -s | head -n -1 | tail -n +3 | sed 's/^/    /'
+			git show ${version} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
 		    else
 			cat <<EOF
   - Development snapshot (from Git commit ${sha}).
