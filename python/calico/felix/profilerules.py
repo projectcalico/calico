@@ -263,9 +263,9 @@ class ProfileRules(RefCountedActor):
         _log.info("%s Programming iptables with our chains.", self)
         assert self._pending_profile is not None, \
             "_update_chains called with no _pending_profile"
-        tag_or_sel_to_ip_set_name = {}
+        ipset_id_to_name = {}
         for tag_or_sel, ipset in self._ipset_refs.iteritems():
-            tag_or_sel_to_ip_set_name[tag_or_sel] = ipset.ipset_name
+            ipset_id_to_name[tag_or_sel] = ipset.ipset_name
 
         _log.info("Updating chains for profile %s", self.id)
         _log.debug("Profile %s: %s", self.id, self._profile)
@@ -274,8 +274,7 @@ class ProfileRules(RefCountedActor):
             self.id,
             self._pending_profile,
             self.ip_version,
-            tag_to_ipset=tag_or_sel_to_ip_set_name,
-            selector_to_ipset=tag_or_sel_to_ip_set_name,
+            ipset_id_to_name=ipset_id_to_name,
             comment_tag=self.id)
 
         _log.debug("Queueing programming for rules %s: %s", self.id,

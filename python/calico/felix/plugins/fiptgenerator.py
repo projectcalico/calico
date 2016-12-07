@@ -562,8 +562,8 @@ class FelixIptablesGenerator(FelixPlugin):
         return set([self._profile_to_chain_name("inbound", profile_id),
                     self._profile_to_chain_name("outbound", profile_id)])
 
-    def profile_updates(self, profile_id, profile, ip_version, tag_to_ipset,
-                        selector_to_ipset, comment_tag=None):
+    def profile_updates(self, profile_id, profile, ip_version, ipset_id_to_name,
+                        comment_tag=None):
         """
         Generate a set of iptables updates that will program all of the chains
         needed for a given profile.
@@ -589,14 +589,11 @@ class FelixIptablesGenerator(FelixPlugin):
 
             fragments = []
             for r in rules:
-                rule_version = r.get('ip_version')
-                if rule_version is None or rule_version == ip_version:
-                    fragments.extend(self._rule_to_iptables_fragments(
-                        chain_name,
-                        r,
-                        ip_version,
-                        tag_to_ipset,
-                        selector_to_ipset))
+                fragments.extend(self._rule_to_iptables_fragments(
+                    chain_name,
+                    r,
+                    ip_version,
+                    ipset_id_to_name))
             updates[chain_name] = fragments
 
         return updates, deps
@@ -842,7 +839,7 @@ class FelixIptablesGenerator(FelixPlugin):
                                                  inbound_or_outbound[:1])
 
     def _rule_to_iptables_fragments(self, chain_name, rule, ip_version,
-                                    tag_to_ipset, selector_to_ipset):
+                                    ipset_id_to_name):
         """
         Convert a rule dict to a list of iptables fragments suitable to use
         with iptables-restore.
@@ -853,8 +850,8 @@ class FelixIptablesGenerator(FelixPlugin):
                the --append)
         :param dict[str,str|list|int] rule: Rule dict.
         :param ip_version.  Whether these are for the IPv4 or IPv6 iptables.
-        :param dict[str] tag_to_ipset: dictionary mapping from tag key to ipset
-               name.
+        :param dict[str] ipset_id_to_name: dictionary mapping from IP set ID to
+               name of IP set in the dataplane.
         :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
                from selector to the name of the ipset that represents it.
         :return list[str]: iptables --append fragments.
@@ -863,6 +860,23 @@ class FelixIptablesGenerator(FelixPlugin):
         # Check we've not got any unknown fields.
         unknown_keys = set(rule.keys()) - KNOWN_RULE_KEYS
         assert not unknown_keys, "Unknown keys: %s" % ", ".join(unknown_keys)
+
+        # Since the names of the ICMP and ICMPv6 protocols are different in our
+        # datamodel, default the IP version to the correct value for the
+        # version of ICMP so that we won't try to render an ICMPv6 rule on IPv4
+        # or vice-versa.
+        implicit_rule_version = ip_version
+        if rule.get("protocol") == "icmp":
+            _log.debug("Rule is an ICMP rule, forcing IP version to 4")
+            implicit_rule_version = 4
+        elif rule.get("protocol") == "icmpv6":
+            _log.debug("Rule is an ICMPv6 rule, forcing IP version to 6")
+            implicit_rule_version = 6
+        rule_version = rule.get("ip_version", implicit_rule_version)
+
+        if rule_version != ip_version:
+            _log.debug("Rule's IP version doesn't match this chain, skipping")
+            return []
 
         # Ports are special, we have a limit on the number of ports that can go
         # in one rule so we need to break up rules with a lot of ports into
@@ -886,8 +900,7 @@ class FelixIptablesGenerator(FelixPlugin):
                     chain_name,
                     rule_copy,
                     ip_version,
-                    tag_to_ipset,
-                    selector_to_ipset)
+                    ipset_id_to_name)
                 fragments.extend(frags)
 
             return fragments
@@ -933,7 +946,7 @@ class FelixIptablesGenerator(FelixPlugin):
         return chunks
 
     def _rule_to_iptables_fragments_inner(self, chain_name, rule, ip_version,
-                                          tag_to_ipset, selector_to_ipset):
+                                          ipset_id_to_name):
         """
         Convert a rule dict to iptables fragments suitable to use with
         iptables-restore.
@@ -942,10 +955,8 @@ class FelixIptablesGenerator(FelixPlugin):
                 the --append)
         :param dict rule: Rule dict.
         :param ip_version.  Whether these are for the IPv4 or IPv6 iptables.
-        :param dict[str] tag_to_ipset: dictionary mapping from tag key to ipset
-               name.
-        :param dict[SelectorExpression,str] selector_to_ipset: dict mapping
-               from selector to the name of the ipset that represents it.
+        :param dict[str] ipset_id_to_name: dictionary mapping from IP set ID
+               to name used in the dataplane.
         :returns list[str]: list of iptables --append fragments.
         """
 
@@ -971,15 +982,24 @@ class FelixIptablesGenerator(FelixPlugin):
 
                 # Network (CIDR).
                 net_key = neg_pfx + dirn + "_net"
-                if net_key in rule and rule[net_key] is not None:
+                if rule.get(net_key):
                     ip_or_cidr = rule[net_key]
                     if (":" in ip_or_cidr) == (ip_version == 6):
+                        # The CIDR's version matches the version we're rendering
+                        # for.
                         append(neg_pfx, "--%s" % direction, ip_or_cidr)
+                    else:
+                        # Rule has a CIDR but it's not for this IP version,
+                        # treat different IP versions as impossible to
+                        # match.
+                        _log.debug("Rule has CIDR %s but rendering for IPv%s, "
+                                   "skipping.", ip_or_cidr, ip_version)
+                        return []
 
                 # Pre-calculated ipsets.
                 ipsets_key = neg_pfx + dirn + "_ip_set_ids"
                 for ipset_id in rule.get(ipsets_key) or []:
-                    ipset_name = tag_to_ipset[ipset_id]
+                    ipset_name = ipset_id_to_name[ipset_id]
                     append("--match set",
                            neg_pfx, "--match-set", ipset_name, dirn)
 

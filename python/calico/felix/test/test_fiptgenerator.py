@@ -75,22 +75,21 @@ INPUT_CHAINS = {
     ]
 }
 
-SELECTOR_A_EQ_B = "a == 'b'"
+IPSET_ID = "s:abcdefg1234567890_-"
 
 RULES_TESTS = [
     {
         "ip_version": 4,
-        "tag_to_ipset": {},
-        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "tag_to_ipset": {IPSET_ID: "felix-_123456"},
         "profile": {
             "id": "prof1",
             "inbound_rules": [
-                {"src_selector": SELECTOR_A_EQ_B,
+                {"src_ip_set_ids": [IPSET_ID],
                  "log_prefix": "foo",
                  "action": "next-tier"}
             ],
             "outbound_rules": [
-                {"dst_selector": SELECTOR_A_EQ_B,
+                {"dst_ip_set_ids": [IPSET_ID],
                  "action": "next-tier"}
             ]
         },
@@ -98,7 +97,7 @@ RULES_TESTS = [
             'felix-p-prof1-i':
                 [
                     '--append felix-p-prof1-i '
-                    '--match set --match-set a-eq-b src '
+                    '--match set --match-set felix-_123456 src '
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-i --match mark '
                     '--mark 0x2000000/0x2000000 --jump LOG '
@@ -109,7 +108,7 @@ RULES_TESTS = [
             'felix-p-prof1-o':
                 [
                     '--append felix-p-prof1-o '
-                    '--match set --match-set a-eq-b dst '
+                    '--match set --match-set felix-_123456 dst '
                     '--jump MARK --set-mark 0x2000000/0x2000000',
                     '--append felix-p-prof1-o --match mark '
                     '--mark 0x2000000/0x2000000 --jump RETURN',
@@ -144,19 +143,20 @@ RULES_TESTS = [
     },
     {
         "ip_version": 4,
-        "tag_to_ipset": {"tag1": "t1", "tag2": "t2"},
-        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "tag_to_ipset": {
+            "tag1": "t1",
+            "tag2": "t2",
+            IPSET_ID: "felix-_123456",
+        },
         "profile": {
             "id": "prof1",
             "inbound_rules": [
                 {"protocol": "tcp",
                  "src_net": "10.0.0.0/8",
-                 "src_tag": "tag1",
-                 "src_selector": SELECTOR_A_EQ_B,
+                 "src_ip_set_ids": ["tag1", IPSET_ID],
                  "src_ports": [1, "2:3"],
                  "!src_net": "11.0.0.0/8",
-                 "!src_tag": "tag2",
-                 "!src_selector": SELECTOR_A_EQ_B,
+                 "!src_ip_set_ids": ["tag2", IPSET_ID],
                  "!src_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
                                 14, 15, 16, 17],
                  "action": "next-tier",}
@@ -164,12 +164,10 @@ RULES_TESTS = [
             "outbound_rules": [
                 {"protocol": "udp",
                  "dst_net": "10.0.0.0/8",
-                 "dst_tag": "tag1",
-                 "dst_selector": SELECTOR_A_EQ_B,
+                 "dst_ip_set_ids": ["tag1", IPSET_ID],
                  "dst_ports": [1, "2:3"],
                  "!dst_net": "11.0.0.0/8",
-                 "!dst_tag": "tag2",
-                 "!dst_selector": SELECTOR_A_EQ_B,
+                 "!dst_ip_set_ids": ["tag2", IPSET_ID],
                  "!dst_ports": [1, "2:3", 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
                                 14, 15, 16, 17],
                  "action": "next-tier",}
@@ -181,11 +179,11 @@ RULES_TESTS = [
                 ' --protocol tcp'
                 ' --source 10.0.0.0/8'
                 ' --match set --match-set t1 src'
-                ' --match set --match-set a-eq-b src'
+                ' --match set --match-set felix-_123456 src'
                 ' --match multiport --source-ports 1,2:3'
                 ' ! --source 11.0.0.0/8'
                 ' --match set ! --match-set t2 src'
-                ' --match set ! --match-set a-eq-b src'
+                ' --match set ! --match-set felix-_123456 src'
                 ' --match multiport ! --source-ports'
                 ' 1,2:3,4,5,6,7,8,9,10,11,12,13,14,15'
                 ' --match multiport ! --source-ports 16,17'
@@ -199,11 +197,11 @@ RULES_TESTS = [
                 ' --protocol udp'
                 ' --destination 10.0.0.0/8'
                 ' --match set --match-set t1 dst'
-                ' --match set --match-set a-eq-b dst'
+                ' --match set --match-set felix-_123456 dst'
                 ' --match multiport --destination-ports 1,2:3'
                 ' ! --destination 11.0.0.0/8'
                 ' --match set ! --match-set t2 dst'
-                ' --match set ! --match-set a-eq-b dst'
+                ' --match set ! --match-set felix-_123456 dst'
                 ' --match multiport ! --destination-ports'
                 ' 1,2:3,4,5,6,7,8,9,10,11,12,13,14,15'
                 ' --match multiport ! --destination-ports 16,17'
@@ -216,8 +214,7 @@ RULES_TESTS = [
     },
     {
         "ip_version": 4,
-        "tag_to_ipset": {"tag1": "t1", "tag2": "t2"},
-        "sel_to_ipset": {SELECTOR_A_EQ_B: "a-eq-b"},
+        "tag_to_ipset": {"tag1": "t1", "tag2": "t2", IPSET_ID: "felix-_123456"},
         "profile": {
             "id": "prof1",
             "inbound_rules": [
@@ -363,6 +360,119 @@ RULES_TESTS = [
                     "1234::beef --match icmp6 --icmpv6-type 7 "
                     "--jump DROP",
                 ]
+        },
+    },
+
+    # Test that ICMPv6 rules are ignored when rendering IPv4 rules.
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "icmp",
+                    "icmp_type": 8,
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "icmpv6",
+                    "icmp_type": 8,
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i':
+                [
+                    "--append felix-p-prof1-i --protocol icmp "
+                    "--match icmp --icmp-type 8 --jump MARK "
+                    "--set-mark 0x1000000/0x1000000",
+                    '--append felix-p-prof1-i --match mark '
+                    '--mark 0x1000000/0x1000000 --jump RETURN',
+                ],
+            'felix-p-prof1-o': []
+        },
+    },
+
+    # Test that ICMPv4 rules are ignored when rendering IPv6 rules.
+    {
+        "ip_version": 6,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "icmp",
+                    "icmp_type": 8,
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "icmpv6",
+                    "icmp_type": 8,
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [],
+            'felix-p-prof1-o': [
+                "--append felix-p-prof1-o --protocol icmpv6 "
+                "--match icmp6 --icmpv6-type 8 --jump MARK "
+                "--set-mark 0x1000000/0x1000000",
+                '--append felix-p-prof1-o --match mark '
+                '--mark 0x1000000/0x1000000 --jump RETURN',
+            ]
+        },
+    },
+
+    # Test that rules with IPv4 CIDRs/IPs are ignored when rendering IPv6 rules.
+    {
+        "ip_version": 6,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "udp",
+                    "src_net": "10.0.0.0/24",
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "udp",
+                    "dst_net": "1.2.3.4",
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [],
+            'felix-p-prof1-o': []
+        },
+    },
+
+    # Test that rules with IPv6 CIDRs/IPs are ignored when rendering IPv4 rules.
+    {
+        "ip_version": 4,
+        "tag_to_ipset": {},
+        "profile": {
+            "id": "prof1",
+            "inbound_rules": [
+                {
+                    "protocol": "udp",
+                    "src_net": "fe80::/96",
+                }
+            ],
+            "outbound_rules": [
+                {
+                    "protocol": "udp",
+                    "dst_net": "fe80::1",
+                }
+            ]
+        },
+        "updates": {
+            'felix-p-prof1-i': [],
+            'felix-p-prof1-o': []
         },
     },
 ]
@@ -674,7 +784,6 @@ class TestRules(BaseTestCase):
              ['16', '17']]
         )
 
-    @skip("golang rewrite")
     def test_rules_generation(self):
         for test in RULES_TESTS:
             _log.info("Running rules test\n%s", pformat(test))
@@ -683,7 +792,6 @@ class TestRules(BaseTestCase):
                 test["profile"],
                 test["ip_version"],
                 test["tag_to_ipset"],
-                selector_to_ipset=test.get("sel_to_ipset", {}),
             )
             _log.info("Updates:\n%s", pformat(updates))
             _log.info("Deps:\n%s", pformat(deps))
@@ -698,7 +806,6 @@ class TestRules(BaseTestCase):
             },
             4,
             {},
-            selector_to_ipset={},
         )
         self.maxDiff = None
         # Should get back a drop rule.
@@ -762,13 +869,13 @@ class TestRules(BaseTestCase):
     def test_bad_icmp_type(self):
         with self.assertRaises(UnsupportedICMPType):
             self.iptables_generator._rule_to_iptables_fragments_inner(
-                "foo", {"icmp_type": 255}, 4, {}, {}
+                "foo", {"icmp_type": 255}, 4, {},
             )
 
     def test_bad_protocol_with_ports(self):
         with self.assertRaises(AssertionError):
             self.iptables_generator._rule_to_iptables_fragments_inner(
-                "foo", {"protocol": "10", "src_ports": [1]}, 4, {}, {}
+                "foo", {"protocol": "10", "src_ports": [1]}, 4, {},
             )
 
 

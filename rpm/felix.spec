@@ -3,7 +3,7 @@
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        2.0.0
-Release:        0.3.beta3%{?dist}
+Release:        0.1.rc3%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -164,6 +164,30 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Dec 05 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc3
+  - Felix 2.0.0-rc3 (from Git commit 6bdd086).
+    Felix version 2.0.0-rc3
+    
+    - Add 5 minutes to initial usage reporting delay
+    - Record Felix 2.0.0-rc2 packaging
+    - Clean up some minor release process niggles
+    - Add a make patch-script target
+    - Update to current libcalico-go master
+
+* Thu Dec 01 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc2
+  - Felix 2.0.0-rc2 (from Git commit a98a7a5).
+    - Improve early logging configuration (fixes #1156)
+      - Default to logging errors.
+      - Provide an override environment variable that allows early logging
+        to be turned off or increased. (FELIX_EARLYLOGSEVERITYSCREEN)
+    - Allow access to floating IPs from the Calico host as well as from
+      further afield.
+    - Fix that clusterType was being defaulted when clusterGUID was missing.
+    - Incorporate latest libcalico-go improvements (v1.0.0-rc1)
+    - Update for current logrus API (fixes #1162)
+    - Improve release process for Felix
+    - Update libcalico-go to v1.0.0-rc2
+
 * Mon Nov 07 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.3.beta3
   - felix version 2.0.0-0.3.beta3 release
     - Pin logrus to 4b6ea73.
