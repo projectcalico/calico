@@ -51,7 +51,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 --set-env=IP=autodetect --net=host quay.io/calico/node:v1.0.0-rc1 &
 ```
 
-This will create a rkt container called `calico-node`.
+This will create a Calico-node rkt container.
 
 You can check that it's running
 
