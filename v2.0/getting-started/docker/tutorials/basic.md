@@ -116,7 +116,7 @@ and specify the Calico IPAM driver (`calico-ipam`). Note: `--ipam-driver calico-
 is mandatory when using Calico with Docker libnetwork. 
 
 
-To create the networks, run:
+To create the networks, run the following commands on one of the hosts:
 
     docker network create --driver calico --ipam-driver calico-ipam net1
     docker network create --driver calico --ipam-driver calico-ipam net2
@@ -159,30 +159,28 @@ the container - so we need to determine the IP addresses assigned to containers
 B and D.
 
 Since A and B are on the same host, we can run a single command that inspects
-the IP address and issues the ping.  On calico-01
+the IP address and issues the ping from A to B. These pings will fail. On calico-01, run:
 
-    docker exec workload-A ping -c 4  `docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net2.IPAddress }}{% endraw %}" workload-B`
-
-These pings will fail.
+    docker exec workload-A ping -c 2  `docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net2.IPAddress }}{% endraw %}" workload-B`
 
 To test connectivity between A and D which are on different hosts, it is
 necessary to run the `docker inspect` command on the host for D (calico-02)
 and then run the ping command on the host for A (calico-01).
 
-On calico-02
+On calico-02:
 
     docker inspect --format "{% raw %}{{ .NetworkSettings.Networks.net3.IPAddress }}{% endraw %}" workload-D
 
 This returns the IP address of workload-D.
 
-On calico-01
+On calico-01:
 
-    docker exec workload-A ping -c 4 <IP address of D>
+    docker exec workload-A ping -c 2 <IP address of D>
 
 replacing the `<...>` with the appropriate IP address of D.  These pings will
 fail.
 
-To see the list of networks, use
+To see the list of networks, use:
 
     docker network ls
 
@@ -215,6 +213,11 @@ docker network create --driver calico --ipam-driver calico-ipam --subnet=192.0.2
 docker run --net my_net --name my_workload --ip 192.0.2.100 -tid busybox
 ```
 
+Verify that the IP address was assigned to the container by running:
+
+```
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' my_workload
+```
 
 ## Advanced network policy
 
