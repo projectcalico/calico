@@ -39,7 +39,16 @@ If you have everything set up properly you should have `calicoctl` in your
 Once you have your cluster up and running, start Calico on both hosts
 
 ```shell
-sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci --set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 --insecure-options=image --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false --mount volume=birdctl,target=/var/run/calico --volume=mods,kind=host,source=/lib/modules,readOnly=false  --mount volume=mods,target=/lib/modules --volume=logs,kind=host,source=/var/log/calico,readOnly=false --mount volume=logs,target=/var/log/calico --set-env=IP=autodetect --net=host quay.io/calico/node:v1.0.0-rc1 &
+sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
+--set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 \
+--insecure-options=image \
+--volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
+--mount volume=birdctl,target=/var/run/calico \
+--volume=mods,kind=host,source=/lib/modules,readOnly=false  \
+--mount volume=mods,target=/lib/modules \
+--volume=logs,kind=host,source=/var/log/calico,readOnly=false \
+--mount volume=logs,target=/var/log/calico \
+--set-env=IP=autodetect --net=host quay.io/calico/node:latest &
 ```
 
 This will create a rkt container called `calico-node`.
