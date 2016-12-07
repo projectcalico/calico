@@ -24,6 +24,7 @@ Usage:
                      [--dryrun]
                      [--init-system]
                      [--disable-docker-networking]
+                     [--docker-networking-ifprefix=<IFPREFIX>]
 
 Options:
   -h --help                Show this screen.
@@ -66,6 +67,11 @@ Options:
                            and there are no pre-existing Calico IP pools.
      --disable-docker-networking
                            Disable Docker networking.
+     --docker-networking-ifprefix=<IFPREFIX>
+                           Interface prefix to use for the network interface
+                           within the Docker containers that have been networked
+                           by the Calico driver.
+                           [default: cali]
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -140,6 +146,11 @@ Calico node started successfully
                          and there are no pre-existing Calico IP pools.
    --disable-docker-networking
                          Disable Docker networking.
+   --docker-networking-ifprefix=<IFPREFIX>
+                         Interface prefix to use for the network interface
+                         within the Docker containers that have been networked
+                         by the Calico driver.
+                         [default: cali]
 ```
 
 ### General options
