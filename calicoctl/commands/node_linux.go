@@ -41,7 +41,7 @@ Options:
 Description:
   Node specific commands for calicoctl.  These commands must be run directly on
   the compute host running the Calico node instance.
-  
+
   See 'calicoctl node <command> --help' to read about a specific subcommand.
 `
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)

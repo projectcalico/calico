@@ -1,4 +1,4 @@
-.PHONY: all binary calico/node test ut ut-circle st st-ssl clean run-etcd run-etcd-ssl help
+.PHONY: all binary calico/node test ut st st-ssl clean run-etcd run-etcd-ssl help
 default: help
 all: test                                 ## Run all the tests
 test: st test-containerized               ## Run all the tests
@@ -270,6 +270,9 @@ semaphore: clean
 	# using "latest" tagged images.
 	$(MAKE) calico/ctl calico/node st
 	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
+
+	# Make sure that calicoctl builds cross-platform.
+	$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64
 
 	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICOCONTAINERS_VERSION
