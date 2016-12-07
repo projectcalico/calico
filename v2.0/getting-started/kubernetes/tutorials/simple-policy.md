@@ -62,7 +62,7 @@ wget: download timed out
 / #
 ```
 
-The request should time out after 5 seconds.  Be enabling isolation on the Namespace, we've prevented access to the Service.
+The request should time out after 5 seconds.  By enabling isolation on the Namespace, we've prevented access to the Service.
 
 ### Allow Access using a NetworkPolicy
 
