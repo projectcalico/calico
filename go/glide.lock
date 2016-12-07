@@ -1,5 +1,5 @@
-hash: 848f11d7568feab670b4d78c7a008c3050c2c6ef11cdaf0e7cd4f78b85fde8ab
-updated: 2016-12-05T14:48:26.738938576Z
+hash: a38217a7bae25bafb56fd9be9e3e6d010b1474515ab821875e37a3c91ccdcff4
+updated: 2016-12-07T00:54:01.542536074Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -128,7 +128,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 53ab28547fab5e922175596b533a40289f322906
+  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
   subpackages:
   - lib
   - lib/api
@@ -138,6 +138,7 @@ imports:
   - lib/backend/compat
   - lib/backend/etcd
   - lib/backend/k8s
+  - lib/backend/k8s/thirdparty
   - lib/backend/model
   - lib/client
   - lib/errors
@@ -244,7 +245,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go
-  version: 5d8c36c93cf544e3bde13caa4c6222b65753ec3c
+  version: 41a99d711af778a177f07402217b85d456b50da1
   subpackages:
   - discovery
   - kubernetes
