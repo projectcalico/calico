@@ -60,8 +60,7 @@ endpoints that arrive on at the host are forwarded accordingly.
 Felix is also responsible for programming ACLs into the Linux kernel.
 These ACLs are used to ensure that only valid traffic can be sent
 between endpoints, and ensure that endpoints are not capable of
-circumventing Calico's security measures. For more on this, see
-the [security model description]({{site.baseurl}}/{{page.version}}/reference/security-model).
+circumventing Calico's security measures.
 
 #### State Reporting
 

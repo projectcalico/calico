@@ -158,9 +158,7 @@ stateless variant of RFC 6877 (464-XLAT). For more detail, see
 
 ## "How do I control policy/connectivity without virtual/physical firewalls?"
 
-Calico provides an extremely rich security policy model, detailed 
-[here]({{site.baseurl}}/{{page.version}}/reference/security-model). 
-This model applies the policy at the first and last hop
+Calico provides an extremely rich security policy model, applying policy at the first and last hop
 of the routed traffic within the Calico network (the source and
 destination compute hosts).
 
@@ -194,10 +192,8 @@ again, and again the reachability doesn’t have to change.
 document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.
 
-## Can a guest container have multiple networked IP addresses?
-Yes. You can add IP addresses using the `calicoctl container <CONTAINER> ip (add|remove) <IP>` command.
-
 ## Why isn't the `-p` flag on `docker run` working as expected?
+
 The `-p` flag tells Docker to set up port mapping to connect a port on the
 Docker host to a port on your container via the `docker0` bridge.
 
@@ -216,6 +212,7 @@ reserved in a L2 subnet, such as IPv4 addresses ending in .0 or .255, are perfec
 okay to use.
 
 ## How do I get network traffic into and out of my Calico cluster?
+
 The recommended way to get traffic to/from your Calico network is by peering to
 your existing data center L3 routers using BGP and by assigning globally
 routable IPs (public IPs) to containers that need to be accessed from the internet.
@@ -237,6 +234,7 @@ We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
 
 ### How can I enable NAT for outgoing traffic from containers with private IP addresses?
+
 If you want to allow containers with private IP addresses to be able to access the
 internet then you can use your data center's existing outbound NAT capabilities
 (typically provided by the data center's border routers).
@@ -244,9 +242,18 @@ internet then you can use your data center's existing outbound NAT capabilities
 Alternatively you can use Calico's built in outbound NAT capability by enabling it on any
 Calico IP pool. In this case Calico will perform outbound NAT locally on the compute
 node on which each container is hosted.
+
 ```
-./calicoctl pool add <CIDR> --nat-outgoing
+cat << EOF | calicoctl apply -f -
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: <CIDR>
+spec:
+  nat-outgoing: true
+EOF
 ```
+
 Where `<CIDR>` is the CIDR of your IP pool, for example `192.168.0.0/16`.
 
 Remember: the security profile for the container will need to allow traffic to the
@@ -254,6 +261,7 @@ internet as well.  Refer to the appropriate guide for your orchestration
 system for details on how to configure policy.
 
 ### How can I enable NAT for incoming traffic to containers with private IP addresses?
+
 As discussed, the recommended way to get traffic to containers that
 need to be accessed from the internet is to give them public IP addresses and
 to configure Calico to peer with the data center's existing L3 routers.
@@ -262,30 +270,52 @@ In cases where this is not possible then you can configure incoming NAT
 (also known as DNAT) on your data centers existing border routers. Alternatively
 you can configure incoming NAT with port mapping on the host on which the container
 is running on.
+
 ```
 iptables -A PREROUTING -t nat -i eth0 -p tcp --dport <EXPOSED_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
 ```
+
 For example, you have a container to which you've assigned the CALICO_IP of 192.168.7.4, and you have NGINX running on port 80 inside the container. If you want to expose this service on port 80, then you could run the following command:
+
 ```
 iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.4:80
 ```
+
 The command will need to be run each time the host is restarted.
 
 Remember: the security profile for the container will need to allow traffic to the exposed port as well.
 Refer to the appropriate guide for your orchestration system for details on how to configure policy.
 
 ### Can I run Calico in a public cloud environment?
-Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between Calico hosts then you can specify the `--ipip` flag your Calico IP pool:
+
+Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between Calico hosts then you can enable `ipip` in your Calico IP pool:
 
 ```shell
-./calicoctl pool add <CIDR> --ipip --nat-outgoing
+cat << EOF | calicoctl apply -f -
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: <CIDR>
+spec:
+  ipip:
+    enabled: true
+  nat-outgoing: true
+EOF
 ```
+
 Calico will then route traffic between Calico hosts using IP in IP.
 
 In AWS, you disable `Source/Dest. Check` instead of using IP in IP as long as all your instances are in the same subnet of your VPC.  This will provide the best performance.  You can disable this with the CLI, or right click the instance in the EC2 console, and `Change Source/Dest. Check` from the `Networking` submenu.
 
 ```shell
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
-...
-./calicoctl pool add <CIDR> --nat-outgoing
+
+cat << EOF | calicoctl apply -f -
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: <CIDR>
+spec:
+  nat-outgoing: true
+EOF
 ```
