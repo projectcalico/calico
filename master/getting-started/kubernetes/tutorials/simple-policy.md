@@ -105,7 +105,7 @@ If you don't see a command prompt, try pressing enter.
 / # wget -q --timeout=5 nginx -O -
 ```
 
-However, we still cannot access the Service from a Pod without the label `access`:
+However, we still cannot access the Service from a Pod without the label `run: access`:
 
 ```
 # Run a Pod and try to access the `nginx` Service.

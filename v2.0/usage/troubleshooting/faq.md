@@ -6,6 +6,7 @@ layout: docwithnav
 * TOC
 {:toc}
 
+
 ## "Why use Calico?"
 
 The problem Calico tries to solve is the networking of workloads (VMs,
@@ -66,6 +67,13 @@ In container deployments, Calico only uses proxy ARP for resolving the
 169.245.1.1 address.  The routing table inside the container ensures
 that all traffic goes via the 169.245.1.1 gateway so that is the only
 IP that will be ARPed by the container.
+
+## "Why containers are still unconnected even with `proxy_arp=1`"
+
+Route for `169.254.1.1` on host is also necessary, since the traffic
+should be forwarded to the default route, or somewhere connected.
+Please check your route table for making sure. Adding a default one is
+fine if absent.
 
 ## "Is Calico compliant with PCI/DSS requirements?"
 

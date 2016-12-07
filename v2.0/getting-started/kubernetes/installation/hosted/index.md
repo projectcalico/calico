@@ -35,7 +35,7 @@ It installs the following Kubernetes resources:
 - The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `calico/node` container on each host using a DaemonSet.
 - Installs the Calico CNI binaries and network config on each host using a DaemonSet.
-- Runs the `calico/kube-policy-controller` as a Deployment.
+- Runs the `calico/kube-policy-controller` in a Deployment.
 - The `calico-etcd-secrets` Secret, which optionally allows for providing etcd TLS assets.
 
 ## Configuration options
@@ -141,7 +141,7 @@ spec:
   hostNetwork: true
   containers:
   - name: calicoctl
-    image: calico/ctl:v1.0.0-beta
+    image: calico/ctl:v1.0.0-rc2
     command: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
     env:
     - name: ETCD_ENDPOINTS

@@ -2,8 +2,7 @@
 title: Securing Calico
 ---
 
-What Calico does and does not provide
-=====================================
+## What Calico does and does not provide
 
 Currently, Calico implements security policy that ensures that:
 
@@ -29,8 +28,7 @@ developer who owns the endpoint (at least when Calico is used with
 OpenStack), it's a management challenge to use that to enforce *network*
 policy.
 
-How Calico uses iptables
-========================
+## How Calico uses iptables
 
 Calico needs to add its security policy rules to the "INPUT", "OUTPUT"
 and "FORWARD" chains of the iptables "filter" table. To minimise the
@@ -61,18 +59,15 @@ Felix inserts a reverse path filtering rule in the iptables "raw"
 PREROUTING chain. (For IPv4, it enables the rp\_filter sysctl on each
 interface that it controls.)
 
-Securing iptables
-=================
+## Securing iptables
 
 In a production environment, we recommend setting the default policy for
 the INPUT and FORWARD chains to be DROP and then explicitly whitelisting
 the traffic that should be allowed.
 
-Securing etcd
-=============
+## Securing etcd
 
-Limiting network access to etcd
--------------------------------
+### Limiting network access to etcd
 
 Calico uses etcd to store and forward the configuration of the network
 from plugin to the Felix agent. By default, etcd is writable by anyone
@@ -84,8 +79,7 @@ range(s) used by the compute nodes and plugin.
 Calico's host endpoint support (see [this document]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal)) can be used to
 enforce such policy.
 
-Using TLS to encrypt and authenticate communication with etcd
--------------------------------------------------------------
+### Using TLS to encrypt and authenticate communication with etcd
 
 Calico supports etcd's TLS-based security model, which supports the
 encryption (and authentication) of traffic between Calico components and
@@ -161,17 +155,18 @@ To enable TLS support:
 
     -   Restart neutron-server.
 
--   Unless your Calico system uses `calicoctl node` to install and
-    configure Felix, configure each Felix with its own key and
-    certificate:
+-   Unless your Calico system uses the `calico/node` container image to configure
+    and launch Felix (this includes the `calicoctl node run` command), configure
+    each Felix with its own key and certificate:
 
     > **NOTE**
     >
-    > In systems that use `calicoctl node` (such as Docker, Kubernetes
-    > and other container orchestrators), you should use the
-    > `calicoctl` tool to configure TLS. See the [calicoctl configuration
-    >  ({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
-    > for details.
+    > In systems that use the `calico/node` container image, including those
+    > that use `calicoctl node run` (such as Docker, Kubernetes
+    > and other container orchestrators), you should pass in the appropriate environment
+    > variables to configure TLS. See the [calicoctl configuration
+    >  guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
+    >  for details.
     >
 
     -   Generate a certificate and key pair for each Felix.
@@ -214,8 +209,7 @@ To enable TLS support:
 
     -   Restart Felix.
 
-Host endpoint failsafe rules
-============================
+## Host endpoint failsafe rules
 
 By default for host endpoints (in order to avoid breaking all
 connectivity to a host) Calico whitelists ssh to and etcd traffic from
@@ -224,3 +218,6 @@ they are fairly broad.
 
 This behaviour can be configured or disabled via configuration
 parameters; see [here]({{site.baseurl}}/{{page.version}}/usage/configuration).
+
+Also, see the [Host Protection guide]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal)
+for example failsafe configuration.

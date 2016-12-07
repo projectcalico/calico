@@ -55,7 +55,7 @@ Marathon install once the tasks start.
 
 	docker pull calico/star:v0.5.0
 
-On your master, download the [stars.json](https://github.com/projectcalico/calico/blob/master/master/getting-started/mesos/demos/docker/stars.json) from this directory.
+On your master, download the [stars.json](./stars.json) from this directory.
 
 ### 1. Create a Docker network
 With Calico, a Docker network represents a logical set of rules that define the

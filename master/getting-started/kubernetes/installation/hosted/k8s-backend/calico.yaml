@@ -60,7 +60,6 @@ spec:
         # host.
         - name: calico-node
           image: calico/node:latest 
-          imagePullPolicy: Always
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -95,7 +94,6 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: calico/cni:latest 
-          imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:
             # The CNI network config to install on each node.

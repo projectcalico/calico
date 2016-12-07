@@ -12,6 +12,7 @@ data:
         "type": "calico",
         "log_level": "debug",
         "datastore_type": "kubernetes",
+        "hostname": "__KUBERNETES_NODE_NAME__",
         "ipam": {
             "type": "host-local",
             "subnet": "usePodCidr"
@@ -58,7 +59,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:v1.0.0-beta 
+          image: calico/node:v1.0.0-rc2 
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -92,7 +93,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:v1.5.0
+          image: calico/cni:v1.5.3 
           command: ["/install-cni.sh"]
           env:
             # The CNI network config to install on each node.

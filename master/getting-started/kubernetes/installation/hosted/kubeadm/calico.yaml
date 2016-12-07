@@ -180,7 +180,6 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: calico/cni:latest
-          imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
