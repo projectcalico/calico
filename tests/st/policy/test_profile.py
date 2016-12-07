@@ -110,7 +110,7 @@ class MultiHostMainline(TestBase):
                 new_profiles[1]['spec']['ingress'].append(rule1)
                 self._apply_new_profile(new_profiles, host1)
                 # Check everything can contact everything else now
-                self.assert_connectivity(retries=2,
+                self.assert_connectivity(retries=3,
                                          pass_list=n1_workloads + n2_workloads)
 
             elif test_type == "rules.protocol.icmp":
