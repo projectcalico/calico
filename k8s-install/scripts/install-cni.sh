@@ -45,10 +45,20 @@ then
 	CNI_CONF_ETCD_CERT=${HOST_SECRETS_DIR}/etcd-cert
 fi
 
-# Place the new binaries.
-cp /opt/cni/bin/* /host/opt/cni/bin/
-echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
-echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
+# Place the new binaries if the directory is writeable.
+if [ -w "/host/opt/cni/bin/" ]; then
+	cp /opt/cni/bin/* /host/opt/cni/bin/
+	echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
+	echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
+fi
+
+# Place them in the secondary location if it exists and 
+# is writeable.
+if [ -w "/host/secondary-bin-dir/" ]; then
+	cp /opt/cni/bin/* /host/secondary-bin-dir/
+	echo "Wrote Calico CNI binaries to /host/secondary-bin-dir/"
+	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"
+fi
 
 # Make the network configuration file.
 cat >calico.conf.tmp <<EOF
