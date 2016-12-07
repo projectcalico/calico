@@ -1,5 +1,5 @@
 ---
-title: Calico Networking with rkt
+title: Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox
 ---
 
 This tutorial describes how to set up a Calico cluster in a pure rkt environment.
@@ -12,7 +12,7 @@ This tutorial walks through getting a cluster set up with Vagrant.
 ### 1.1 Install dependencies
 
 * [VirtualBox][virtualbox] 5.0.0 or greater.
-* [Vagrant][vagrant] 1.7.4 or greater.
+* [Vagrant][vagrant] 1.8.5 or greater.
 * [Git][git]
 
 ### 1.2 Clone this project
@@ -20,9 +20,10 @@ This tutorial walks through getting a cluster set up with Vagrant.
     git clone https://github.com/projectcalico/calico.git
 
 ### 1.3 Startup and SSH
+
 Change into the directory for this guide:
 
-    cd calico/{{page.version}}/getting-started/rkt/vagrant/
+    cd calico/{{page.version}}/getting-started/rkt/installation/vagrant-coreos
 
 Run
 
@@ -57,24 +58,73 @@ help.  Remember to shut down the VMs with `vagrant halt` before you reboot.
 
 You should also verify each host can access etcd.  The following will return an error if etcd is not available.
 
-    curl -L http://localhost:2379/version
+    curl -L http://172.18.18.101:2379/version
 
+And finally check that `rkt` is running on both hosts by running
+
+    sudo rkt list
+
+## 2. Try out Calico Networking
+
+Now that you have a basic two node CoreOS cluster setup, see the [Calico networking with rkt]({{site.baseurl}}/{{page.version}}/getting-started/rkt/tutorials/basic)
+
+[virtualbox]: https://www.virtualbox.org/
+[vagrant]: https://www.vagrantup.com/downloads.html
+[git]: http://git-scm.com/
+
+---
+title: Calico networking with rkt
+---
+
+
+This tutorial describes how to set up a Calico cluster in a pure rkt environment
+using CNI with Calico specific network and IPAM drivers.
+
+Using the Calico CNI plugin, the required network setup and configuration
+for networking containers using Calico is handled automatically as part of the
+standard network and container lifecycle.  Provided the network is created
+using the Calico driver, creating a container using that network will
+automatically add the container to the Calico network, creating all necessary
+Calico configuration and setting up the interface and routes in the container
+accordingly.
+
+The Calico IPAM driver must be used in addition to the the Calico network
+driver.  This provides IP address management using the configured Calico IP
+Pools as address pools for the container, preferentially selecting sub-blocks
+of IPs for a particular host.
+
+## 1. Environment setup
+
+To run through the worked example in this tutorial you will need to set up two hosts
+with a number of installation dependencies.
+
+Follow the instructions in the tutorial below to set up a virtualized
+environment using Vagrant - be sure to follow the appropriate instructions
+for _Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox_.
+
+- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/rkt/installation/vagrant-coreos/)
+
+
+If you have everything set up properly you should have `calicoctl` in your
+`$PATH`, and two hosts called `calico-01` and `calico-02`.
 
 ## 2. Starting Calico services
 
 Once you have your cluster up and running, start Calico on both hosts
 
-    sudo calicoctl node  --runtime=rkt
+```shell
+sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci --set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 --insecure-options=image --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false --mount volume=birdctl,target=/var/run/calico --volume=mods,kind=host,source=/lib/modules,readOnly=false  --mount volume=mods,target=/lib/modules --volume=logs,kind=host,source=/var/log/calico,readOnly=false --mount volume=logs,target=/var/log/calico --set-env=IP=autodetect --net=host quay.io/calico/node:v1.0.0-rc1 &
+```
 
-This will create a systemd unit called `calico-node` which runs the Calico components under `rkt`
+This will create a rkt container called `calico-node`.
 
 You can check that it's running
 
-	$ sudo rkt list
-	UUID            APP     IMAGE NAME                              STATE   NETWORKS
-	bc13af40        node    registry-1.docker.io/calico/node:v1.0.0-beta running
-
-You can check the status and logs using normal systemd commands e.g. `systemctl status calico-node` and `journalctl -u calico-node`
+```shell
+$ sudo rkt list
+UUID		APP	    IMAGE NAME			            STATE	CREATED		    STARTED		   NETWORKS
+6e552eeb	node	quay.io/calico/node:v1.0.0-rc1	running	20 seconds ago	20 seconds ago
+```
 
 ## 3. Create the networks
 
@@ -122,144 +172,90 @@ Both "services" will just be a `httpd` running in a `busybox` container. The ser
 
 ### On calico-01
 
-Create the "frontend" service using `systemd-run`.
+Create the "frontend" service.
 
-    sudo systemd-run --unit=frontend sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec httpd -- -f -h /
+```shell
+sudo rkt run --net=backend docker://busybox --exec httpd -- -f -h / &
+```
 
-Normal [systemd commands][systemd-run] can then be used to get the status of the container and view its logs (e.g. `sudo journalctl -u frontend`). Use `rkt list` to see the IP.
+Use `rkt list` to see the IP.
 
-	$ sudo rkt list
-	UUID		APP	IMAGE NAME					STATE	CREATED		STARTEDNETWORKS
-	05f8779a	node	registry-1.docker.io/calico/node:v1.0.0-beta		running	1 hour ago	1 hour ago
-	c89f2f35	busybox	registry-1.docker.io/library/busybox:latest	running	2 seconds ago	1 second ago	frontend:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
+```shell
+$ sudo rkt list
+UUID		APP		IMAGE NAME									STATE	CREATED			STARTED			NETWORKS
+6e552eeb	node	quay.io/calico/node:v1.0.0-rc1				running	7 minutes ago	7 minutes ago
+fe706423	busybox	registry-1.docker.io/library/busybox:latest	running	9 seconds ago	8 seconds ago	frontend:ip4=192.168.212.129, default-restricted:ip4=172.16.28.2
+```
 
-
-We now have a `busybox` container running on the network `frontend` with an IP address of `192.168.0.0`
+We now have a `busybox` container running on the network `frontend` with an IP address of `192.168.212.129`
 rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network)
 
 ### On calico-02
 
 Repeat for a "backend" service on `calico-02`
 
-    sudo systemd-run --unit=backend sudo rkt run --net=backend registry-1.docker.io/library/busybox --exec httpd -- -f -h /
+```shell
+sudo rkt run --net=backend docker://busybox --exec httpd -- -f -h / &
+```
 
-	$ sudo rkt list
-	UUID		APP	IMAGE NAME					STATE	CREATED		STARTEDNETWORKS
-	2cc27ce1	node	registry-1.docker.io/calico/node:v1.0.0-beta		running	1 hour ago	1 hour ago
-	407208a5	busybox	registry-1.docker.io/library/busybox:latest	running	11 seconds ago	10 seconds ago	backend:ip4=192.168.0.64, default-restricted:ip4=172.16.28.2
+Use `rkt list` to see the container IP.
 
-We now have a `busybox` container running on the network `backend` with an IP address of `192.168.0.1`
+```shell
+$ sudo rkt list
+UUID		APP		IMAGE NAME									STATE	CREATED			STARTED			NETWORKS
+33ce4f2b	node	quay.io/calico/node:v1.0.0-rc1				running	1 minute ago	1 minute ago
+7e7315af	busybox	registry-1.docker.io/library/busybox:latest	running	15 seconds ago	15 seconds ago	backend:ip4=192.168.138.64, default-restricted:ip4=172.16.28.2
+```
+
+We now have a `busybox` container running on the network `backend` with an IP address of `192.168.138.64`
 
 ## 5. Validate access to services
 
-Now that we've created the services and we know their IP addresses, we can access them using `wget` from containers running on
+Now that we have created the services and we know their IP addresses, we can access them using `wget` from containers running on
 either host, as long as they are created on the same network.
 
 e.g. On `calico-02` use wget to access the frontend service which is running on `calico-01`
 
-	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 10 192.168.0.0/etc/passwd 2>/dev/null
+```shell
+sudo rkt run --net=frontend docker://busybox --exec=/bin/wget -- -T 3 192.168.212.129/etc/passwd 2>/dev/null
+```
 
-Expected output
+Expected output:
 
-	[62032.807862] wget[4]: Connecting to 192.168.0.0 (192.168.0.0:80)
-	[62032.813662] wget[4]: passwd               100% |*******************************|   334   0:00:00 ETA
+```shell
+[62032.807862] wget[4]: Connecting to 192.168.212.129 (192.168.212.129:80)
+[62032.813662] wget[4]: passwd               100% |*******************************|   334   0:00:00 ETA
+```
 
-This command runs the `wget` command in a busybox container to fetch the `passwd` file from our host. '-T 1' tells wget to only wait a second for a response.
+This command runs the `wget` command in a busybox container to fetch the `passwd` file from our host. '-T 3' tells wget to only wait for 3 seconds for a response.
 Stderr is redirected to `/dev/null` as we're not interested in the logs from `rkt` for this command.
 
-You can repeat this command on calico-01 and check that access works the same from any server in your cluster.
+You can repeat this command on `calico-01` and check that access works the same from any server in your cluster.
 
-### 5.1 Checking network isolation
+### 5 Checking network isolation
+
 Repeat the above command but try to access the backend from the frontend. Because we've not allowed access between these networks, the command will fail.
 
-	sudo rkt run --net=backend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 2 192.168.0.0/etc/passwd 2>/dev/null
+```shell
+sudo rkt run --net=backend docker://busybox --exec=/bin/wget -- -T 3 192.168.212.129/etc/passwd 2>/dev/null
+```
 
-Expected output
+Expected output:
 
-	[62128.109283] wget[4]: Connecting to 192.168.0.0 (192.168.0.0:80)
-	[62129.109472] wget[4]: wget: download timed out
+```shell
+[62128.109283] wget[4]: Connecting to 192.168.212.129 (192.168.212.129:80)
+[62129.109472] wget[4]: wget: download timed out
+```
 
-Calico always allows access to the containers running on a host _from that host only_. The rules are bypassed in this case only.
-This means that the backend service can be accessed directly from `calico-02` (the host it's running on), but not from `calico-01`
+## 6. Resetting/Cleanup up
 
-## 6. Add network policy
-To view the existing network policy, use the `calicoctl` command.
+If you want to start again from the beginning, then run the following commands on both hosts to ensure that all the rkt containers are removed.
 
-On either host, run
+	# Stop the frontend/backend containers and calico-node container
+	sudo rkt stop --force <Container_UUID>
 
-	calicoctl profile backend rule show
-
-Expected output
-
-	Inbound rules:
-		 1 allow from tag backend
-	Outbound rules:
-		 1 allow
-
-The "frontend" profile produces a similar result.
-
-### Open access to backends
-
-We want the backends to allow inbound traffic from the frontends, but only on port 80.
-
-Run
-
-	calicoctl profile backend rule add inbound allow tcp from tag frontend to ports 80
-	calicoctl profile backend rule show
-
-To produce the following output
-
-	Inbound rules:
-		 1 allow from tag backend
-		 2 allow tcp from tag frontend to ports 80
-	Outbound rules:
-		 1 allow
-
-And we can now access our backend service from the frontend containers.
-
-On either host, run
-
-	sudo rkt run --net=frontend registry-1.docker.io/library/busybox --exec=/bin/wget -- -T 10 192.168.0.64/etc/passwd 2>/dev/null
-
-### Open access to frontends
-We want to allow everyone to access our frontends, but only on port 80.
-
-	calicoctl profile frontend rule add inbound allow tcp to ports 80
-	calicoctl profile frontend rule show
-
-To produce the following output
-
-	calicoctl profile frontend rule show
-	Inbound rules:
-		 1 allow from tag frontend
-		 2 allow tcp to ports 80
-	Outbound rules:
-		 1 allow
-
-Now on either host, we can access the container directly
-
-	wget -T 10 192.168.0.0/etc/passwd
-
-## 7. Resetting/Cleanup up
-If you want to start again from the beginning, then run the following commands on both hosts to ensure that all the rkt containers and systemd jobs are removed.
-
-	# Stop the frontend (in case the job failed, manually remove the service too)
-	sudo systemctl stop frontend; sudo rm -rf /run/systemd/system/frontend.service /run/systemd/system/frontend.service.d; sudo systemctl daemon-reload
-
-	# Stop the backend (in case the job failed, manually remove the service too)
-	sudo systemctl stop backend; sudo rm -rf /run/systemd/system/backend.service /run/systemd/system/backend.service.d; sudo systemctl daemon-reload
-
-	# Stop the calico-node (in case the job failed, manually remove the service too)
-	sudo systemctl stop calico-node; sudo rm -rf /run/systemd/system/calico-node.service /run/systemd/system/calico-node.service.d; sudo systemctl daemon-reload
-
-	# Remove any stopped busybox containers
+	# Remove the stopped containers
 	sudo rkt list --no-legend | cut -f1 |sudo xargs rkt rm
 
 	# Wipe Calico data from etcd
 	etcdctl rm --recursive /calico
-
-
-[systemd-run]: https://github.com/coreos/rkt/blob/master/Documentation/using-rkt-with-systemd.md#systemd-run
-[virtualbox]: https://www.virtualbox.org/
-[vagrant]: https://www.vagrantup.com/downloads.html
-[git]: http://git-scm.com/
