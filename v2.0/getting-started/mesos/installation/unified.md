@@ -22,9 +22,11 @@ Run the following steps on **each agent**.
 
 ```shell
 curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
-    https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
+    https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico
+curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
+    https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico-ipam
 chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
-ln -s $NETWORK_CNI_PLUGINS_DIR/calico $NETWORK_CNI_PLUGINS_DIR/calico-ipam
+chmod +x $NETWORK_CNI_PLUGINS_DIR/calico-ipam
 ```
 
 2. Run `calico/node`, a Docker container with calico's core routing processes.

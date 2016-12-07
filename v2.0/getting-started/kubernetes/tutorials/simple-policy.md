@@ -72,7 +72,7 @@ from anywhere else.
 Create a network policy `access-nginx` with the following contents:
 
 ```
-$ kubectl create -f - <<EOF
+kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: extensions/v1beta1
 metadata:

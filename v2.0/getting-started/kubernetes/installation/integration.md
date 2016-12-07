@@ -54,7 +54,7 @@ done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-beta/calicoctl
+wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc2/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -78,7 +78,23 @@ Requires=docker.service
 User=root
 Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node -e ETCD_ENDPOINTS= -e HOSTNAME=${HOSTNAME} -e IP= -e NO_DEFAULT_POOLS= -e AS= -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e CALICO_LIBNETWORK_ENABLED=true -e IP6= -e CALICO_NETWORKING_BACKEND=bird -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock -v /var/log/calico:/var/log/calico calico/node:v1.0.0-beta
+ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \ 
+  -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
+  -e HOSTNAME=${HOSTNAME} \ 
+  -e IP= \
+  -e NO_DEFAULT_POOLS= \
+  -e AS= \
+  -e ETCD_AUTHORITY=127.0.0.1:2379 \
+  -e ETCD_SCHEME=http \
+  -e CALICO_LIBNETWORK_ENABLED=true \
+  -e IP6= \
+  -e CALICO_NETWORKING_BACKEND=bird \
+  -v /var/run/calico:/var/run/calico \
+  -v /lib/modules:/lib/modules \
+  -v /run/docker/plugins:/run/docker/plugins \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/log/calico:/var/log/calico \
+  calico/node:v1.0.0-rc2
 Restart=always
 RestartSec=10
 
@@ -96,8 +112,8 @@ The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ip
 Download the binaries and make sure they're executable
 
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.0/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 
@@ -128,7 +144,7 @@ EOF
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
 
-For more information on configuring the Calico CNI plugins, see the [configuration guide](https://github.com/projectcalico/calico-cni/blob/v1.4.3/configuration.md).
+For more information on configuring the Calico CNI plugins, see the [configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
 
 ### Install standard CNI lo plugin
 
@@ -167,7 +183,7 @@ calico-policy-controller                 2/2       Running   0          1m
 ```
 
 For more information on how to configure the policy controller, 
-see the [configuration guide](https://github.com/projectcalico/k8s-policy/blob/v0.5.0/configuration.md).
+see the [configuration guide](https://github.com/projectcalico/k8s-policy/blob/v0.5.1/configuration.md).
 
 ## Configuring Kubernetes
 

@@ -122,6 +122,8 @@ spec:
             # below.
             - name: NO_DEFAULT_POOLS
               value: "true"
+            - name: FELIX_LOGSEVERITYSCREEN
+              value: "info"
             # Location of the CA certificate for etcd.
             - name: ETCD_CA_CERT_FILE
               valueFrom:
@@ -158,7 +160,6 @@ spec:
         # and CNI network config file on each node.
         - name: install-cni
           image: calico/cni:latest
-          imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
