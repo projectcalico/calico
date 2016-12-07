@@ -105,8 +105,6 @@ toc:
     path: /reference/architecture/components
   - title: Data Path
     path: /reference/architecture/data-path
-- title: Addressing and Connectivity Overview
-  path: /reference/addressing
 - title: Advanced
   section:
   - title: RBAC for etcdv2
