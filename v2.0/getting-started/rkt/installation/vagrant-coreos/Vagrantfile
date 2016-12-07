@@ -5,6 +5,7 @@ num_instances=2
 instance_name_prefix="calico"
 
 # Official CoreOS channel from which updates should be downloaded
+# Using the beta channel because the rkt version shipped with stable doesn't have a rkt stop command.
 update_channel='beta'
 
 Vagrant.configure("2") do |config|
