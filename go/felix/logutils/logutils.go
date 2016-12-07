@@ -198,7 +198,9 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 		}
 		var value interface{} = entry.Data[key]
 		var stringifiedValue string
-		if stringer, ok := value.(fmt.Stringer); ok {
+		if err, ok := value.(error); ok {
+			stringifiedValue = err.Error()
+		} else if stringer, ok := value.(fmt.Stringer); ok {
 			// Trust the value's String() method.
 			stringifiedValue = stringer.String()
 		} else {

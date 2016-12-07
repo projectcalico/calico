@@ -57,12 +57,38 @@ func (m MatchCriteria) OutInterface(ifaceMatch string) MatchCriteria {
 	return append(m, fmt.Sprintf("--out-interface %s", ifaceMatch))
 }
 
+type AddrType string
+
+const (
+	AddrTypeLocal AddrType = "LOCAL"
+)
+
+func (m MatchCriteria) NotSrcAddrType(addrType AddrType, limitIfaceOut bool) MatchCriteria {
+	if limitIfaceOut {
+		return append(m, fmt.Sprintf("-m addrtype ! --src-type %s --limit-iface-out", addrType))
+	} else {
+		return append(m, fmt.Sprintf("-m addrtype ! --src-type %s", addrType))
+	}
+}
+
+func (m MatchCriteria) SrcAddrType(addrType AddrType, limitIfaceOut bool) MatchCriteria {
+	if limitIfaceOut {
+		return append(m, fmt.Sprintf("-m addrtype --src-type %s --limit-iface-out", addrType))
+	} else {
+		return append(m, fmt.Sprintf("-m addrtype --src-type %s", addrType))
+	}
+}
+
 func (m MatchCriteria) ConntrackState(stateNames string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m conntrack --ctstate %s", stateNames))
 }
 
 func (m MatchCriteria) Protocol(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-p %s", name))
+}
+
+func (m MatchCriteria) ProtocolNum(num uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("-p %d", num))
 }
 
 func (m MatchCriteria) SourceNet(net string) MatchCriteria {

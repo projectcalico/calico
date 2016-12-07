@@ -28,6 +28,7 @@ import (
 type Config struct {
 	DisableIPv6          bool
 	RuleRendererOverride rules.RuleRenderer
+	IPIPMTU              int
 
 	RulesConfig rules.Config
 }
@@ -45,6 +46,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		cleanupPending:    true,
 		ifaceMonitor:      ifacemonitor.New(),
 		ifaceUpdates:      make(chan *ifaceUpdate, 100),
+		config:            config,
 	}
 
 	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
@@ -77,7 +79,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		4,
 		config.RulesConfig.WorkloadIfacePrefixes))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, 1000000, 4))
-
+	if config.RulesConfig.IPIPEnabled {
+		// Add a manger to keep the all-hosts IP set up to date.
+		dp.RegisterManager(newIPIPManager(ipSetsV4, 1000000)) // IPv4-only
+	}
 	if !config.DisableIPv6 {
 		natTableV6 := iptables.NewTable(
 			"nat",
@@ -147,6 +152,8 @@ type InternalDataplane struct {
 
 	dataplaneNeedsSync bool
 	cleanupPending     bool
+
+	config Config
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
@@ -196,10 +203,24 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
 
 	for _, t := range d.iptablesFilterTables {
-		t.UpdateChains(d.ruleRenderer.StaticFilterTableChains())
+		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion)
+		t.UpdateChains(filterChains)
 		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
 			Action: iptables.JumpAction{rules.FilterForwardChainName},
 		}})
+	}
+
+	if d.config.RulesConfig.IPIPEnabled {
+		err := configureIPIPDevice(d.config.IPIPMTU,
+			d.config.RulesConfig.IPIPTunnelAddress)
+		if err != nil {
+			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			err := configureIPIPDevice(d.config.IPIPMTU,
+				d.config.RulesConfig.IPIPTunnelAddress)
+			if err != nil {
+				log.WithError(err).Panic("IPIP enabled but failed to configure tunnel.")
+			}
+		}
 	}
 
 	for _, t := range d.iptablesNATTables {

@@ -37,6 +37,8 @@ const (
 	NATOutgoingAllIPsSetID  = "all-ipam-pools"
 	NATOutgoingMasqIPsSetID = "masq-ipam-pools"
 
+	AllHostIPsSetID = "all-hosts"
+
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
 
@@ -80,7 +82,7 @@ var (
 )
 
 type RuleRenderer interface {
-	StaticFilterTableChains() []*iptables.Chain
+	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
@@ -123,6 +125,9 @@ type Config struct {
 	WhitelistDHCPToHost   bool
 	OpenStackMetadataIP   net.IP
 	OpenStackMetadataPort uint16
+
+	IPIPEnabled       bool
+	IPIPTunnelAddress net.IP
 }
 
 func NewRenderer(config Config) RuleRenderer {
