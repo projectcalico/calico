@@ -30,8 +30,8 @@ import (
 
 	"encoding/json"
 
-	"k8s.io/client-go/1.4/kubernetes"
-	"k8s.io/client-go/1.4/tools/clientcmd"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	log "github.com/Sirupsen/logrus"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/client"
