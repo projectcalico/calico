@@ -5,14 +5,13 @@ title: Using Calico to Secure Host Interfaces
 This guide describes how to use Calico to secure the network interfaces
 of the host itself (as opposed to those of any container/VM workloads
 that are present on the host). We call such interfaces "host endpoints",
-to distinguish them from "workload endpoints".
+to distinguish them from "workload endpoints" (such as containers or VMs).
 
 Calico supports the same rich security policy model for host endpoints
-that it supports for workload endpoints. Host endpoints can have labels
-and tags, and their labels and tags are in the same "namespace" as those
-of workload endpoints. This allows security rules for either type of
-endpoint to refer to the other type (or a mix of the two) using labels
-and selectors.
+that it supports for workload endpoints.  Host endpoints can have labels, and
+their labels are in the same "namespace" as those of workload endpoints. This 
+allows security rules for either type of endpoint to refer to the other type 
+(or a mix of the two) using labels and selectors.
 
 Calico does not support setting IPs or policing MAC addresses for host
 interfaces, it assumes that the interfaces are configured by the
@@ -290,10 +289,10 @@ key/value pairs that can be used in selector expressions.
 
 > **Warning**
 >
-> When rendering security rules on other hosts, Calico uses the
-> `expected_ipvX_addrs` fields to resolve tags and label selectors
-> to IP addresses. If the `expected_ipvX_addrs` fields are omitted
-> then security rules that use labels and tags will fail to match
+> When rendering security rules on other hosts, Calico uses the 
+> `expectedIPs` field to resolve label selectors
+> to IP addresses. If the `expectedIPs` field is omitted
+> then security rules that use labels will fail to match
 > this endpoint.
 
 Or, if you knew that the IP address should be 10.0.0.1, but not the name

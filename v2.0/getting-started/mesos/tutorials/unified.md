@@ -34,7 +34,7 @@ With your CNI network configured, you are now ready to launch tasks on it. There
 
 #### a.) Using Mesos-Execute
 
-To quickly test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
+To test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
 
 ```shell
 mesos-execute --containerizer=mesos \
@@ -131,13 +131,11 @@ spec:
       - 6379
 ```
 
-[This alpha version of calicoctl](https://github.com/tigera/libcalico-go/releases/tag/v1.0.0-alpha.1) can be used to register this policy spec:
+Use [`calicoctl`]({{site.baseurl}}/{{page.version}}/releases) to create the policy resource.
 
 ```shell
 calicoctl create -f frontend-policy.yaml
 ```
-
-**Note: The above link to the new resource-based calicoctl is neither the permanent nor future home for the binary. Expect the golang source for calicoctl to move. The linked release may also be deleted.**
 
 [calico-slack]: https://slack.projectcalico.org/
 [marathon-ip-per-task-doc]: https://github.com/mesosphere/marathon/blob/v0.14.0/docs/ip-per-task.md

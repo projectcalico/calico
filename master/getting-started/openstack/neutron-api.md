@@ -123,8 +123,7 @@ issue.
 
 In Calico, security groups have all the same function. Additionally,
 they serve to provide the connectivity-limiting function that in vanilla
-OpenStack is provided by Neutron networks. For more information, see
-[this document]({{site.baseurl}}/{{page.version}}/reference/security-model).
+OpenStack is provided by Neutron networks.
 
 All the attributes of security groups remain unchanged in Calico.
 

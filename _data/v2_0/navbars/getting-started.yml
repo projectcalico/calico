@@ -72,8 +72,6 @@ toc:
     section:
     - title: Vagrant Quickstart - Docker Containerizer
       path: /getting-started/mesos/vagrant/
-    - title: Stars Demo - Docker Containerizer
-      path: /getting-started/mesos/demos/docker/
   - title: Troubleshooting
     path: /getting-started/mesos/troubleshooting
   - title: Upgrade

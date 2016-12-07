@@ -4,11 +4,12 @@ title: Accessing Calico policy with Calico as a network plugin
 
 ## Background
 
-With Calico as a Docker network plugin, Calico will create an identically named 
+With Calico as a Docker network plugin, Calico uses an identically named 
 [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
 to represent each Docker network.  This profile is applied to each container 
 in that network and the profile is used by Calico to configure access policy
-for that container.  By default, the profile contains rules that allow full
+for that container.  The Calico network plugin will automatically create the associated profile if it
+does not exist when the container is attached to the network.  By default, the profile contains rules that allow full
 egress traffic but allow ingress traffic only from containers within the same
 network and no other source.  Custom policy for a network can be configured by 
 creating in advance, or editing, the profile associated with the Docker network.
@@ -26,7 +27,7 @@ There are two ways in which the policy that defines the Docker network can be mo
    way to group together all of your network Policy, makes it easy to reuse policy in
    different networks, and makes it easier to define policy that extends across 
    different orchestration systems that use Calico.
-
+   
 ## Managing Calico policy for a network
 
 This section provides a worked examples applying policy using the two approaches
