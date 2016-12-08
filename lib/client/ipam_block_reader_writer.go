@@ -17,11 +17,12 @@ package client
 import (
 	goerrors "errors"
 	"fmt"
+	"hash/fnv"
 	"math/big"
 	"math/rand"
 	"net"
+	"os"
 	"reflect"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -340,8 +341,17 @@ func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	numBlocks := new(big.Int)
 	numBlocks.Div(numIP, big.NewInt(blockSize))
 
-	// Start at a random offset index
-	source := rand.NewSource(time.Now().UnixNano())
+	// Create a random number generator seed based on the hostname.
+	// This is to avoid assigning multiple blocks when multiple
+	// workloads request IPs around the same time.
+	hostName, err := os.Hostname()
+	if err != nil {
+		log.Errorf("Failed to get the hostname\n")
+	}
+
+	hostHash := fnv.New32()
+	hostHash.Write([]byte(hostName))
+	source := rand.NewSource(int64(hostHash.Sum32()))
 	randm := rand.New(source)
 
 	// initialIndex keeps track of the random starting point
