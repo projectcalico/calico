@@ -251,7 +251,7 @@ func (c ipams) autoAssign(num int, handleID *string, attrs map[string]string, po
 		// or the request has been satisfied.
 		for _, p := range pools {
 			log.Debugf("Assigning from random blocks in pool %s", p.String())
-			newBlock := randomBlockGenerator(p)
+			newBlock := randomBlockGenerator(p, host)
 			for rem > 0 {
 				// Grab a new random block.
 				blockCIDR := newBlock()

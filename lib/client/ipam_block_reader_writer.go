@@ -17,11 +17,11 @@ package client
 import (
 	goerrors "errors"
 	"fmt"
+	"hash/fnv"
 	"math/big"
 	"math/rand"
 	"net"
 	"reflect"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -118,7 +118,7 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	for _, pool := range pools {
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
-		blocks := randomBlockGenerator(pool)
+		blocks := randomBlockGenerator(pool, host)
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if a block already exists for this subnet.
 			log.Debugf("Getting block: %s", subnet.String())
@@ -327,7 +327,7 @@ func blockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 // Returns a generator that, when called, returns a random
 // block from the given pool.  When there are no blocks left,
 // the it returns nil.
-func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
+func randomBlockGenerator(pool cnet.IPNet, hostName string) func() *cnet.IPNet {
 
 	// Determine the IP type to use.
 	version := getIPVersion(cnet.IP{pool.IP})
@@ -340,8 +340,12 @@ func randomBlockGenerator(pool cnet.IPNet) func() *cnet.IPNet {
 	numBlocks := new(big.Int)
 	numBlocks.Div(numIP, big.NewInt(blockSize))
 
-	// Start at a random offset index
-	source := rand.NewSource(time.Now().UnixNano())
+	// Create a random number generator seed based on the hostname.
+	// This is to avoid assigning multiple blocks when multiple
+	// workloads request IPs around the same time.
+	hostHash := fnv.New32()
+	hostHash.Write([]byte(hostName))
+	source := rand.NewSource(int64(hostHash.Sum32()))
 	randm := rand.New(source)
 
 	// initialIndex keeps track of the random starting point
