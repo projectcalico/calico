@@ -3,7 +3,13 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
+	"time"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"net"
 
@@ -16,38 +22,27 @@ import (
 	"github.com/onsi/gomega/gexec"
 	. "github.com/projectcalico/calico-cni/test_utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
 )
 
-// Some ideas for more tests
-// Test that both etcd_endpoints and etcd_authity can be used
-// Test k8s
-// test bad network name
-// badly formatted netconf
-// vary the MTU
-// Existing endpoint
-
-var calicoClient *client.Client
-
 func init() {
-	var err error
-	calicoClient, err = testutils.NewClient("")
-	if err != nil {
-		panic(err)
-	}
+	// Create a random seed
+	rand.Seed(time.Now().UTC().UnixNano())
 }
 
 var _ = Describe("CalicoCni", func() {
 	hostname, _ := os.Hostname()
 	BeforeEach(func() {
+		WipeK8sPods()
 		WipeEtcd()
 	})
 
-	Describe("Run Calico CNI plugin", func() {
+	Describe("Run Calico CNI plugin in K8s mode", func() {
 		Context("using host-local IPAM", func() {
+
+			//TODO - set the netconfig
 			netconf := fmt.Sprintf(`
 			{
 			  "name": "net1",
@@ -56,11 +51,38 @@ var _ = Describe("CalicoCni", func() {
 			  "ipam": {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
-			  }
+			  },
+				"kubernetes": {
+					        "k8s_api_root": "http://127.0.0.1:8080"
+									    
+				},
+				"policy": {"type": "k8s"},
+	"log_level":"info"
 			}`, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, "")
+				config, err := clientcmd.DefaultClientConfig.ClientConfig()
+				if err != nil {
+					panic(err)
+				}
+				clientset, err := kubernetes.NewForConfig(config)
+
+				if err != nil {
+					panic(err)
+				}
+				name := fmt.Sprintf("run%d", rand.Uint32())
+				interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+				_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+					ObjectMeta: v1.ObjectMeta{Name: name},
+					Spec: v1.PodSpec{Containers: []v1.Container{{
+						Name:  fmt.Sprintf("container-%s", name),
+						Image: "ignore",
+					}}},
+				})
+				if err != nil {
+					panic(err)
+				}
+				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name)
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -75,34 +97,29 @@ var _ = Describe("CalicoCni", func() {
 				Expect(result.IP4.IP.Mask.String()).Should(Equal("ffffffff"))
 
 				// datastore things:
-				// Profile is created with correct details
-				profile, err := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "net1"})
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(profile.Metadata.Tags).Should(ConsistOf("net1"))
-				Expect(profile.Spec.EgressRules).Should(Equal([]api.Rule{{Action: "allow"}}))
-				Expect(profile.Spec.IngressRules).Should(Equal([]api.Rule{{Action: "allow", Source: api.EntityRule{Tag: "net1"}}}))
+				// TODO Make sure the profile doesn't exist
 
-				// The endpoint is created in etcd
+				// The endpoint is created
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(endpoints.Items).Should(HaveLen(1))
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
 					Node:         hostname,
 					Name:         "eth0",
-					Workload:     containerID,
-					Orchestrator: "cni",
+					Workload:     fmt.Sprintf("test.%s", name),
+					Orchestrator: "k8s",
+					Labels:       map[string]string{"calico/k8s_ns": "test"},
 				}))
-
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-					InterfaceName: fmt.Sprintf("cali%s", containerID),
+					InterfaceName: interfaceName,
 					IPNetworks:    []cnet.IPNet{{result.IP4.IP}},
 					MAC:           &cnet.MAC{HardwareAddr: mac},
-					Profiles:      []string{"net1"},
+					Profiles:      []string{"k8s_ns.test"},
 				}))
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging
-				hostVeth, err := netlink.LinkByName("cali" + containerID)
+				hostVeth, err := netlink.LinkByName(interfaceName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 				Expect(hostVeth.Attrs().MTU).Should(Equal(1500))
@@ -128,7 +145,7 @@ var _ = Describe("CalicoCni", func() {
 						Type:      syscall.RTN_UNICAST,
 					})))
 
-				session, err = DeleteContainer(netconf, netnspath, "")
+				session, err = DeleteContainer(netconf, netnspath, name)
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 

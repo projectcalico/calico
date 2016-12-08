@@ -5,7 +5,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # fail if unable to download
 CURL=curl -sSf
 
-K8S_VERSION=1.3.1
+K8S_VERSION=1.4.6
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -83,12 +83,12 @@ dist/calico-ipam: $(SRCFILES) vendor
 
 .PHONY: test
 # Run the unit tests.
-test: dist/calico dist/calico-ipam dist/host-local run-etcd
+test: dist/calico dist/calico-ipam dist/host-local run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
 # Run the unit tests, watching for changes.
-test-watch: dist/calico dist/calico-ipam
+test-watch: dist/calico dist/calico-ipam run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
 
@@ -112,7 +112,7 @@ fetch-cni-bins:
 
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized
-test-containerized: run-etcd build-containerized
+test-containerized: run-etcd run-k8s-apiserver build-containerized
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e PLUGIN=calico \
@@ -152,6 +152,17 @@ run-etcd-host: stop-etcd
 
 stop-etcd:
 	@-docker rm -f calico-etcd
+
+# Kubernetes apiserver used for tests
+run-k8s-apiserver: stop-k8s-apiserver
+	docker run --detach --net=host \
+	  --name calico-k8s-apiserver \
+  	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+		  --service-cluster-ip-range=10.101.0.0/16 
+
+stop-k8s-apiserver:
+	@-docker rm -f calico-k8s-apiserver
 
 # Install or update the tools used by the build
 .PHONY: update-tools
