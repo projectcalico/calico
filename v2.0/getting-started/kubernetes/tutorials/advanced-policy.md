@@ -15,7 +15,7 @@ in order to define more complex network policies.
 - This guide assumes you have a working Kubernetes cluster with Calico for policy. (See: [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes#installation-guides) for help)
 - This guide assumes that your pods have connectivity to the public internet.
 - This guide assumes you are familiar with [Kubernetes NetworkPolicy](simple-policy)
-- This guide assumes you are using etcdv2 as the Calico backend datastore.
+- This guide assumes you are using etcdv2 (or v3) as the Calico backend datastore.
 - You must have configured kubectl access to the cluster.
 - You must have installed and [configured the calicoctl tool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2)
 

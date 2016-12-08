@@ -45,7 +45,7 @@ The bundle has the following pre-requisites:
     (or compiled-in).
 -   An [etcd](https://github.com/coreos/etcd/releases/) cluster that 
     supports the etcdv2 protocol.  We recommend running the latest 
-    stable release of etcd v2.x. To check the version, run 
+    stable release of etcd v3.x. To check the version, run 
     `etcd --version`
 
 > **NOTE**

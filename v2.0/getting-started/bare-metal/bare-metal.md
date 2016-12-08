@@ -70,7 +70,7 @@ directory.
 If you haven't already created an etcd cluster for your Calico
 deployment, you'll need to create one.
 
-To create a single-node etcd cluster for testing, download an etcd v2.x
+To create a single-node etcd cluster for testing, download an etcd v3.x
 release from [the etcd releases archive](https://github.com/coreos/etcd/releases); we recommend using
 the most recent bugfix release. Then follow the instructions on that
 page to unpack and run the etcd binary.
