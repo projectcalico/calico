@@ -13,14 +13,10 @@ toc:
   path: /usage/configuration/bgp
 - title: Route Reflector
   path: /usage/bird-rr-config
-- title: Securing Calico
-  path: /usage/configuration/securing-calico
 - title: IPv6
   path: /usage/ipv6
 - title: External Connectivity
   path: /usage/external-connectivity
-- title: Exposing Ports
-  path: /usage/exposing-ports
 - title: Troubleshooting
   path: /usage/troubleshooting/
 - title: Logging
