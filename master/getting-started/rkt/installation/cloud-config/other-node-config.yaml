@@ -33,7 +33,7 @@ coreos:
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico-ipam
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
         ExecStartPre=/usr/bin/rkt --insecure-options=image fetch docker://busybox
-        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:v1.0.0-rc2
+        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:latest
         ExecStart=/usr/bin/true
         RemainAfterExit=yes
         Type=oneshot

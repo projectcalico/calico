@@ -147,7 +147,7 @@ toc:
       path: /getting-started/rkt/installation/vagrant-coreos/
   - title: Tutorials
     section:
-    - title: Installation & Basic Use
+    - title: Calico networking with rkt
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting
