@@ -2,22 +2,8 @@
 title: Calico networking with rkt
 ---
 
-
 This tutorial describes how to set up a Calico cluster in a pure rkt environment
 using CNI with Calico specific network and IPAM drivers.
-
-Using the Calico CNI plugin, the required network setup and configuration
-for networking containers using Calico is handled automatically as part of the
-standard network and container lifecycle.  Provided the network is created
-using the Calico driver, creating a container using that network will
-automatically add the container to the Calico network, creating all necessary
-Calico configuration and setting up the interface and routes in the container
-accordingly.
-
-The Calico IPAM driver must be used in addition to the the Calico network
-driver.  This provides IP address management using the configured Calico IP
-Pools as address pools for the container, preferentially selecting sub-blocks
-of IPs for a particular host.
 
 ## 1. Environment setup
 
@@ -30,9 +16,10 @@ for _Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox_.
 
 - [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/rkt/installation/vagrant-coreos/)
 
-
 If you have everything set up properly you should have `calicoctl` in your
-`$PATH`, and two hosts called `calico-01` and `calico-02`.
+`$PATH`, and two hosts called `calico-01` and `calico-02`.  The exact
+choice of hostname is not important although you will need to adjust these
+instructions accordingly based on your actual hostnames.
 
 ## 2. Starting Calico services
 
@@ -40,25 +27,25 @@ Once you have your cluster up and running, start Calico on both hosts
 
 ```shell
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
---set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 \
---insecure-options=image \
---volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
---mount volume=birdctl,target=/var/run/calico \
---volume=mods,kind=host,source=/lib/modules,readOnly=false  \
---mount volume=mods,target=/lib/modules \
---volume=logs,kind=host,source=/var/log/calico,readOnly=false \
---mount volume=logs,target=/var/log/calico \
---set-env=IP=autodetect --net=host quay.io/calico/node:latest &
+  --set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 \
+  --insecure-options=image \
+  --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
+  --mount volume=birdctl,target=/var/run/calico \
+  --volume=mods,kind=host,source=/lib/modules,readOnly=false  \
+  --mount volume=mods,target=/lib/modules \
+  --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
+  --mount volume=logs,target=/var/log/calico \
+  --set-env=IP=autodetect --net=host quay.io/calico/node:latest &
 ```
 
-This will create a Calico-node rkt container.
+This will create a calico/node rkt container.
 
-You can check that it's running
+You can check that it's running using `sudo rkt list`.
 
 ```shell
 $ sudo rkt list
-UUID		APP	    IMAGE NAME			            STATE	CREATED		    STARTED		   NETWORKS
-6e552eeb	node	quay.io/calico/node:v1.0.0-rc1	running	20 seconds ago	20 seconds ago
+UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
+b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds ago
 ```
 
 ## 3. Create the networks
@@ -100,66 +87,76 @@ cat >/etc/rkt/net.d/10-calico-frontend.conf <<EOF
 EOF
 ```
 
-## 4. Create services
+## 4. Create containers
 
-With the networks created, let's start some services. We'll create a "frontend" and a "backend" service, one on `calico-01` and the other on `calico-02`
-Both "services" will just be a `httpd` running in a `busybox` container. The service just serves up the filesystem in the container over HTTP.
+With the networks created, let's start some containers. We'll create a "frontend" 
+container on `calico-01` and a "backend" container on `calico-02`.
+Both containers will just be a `busybox` image running a simple HTTP daemon `httpd`
+serving up the containers local filesystem over HTTP.
 
 ### On calico-01
 
-Create the "frontend" service.
+Create the "frontend" container.  Note that we include a suffix `:IP=192.168.0.0`, this
+is used to pass in the IP environment through to the frontend network plugin which
+Calico IPAM uses to assign a specific IP address.  This may be omitted, in which case
+Calico IPAM will automatically select an IP address to use from it's configured
+IP Pools - however, to simplify this worked we use fixed IP addresses.
 
 ```shell
-sudo rkt run --net=backend docker://busybox --exec httpd -- -f -h / &
+sudo rkt run --net=frontend:IP=192.168.0.0 docker://busybox --exec httpd -- -f -h / &
 ```
 
 Use `rkt list` to see the IP.
 
 ```shell
 $ sudo rkt list
-UUID		APP		IMAGE NAME									STATE	CREATED			STARTED			NETWORKS
-6e552eeb	node	quay.io/calico/node:v1.0.0-rc1				running	7 minutes ago	7 minutes ago
-fe706423	busybox	registry-1.docker.io/library/busybox:latest	running	9 seconds ago	8 seconds ago	frontend:ip4=192.168.212.129, default-restricted:ip4=172.16.28.2
+UUID      APP      IMAGE NAME                                   STATE   CREATED         STARTED         NETWORKS
+6876aae5  busybox  registry-1.docker.io/library/busybox:latest  running 11 seconds ago  11 seconds ago  frontend:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
+b52bba11  node     quay.io/calico/node:latest                   running 2 minutes ago   2 minutes ago   
 ```
 
-We now have a `busybox` container running on the network `frontend` with an IP address of `192.168.212.129`
-rkt also creates a second network called `default-restricted`. This is used for communication with the rkt metadata service running on the host and is covered in the [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network)
+We now have a `busybox` container running on the network `frontend` with an IP 
+address of `192.168.0.0`.  You will see that rkt also creates a second network
+called `default-restricted` - this is used for communication with the rkt 
+metadata service running on the host and is discussed in the
+[rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network).
 
 ### On calico-02
 
-Repeat for a "backend" service on `calico-02`
+Repeat for a "backend" container on `calico-02`
 
 ```shell
-sudo rkt run --net=backend docker://busybox --exec httpd -- -f -h / &
+sudo rkt run --net=backend:IP=192.168.100.0 docker://busybox --exec httpd -- -f -h / &
 ```
 
 Use `rkt list` to see the container IP.
 
 ```shell
 $ sudo rkt list
-UUID		APP		IMAGE NAME									STATE	CREATED			STARTED			NETWORKS
-33ce4f2b	node	quay.io/calico/node:v1.0.0-rc1				running	1 minute ago	1 minute ago
-7e7315af	busybox	registry-1.docker.io/library/busybox:latest	running	15 seconds ago	15 seconds ago	backend:ip4=192.168.138.64, default-restricted:ip4=172.16.28.2
+UUID      APP      IMAGE NAME                                   STATE   CREATED        STARTED         NETWORKS
+72ce148c  node     quay.io/calico/node:latest                   running 4 minutes ago  4 minutes ago   
+a2c7ca32  busybox  registry-1.docker.io/library/busybox:latest  running 13 seconds ago 12 seconds ago  backend:ip4=192.168.100.0, default-restricted:ip4=172.16.28.2
 ```
 
-We now have a `busybox` container running on the network `backend` with an IP address of `192.168.138.64`
+We now have a `busybox` container running on the network `backend` with an IP
+address of `192.168.100.0`.
 
-## 5. Validate access to services
+## 5. Validate access to containers
 
-Now that we have created the services and we know their IP addresses, we can access them using `wget` from containers running on
+Now that we have created the containers and we know their IP addresses, we can access them using `wget` from containers running on
 either host, as long as they are created on the same network.
 
-e.g. On `calico-02` use wget to access the frontend service which is running on `calico-01`
+e.g. On `calico-02` use wget to access the frontend container which is running on `calico-01`
 
 ```shell
-sudo rkt run --net=frontend docker://busybox --exec=/bin/wget -- -T 3 192.168.212.129/etc/passwd 2>/dev/null
+sudo rkt run --net=frontend docker://busybox --exec=/bin/wget -- -T 3 192.168.0.0/etc/passwd 2>/dev/null
 ```
 
 Expected output:
 
 ```shell
-[62032.807862] wget[4]: Connecting to 192.168.212.129 (192.168.212.129:80)
-[62032.813662] wget[4]: passwd               100% |*******************************|   334   0:00:00 ETA
+[  576.042144] busybox[5]: Connecting to 192.168.0.0 (192.168.0.0:80)
+[  576.046836] busybox[5]: passwd               100% |*******************************|   334   0:00:00 ETA
 ```
 
 This command runs the `wget` command in a busybox container to fetch the `passwd` file from our host. '-T 3' tells wget to only wait for 3 seconds for a response.
@@ -172,25 +169,25 @@ You can repeat this command on `calico-01` and check that access works the same 
 Repeat the above command but try to access the backend from the frontend. Because we've not allowed access between these networks, the command will fail.
 
 ```shell
-sudo rkt run --net=backend docker://busybox --exec=/bin/wget -- -T 3 192.168.212.129/etc/passwd 2>/dev/null
+sudo rkt run --net=backend docker://busybox --exec=/bin/wget -- -T 3 192.168.0.0/etc/passwd 2>/dev/null
 ```
 
 Expected output:
 
 ```shell
-[62128.109283] wget[4]: Connecting to 192.168.212.129 (192.168.212.129:80)
-[62129.109472] wget[4]: wget: download timed out
+[  621.119210] busybox[5]: Connecting to 192.168.0.0 (192.168.0.0:80)
+[  624.120081] busybox[5]: wget: download timed out
 ```
 
 ## 6. Resetting/Cleanup up
 
 If you want to start again from the beginning, then run the following commands on both hosts to ensure that all the rkt containers are removed.
 
-	# Stop the frontend/backend containers and calico-node container
+	# Stop the frontend/backend containers
 	sudo rkt stop --force <Container_UUID>
 
 	# Remove the stopped containers
-	sudo rkt list --no-legend | cut -f1 |sudo xargs rkt rm
+	sudo rkt list --no-legend | cut -f1 | sudo xargs rkt rm
 
 	# Wipe Calico data from etcd
 	etcdctl rm --recursive /calico
