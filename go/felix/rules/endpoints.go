@@ -21,36 +21,63 @@ import (
 )
 
 func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*Chain {
-	toEndpointRules := make([]Rule, 0, len(endpoints)+1)
-	fromEndpointRules := make([]Rule, 0, len(endpoints)+1)
+
+	// Extract endpoint names.
+	names := make([]string, 0, len(endpoints))
 	for _, endpoint := range endpoints {
+		names = append(names, endpoint.Name)
+	}
+
+	return dispatchChains(
+		names,
+		WorkloadFromEndpointPfx,
+		WorkloadToEndpointPfx,
+		ChainFromWorkloadDispatch,
+		ChainToWorkloadDispatch,
+		DropAction{},
+	)
+}
+
+func dispatchChains(
+	names []string,
+	fromEndpointPfx,
+	toEndpointPfx,
+	dispatchFromEndpoint,
+	dispatchToEndpoint string,
+	unknownInterfaceAction Action,
+) []*Chain {
+	toEndpointRules := make([]Rule, 0, len(names)+1)
+	fromEndpointRules := make([]Rule, 0, len(names)+1)
+	for _, name := range names {
 		fromEndpointRules = append(fromEndpointRules, Rule{
-			Match: Match().InInterface(endpoint.Name),
+			Match: Match().InInterface(name),
 			Action: GotoAction{
-				Target: EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name),
+				Target: EndpointChainName(fromEndpointPfx, name),
 			},
 		})
 		toEndpointRules = append(toEndpointRules, Rule{
-			Match: Match().OutInterface(endpoint.Name),
+			Match: Match().OutInterface(name),
 			Action: GotoAction{
-				Target: EndpointChainName(WorkloadToEndpointPfx, endpoint.Name),
+				Target: EndpointChainName(toEndpointPfx, name),
 			},
 		})
 	}
 
 	fromEndpointRules = append(fromEndpointRules, Rule{
-		Action: DropAction{},
+		Action:  unknownInterfaceAction,
+		Comment: "Unknown interface",
 	})
 	toEndpointRules = append(toEndpointRules, Rule{
-		Action: DropAction{},
+		Action:  unknownInterfaceAction,
+		Comment: "Unknown interface",
 	})
 
 	fromEndpointDispatchChain := Chain{
-		Name:  ChainFromWorkloadDispatch,
+		Name:  dispatchFromEndpoint,
 		Rules: fromEndpointRules,
 	}
 	toEndpointDispatchChain := Chain{
-		Name:  ChainToWorkloadDispatch,
+		Name:  dispatchToEndpoint,
 		Rules: toEndpointRules,
 	}
 
@@ -168,9 +195,22 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
 }
 
-func (r *ruleRenderer) HostDispatchChains(map[proto.HostEndpointID]*proto.HostEndpoint) []*Chain {
-	panic("Not implemented")
-	return nil
+func (r *ruleRenderer) HostDispatchChains(endpoints map[proto.HostEndpointID]*proto.HostEndpoint) []*Chain {
+
+	// Extract endpoint names.
+	names := make([]string, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		names = append(names, endpoint.Name)
+	}
+
+	return dispatchChains(
+		names,
+		HostFromEndpointPfx,
+		HostToEndpointPfx,
+		ChainDispatchFromHostEndpoint,
+		ChainDispatchToHostEndpoint,
+		ReturnAction{},
+	)
 }
 
 func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*Chain {
