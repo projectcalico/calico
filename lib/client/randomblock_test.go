@@ -29,13 +29,14 @@ func poolTest(cidr string) {
 	}
 	var pools []cnet.IPNet
 	pools = []cnet.IPNet{{*subnet}}
+	host := "testHost"
 
 	for _, pool := range pools {
 
 		ones, size := pool.Mask.Size()
 		prefixLen := size - ones
 		numIP := new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(prefixLen)), nil)
-		blocks := randomBlockGenerator(pool)
+		blocks := randomBlockGenerator(pool, host)
 
 		blockCount := big.NewInt(0)
 		for blk := blocks(); blk != nil; blk = blocks() {
