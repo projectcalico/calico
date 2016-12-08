@@ -181,10 +181,10 @@ func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, 
 	return nil
 }
 
-func EndpointChainName(prefix string, name string) string {
+func EndpointChainName(prefix string, ifaceName string) string {
 	return hashutils.GetLengthLimitedID(
 		prefix,
-		name,
+		ifaceName,
 		MaxChainNameLength,
 	)
 }
