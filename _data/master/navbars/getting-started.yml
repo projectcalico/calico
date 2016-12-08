@@ -23,7 +23,7 @@ toc:
         path: /getting-started/kubernetes/installation/hosted/kubeadm/
       - title: Etcdless Hosted Install
         path: /getting-started/kubernetes/installation/hosted/k8s-backend/
-    - title: Integration Guide 
+    - title: Integration Guide
       path: /getting-started/kubernetes/installation/integration
     - title: AWS
       path: /getting-started/kubernetes/installation/aws
@@ -83,31 +83,18 @@ toc:
     path: /getting-started/docker/
   - title: Installation
     section:
+    - title: Prerequisites
+      path: /getting-started/docker/installation/prerequisites
     - title: Manual
       path: /getting-started/docker/installation/manual
-    - title: AWS
-      path: /getting-started/docker/installation/aws
-    - title: DigitalOcean
-      path: /getting-started/docker/installation/digital-ocean
-    - title: GCE
-      path: /getting-started/docker/installation/gce
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/docker/installation/vagrant-coreos/
-    - title: 'Vagrant/VirtualBox: Ubuntu'
-      path: /getting-started/docker/installation/vagrant-ubuntu/
-  - title: Tutorials
-    section:
-    - title: Installation & Basic Use
-      path: /getting-started/docker/tutorials/basic
-    - title: Configuring Policy
-      path: /getting-started/docker/tutorials/advanced-policy
     - title: Docker Swarm
       path: /getting-started/docker/tutorials/docker-swarm
-  - title: Troubleshooting
-    path: /getting-started/docker/troubleshooting
-  - title: Upgrade
-    path: /getting-started/docker/upgrade
-
+  - title: Tutorials
+    section:
+    - title: Configuring Policy
+      path: /getting-started/docker/tutorials/advanced-policy
 - title: OpenStack
   section:
   - title: Overview
