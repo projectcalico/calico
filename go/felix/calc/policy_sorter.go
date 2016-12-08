@@ -29,7 +29,6 @@ type PolicySorter struct {
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
 		tier: &tierInfo{
-
 			Name:     "default",
 			Policies: make(map[model.PolicyKey]*model.Policy),
 		},
@@ -60,32 +59,31 @@ func (poc *PolicySorter) Sorted() *tierInfo {
 	tierInfo := poc.tier
 	tierInfo.OrderedPolicies = make([]PolKV, 0, len(tierInfo.Policies))
 	for k, v := range tierInfo.Policies {
-		tierInfo.OrderedPolicies = append(tierInfo.OrderedPolicies,
-			PolKV{Key: k, Value: v})
+		tierInfo.OrderedPolicies = append(tierInfo.OrderedPolicies, PolKV{Key: k, Value: v})
 	}
-	if log.GetLevel() >= log.DebugLevel {
-		names := make([]string, len(tierInfo.OrderedPolicies))
-		for ii, kv := range tierInfo.OrderedPolicies {
-			names[ii] = fmt.Sprintf("%v(%v)",
-				kv.Key.Name, *kv.Value.Order)
-		}
-		log.Infof("Before sorting policies: %v", names)
-	}
+	// Note: using explicit Debugf() here rather than WithFields(); we want the []PolKV slice
+	// to be stringified with %v rather than %#v (as used by WithField()).
+	log.Debugf("Order before sorting: %v", tierInfo.OrderedPolicies)
 	sort.Sort(PolicyByOrder(tierInfo.OrderedPolicies))
-	if log.GetLevel() >= log.DebugLevel {
-		names := make([]string, len(tierInfo.OrderedPolicies))
-		for ii, kv := range tierInfo.OrderedPolicies {
-			names[ii] = fmt.Sprintf("%v(%v)",
-				kv.Key.Name, *kv.Value.Order)
-		}
-		log.Infof("After sorting policies: %v", names)
-	}
+	log.Debugf("Order after sorting: %v", tierInfo.OrderedPolicies)
 	return tierInfo
 }
 
 type PolKV struct {
 	Key   model.PolicyKey
 	Value *model.Policy
+}
+
+func (p PolKV) String() string {
+	orderStr := "nil policy"
+	if p.Value != nil {
+		if p.Value.Order != nil {
+			orderStr = fmt.Sprintf("%v", *p.Value.Order)
+		} else {
+			orderStr = "default"
+		}
+	}
+	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
 }
 
 type PolicyByOrder []PolKV
