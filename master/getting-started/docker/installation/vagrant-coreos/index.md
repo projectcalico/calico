@@ -59,9 +59,28 @@ And finally check that Docker is running on both hosts by running
 
     docker ps
 
-## 2. Try out Calico networking
+## 2. Install Calico
 
-Now you have a basic two node CoreOS cluster setup, see the [Calico with Docker Networking Walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic) for information on how to try Calico Networking.
+With your VMs running, and connectivity between them established,
+it is time to launch `calico/node`.
+
+The Vagrant machines already have `calicoctl` installed. Use it to launch `calico/node`:
+
+    sudo ETCD_ENDPOINTS=http://172.17.8.101:2379 calicoctl node run
+
+This will start the `calico/node` container on this host. Check it is running:
+
+    docker ps
+
+You should see output like this on each node
+
+    vagrant@calico-01:~$ docker ps
+    CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
+    408bd2b9ba53        calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
+
+## Next Steps
+
+Now that you have a basic two node CoreOS cluster setup, see the [simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
 
 [calico-networking]: https://github.com/projectcalico/calico-containers
 [virtualbox]: https://www.virtualbox.org/

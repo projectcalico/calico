@@ -1,101 +1,67 @@
 ---
-title:  Preparing the environment for Calico as a Docker network plugin
+title: Installing Calico for Docker
 ---
 
-The worked example in the _Calico as a Docker network plugin tutorial_ is run
-on two Linux servers that have a number of installation requirements.
+Calico runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
 
-This tutorial describes how to manually configure a working environment for
-the example.
+## Using Calicoctl
 
-## Requirements
+1. Download the calicoctl binary:
 
-You will need 2 servers (bare metal or VMs) with a  modern 64-bit Linux OS
-and IP connectivity between them.
+	 ```
+   sudo wget -O /usr/local/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+	 sudo chmod +x calicoctl
+   ```
 
-We recommend configuring the hosts with the hostname `calico-01` and
-`calico-02`.  The worked example will refer to these hostnames.
+2. Launch `calico/node`:
 
-They must have the following software installed:
+   ```
+   sudo calicoctl node run
+   ```
 
-- Docker 1.9 or greater (details below)
-- `ip_set`, `iptables`, and `ip6tables` kernel modules.
--  The `calicoctl` binary in your path (see below)
+Check that `calico/node` is now running:
 
-You will also need an etcd cluster which Calico uses for coordinating state
-between the nodes.  This may installed on one or both of the two servers for
-the worked example.  See the [etcd documentation][etcd] for details on setting
-up a cluster.
+```
+vagrant@calico-01:~$ docker ps
+CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
+408bd2b9ba53        calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
+```
 
-### Docker (with multi-host networking)
+Furthermore, check that the `calico/node` container is functioning properly
+with the following command:
 
-Follow the instructions for installing [Docker][docker].  A version of 1.9 or
-greater is required.
+```
+sudo calicoctl node status
+```
 
-To use Calico as a Docker network plugin, the Docker daemon
-needs to run specifying a cluster store.  If using etcd as a cluster store,
-configure the `cluster-store` on the Docker daemon to `etcd://<ETCD_IP>:<ETCD_PORT>`,
-replacing `<ETCD IP>` and <ETCD_PORT> with the appropriate address and client
-port for your etcd cluster.
+## Using "docker run"
 
-> For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
-> or for 1.9 see the appropriate 'Configuring Docker' section in [configuring docker][configuring-docker-1.9].
+For more control over the Calico startup process, and to simplify binding
+startup to an init system, `calicoctl` can print the command it uses
+to launch `calico/node`.
 
-#### Docker permissions
+To print the command `calicoctl node run` uses to launch Calico on this host,
+run the command with the `--init-system` and `--dry-run` flags:
 
-Running Docker is much easier if your user has permissions to run Docker
-commands. If your distro didn't set this permissions as part of the install,
-you can usually enable this by adding your user to the `docker` group and
-restarting your terminal.
+```
+calico@calico:~/code/calico$ ../calico-containers/dist/calicoctl node run --init-system --dryrun
+Use the following command to start the calico/node container:
 
-    sudo usermod -aG docker <your_username>
+docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock calico/node:master
 
-If you prefer not to do this you can still run the demo but remember to run
-`docker` using `sudo`.
+Use the following command to stop the calico/node container:
 
-### Getting calicoctl Binary
+docker stop calico-node
 
-Get the calicoctl binary onto each host.
+calico@calico:~/code/calico$
+```
 
-	wget http://www.projectcalico.org/builds/calicoctl
-	chmod +x calicoctl
+Pair the printed command with your favorite init system to ensure Calico is
+always running on each host.
 
-This binary should be placed in your `$PATH` so it can be run from any
-directory.
+See [additional information on binding to an init system ]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service).
 
-### Preload the Calico docker images (optional)
+## Next Steps
 
-You can optionally preload the Calico Docker image to avoid the delay when you
-run `calicoctl node run` the first time.  Select the appropriate version of the
-`calico/node` as required by the version of calicoctl:
-
-    docker pull calico/node:latest
-
-### Final checks
-
-Verify the hostnames.  If they don't match the recommended names above then
-you'll need to adjust the tutorial instructions accordingly.
-
-Check that the hosts have IP addresses assigned, and that your hosts can ping
-one another.
-
-Check that you are running with a suitable version of Docker.
-
-    docker version
-
-It should indicate a version of 1.9 or greater.
-
-You should also verify each host can access etcd.  The following will return
-the current etcd version if etcd is available.
-
-    curl -L http://127.0.0.1:2379/version
-
-## Continue with the worked example
-
-With the environment set up, you can run through the remainder of the worked
-example in the [Calico as a Docker network plugin tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic).
-
-[etcd]: https://coreos.com/etcd/docs/latest/
-[docker]: https://docs.docker.com/engine/installation/
-[daemon-config-file]: https://docs.docker.com/engine/reference/commandline/dockerd/#/daemon-configuration-file
-[configuring-docker-1.9]: https://docs.docker.com/v1.9/engine/articles/configuring/
+With `calico/node` running, you are ready to start using Calico by following the
+[simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy).
