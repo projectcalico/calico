@@ -166,3 +166,8 @@ EOF
 > paramater may contain a comma separated list of endpoints of your etcd cluster.
 > If the parameter is omitted from the config file, Calico defaults to a single etcd 
 > endpoint at http://127.0.0.1:2379.
+
+## Next steps
+
+With your deployment ready we recommend you follow the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials) 
+to run through examples of managing Calico policy with your rkt containers.

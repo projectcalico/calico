@@ -106,8 +106,9 @@ b52bba11  node  quay.io/calico/node:v1.0.0-rc2  running 10 seconds ago  10 secon
 
 ## Try out Calico networking
 
-Now that you have a basic two node CoreOS cluster setup, see the 
-[Calico with rkt tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials)
+Now that you have a basic two node CoreOS cluster setup we recommend you follow
+the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials) 
+to run through examples of managing Calico policy with your rkt containers.
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
