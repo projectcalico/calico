@@ -149,7 +149,7 @@ toc:
       path: /getting-started/rkt/installation/vagrant-coreos/
   - title: Tutorials
     section:
-    - title: Basic network isolation with rkt
+    - title: Basic network isolation
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting

@@ -1,5 +1,5 @@
 ---
-title: Basic network isolation with rkt
+title: Basic network isolation
 ---
 
 This guide provides a simple way to try out rkt network isolation with Calico.

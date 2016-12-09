@@ -5,10 +5,6 @@ title:  Manual installation of Calico with rkt
 This tutorial describes how to manually configure a working environment for
 a cluster of Calico-rkt enabled nodes.
 
-To run through the tutorials, you will require at least two nodes, which we have
-named `calico-01` and `calico-02`.  These names are not required to run the tutorials
-but you may need to adapt the tutorial instructions based on your actual node names.
-
 * TOC
 {:toc}
 
@@ -16,32 +12,33 @@ but you may need to adapt the tutorial instructions based on your actual node na
 
 - A cluster of bare metal servers or VMs (nodes) with a modern 64-bit Linux OS and IP connectivity
   between them.
-- A recent version of [`rkt`][https://github.com/coreos/rkt/releases/latest] installed on each node in the cluster.  We recommend
+- A recent version of [`rkt`](https://github.com/coreos/rkt/releases/latest) installed on each node in the cluster.  We recommend
   version > 1.20.0 as this is contains important fixes that prevent leaking IP addresses
   when containers are deleted.
-- An [`etcd`][https://coreos.com/etcd/docs/latest/] cluster accessible by all nodes in the cluster
+- An [`etcd`](https://coreos.com/etcd/docs/latest/) cluster accessible by all nodes in the cluster
 
 ## About the Calico Components
 
 There are three components of a Calico / rkt integration.
 
-- The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
-- The [`calicoctl`](https://github.com/projectcalico/calico-containers) binary used to manage network
-  policy.
-- The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
-  - This is the combination of two binary executables and a configuration file.
+#### 1. The calico/node container
 
-The `calico/node` rkt container must be run on node in your cluster.  It contains 
-the BGP agent necessary for Calico routing to occur, and the Felix agent which programs 
-network policy rules.
+The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags),
+must be run on every node in your cluster.  It contains the BGP agent which provides Calico routing,
+and the Felix agent which programs network policy rules.
 
-The `calicoctl` binary is a command line utility that can be used to manage network
-policy for your rkt containers, and can be used to monitor the status of your
-Calico services.
+#### 2. The calicoctl CLI tool
 
-The `calico-cni` plugin binaries integrate directly with the rkt container lifecycle 
-hooks on each node to configure the container interfaces, manage IP addresses and 
-configure the containers to use Calico policy.
+The [`calicoctl`](https://github.com/projectcalico/calico-containers) binary is
+a command line utility that can be used to manage network policy for your rkt 
+containers, and can be used to monitor the status of your Calico services.
+
+#### 3. The calico-cni plugin binaries
+
+The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries
+are a combination of two binary executables.  These binaries are invoked from  
+the rkt container lifecycle hooks on each node to configure the container interfaces, 
+manage IP addresses and enable Calico policy on the containers.
 
 ## Installing `calico/node` 
 
@@ -98,7 +95,7 @@ b52bba11  node  quay.io/calico/node:v1.0.0-rc2  running 10 seconds ago  10 secon
 
 ## Intalling the calicoctl CLI tool
 
-Download the calicoctl binary and ensure it is writeable.  We download to the 
+Download the calicoctl binary and ensure it is executable.  We download to the 
 /opt/bin directory to ensure it is accessible in your path (you may download 
 wherever convenient though):
 
@@ -111,13 +108,13 @@ chmod +x /opt/bin/calicoctl
 See the [`calicoctl` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for more information on this CLI tool.
 
-## Installing the Calico CNI plugins
- 
-You can configure multiple networks when using rkt. Each network is represented by a configuration file in
-`/etc/rkt/net.d/`.   To use Calico networking and policy, create a network that uses the Calico
-CNI binaries for handling networking, policy and IP address management.
+## Installing Calico as a CNI plugin
 
-### Install the Calico plugins
+To install Calico as a CNI plugin used by rkt, we need to first install the
+actual plugin binaries, and then once installed create any CNI networks that you
+require with the appropriate Calico CNI plugin references.
+
+### Install the Calico plugin binaries
 
 Download the binaries and make sure they're executable.  We download to the 
 `/etc/rkt/net.d` directory since it is one of the default locations that rkt uses
@@ -134,9 +131,7 @@ The Calico CNI plugins require a standard CNI config file.
 
 ### Create a Calico network
 
-By default, when using Calico CNI, connections to a given container are only allowed 
-from containers on the same network. This can be changed by applying additional Calico policy - which will 
-be discussed in advanced tutorials.
+### Create a Calico network
 
 To define a rkt network for Calico, create a configuration file in `/etc/rkt/net.d/`.
 
@@ -144,13 +139,13 @@ To define a rkt network for Calico, create a configuration file in `/etc/rkt/net
 - To use Calico networking, specify "type": "calico"
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
 
-Calico will create an identically named profile for each Calico-rkt network, by
-default the policy specific in the profile allows full communication between containers within the same 
-network (i.e. using the same profile) but prohibits ingress traffic from containers
+Calico will create an identically named profile for each Calico-rkt network which, by
+default, contains policy to allow full communication between containers within the same 
+network (i.e. using the same profile) but prohibit ingress traffic from containers
 on other networks.
 
 The same network configuration needs to be added to each node for the network
-to be discoverable on that node.
+to be discoverable on that node.  Mutliple networks may be created using unique names.
 
 For example, run the following to create a network called "mynet"
 
