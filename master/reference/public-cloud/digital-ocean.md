@@ -7,24 +7,24 @@ networking for containers in public cloud environments such as Digital Ocean.
 
 ## How to Run Calico in Digital Ocean
 
-Digital Ocean offers two networking options for droplets.
-Calico can be launched on either:
+Digital Ocean offers two networking options for droplets:
 
 - Public Interface
-- Private Interface [Optional]
+- Private Interface
 
+Calico can be launched on either.
 We recommend running Calico on the private interface, as it enhances security by
 ensuring Calico services are not accessible from the wider internet.
 
 However, hosts in different Datacenter Regions will not have IP connectivity with one
-another on their private address, and therefore will not be able to establish
-BGP sessions with one another. For mluti-region digital ocean clusters,
+another through their private address, and therefore will not be able to establish
+BGP sessions with one another. For mluti-region Digital Ocean clusters,
 bind Calico to the public interface.
 
 ###### Enable Encapsulation
 
-In Digital Ocean, cross-host container-to-container traffic will travel over an
-L3 hop. Since Digital Ocean does not allow peering to the L3 hop, it will
+In Digital Ocean, cross-host container-to-container traffic will travel over at least one
+L3 hop. Since Digital Ocean does not allow peering to its networking fabric, it will
 not know how to route this container traffic, and will drop it.
 
 To remedy this, Calico can encapsulate container traffic with the IP so that the
@@ -32,7 +32,7 @@ networking fabric never sees the container IPs, allowing standard routing to
 take over. Turn on traffic encapsulation in pool settings by enabling:
 
 - `ipip` for container-to-container traffic.
-- `nat-outgoing` for container-to-ec2-instance traffic.
+- `nat-outgoing` for container-to-droplet traffic.
 
 See [pool configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) for information on how to enable this for IP pools.
 
