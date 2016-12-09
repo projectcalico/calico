@@ -16,7 +16,7 @@ this guide if you're integrating Calico with your own rkt orchestration environm
 
 ## Quick Start Guides 
 
-#### [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/rkt/installation/vagrant/)
+#### [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/rkt/installation/vagrant-coreos/)
 
 This guide uses Vagrant and VirtualBox to locally run a rkt-Calico enabled cluster.
 
