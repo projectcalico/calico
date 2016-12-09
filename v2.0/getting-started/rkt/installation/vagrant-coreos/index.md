@@ -2,24 +2,30 @@
 title: Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox
 ---
 
-This tutorial describes how to set up a Calico cluster in a pure rkt environment.
-rkt is used for running both the Calico components and the workloads.
+This is a Quick Start guide that uses Vagrant and VirtualBox to create a two-node
+Calico cluster that can be used to run through the tutorial for Calico in a 
+pure rkt environment.
 
-## 1. Environment setup
+## Environment setup
 
-This tutorial walks through getting a cluster set up with Vagrant.
+This section contains the requirements and steps required to ensure your local
+environment is correctly configured.
 
-### 1.1 Install dependencies
+### 1. Install dependencies
+
+You will need to install the following software:
 
 * [VirtualBox][virtualbox] 5.0.0 or greater.
 * [Vagrant][vagrant] 1.8.5 or greater.
 * [Git][git]
 
-### 1.2 Clone this project
+### 2. Clone this project
+
+Clone the calico project into a suitable location on your local host.
 
     git clone https://github.com/projectcalico/calico.git
 
-### 1.3 Startup and SSH
+### 3. Startup and SSH
 
 Change into the directory for this guide:
 
@@ -29,15 +35,15 @@ Run
 
     vagrant up
 
-To connect to your servers
+to start the cluster.  To connect to your servers:
 
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
 * Windows
     * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
     * run `vagrant putty <hostname>`
-
-### 1.4 Verify environment
+    
+### 4. Verify environment
 
 You should now have two CoreOS servers. The servers are named calico-01 and calico-02
 and have IP addresses 172.18.18.101 and 172.18.18.102.
@@ -60,13 +66,48 @@ You should also verify each host can access etcd.  The following will return an 
 
     curl -L http://172.18.18.101:2379/version
 
-And finally check that `rkt` is running on both hosts by running
+Check that `rkt` is running on both hosts by running
 
     sudo rkt list
+    
+Verify that `calicoctl` (the Calico CLI) is installed by running
 
-## 2. Try out Calico Networking
+    calicoctl version
+    
 
-Now that you have a basic two node CoreOS cluster setup, see the [Calico networking with rkt]({{site.baseurl}}/{{page.version}}/getting-started/rkt/tutorials/basic)
+### 5. Start the Calico service
+
+Start the Calico service on *both* hosts
+
+```shell
+sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
+  --set-env ETCD_ENDPOINTS=http://172.18.18.101:2379 \
+  --insecure-options image \
+  --volume birdctl,kind=host,source=/var/run/calico,readOnly=false \
+  --mount volume=birdctl,target=/var/run/calico \
+  --volume mods,kind=host,source=/lib/modules,readOnly=false  \
+  --mount volume=mods,target=/lib/modules \
+  --volume logs,kind=host,source=/var/log/calico,readOnly=false \
+  --mount volume=logs,target=/var/log/calico \
+  --set-env IP=autodetect \
+  --net host \
+  quay.io/calico/node:v1.0.0-rc2 &
+```
+
+This will create a calico/node rkt container.
+
+You can check that it's running using `sudo rkt list`.
+
+```shell
+$ sudo rkt list
+UUID      APP	IMAGE NAME                      STATE   CREATED         STARTED         NETWORKS
+b52bba11  node  quay.io/calico/node:v1.0.0-rc2  running 10 seconds ago  10 seconds ago
+```
+
+## Try out Calico networking
+
+Now that you have a basic two node CoreOS cluster setup, see the 
+[Calico with rkt tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials)
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
