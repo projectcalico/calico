@@ -21,28 +21,26 @@ a cluster of Calico-rkt enabled nodes.
 
 There are three components of a Calico / rkt integration.
 
-#### 1. The calico/node container
+- The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
+- The [`calicoctl`](https://github.com/projectcalico/calico-containers) command line tool.
+- The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
+  - This is the combination of two binary executables and a configuration file.
+- When using Kubernetes NetworkPolicy, the Calico policy controller is also required.
 
-The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags),
-must be run on every node in your cluster.  It contains the BGP agent which provides Calico routing,
-and the Felix agent which programs network policy rules.
+The `calico/node` docker container must be run on each node in your cluster.  It contains
+the BGP agent which provides Calico routing, and the Felix agent which programs network policy
+rules.
 
-#### 2. The calicoctl CLI tool
+The `calicoctl` binary is a command line utility that can be used to manage network policy
+for your rkt containers, and can be used to monitor the status of your Calico services.
 
-The [`calicoctl`](https://github.com/projectcalico/calico-containers) binary is
-a command line utility that can be used to manage network policy for your rkt 
-containers, and can be used to monitor the status of your Calico services.
-
-#### 3. The calico-cni plugin binaries
-
-The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries
-are a combination of two binary executables.  These binaries are invoked from  
-the rkt container lifecycle hooks on each node to configure the container interfaces, 
-manage IP addresses and enable Calico policy on the containers.
+The `calico-cni` network plugin binaries are a combination of two binary executables.
+These binaries are invoked from the rkt container lifecycle hooks on each node to configure
+the container interfaces,  manage IP addresses and enable Calico policy on the containers.
 
 ## Installing `calico/node` 
 
-### Prepare host directory structure
+#### Prepare host directory structure
 
 The `calicoctl` binary uses certain known directories for service diagnostics and
 status discovery.  In addition, this tutorial assumes binaries and CNI network
@@ -58,7 +56,7 @@ mkdir -p /opt/bin
 mkdir -p /etc/rkt/net.d
 ```
 
-### Run `calico/node` and configure the node.
+#### Run `calico/node` and configure the node.
 
 Each Calico-rkt enabled node requires the `calico/node` container to be running.
 
@@ -93,7 +91,7 @@ UUID      APP	IMAGE NAME                      STATE   CREATED         STARTED   
 b52bba11  node  quay.io/calico/node:v1.0.0-rc2  running 10 seconds ago  10 seconds ago
 ```
 
-## Intalling the calicoctl CLI tool
+## Installing the calicoctl CLI tool
 
 Download the calicoctl binary and ensure it is executable.  We download to the 
 /opt/bin directory to ensure it is accessible in your path (you may download 
@@ -114,7 +112,7 @@ To install Calico as a CNI plugin used by rkt, we need to first install the
 actual plugin binaries, and then once installed create any CNI networks that you
 require with the appropriate Calico CNI plugin references.
 
-### Install the Calico plugin binaries
+#### Install the Calico plugin binaries
 
 Download the binaries and make sure they're executable.  We download to the 
 `/etc/rkt/net.d` directory since it is one of the default locations that rkt uses
@@ -129,9 +127,7 @@ chmod +x /etc/rkt/net.d/calico /etc/rkt/net.d/calico-ipam
 
 The Calico CNI plugins require a standard CNI config file.
 
-### Create a Calico network
-
-### Create a Calico network
+#### Create a Calico network
 
 To define a rkt network for Calico, create a configuration file in `/etc/rkt/net.d/`.
 
