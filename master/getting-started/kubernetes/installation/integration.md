@@ -1,5 +1,5 @@
 ---
-title: Integration Guide 
+title: Integration Guide
 ---
 
 
@@ -42,14 +42,14 @@ on each node to discover which pods have been created, and adds them to Calico n
 The `calico/kube-policy-controller` container runs as a pod on top of Kubernetes and implements
 the NetworkPolicy API.  This component requires Kubernetes >= 1.3.0.
 
-## Installing `calico/node` 
+## Installing `calico/node`
 
 ### Run `calico/node` and configure the node.
 
 The Kubernetes master and each Kubernetes node require the `calico/node` container.
 Each node must also be recorded in the Calico datastore.
 
-The calico/node container can be run directly through docker, or it can be 
+The calico/node container can be run directly through docker, or it can be
 done using the `calicoctl` utility.
 
 ```
@@ -80,7 +80,7 @@ Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
 ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
-  -e HOSTNAME=${HOSTNAME} \ 
+  -e NODENAME=${HOSTNAME} \
   -e IP= \
   -e NO_DEFAULT_POOLS= \
   -e AS= \
@@ -95,6 +95,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
   calico/node:latest
+ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10
 
@@ -104,7 +105,7 @@ WantedBy=multi-user.target
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
 ## Installing the Calico CNI plugins
- 
+
 The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ipam` plugins.
 
 ### Install the Calico plugins
@@ -160,13 +161,13 @@ sudo cp loopback /opt/cni/bin/
 
 ## Intalling the Calico network policy controller
 
-The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the 
+The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the
 Kubernetes API for Pod, Namespace, and NetworkPolicy events and configuring Calico in response. It runs as
 a single pod managed by a Deployment.
 
 To install the policy controller:
 
-- Download the [policy controller manifest](policy-controller.yaml). 
+- Download the [policy controller manifest](policy-controller.yaml).
 - Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
 - Install it using `kubectl`.
 
@@ -182,7 +183,7 @@ NAME                                     READY     STATUS    RESTARTS   AGE
 calico-policy-controller                 2/2       Running   0          1m
 ```
 
-For more information on how to configure the policy controller, 
+For more information on how to configure the policy controller,
 see the [configuration guide](https://github.com/projectcalico/k8s-policy/blob/v0.5.1/configuration.md).
 
 ## Configuring Kubernetes
