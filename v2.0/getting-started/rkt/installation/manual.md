@@ -25,7 +25,6 @@ There are three components of a Calico / rkt integration.
 - The [`calicoctl`](https://github.com/projectcalico/calico-containers) command line tool.
 - The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
-- When using Kubernetes NetworkPolicy, the Calico policy controller is also required.
 
 The `calico/node` docker container must be run on each node in your cluster.  It contains
 the BGP agent which provides Calico routing, and the Felix agent which programs network policy
