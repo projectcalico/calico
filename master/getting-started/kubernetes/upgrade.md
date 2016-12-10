@@ -18,6 +18,9 @@ complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/k
 
 This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted) Calico installation.
 
+Note that while a self-hosted installation of Calico is typically done all at once (via calico.yaml), it is
+recommended to perform upgrades one component at a time.
+
 #### Upgrading the Calico policy controller
 
 In a self-hosted Calico installation, the calico/kube-policy-controller is run under a Deployment.  As such,
@@ -27,7 +30,7 @@ To upgrade the policy controller, simply apply changes to the Deployment specifi
 do the rest.
 
 ```
-kubectl apply -f modified-calico.yaml
+kubectl apply -f policy-controller.yaml
 ```
 
 > **NOTE**
@@ -46,10 +49,10 @@ To upgrade from the ReplicaSet to a Deployment, follow these steps:_
 kubectl scale rs -n kube-system calico-policy-controller --replicas=0
 ```
 
-- _Deploy the new policy controller as a DaemonSet_
+- _Deploy the new policy controller as a Deployment_
 
 ```
-kubectl apply -f calico.yaml
+kubectl apply -f policy-controller.yaml
 ```
 
 #### Upgrading the Calico DaemonSet
@@ -64,10 +67,10 @@ To upgrade the DaemonSet:
 Modify the DaemonSet manifest and run:
 
 ```
-kubectl apply -f modified-calico.yaml
+kubectl apply -f calico-node.yaml
 ```
 
-Alternatively, use `kubectl edit` to modify the DaemonSet.
+> Alternatively, you can use `kubectl edit` to modify the DaemonSet.
 
 ##### 2. Upgrade each node.
 
