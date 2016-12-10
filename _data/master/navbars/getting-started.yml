@@ -143,11 +143,13 @@ toc:
     path: /getting-started/rkt/
   - title: Installation
     section:
+    - title: 'Manual installation'
+      path: /getting-started/rkt/installation/manual
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/rkt/installation/vagrant-coreos/
   - title: Tutorials
     section:
-    - title: Calico networking with rkt
+    - title: Basic network isolation
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting
