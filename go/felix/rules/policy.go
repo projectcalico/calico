@@ -61,27 +61,39 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 	// TODO(smc) handle > 15 ports in a rule (iptables limitation)
 	match := iptables.Match()
 
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"rule":      protoRule,
+	})
 	if protoRule.IpVersion != 0 && protoRule.IpVersion != proto.IPVersion(ipVersion) {
+		logCxt.Debug("Skipping rule because it is for a different IP version.")
 		return nil
 	}
 
 	if protoRule.Protocol != nil {
 		switch p := protoRule.Protocol.NumberOrName.(type) {
 		case *proto.Protocol_Name:
+			logCxt.WithField("protoName", p.Name).Debug("Adding protocol match")
 			match = match.Protocol(p.Name)
 		case *proto.Protocol_Number:
-			match = match.Protocol(fmt.Sprintf("%d", p.Number))
+			logCxt.WithField("protoNum", p.Number).Debug("Adding protocol match")
+			match = match.ProtocolNum(p.Number)
 		}
 	}
 
 	if protoRule.SrcNet != "" {
 		isV6 := strings.Index(protoRule.SrcNet, ":") >= 0
 		wantV6 := ipVersion == 6
-		if wantV6 == isV6 {
-			// Only include the address if it matches the IP version that we're
-			// rendering.
-			match = match.SourceNet(protoRule.SrcNet)
+		if wantV6 != isV6 {
+			// We're rendering for one IP version but the rule has an CIDR for the other
+			// IP version, skip the rule.
+			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
+			return nil
 		}
+		// Only include the address if it matches the IP version that we're
+		// rendering.
+		logCxt.WithField("cidr", protoRule.SrcNet).Debug("Adding src CIDR match")
+		match = match.SourceNet(protoRule.SrcNet)
 	}
 
 	for _, ipsetID := range protoRule.SrcIpSetIds {
@@ -91,21 +103,33 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 		} else {
 			ipsetName = r.IPSetConfigV6.NameForMainIPSet(ipsetID)
 		}
+		logCxt.WithFields(log.Fields{
+			"ipsetID":   ipsetID,
+			"ipSetName": ipsetName,
+		}).Debug("Adding src IP set match")
 		match = match.SourceIPSet(ipsetName)
 	}
 
 	if len(protoRule.SrcPorts) > 0 {
+		logCxt.WithFields(log.Fields{
+			"ports": protoRule.SrcPorts,
+		}).Debug("Adding src port match")
 		match = match.SourcePortRanges(protoRule.SrcPorts)
 	}
 
 	if protoRule.DstNet != "" {
 		isV6 := strings.Index(protoRule.DstNet, ":") >= 0
 		wantV6 := ipVersion == 6
-		if wantV6 == isV6 {
-			// Only include the address if it matches the IP version that we're
-			// rendering.
-			match = match.DestNet(protoRule.DstNet)
+		if wantV6 != isV6 {
+			// We're rendering for one IP version but the rule has an CIDR for the other
+			// IP version, skip the rule.
+			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
+			return nil
 		}
+		// Only include the address if it matches the IP version that we're
+		// rendering.
+		logCxt.WithField("cidr", protoRule.DstNet).Debug("Adding dst CIDR match")
+		match = match.DestNet(protoRule.DstNet)
 	}
 
 	for _, ipsetID := range protoRule.DstIpSetIds {
@@ -116,26 +140,37 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(protoRule *proto.Rule, ipVersion
 			ipsetName = r.IPSetConfigV6.NameForMainIPSet(ipsetID)
 		}
 		match = match.DestIPSet(ipsetName)
+		logCxt.WithFields(log.Fields{
+			"ipsetID":   ipsetID,
+			"ipSetName": ipsetName,
+		}).Debug("Adding dst IP set match")
 	}
 
 	if len(protoRule.DstPorts) > 0 {
+		logCxt.WithFields(log.Fields{
+			"ports": protoRule.SrcPorts,
+		}).Debug("Adding dst port match")
 		match = match.DestPortRanges(protoRule.DstPorts)
 	}
 
 	if ipVersion == 4 {
 		switch icmp := protoRule.Icmp.(type) {
 		case *proto.Rule_IcmpTypeCode:
+			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMP type/code match.")
 			match = match.ICMPTypeAndCode(
 				uint8(icmp.IcmpTypeCode.Type), uint8(icmp.IcmpTypeCode.Code))
 		case *proto.Rule_IcmpType:
+			logCxt.WithField("icmpType", icmp).Debug("Adding ICMP type-only match.")
 			match = match.ICMPType(uint8(icmp.IcmpType))
 		}
 	} else {
 		switch icmp := protoRule.Icmp.(type) {
 		case *proto.Rule_IcmpTypeCode:
+			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMPv6 type/code match.")
 			match = match.ICMPV6TypeAndCode(
 				uint8(icmp.IcmpTypeCode.Type), uint8(icmp.IcmpTypeCode.Code))
 		case *proto.Rule_IcmpType:
+			logCxt.WithField("icmpTypeCode", icmp).Debug("Adding ICMPv6 type-only match.")
 			match = match.ICMPV6Type(uint8(icmp.IcmpType))
 		}
 	}
