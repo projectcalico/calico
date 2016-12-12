@@ -21,3 +21,4 @@ version.txt
 bin
 local-utils
 python/version.py
+.go-pkg-cache

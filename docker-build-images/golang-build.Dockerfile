@@ -28,5 +28,8 @@ RUN chmod -R a+wX $GOPATH /usr/local/go
 
 # Disable cgo so that binaries we build will be fully static.
 ENV CGO_ENABLED=0
+# Recompile the standard library with cgo disabled.  This prevents the standard library from being
+# marked stale, causing full rebuilds every time.
+RUN go install -v std
 
 WORKDIR /go/src/github.com/projectcalico/felix

@@ -270,12 +270,17 @@ bin/calico-felix: $(GO_FILES) \
 	# freshness checking for us.
 	$(MAKE) calico-build/golang
 	mkdir -p bin
+	mkdir -p .go-pkg-cache
+	@echo Building felix...
 	$(DOCKER_RUN_RM) \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
 	    calico-build/golang \
-	    go build -o $@ $(LDFLAGS) "./go/felix/felix.go"
-	# Check that the executable is correctly statically linked.
-	ldd bin/calico-felix | grep -q "not a dynamic executable"
+	    go build -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/go/felix"
+
+	@# Check that the executable is correctly statically linked.
+	@ldd bin/calico-felix | grep -q "not a dynamic executable" || \
+	     echo "Error: bin/calico-felix wasn't statically linked"
 
 # Build the pyinstaller bundle, which is an output artefact in its own right
 # as well as being the input to our Deb and RPM builds.
@@ -338,9 +343,11 @@ python-ut: python/calico/felix/felixbackend_pb2.py
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(MAKE) calico-build/golang
+	mkdir -p .go-pkg-cache
 	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
 	    -w /go/src/github.com/projectcalico/felix/go \
 	    calico-build/golang \
 	    ./run-coverage
@@ -389,6 +396,7 @@ clean:
 	       go/docs/calc.pdf \
 	       go/.glide \
 	       go/vendor \
+	       .go-pkg-cache \
 	       python/.tox \
 	       htmlcov \
 	       python/htmlcov

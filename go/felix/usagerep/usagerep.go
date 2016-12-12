@@ -105,15 +105,14 @@ func calculateURL(hostname, clusterGUID, clusterType string, stats calc.StatsUpd
 		"gitRevision": buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
-		"hostname":           {hostname},
-		"guid":               {clusterGUID},
-		"cluster_type":       {clusterType},
-		"size":               {fmt.Sprintf("%v", stats.NumHosts)},
-		"num_wl_endpoints":   {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
-		"num_host_endpoints": {fmt.Sprintf("%v", stats.NumHostEndpoints)},
-		"version":            {buildinfo.GitVersion},
-		"git_revision":       {buildinfo.GitRevision},
-		"felix_type":         {"go"},
+		"hostname": {hostname},
+		"guid":     {clusterGUID},
+		"type":     {clusterType},
+		"size":     {fmt.Sprintf("%v", stats.NumHosts)},
+		"weps":     {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
+		"heps":     {fmt.Sprintf("%v", stats.NumHostEndpoints)},
+		"version":  {buildinfo.GitVersion},
+		"rev":      {buildinfo.GitRevision},
 	}
 	fullURL := baseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")
