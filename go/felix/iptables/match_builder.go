@@ -87,12 +87,24 @@ func (m MatchCriteria) Protocol(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-p %s", name))
 }
 
+func (m MatchCriteria) NotProtocol(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("! -p %s", name))
+}
+
 func (m MatchCriteria) ProtocolNum(num uint8) MatchCriteria {
 	return append(m, fmt.Sprintf("-p %d", num))
 }
 
+func (m MatchCriteria) NotProtocolNum(num uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("! -p %d", num))
+}
+
 func (m MatchCriteria) SourceNet(net string) MatchCriteria {
 	return append(m, fmt.Sprintf("--source %s", net))
+}
+
+func (m MatchCriteria) NotSourceNet(net string) MatchCriteria {
+	return append(m, fmt.Sprintf("! --source %s", net))
 }
 
 func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
@@ -113,8 +125,17 @@ func (m MatchCriteria) SourcePortRanges(ports []*proto.PortRange) MatchCriteria 
 	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
 }
 
+func (m MatchCriteria) NotSourcePortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
+}
+
 func (m MatchCriteria) DestNet(net string) MatchCriteria {
 	return append(m, fmt.Sprintf("--destination %s", net))
+}
+
+func (m MatchCriteria) NotDestNet(net string) MatchCriteria {
+	return append(m, fmt.Sprintf("! --destination %s", net))
 }
 
 func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
@@ -135,20 +156,41 @@ func (m MatchCriteria) DestPortRanges(ports []*proto.PortRange) MatchCriteria {
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
 }
 
+func (m MatchCriteria) NotDestPortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport ! --destination-ports %s", portsString))
+}
+
 func (m MatchCriteria) ICMPType(t uint8) MatchCriteria {
-	return append(m, fmt.Sprintf("--match icmp --icmp-type %d", t))
+	return append(m, fmt.Sprintf("-m icmp --icmp-type %d", t))
+}
+
+func (m MatchCriteria) NotICMPType(t uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("-m icmp ! --icmp-type %d", t))
 }
 
 func (m MatchCriteria) ICMPTypeAndCode(t, c uint8) MatchCriteria {
-	return append(m, fmt.Sprintf("--match icmp --icmp-type %d/%d", t, c))
+	return append(m, fmt.Sprintf("-m icmp --icmp-type %d/%d", t, c))
+}
+
+func (m MatchCriteria) NotICMPTypeAndCode(t, c uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("-m icmp ! --icmp-type %d/%d", t, c))
 }
 
 func (m MatchCriteria) ICMPV6Type(t uint8) MatchCriteria {
-	return append(m, fmt.Sprintf("--match icmp6 --icmp-type %d", t))
+	return append(m, fmt.Sprintf("-m icmp6 --icmpv6-type %d", t))
+}
+
+func (m MatchCriteria) NotICMPV6Type(t uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("-m icmp6 ! --icmpv6-type %d", t))
 }
 
 func (m MatchCriteria) ICMPV6TypeAndCode(t, c uint8) MatchCriteria {
-	return append(m, fmt.Sprintf("--match icmp6 --icmpv6-type %d/%d", t, c))
+	return append(m, fmt.Sprintf("-m icmp6 --icmpv6-type %d/%d", t, c))
+}
+
+func (m MatchCriteria) NotICMPV6TypeAndCode(t, c uint8) MatchCriteria {
+	return append(m, fmt.Sprintf("-m icmp6 ! --icmpv6-type %d/%d", t, c))
 }
 
 func PortsToMultiport(ports []uint16) string {
