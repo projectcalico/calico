@@ -3,31 +3,15 @@ title: Getting Involved
 ---
 
 Calico is an open source project, and we'd love you to get involved.
-Whether that might be by reading and participating on our mailing list,
+Whether that might be by reading and participating on our slack,
 or by diving into the code to propose enhancements or integrate with
 other systems. To see the options for getting involved with Calico the
 project, please take a look at the following.
 
-## Mailing Lists
+## Join us on Slack
 
-Project Calico runs two mailing lists:
-
--   [calico-announce](http://lists.projectcalico.org/mailman/listinfo/calico-announce_lists.projectcalico.org)
-    provides a read-only list providing a regular update on Project
-    Calico. Please subscribe so that you can keep up to date on
-    the project.
--   [calico-tech](http://lists.projectcalico.org/mailman/listinfo/calico-tech_lists.projectcalico.org)
-    provides a list for technical discussions and queries about the
-    project. You're welcome to subscribe and to post any Calico-related
-    discussion to this list, including problems, ideas, or requirements.
-
-When reporting a problem on calico-tech, please try to:
-
--   provide a clear subject line
--   provide as much diagnostic information as possible.
-
-That will help us (or anyone else) to answer your question quickly and
-correctly.
+Our [public slack](https://slack.projectcalico.org) is the quickest way to get
+in touch for help debugging any issues with Calico.
 
 ## Read the Source, Luke!
 
