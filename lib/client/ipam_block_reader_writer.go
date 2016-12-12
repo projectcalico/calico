@@ -141,11 +141,12 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 }
 
 func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, config IPAMConfig) error {
-	// Claim the block affinity for this host.
+	// Claim the block affinity for this host.  See model.BlockAffinityValue
+	// for details on the hard-coded value that is used.
 	log.Infof("Host %s claiming block affinity for %s", host, subnet)
 	obj := model.KVPair{
 		Key:   model.BlockAffinityKey{Host: host, CIDR: subnet},
-		Value: &model.BlockAffinity{},
+		Value: model.BlockAffinityValue,
 	}
 	_, err := rw.client.backend.Create(&obj)
 
