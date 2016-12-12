@@ -164,7 +164,8 @@ run-etcd-st:
 	$(MAKE) stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:v2.0.11 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379" \
 	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
 
@@ -437,7 +438,8 @@ run-etcd:
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	-p 2379:2379 \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
@@ -447,7 +449,8 @@ run-etcd-host:
 	@-docker rm -f calico-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
