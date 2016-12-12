@@ -1,4 +1,4 @@
-FROM jeanblanchard/alpine-glibc
+FROM alpine:3.4
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
 ADD dist/calicoctl ./calicoctl
