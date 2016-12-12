@@ -29,11 +29,14 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 	log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
-	}).Info("Configuring IPIP")
+	}).Info("Configuring IPIP tunnel")
 	link, err := netlink.LinkByName("tunl0")
 	if err != nil {
 		// TODO(smc) WIBNI we could use netlink here too?
-		log.WithError(err).Info("Fialed to get IPIP tunnel device, assuming it isn't present")
+		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
+		// We call out to "ip tunnel", which takes care of loading the kernel module if
+		// needed.  The tunl0 device is actually created automatically by the kernel
+		// module.
 		cmd := exec.Command("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 		err := cmd.Run()
 		if err != nil {
@@ -93,7 +96,6 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 		}
 		addr := &netlink.Addr{
 			IPNet: &ipNet,
-			Label: "cali",
 		}
 		if err := netlink.AddrAdd(link, addr); err != nil {
 			log.WithError(err).WithField("addr", address).Warn("Failed to add address")
