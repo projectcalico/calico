@@ -4,13 +4,13 @@ title: Installing Calico for Docker
 
 Calico runs as a Docker container on each host. The `calicoctl` command line tool can be used to launch the `calico/node` container.
 
-## Using Calicoctl
+## Using calicoctl
 
 1. Download the calicoctl binary:
 
-	 ```
-	 sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc2/calicoctl
-	 sudo chmod +x calicoctl
+   ```
+   sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc2/calicoctl
+   sudo chmod +x calicoctl
    ```
 
 2. Launch `calico/node`:
@@ -53,7 +53,6 @@ Use the following command to stop the calico/node container:
 
 docker stop calico-node
 
-calico@calico:~/code/calico$
 ```
 
 Pair the printed command with your favorite init system to ensure Calico is

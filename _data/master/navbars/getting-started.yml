@@ -144,8 +144,6 @@ toc:
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting
-  - title: Upgrade
-    path: /getting-started/rkt/upgrade
 
 - title: Host Protection
   section:
