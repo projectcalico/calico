@@ -79,6 +79,10 @@ help:
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 
+# Disable make's implicit rules, which are not useful for golang, and slow down the build
+# considerably.
+.SUFFIXES:
+
 all: pyinstaller deb rpm calico/felix
 test: ut
 
@@ -126,6 +130,7 @@ LIBCALICOGO_PATH?=none
 # Build a docker image used for building our go code into a binary.
 .PHONY: calico-build/golang
 calico-build/golang:
+	@echo "Checking freshness of calico-build/golang container image."
 	cd docker-build-images && \
 	  docker build \
 	  --build-arg=UID=$(MY_UID) \
