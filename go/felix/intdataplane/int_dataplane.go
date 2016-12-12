@@ -211,10 +211,13 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	}
 
 	if d.config.RulesConfig.IPIPEnabled {
+		// TODO(smc) Should we maintain this IP (and replace it if someone removes it by
+		// accident)
 		err := configureIPIPDevice(d.config.IPIPMTU,
 			d.config.RulesConfig.IPIPTunnelAddress)
 		if err != nil {
 			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			time.Sleep(1 * time.Second)
 			err := configureIPIPDevice(d.config.IPIPMTU,
 				d.config.RulesConfig.IPIPTunnelAddress)
 			if err != nil {
