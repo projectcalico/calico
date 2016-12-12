@@ -77,6 +77,10 @@ toc:
         path: /reference/calicoctl/setup/etcdv2
       - title: kubernetes api datastore
         path: /reference/calicoctl/setup/kubernetes
+- title: calico/node
+  section:
+  - title: Configuration
+    path: /reference/node/configuration
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Policy Controller
