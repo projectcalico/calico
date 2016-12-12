@@ -192,8 +192,8 @@ kind: notCalicoApiConfig
 
 		Entry("valid etcd configuration", data1, cfg1data, nil),
 		Entry("valid k8s configuration", data2, cfg2data, nil),
-		Entry("invalid version", data3, nil, errors.New("unknown APIVersion 'v2'")),
-		Entry("invalid kind", data4, nil, errors.New("expected kind 'calicoApiConfig', got 'notCalicoApiConfig'")),
+		Entry("invalid version", data3, nil, errors.New("invalid config file: unknown APIVersion 'v2'")),
+		Entry("invalid kind", data4, nil, errors.New("invalid config file: expected kind 'calicoApiConfig', got 'notCalicoApiConfig'")),
 	)
 
 	DescribeTable("Load client config by environment",

@@ -11,7 +11,7 @@ import:
   subpackages:
   - client
   - pkg/transport
-- package: github.com/ghodss/yaml
+- package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/kelseyhightower/envconfig
 - package: github.com/onsi/ginkgo
 - package: github.com/satori/go.uuid
