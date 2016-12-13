@@ -19,6 +19,8 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
+// ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
+// dataplane layer.
 type ipSetsManager struct {
 	ipsets *ipsets.IPSets
 }

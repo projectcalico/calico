@@ -32,6 +32,16 @@ import (
 	"strings"
 )
 
+// endpointManager manages the dataplane resources that belong to each endpoint as well as
+// the "dispatch chains" that fan out packets to the right per-endpoint chain.
+//
+// It programs the relevant iptables chains (via the iptables.Table objects) along with
+// per-endpoint routes (via the RouteTable).
+//
+// Since calculating the dispatch chains is fairly expensive, the main OnUpdate method
+// simply records the pending state of each interface and defers the actual calculation
+// to CompleteDeferredWork().  This is also the basis of our failure handling; updates
+// that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
 	ipVersion       int
 	ourIfacesRegexp *regexp.Regexp
