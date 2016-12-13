@@ -34,7 +34,8 @@ var validate *validator.Validate
 var (
 	nameRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
 	interfaceRegex     = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
-	labelRegex         = regexp.MustCompile("^[a-zA-Z_./-][a-zA-Z0-9_./-]{0,127}$")
+	labelRegex         = regexp.MustCompile("^([a-zA-Z0-9.-]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
+	labelValueRegex    = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
 	actionRegex        = regexp.MustCompile("^(allow|deny|log|pass)$")
 	backendActionRegex = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
 	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
@@ -166,7 +167,7 @@ func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStruc
 	l := field.Interface().(map[string]string)
 	log.Debugf("Validate labels: %s", l)
 	for k, v := range l {
-		if !labelRegex.MatchString(k) || !labelRegex.MatchString(v) {
+		if !labelRegex.MatchString(k) || !labelValueRegex.MatchString(v) {
 			return false
 		}
 	}

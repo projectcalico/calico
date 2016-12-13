@@ -110,10 +110,19 @@ func init() {
 
 		// (API) Labels.
 		Entry("should accept a valid label", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "gold._0-9"}}, true),
-		Entry("should reject label key starting with 0-9", api.HostEndpointMetadata{Labels: map[string]string{"2rank": "gold"}}, false),
-		Entry("should reject label value starting with 0-9", api.HostEndpointMetadata{Labels: map[string]string{"rank": "2gold"}}, false),
+		Entry("should accept label key starting with 0-9", api.HostEndpointMetadata{Labels: map[string]string{"2rank": "gold"}}, true),
+		Entry("should accept label value starting with 0-9", api.HostEndpointMetadata{Labels: map[string]string{"rank": "2gold"}}, true),
+		Entry("should accept label key with dns prefix", api.HostEndpointMetadata{Labels: map[string]string{"calico/k8s_ns": "kube-system"}}, true),
+		Entry("should accept label key where prefix is 253 characters", api.HostEndpointMetadata{Labels: map[string]string{"Projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org12/k8s_ns": "gold"}}, true),
+		Entry("should accept label key where name segment is 63 character", api.HostEndpointMetadata{Labels: map[string]string{"projectcalico.org/gold._0-9gold._0-9gold._0-9gold._0-9gold._0-9gold._0-9gold._012": "gold"}}, true),
 		Entry("should reject label key with !", api.HostEndpointMetadata{Labels: map[string]string{"rank!": "gold"}}, false),
-		Entry("should reject label value with !", api.HostEndpointMetadata{Labels: map[string]string{"rank": "gold!"}}, false),
+		Entry("should reject label key starting with ~", api.HostEndpointMetadata{Labels: map[string]string{"~rank_.0-9": "gold"}}, false),
+		Entry("should reject label key ending with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9~": "gold"}}, false),
+		Entry("should reject label key with multiple /", api.HostEndpointMetadata{Labels: map[string]string{"projectcalico.org/a/b": "gold"}}, false),
+		Entry("should reject label key where prefix > 253 characters", api.HostEndpointMetadata{Labels: map[string]string{"Projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org123/k8s_ns": "gold"}}, false),
+		Entry("should reject label key where name segment > 63 character", api.HostEndpointMetadata{Labels: map[string]string{"projectcalico.org/gold._0-9gold._0-9gold._0-9gold._0-9gold._0-9gold._0-9gold._0123": "gold"}}, false),
+		Entry("should reject label value starting with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "~gold"}}, false),
+		Entry("should reject label value ending with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "gold~"}}, false),
 
 		// (API) Interface.
 		Entry("should accept a valid interface", api.WorkloadEndpointSpec{InterfaceName: "ValidIntface0-9"}, true),
