@@ -278,22 +278,35 @@ Verify that you can access the Kubernetes API.  The following command should ret
 ```shell
 ./kubectl get nodes
 ```
-### 4.2 Configure Outbound NAT
-
-To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
-
-```shell
-# Log into the master instance.
-ssh -i ~/mykey.pem core@$MASTER_DNS
-
-# Enable outgoing NAT on the Calico pool.
-docker run --rm --net=host calico/ctl pool add 192.168.0.0/16 --nat-outgoing
-```
 
 ## 5. Install Addons
 
 {% include {{page.version}}/install-k8s-addons.md %}
 
+## 6. Configure the Calico IP pool
+
+To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
+
+```
+# Log into the master instance.
+ssh -i ~/mykey.pem core@$MASTER_DNS
+
+# Enable outgoing NAT and ipip on the Calico pool.
+docker run -i --rm --net=host calico/ctl:latest apply -f -<<EOF
+apiVersion: v1
+kind: ipPool
+metadata:
+  cidr: 192.168.0.0/16
+spec:
+  nat-outgoing: true
+EOF
+```
+
+## Next Steps
+
+You should now have a fully functioning Kubernetes cluster using Calico for networking.  You're ready to use your cluster.
+
+We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/simple-policy).
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html

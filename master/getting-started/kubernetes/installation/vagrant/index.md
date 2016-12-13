@@ -99,6 +99,11 @@ kubectl config use-context vagrant-system
 
 {% include {{page.version}}/install-k8s-addons.md %}
 
+## Next Steps
+
+You should now have a fully functioning Kubernetes cluster using Calico for networking.  You're ready to use your cluster.
+
+We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/simple-policy).
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [virtualbox]: https://www.virtualbox.org/

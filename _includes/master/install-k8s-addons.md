@@ -36,8 +36,3 @@ To install KubeDNS, use the provided manifest.  This enables Kubernetes Service 
 ```shell
 kubectl apply -f manifests/skydns.yaml
 ```
-
-## Next Steps
-You should now have a fully functioning Kubernetes cluster using Calico for networking.  You're ready to use your cluster.
-
-We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/simple-policy).
