@@ -36,11 +36,32 @@ func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clus
 	log.Info("Usage reporting thread started, waiting for size estimate")
 	stats := <-statsUpdateC
 	log.WithField("stats", stats).Info("Initial stats read")
+
 	// To avoid thundering herd, inject some startup jitter.
 	initialDelay := calculateInitialDelay(stats.NumHosts)
 	log.WithField("delay", initialDelay).Info("Waiting before first check-in")
-	time.Sleep(initialDelay)
+
+	// Even while we're in the initial delay period, we need to keep draining the stats channel
+	// so we do the delay in a goroutine.
+	initialDelayC := make(chan bool)
+	go func() {
+		time.Sleep(initialDelay)
+		initialDelayC <- true
+		close(initialDelayC)
+	}()
+initialDelayLoop:
+	for {
+		select {
+		case stats = <-statsUpdateC:
+		case <-initialDelayC:
+			break initialDelayLoop
+		}
+	}
+
+	log.Info("Initial delay complete, making first check-in")
 	ReportUsage(hostname, clusterGUID, clusterType, stats)
+
+	log.WithField("interval", interval).Info("Initial check-in done, switching to timer.")
 	ticker := jitter.NewTicker(interval, interval/10)
 	for {
 		select {
@@ -105,15 +126,14 @@ func calculateURL(hostname, clusterGUID, clusterType string, stats calc.StatsUpd
 		"gitRevision": buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
-		"hostname":           {hostname},
-		"guid":               {clusterGUID},
-		"cluster_type":       {clusterType},
-		"size":               {fmt.Sprintf("%v", stats.NumHosts)},
-		"num_wl_endpoints":   {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
-		"num_host_endpoints": {fmt.Sprintf("%v", stats.NumHostEndpoints)},
-		"version":            {buildinfo.GitVersion},
-		"git_revision":       {buildinfo.GitRevision},
-		"felix_type":         {"go"},
+		"hostname": {hostname},
+		"guid":     {clusterGUID},
+		"type":     {clusterType},
+		"size":     {fmt.Sprintf("%v", stats.NumHosts)},
+		"weps":     {fmt.Sprintf("%v", stats.NumWorkloadEndpoints)},
+		"heps":     {fmt.Sprintf("%v", stats.NumHostEndpoints)},
+		"version":  {buildinfo.GitVersion},
+		"rev":      {buildinfo.GitRevision},
 	}
 	fullURL := baseURL + queryParams.Encode()
 	log.WithField("url", fullURL).Debug("Calculated URL.")

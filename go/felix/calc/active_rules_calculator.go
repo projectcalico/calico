@@ -42,6 +42,18 @@ type PolicyMatchListener interface {
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey interface{})
 }
 
+// ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
+// are active for the particular endpoints that it's been told about.  It emits events
+// when the set of active rules changes.
+//
+// For example, if the ActiveRulesCalculator is fed *all* the policies/profiles along with
+// the endpoints that are on the local host then its output (via the callback objects) will
+// indicate exactly which policies/profiles are active on the local host.
+//
+// When looking at policies, the ActiveRules calculator is only interested in the selector
+// attached to the policy itself (which determines the set of endpoints that it applies to).
+// The rules in a policy may also contain selectors; those are are ignored here; they are
+// mapped to IP sets by the RuleScanner.
 type ActiveRulesCalculator struct {
 	// Caches of all known policies/profiles.
 	allPolicies     map[model.PolicyKey]*model.Policy

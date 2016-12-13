@@ -8,7 +8,7 @@ version_file=python/version.py
 
 # Get the location of this script.  Other scripts that we use must be in the
 # same location.
-scriptdir=$(dirname $(readlink -f $0))
+scriptdir=$(dirname $(realpath $0))
 
 # Include function library.
 . ${scriptdir}/lib.sh

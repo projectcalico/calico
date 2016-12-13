@@ -1,5 +1,5 @@
-hash: f5a502e8063315f9f53115c3925d3555dfc3215fb5380bcbac822bde26cdcd9d
-updated: 2016-12-02T12:45:32.303876681Z
+hash: 5ef568b0af6c67f5fe0e1391161d666f8f791c7ce5a07f42e7e65b854787d997
+updated: 2016-12-13T15:28:23.086070904Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -80,7 +80,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8d92cf5fc15a4382f8964b08e1f42a75c0591aa3
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -128,7 +128,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: d1901d62e520449b2fffd6281909c470d3adf44e
+  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
   subpackages:
   - lib
   - lib/api
@@ -138,6 +138,7 @@ imports:
   - lib/backend/compat
   - lib/backend/etcd
   - lib/backend/k8s
+  - lib/backend/k8s/thirdparty
   - lib/backend/model
   - lib/client
   - lib/errors
@@ -174,7 +175,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 4b6ea7319e214d98c938f12692336f7ca9348d6b
+  version: d26492970760ca5d33129d2d799e34be5c4782eb
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -250,7 +251,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go
-  version: 5d8c36c93cf544e3bde13caa4c6222b65753ec3c
+  version: 41a99d711af778a177f07402217b85d456b50da1
   subpackages:
   - discovery
   - kubernetes
