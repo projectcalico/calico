@@ -53,6 +53,7 @@ type kubeSyncer struct {
 
 // Holds resource version information.
 type resourceVersions struct {
+	nodeVersion	     string
 	podVersion           string
 	namespaceVersion     string
 	networkPolicyVersion string
@@ -129,7 +130,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	latestVersions := resourceVersions{}
 
 	// Other watcher vars.
-	var nsChan, poChan, npChan, gcChan, poolChan <-chan watch.Event
+	var nsChan, poChan, npChan, gcChan, poolChan, noChan <-chan watch.Event
 	var event watch.Event
 	var kvp *model.KVPair
 	var opts k8sapi.ListOptions
@@ -214,11 +215,21 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 
+			// Create watcher for Node objects
+			opts := k8sapi.ListOptions{ResourceVersion: latestVersions.nodeVersion}
+			nodeWatch, err := syn.kc.clientSet.Nodes().Watch(opts)
+			if err != nil {
+				log.Warnf("Failed to watch Nodes, retrying: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
 			nsChan = nsWatch.ResultChan()
 			poChan = poWatch.ResultChan()
 			npChan = npWatch.ResultChan()
 			gcChan = globalConfigWatch.ResultChan()
 			poolChan = ipPoolWatch.ResultChan()
+			noChan = nodeWatch.ResultChan()
 
 			// Success - reset the flag.
 			needsResync = false
@@ -290,10 +301,21 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				log.Warn("Event triggered resync: %+v", event)
 				continue
 			}
-
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseIPPoolEvent(event)
 			latestVersions.poolVersion = kvp.Revision.(string)
+			syn.sendUpdates([]model.KVPair{*kvp})
+		case event = <-noChan:
+			log.Debugf("Incoming Node watch event. Type=%s", event.Type)
+			if needsResync = syn.eventTriggersResync(event); needsResync {
+				// We need to resync.  Break out of the sync loop.
+				log.Warn("Event triggered resync: %+v", event)
+				continue
+			}
+
+			// Event is OK - parse it and send it over the channel.
+			kvp = syn.parseNodeEvent(event)
+			latestVersions.nodeVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
 		}
 	}
@@ -430,6 +452,26 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 			keys[p.Key.String()] = true
 		}
 
+		log.Info("Syncing nodes")
+		noList, err := syn.kc.clientSet.Nodes().List(opts)
+		if err != nil {
+			log.Warnf("Error syncing Nodes, retrying: %s", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		versions.nodeVersion = noList.ListMeta.ResourceVersion
+		for _, no := range noList.Items {
+			node, err := resources.K8sNodeToCalico(&no)
+			if err != nil {
+				log.Panicf("%s", err)
+			}
+			if node != nil {
+				snap = append(snap, *node)
+				keys[node.Key.String()] = true
+			}
+		}
+
 		// Include ready state.
 		ready, err := syn.kc.getReadyStatus(model.ReadyFlagKey{})
 		if err != nil {
@@ -490,6 +532,25 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 
 	// Return the updates.
 	return []model.KVPair{*rules, *tags, *labels, *policy}
+}
+
+func (syn *kubeSyncer) parseNodeEvent(e watch.Event) *model.KVPair {
+	node, ok := e.Object.(*k8sapi.Node)
+	if !ok {
+		log.Panicf("Invalid node event. Type: %s, Object: %+v", e.Type, e.Object)
+	}
+
+	kvp, err := resources.K8sNodeToCalico(node)
+
+	if err != nil {
+		log.Panicf("%s", err)
+	}
+
+	if e.Type == watch.Deleted {
+		kvp.Value = nil
+	}
+
+	return kvp
 }
 
 // parsePodEvent returns a KVPair for the given event.  If the event isn't

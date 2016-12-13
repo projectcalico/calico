@@ -42,6 +42,15 @@ func (i *IP) UnmarshalJSON(b []byte) error {
 	return i.UnmarshalText([]byte(s))
 }
 
+// ParseIP returns an IP from a string
+func ParseIP(ip string) *IP {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return nil
+	}
+	return &IP{addr}
+}
+
 // Version returns the IP version for an IP, or 0 if the IP is not valid.
 func (i IP) Version() int {
 	if i.To4() != nil {
