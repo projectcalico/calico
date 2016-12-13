@@ -341,7 +341,7 @@ Description:
 
 	// Create the command to follow the docker logs for the calico/node
 	fmt.Println("Container started, checking progress logs.")
-	logCmd := exec.Command("docker", "logs", "calico-node", "--follow")
+	logCmd := exec.Command("docker", "logs", "--follow", "calico-node")
 
 	// Get the stdout pipe
 	outPipe, err := logCmd.StdoutPipe()
