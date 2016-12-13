@@ -3,7 +3,7 @@ default: help
 all: test                                 ## Run all the tests
 test: st test-containerized               ## Run all the tests
 ssl-certs: certs/.certificates.created    ## Generate self-signed SSL certificates
-all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64 test-containerized
+all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe test-containerized
 
 # Determine which OS / ARCH.
 OS := $(shell uname -s | tr A-Z a-z)
@@ -273,7 +273,7 @@ semaphore: clean
 	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 	# Make sure that calicoctl builds cross-platform.
-	$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64
+	$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
 
 	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICOCONTAINERS_VERSION
@@ -412,8 +412,9 @@ dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
 dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=darwin ARCH=amd64 binary-containerized
 
-dist/calicoctl-windows-amd64: $(CALICOCTL_FILES) vendor
+dist/calicoctl-windows-amd64.exe: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=windows ARCH=amd64 binary-containerized
+	mv dist/calicoctl-windows-amd64 dist/calicoctl-windows-amd64.exe
 
 ## Run the build in a container. Useful for CI
 binary-containerized: $(CALICOCTL_FILES) vendor
@@ -487,7 +488,7 @@ endif
 	git tag $(VERSION)
 
 	# Build the calicoctl binaries, as well as the calico/ctl and calico/node images.
-	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64 
+	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe 
 	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) calico/ctl calico/node
 
 	# Check that the version output includes the version specified.

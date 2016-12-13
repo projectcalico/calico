@@ -25,4 +25,4 @@ You should have no local changes and tests should be passing.
 5. Attach the following `calicoctl` binaries:
    - `calicoctl`
    - `calicoctl-darwin-amd64`
-   - `calicoctl-windows-amd64`
+   - `calicoctl-windows-amd64.exe`
