@@ -236,7 +236,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					Tags: []string{conf.Name},
 				},
 				Spec: api.ProfileSpec{
-					EgressRules: []api.Rule{{Action: "allow"}},
+					EgressRules:  []api.Rule{{Action: "allow"}},
 					IngressRules: inboundRules,
 				},
 			}
