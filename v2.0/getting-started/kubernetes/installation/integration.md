@@ -80,7 +80,7 @@ Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
 ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
-  -e HOSTNAME=${HOSTNAME} \
+  -e NODENAME=${HOSTNAME} \
   -e IP= \
   -e NO_DEFAULT_POOLS= \
   -e AS= \
@@ -95,6 +95,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
   calico/node:v1.0.0-rc2
+ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10
 
