@@ -25,6 +25,12 @@ type UpdateHandler func(update api.Update) (filterOut bool)
 
 type StatusHandler func(status api.SyncStatus)
 
+// Dispatcher fans out incoming events based on their reflect.Type.  One or more UpdateHandler
+// functions can be registered for each type.
+//
+// The Dispatcher supports rudimentary filtering:  UpdateHandlers are called in the order
+// they were added.  Earlier handlers can return filterOut=true to prevent further handlers
+// being called.
 type Dispatcher struct {
 	typeToHandler  map[reflect.Type]updateHandlers
 	statusHandlers []StatusHandler

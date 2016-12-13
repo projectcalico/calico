@@ -54,6 +54,32 @@ Options:
   --version                  Print the version and exit.
 `
 
+// main is the entry point to the calico-felix binary.
+//
+// Its main role is to sequence Felix's startup by:
+//
+// Initialising early logging config (log format and early debug settings).
+//
+// Parsing command line parameters.
+//
+// Loading datastore configuration from the environment or config file.
+//
+// Loading more configuration from the datastore (this is retried until success).
+//
+// Starting the configured internal (golang) or external dataplane driver.
+//
+// Starting the background processing goroutines, which load and keep in sync with the
+// state from the datastore, the "calculation graph".
+//
+// Starting the usage reporting and prometheus metrics endpoint threads (if configured).
+//
+// Then, it defers to monitorAndManageShutdown(), which blocks until one of the components
+// fails, then attempts a graceful shutdown.  At that point, all the processing is in
+// background goroutines.
+//
+// To avoid having to maintain rarely-used code paths, Felix handles updates to its
+// main config parameters by exiting and allowing itself to be restarted by the init
+// daemon.
 func main() {
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
