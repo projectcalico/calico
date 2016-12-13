@@ -1,5 +1,5 @@
-hash: 7c77d7317837153b309729cb60924eb59c0e9a4a598028ade82e90c38d81f2fa
-updated: 2016-12-09T12:00:18.829800417-08:00
+hash: 1efa10f7d9f9793128d78496760c641fb6ee82b2686a4fd476ba83a624f1506c
+updated: 2016-12-13T15:51:57.719804486-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -20,7 +20,7 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: cfd10b4bbfc6a9a1cf2d3f5ec8e31dae31e15122
+  version: 454f1da2f2bc48f9d2aede84fece95d292c8e3fc
   subpackages:
   - client
   - pkg/fileutil
@@ -67,7 +67,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -139,8 +139,16 @@ imports:
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/projectcalico/go-json
+  version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
+  subpackages:
+  - json
+- name: github.com/projectcalico/go-yaml
+  version: 955bc3e451ef0c9df8b9113bf2e341139cdafab2
+- name: github.com/projectcalico/go-yaml-wrapper
+  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e44106f65e2315a30cb0bb00a6766d0bd343bfeb
+  version: f87d39740b5a49891d6ee2646a17326c5e337b20
   subpackages:
   - lib/api
   - lib/api/unversioned

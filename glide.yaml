@@ -15,7 +15,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: e44106f65e2315a30cb0bb00a6766d0bd343bfeb
+  version: v1.0.0-rc6
   subpackages:
   - lib/api
   - lib/client
