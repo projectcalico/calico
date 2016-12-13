@@ -1,5 +1,5 @@
-hash: a38217a7bae25bafb56fd9be9e3e6d010b1474515ab821875e37a3c91ccdcff4
-updated: 2016-12-07T00:54:01.542536074Z
+hash: f26bbcaba70a0ec54d299beb9004bb185611c2049cce4ddaa631a18e1216be58
+updated: 2016-12-13T10:51:01.182974068Z
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -61,7 +61,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
   version: 6e4869b434bd001f6983749881c7ead3545887d8
 - name: github.com/go-openapi/jsonpointer
@@ -127,8 +127,16 @@ imports:
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/projectcalico/go-json
+  version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
+  subpackages:
+  - json
+- name: github.com/projectcalico/go-yaml
+  version: 955bc3e451ef0c9df8b9113bf2e341139cdafab2
+- name: github.com/projectcalico/go-yaml-wrapper
+  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
+  version: b0fb84b6aa0e23b9b7c4f3a5deb088b2caccc12c
   subpackages:
   - lib
   - lib/api
@@ -206,7 +214,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 30237cf4eefd639b184d1f2cb77a581ea0be8947
+  version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
 - name: golang.org/x/text
