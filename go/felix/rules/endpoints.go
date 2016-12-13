@@ -27,13 +27,13 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 		fromEndpointRules = append(fromEndpointRules, Rule{
 			Match: Match().InInterface(endpoint.Name),
 			Action: GotoAction{
-				Target: WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
+				Target: EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name),
 			},
 		})
 		toEndpointRules = append(toEndpointRules, Rule{
 			Match: Match().OutInterface(endpoint.Name),
 			Action: GotoAction{
-				Target: WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
+				Target: EndpointChainName(WorkloadToEndpointPfx, endpoint.Name),
 			},
 		})
 	}
@@ -158,11 +158,11 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 	outRules = append(outRules, r.DropRules(Match(), "Drop if no profiles matched")...)
 
 	toEndpointChain := Chain{
-		Name:  WorkloadEndpointChainName(WorkloadToEndpointPfx, endpoint),
+		Name:  EndpointChainName(WorkloadToEndpointPfx, endpoint.Name),
 		Rules: inRules,
 	}
 	fromEndpointChain := Chain{
-		Name:  WorkloadEndpointChainName(WorkloadFromEndpointPfx, endpoint),
+		Name:  EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name),
 		Rules: outRules,
 	}
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
@@ -181,10 +181,10 @@ func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, 
 	return nil
 }
 
-func WorkloadEndpointChainName(prefix string, endpoint *proto.WorkloadEndpoint) string {
+func EndpointChainName(prefix string, ifaceName string) string {
 	return hashutils.GetLengthLimitedID(
 		prefix,
-		endpoint.Name,
+		ifaceName,
 		MaxChainNameLength,
 	)
 }

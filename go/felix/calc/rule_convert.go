@@ -80,7 +80,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	out := &proto.Rule{
 		Action: in.Action,
 
-		IpVersion: ipVersionToProtoIPVersion(in.IPVersion),
+		IpVersion: ipVersionToProtoIPVersion(in.IPVersion, in.Protocol),
 
 		Protocol: protocolToProtoProtocol(in.Protocol),
 
@@ -141,9 +141,20 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	return out
 }
 
-func ipVersionToProtoIPVersion(in *int) proto.IPVersion {
+func ipVersionToProtoIPVersion(in *int, p *numorstring.Protocol) proto.IPVersion {
 	if in == nil {
-		return proto.IPVersion_ANY
+		// No explicit version, see if we can work out the version from the protocol.
+		if p == nil {
+			return proto.IPVersion_ANY
+		}
+		switch p.String() {
+		case "icmp":
+			return proto.IPVersion_IPV4
+		case "icmpv6":
+			return proto.IPVersion_IPV6
+		default:
+			return proto.IPVersion_ANY
+		}
 	}
 	switch *in {
 	case 4:

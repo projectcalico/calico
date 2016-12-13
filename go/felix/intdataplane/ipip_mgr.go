@@ -25,15 +25,19 @@ import (
 	"reflect"
 )
 
+// configureIPIPDevice ensures the IPIP tunneld evice is up and configures correctly.
 func configureIPIPDevice(mtu int, address net.IP) error {
 	log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
-	}).Info("Configuring IPIP")
+	}).Info("Configuring IPIP tunnel")
 	link, err := netlink.LinkByName("tunl0")
 	if err != nil {
 		// TODO(smc) WIBNI we could use netlink here too?
-		log.WithError(err).Info("Fialed to get IPIP tunnel device, assuming it isn't present")
+		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
+		// We call out to "ip tunnel", which takes care of loading the kernel module if
+		// needed.  The tunl0 device is actually created automatically by the kernel
+		// module.
 		cmd := exec.Command("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 		err := cmd.Run()
 		if err != nil {
@@ -61,7 +65,14 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 	)
 }
 
+// setLinkAddressV4 updates the given link to set its local IP address.  It removes any other
+// addresses.
 func setLinkAddressV4(linkName string, address net.IP) error {
+	logCxt := log.WithFields(log.Fields{
+		"link": linkName,
+		"addr": address,
+	})
+	logCxt.Info("Setting local IPv4 address on link.")
 	link, err := netlink.LinkByName(linkName)
 	if err != nil {
 		log.WithError(err).WithField("name", linkName).Warning("Failed to get device")
@@ -77,9 +88,11 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 	found := false
 	for _, addr := range addrs {
 		if reflect.DeepEqual(addr.IP, address) {
+			logCxt.Info("Address already present.")
 			found = true
 			continue
 		}
+		logCxt.WithField("oldAddr", addr).Info("Removing old address")
 		if err := netlink.AddrDel(link, &addr); err != nil {
 			log.WithError(err).Warn("Failed to delete address")
 			return err
@@ -87,27 +100,31 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 	}
 
 	if !found && address != nil {
+		logCxt.Info("Address wasn't present, adding it.")
 		ipNet := net.IPNet{
 			IP:   address,
 			Mask: net.CIDRMask(32, 32),
 		}
 		addr := &netlink.Addr{
 			IPNet: &ipNet,
-			Label: "cali",
 		}
 		if err := netlink.AddrAdd(link, addr); err != nil {
 			log.WithError(err).WithField("addr", address).Warn("Failed to add address")
 			return err
 		}
 	}
+	logCxt.Info("Address set.")
 
 	return nil
 }
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
-// when IPIP is enabled.
+// when IPIP is enabled.  It doesn't actually program the rules, because they are part of the
+// top-level static chains.
 type ipipManager struct {
-	ipsets             *ipsets.IPSets
+	ipsets *ipsets.IPSets
+	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
+	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
 }
 
