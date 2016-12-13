@@ -135,8 +135,6 @@ NAME          STATUS                     AGE
 
 ## 5. Configure the Calico IP pool
 
-### 5.1 Configure Outbound NAT and IP-in-IP
-
 To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 
 ```
@@ -144,7 +142,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 gcloud compute ssh kubernetes-master
 
 # Enable outgoing NAT and ipip on the Calico pool.
-docker run --rm --net=host calico/ctl:latest apply -f -<<EOF
+docker run -i --rm --net=host calico/ctl:latest apply -f -<<EOF
 apiVersion: v1
 kind: ipPool
 metadata:
@@ -155,6 +153,12 @@ spec:
   nat-outgoing: true
 EOF
 ```
+
+## Next Steps
+
+You should now have a fully functioning Kubernetes cluster using Calico for networking.  You're ready to use your cluster.
+
+We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/simple-policy).
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
 [coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html
