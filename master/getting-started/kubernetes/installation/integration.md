@@ -180,11 +180,11 @@ After a few moments, you should see the policy controller enter `Running` state:
 ```shell
 $ kubectl get pods --namespace=kube-system
 NAME                                     READY     STATUS    RESTARTS   AGE
-calico-policy-controller                 2/2       Running   0          1m
+calico-policy-controller                 1/1       Running   0          1m
 ```
 
 For more information on how to configure the policy controller,
-see the [configuration guide](https://github.com/projectcalico/k8s-policy/blob/v0.5.1/configuration.md).
+see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/policy-controller/configuration).
 
 ## Configuring Kubernetes
 
