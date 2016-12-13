@@ -21,7 +21,7 @@ import:
   - json
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: v1.0.0-rc4
+  version: b0fb84b6aa0e23b9b7c4f3a5deb088b2caccc12c
   subpackages:
   - lib/api
   - lib/api/unversioned

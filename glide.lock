@@ -1,5 +1,5 @@
-hash: 92eaa99856aef5f42540bc16d27626ac4b3e941cef9680efeb263065239e24f3
-updated: 2016-12-06T17:13:23.966238694-08:00
+hash: a32cedea0b6316cdf7d4a79d8eab4203580b25522df911ab304b40581f1bfc2a
+updated: 2016-12-12T20:45:51.085315835-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: c4e5081562ace0ae35138630a55e20a0f889476d
+  version: 797d82611775fa0ac7a8da79e0e41e2b042ededf
   subpackages:
   - client
   - pkg/fileutil
@@ -34,7 +34,7 @@ imports:
   - journal
   - util
 - name: github.com/coreos/pkg
-  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
   - capnslog
   - health
@@ -73,14 +73,14 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 8d70fb3182befc465c4a1eac8ad4d38ff49778e2
+  version: 909568be09de550ed094403c2bf8a261b5bb730a
   subpackages:
   - proto
   - sortkeys
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -101,7 +101,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 5f9e5dcd0726f8a787a3424a3494926a755fb7b8
+  version: 855c567c67d7fff1e2f91617c292ea20cf26e53c
   subpackages:
   - client/v2
   - models
@@ -125,11 +125,11 @@ imports:
 - name: github.com/mitchellh/go-ps
   version: e2d21980687ce16e58469d98dcee92d27fbbd7fb
 - name: github.com/mitchellh/mapstructure
-  version: 5a0325d7fafaac12dda6e7fb8bd222ec1b69875e
+  version: bfdb1a85537d60bc7e954e600c250219ea497417
 - name: github.com/olekukonko/tablewriter
   version: bdcc175572fd7abece6c831e643891b9331bc9e7
 - name: github.com/onsi/ginkgo
-  version: 74c678d97c305753605c338c6c78c49ec104b5e7
+  version: 00054c0bb96fc880d4e0be1b90937fad438c5290
   subpackages:
   - config
   - extensions/table
@@ -145,6 +145,8 @@ imports:
   - internal/writer
   - reporters
   - reporters/stenographer
+  - reporters/stenographer/support/go-colorable
+  - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/osrg/gobgp
   version: 38c47609a2eeae67c2c9cc042adea60484c2f481
@@ -174,7 +176,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
+  version: b0fb84b6aa0e23b9b7c4f3a5deb088b2caccc12c
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -206,7 +208,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/afero
-  version: 06b7e5f50606ecd49148a01a6008942d9b669217
+  version: 2f30b2a92c0e5700bcfe4715891adb1f2a7a406d
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -224,7 +226,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 266f02d3a80fb75c33302a2c91e7632ec33c1f32
+  version: 7a823e360eee9619b585d41579dfd445a8f788cb
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -253,7 +255,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 478fcf54317e52ab69f40bb4c7a1520288d7f7ea
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -301,7 +303,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/tomb.v2
-  version: 9dde971544235898fc9720ed594059f79fd3273c
+  version: d5d1b5820637886def9eef33e03a27a9f166942c
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go

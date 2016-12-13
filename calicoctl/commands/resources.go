@@ -17,14 +17,15 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
@@ -240,7 +241,8 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	cf := args["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
-		return commandResults{err: err}
+		fmt.Printf("Failed to create Calico API client: %s\n", err)
+		os.Exit(1)
 	}
 	log.Infof("Client: %v", client)
 
