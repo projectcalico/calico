@@ -1,8 +1,8 @@
 ---
-title: Installing Calico on Kubernetes 
+title: Installing Calico on Kubernetes
 ---
 
-Calico can be installed on a Kubernetes cluster in a number of configurations.  This document 
+Calico can be installed on a Kubernetes cluster in a number of configurations.  This document
 gives an overview of the most popular approaches, and provides links to each for more detailed
 information.
 
@@ -16,12 +16,12 @@ Calico can run on any Kubernetes cluster which meets the following criteria.
 
 ## [Calico Hosted Install](hosted)
 
-Installs the Calico components as a DaemonSet entirely using Kubernetes manifests through a single 
-kubectl command. 
+Installs the Calico components as a DaemonSet entirely using Kubernetes manifests through a single
+kubectl command.  This method is supported for Kubernetes versions >= v1.4.0.
 
-## [Custom Installation](integration) 
+## [Custom Installation](integration)
 
-In addition to the hosted approach above, the Calico components can also be installed using your 
+In addition to the hosted approach above, the Calico components can also be installed using your
 own orchestration mechanisms (e.g ansible, chef, bash, etc)
 
 Follow the [integration guide](integration) if you're using a Kubernetes version < v1.4.0, or if you would like
