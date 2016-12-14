@@ -20,7 +20,7 @@ ETCD_ENDPOINTS=http://localhost:2379
 ETCD_CA_FILE=""
 ETCD_CERT_FILE=""
 ETCD_KEY_FILE=""
-CALICO_HOSTNAME=""
+CALICO_NODENAME=""
 CALICO_NO_DEFAULT_POOLS=""
 CALICO_IP=""
 CALICO_IP6=""
@@ -37,16 +37,24 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 > here are standard values for a non-SSL version of Etcd, but you can use this
 > template to define your SSL values if desired.
 >
-> If CALICO_HOSTNAME is blank, the compute server hostname will be used
+> If CALICO_NODENAME is blank, the compute server hostname will be used
 > to identify the Calico node.
 >
-> If CALICO_IP or CALICO_IP6 are left blank, the next hop IP addresses for
-> this node will be automatically determined by querying the host interfaces.
-> It may be necessary to explicitly set these values.
+> If CALICO_IP or CALICO_IP6 are left blank, Calico will use the currently
+> configured values for the next hop IP addresses for this node - these can
+> be configured through the node resource.  If no next hop addresses have 
+> been configured, Calico will automatically determine an IPv4 next hop address 
+> by querying the host interfaces (and it will configure this value in the 
+> node resource).  You may set CALICO_IP to `autodetect` to force 
+> auto-detection of IP address every time the node starts.  If you set IP 
+> addresses through these environments it will reconfigure any values currently
+> set through the node resource.
 >
-> If CALICO_AS is left blank, the AS Number for the node BGP client will be
-> inherited from the global defaut value.  Set this if you need to explicitly
-> set the AS Number for this node.
+> If CALICO_AS is left blank, Calico will use the currently configured value
+> for the AS Number for the node BGP client - this can be configured through 
+> the node resource.  If no value is set,  Calico will inherit the AS Number 
+> from the global default value.  If you set a value through this environment
+> it will reconfigure any value currently set through the node resource.
 >
 > The CALICO_NETWORKING_BACKEND defaults to use Bird as the routing daemon.
 > This may also be set to gobgp (to use gobgp as the routing daemon, but note
@@ -68,7 +76,7 @@ EnvironmentFile=/etc/calico/calico.env
 ExecStartPre=-/usr/bin/docker rm -f calico-node
 ExecStart=/usr/bin/docker run --net=host --privileged \
  --name=calico-node \
- -e HOSTNAME=${HOSTNAME} \
+ -e NODENAME=${CALICO_NODENAME} \
  -e IP=${CALICO_IP} \
  -e IP6=${CALICO_IP6} \
  -e CALICO_NETWORKING_BACKEND=${CALICO_NETWORKING_BACKEND} \
@@ -83,7 +91,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
  -v /var/run/calico:/var/run/calico \
- calico/node:v1.0.0-rc2
+ calico/node:v1.0.0-rc4
 
 ExecStop=-/usr/bin/docker stop calico-node
 

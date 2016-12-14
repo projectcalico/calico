@@ -245,14 +245,14 @@ Download `kubectl`
 > The linux kubectl binary can be fetched with a command like:
 
 ```shell
-wget https://storage.googleapis.com/kubernetes-release/release/v1.5.0/bin/linux/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 > On an OS X workstation, replace linux in the URL above with darwin:
 
 ```shell
-wget https://storage.googleapis.com/kubernetes-release/release/v1.5.0/bin/darwin/amd64/kubectl
+wget https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/darwin/amd64/kubectl
 ```
 
 Save the public DNS name for the master in an environment variable. Replace `ec2-###-##-##-###.compute-1.amazonaws.com` with the master public DNS name - you can find this in the AWS portal, or by running `aws ec2 describe-instances`.
@@ -292,7 +292,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 ssh -i ~/mykey.pem core@$MASTER_DNS
 
 # Enable outgoing NAT and ipip on the Calico pool.
-docker run -i --rm --net=host calico/ctl:v1.0.0-rc2 apply -f -<<EOF
+docker run -i --rm --net=host calico/ctl:v1.0.0-rc4 apply -f -<<EOF
 apiVersion: v1
 kind: ipPool
 metadata:

@@ -272,7 +272,7 @@ iptables -A PREROUTING -t nat -i eth0 -p tcp --dport <EXPOSED_PORT> -j DNAT  --t
 For example, you have a container to which you've assigned the CALICO_IP of 192.168.7.4, and you have NGINX running on port 80 inside the container. If you want to expose this service on port 80, then you could run the following command:
 
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 172.168.7.4:80
+iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.7.4:80
 ```
 
 The command will need to be run each time the host is restarted.
