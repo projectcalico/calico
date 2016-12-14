@@ -1,5 +1,5 @@
-hash: 23fb65f32e70518d0c0d686223a4ab3699f1398f884d0523acf6f2fc9098e87e
-updated: 2016-12-06T17:06:26.938671549-08:00
+hash: 1efa10f7d9f9793128d78496760c641fb6ee82b2686a4fd476ba83a624f1506c
+updated: 2016-12-13T15:51:57.719804486-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -20,7 +20,7 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: ea057115224138376622d63a51b699133310ea31
+  version: 454f1da2f2bc48f9d2aede84fece95d292c8e3fc
   subpackages:
   - client
   - pkg/fileutil
@@ -96,7 +96,7 @@ imports:
 - name: github.com/jonboulle/clockwork
   version: 72f9bd7c4e0c2a40055ab3d0f09654f730cce982
 - name: github.com/kelseyhightower/envconfig
-  version: 9aca109c9aec4633fced9717c4a09ecab3d33111
+  version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -139,8 +139,16 @@ imports:
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/projectcalico/go-json
+  version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
+  subpackages:
+  - json
+- name: github.com/projectcalico/go-yaml
+  version: 955bc3e451ef0c9df8b9113bf2e341139cdafab2
+- name: github.com/projectcalico/go-yaml-wrapper
+  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
+  version: f87d39740b5a49891d6ee2646a17326c5e337b20
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -198,7 +206,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 9c60d1c508f5134d1ca726b4641db998f2523357
+  version: 478fcf54317e52ab69f40bb4c7a1520288d7f7ea
   subpackages:
   - unix
 - name: golang.org/x/text
