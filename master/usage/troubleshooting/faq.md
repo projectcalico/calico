@@ -17,10 +17,10 @@ single site.
 
 Calico also provides a rich network security model that
 allows operators and developers to declare intent-based network security
-policy that is automatically rendered into distributed firewall rules 
+policy that is automatically rendered into distributed firewall rules
 across a cluster of containers, VMs, and/or servers.
 
-For a more detailed discussion of this topic, see our blog post at 
+For a more detailed discussion of this topic, see our blog post at
 [Why Calico?](http://www.projectcalico.org/why-calico/).
 
 ## "Does Calico work with IPv6?"
@@ -30,31 +30,31 @@ not all orchestrators that we integrate with support IPv6 yet.
 
 ## "Why does my container have a route to 169.245.1.1?"
 
-In a Calico network, each host acts as a gateway router for the 
-workloads that it hosts.  In container deployments, Calico uses 
-169.245.1.1 as the address for the Calico router.  By using a 
-link-local address, Calico saves precious IP addresses and avoids 
+In a Calico network, each host acts as a gateway router for the
+workloads that it hosts.  In container deployments, Calico uses
+169.245.1.1 as the address for the Calico router.  By using a
+link-local address, Calico saves precious IP addresses and avoids
 burdoning the user with configuring a suitable address.
 
-While the routing table may look a little odd to someone who is used to 
-configuring  LAN networking, using explicit routes rather than 
+While the routing table may look a little odd to someone who is used to
+configuring  LAN networking, using explicit routes rather than
 subnet-local gateways is fairly common in WAN networking.
 
 ## Why can't I see the 169.245.1.1 address mentioned above on my host?
 
 Calico tries hard to avoid interfering with any other configuration
 on the host.  Rather than adding the gateway address to the host side
-of each workload interface, Calico sets the `proxy_arp` flag on the 
+of each workload interface, Calico sets the `proxy_arp` flag on the
 interface.  This makes the host behave like a gateway, responding to
-ARPs for 169.245.1.1 without having to actually allocate the IP address 
+ARPs for 169.245.1.1 without having to actually allocate the IP address
 to the interface.
 
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
 
-The Kubernetes [NetworkPolicy](http://kubernetes.io/docs/api-reference/extensions/v1beta1/definitions/#_v1beta1_networkpolicy) 
+The Kubernetes [NetworkPolicy](http://kubernetes.io/docs/api-reference/extensions/v1beta1/definitions/#_v1beta1_networkpolicy)
 API doesn't currently support this.  However,
 Calico does!  You can use `calicoctl` to configure egress policy to prevent
-Kubernetes pods from initiating outgoing connections based on the full set of 
+Kubernetes pods from initiating outgoing connections based on the full set of
 supported Calico policy primitives including labels, Kubernetes namespaces,
 CIDRs, and ports.
 
@@ -62,7 +62,7 @@ CIDRs, and ports.
 
 It can, but not in the way that Calico uses it.
 
-In container deployments, Calico only uses proxy ARP for resolving the 
+In container deployments, Calico only uses proxy ARP for resolving the
 169.245.1.1 address.  The routing table inside the container ensures
 that all traffic goes via the 169.245.1.1 gateway so that is the only
 IP that will be ARPed by the container.
@@ -134,9 +134,9 @@ workloads to each other, and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, Calico has discussed how both a layer 2 (see
-[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)) 
-or a layer 3 (see 
-[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)) 
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric))
+or a layer 3 (see
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric))
 fabric
 could be integrated with Calico. This is one of the great strengths of
 the Calico model: it allows the infrastructure to be decoupled from what
@@ -149,12 +149,6 @@ route scale, does not mean that Calico is "going back to Ethernet" or
 that we're recommending layer 2 for tenant applications. In all cases we
 forward on IP packets, no matter what architecture is used to build the
 fabric.
-
-## "I need to use hard-coded private IP addresses: how do I do that?"
-
-While this isn't supported today, this is on our roadmap using a
-stateless variant of RFC 6877 (464-XLAT). For more detail, see
-[this document]({{site.baseurl}}/{{page.version}}/reference/advanced/overlap-ips).
 
 ## "How do I control policy/connectivity without virtual/physical firewalls?"
 
@@ -188,7 +182,7 @@ again, and again the reachability doesn’t have to change.
 
 ## "How does Calico interact with the Neutron API?"
 
-[This document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/neutron-api) 
+[This document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/neutron-api)
 document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.
 

@@ -153,9 +153,3 @@ toc:
     section:
     - title: Alternative Felix Install with PyInstaller Bundle
       path: /getting-started/bare-metal/pyi-bare-metal-install
-  - title: Tutorials
-    path: /getting-started/bare-metal/tutorials
-  - title: Troubleshooting
-    path: /getting-started/bare-metal/troubleshooting
-  - title: Upgrade
-    path: /getting-started/bare-metal/upgrade
