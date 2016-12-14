@@ -10,7 +10,7 @@ Use the version selector at the top-right of this page to view a different relea
 
 | Component                     | Version                                                                                    |
 |-------------------------------+--------------------------------------------------------------------------------------------|
-| felix                         | [2.0.0-rc6](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc6)                 |
+| felix                         | [2.0.0-rc7](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc7)                 |
 | calicoctl                     | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
 | calico/node                   | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
 | calico/cni                    | [v1.5.4](https://github.com/projectcalico/calico-cni/releases/tag/v1.5.4)                  |
