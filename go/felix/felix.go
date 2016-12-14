@@ -179,6 +179,8 @@ configRetry:
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
+
+				ActionOnDrop: configParams.DropActionOverride,
 			},
 			IPIPMTU: configParams.IpInIpMtu,
 		}

@@ -20,6 +20,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"net"
+	"strings"
 )
 
 const (
@@ -100,6 +101,8 @@ type RuleRenderer interface {
 
 type ruleRenderer struct {
 	Config
+
+	dropActions []iptables.Action
 }
 
 func (r *ruleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -129,8 +132,24 @@ type Config struct {
 
 	IPIPEnabled       bool
 	IPIPTunnelAddress net.IP
+
+	ActionOnDrop string
 }
 
 func NewRenderer(config Config) RuleRenderer {
-	return &ruleRenderer{config}
+	dropActions := []iptables.Action{}
+	if strings.HasPrefix(config.ActionOnDrop, "LOG-") {
+		log.Warn("Action on drop includes LOG.  All dropped packets will be logged.")
+		dropActions = append(dropActions, iptables.LogAction{Prefix: "calico-drop"})
+	}
+	if strings.HasSuffix(config.ActionOnDrop, "ACCEPT") {
+		log.Warn("Action on drop set to ACCEPT.  Calico security is disabled!")
+		dropActions = append(dropActions, iptables.AcceptAction{})
+	} else {
+		dropActions = append(dropActions, iptables.DropAction{})
+	}
+	return &ruleRenderer{
+		Config:      config,
+		dropActions: dropActions,
+	}
 }

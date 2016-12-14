@@ -61,6 +61,14 @@ func (g DropAction) ToFragment() string {
 	return "--jump DROP"
 }
 
+type LogAction struct {
+	Prefix string
+}
+
+func (g LogAction) ToFragment() string {
+	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
+}
+
 type AcceptAction struct{}
 
 func (g AcceptAction) ToFragment() string {

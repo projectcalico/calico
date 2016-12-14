@@ -174,12 +174,20 @@ func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	}}
 }
 
-func (t ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
-	return []Rule{
-		{
+func (r ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
+	rules := []Rule{}
+
+	for _, action := range r.DropActions() {
+		rules = append(rules, Rule{
 			Match:   matchCriteria,
-			Action:  DropAction{},
+			Action:  action,
 			Comment: strings.Join(comments, "; "),
-		},
+		})
 	}
+
+	return rules
+}
+
+func (r *ruleRenderer) DropActions() []Action {
+	return r.dropActions
 }

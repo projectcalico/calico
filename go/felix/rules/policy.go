@@ -15,6 +15,7 @@
 package rules
 
 import (
+	"errors"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/hashutils"
 	"github.com/projectcalico/felix/go/felix/iptables"
@@ -58,6 +59,79 @@ func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVer
 
 func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
 	// TODO(smc) handle > 15 ports in a rule (iptables limitation)
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"rule":      pRule,
+	})
+
+	match, err := r.CalculateRuleMatch(pRule, ipVersion)
+	if err == SkipRule {
+		logCxt.Debug("Rule skipped.")
+		return nil
+	}
+
+	markBit, actions := r.CalculateActions(match, pRule, ipVersion)
+	rules := []iptables.Rule{}
+	if markBit != 0 {
+		// An accept or next-tier rule say, which needs to set a mark bit.  We render one
+		// with the full match criteria, which sets the mark.
+		rules = append(rules, iptables.Rule{
+			Match:  match,
+			Action: iptables.SetMarkAction{Mark: markBit},
+		})
+		// Then we render the subsequent actions using a match on the mark bit (which should
+		// be a lot faster than re-doing the match.
+		match = iptables.Match().MarkSet(markBit)
+	}
+	for _, action := range actions {
+		rules = append(rules, iptables.Rule{
+			Match:  match,
+			Action: action,
+		})
+	}
+
+	return rules
+}
+
+func (r *ruleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
+	actions = []iptables.Action{}
+
+	if pRule.LogPrefix != "" || pRule.Action == "log" {
+		// This rule should log (and possibly do something else too).
+		prefix := pRule.LogPrefix
+		if prefix == "" {
+			prefix = "calico-packet"
+		}
+		actions = append(actions, iptables.LogAction{
+			Prefix: prefix,
+		})
+	}
+
+	switch pRule.Action {
+	case "", "allow":
+		// Allow needs to set the accept mark, and then return to the calling chain for
+		// further processing.
+		mark = r.IptablesMarkAccept
+		actions = append(actions, iptables.ReturnAction{})
+	case "next-tier":
+		// Next tier needs to set the next-tier mark, and then return to the calling chain
+		// for further processing.
+		mark = r.IptablesMarkNextTier
+		actions = append(actions, iptables.ReturnAction{})
+	case "deny":
+		// Deny maps to DROP.  We defer to DropActions() to allow for "sandbox" mode.
+		actions = append(actions, r.DropActions()...)
+	case "log":
+		// Handled above.
+	default:
+		log.WithField("action", pRule.Action).Panic("Unknown rule action")
+	}
+	return
+}
+
+var SkipRule = errors.New("Rule skipped")
+
+func (r *ruleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (iptables.MatchCriteria, error) {
 	match := iptables.Match()
 
 	logCxt := log.WithFields(log.Fields{
@@ -67,7 +141,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 
 	if pRule.IpVersion != 0 && pRule.IpVersion != proto.IPVersion(ipVersion) {
 		logCxt.Debug("Skipping rule because it is for a different IP version.")
-		return nil
+		return nil, SkipRule
 	}
 
 	// First, process positive (non-negated) match criteria.
@@ -90,7 +164,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 			// We're rendering for one IP version but the rule has an CIDR for the other
 			// IP version, skip the rule.
 			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil
+			return nil, SkipRule
 		}
 		// Only include the address if it matches the IP version that we're
 		// rendering.
@@ -126,7 +200,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 			// We're rendering for one IP version but the rule has an CIDR for the other
 			// IP version, skip the rule.
 			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil
+			return nil, SkipRule
 		}
 		// Only include the address if it matches the IP version that we're
 		// rendering.
@@ -197,7 +271,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 			// We're rendering for one IP version but the rule has an CIDR for the other
 			// IP version, skip the rule.
 			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil
+			return nil, SkipRule
 		}
 		// Only include the address if it matches the IP version that we're
 		// rendering.
@@ -234,7 +308,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 			// We're rendering for one IP version but the rule has an CIDR for the other
 			// IP version, skip the rule.
 			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil
+			return nil, SkipRule
 		}
 		// Only include the address if it matches the IP version that we're
 		// rendering.
@@ -284,42 +358,7 @@ func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uin
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
-
-	// TODO(smc) Implement log action.
-	// TODO(smc) Implement log prefix.
-	switch pRule.Action {
-	case "", "allow":
-		return []iptables.Rule{
-			{
-				Match:  match,
-				Action: iptables.SetMarkAction{r.IptablesMarkAccept},
-			},
-			{
-				Match:  iptables.Match().MarkSet(r.IptablesMarkAccept),
-				Action: iptables.ReturnAction{},
-			},
-		}
-	case "next-tier":
-		return []iptables.Rule{
-			{
-				Match:  match,
-				Action: iptables.SetMarkAction{r.IptablesMarkNextTier},
-			},
-			{
-				Match:  iptables.Match().MarkSet(r.IptablesMarkNextTier),
-				Action: iptables.ReturnAction{},
-			},
-		}
-	case "deny":
-		return []iptables.Rule{
-			{
-				Match:  match,
-				Action: iptables.DropAction{},
-			},
-		}
-	}
-	log.WithField("action", pRule.Action).Panic("Unknown rule action")
-	return nil
+	return match, nil
 }
 
 func PolicyChainName(prefix string, polID *proto.PolicyID) string {
