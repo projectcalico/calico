@@ -129,6 +129,18 @@ var ruleTestData = []TableEntry{
 			{First: 8080, Last: 8080},
 		}},
 		"-m multiport ! --source-ports 10:12,20:30,8080"),
+	Entry("Source ports (>15) should be broken into blocks", 4,
+		proto.Rule{NotSrcPorts: []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}},
+		"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --source-ports 15:16"),
 	Entry("ICMP", 4,
 		proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
 		"-m icmp ! --icmp-type 10"),
@@ -154,6 +166,18 @@ var ruleTestData = []TableEntry{
 	Entry("Dest ports", 4,
 		proto.Rule{NotDstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --destination-ports 10:12"),
+	Entry("Dest ports (>15) should be broken into blocks", 4,
+		proto.Rule{NotDstPorts: []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}},
+		"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --destination-ports 15:16"),
 	Entry("Dest ports (multiple)", 4,
 		proto.Rule{NotDstPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
@@ -308,4 +332,219 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		},
 		ruleTestData...,
 	)
+
+	It("Should correctly render the cross-product of the source/dest ports", func() {
+		srcPorts := []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}
+		dstPorts := []*proto.PortRange{
+			{First: 101, Last: 102},
+			{First: 103, Last: 104},
+			{First: 105, Last: 106},
+			{First: 107, Last: 108},
+			{First: 109, Last: 1010},
+			{First: 1011, Last: 1012},
+			{First: 1013, Last: 1014},
+			{First: 1015, Last: 1016},
+		}
+		rule := proto.Rule{
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}},
+			SrcPorts: srcPorts,
+			DstPorts: dstPorts,
+		}
+		renderer := NewRenderer(rrConfigNormal)
+		rules := renderer.ProtoRuleToIptablesRules(&rule, uint8(4))
+		Expect(rules).To(Equal([]iptables.Rule{
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[:7]).
+					DestPortRanges(dstPorts[:7]),
+				Action: iptables.SetMarkAction{0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[:7]).
+					DestPortRanges(dstPorts[7:8]),
+				Action: iptables.SetMarkAction{0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[7:8]).
+					DestPortRanges(dstPorts[:7]),
+				Action: iptables.SetMarkAction{0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[7:8]).
+					DestPortRanges(dstPorts[7:8]),
+				Action: iptables.SetMarkAction{0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+		}))
+	})
 })
+
+var _ = DescribeTable("Port split tests",
+	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
+		Expect(SplitPortList(in)).To(Equal(expected))
+	},
+	Entry("nil input", ([]*proto.PortRange)(nil), [][]*proto.PortRange{{}}),
+	Entry("empty input", []*proto.PortRange{}, [][]*proto.PortRange{{}}),
+	Entry("single input", []*proto.PortRange{{First: 1, Last: 1}}, [][]*proto.PortRange{{{First: 1, Last: 1}}}),
+	Entry("range input", []*proto.PortRange{{First: 1, Last: 10}}, [][]*proto.PortRange{{{First: 1, Last: 10}}}),
+	Entry("exactly 15 single ports should give exactly one split", []*proto.PortRange{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}}),
+	Entry("exactly 16 single ports should give exactly tow splits", []*proto.PortRange{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+		{First: 16, Last: 16},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}, {
+		{First: 16, Last: 16},
+	}}),
+	Entry("port ranges should count for 2 single ports", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 15},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 15},
+	}}),
+	Entry("port range straggling 15-16 should be put in second group", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+	}, {
+		{First: 15, Last: 16},
+	}}),
+	Entry("further splits should be made in correct place", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+		{First: 21, Last: 22},
+		{First: 23, Last: 24},
+		{First: 23, Last: 26},
+		{First: 27, Last: 28},
+		{First: 29, Last: 210},
+		{First: 211, Last: 212},
+		{First: 213, Last: 214},
+		{First: 215, Last: 216},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+	}, {
+		{First: 15, Last: 16},
+		{First: 21, Last: 22},
+		{First: 23, Last: 24},
+		{First: 23, Last: 26},
+		{First: 27, Last: 28},
+		{First: 29, Last: 210},
+		{First: 211, Last: 212},
+	}, {
+		{First: 213, Last: 214},
+		{First: 215, Last: 216},
+	}}),
+)

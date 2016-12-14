@@ -58,39 +58,81 @@ func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVer
 }
 
 func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
-	// TODO(smc) handle > 15 ports in a rule (iptables limitation)
-	logCxt := log.WithFields(log.Fields{
-		"ipVersion": ipVersion,
-		"rule":      pRule,
-	})
-
-	match, err := r.CalculateRuleMatch(pRule, ipVersion)
-	if err == SkipRule {
-		logCxt.Debug("Rule skipped.")
-		return nil
-	}
-
-	markBit, actions := r.CalculateActions(match, pRule, ipVersion)
 	rules := []iptables.Rule{}
-	if markBit != 0 {
-		// An accept or next-tier rule say, which needs to set a mark bit.  We render one
-		// with the full match criteria, which sets the mark.
-		rules = append(rules, iptables.Rule{
-			Match:  match,
-			Action: iptables.SetMarkAction{Mark: markBit},
-		})
-		// Then we render the subsequent actions using a match on the mark bit (which should
-		// be a lot faster than re-doing the match.
-		match = iptables.Match().MarkSet(markBit)
-	}
-	for _, action := range actions {
-		rules = append(rules, iptables.Rule{
-			Match:  match,
-			Action: action,
-		})
-	}
+	ruleCopy := *pRule
 
+	// iptables has a 15-port limit on the number of ports that can be in a single multiport
+	// match.  In case a user has supplied a longer port list, break up the source and dest port
+	// lists into blocks of 15 and render the cross-product of the rules.  We only need to do
+	// that for the non-negated matches, because match criteria in a single rule are ANDed
+	// together.  For negated matches, we can just use more than one multiport in the same
+	// rule.
+	for _, srcPorts := range SplitPortList(pRule.SrcPorts) {
+		for _, dstPorts := range SplitPortList(pRule.DstPorts) {
+			ruleCopy.SrcPorts = srcPorts
+			ruleCopy.DstPorts = dstPorts
+
+			logCxt := log.WithFields(log.Fields{
+				"ipVersion": ipVersion,
+				"rule":      ruleCopy,
+			})
+			match, err := r.CalculateRuleMatch(&ruleCopy, ipVersion)
+			if err == SkipRule {
+				logCxt.Debug("Rule skipped.")
+				return nil
+			}
+
+			markBit, actions := r.CalculateActions(match, &ruleCopy, ipVersion)
+			if markBit != 0 {
+				// An accept or next-tier rule say, which needs to set a mark bit.  We render one
+				// with the full match criteria, which sets the mark.
+				rules = append(rules, iptables.Rule{
+					Match:  match,
+					Action: iptables.SetMarkAction{Mark: markBit},
+				})
+				// Then we render the subsequent actions using a match on the mark bit (which should
+				// be a lot faster than re-doing the match.
+				match = iptables.Match().MarkSet(markBit)
+			}
+			for _, action := range actions {
+				rules = append(rules, iptables.Rule{
+					Match:  match,
+					Action: action,
+				})
+			}
+		}
+	}
 	return rules
+}
+
+// SplitPortList splits the input list of ports into groups containing up to 15 port numbers.
+// It always returns at least one (possibly empty) split.
+//
+// The requirement to split into groups of 15, comes from iptables' limit on the number of ports
+// "slots" in a multiport match.  A single port takes up one slot, a range of ports requires 2.
+func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
+	slotsAvailableInCurrentSplit := 15
+	currentSplit := 0
+	splits = append(splits, []*proto.PortRange{})
+	for _, portRange := range ports {
+		// First figure out how many slots adding this PortRange would require.
+		var numSlotsRequired int
+		if portRange.First == portRange.Last {
+			numSlotsRequired = 1
+		} else {
+			numSlotsRequired = 2
+		}
+		if slotsAvailableInCurrentSplit < numSlotsRequired {
+			// Adding this port to the current split would take it over the 15 slot
+			// limit, start a new split.
+			slotsAvailableInCurrentSplit = 15
+			splits = append(splits, []*proto.PortRange{})
+			currentSplit += 1
+		}
+		splits[currentSplit] = append(splits[currentSplit], portRange)
+		slotsAvailableInCurrentSplit -= numSlotsRequired
+	}
+	return
 }
 
 func (r *ruleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
@@ -297,8 +339,9 @@ func (r *ruleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (i
 		logCxt.WithFields(log.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding src port match")
-		// TODO(smc) handle > 15 ports
-		match = match.NotSourcePortRanges(pRule.NotSrcPorts)
+		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
+			match = match.NotSourcePortRanges(portSplit)
+		}
 	}
 
 	if pRule.NotDstNet != "" {
@@ -334,7 +377,9 @@ func (r *ruleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (i
 		logCxt.WithFields(log.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding dst port match")
-		match = match.NotDestPortRanges(pRule.NotDstPorts)
+		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
+			match = match.NotDestPortRanges(portSplit)
+		}
 	}
 
 	if ipVersion == 4 {
