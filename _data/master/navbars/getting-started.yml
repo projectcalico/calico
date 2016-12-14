@@ -72,10 +72,6 @@ toc:
     section:
     - title: Vagrant Quickstart - Docker Containerizer
       path: /getting-started/mesos/vagrant/
-  - title: Troubleshooting
-    path: /getting-started/mesos/troubleshooting
-  - title: Upgrade
-    path: /getting-started/mesos/upgrade
 
 - title: Docker
   section:
