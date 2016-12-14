@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// extdataplane implements the connection to an external dataplane driver, connected via
+// a pair of pipes.
 package extdataplane
 
 import (
@@ -26,6 +28,8 @@ import (
 	"os/exec"
 )
 
+// StartExtDataplaneDriver starts the given driver as a child process and returns a
+// connection to it along with the command itself so that it may be monitored.
 func StartExtDataplaneDriver(driverFilename string) (*extDataplaneConn, *exec.Cmd) {
 	// Create a pair of pipes, one for sending messages to the dataplane
 	// driver, the other for receiving.

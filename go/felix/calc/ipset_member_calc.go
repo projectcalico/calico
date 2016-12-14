@@ -29,6 +29,16 @@ type IPAddRemoveCallbacks interface {
 	OnIPRemoved(ipSetID string, ip ip.Addr)
 }
 
+// MemberCalculator calculates the actual IPs that should be in each IP set.  As input, it
+// expects MatchStarted/Stopped events telling it which IP sets match which endpoints (by ID)
+// along with OnUpdate calls for endpoints.  It then joins the match data with the endpoint
+// data to calculate which IPs are in which IP set and generates events when IPs are added or
+// removed.
+//
+// The complexity in the MemberCalculator comes from needing to deal with IPs being assigned
+// to multiple endpoints at the same time.  If two endpoints are added with the same IP, we
+// want to generate only one "IP added" event.  We also need to wait for both endpoints to be
+// removed before generating the "IP removed" event.
 type MemberCalculator struct {
 	keyToIPs              map[model.Key][]ip.Addr
 	keyToMatchingIPSetIDs multidict.IfaceToString

@@ -187,45 +187,6 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
 }
 
-type DataplanePassthru struct {
-	callbacks passthruCallbacks
-}
-
-func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
-	return &DataplanePassthru{callbacks: callbacks}
-}
-
-func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
-	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
-	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
-}
-
-func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
-	switch key := update.Key.(type) {
-	case model.HostIPKey:
-		hostname := key.Hostname
-		if update.Value == nil {
-			log.WithField("update", update).Debug("Passing-through HostIP deletion")
-			h.callbacks.OnHostIPRemove(hostname)
-		} else {
-			log.WithField("update", update).Debug("Passing-through HostIP update")
-			ip := update.Value.(*net.IP)
-			h.callbacks.OnHostIPUpdate(hostname, ip)
-		}
-	case model.IPPoolKey:
-		if update.Value == nil {
-			log.WithField("update", update).Debug("Passing-through IPPool deletion")
-			h.callbacks.OnIPPoolRemove(key)
-		} else {
-			log.WithField("update", update).Debug("Passing-through IPPool update")
-			pool := update.Value.(*model.IPPool)
-			h.callbacks.OnIPPoolUpdate(key, pool)
-		}
-	}
-
-	return false
-}
-
 func TagIPSetID(tagID string) string {
 	return hash.MakeUniqueID("t", tagID)
 }

@@ -24,6 +24,17 @@ import (
 	"strings"
 )
 
+// masqManager manages the ipsets and iptables chains used to implement the "NAT outgoing" or
+// "masquerade" feature.  The feature adds a boolean flag to each IPAM pool, which controls how
+// outgoing traffic to non-Calico destinations is handled.  If the "masquerade" flag is set,
+// outgoing traffic is source-NATted to appear to come from the host's IP address.
+//
+// The masqManager maintains two CIDR IP sets: one contains the CIDRs for all Calico
+// IPAM pools, the other contains only the NAT-enabled pools.
+//
+// When NAT-enabled pools are present, the masqManager inserts the iptables masquerade rule
+// to trigger NAT of outgoing packets from NAT-enabled pools.  Traffic to any Calico-owned
+// pool is excluded.
 type masqManager struct {
 	ipVersion    uint8
 	ipsets       *ipsets.IPSets

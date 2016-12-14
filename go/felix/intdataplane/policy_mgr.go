@@ -21,6 +21,8 @@ import (
 	"github.com/projectcalico/felix/go/felix/rules"
 )
 
+// policyManager simply renders policy/profile updates into iptables.Chain objects and sends
+// them to the dataplane layer.
 type policyManager struct {
 	filterTable  *iptables.Table
 	ruleRenderer rules.RuleRenderer

@@ -24,8 +24,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
-// RuleScanner calculates the active set of selectors and tags from the current set of policies/profiles.
-// It generates events for selectors becoming active/inactive.
+// RuleScanner calculates which selectors and tags are in use by the active rules (calculated
+// by the ActiveRulesCalculator).  I.e. which tags and selectors are in the rules and need to
+// be rendered to the dataplane (as IP sets, for example).
+//
+// The RuleScanner emits events via the attached callbacks when tags/selectors become
+// active/inactive.  It also emits events when rules are updated:  since the input rule
+// structs contain tags and selectors but downstream, we only care about IP sets, the
+// RuleScanner converts rules from model.Rule objects to calc.ParsedRule objects.
+// The latter share most fields, but the tags and selector fields are replaced by lists of
+// IP sets.
+//
+// The RuleScanner only calculates which selectors and tags are active/inactive.  It doesn't
+// match endpoints against tags/selectors.  (That is done downstream in a labelindex.InheritIndex
+// created in NewCalculationGraph.)
 type RuleScanner struct {
 	// selectorsByUid maps from a selector's UID to the selector itself.
 	tagsOrSelsByUID map[string]tagOrSel

@@ -23,6 +23,14 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
+// PolicyResolver marries up the active policies with local endpoints and
+// calculates the complete, ordered set of policies that apply to each endpoint.
+// As policies and endpoints are added/removed/updated, it emits events
+// via the PolicyResolverCallbacks with the updated set of matching policies.
+//
+// The PolicyResolver doesn't figure out which policies are currently active, it
+// expects to be told via its OnPolicyMatch(Stopped) methods which policies match
+// which endpoints.  The ActiveRulesCalculator does that calculation.
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.IfaceToIface
 	endpointIDToPolicyIDs multidict.IfaceToIface

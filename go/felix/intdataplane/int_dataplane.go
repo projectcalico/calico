@@ -33,6 +33,60 @@ type Config struct {
 	RulesConfig rules.Config
 }
 
+// InternalDataplane implements an in-process Felix dataplane driver based on iptables
+// and ipsets.  It communicates with the datastore-facing part of Felix via the
+// Send/RecvMessage methods, which operate on the protobuf-defined API objects.
+//
+// Architecture
+//
+// The internal dataplane driver is organised around a main event loop, which handles
+// update events from the datastore and dataplane.
+//
+// Each pass around the main loop has two phases.  In the first phase, updates are fanned
+// out to "manager" objects, which calculate the changes that are needed and pass them to
+// the dataplane programming layer.  In the second phase, the dataplane layer applies the
+// updates in a consistent sequence.  The second phase is skipped until the datastore is
+// in sync; this ensures that the first update to the dataplane applies a consistent
+// snapshot.
+//
+// Having the dataplane layer batch updates has several advantages.  It is much more
+// efficient to batch updates, since each call to iptables/ipsets has a high fixed cost.
+// In addition, it allows for different managers to make updates without having to
+// coordinate on their sequencing.
+//
+// Requirements on the API
+//
+// The internal dataplane does not do consistency checks on the incoming data (as the
+// old Python-based driver used to do).  It expects to be told about dependent resources
+// before they are needed and for their lifetime to exceed that of the resources that
+// depend on them.  For example, it is important the the datastore layer send an
+// IP set create event before it sends a rule that references that IP set.
+type InternalDataplane struct {
+	toDataplane   chan interface{}
+	fromDataplane chan interface{}
+
+	iptablesNATTables    []*iptables.Table
+	iptablesRawTables    []*iptables.Table
+	iptablesFilterTables []*iptables.Table
+	ipsetsWriters        []*ipsets.IPSets
+
+	ifaceMonitor *ifacemonitor.InterfaceMonitor
+	ifaceUpdates chan *ifaceUpdate
+
+	allManagers []Manager
+
+	ruleRenderer rules.RuleRenderer
+
+	interfacePrefixes []string
+
+	routeTables []*routetable.RouteTable
+
+	dataplaneNeedsSync bool
+	cleanupPending     bool
+
+	config Config
+}
+
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -128,32 +182,6 @@ type Manager interface {
 	// Called before the main loop flushes updates to the dataplane to allow for batched
 	// work to be completed.
 	CompleteDeferredWork() error
-}
-
-type InternalDataplane struct {
-	toDataplane   chan interface{}
-	fromDataplane chan interface{}
-
-	iptablesNATTables    []*iptables.Table
-	iptablesRawTables    []*iptables.Table
-	iptablesFilterTables []*iptables.Table
-	ipsetsWriters        []*ipsets.IPSets
-
-	ifaceMonitor *ifacemonitor.InterfaceMonitor
-	ifaceUpdates chan *ifaceUpdate
-
-	allManagers []Manager
-
-	ruleRenderer rules.RuleRenderer
-
-	interfacePrefixes []string
-
-	routeTables []*routetable.RouteTable
-
-	dataplaneNeedsSync bool
-	cleanupPending     bool
-
-	config Config
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
