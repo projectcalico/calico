@@ -70,7 +70,7 @@ switch sides of the sessions.
 If you have a small number of hosts, you can configure BGP sessions between your router and each Calico-enabled host. With many hosts, you may wish to use a
 route reflector or set up a Layer 3 topology.
 
-There's further advice on network topologies in the [private cloud reference documentation]({{site.baseurl}}/{{page.version}}/reference/private-cloud).
+There's further advice on network topologies in the [private cloud reference documentation]({{site.baseurl}}/{{page.version}}/reference/).
 We'd also encourage you to [get in touch](http://www.projectcalico.org/contact/)
 to discuss your environment.
 

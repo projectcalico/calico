@@ -87,20 +87,14 @@ toc:
   path: /reference/policy-controller/configuration
 - title: Deploying on Public Cloud
   section:
-    - title: Overview
-      path: /reference/public-cloud/overview
     - title: AWS
       path: /reference/public-cloud/aws
 - title: Deploying on Private Cloud
   section:
-    - title: Overview
-      path: /reference/private-cloud/
     - title: Calico Over Ethernet Fabrics
       path: /reference/private-cloud/l2-interconnect-fabric
-    - title:  IP Interconnect Fabrics in Calico
+    - title: Calico Over IP Fabrics 
       path: /reference/private-cloud/l3-interconnect-fabric
-    - title: Troubleshooting
-      path: /reference/private-cloud/troubleshooting
 - title: Architecture
   section:
   - title: Introduction
@@ -113,8 +107,6 @@ toc:
   section:
   - title: RBAC for etcdv2
     path: /reference/advanced/etcd-rbac
-  - title: Overlapping IP Support
-    path: /reference/advanced/overlap-ips
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute
