@@ -24,11 +24,11 @@ from calico.felix.masq import MASQ_RULE_FRAGMENT
 
 _log = logging.getLogger(__name__)
 
-JUMP_RULE_RE = r'-A ((?!%s)\w+ .*-j %s\w+.*)' % (FELIX_PREFIX, FELIX_PREFIX)
+JUMP_RULE_RE = r'-A ((?!%s|cali)\w+ .*-j (%s|cali)\w+.*)' % (FELIX_PREFIX, FELIX_PREFIX)
 """Regex to match top-level jump rules from, for example, INPUT to
 felix-INPUT."""
 
-IPSET_NAME_RE = r"^Name: (%s.*)" % FELIX_PFX
+IPSET_NAME_RE = r"^Name: ((%s|cali).*)" % FELIX_PFX
 
 
 def main():
@@ -72,7 +72,7 @@ def clean_up_iptables(iptables_cmd, iptables_save_cmd):
             table = line[1:]
         elif line.startswith(":"):
             chain = line[1:line.index(" ")]
-            if chain.startswith(FELIX_PREFIX):
+            if chain.startswith(FELIX_PREFIX) or chain.startswith("cali"):
                 our_chains_by_table[table].add(chain)
 
     # Flush them all to remove dependencies.
