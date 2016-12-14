@@ -1,5 +1,5 @@
-hash: a38217a7bae25bafb56fd9be9e3e6d010b1474515ab821875e37a3c91ccdcff4
-updated: 2016-12-07T00:54:01.542536074Z
+hash: ded5d19812d7c9957bae16a456885e4aa01a1a9ee45e1b70bdc056612c8c2915
+updated: 2016-12-13T16:28:27.765782976-08:00
 imports:
 - name: bitbucket.org/ww/goautoneg
   version: 75cd24fc2f2c2a2088577d12123ddee5f54e0675
@@ -61,7 +61,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: a54de18a07046d8c4b26e9327698a2ebb9285b36
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
   version: 6e4869b434bd001f6983749881c7ead3545887d8
 - name: github.com/go-openapi/jsonpointer
@@ -94,7 +94,7 @@ imports:
 - name: github.com/kardianos/osext
   version: c2c54e542fb797ad986b31721e1baedf214ca413
 - name: github.com/kelseyhightower/envconfig
-  version: 9aca109c9aec4633fced9717c4a09ecab3d33111
+  version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -108,7 +108,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: 74c678d97c305753605c338c6c78c49ec104b5e7
+  version: 00054c0bb96fc880d4e0be1b90937fad438c5290
   subpackages:
   - config
   - extensions/table
@@ -124,11 +124,21 @@ imports:
   - internal/writer
   - reporters
   - reporters/stenographer
+  - reporters/stenographer/support/go-colorable
+  - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
+- name: github.com/projectcalico/go-json
+  version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
+  subpackages:
+  - json
+- name: github.com/projectcalico/go-yaml
+  version: 955bc3e451ef0c9df8b9113bf2e341139cdafab2
+- name: github.com/projectcalico/go-yaml-wrapper
+  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d0cb24464ebef818ec073f7b0a61887bc1bcd3c9
+  version: f87d39740b5a49891d6ee2646a17326c5e337b20
   subpackages:
   - lib
   - lib/api
@@ -167,7 +177,7 @@ imports:
   - expfmt
   - model
 - name: github.com/prometheus/procfs
-  version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
+  version: fcdb11ccb4389efb1b210b7ffb623ab71c5fdd60
 - name: github.com/PuerkitoBio/purell
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
@@ -206,7 +216,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 30237cf4eefd639b184d1f2cb77a581ea0be8947
+  version: 9c60d1c508f5134d1ca726b4641db998f2523357
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -363,7 +373,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: d59fa0ac68bb5dd932ee8d24eed631cdd519efc3
+  version: f1f0f388b31eca4e2cbe7a6dd8a3a1dfddda5b1c
   subpackages:
   - format
   - internal/assertion
