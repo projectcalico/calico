@@ -14,8 +14,7 @@ var plugin = "calico-ipam"
 
 var _ = Describe("Calico IPAM Tests", func() {
 	BeforeEach(func() {
-		Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 rm /calico --recursive | true", os.Getenv("ETCD_IP")))
-
+		WipeEtcd()
 		PreCreatePool("192.168.0.0/16")
 		PreCreatePool("fd80:24e2:f998:72d6::/64")
 	})

@@ -2,6 +2,7 @@ package test_utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,13 +17,58 @@ import (
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
+	etcdclient "github.com/coreos/etcd/client"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	calnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 )
 
-func PreCreatePool(pool string) string {
-	return Cmd("dist/calicoctl pool add " + pool)
+var kapi etcdclient.KeysAPI
+
+func init() {
+
+	cfg := etcdclient.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
+	c, _ := etcdclient.New(cfg)
+	kapi = etcdclient.NewKeysAPI(c)
+}
+
+// Delete everything under /calico from etcd
+func WipeEtcd() {
+	_, err := kapi.Delete(context.Background(), "/calico", &etcdclient.DeleteOptions{Dir: true, Recursive: true})
+	if err != nil && !etcdclient.IsKeyNotFound(err) {
+		panic(err)
+
+	}
+
+}
+
+func PreCreatePool(pool string) {
+	// Load the client config from the current environment.
+	clientConfig, err := client.LoadClientConfig("")
+	if err != nil {
+		panic(err)
+	}
+
+	// Create a new client.
+	calicoClient, err := client.New(*clientConfig)
+	if err != nil {
+		panic(err)
+	}
+
+	_, ipNet, err := calnet.ParseCIDR(pool)
+	if err != nil {
+		panic(err)
+	}
+
+	ippool := api.NewIPPool()
+	ippool.Metadata.CIDR = *ipNet
+	ippool, err = calicoClient.IPPools().Create(ippool)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func RunIPAMPlugin(netconf, command, args string) (types.Result, int) {
@@ -191,16 +237,4 @@ func CmdWithStdin(cmd, stdin_string string) string {
 	//}
 
 	return stdout_buf.String()
-}
-
-func GetEtcdString(path string) string {
-	return Cmd(EtcdGetCommand(path))
-}
-
-func GetEtcdMostRecentSubdir(path string) string {
-	return Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 ls %s --recursive |tail -1", os.Getenv("ETCD_IP"), path))
-}
-
-func EtcdGetCommand(path string) string {
-	return fmt.Sprintf("etcdctl --endpoints http://%s:2379 get %s", os.Getenv("ETCD_IP"), path)
 }
