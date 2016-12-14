@@ -64,16 +64,16 @@ as fly stage-1 container.
 
 ```shell
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
-  --set-env ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> \
-  --set-env IP=autodetect \
-  --insecure-options image \
-  --volume birdctl,kind=host,source=/var/run/calico,readOnly=false \
-  --mount volume=birdctl,target=/var/run/calico \
-  --volume mods,kind=host,source=/lib/modules,readOnly=false  \
-  --mount volume=mods,target=/lib/modules \
-  --volume logs,kind=host,source=/var/log/calico,readOnly=false \
-  --mount volume=logs,target=/var/log/calico \
-  --net host \
+  --set-env=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> \
+  --set-env=IP=autodetect \
+  --insecure-options=image \
+  --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
+  --mount=volume=birdctl,target=/var/run/calico \
+  --volume=mods,kind=host,source=/lib/modules,readOnly=false  \
+  --mount=volume=mods,target=/lib/modules \
+  --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
+  --mount=volume=logs,target=/var/log/calico \
+  --net=host \
   quay.io/calico/node:v1.0.0-rc4 &
 ```
 
