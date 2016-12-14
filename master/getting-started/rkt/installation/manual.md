@@ -37,8 +37,7 @@ The `calico-cni` network plugin binaries are a combination of two binary executa
 These binaries are invoked from the rkt container lifecycle hooks on each node to configure
 the container interfaces,  manage IP addresses and enable Calico policy on the containers.
 
-
-## Installing `calico/node` 
+## Installing `calico/node`
 
 #### Prepare host directory structure
 
@@ -80,7 +79,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.  The `ETCD_ENDPOINTS`
 > environment may contain a comma separated list of endpoints of your etcd cluster.
-> If the environment is omitted, Calico defaults to a single etcd 
+> If the environment is omitted, Calico defaults to a single etcd
 > endpoint at http://127.0.0.1:2379.
 
 You can check that it's running using `sudo rkt list`.
@@ -93,8 +92,8 @@ b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds a
 
 ## Installing the calicoctl CLI tool
 
-Download the calicoctl binary and ensure it is executable.  We download to the 
-/opt/bin directory to ensure it is accessible in your path (you may download 
+Download the calicoctl binary and ensure it is executable.  We download to the
+/opt/bin directory to ensure it is accessible in your path (you may download
 wherever convenient though):
 
 ```
@@ -114,14 +113,14 @@ require with the appropriate Calico CNI plugin references.
 
 #### Install the Calico plugin binaries
 
-Download the binaries and make sure they're executable.  We download to the 
+Download the binaries and make sure they're executable.  We download to the
 `/etc/rkt/net.d` directory since it is one of the default locations that rkt uses
 for config discovery.  You may change the location and override the rkt configuration
 if desired.
 
 ```bash
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.3/calico-ipam
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.4/calico
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.4/calico-ipam
 chmod +x /etc/rkt/net.d/calico /etc/rkt/net.d/calico-ipam
 ```
 
@@ -136,7 +135,7 @@ To define a rkt network for Calico, create a configuration file in `/etc/rkt/net
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
 
 Calico will create an identically named profile for each Calico-rkt network which, by
-default, contains policy to allow full communication between containers within the same 
+default, contains policy to allow full communication between containers within the same
 network (i.e. using the same profile) but prohibit ingress traffic from containers
 on other networks.
 
@@ -160,10 +159,10 @@ EOF
 
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.  The `etcd_endpoints`
 > paramater may contain a comma separated list of endpoints of your etcd cluster.
-> If the parameter is omitted from the config file, Calico defaults to a single etcd 
+> If the parameter is omitted from the config file, Calico defaults to a single etcd
 > endpoint at http://127.0.0.1:2379.
 
 ## Next steps
 
-With your deployment ready we recommend you follow the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials) 
+With your deployment ready we recommend you follow the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials)
 to run through examples of managing Calico policy with your rkt containers.

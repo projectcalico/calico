@@ -15,5 +15,3 @@ tidyup of IP addresses when deleting a container.
 
 If you are seeing errors that only occur during container deletion, check your
 rkt version.  We recommend a version of rkt 1.20.0 and higher.
-
-

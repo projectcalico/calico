@@ -50,7 +50,7 @@ coreos:
         [Service]
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
         ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.3.0.tgz -C /opt/cni/bin
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.0/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
         ExecStart=/opt/bin/kubelet \
@@ -79,7 +79,7 @@ coreos:
         Requires=kubelet.service
         After=kubelet.service
         [Service]
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.5.0/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
         --master=http://kubernetes-master:8080 \

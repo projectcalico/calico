@@ -68,7 +68,7 @@ to learn how to do this.
 To start Calico on each agent, first download `calicoctl`:
 
 ```shell
-$ curl -o /usr/bin/calicoctl -L https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc2/calicoctl
+$ curl -o /usr/bin/calicoctl -L https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc4/calicoctl
 $ chmod a+x calicoctl
 ```
 

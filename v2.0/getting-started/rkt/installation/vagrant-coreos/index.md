@@ -3,7 +3,7 @@ title: Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox
 ---
 
 This is a Quick Start guide that uses Vagrant and VirtualBox to create a two-node
-Calico cluster that can be used to run through the tutorial for Calico in a 
+Calico cluster that can be used to run through the tutorial for Calico in a
 pure rkt environment.
 
 ## Environment setup
@@ -42,7 +42,7 @@ to start the cluster.  To connect to your servers:
 * Windows
     * Follow instructions from https://github.com/nickryand/vagrant-multi-putty
     * run `vagrant putty <hostname>`
-    
+
 ### 4. Verify environment
 
 You should now have two CoreOS servers. The servers are named calico-01 and calico-02
@@ -69,11 +69,11 @@ You should also verify each host can access etcd.  The following will return an 
 Check that `rkt` is running on both hosts by running
 
     sudo rkt list
-    
+
 Verify that `calicoctl` (the Calico CLI) is installed by running
 
     calicoctl version
-    
+
 
 ### 5. Start the Calico service
 
@@ -91,7 +91,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --mount volume=logs,target=/var/log/calico \
   --set-env IP=autodetect \
   --net host \
-  quay.io/calico/node:v1.0.0-rc2 &
+  quay.io/calico/node:v1.0.0-rc4 &
 ```
 
 This will create a calico/node rkt container.
@@ -101,13 +101,13 @@ You can check that it's running using `sudo rkt list`.
 ```shell
 $ sudo rkt list
 UUID      APP	IMAGE NAME                      STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  quay.io/calico/node:v1.0.0-rc2  running 10 seconds ago  10 seconds ago
+b52bba11  node  quay.io/calico/node:v1.0.0-rc4  running 10 seconds ago  10 seconds ago
 ```
 
 ## Try out Calico networking
 
 Now that you have a basic two node CoreOS cluster setup we recommend you follow
-the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials) 
+the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials)
 to run through examples of managing Calico policy with your rkt containers.
 
 [virtualbox]: https://www.virtualbox.org/

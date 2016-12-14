@@ -105,7 +105,7 @@ The following steps configure remote kubectl access to your cluster.
 Download `kubectl`
 
 ```shell
-sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.5.0/bin/linux/amd64/kubectl
+sudo wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kubectl
 sudo chmod +x /usr/local/bin/kubectl
 ```
 
@@ -142,7 +142,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 gcloud compute ssh kubernetes-master
 
 # Enable outgoing NAT and ipip on the Calico pool.
-docker run -i --rm --net=host calico/ctl:v1.0.0-rc2 apply -f -<<EOF
+docker run -i --rm --net=host calico/ctl:v1.0.0-rc4 apply -f -<<EOF
 apiVersion: v1
 kind: ipPool
 metadata:
