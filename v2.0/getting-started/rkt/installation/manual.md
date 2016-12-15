@@ -74,7 +74,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
   --mount=volume=logs,target=/var/log/calico \
   --net=host \
-  quay.io/calico/node:v1.0.0-rc4 &
+  quay.io/calico/node:v1.0.0 &
 ```
 
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.  The `ETCD_ENDPOINTS`
@@ -86,8 +86,8 @@ You can check that it's running using `sudo rkt list`.
 
 ```shell
 $ sudo rkt list
-UUID      APP	IMAGE NAME                      STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  quay.io/calico/node:v1.0.0-rc4  running 10 seconds ago  10 seconds ago
+UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
+b52bba11  node  quay.io/calico/node:v1.0.0  running 10 seconds ago  10 seconds ago
 ```
 
 ## Installing the calicoctl CLI tool
@@ -98,7 +98,7 @@ wherever convenient though):
 
 ```
 # Download and install `calicoctl`
-wget -N -O /opt/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc4/calicoctl
+wget -N -O /opt/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0/calicoctl
 chmod +x /opt/bin/calicoctl
 ```
 
@@ -119,8 +119,8 @@ for config discovery.  You may change the location and override the rkt configur
 if desired.
 
 ```bash
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.4/calico
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.4/calico-ipam
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico-ipam
 chmod +x /etc/rkt/net.d/calico /etc/rkt/net.d/calico-ipam
 ```
 

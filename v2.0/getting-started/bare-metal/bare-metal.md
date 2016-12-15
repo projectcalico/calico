@@ -59,7 +59,7 @@ these steps, described in more detail below:
 
 Download the calicoctl binary onto your host.
 
-	wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc4/calicoctl
+	wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0/calicoctl
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any
