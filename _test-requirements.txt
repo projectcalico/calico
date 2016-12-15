@@ -9,7 +9,7 @@ hacking<0.11,>=0.10.0
 coverage>=3.6
 kombu<4.0.0
 python-subunit>=0.0.18
-docutils
+docutils==0.12
 jinja2
 markupsafe
 sphinx>=1.1.2,!=1.2.0,!=1.3b1,<1.3
