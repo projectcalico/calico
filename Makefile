@@ -25,8 +25,8 @@ CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scal
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/bird6
 BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/birdcl
-CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc3/calico-bgp-daemon
-GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1-rc3/gobgp
+CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1/gobgp
 
 # we can use "custom" build image and test image name
 PYTHON_BUILD_CONTAINER_NAME?=calico/build:v0.19.0
@@ -46,8 +46,8 @@ NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup startup-go allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
-FELIX_CONTAINER_NAME?=calico/felix:2.0.0-rc7
-LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.0.0-rc4
+FELIX_CONTAINER_NAME?=calico/felix:2.0.0
+LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.0.0
 
 calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
