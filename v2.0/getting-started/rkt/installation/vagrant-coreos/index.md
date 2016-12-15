@@ -31,11 +31,11 @@ Change into the directory for this guide:
 
     cd calico/{{page.version}}/getting-started/rkt/installation/vagrant-coreos
 
-Run
+To start the cluster, run:
 
     vagrant up
 
-to start the cluster.  To connect to your servers:
+To connect to your servers:
 
 * Linux/Mac OS X
     * run `vagrant ssh <hostname>`
