@@ -3,20 +3,20 @@ title: Basic network isolation
 ---
 
 This guide provides a simple way to try out rkt network isolation with Calico.
-It requires a cluster of nodes configured with Calico networking, and expects 
-that you have `rkt` installed and `calicoctl` configured to interact with the 
+It requires a cluster of nodes configured with Calico networking, and expects
+that you have `rkt` installed and `calicoctl` configured to interact with the
 cluster.
 
-You can quickly and easily deploy such a cluster by following one of the 
+You can quickly and easily deploy such a cluster by following one of the
 [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/rkt#installation-guides)
 
-For simplicity, we assume you have a two node cluster with the node names 
+For simplicity, we assume you have a two node cluster with the node names
 `calico-01` and `calico-02`.  If your nodes have different names, adjust the
 instructions accordingly.
 
 ## 1. Verify Calico service is running
 
-Your installation should have installed and started the Calico service on each node.  You 
+Your installation should have installed and started the Calico service on each node.  You
 can check that it's running using `sudo rkt list`.
 
 ```shell
@@ -28,8 +28,8 @@ b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds a
 ## 2. Create the networks
 
 You can configure multiple networks when using rkt. Each network is represented by a configuration file in
-`/etc/rkt/net.d/`. By default, when using Calico CNI, connections to a given container are only allowed 
-from containers on the same network. This can be changed by applying additional Calico policy - which will 
+`/etc/rkt/net.d/`. By default, when using Calico CNI, connections to a given container are only allowed
+from containers on the same network. This can be changed by applying additional Calico policy - which will
 be discussed in advanced tutorials.
 
 To define a rkt network for Calico, create a configuration file in `/etc/rkt/net.d/`.
@@ -39,7 +39,7 @@ To define a rkt network for Calico, create a configuration file in `/etc/rkt/net
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
 
 Calico will create an identically named profile for each Calico-rkt network, by
-default the policy specified in the profile allows full communication between containers within the same 
+default the policy specified in the profile allows full communication between containers within the same
 network (i.e. using the same profile) but prohibits ingress traffic from containers
 on other networks.
 
@@ -69,9 +69,9 @@ EOF
 
 ## 3. Create test container
 
-With the networks created, let's start some containers. We'll create a  
-container on `calico-01` in `network1`, and then create containers on `calico-02` 
-in each network to check connectivity to the first container.  For this tutorial, 
+With the networks created, let's start some containers. We'll create a
+container on `calico-01` in `network1`, and then create containers on `calico-02`
+in each network to check connectivity to the first container.  For this tutorial,
 the container we create on `calico-01` will be a `busybox` image running a simple HTTP daemon `httpd`
 serving up the containers local filesystem over HTTP.
 
@@ -79,8 +79,8 @@ serving up the containers local filesystem over HTTP.
 
 Create the container in `network1`.  Note that we include a suffix `:IP=192.168.0.0`, this
 is used to pass the IP environment through to the network plugin which
-Calico IPAM uses to assign a specific IP address.  We use a fixed IP address to 
-simplify the steps in this tutorial, however if the suffix is omitted, Calico IPAM will 
+Calico IPAM uses to assign a specific IP address.  We use a fixed IP address to
+simplify the steps in this tutorial, however if the suffix is omitted, Calico IPAM will
 automatically select an IP address to use from it's configured IP Pools.
 
 ```shell
@@ -93,12 +93,12 @@ Use `rkt list` to see the IP.
 $ sudo rkt list
 UUID      APP      IMAGE NAME                                   STATE   CREATED         STARTED         NETWORKS
 6876aae5  busybox  registry-1.docker.io/library/busybox:latest  running 11 seconds ago  11 seconds ago  network1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
-b52bba11  node     quay.io/calico/node:latest                   running 2 minutes ago   2 minutes ago   
+b52bba11  node     quay.io/calico/node:latest                   running 2 minutes ago   2 minutes ago
 ```
 
-We now have a `busybox` container running on the network `network1` with an IP 
+We now have a `busybox` container running on the network `network1` with an IP
 address of `192.168.0.0`.  You will see that rkt also creates a second network
-called `default-restricted` - this is used for communication with the rkt 
+called `default-restricted` - this is used for communication with the rkt
 metadata service running on the host and is discussed in the
 [rkt documentation](https://github.com/coreos/rkt/blob/master/Documentation/networking/overview.md#the-default-restricted-network).
 
@@ -122,7 +122,7 @@ Expected output:
 ```
 
 This command runs the `wget` command in a busybox container to fetch the `passwd` file from our host.
-'-T 3' tells wget to only wait for 3 seconds for a response. Stderr is redirected to `/dev/null` as we're 
+'-T 3' tells wget to only wait for 3 seconds for a response. Stderr is redirected to `/dev/null` as we're
 not interested in the logs from `rkt` for this command.
 
 You can repeat this command on `calico-01` and check that access works the same
@@ -151,9 +151,9 @@ plugin created two profiles, `network1` and `network2`:
 
 ```shell
 $ calicoctl get profiles
-NAME       
-network1   
-network2   
+NAME
+network1
+network2
 ```
 
 ## 7. Resetting/Cleanup

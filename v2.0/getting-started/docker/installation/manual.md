@@ -9,7 +9,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 1. Download the calicoctl binary:
 
    ```
-   sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0-rc4/calicoctl
+   sudo wget -O /usr/local/bin/calicoctl https://github.com/projectcalico/calico-containers/releases/download/v1.0.0/calicoctl
    sudo chmod +x calicoctl
    ```
 
@@ -24,8 +24,8 @@ Check that `calico/node` is now running:
 
 ```
 vagrant@calico-01:~$ docker ps
-CONTAINER ID        IMAGE                    COMMAND             CREATED             STATUS              PORTS               NAMES
-408bd2b9ba53        calico/node:v1.0.0-rc4   "start_runit"       About an hour ago   Up About an hour                        calico-node
+CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
+408bd2b9ba53        calico/node:v1.0.0   "start_runit"       About an hour ago   Up About an hour                        calico-node
 ```
 
 Furthermore, check that the `calico/node` container is functioning properly
@@ -48,7 +48,7 @@ run the command with the `--init-system` and `--dry-run` flags:
 $ calicoctl node run --init-system --dryrun
 Use the following command to start the calico/node container:
 
-docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock calico/node:v1.0.0-rc4
+docker run --net=host --privileged --name=calico-node --rm -e ETCD_AUTHORITY=127.0.0.1:2379 -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=calico -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= -e CALICO_LIBNETWORK_ENABLED=true -e CALICO_LIBNETWORK_IFPREFIX=cali -v /var/run/calico:/var/run/calico -v /lib/modules:/lib/modules -v /var/log/calico:/var/log/calico -v /run/docker/plugins:/run/docker/plugins -v /var/run/docker.sock:/var/run/docker.sock calico/node:v1.0.0
 
 Use the following command to stop the calico/node container:
 

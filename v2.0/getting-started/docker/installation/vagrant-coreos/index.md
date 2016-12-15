@@ -76,7 +76,7 @@ You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
     CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
-    408bd2b9ba53        calico/node:v1.0.0-rc4   "start_runit"       About an hour ago   Up About an hour                        calico-node
+    408bd2b9ba53        calico/node:v1.0.0   "start_runit"       About an hour ago   Up About an hour                        calico-node
 
 ## Next Steps
 

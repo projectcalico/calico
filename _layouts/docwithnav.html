@@ -85,13 +85,7 @@ function redirect(version) {
 		{% if page.version == "master"  %}
 			<div style="text-align: center; color: #8a6d3b; background-color: #fcf8e3; border-color: #faebcc; padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px;">
 				<p><b>Warning: You are viewing <code>master</code> documentation.</b></p>
-				<p>To view documentation for the last stable production release, see the <a href="/v1.6/introduction/">v1.6 documentation</a>.</p>
-			</div>
-		{% elsif page.version == "v2.0" %}
-			<div style="text-align: center; color: #8a6d3b; background-color: #fcf8e3; border-color: #faebcc; padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px;">
-				<p><b>Warning: You are viewing Calico v2.0 Beta documentation.</b></p>
-				<p>Calico v2.0 Beta is not recommended for production.</p>
-				<p>To view documentation for the last stable production release, see the <a href="/v1.6/introduction/">v1.6 documentation</a>.</p>
+				<p>To view documentation for the last stable production release, see the <a href="/v2.0/introduction/">v2.0 documentation</a>.</p>
 			</div>
 		{% endif %}
     	{% if notitle != "true" %}<h1>{{ title }}</h1>{% endif %}
