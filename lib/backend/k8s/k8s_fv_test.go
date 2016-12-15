@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
@@ -400,6 +401,56 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
 			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
 			Expect(updGC.Revision).NotTo(BeNil())
+		})
+	})
+
+	It("should support setting and getting IP Pools", func() {
+		By("listing IP pools when none have been created", func() {
+			_, err := c.List(model.IPPoolListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("creating an IP Pool and getting it back", func() {
+			_, cidr, _ := cnet.ParseCIDR("192.168.0.0/16")
+			pool := &model.KVPair{
+				Key: model.IPPoolKey{
+					CIDR: *cidr,
+				},
+				Value: &model.IPPool{
+					CIDR:          *cidr,
+					IPIPInterface: "tunl0",
+					Masquerade:    true,
+					IPAM:          true,
+					Disabled:      true,
+				},
+			}
+			_, err := c.Create(pool)
+			Expect(err).NotTo(HaveOccurred())
+
+			receivedPool, err := c.Get(pool.Key)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(receivedPool.Value.(*model.IPPool).CIDR).To(Equal(*cidr))
+			Expect(receivedPool.Value.(*model.IPPool).IPIPInterface).To(Equal("tunl0"))
+			Expect(receivedPool.Value.(*model.IPPool).Masquerade).To(Equal(true))
+			Expect(receivedPool.Value.(*model.IPPool).IPAM).To(Equal(true))
+			Expect(receivedPool.Value.(*model.IPPool).Disabled).To(Equal(true))
+		})
+
+		By("deleting the IP Pool", func() {
+			_, cidr, _ := cnet.ParseCIDR("192.168.0.0/16")
+			err := c.Delete(&model.KVPair{
+				Key: model.IPPoolKey{
+					CIDR: *cidr,
+				},
+				Value: &model.IPPool{
+					CIDR:          *cidr,
+					IPIPInterface: "tunl0",
+					Masquerade:    true,
+					IPAM:          true,
+					Disabled:      true,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })

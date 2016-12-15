@@ -51,6 +51,10 @@ func (key ReadyFlagKey) valueType() reflect.Type {
 	return typeReadyFlag
 }
 
+func (key ReadyFlagKey) String() string {
+	return "ReadyFlagKey()"
+}
+
 type GlobalConfigKey struct {
 	Name string `json:"-" validate:"required,name"`
 }

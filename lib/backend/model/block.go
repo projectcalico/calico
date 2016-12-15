@@ -55,6 +55,10 @@ func (key BlockKey) valueType() reflect.Type {
 	return typeBlock
 }
 
+func (key BlockKey) String() string {
+	return fmt.Sprintf("BlockKey(cidr=%s)", key.CIDR.String())
+}
+
 type BlockListOptions struct {
 	IPVersion int `json:"-"`
 }

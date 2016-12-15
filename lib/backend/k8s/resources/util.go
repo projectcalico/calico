@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package resources
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -20,9 +20,13 @@ import (
 	kerrors "k8s.io/client-go/pkg/api/errors"
 )
 
-// k8sErrorToCalico returns the equivalent libcalico error for the given
+// K8sErrorToCalico returns the equivalent libcalico error for the given
 // kubernetes error.
-func k8sErrorToCalico(ke error, id interface{}) error {
+func K8sErrorToCalico(ke error, id interface{}) error {
+	if ke == nil {
+		return nil
+	}
+
 	if kerrors.IsAlreadyExists(ke) {
 		return errors.ErrorResourceAlreadyExists{
 			Err:        ke,

@@ -52,6 +52,10 @@ func (key IPAMHandleKey) valueType() reflect.Type {
 	return typeHandle
 }
 
+func (key IPAMHandleKey) String() string {
+	return fmt.Sprintf("IPAMHandleKey(id=%s)", key.HandleID)
+}
+
 type IPAMHandleListOptions struct {
 	// TODO: Have some options here?
 }
