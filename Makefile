@@ -43,9 +43,11 @@ endif
 	# Check that the version output appears on a line of its own (the -x option to grep).
 # Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
 	@echo "Checking if the tag made it into the binary"
-	dist/calico -v | grep -x $(VERSION) || ( echo "Reported version:" `dist/calico -v` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
 	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(VERSION)
 	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
+	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):latest
 
 	@echo "Now push the tag and images. Then create a release on Github and attach the dist/calico and dist/calico-ipam binaries"
 	@echo "git push origin $(VERSION)"
