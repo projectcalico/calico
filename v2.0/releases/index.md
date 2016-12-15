@@ -6,10 +6,30 @@ The following table shows component versioning for Calico  **{{ page.version }}*
 
 Use the version selector at the top-right of this page to view a different release.
 
-## v2.0.0
+## v2.0.0 - Release Notes
+
+- The calicoctl command line tool has been updated to provide an
+[object-oriented resource focused UX]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands).
+- For Kubernetes deployments, Calico now has the option of
+[using the Kubernetes API server as its backend datastore]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/) instead of etcd. Under the covers, this is
+implemented using a new pluggable datastore API introduced in libcalico-go.
+- [Felix has been rewritten in golang](https://github.com/projectcalico/felix/pull/1122), greatly improving startup performance,
+particularly around resync, graceful restart, and catch-up behavior.
+- Improved packaging that now vendors our dependencies; removes potential Python dependency issues such as incompatible urllib3/requests versions
+- Felix introduces a new dataplane driver API, which will allow for non-iptables
+dataplanes in the future.
+- For pure Go enthusiasts, Calico now has experimental support for swapping out
+the C++ based BIRD BGP implementation with GoBGP instead.
+- Many of Calico's components have been ported from Python to Go, including:
+calicoctl, libcalico (as libcalico-go), calico-cni, libnetwork-plugin, most of
+Felix, and parts of calico/node. This port brings with it improved performance
+and better alignment with many of the projects within the container ecosystem
+(e.g. Calico now uses the native APIs for kubernetes, etcd, and Prometheus directly).
+
+And more! View release notes for the following components below for more information:
 
 | Component                     | Version                                                                                    |
-|-------------------------------+--------------------------------------------------------------------------------------------|
+|-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0](https://github.com/projectcalico/felix/releases/tag/2.0.0)                         |
 | calicoctl                     | [v1.0.0](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0)           |
 | calico/node                   | [v1.0.0](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0)           |
@@ -26,7 +46,7 @@ Use the version selector at the top-right of this page to view a different relea
 ## v2.0.0-rc3
 
 | Component                     | Version                                                                                    |
-|-------------------------------+--------------------------------------------------------------------------------------------|
+|-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-rc7](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc7)                 |
 | calicoctl                     | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
 | calico/node                   | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
@@ -42,7 +62,7 @@ Use the version selector at the top-right of this page to view a different relea
 ## v2.0.0-rc2
 
 | Component                     | Version                                                                                    |
-|-------------------------------+--------------------------------------------------------------------------------------------|
+|-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-rc4](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc4)                 |
 | calicoctl                     | [v1.0.0-rc2](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
 | calico/node                   | [v1.0.0-rc2](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
@@ -58,7 +78,7 @@ Use the version selector at the top-right of this page to view a different relea
 ## v2.0.0-beta
 
 | Component                     | Version                                                                                    |
-|-------------------------------+--------------------------------------------------------------------------------------------|
+|-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-beta.3](https://github.com/projectcalico/felix/releases/tag/2.0.0-beta.3)           |
 | calicoctl                     | [v1.0.0-beta](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-beta) |
 | calico/node                   | [v1.0.0-beta](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-beta) |
