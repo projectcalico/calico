@@ -22,8 +22,8 @@ a cluster of Calico-rkt enabled nodes.
 There are three components of a Calico / rkt integration.
 
 - The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
-- The [`calicoctl`](https://github.com/projectcalico/calico-containers) command line tool.
-- The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
+- The [`calicoctl`](https://github.com/projectcalico/calico-containers/releases) command line tool.
+- The [calico-cni](https://github.com/projectcalico/calico-cni/releases) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
 
 The `calico/node` docker container must be run on each node in your cluster.  It contains
