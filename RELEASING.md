@@ -57,7 +57,7 @@ So, to make a Felix release:
 # Felix packages for Calico with OpenStack
 
 Apart from OpenStack, the platforms that Calico targets are container-based, so
-the container image artifacts already generated above are appropriate for
+the container image artifacts already documented above are appropriate for
 installing Felix on those platforms.  OpenStack installations, however, are
 commonly based on packages, so for Calico with OpenStack we provide packages
 for the OS platforms that are popular for OpenStack installs: Debian packages
@@ -88,11 +88,11 @@ To publish Debian packages:
 - Become a member of "Project Calico" and upload your GPG key, if you
   aren't/haven't already.
 
-- `debsign -k<KEY_ID> dist/{trusty,xenial}/*_source.changes`, where <KEY_ID> is
-  enough of your GPG key name to uniquely identify it.
+- `debsign -k<KEY_ID> dist/{trusty,xenial}/*_source.changes`, where `<KEY_ID>`
+  is enough of your GPG key name to uniquely identify it.
 
 - `dput ppa:project-calico/<PPA> dist/{trusty,xenial}/*_source.changes`, where
-  <PPA> is the target PPA, such as 'calico-1.4'.
+  `<PPA>` is the target PPA, such as 'calico-1.4'.
 
 To publish RPM packages:
 
@@ -104,10 +104,10 @@ To publish RPM packages:
   steps are as follows.
 
 - `rpm --define '_gpg_name <KEY_ID>' --resign dist/rpms/RPMS/*/*.rpm`, where
-  <KEY_ID> is enough of the GPG signing key name to uniquely identify it.
+  `<KEY_ID>` is enough of the GPG signing key name to uniquely identify it.
 
 - Copy signed RPMs to the appropriate place under
-  /usr/share/nginx/html/rpm/<REPO_NAME> on binaries.projectcalico.org.
+  `/usr/share/nginx/html/rpm/<REPO_NAME>` on binaries.projectcalico.org.
 
-- Run `createrepo .` in /usr/share/nginx/html/rpm/<REPO_NAME> on
+- Run `createrepo .` in `/usr/share/nginx/html/rpm/<REPO_NAME>` on
   binaries.projectcalico.org, to update the repository's metadata.
