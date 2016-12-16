@@ -29,9 +29,9 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	kapi "k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/unversioned"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 )
 
 var (
@@ -237,7 +237,7 @@ func (c converter) networkPolicyToPolicy(np *extensions.NetworkPolicy) (*model.K
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
-func (c converter) k8sSelectorToCalico(s *unversioned.LabelSelector, ns *string) string {
+func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) string {
 	// If this is a podSelector, it needs to be namespaced, and it
 	// uses a different prefix.  Otherwise, treat this as a NamespaceSelector.
 	selectors := []string{}
@@ -259,13 +259,13 @@ func (c converter) k8sSelectorToCalico(s *unversioned.LabelSelector, ns *string)
 
 		// Each selector is formatted differently based on the operator.
 		switch e.Operator {
-		case unversioned.LabelSelectorOpIn:
+		case metav1.LabelSelectorOpIn:
 			selectors = append(selectors, fmt.Sprintf("%s%s in { '%s' }", prefix, e.Key, valueList))
-		case unversioned.LabelSelectorOpNotIn:
+		case metav1.LabelSelectorOpNotIn:
 			selectors = append(selectors, fmt.Sprintf("%s%s not in { '%s' }", prefix, e.Key, valueList))
-		case unversioned.LabelSelectorOpExists:
+		case metav1.LabelSelectorOpExists:
 			selectors = append(selectors, fmt.Sprintf("has(%s%s)", prefix, e.Key))
-		case unversioned.LabelSelectorOpDoesNotExist:
+		case metav1.LabelSelectorOpDoesNotExist:
 			selectors = append(selectors, fmt.Sprintf("! has(%s%s)", prefix, e.Key))
 		}
 	}

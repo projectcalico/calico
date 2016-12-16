@@ -5,7 +5,7 @@ import (
 
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/meta"
-	"k8s.io/client-go/pkg/api/unversioned"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/runtime/schema"
 )
 
@@ -15,15 +15,15 @@ type GlobalConfigSpec struct {
 }
 
 type GlobalConfig struct {
-	unversioned.TypeMeta `json:",inline"`
-	Metadata             api.ObjectMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	Metadata        api.ObjectMeta `json:"metadata"`
 
 	Spec GlobalConfigSpec `json:"spec"`
 }
 
 type GlobalConfigList struct {
-	unversioned.TypeMeta `json:",inline"`
-	Metadata             unversioned.ListMeta `json:"metadata"`
+	metav1.TypeMeta `json:",inline"`
+	Metadata        metav1.ListMeta `json:"metadata"`
 
 	Items []GlobalConfig `json:"items"`
 }
@@ -44,7 +44,7 @@ func (el *GlobalConfigList) GetObjectKind() schema.ObjectKind {
 }
 
 // Required to satisfy ListMetaAccessor interface
-func (el *GlobalConfigList) GetListMeta() unversioned.List {
+func (el *GlobalConfigList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
