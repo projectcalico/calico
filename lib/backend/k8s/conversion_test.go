@@ -19,9 +19,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"k8s.io/client-go/pkg/api/unversioned"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/intstr"
 )
 
@@ -179,7 +179,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Namespace: "default",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{
+				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
@@ -189,7 +189,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 						},
 						From: []extensions.NetworkPolicyPeer{
 							extensions.NetworkPolicyPeer{
-								PodSelector: &unversioned.LabelSelector{
+								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
@@ -223,7 +223,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Namespace: "default",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{
+				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
 			},
@@ -250,7 +250,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Namespace: "default",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{},
+				PodSelector: metav1.LabelSelector{},
 			},
 		}
 
@@ -275,11 +275,11 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Namespace: "default",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{
-					MatchExpressions: []unversioned.LabelSelectorRequirement{
-						unversioned.LabelSelectorRequirement{
+				PodSelector: metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						metav1.LabelSelectorRequirement{
 							Key:      "k",
-							Operator: unversioned.LabelSelectorOpIn,
+							Operator: metav1.LabelSelectorOpIn,
 							Values:   []string{"v1", "v2"},
 						},
 					},
@@ -310,7 +310,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Namespace: "default",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{},
+				PodSelector: metav1.LabelSelector{},
 				Ingress: []extensions.NetworkPolicyIngressRule{
 					extensions.NetworkPolicyIngressRule{
 						Ports: []extensions.NetworkPolicyPort{

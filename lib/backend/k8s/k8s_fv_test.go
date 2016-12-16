@@ -10,9 +10,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"k8s.io/client-go/pkg/api/unversioned"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 )
 
 // cb implements the callback interface required for the
@@ -152,7 +152,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				Name: "test-syncer-basic-net-policy",
 			},
 			Spec: extensions.NetworkPolicySpec{
-				PodSelector: unversioned.LabelSelector{
+				PodSelector: metav1.LabelSelector{
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
@@ -162,7 +162,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 						},
 						From: []extensions.NetworkPolicyPeer{
 							extensions.NetworkPolicyPeer{
-								PodSelector: &unversioned.LabelSelector{
+								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
 									},
@@ -264,7 +264,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Wait up to 120s for pod to start running.
 		log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
 		for i := 0; i < 120; i++ {
-			p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name)
+			p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			if p.Status.Phase == k8sapi.PodRunning {
 				// Pod is running
@@ -272,7 +272,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			}
 			time.Sleep(1 * time.Second)
 		}
-		p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name)
+		p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(p.Status.Phase).To(Equal(k8sapi.PodRunning))
 

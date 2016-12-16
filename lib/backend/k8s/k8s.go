@@ -32,6 +32,7 @@ import (
 	kerrors "k8s.io/client-go/pkg/api/errors"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/runtime"
 	"k8s.io/client-go/pkg/runtime/schema"
 	"k8s.io/client-go/pkg/runtime/serializer"
@@ -387,7 +388,7 @@ func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 	if err != nil {
 		return nil, err
 	}
-	namespace, err := c.clientSet.Namespaces().Get(namespaceName)
+	namespace, err := c.clientSet.Namespaces().Get(namespaceName, metav1.GetOptions{})
 	if err != nil {
 		return nil, k8sErrorToCalico(err, k)
 	}
@@ -402,7 +403,7 @@ func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, erro
 	if len(ips) > 0 {
 		log.Debugf("Applying workload with IPs: %+v", ips)
 		ns, name := c.converter.parseWorkloadID(k.Key.(model.WorkloadEndpointKey).WorkloadID)
-		pod, err := c.clientSet.Pods(ns).Get(name)
+		pod, err := c.clientSet.Pods(ns).Get(name, metav1.GetOptions{})
 		if err != nil {
 			return nil, k8sErrorToCalico(err, k.Key)
 		}
@@ -466,7 +467,7 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 	// can find the correct namespace to get the pod.
 	namespace, podName := c.converter.parseWorkloadID(k.WorkloadID)
 
-	pod, err := c.clientSet.Pods(namespace).Get(podName)
+	pod, err := c.clientSet.Pods(namespace).Get(podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, k8sErrorToCalico(err, k)
 	}

@@ -23,7 +23,7 @@ import:
   subpackages:
   - patricia
 - package: k8s.io/client-go
-  version: 41a99d711af778a177f07402217b85d456b50da1
+  version: 243d8a9cb66a51ad8676157f79e71033b4014a2a
   subpackages:
   - kubernetes
   - pkg/api
