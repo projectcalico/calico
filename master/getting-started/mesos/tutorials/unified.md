@@ -5,7 +5,8 @@ title: Networking Mesos Tasks with Calico-CNI
 ## Prerequisites
 
 This guide assumes you have a running Mesos Cluster whereby each Agent has
-CNI enabled, and Calico services and binaries are installed. See [Adding Calico-CNI to an existing Mesos Cluster]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/unified).
+CNI enabled, and Calico services and binaries are installed. See the [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/integration)
+for information on how to meet these requirements.
 
 ## Getting started
 

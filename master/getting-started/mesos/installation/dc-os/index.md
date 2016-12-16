@@ -1,11 +1,11 @@
 ---
-title: Installing Calico in DC/OS
+title: Overview of Calico for DC/OS
 ---
 
 The following information details Calico's installation and runtime dependencies
 in DC/OS, and looks at how to leverage Calico-DC/OS Framework to get up and running.
 
-## Background
+## Overview
 
 Calico provides multi-host networking for DC/OS, giving each task its own IP
 address and isolated networking namespace, with highly flexible policy configuration.
@@ -28,8 +28,6 @@ steps on every agent in the cluster:
 
 The framework is flexible, allowing users to enable, disable, or customize each step.
 Below, we'll see what each step does, and how it can be modified.
-
-**Alternatives: Installing Manually**
 
 The framework runs Calico (and its configuration) **within DC/OS.**
 This means it registers as a Mesos Framework, and uses Mesos Resource offers
@@ -105,18 +103,11 @@ be restarted to pick up the change. This step of the Framework performs the foll
 
 4. Restart the slave process with `systemctl restart dcos-mesos-slave`
 
-### Calico Libnetwork
-
-To receive networking hook calls from the Docker engine, Calico's libnetwork plugin must
-be running on every agent. This task ensures the `calico/node-libnetwork` container
-is running.
-
 ### Run Calico Node
 
-No matter which networking plugin you use, Calico's core processes must be run
-on each agent. This task ensures the `calico/node` container is running.
+This task ensures the Calico's core process `calico/node` is running.
 
 ## Next Steps: Installing
 
-For a walkthrough of how to deploy common configurations of the Calico-DC/OS Framework,
-see [The Calico-DC/OS Framework Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/dc-os/framework)
+Now that we have a basic understanding of what the Calico-DC/OS Install Framework
+does, see [The Calico-DC/OS Framework Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/dc-os/framework)
