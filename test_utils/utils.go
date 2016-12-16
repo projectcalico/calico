@@ -9,6 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
+
 	"path"
 
 	"encoding/json"
@@ -20,16 +24,14 @@ import (
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
-	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/client"
-	calnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 )
 
 var kapi etcdclient.KeysAPI
 
-func init() {
+const K8S_TEST_NS = "test"
 
+func init() {
 	cfg := etcdclient.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
 	c, _ := etcdclient.New(cfg)
 	kapi = etcdclient.NewKeysAPI(c)
@@ -40,34 +42,31 @@ func WipeEtcd() {
 	_, err := kapi.Delete(context.Background(), "/calico", &etcdclient.DeleteOptions{Dir: true, Recursive: true})
 	if err != nil && !etcdclient.IsKeyNotFound(err) {
 		panic(err)
-
 	}
-
 }
 
-func PreCreatePool(pool string) {
-	// Load the client config from the current environment.
-	clientConfig, err := client.LoadClientConfig("")
+// Delete all K8s pods from the "test" namespace
+func WipeK8sPods() {
+	config, err := clientcmd.DefaultClientConfig.ClientConfig()
+	if err != nil {
+		panic(err)
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+
+	if err != nil {
+		panic(err)
+	}
+	pods, err := clientset.Pods(K8S_TEST_NS).List(v1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	// Create a new client.
-	calicoClient, err := client.New(*clientConfig)
-	if err != nil {
-		panic(err)
-	}
+	for _, pod := range pods.Items {
+		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &v1.DeleteOptions{})
 
-	_, ipNet, err := calnet.ParseCIDR(pool)
-	if err != nil {
-		panic(err)
-	}
-
-	ippool := api.NewIPPool()
-	ippool.Metadata.CIDR = *ipNet
-	ippool, err = calicoClient.IPPools().Create(ippool)
-	if err != nil {
-		panic(err)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -111,7 +110,7 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, int) {
 	return result, exitCode
 }
 
-func CreateContainer(netconf string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+func CreateContainer(netconf string, k8sName string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
 	targetNs, err := ns.NewNS()
 	if err != nil {
 		return "", "", nil, nil, nil, nil, err
@@ -135,7 +134,11 @@ func CreateContainer(netconf string) (container_id, netnspath string, session *g
 
 	// Set up the env for running the CNI plugin
 	//TODO pass in the env properly
-	cni_env := fmt.Sprintf("CNI_COMMAND=ADD CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist", container_id, netnspath)
+	var k8s_env = ""
+	if k8sName != "" {
+		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", k8sName)
+	}
+	cni_env := fmt.Sprintf("CNI_COMMAND=ADD CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
 
 	// Run the CNI plugin passing in the supplied netconf
 	//TODO - Get rid of this PLUGIN thing and use netconf instead
@@ -173,11 +176,17 @@ func CreateContainer(netconf string) (container_id, netnspath string, session *g
 	return
 }
 
-func DeleteContainer(netconf, netnspath string) (session *gexec.Session, err error) {
+func DeleteContainer(netconf, netnspath, name string) (session *gexec.Session, err error) {
 	netnsname := path.Base(netnspath)
 	container_id := netnsname[:10]
+	var k8s_env = ""
+	if name != "" {
+
+		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", name)
+	}
+
 	// Set up the env for running the CNI plugin
-	cni_env := fmt.Sprintf("CNI_COMMAND=DEL CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist", container_id, netnspath)
+	cni_env := fmt.Sprintf("CNI_COMMAND=DEL CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
 
 	// Run the CNI plugin passing in the supplied netconf
 	subProcess := exec.Command("bash", "-c", fmt.Sprintf("%s dist/%s", cni_env, os.Getenv("PLUGIN")), netconf)

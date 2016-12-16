@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	. "github.com/projectcalico/calico-cni/test_utils"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var plugin = "calico-ipam"
@@ -15,8 +16,8 @@ var plugin = "calico-ipam"
 var _ = Describe("Calico IPAM Tests", func() {
 	BeforeEach(func() {
 		WipeEtcd()
-		PreCreatePool("192.168.0.0/16")
-		PreCreatePool("fd80:24e2:f998:72d6::/64")
+		testutils.CreateNewIPPool(*calicoClient, "192.168.0.0/16", false, false, true)
+		testutils.CreateNewIPPool(*calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 	})
 
 	Describe("Run IPAM plugin", func() {
