@@ -27,13 +27,12 @@ import (
 
 var (
 	rrConfigNormal = Config{
-		IPIPEnabled:           true,
-		IPIPTunnelAddress:     nil,
-		IPSetConfigV4:         ipsets.NewIPSetConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:         ipsets.NewIPSetConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:    0x8,
-		IptablesMarkNextTier:  0x10,
-		IptablesMarkEndpoints: 0x20,
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPSetConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPSetConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x8,
+		IptablesMarkNextTier: 0x10,
 	}
 )
 
