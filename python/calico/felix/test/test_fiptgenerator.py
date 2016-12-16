@@ -759,6 +759,19 @@ class TestRules(BaseTestCase):
             '--comment "comment"'
         ])
 
+    def test_log_prefix(self):
+        self.iptables_generator.LOG_PREFIX = "calico-something"
+        self.iptables_generator.ACTION_ON_DROP = "LOG-and-DROP"
+        drop_rules = self.iptables_generator.drop_rules(
+            4, "foo", "--rulespec", "comment"
+        )
+        self.assertEqual(drop_rules, [
+            '--append foo --rulespec --jump LOG --log-prefix "calico-something: " '
+            '--log-level 4 -m comment --comment "comment"',
+            '--append foo --rulespec --jump DROP -m comment '
+            '--comment "comment"'
+        ])
+
     def test_bad_icmp_type(self):
         with self.assertRaises(UnsupportedICMPType):
             self.iptables_generator._rule_to_iptables_fragments_inner(
