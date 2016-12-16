@@ -137,7 +137,7 @@ func newIPIPManager(
 	// in sync, by which point we'll have added all our CIDRs into the sets.
 	ipsetsMgr.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.AllHostIPsSetID,
+		SetID:   rules.IPSetIDAllHostIPs,
 		Type:    ipsets.IPSetTypeHashIP,
 	}, []string{})
 
@@ -169,13 +169,13 @@ func (d *ipipManager) OnUpdate(msg interface{}) {
 		// defers and coalesces the update so removing then adding the same IP is a no-op
 		// anyway.
 		logCxt.WithField("oldIP", oldIP).Debug("Removing old IP.")
-		d.ipsets.RemoveMembers(rules.AllHostIPsSetID, []string{oldIP})
+		d.ipsets.RemoveMembers(rules.IPSetIDAllHostIPs, []string{oldIP})
 		delete(d.activeHostnameToIP, hostname)
 	}
 	if newIP != "" {
 		// Update the IP sets.
 		logCxt.Debug("Adding host to IP set.")
-		d.ipsets.AddMembers(rules.AllHostIPsSetID, []string{newIP})
+		d.ipsets.AddMembers(rules.IPSetIDAllHostIPs, []string{newIP})
 		d.activeHostnameToIP[hostname] = newIP
 	}
 }

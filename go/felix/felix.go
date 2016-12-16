@@ -41,7 +41,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"reflect"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -180,7 +179,7 @@ configRetry:
 		log.Info("Using internal dataplane driver.")
 		dpConfig := intdataplane.Config{
 			RulesConfig: rules.Config{
-				WorkloadIfacePrefixes: strings.Split(configParams.InterfacePrefix, ","),
+				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPSetConfig(
 					ipsets.IPFamilyV4,
@@ -195,18 +194,19 @@ configRetry:
 					nil,
 				),
 
-				OpenStackMetadataIP:   net.ParseIP(configParams.MetadataAddr),
-				OpenStackMetadataPort: uint16(configParams.MetadataPort),
+				OpenStackSpecialCasesEnabled: configParams.OpenstackActive(),
+				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
+				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
 
 				// TODO(smc) honour config of iptables mark marks.
-				IptablesMarkAccept:    0x1,
-				IptablesMarkNextTier:  0x2,
-				IptablesMarkEndpoints: 0x4,
+				IptablesMarkAccept:   0x1,
+				IptablesMarkNextTier: 0x2,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
-				ActionOnDrop: configParams.DropActionOverride,
+				ActionOnDrop:         configParams.DropActionOverride,
+				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 			},
 			IPIPMTU: configParams.IpInIpMtu,
 		}

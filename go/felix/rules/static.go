@@ -15,7 +15,7 @@
 package rules
 
 import (
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	. "github.com/projectcalico/felix/go/felix/iptables"
 	"strings"
 )
@@ -28,39 +28,173 @@ func (r *ruleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain
 }
 
 const (
-	ProtoIPIP = 4
+	ProtoIPIP   = 4
+	ProtoICMPv6 = 58
 )
 
 func (r *ruleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
-
-	// TODO(smc) Metadata IP/port
-	// TODO(smc) DHCP special case for OpenStack
-
-	var rules []Rule
+	return []*Chain{
+		r.filterInputChain(ipVersion),
+		r.filterWorkloadToHostChain(ipVersion),
+	}
+}
+func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
+	var inputRules []Rule
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
 		// recognised host.  We use the protocol number rather than its name because the
 		// name is not guaranteed to be known by the kernel.
 		match := Match().ProtocolNum(ProtoIPIP).
-			NotSourceIPSet(r.IPSetConfigV4.NameForMainIPSet(AllHostIPsSetID))
-		rules = append(rules,
+			NotSourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs))
+		inputRules = append(inputRules,
 			r.DropRules(match, "Drop IPIP packets from non-Calico hosts")...)
 	}
 
-	return []*Chain{
-		{
-			Name:  FilterInputChainName,
-			Rules: rules,
+	// Allow established connections via the conntrack table.
+	inputRules = append(inputRules, r.DropRules(Match().ConntrackState("INVALID"))...)
+	inputRules = append(inputRules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
 		},
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
+		},
+	)
+
+	// Apply our policy to packets coming from workload endpoints.
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		ifaceMatch := prefix + "+"
+		inputRules = append(inputRules, Rule{
+			Match:  Match().InInterface(ifaceMatch),
+			Action: GotoAction{Target: ChainWorkloadToHost},
+		})
+	}
+
+	// TODO Apply host endpoint policy...
+
+	return &Chain{
+		Name:  ChainFilterInput,
+		Rules: inputRules,
+	}
+}
+
+func (r *ruleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
+	var rules []Rule
+
+	// For IPv6, we need to white-list certain ICMP traffic from workloads in order to to act
+	// as a router.  Note: we do this before the policy chains, so we're bypassing the egress
+	// rules for this traffic.  While that might be unexpected, it makes sure that the user
+	// doesn't cut off their own connectivity in subtle ways that they shouldn't have to worry
+	// about.
+	//
+	// - 130: multicast listener query.
+	// - 131: multicast listener report.
+	// - 132: multicast listener done.
+	// - 133: router solicitation, which an endpoint uses to request
+	//        configuration information rather than waiting for an
+	//        unsolicited router advertisement.
+	// - 135: neighbor solicitation.
+	// - 136: neighbor advertisement.
+	if ipVersion == 6 {
+		for _, icmpType := range []uint8{130, 131, 132, 133, 135, 136} {
+			rules = append(rules, Rule{
+				Match: Match().
+					ProtocolNum(ProtoICMPv6).
+					ICMPV6Type(icmpType),
+				Action: AcceptAction{},
+			})
+		}
+	}
+
+	if r.OpenStackSpecialCasesEnabled {
+		if ipVersion == 4 && r.OpenStackMetadataIP != nil {
+			// For OpenStack compatibility, we support a special-case to allow incoming traffic
+			// to the OpenStack metadata IP/port.
+			// TODO(smc) Long-term, it'd be nice if the OpenStack plugin programmed a policy to
+			// do this instead.
+			log.WithField("ip", r.OpenStackMetadataIP).Info(
+				"OpenStack metadata IP specified, installing whitelist rule.")
+			rules = append(rules, Rule{
+				Match: Match().
+					Protocol("tcp").
+					DestNet(r.OpenStackMetadataIP.String()).
+					DestPorts(r.OpenStackMetadataPort),
+				Action: AcceptAction{},
+			})
+		}
+
+		// Again, for OpenStack compatibility, white-list certain protocols.
+		// TODO(smc) Long-term, it'd be nice if the OpenStack plugin programmed a policy to
+		// do this instead.
+		dhcpSrcPort := uint16(68)
+		dhcpDestPort := uint16(67)
+		if ipVersion == 6 {
+			dhcpSrcPort = uint16(546)
+			dhcpDestPort = uint16(547)
+		}
+		dnsDestPort := uint16(53)
+		rules = append(rules,
+			Rule{
+				Match: Match().
+					Protocol("udp").
+					SourcePorts(dhcpSrcPort).
+					DestPorts(dhcpDestPort),
+				Action: AcceptAction{},
+			},
+			Rule{
+				Match: Match().
+					Protocol("udp").
+					DestPorts(dnsDestPort),
+				Action: AcceptAction{},
+			},
+		)
+	}
+
+	// Now send traffic to the policy chains to apply the egress policy.
+	rules = append(rules, Rule{
+		Action: JumpAction{Target: ChainFromWorkloadDispatch},
+	})
+
+	// If the dispatch chain accepts the packet, it returns to us here.  Apply the configured
+	// action.  Note: we may have done work above to allow the packet and then end up dropping
+	// it here.  We can't optimize that away because there may be other rules (such as log
+	// rules in the policy).
+	for _, action := range r.inputAcceptActions {
+		rules = append(rules, Rule{
+			Action:  action,
+			Comment: "Configured DefaultEndpointToHostAction",
+		})
+	}
+
+	return &Chain{
+		Name:  ChainWorkloadToHost,
+		Rules: rules,
 	}
 }
 
 func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
+	// To handle multiple interface prefixes, we want 3 batches of rules.
+	//
+	// The first batch handles conntrack, accepting packets from established flows.
+	//
+	// The second dispatches the packet to our dispatch chains if it is going to/from an
+	// interface that we're responsible for.  Note: the dispatch chains represent "allow" by
+	// returning to this chain for further processing; this is required to handle traffic that
+	// is going between endpoints on the same host.  In that case we need to apply the egress
+	// policy for one endpoint and the ingress policy for the other.
+	//
+	// The third batch actually accepts the packets if they passed through the policy
+	// and were returned.
+
+	// conntrack rules.
 	for _, prefix := range r.WorkloadIfacePrefixes {
-		logrus.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
 		ifaceMatch := prefix + "+"
 		rules = append(rules, r.DropRules(Match().InInterface(ifaceMatch).ConntrackState("INVALID"))...)
 		rules = append(rules,
@@ -72,14 +206,30 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 				Match:  Match().OutInterface(ifaceMatch).ConntrackState("RELATED,ESTABLISHED"),
 				Action: AcceptAction{},
 			},
+		)
+	}
+
+	// Jump to dispatch chains.
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		ifaceMatch := prefix + "+"
+		rules = append(rules,
 			Rule{
 				Match:  Match().InInterface(ifaceMatch),
-				Action: JumpAction{Target: DispatchFromWorkloadEndpoint},
+				Action: JumpAction{Target: ChainFromWorkloadDispatch},
 			},
 			Rule{
 				Match:  Match().OutInterface(ifaceMatch),
-				Action: JumpAction{Target: DispatchToWorkloadEndpoint},
+				Action: JumpAction{Target: ChainToWorkloadDispatch},
 			},
+		)
+	}
+
+	// Accept if everything above passed.
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		ifaceMatch := prefix + "+"
+		rules = append(rules,
 			Rule{
 				Match:  Match().InInterface(ifaceMatch),
 				Action: AcceptAction{},
@@ -87,11 +237,12 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 			Rule{
 				Match:  Match().OutInterface(ifaceMatch),
 				Action: AcceptAction{},
-			})
+			},
+		)
 	}
 
 	return []*Chain{{
-		Name:  FilterForwardChainName,
+		Name:  ChainFilterForward,
 		Rules: rules,
 	}}
 }
@@ -124,7 +275,7 @@ func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 	}
 
 	return []*Chain{{
-		Name:  NATPreroutingChainName,
+		Name:  ChainNATPrerouting,
 		Rules: rules,
 	}}
 }
@@ -132,7 +283,7 @@ func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
 		{
-			Action: JumpAction{Target: NATOutgoingChainName},
+			Action: JumpAction{Target: ChainNATOutgoing},
 		},
 	}
 	if r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
@@ -169,7 +320,7 @@ func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 		})
 	}
 	return []*Chain{{
-		Name:  NATPostroutingChainName,
+		Name:  ChainNATPostrouting,
 		Rules: rules,
 	}}
 }

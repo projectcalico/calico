@@ -20,8 +20,8 @@ func (r *ruleRenderer) NATOutgoingChain(active bool, ipVersion uint8) *iptables.
 	var rules []iptables.Rule
 	if active {
 		ipConf := r.ipSetConfig(ipVersion)
-		allIPsSetName := ipConf.NameForMainIPSet(NATOutgoingAllIPsSetID)
-		masqIPsSetName := ipConf.NameForMainIPSet(NATOutgoingMasqIPsSetID)
+		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 		rules = []iptables.Rule{
 			{
 				Action: iptables.MasqAction{},
@@ -32,7 +32,7 @@ func (r *ruleRenderer) NATOutgoingChain(active bool, ipVersion uint8) *iptables.
 		}
 	}
 	return &iptables.Chain{
-		Name:  NATOutgoingChainName,
+		Name:  ChainNATOutgoing,
 		Rules: rules,
 	}
 }

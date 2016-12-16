@@ -27,27 +27,28 @@ const (
 	ChainNamePrefix = "cali"
 	IPSetNamePrefix = "cali"
 
-	FilterInputChainName   = ChainNamePrefix + "-INPUT"
-	FilterForwardChainName = ChainNamePrefix + "-FORWARD"
-	FilterOutputChainName  = ChainNamePrefix + "-OUTPUT"
+	ChainFilterInput   = ChainNamePrefix + "-INPUT"
+	ChainFilterForward = ChainNamePrefix + "-FORWARD"
 
-	NATPreroutingChainName  = ChainNamePrefix + "-PREROUTING"
-	NATPostroutingChainName = ChainNamePrefix + "-POSTROUTING"
-	NATOutgoingChainName    = ChainNamePrefix + "-nat-outgoing"
+	ChainNATPrerouting  = ChainNamePrefix + "-PREROUTING"
+	ChainNATPostrouting = ChainNamePrefix + "-POSTROUTING"
+	ChainNATOutgoing    = ChainNamePrefix + "-nat-outgoing"
 
-	NATOutgoingAllIPsSetID  = "all-ipam-pools"
-	NATOutgoingMasqIPsSetID = "masq-ipam-pools"
+	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
+	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
-	AllHostIPsSetID = "all-hosts"
+	IPSetIDAllHostIPs = "all-hosts"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
 
-	DispatchToWorkloadEndpoint   = ChainNamePrefix + "-to-wl-endpoint"
-	DispatchFromWorkloadEndpoint = ChainNamePrefix + "-from-wl-endpoint"
+	ChainWorkloadToHost       = ChainNamePrefix + "-wl-to-host"
+	ChainHostToWorkload       = ChainNamePrefix + "-host-to-wl"
+	ChainFromWorkloadDispatch = ChainNamePrefix + "-from-wl-dispatch"
+	ChainToWorkloadDispatch   = ChainNamePrefix + "-to-wl-dispatch"
 
-	DispatchToHostEndpoint   = ChainNamePrefix + "-to-host-endpoint"
-	DispatchFromHostEndpoint = ChainNamePrefix + "-from-host-endpoint"
+	ChainDispatchToHostEndpoint   = ChainNamePrefix + "-to-host-endpoint"
+	ChainDispatchFromHostEndpoint = ChainNamePrefix + "-from-host-endpoint"
 
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -102,7 +103,8 @@ type RuleRenderer interface {
 type ruleRenderer struct {
 	Config
 
-	dropActions []iptables.Action
+	dropActions        []iptables.Action
+	inputAcceptActions []iptables.Action
 }
 
 func (r *ruleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -122,22 +124,25 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept    uint32
-	IptablesMarkNextTier  uint32
-	IptablesMarkEndpoints uint32
+	IptablesMarkAccept   uint32
+	IptablesMarkNextTier uint32
 
-	WhitelistDHCPToHost   bool
-	OpenStackMetadataIP   net.IP
-	OpenStackMetadataPort uint16
+	OpenStackMetadataIP          net.IP
+	OpenStackMetadataPort        uint16
+	OpenStackSpecialCasesEnabled bool
 
 	IPIPEnabled       bool
 	IPIPTunnelAddress net.IP
 
-	ActionOnDrop string
+	ActionOnDrop         string
+	EndpointToHostAction string
 }
 
 func NewRenderer(config Config) RuleRenderer {
-	dropActions := []iptables.Action{}
+	// Convert configured actions to rule slices.  First, what should we actually do when we'd
+	// normally drop a packet?  For sandbox mode, we support allowing the packet instead, or
+	// logging it.
+	var dropActions []iptables.Action
 	if strings.HasPrefix(config.ActionOnDrop, "LOG-") {
 		log.Warn("Action on drop includes LOG.  All dropped packets will be logged.")
 		dropActions = append(dropActions, iptables.LogAction{Prefix: "calico-drop"})
@@ -148,8 +153,24 @@ func NewRenderer(config Config) RuleRenderer {
 	} else {
 		dropActions = append(dropActions, iptables.DropAction{})
 	}
+
+	// Second, what should we do with packets that come from workloads to the host itself.
+	var inputAcceptActions []iptables.Action
+	switch config.EndpointToHostAction {
+	case "DROP":
+		log.Info("Workload to host packts will be dropped.")
+		inputAcceptActions = dropActions
+	case "ACCEPT":
+		log.Info("Workload to host packts will be accepted.")
+		inputAcceptActions = []iptables.Action{iptables.AcceptAction{}}
+	default:
+		log.Info("Workload to host packts will be returned to INPUT chain.")
+		inputAcceptActions = []iptables.Action{iptables.ReturnAction{}}
+	}
+
 	return &ruleRenderer{
-		Config:      config,
-		dropActions: dropActions,
+		Config:             config,
+		dropActions:        dropActions,
+		inputAcceptActions: inputAcceptActions,
 	}
 }

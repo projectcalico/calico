@@ -175,6 +175,33 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	return
 }
 
+func (c *Config) InterfacePrefixes() []string {
+	return strings.Split(c.InterfacePrefix, ",")
+}
+
+func (config *Config) OpenstackActive() bool {
+	if strings.Contains(strings.ToLower(config.ClusterType), "openstack") {
+		log.Debug("Cluster type contains OpenStack")
+		return true
+	}
+	if config.MetadataAddr != "127.0.0.1" {
+		log.Debug("OpenStack metadata IP set to non-default, assuming OpenStack active")
+		return true
+	}
+	if config.MetadataPort != 8775 {
+		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
+		return true
+	}
+	for _, prefix := range config.InterfacePrefixes() {
+		if prefix == "tap" {
+			log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
+			return true
+		}
+	}
+	log.Debug("No evidence this is an OpenStack deployment; diabling OpenStack special-cases")
+	return false
+}
+
 func (config *Config) resolve() (changed bool, err error) {
 	newRawValues := make(map[string]string)
 	nameToSource := make(map[string]Source)

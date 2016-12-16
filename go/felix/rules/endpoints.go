@@ -46,11 +46,11 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 	})
 
 	fromEndpointDispatchChain := Chain{
-		Name:  DispatchFromWorkloadEndpoint,
+		Name:  ChainFromWorkloadDispatch,
 		Rules: fromEndpointRules,
 	}
 	toEndpointDispatchChain := Chain{
-		Name:  DispatchToWorkloadEndpoint,
+		Name:  ChainToWorkloadDispatch,
 		Rules: toEndpointRules,
 	}
 

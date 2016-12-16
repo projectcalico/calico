@@ -59,12 +59,12 @@ func newMasqManager(
 	// in sync, by which point we'll have added all our CIDRs into the sets.
 	ipsetsMgr.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.NATOutgoingAllIPsSetID,
+		SetID:   rules.IPSetIDNATOutgoingAllPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 	ipsetsMgr.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.NATOutgoingMasqIPsSetID,
+		SetID:   rules.IPSetIDNATOutgoingMasqPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 
@@ -103,10 +103,10 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
-		d.ipsets.RemoveMembers(rules.NATOutgoingAllIPsSetID, []string{oldPool.Cidr})
+		d.ipsets.RemoveMembers(rules.IPSetIDNATOutgoingAllPools, []string{oldPool.Cidr})
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			d.ipsets.RemoveMembers(rules.NATOutgoingMasqIPsSetID, []string{oldPool.Cidr})
+			d.ipsets.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
 		}
 		delete(d.activePools, poolID)
 		d.masqPools.Discard(poolID)
@@ -122,10 +122,10 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 
 		// Update the IP sets.
 		logCxt.Debug("Adding IPAM pool to IP sets.")
-		d.ipsets.AddMembers(rules.NATOutgoingAllIPsSetID, []string{newPool.Cidr})
+		d.ipsets.AddMembers(rules.IPSetIDNATOutgoingAllPools, []string{newPool.Cidr})
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			d.ipsets.AddMembers(rules.NATOutgoingMasqIPsSetID, []string{newPool.Cidr})
+			d.ipsets.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
 			d.masqPools.Add(poolID)
 		}
 		d.activePools[poolID] = newPool
