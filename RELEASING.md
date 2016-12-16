@@ -54,6 +54,15 @@ So, to make a Felix release:
   expects a version number of the form "2.0.0", with optional suffixes
   such as "-beta1-rc3".
 
+# Felix packages for Calico with OpenStack
+
+Apart from OpenStack, the platforms that Calico targets are container-based, so
+the container image artifacts already generated above are appropriate for
+installing Felix on those platforms.  OpenStack installations, however, are
+commonly based on packages, so for Calico with OpenStack we provide packages
+for the OS platforms that are popular for OpenStack installs: Debian packages
+for Ubuntu Trusty and Xenial, and RPM packages for CentOS 7 or RHEL 7.
+
 To build Debian and RPM packages for a release:
 
 - Following the above, run `make deb rpm`.  You should see debian/changelog and
