@@ -34,4 +34,7 @@
 //			...
 //		...
 //	}
+//
+// The best explanation of the wiring of the calculation graph nodes is in the
+// code comments inside NewCalculationGraph.
 package calc
