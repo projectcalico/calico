@@ -1,3 +1,11 @@
+felix (2.0.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.0.0 (from Git commit de9ffc2).
+    - Rev libcalico-go to 1.0.0-rc5.
+    - Update to use libcalico-go 1.0.0
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 16 Dec 2016 12:44:02 +0000
+
 felix (2.0.0~rc4~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.0.0-rc4 (from Git commit 706bb9c).
