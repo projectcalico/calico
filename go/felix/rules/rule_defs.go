@@ -29,6 +29,7 @@ const (
 
 	ChainFilterInput   = ChainNamePrefix + "-INPUT"
 	ChainFilterForward = ChainNamePrefix + "-FORWARD"
+	ChainFilterOutput  = ChainNamePrefix + "-OUTPUT"
 
 	ChainNATPrerouting  = ChainNamePrefix + "-PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "-POSTROUTING"
@@ -43,7 +44,6 @@ const (
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
 
 	ChainWorkloadToHost       = ChainNamePrefix + "-wl-to-host"
-	ChainHostToWorkload       = ChainNamePrefix + "-host-to-wl"
 	ChainFromWorkloadDispatch = ChainNamePrefix + "-from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "-to-wl-dispatch"
 

@@ -38,6 +38,7 @@ func (r *ruleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
 		r.filterWorkloadToHostChain(ipVersion),
 	}
 }
+
 func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
@@ -248,8 +249,44 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 }
 
 func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
-	// TODO(smc) filter output chain
-	return []*Chain{}
+	rules := []Rule{}
+
+	// conntrack rules.
+	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
+		},
+	)
+
+	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
+	// That decision is based on pragmatism; it's generally very useful to be able to contact
+	// any local workload from the host and policing the traffic doesn't really protect
+	// against host compromise.  If a host is compromised, then the rules could be removed!
+	for _, prefix := range r.WorkloadIfacePrefixes {
+		// If the packet is going to a worklaod endpoint, RETURN.
+		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
+		ifaceMatch := prefix + "+"
+		rules = append(rules,
+			Rule{
+				Match:  Match().OutInterface(ifaceMatch),
+				Action: ReturnAction{},
+			},
+		)
+	}
+
+	// If we reach here, the packet is not going to a workload so it must be going to a
+	// host endpoint.
+
+	// TODO(smc) jump to host endpoint chains.
+
+	return []*Chain{
+		{
+			Name:  ChainFilterOutput,
+			Rules: rules,
+		},
+	}
 }
 
 func (r *ruleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
