@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -488,7 +488,18 @@ class FelixIptablesGenerator(FelixPlugin):
                 (CHAIN_FORWARD, iface_match),
             ])
 
-        return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
+        # If we get to this point in the chain, the packet is not from or to
+        # a workload endpoint.  Hence, it must be being forwarded through
+        # this host, potentially via host endpoints that we want to police.
+        # Send the traffic to the host endpoint chains for processing.
+        # If there are no host endpoints configured, these chains are no-ops.
+        forward_chain.append("--append {chain} --jump {jump}".format(
+                chain=CHAIN_FORWARD, jump=CHAIN_FROM_IFACE))
+        forward_chain.append("--append {chain} --jump {jump}".format(
+                chain=CHAIN_FORWARD, jump=CHAIN_TO_IFACE))
+
+        return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT,
+                                   CHAIN_FROM_IFACE, CHAIN_TO_IFACE])
 
     def raw_prerouting_chain(self, ip_version):
         """
