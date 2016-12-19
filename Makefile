@@ -79,6 +79,10 @@ help:
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 
+# Disable make's implicit rules, which are not useful for golang, and slow down the build
+# considerably.
+.SUFFIXES:
+
 all: pyinstaller deb rpm calico/felix
 test: ut
 
@@ -126,6 +130,7 @@ LIBCALICOGO_PATH?=none
 # Build a docker image used for building our go code into a binary.
 .PHONY: calico-build/golang
 calico-build/golang:
+	@echo "Checking freshness of calico-build/golang container image."
 	cd docker-build-images && \
 	  docker build \
 	  --build-arg=UID=$(MY_UID) \
@@ -270,12 +275,15 @@ bin/calico-felix: $(GO_FILES) \
 	# freshness checking for us.
 	$(MAKE) calico-build/golang
 	mkdir -p bin
+	mkdir -p .go-pkg-cache
+	@echo Building felix...
 	$(DOCKER_RUN_RM) \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
 	    calico-build/golang \
-	    go build -o $@ $(LDFLAGS) "./go/felix/felix.go"
-	# Check that the executable is correctly statically linked.
-	ldd bin/calico-felix | grep -q "not a dynamic executable"
+	    sh -c 'go build -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/go/felix" && \
+               ( ldd bin/calico-felix | grep -q "not a dynamic executable" || \
+	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
 # Build the pyinstaller bundle, which is an output artefact in its own right
 # as well as being the input to our Deb and RPM builds.
@@ -338,9 +346,11 @@ python-ut: python/calico/felix/felixbackend_pb2.py
 go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(MAKE) calico-build/golang
+	mkdir -p .go-pkg-cache
 	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
 	    -w /go/src/github.com/projectcalico/felix/go \
 	    calico-build/golang \
 	    ./run-coverage
@@ -389,6 +399,7 @@ clean:
 	       go/docs/calc.pdf \
 	       go/.glide \
 	       go/vendor \
+	       .go-pkg-cache \
 	       python/.tox \
 	       htmlcov \
 	       python/htmlcov
