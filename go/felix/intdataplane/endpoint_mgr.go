@@ -62,6 +62,7 @@ type endpointManager struct {
 	// Pending updates, cleared in CompleteDeferredWork.
 	pendingEndpointUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	pendingIfaceUpdates    map[string]ifacemonitor.State
+	pendingHostEpUpdates   map[proto.HostEndpointID]*proto.HostEndpoint
 }
 
 func newEndpointManager(
@@ -90,6 +91,7 @@ func newEndpointManager(
 
 		pendingEndpointUpdates: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates:    map[string]ifacemonitor.State{},
+		pendingHostEpUpdates:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 	}
 }
 

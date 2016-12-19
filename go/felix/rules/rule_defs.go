@@ -158,13 +158,13 @@ func NewRenderer(config Config) RuleRenderer {
 	var inputAcceptActions []iptables.Action
 	switch config.EndpointToHostAction {
 	case "DROP":
-		log.Info("Workload to host packts will be dropped.")
+		log.Info("Workload to host packets will be dropped.")
 		inputAcceptActions = dropActions
 	case "ACCEPT":
-		log.Info("Workload to host packts will be accepted.")
+		log.Info("Workload to host packets will be accepted.")
 		inputAcceptActions = []iptables.Action{iptables.AcceptAction{}}
 	default:
-		log.Info("Workload to host packts will be returned to INPUT chain.")
+		log.Info("Workload to host packets will be returned to INPUT chain.")
 		inputAcceptActions = []iptables.Action{iptables.ReturnAction{}}
 	}
 
