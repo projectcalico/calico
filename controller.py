@@ -397,7 +397,7 @@ class Controller(object):
 
         # Get the list of existing API objects from the response, as
         # well as the latest resourceVersion.
-        resources = resp.json()["items"]
+        resources = [] if not resp.json()["items"] else resp.json()["items"]
         metadata = resp.json().get("metadata", {})
         resource_version = metadata.get("resourceVersion")
         _log.debug("%s metadata: %s", resource_type, metadata)
