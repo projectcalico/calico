@@ -711,6 +711,10 @@ TAP_FORWARD_CHAIN = [
     # Then accept the packet if both pass.
     '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
     '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+
+    # For non-workload packets, sent to the host endpoint chains.
+    "--append felix-FORWARD --jump felix-FROM-HOST-IF",
+    "--append felix-FORWARD --jump felix-TO-HOST-IF",
 ]
 
 TAP_CALI_FORWARD_CHAIN = [
@@ -737,6 +741,10 @@ TAP_CALI_FORWARD_CHAIN = [
     '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
     '--append felix-FORWARD --jump ACCEPT --in-interface cali+',
     '--append felix-FORWARD --jump ACCEPT --out-interface cali+',
+
+    # For non-workload packets, sent to the host endpoint chains.
+    "--append felix-FORWARD --jump felix-FROM-HOST-IF",
+    "--append felix-FORWARD --jump felix-TO-HOST-IF",
 ]
 
 
@@ -790,7 +798,9 @@ class TestGlobalChains(BaseTestCase):
         self.maxDiff = None
         self.assertEqual(chain, TAP_FORWARD_CHAIN)
         self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
-                                    "felix-TO-ENDPOINT"]))
+                                    "felix-TO-ENDPOINT",
+                                    "felix-TO-HOST-IF",
+                                    "felix-FROM-HOST-IF"]))
 
     def test_forward_chain_multiple_prefixes(self):
         host_dict = {
@@ -802,7 +812,9 @@ class TestGlobalChains(BaseTestCase):
         self.maxDiff = None
         self.assertEqual(chain, TAP_CALI_FORWARD_CHAIN)
         self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
-                                    "felix-TO-ENDPOINT"]))
+                                    "felix-TO-ENDPOINT",
+                                    "felix-TO-HOST-IF",
+                                    "felix-FROM-HOST-IF"]))
 
 
 class TestRules(BaseTestCase):

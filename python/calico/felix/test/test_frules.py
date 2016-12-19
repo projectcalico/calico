@@ -35,7 +35,8 @@ _log = logging.getLogger(__name__)
 EXPECTED_TOP_LEVEL_DEPS = {
     'felix-INPUT': set(['felix-FROM-ENDPOINT', 'felix-FROM-HOST-IF']),
     'felix-OUTPUT': set(['felix-TO-HOST-IF']),
-    'felix-FORWARD': set(['felix-FROM-ENDPOINT', 'felix-TO-ENDPOINT']),
+    'felix-FORWARD': set(['felix-FROM-ENDPOINT', 'felix-TO-ENDPOINT',
+                          'felix-TO-HOST-IF', 'felix-FROM-HOST-IF']),
     'felix-FAILSAFE-IN': set(), 'felix-FAILSAFE-OUT': set()
 }
 
@@ -146,7 +147,9 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -351,7 +354,9 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -473,7 +478,9 @@ class TestRules(BaseTestCase):
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
