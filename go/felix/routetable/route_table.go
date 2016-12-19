@@ -90,12 +90,16 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 }
 
 func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.State) {
+	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
+	if !r.ifacePrefixRegexp.MatchString(ifaceName) {
+		logCxt.Debug("Ignoring interface state change, not a Calico interface.")
+	}
 	if state == ifacemonitor.StateUp {
-		r.logCxt.WithField("ifaceName", ifaceName).Debug("Interface up, marking for route sync")
+		logCxt.Debug("Interface up, marking for route sync")
 		r.activeUpIfaces.Add(ifaceName)
 		r.dirtyIfaces.Add(ifaceName)
 	} else {
-		r.logCxt.WithField("ifaceName", ifaceName).Debug("Interface down, blacklisting from route sync")
+		logCxt.Debug("Interface down, blacklisting from route sync")
 		r.activeUpIfaces.Discard(ifaceName)
 		r.dirtyIfaces.Discard(ifaceName) // Can't update routes if it's down.
 	}
