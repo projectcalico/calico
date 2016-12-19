@@ -93,6 +93,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	if !r.ifacePrefixRegexp.MatchString(ifaceName) {
 		logCxt.Debug("Ignoring interface state change, not a Calico interface.")
+		return
 	}
 	if state == ifacemonitor.StateUp {
 		logCxt.Debug("Interface up, marking for route sync")
