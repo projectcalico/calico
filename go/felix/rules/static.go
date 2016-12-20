@@ -75,7 +75,10 @@ func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	// TODO Apply host endpoint policy...
+	// Apply host endpoint policy.
+	inputRules = append(inputRules, Rule{
+		Action: GotoAction{Target: ChainDispatchFromHostEndpoint},
+	})
 
 	return &Chain{
 		Name:  ChainFilterInput,
@@ -279,7 +282,10 @@ func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
 	// If we reach here, the packet is not going to a workload so it must be going to a
 	// host endpoint.
 
-	// TODO(smc) jump to host endpoint chains.
+	// Apply host endpoint policy.
+	rules = append(rules, Rule{
+		Action: GotoAction{Target: ChainDispatchToHostEndpoint},
+	})
 
 	return []*Chain{
 		{
