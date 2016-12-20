@@ -18,25 +18,43 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/set"
 	"io"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 // This file contains shared test infrastructure for testing the ipsets package.
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
-		IPSetMembers: make(map[string]set.Set),
+		IPSetMembers:  make(map[string]set.Set),
+		IPSetMetadata: make(map[string]setMetadata),
 	}
 }
 
 type mockDataplane struct {
-	IPSetMembers map[string]set.Set
-	Cmds         []CmdIface
+	IPSetMembers  map[string]set.Set
+	IPSetMetadata map[string]setMetadata
+	Cmds          []CmdIface
+}
+
+func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
+	// Input has a slice for each set, convert to a set for comparison.
+	membersToCompare := map[string]set.Set{}
+	for name, members := range expected {
+		memberSet := set.New()
+		for _, member := range members {
+			memberSet.Add(member)
+		}
+		membersToCompare[name] = memberSet
+	}
+	Expect(d.IPSetMembers).To(Equal(membersToCompare))
 }
 
 func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
@@ -48,6 +66,10 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 
 	switch arg[0] {
 	case "restore":
+		Expect(len(arg)).To(Equal(1))
+		cmd = &restoreCmd{
+			Dataplane: d,
+		}
 	case "destroy":
 		Expect(len(arg)).To(Equal(2))
 		name := arg[1]
@@ -69,6 +91,139 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	d.Cmds = append(d.Cmds, cmd)
 
 	return cmd
+}
+
+type restoreCmd struct {
+	Dataplane *mockDataplane
+	SetName   string
+	Stdin     io.Reader
+}
+
+func (d *restoreCmd) SetStdin(r io.Reader) {
+	d.Stdin = r
+}
+
+func (d *restoreCmd) Output() ([]byte, error) {
+	Fail("Not implemented")
+	return nil, errors.New("Not implemented")
+}
+
+func (d *restoreCmd) CombinedOutput() ([]byte, error) {
+	// Get the input.
+	var buf bytes.Buffer
+	_, err := buf.ReadFrom(d.Stdin)
+	Expect(err).NotTo(HaveOccurred())
+	input := buf.String()
+
+	// Process it line by line.
+	lines := strings.Split(input, "\n")
+	commitSeen := false
+	for i, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, " ")
+		subCmd := parts[0]
+		log.WithFields(log.Fields{
+			"lineNum": i + 1,
+			"line":    line,
+			"subCmd":  subCmd,
+		}).Info("Mock dataplane, analysing ipset restore line")
+		if subCmd != "COMMIT" {
+			Expect(commitSeen).To(BeFalse())
+		}
+		switch subCmd {
+		case "create":
+			Expect(len(parts)).To(Equal(7))
+
+			name := parts[1]
+			Expect(len(name)).To(BeNumerically("<=", MaxIPSetNameLength))
+			Expect(name).To(HavePrefix("cali"))
+
+			ipSetType := IPSetType(parts[2])
+			Expect(ipSetType.IsValid()).To(BeTrue())
+
+			Expect(parts[3]).To(Equal("family"))
+			ipFamily := IPFamily(parts[4])
+			Expect(ipFamily.IsValid()).To(BeTrue())
+
+			Expect(parts[5]).To(Equal("maxelem"))
+			maxElem, err := strconv.Atoi(parts[6])
+			Expect(err).NotTo(HaveOccurred())
+
+			setMetadata := setMetadata{
+				Name:    name,
+				Family:  ipFamily,
+				MaxSize: maxElem,
+				Type:    ipSetType,
+			}
+			log.WithField("setMetadata", setMetadata).Info("Set created")
+
+			if _, ok := d.Dataplane.IPSetMembers[name]; ok {
+				return []byte("set exists"), &exec.ExitError{}
+			}
+
+			d.Dataplane.IPSetMembers[name] = set.New()
+			d.Dataplane.IPSetMetadata[name] = setMetadata
+		case "destroy":
+			Expect(len(parts)).To(Equal(2))
+			name := parts[1]
+			if _, ok := d.Dataplane.IPSetMembers[name]; !ok {
+				return []byte("set doesn't exist"), &exec.ExitError{}
+			}
+			delete(d.Dataplane.IPSetMembers, name)
+			log.WithField("setName", name).Info("Set destroyed")
+		case "add":
+			Expect(len(parts)).To(Equal(3))
+			name := parts[1]
+			newMember := parts[2]
+			logCxt := log.WithField("setName", name)
+			if currentMembers, ok := d.Dataplane.IPSetMembers[name]; !ok {
+				return []byte("set doesn't exist"), &exec.ExitError{}
+			} else {
+				Expect(currentMembers.Contains(newMember)).To(BeFalse())
+				currentMembers.Add(newMember)
+				logCxt.WithField("member", newMember).Info("Member added")
+			}
+		case "swap":
+			Expect(len(parts)).To(Equal(3))
+			name1 := parts[1]
+			name2 := parts[2]
+
+			log.WithFields(log.Fields{
+				"name1": name1,
+				"name2": name2,
+			}).Info("Swapping IP sets")
+
+			if set1, ok := d.Dataplane.IPSetMembers[name1]; !ok {
+				log.WithField("name", name1).Warn("IP set doesn't exist")
+				return []byte("set doesn't exist"), &exec.ExitError{}
+			} else if set2, ok := d.Dataplane.IPSetMembers[name2]; !ok {
+				log.WithField("name", name2).Warn("IP set doesn't exist")
+				return []byte("set doesn't exist"), &exec.ExitError{}
+			} else {
+				d.Dataplane.IPSetMembers[name1] = set2
+				d.Dataplane.IPSetMembers[name2] = set1
+
+				meta1 := d.Dataplane.IPSetMetadata[name1]
+				meta2 := d.Dataplane.IPSetMetadata[name2]
+				d.Dataplane.IPSetMetadata[name1] = meta2
+				d.Dataplane.IPSetMetadata[name2] = meta1
+			}
+
+		case "COMMIT":
+			commitSeen = true
+		}
+	}
+	Expect(commitSeen).To(BeTrue())
+	return nil, nil
+}
+
+type setMetadata struct {
+	Name    string
+	Family  IPFamily
+	Type    IPSetType
+	MaxSize int
 }
 
 type destroyCmd struct {

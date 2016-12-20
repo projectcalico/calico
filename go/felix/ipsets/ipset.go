@@ -33,6 +33,14 @@ const (
 	IPSetTypeHashNet IPSetType = "hash:net"
 )
 
+func (t IPSetType) IsValid() bool {
+	switch t {
+	case IPSetTypeHashIP, IPSetTypeHashNet:
+		return true
+	}
+	return false
+}
+
 // IPSetType constants for the names that the ipset command uses for the IP versions.
 type IPFamily string
 
@@ -40,6 +48,14 @@ const (
 	IPFamilyV4 = IPFamily("inet")
 	IPFamilyV6 = IPFamily("inet6")
 )
+
+func (f IPFamily) IsValid() bool {
+	switch f {
+	case IPFamilyV4, IPFamilyV6:
+		return true
+	}
+	return false
+}
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name, type and size.
 type IPSetMetadata struct {
@@ -239,15 +255,6 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 	// ipset restore input ends with "COMMIT" (but only the swap instruction is guaranteed to be
 	// atomic).
 	buf.WriteString("COMMIT\n")
-}
-
-func (s *IPSet) DeleteTempIPSet() {
-	cmd := s.newCmd("ipset", "destroy", string(s.TempIPSetName()))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("output", output).Info(
-			"Failed to delete temporary IP set, assuming it is not present")
-	}
 }
 
 func (s *IPSet) TempIPSetName() string {
