@@ -20,7 +20,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/set"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -43,25 +42,38 @@ type Registry struct {
 
 	// existenceCache is a shared cache of the names (not IDs) of IP sets that currently exist.
 	existenceCache existenceCache
+
+	// Factory for command objects; shimmed for UT mocking.
+	newCmd cmdFactory
 }
 
 func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
-	return NewRegistryWithOverrides(ipVersionConfig, NewExistenceCache())
+	return newRegistryWithOverrides(
+		ipVersionConfig,
+		NewExistenceCache(newRealCmd),
+		newRealCmd,
+	)
 }
 
-func NewRegistryWithOverrides(ipVersionConfig *IPVersionConfig, existenceCache existenceCache) *Registry {
+// newRegistryWithOverrides is an internal test constructor.
+func newRegistryWithOverrides(
+	ipVersionConfig *IPVersionConfig,
+	existenceCache existenceCache,
+	cmdFactory cmdFactory,
+) *Registry {
 	return &Registry{
 		IPVersionConfig:       ipVersionConfig,
 		ipSetIDToActiveIPSet:  map[string]*IPSet{},
 		dirtyIPSetIDs:         set.New(),
 		pendingIPSetDeletions: set.New(),
 		existenceCache:        existenceCache,
+		newCmd:                cmdFactory,
 	}
 }
 
 func (s *Registry) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
 	members = s.filterMembersByIPVersion(members)
-	ipSet := NewIPSet(s.IPVersionConfig, setMetadata, s.existenceCache)
+	ipSet := NewIPSet(s.IPVersionConfig, setMetadata, s.existenceCache, s.newCmd)
 	ipSet.ReplaceMembers(members)
 	s.ipSetIDToActiveIPSet[ipSet.SetID] = ipSet
 	s.dirtyIPSetIDs.Add(ipSet.SetID)
@@ -135,7 +147,7 @@ func (s *Registry) ApplyDeletions() {
 
 func (s *Registry) deleteIPSet(setName string) error {
 	log.WithField("setName", setName).Info("Deleting IP set.")
-	cmd := exec.Command("ipset", "destroy", string(setName))
+	cmd := s.newCmd("ipset", "destroy", string(setName))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"setName": setName,
@@ -314,12 +326,15 @@ type IPSet struct {
 	rewritePending bool
 
 	existenceCache existenceCache
+
+	newCmd cmdFactory
 }
 
 func NewIPSet(
 	versionConfig *IPVersionConfig,
 	metadata IPSetMetadata,
 	existenceCache existenceCache,
+	cmdFactory cmdFactory,
 ) *IPSet {
 	return &IPSet{
 		IPVersionConfig:  versionConfig,
@@ -329,6 +344,7 @@ func NewIPSet(
 		pendingDeletions: set.New(),
 		rewritePending:   true,
 		existenceCache:   existenceCache,
+		newCmd:           cmdFactory,
 	}
 }
 
@@ -421,8 +437,8 @@ func (s *IPSet) rewriteIPSet() error {
 	}
 
 	// Execute the commands via the bulk "restore" sub-command.
-	cmd := exec.Command("ipset", "restore")
-	cmd.Stdin = &buf
+	cmd := s.newCmd("ipset", "restore")
+	cmd.SetStdin(&buf)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.WithError(err).WithField("output", string(output)).Warn("Failed to execute ipset restore")
@@ -482,7 +498,7 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 }
 
 func (s *IPSet) DeleteTempIPSet() {
-	cmd := exec.Command("ipset", "destroy", string(s.TempIPSetName()))
+	cmd := s.newCmd("ipset", "destroy", string(s.TempIPSetName()))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.WithError(err).WithField("output", output).Info(
@@ -518,11 +534,13 @@ type existenceCache interface {
 
 type ExistenceCache struct {
 	existingIPSetNames set.Set
+	newCmd             cmdFactory
 }
 
-func NewExistenceCache() *ExistenceCache {
+func NewExistenceCache(cmdFactory cmdFactory) *ExistenceCache {
 	cache := &ExistenceCache{
 		existingIPSetNames: set.New(),
+		newCmd:             cmdFactory,
 	}
 	cache.Reload()
 	return cache
@@ -531,7 +549,7 @@ func NewExistenceCache() *ExistenceCache {
 // Reload reloads the cache from the dataplane.
 func (c *ExistenceCache) Reload() error {
 	log.Info("Reloading IP set existence cache.")
-	cmd := exec.Command("ipset", "list", "-n")
+	cmd := c.newCmd("ipset", "list", "-n")
 	output, err := cmd.Output()
 	if err != nil {
 		return err
