@@ -95,12 +95,12 @@ func newEndpointManager(
 
 		activeIfacesNeedingConfig: set.New(),
 
-		pendingEndpointUpdates:   nil,
-		pendingIfaceUpdates:      nil,
-		ifaceAddrs:               nil,
-		rawHostEndpoints:         nil,
-		dirtyHostEndpoints:       false,
-		activeHostIdToChains:     nil,
+		pendingEndpointUpdates:   make(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint),
+		pendingIfaceUpdates:      make(map[string]ifacemonitor.State),
+		ifaceAddrs:               make(map[string][]string),
+		rawHostEndpoints:         make(map[proto.HostEndpointID]*proto.HostEndpoint),
+		dirtyHostEndpoints:       true,
+		activeHostIdToChains:     make(map[*proto.HostEndpointID][]*iptables.Chain),
 		activeHostDispatchChains: nil,
 	}
 }
@@ -308,7 +308,6 @@ func (m *endpointManager) resolveHostEndpoints() error {
 		if bestHostEpId != nil {
 			resolvedHostEpIds[ifaceName] = bestHostEpId
 		}
-		return nil
 	}
 
 	// Set up programming for the host endpoints that are now to be used.

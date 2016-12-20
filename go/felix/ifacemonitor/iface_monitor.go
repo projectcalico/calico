@@ -43,8 +43,8 @@ type InterfaceMonitor struct {
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
 		upIfaces:   set.New(),
-		ifaceName:  nil,
-		ifaceAddrs: nil,
+		ifaceName:  make(map[int]string),
+		ifaceAddrs: make(map[int][]string),
 	}
 }
 
