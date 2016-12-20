@@ -257,6 +257,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
 			Action: iptables.JumpAction{rules.ChainFilterForward},
 		}})
+		t.SetRuleInsertions("INPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.ChainFilterInput},
+		}})
+		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.ChainFilterOutput},
+		}})
 	}
 
 	if d.config.RulesConfig.IPIPEnabled {
