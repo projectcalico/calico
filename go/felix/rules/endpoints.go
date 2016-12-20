@@ -195,12 +195,12 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
 }
 
-func (r *ruleRenderer) HostDispatchChains(endpoints map[proto.HostEndpointID]*proto.HostEndpoint) []*Chain {
+func (r *ruleRenderer) HostDispatchChains(endpoints map[string]*proto.HostEndpointID) []*Chain {
 
 	// Extract endpoint names.
 	names := make([]string, 0, len(endpoints))
-	for _, endpoint := range endpoints {
-		names = append(names, endpoint.Name)
+	for ifaceName, _ := range endpoints {
+		names = append(names, ifaceName)
 	}
 
 	return dispatchChains(

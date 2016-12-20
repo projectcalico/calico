@@ -18,8 +18,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/vishvananda/netlink"
-	k8snet "k8s.io/client-go/pkg/util/net"
-	"net"
 	"syscall"
 	"time"
 )
@@ -32,21 +30,21 @@ const (
 )
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State)
-type AddrStateCallback func(ifaceName string, addr *net.IPNet, ifaceState State)
+type AddrStateCallback func(ifaceName string, addrs []string)
 
 type InterfaceMonitor struct {
 	upIfaces     set.Set
 	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
-	ifaceAddrs   map[int][]net.IPNet
+	ifaceAddrs   map[int][]string
 }
 
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
 		upIfaces:   set.New(),
-		ifaceName:  make(map[int]string),
-		ifaceAddrs: make(map[int][]net.IPNet),
+		ifaceName:  nil,
+		ifaceAddrs: nil,
 	}
 }
 
@@ -110,7 +108,7 @@ func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 }
 
 func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
-	addr := update.LinkAddress
+	addr := update.LinkAddress.IP.String()
 	ifIndex := update.LinkIndex
 	exists := update.NewAddr
 	log.WithFields(log.Fields{
@@ -119,7 +117,7 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		"exists":  exists,
 	}).Info("Netlink address update.")
 
-	ifaceName, ifaceKnown := m.ifaceName[ifIndex]
+	_, ifaceKnown := m.ifaceName[ifIndex]
 	if !ifaceKnown {
 		log.WithField("ifIndex", ifIndex).Warn("No known iface with this index.")
 		return
@@ -128,38 +126,42 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 	if exists {
 		if !m.addrKnownForIface(addr, ifIndex) {
 			m.addAddrForIface(addr, ifIndex)
-			m.AddrCallback(ifaceName, &addr, StateUp)
+			m.notifyIfaceAddrs(ifIndex)
 		}
 	} else {
 		if m.addrKnownForIface(addr, ifIndex) {
 			m.delAddrForIface(addr, ifIndex)
-			m.AddrCallback(ifaceName, &addr, StateDown)
+			m.notifyIfaceAddrs(ifIndex)
 		}
 	}
 }
 
-func (m *InterfaceMonitor) addrKnownForIface(addr net.IPNet, ifIndex int) bool {
+func (m *InterfaceMonitor) addrKnownForIface(addr string, ifIndex int) bool {
 	for _, known := range m.ifaceAddrs[ifIndex] {
-		if k8snet.IPNetEqual(&addr, &known) {
+		if addr == known {
 			return true
 		}
 	}
 	return false
 }
 
-func (m *InterfaceMonitor) addAddrForIface(addr net.IPNet, ifIndex int) {
+func (m *InterfaceMonitor) addAddrForIface(addr string, ifIndex int) {
 	m.ifaceAddrs[ifIndex] = append(m.ifaceAddrs[ifIndex], addr)
 }
 
-func (m *InterfaceMonitor) delAddrForIface(addr net.IPNet, ifIndex int) {
+func (m *InterfaceMonitor) delAddrForIface(addr string, ifIndex int) {
 	for i, known := range m.ifaceAddrs[ifIndex] {
-		if k8snet.IPNetEqual(&addr, &known) {
+		if addr == known {
 			last := len(m.ifaceAddrs[ifIndex]) - 1
 			m.ifaceAddrs[ifIndex][i] = m.ifaceAddrs[ifIndex][last]
 			m.ifaceAddrs[ifIndex] = m.ifaceAddrs[ifIndex][:last]
 			break
 		}
 	}
+}
+
+func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
+	m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex])
 }
 
 func (m *InterfaceMonitor) storeUpdateAndNotifyOnChange(ifaceExists bool, attrs *netlink.LinkAttrs) {
@@ -208,9 +210,7 @@ func (m *InterfaceMonitor) resync() error {
 		m.storeUpdateAndNotifyOnChange(true, attrs)
 
 		ifIndex := attrs.Index
-		old_addrs := make([]net.IPNet, len(m.ifaceAddrs[ifIndex]))
-		copy(old_addrs, m.ifaceAddrs[ifIndex])
-		new_addrs := []net.IPNet{}
+		new_addrs := []string{}
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 			addrs, err := netlink.AddrList(link, family)
 			if err != nil {
@@ -218,18 +218,11 @@ func (m *InterfaceMonitor) resync() error {
 				return err
 			}
 			for _, addr := range addrs {
-				if !m.addrKnownForIface(*addr.IPNet, ifIndex) {
-					m.AddrCallback(attrs.Name, addr.IPNet, StateUp)
-				}
-				new_addrs = append(new_addrs, *addr.IPNet)
+				new_addrs = append(new_addrs, addr.IPNet.IP.String())
 			}
 		}
 		m.ifaceAddrs[ifIndex] = new_addrs
-		for _, addr := range old_addrs {
-			if !m.addrKnownForIface(addr, ifIndex) {
-				m.AddrCallback(attrs.Name, &addr, StateDown)
-			}
-		}
+		m.notifyIfaceAddrs(ifIndex)
 	}
 	m.upIfaces.Iter(func(name interface{}) error {
 		if currentIfaces.Contains(name) {

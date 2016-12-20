@@ -43,8 +43,8 @@ import (
 // to CompleteDeferredWork().  This is also the basis of our failure handling; updates
 // that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
-	ipVersion       int
-	ourIfacesRegexp *regexp.Regexp
+	ipVersion      int
+	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
 	filterTable  *iptables.Table
@@ -62,7 +62,13 @@ type endpointManager struct {
 	// Pending updates, cleared in CompleteDeferredWork.
 	pendingEndpointUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	pendingIfaceUpdates    map[string]ifacemonitor.State
-	pendingHostEpUpdates   map[proto.HostEndpointID]*proto.HostEndpoint
+
+	// Host endpoint processing.
+	ifaceAddrs               map[string][]string
+	rawHostEndpoints         map[proto.HostEndpointID]*proto.HostEndpoint
+	dirtyHostEndpoints       bool
+	activeHostIdToChains     map[*proto.HostEndpointID][]*iptables.Chain
+	activeHostDispatchChains []*iptables.Chain
 }
 
 func newEndpointManager(
@@ -72,26 +78,30 @@ func newEndpointManager(
 	ipVersion int,
 	ourInterfacePrefixes []string,
 ) *endpointManager {
-	ourIfacesPattern := "^(" + strings.Join(ourInterfacePrefixes, "|") + ").*"
-	ourIfacesRegexp := regexp.MustCompile(ourIfacesPattern)
+	wlIfacesPattern := "^(" + strings.Join(ourInterfacePrefixes, "|") + ").*"
+	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
 
 	return &endpointManager{
-		ipVersion:       ipVersion,
-		ourIfacesRegexp: ourIfacesRegexp,
+		ipVersion:      ipVersion,
+		wlIfacesRegexp: wlIfacesRegexp,
 
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 
-		activeEndpoints:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeEndpoints:  nil,
 		activeUpIfaces:   set.New(),
-		activeIdToChains: map[proto.WorkloadEndpointID][]*iptables.Chain{},
+		activeIdToChains: nil,
 
 		activeIfacesNeedingConfig: set.New(),
 
-		pendingEndpointUpdates: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingIfaceUpdates:    map[string]ifacemonitor.State{},
-		pendingHostEpUpdates:   map[proto.HostEndpointID]*proto.HostEndpoint{},
+		pendingEndpointUpdates:   nil,
+		pendingIfaceUpdates:      nil,
+		ifaceAddrs:               nil,
+		rawHostEndpoints:         nil,
+		dirtyHostEndpoints:       false,
+		activeHostIdToChains:     nil,
+		activeHostDispatchChains: nil,
 	}
 }
 
@@ -102,18 +112,28 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.WorkloadEndpointRemove:
 		m.pendingEndpointUpdates[*msg.Id] = nil
 	case *proto.HostEndpointUpdate:
-		// TODO(smc) Host endpoint updates
-		log.WithField("msg", msg).Warn("Message not implemented")
+		log.WithField("msg", msg).Debug("Host endpoint update")
+		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
+		m.dirtyHostEndpoints = true
 	case *proto.HostEndpointRemove:
-		// TODO(smc) Host endpoint updates
-		log.WithField("msg", msg).Warn("Message not implemented")
+		log.WithField("msg", msg).Debug("Host endpoint removed")
+		delete(m.rawHostEndpoints, *msg.Id)
+		m.dirtyHostEndpoints = true
 	case *ifaceUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
-		if !m.ourIfacesRegexp.MatchString(msg.Name) {
-			log.WithField("update", msg).Debug("Not our interface, ignoring.")
+		if !m.wlIfacesRegexp.MatchString(msg.Name) {
+			log.WithField("update", msg).Debug("Not workload interface, ignoring.")
 			return
 		}
 		m.pendingIfaceUpdates[msg.Name] = msg.State
+	case *ifaceAddrsUpdate:
+		log.WithField("update", msg).Debug("Interface addrs changed.")
+		if m.wlIfacesRegexp.MatchString(msg.Name) {
+			log.WithField("update", msg).Debug("Workload interface, ignoring.")
+			return
+		}
+		m.ifaceAddrs[msg.Name] = msg.Addrs
+		m.dirtyHostEndpoints = true
 	}
 }
 
@@ -203,6 +223,124 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		}
 		return set.RemoveItem
 	})
+
+	if m.dirtyHostEndpoints {
+		err := m.resolveHostEndpoints()
+		if err != nil {
+			log.WithError(err).Warn("Failed to resolve host endpoints")
+			return err
+		}
+		m.dirtyHostEndpoints = false
+	}
+
+	return nil
+}
+
+func (m *endpointManager) resolveHostEndpoints() error {
+
+	// Host endpoint resolution
+	// ------------------------
+	//
+	// There is a set of non-workload interfaces on the local host, each
+	// possibly with IP addresses, that might be controlled by HostEndpoint
+	// resources in the Calico data model.  The data model syntactically
+	// allows multiple HostEndpoint resources to match a given interface -
+	// for example, an interface 'eth1' might have address 10.240.0.34 and
+	// 172.19.2.98, and the data model might include:
+	//
+	// - HostEndpoint A with Name 'eth1'
+	//
+	// - HostEndpoint B with ExpectedIpv4Addrs including '10.240.0.34'
+	//
+	// - HostEndpoint C with ExpectedIpv4Addrs including '172.19.2.98'.
+	//
+	// but at one runtime, at any given time, we only allow one HostEndpoint
+	// to govern that interface.  That HostEndpoint becomes the active one,
+	// and the others remain inactive.  (But if, for example, the active
+	// HostEndpoint resource was deleted, then one of the inactive ones
+	// could take over.)  Given multiple matching HostEndpoint resources,
+	// the one that wins is the one with the alphabetically earliest
+	// HostEndpointId
+	//
+	// So the process here is not about 'resolving' a particular
+	// HostEndpoint on its own.  Rather it is looking at the set of local
+	// non-workload interfaces and seeing which of them are matched by
+	// the current set of HostEndpoints as a whole.
+	var resolvedHostEpIds map[string]*proto.HostEndpointID = nil
+	for ifaceName, ifaceAddrs := range m.ifaceAddrs {
+		var bestHostEpId *proto.HostEndpointID = nil
+	HostEpLoop:
+		for id, hostEp := range m.rawHostEndpoints {
+			logCxt := log.WithField("id", id)
+			if (bestHostEpId != nil) && (bestHostEpId.EndpointId < id.EndpointId) {
+				// We already have a HostEndpointId that is
+				// better than this one, so no point looking any
+				// further.
+				logCxt.Debug("No better than existing match")
+				continue
+			}
+			if hostEp.Name == ifaceName {
+				// The HostEndpoint has an explicit name that
+				// matches the interface.
+				logCxt.Debug("Match on explicit iface name")
+				bestHostEpId = &id
+				continue
+			} else if hostEp.Name != "" {
+				// The HostEndpoint has an explicit name that
+				// isn't this interface.  Continue, so as not to
+				// allow it to match on an IP address instead.
+				logCxt.Debug("Rejected on explicit iface name")
+				continue
+			}
+			for wanted := range append(hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs...) {
+				for actual := range ifaceAddrs {
+					if wanted == actual {
+						// The HostEndpoint expects an
+						// IP address that is on this
+						// interface.
+						logCxt.Debug("Match on address")
+						bestHostEpId = &id
+						continue HostEpLoop
+					}
+				}
+			}
+		}
+		if bestHostEpId != nil {
+			resolvedHostEpIds[ifaceName] = bestHostEpId
+		}
+		return nil
+	}
+
+	// Set up programming for the host endpoints that are now to be used.
+	var newHostEpChains map[*proto.HostEndpointID][]*iptables.Chain = nil
+	for _, id := range resolvedHostEpIds {
+		log.WithField("id", id).Info("Updating per-endpoint chains.")
+		hostEp := m.rawHostEndpoints[*id]
+		chains := m.ruleRenderer.HostEndpointToIptablesChains(id, hostEp)
+		m.filterTable.UpdateChains(chains)
+		newHostEpChains[id] = chains
+		delete(m.activeHostIdToChains, id)
+	}
+
+	// Remove programming for host endpoints that are not now in use.
+	for id, chains := range m.activeHostIdToChains {
+		log.WithField("id", id).Info("HostEp removed, deleting its chains.")
+		m.filterTable.RemoveChains(chains)
+	}
+
+	// Remember the host endpoints that are now in use.
+	m.activeHostIdToChains = newHostEpChains
+
+	// Rewrite the dispatch chains if they've changed.
+	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
+	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
+	newDispatchChains := m.ruleRenderer.HostDispatchChains(resolvedHostEpIds)
+	if !reflect.DeepEqual(newDispatchChains, m.activeHostDispatchChains) {
+		log.Info("HostEps changed, updating dispatch chains.")
+		m.filterTable.RemoveChains(m.activeHostDispatchChains)
+		m.filterTable.UpdateChains(newDispatchChains)
+		m.activeHostDispatchChains = newDispatchChains
+	}
 
 	return nil
 }
