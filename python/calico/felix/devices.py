@@ -173,6 +173,7 @@ def set_interface_ips(ip_type, interface, ips):
     assert ip_type in (futils.IPV4, futils.IPV6), (
         "Expected an IP type, got %s" % ip_type
     )
+    assert all(isinstance(ip, IPAddress) for ip in ips)
     old_ips = list_interface_ips(ip_type, interface)
     ips_to_add = ips - old_ips
     ips_to_remove = old_ips - ips

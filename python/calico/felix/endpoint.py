@@ -1059,14 +1059,29 @@ class WorkloadEndpoint(LocalEndpoint):
         """
         try:
             devices.set_routes(self.ip_type, set(), self._iface_name, None)
-        except (IOError, FailedSystemCall):
+        except FailedSystemCall as e:
+            if "Cannot find device" in e.stderr:
+                # Deleted under our feet - so the rules are gone.
+                _log.info("Interface %s for %s already deleted",
+                          self._iface_name, self.combined_id)
+            else:
+                # Since there are lots of potential races here with trying to
+                # check status and interfaces flapping, log and continue.
+                _log.exception("Failed to remove routes from interface %s "
+                               "for %s, but interface appears to still be "
+                               "present. Assuming the interface flapped.",
+                               self._iface_name, self.combined_id)
+        except IOError:
             if not devices.interface_exists(self._iface_name):
                 # Deleted under our feet - so the rules are gone.
                 _log.info("Interface %s for %s already deleted",
                           self._iface_name, self.combined_id)
             else:
-                # An error deleting the routes. Log and continue.
-                _log.exception("Cannot delete routes for interface %s for %s",
+                # Since there are lots of potential races here with trying to
+                # check status and interfaces flapping, log and continue.
+                _log.exception("Failed to remove routes from interface %s "
+                               "for %s, but interface appears to still be "
+                               "present. Assuming the interface flapped.",
                                self._iface_name, self.combined_id)
         else:
             _log.info("Interface %s deconfigured", self._iface_name)

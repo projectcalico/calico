@@ -427,7 +427,10 @@ class FelixIptablesGenerator(FelixPlugin):
                 "--append %s --out-interface %s --match conntrack "
                 "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
                 (CHAIN_FORWARD, iface_match),
+            ])
 
+        for iface_match in self.IFACE_MATCH:
+            forward_chain.extend([
                 # Then, for traffic from a workload interface, jump to the
                 # from endpoint chain.  It will either DROP the packet or,
                 # if policy allows, return it to this chain for further
@@ -441,7 +444,10 @@ class FelixIptablesGenerator(FelixPlugin):
                 # the "from" and "to" chains.
                 "--append %s --jump %s --out-interface %s" %
                 (CHAIN_FORWARD, CHAIN_TO_ENDPOINT, iface_match),
+            ])
 
+        for iface_match in self.IFACE_MATCH:
+            forward_chain.extend([
                 # Finally, if the packet is from/to a workload and it passes
                 # both the "from" and "to" chains without being dropped, it
                 # must be allowed by policy; ACCEPT it.
@@ -450,6 +456,7 @@ class FelixIptablesGenerator(FelixPlugin):
                 "--append %s --jump ACCEPT --out-interface %s" %
                 (CHAIN_FORWARD, iface_match),
             ])
+
         return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
 
     def endpoint_chain_names(self, endpoint_suffix):

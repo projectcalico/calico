@@ -697,6 +697,50 @@ TO_HOST_ENDPOINT_CHAIN = [
 ]
 
 
+TAP_FORWARD_CHAIN = [
+    # Conntrack rules.
+    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+
+    # Jump to egress and ingress policies.
+    '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
+    '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
+
+    # Then accept the packet if both pass.
+    '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
+    '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+]
+
+TAP_CALI_FORWARD_CHAIN = [
+    # Conntrack rules for all interfaces come first.
+    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --in-interface cali+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --out-interface cali+ --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --in-interface cali+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --out-interface cali+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+
+    # Then, all policies.  It's important that these come as a block since a packet may be going
+    # from one prefix to another so we need to make sure it hits the tap and cali policies
+    # before we accept the packet.
+    '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
+    '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
+    '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface cali+',
+    '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface cali+',
+
+    # Accept traffic that passed all the policies.
+    '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
+    '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+    '--append felix-FORWARD --jump ACCEPT --in-interface cali+',
+    '--append felix-FORWARD --jump ACCEPT --out-interface cali+',
+]
+
+
+
 class TestGlobalChains(BaseTestCase):
     def setUp(self):
         super(TestGlobalChains, self).setUp()
@@ -735,6 +779,30 @@ class TestGlobalChains(BaseTestCase):
         self.assertEqual(chain, INPUT_CHAINS["Return"])
         self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
                                     "felix-FROM-HOST-IF"]))
+
+    def test_forward_chain_single_prefix(self):
+        host_dict = {
+            "InterfacePrefix": "tap",
+        }
+        config = load_config("felix_empty.cfg", host_dict=host_dict)
+        generator = config.plugins["iptables_generator"]
+        chain, deps = generator.filter_forward_chain(ip_version=4)
+        self.maxDiff = None
+        self.assertEqual(chain, TAP_FORWARD_CHAIN)
+        self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
+                                    "felix-TO-ENDPOINT"]))
+
+    def test_forward_chain_multiple_prefixes(self):
+        host_dict = {
+            "InterfacePrefix": "tap,cali",
+        }
+        config = load_config("felix_empty.cfg", host_dict=host_dict)
+        generator = config.plugins["iptables_generator"]
+        chain, deps = generator.filter_forward_chain(ip_version=4)
+        self.maxDiff = None
+        self.assertEqual(chain, TAP_CALI_FORWARD_CHAIN)
+        self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
+                                    "felix-TO-ENDPOINT"]))
 
 
 class TestRules(BaseTestCase):

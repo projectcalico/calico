@@ -122,6 +122,7 @@ class IptablesUpdater(Actor):
         self.table = table
         self.refresh_interval = config.REFRESH_INTERVAL
         self.iptables_generator = config.plugins["iptables_generator"]
+        self.chain_insert_mode = config.CHAIN_INSERT_MODE
         self.ip_version = ip_version
         if ip_version == 4:
             self._restore_cmd = "iptables-restore"
@@ -282,9 +283,9 @@ class IptablesUpdater(Actor):
     @actor_message(needs_own_batch=True)
     def ensure_rule_inserted(self, rule_fragment):
         """
-        Runs the given rule fragment, prefixed with --insert. If the
-        rule was already present, it is removed and reinserted at the
-        start of the chain.
+        Runs the given rule fragment, prefixed with --insert or --append
+        depending on the configuration. If the rule was already present,
+        it is removed and reinserted at the start (or end) of the chain.
 
         This covers the case where we need to insert a rule into the
         pre-existing kernel chains (only). For chains that are owned by Felix,
@@ -298,7 +299,10 @@ class IptablesUpdater(Actor):
         _log.info("Inserting rule %r", rule_fragment)
         self._inserted_rule_fragments.add(rule_fragment)
         self._removed_rule_fragments.discard(rule_fragment)
-        self._insert_rule(rule_fragment)
+        if self.chain_insert_mode == "insert":
+            self._insert_rule(rule_fragment)
+        else:
+            self._append_rule(rule_fragment)
 
     def _insert_rule(self, rule_fragment, log_level=logging.INFO):
         """
@@ -328,6 +332,36 @@ class IptablesUpdater(Actor):
                                 "%r, inserting it instead.", rule_fragment)
             self._execute_iptables(['*%s' % self.table,
                                     '--insert %s' % rule_fragment,
+                                    'COMMIT'])
+
+    def _append_rule(self, rule_fragment, log_level=logging.INFO):
+        """
+        Execute the iptables commands to atomically (re)append the
+        given rule fragment into iptables.
+
+        Has the side-effect of moving the rule to the end of the
+        chain.
+
+        :param rule_fragment: A rule fragment, starting with the chain
+            name; will be prefixed with "--append ", for example, to
+            create the actual iptables line to execute.
+        """
+        try:
+            # Do an atomic delete + append of the rule.  If the rule already
+            # exists then the rule will be moved to the end of the chain.
+            _log.log(log_level, "Attempting to move any existing instance "
+                                "of rule %r to end of chain.", rule_fragment)
+            self._execute_iptables(['*%s' % self.table,
+                                    '--delete %s' % rule_fragment,
+                                    '--append %s' % rule_fragment,
+                                    'COMMIT'],
+                                   fail_log_level=logging.DEBUG)
+        except FailedSystemCall:
+            # Assume the rule didn't exist. Try inserting it.
+            _log.log(log_level, "Didn't find any existing instance of rule "
+                                "%r, appending it instead.", rule_fragment)
+            self._execute_iptables(['*%s' % self.table,
+                                    '--append %s' % rule_fragment,
                                     'COMMIT'])
 
     @actor_message(needs_own_batch=True)
@@ -570,7 +604,10 @@ class IptablesUpdater(Actor):
                           "inserts and deletions.")
                 try:
                     for fragment in self._inserted_rule_fragments:
-                        self._insert_rule(fragment, log_level=logging.DEBUG)
+                        if self.chain_insert_mode == "insert":
+                            self._insert_rule(fragment, log_level=logging.DEBUG)
+                        else:
+                            self._append_rule(fragment, log_level=logging.DEBUG)
                     for fragment in self._removed_rule_fragments:
                         self._remove_rule(fragment, log_level=logging.DEBUG)
                 except FailedSystemCall:

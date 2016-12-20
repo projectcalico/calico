@@ -273,6 +273,10 @@ class Config(object):
                            "attempt to detect whether the system supports "
                            "IPv6 and use it if it does.",
                            "auto")
+        self.add_parameter("ChainInsertMode",
+                           "Whether to insert the felix chains or append them."
+                           "one of: insert, append. Defaults to insert.",
+                           "insert")
 
         # The following setting determines which flavour of Iptables Generator
         # plugin is loaded.  Note: this plugin support is currently highly
@@ -344,6 +348,7 @@ class Config(object):
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
         self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
+        self.CHAIN_INSERT_MODE = self.parameters["ChainInsertMode"].value
 
         self._validate_cfg(final=final)
 
@@ -531,6 +536,12 @@ class Config(object):
             log.warning("Unrecognized value for Ipv6Support (%s), "
                         "defaulting to 'auto'", self.IPV6_SUPPORT)
             self.IPV6_SUPPORT = "auto"
+
+        if self.CHAIN_INSERT_MODE not in ("insert", "append"):
+            raise ConfigException(
+                "Invalid field value",
+                self.parameters["ChainInsertMode"]
+            )
 
         if not final:
             # Do not check that unset parameters are defaulted; we have more

@@ -38,7 +38,7 @@ for package_type in "$@"; do
 
 	deb )
 	    debver=`git_version_to_deb ${version}`
-	    if grep felix debian/changelog | head -n 1 | grep -F "${debver}"; then
+	    if grep felix debian/changelog | head -n 1 | grep -F "${debver}~__STREAM__"; then
 		# debian/changelog already has the version stanza.
 		:
 	    else
