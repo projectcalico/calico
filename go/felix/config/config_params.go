@@ -118,6 +118,7 @@ type Config struct {
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
 	DropActionOverride          string `config:"oneof(DROP,ACCEPT,LOG-and-DROP,LOG-and-ACCEPT);DROP;non-zero,die-on-fail"`
+	LogPrefix                   string `config:"string;calico-drop"`
 
 	LogFilePath           string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 	EtcdDriverLogFilePath string `config:"file;/var/log/calico/felix-etcd.log"`
