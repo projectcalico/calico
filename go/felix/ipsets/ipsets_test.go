@@ -43,6 +43,7 @@ type mockDataplane struct {
 	IPSetMetadata   map[string]setMetadata
 	Cmds            []CmdIface
 	FailNextRestore bool
+	FailNextDestroy bool
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
@@ -247,8 +248,13 @@ func (d *destroyCmd) Output() ([]byte, error) {
 }
 
 func (d *destroyCmd) CombinedOutput() ([]byte, error) {
+	if d.Dataplane.FailNextDestroy {
+		d.Dataplane.FailNextDestroy = false
+		return nil, &exec.ExitError{}
+	}
 	if _, ok := d.Dataplane.IPSetMembers[d.SetName]; ok {
 		// IP set exists.
+		delete(d.Dataplane.IPSetMembers, d.SetName)
 		return []byte(""), nil // No output on success
 	} else {
 		// IP set missing.

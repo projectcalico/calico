@@ -44,7 +44,7 @@ type Registry struct {
 }
 
 func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
-	return newRegistryWithOverrides(
+	return NewRegistryWithOverrides(
 		ipVersionConfig,
 		NewExistenceCache(newRealCmd),
 		newRealCmd,
@@ -52,7 +52,7 @@ func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
 }
 
 // newRegistryWithOverrides is an internal test constructor.
-func newRegistryWithOverrides(
+func NewRegistryWithOverrides(
 	ipVersionConfig *IPVersionConfig,
 	existenceCache existenceCache,
 	cmdFactory cmdFactory,
@@ -232,6 +232,7 @@ func NewIPVersionConfig(
 	}
 	versionedPrefix := namePrefix + version
 	var versionedPrefixes []string
+	versionedPrefixes = append(versionedPrefixes, namePrefix+version)
 	for _, prefix := range allHistoricPrefixes {
 		versionedPrefixes = append(versionedPrefixes, prefix+version)
 	}

@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/projectcalico/felix/go/felix/ipsets"
+	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/set"
 	"time"
 )
@@ -51,8 +52,18 @@ var _ = Describe("Ipset", func() {
 		SetID:   ipSetID,
 		Type:    IPSetTypeHashIP,
 	}
-	v4VersionConf := NewIPVersionConfig(IPFamilyV4, "cali", nil, nil)
-	v6VersionConf := NewIPVersionConfig(IPFamilyV6, "cali", nil, nil)
+	v4VersionConf := NewIPVersionConfig(
+		IPFamilyV4,
+		"cali",
+		rules.AllHistoricIPSetNamePrefixes,
+		rules.LegacyV4IPSetNames,
+	)
+	v6VersionConf := NewIPVersionConfig(
+		IPFamilyV6,
+		"cali",
+		rules.AllHistoricIPSetNamePrefixes,
+		nil,
+	)
 
 	var sleeps []time.Duration
 
