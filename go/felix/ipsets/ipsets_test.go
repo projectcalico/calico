@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipsets
+package ipsets_test
 
 import (
 	"bytes"
@@ -20,102 +20,13 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/set"
 	"io"
 	"os/exec"
 )
 
-var _ = Describe("ExistenceCache", func() {
-	var dataplane *mockDataplane
-	var cache *ExistenceCache
-
-	Describe("with empty dataplane", func() {
-		BeforeEach(func() {
-			dataplane = newMockDataplane()
-			cache = NewExistenceCache(dataplane.newCmd)
-		})
-		It("should load no IP sets", func() {
-			cache.Iter(func(setName string) {
-				Fail("Unexpected IP set")
-			})
-		})
-		It("should return false for unknown sets", func() {
-			Expect(cache.IPSetExists("unknown")).To(BeFalse())
-		})
-
-		Describe("after dataplane update that adds a set", func() {
-			BeforeEach(func() {
-				dataplane.IPSetMembers["cali6ts:qMt7iLlGDhvLnCjM0l9nzxb"] = set.New()
-			})
-			It("should still report no IP sets due to caching", func() {
-				cache.Iter(func(setName string) {
-					Fail("Unexpected IP set")
-				})
-			})
-			It("and Reload()ing, it should report the IP set", func() {
-				cache.Reload()
-				setNames := set.New()
-				cache.Iter(func(setName string) {
-					// Should only report each set once.
-					Expect(setNames.Contains(setName)).To(BeFalse())
-					setNames.Add(setName)
-				})
-				expectedNames := set.New()
-				expectedNames.Add("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb")
-				Expect(setNames).To(Equal(expectedNames))
-			})
-			It("should return false for unknown sets", func() {
-				Expect(cache.IPSetExists("unknown")).To(BeFalse())
-			})
-		})
-
-		Describe("after explicitly marking a set as added", func() {
-			BeforeEach(func() {
-				cache.SetIPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb", true)
-			})
-			It("should report the IP set as present", func() {
-				Expect(cache.IPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb")).To(BeTrue())
-			})
-			It("should return false for unknown sets", func() {
-				Expect(cache.IPSetExists("unknown")).To(BeFalse())
-			})
-
-			Describe("and then Reload()ing", func() {
-				BeforeEach(func() {
-					cache.Reload()
-				})
-				It("should report the IP set as gone", func() {
-					Expect(cache.IPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb")).To(BeFalse())
-				})
-			})
-			Describe("and then removing it again", func() {
-				BeforeEach(func() {
-					cache.SetIPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb", false)
-				})
-				It("should report the IP set as gone", func() {
-					Expect(cache.IPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb")).To(BeFalse())
-				})
-			})
-		})
-	})
-
-	Describe("with some sets in dataplane at start of day", func() {
-		BeforeEach(func() {
-			dataplane = newMockDataplane()
-			dataplane.IPSetMembers["foobar"] = set.New()
-			dataplane.IPSetMembers["cali6ts:qMt7iLlGDhvLnCjM0l9nzxb"] = set.New()
-			cache = NewExistenceCache(dataplane.newCmd)
-		})
-
-		It("should load them", func() {
-			Expect(cache.IPSetExists("foobar")).To(BeTrue())
-			Expect(cache.IPSetExists("cali6ts:qMt7iLlGDhvLnCjM0l9nzxb")).To(BeTrue())
-		})
-		It("should return false for unknown sets", func() {
-			Expect(cache.IPSetExists("unknown")).To(BeFalse())
-		})
-	})
-})
+// This file contains shared test infrastructure for testing the ipsets package.
 
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
@@ -125,15 +36,15 @@ func newMockDataplane() *mockDataplane {
 
 type mockDataplane struct {
 	IPSetMembers map[string]set.Set
-	Cmds         []cmdIface
+	Cmds         []CmdIface
 }
 
-func (d *mockDataplane) newCmd(name string, arg ...string) cmdIface {
+func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	if name != "ipset" {
 		Fail("Unknown command: " + name)
 	}
 
-	var cmd cmdIface
+	var cmd CmdIface
 
 	switch arg[0] {
 	case "restore":

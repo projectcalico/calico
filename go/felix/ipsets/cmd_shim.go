@@ -19,15 +19,15 @@ import (
 	"os/exec"
 )
 
-type cmdIface interface {
+type CmdIface interface {
 	SetStdin(io.Reader)
 	Output() ([]byte, error)
 	CombinedOutput() ([]byte, error)
 }
 
-type cmdFactory func(name string, arg ...string) cmdIface
+type cmdFactory func(name string, arg ...string) CmdIface
 
-func newRealCmd(name string, arg ...string) cmdIface {
+func newRealCmd(name string, arg ...string) CmdIface {
 	cmd := exec.Command(name, arg...)
 	return (*cmdAdapter)(cmd)
 }
