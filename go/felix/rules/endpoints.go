@@ -91,6 +91,8 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 		endpoint.Name,
 		PolicyInboundPfx,
 		PolicyOutboundPfx,
+		"",
+		"",
 	)
 }
 
@@ -100,9 +102,23 @@ func (r *ruleRenderer) endpointToIptablesChains(
 	name string,
 	toPrefix string,
 	fromPrefix string,
+	toFailsafeChain string,
+	fromFailsafeChain string,
 ) []*Chain {
 	toRules := []Rule{}
 	fromRules := []Rule{}
+
+	// First set up failsafes.
+	if toFailsafeChain != "" {
+		toRules = append(toRules, Rule{
+			Action: JumpAction{Target: toFailsafeChain},
+		})
+	}
+	if fromFailsafeChain != "" {
+		fromRules = append(fromRules, Rule{
+			Action: JumpAction{Target: fromFailsafeChain},
+		})
+	}
 
 	// Start by ensuring that the accept mark bit is clear, policies set that bit to indicate
 	// that they accepted the packet.
@@ -237,6 +253,8 @@ func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, 
 		epID.EndpointId,
 		PolicyOutboundPfx,
 		PolicyInboundPfx,
+		ChainFailsafeOut,
+		ChainFailsafeIn,
 	)
 }
 
