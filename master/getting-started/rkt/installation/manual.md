@@ -90,20 +90,15 @@ UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED       
 b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds ago
 ```
 
-## Installing the calicoctl CLI tool
+## Installing calicoctl
+   Download the calicoctl binary:
 
-Download the calicoctl binary and ensure it is executable.  We download to the
-/opt/bin directory to ensure it is accessible in your path (you may download
-wherever convenient though):
+   ```
+   sudo wget -O /usr/local/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+   sudo chmod +x calicoctl
+   ```
 
-```
-# Download and install `calicoctl`
-wget -N -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
-chmod +x /opt/bin/calicoctl
-```
-
-See the [`calicoctl` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
-for more information on this CLI tool.
+The [`calicoctl` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) has commandline options and configuration.
 
 ## Installing Calico as a CNI plugin
 
