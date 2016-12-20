@@ -122,27 +122,27 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 // when IPIP is enabled.  It doesn't actually program the rules, because they are part of the
 // top-level static chains.
 type ipipManager struct {
-	ipsets *ipsets.IPSets
+	ipsetReg *ipsets.Registry
 	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
 }
 
 func newIPIPManager(
-	ipsetsMgr *ipsets.IPSets,
+	ipSetReg *ipsets.Registry,
 	maxIPSetSize int,
 ) *ipipManager {
 	// Make sure our IP set exists.  We set the contents to empty here
 	// but the IPSets object will defer writing the IP sets until we're
 	// in sync, by which point we'll have added all our CIDRs into the sets.
-	ipsetsMgr.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+	ipSetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
 		SetID:   rules.IPSetIDAllHostIPs,
 		Type:    ipsets.IPSetTypeHashIP,
 	}, []string{})
 
 	return &ipipManager{
-		ipsets:             ipsetsMgr,
+		ipsetReg:           ipSetReg,
 		activeHostnameToIP: map[string]string{},
 	}
 }
@@ -169,13 +169,13 @@ func (d *ipipManager) OnUpdate(msg interface{}) {
 		// defers and coalesces the update so removing then adding the same IP is a no-op
 		// anyway.
 		logCxt.WithField("oldIP", oldIP).Debug("Removing old IP.")
-		d.ipsets.RemoveMembers(rules.IPSetIDAllHostIPs, []string{oldIP})
+		d.ipsetReg.RemoveMembers(rules.IPSetIDAllHostIPs, []string{oldIP})
 		delete(d.activeHostnameToIP, hostname)
 	}
 	if newIP != "" {
 		// Update the IP sets.
 		logCxt.Debug("Adding host to IP set.")
-		d.ipsets.AddMembers(rules.IPSetIDAllHostIPs, []string{newIP})
+		d.ipsetReg.AddMembers(rules.IPSetIDAllHostIPs, []string{newIP})
 		d.activeHostnameToIP[hostname] = newIP
 	}
 }

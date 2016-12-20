@@ -68,7 +68,7 @@ type InternalDataplane struct {
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
-	ipsetsWriters        []*ipsets.IPSets
+	ipSetRegistries      []*ipsets.Registry
 
 	ifaceMonitor *ifacemonitor.InterfaceMonitor
 	ifaceUpdates chan *ifaceUpdate
@@ -115,16 +115,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	rawTableV4 := iptables.NewTable("raw", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
 	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
-	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
+	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
 	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
-	dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV4)
+	dp.ipSetRegistries = append(dp.ipSetRegistries, ipSetRegV4)
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
-	dp.RegisterManager(newIPSetsManager(ipSetsV4))
+	dp.RegisterManager(newIPSetsManager(ipSetRegV4))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		filterTableV4,
@@ -132,10 +132,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4,
 		4,
 		config.RulesConfig.WorkloadIfacePrefixes))
-	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, 1000000, 4))
+	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, 1000000, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
-		dp.RegisterManager(newIPIPManager(ipSetsV4, 1000000)) // IPv4-only
+		dp.RegisterManager(newIPIPManager(ipSetRegV4, 1000000)) // IPv4-only
 	}
 	if !config.DisableIPv6 {
 		natTableV6 := iptables.NewTable(
@@ -149,8 +149,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV6 := iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
-		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6)
-		dp.ipsetsWriters = append(dp.ipsetsWriters, ipSetsV6)
+		ipSetRegV6 := ipsets.NewRegistry(ipSetsConfigV6)
+		dp.ipSetRegistries = append(dp.ipSetRegistries, ipSetRegV6)
 		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
 		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
@@ -158,7 +158,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetsV6))
+		dp.RegisterManager(newIPSetsManager(ipSetRegV6))
 		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			filterTableV6,
@@ -166,7 +166,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6,
 			6,
 			config.RulesConfig.WorkloadIfacePrefixes))
-		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, 1000000, 6))
+		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, 1000000, 6))
 	}
 	return dp
 }
@@ -333,7 +333,7 @@ func (d *InternalDataplane) apply() {
 
 	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
 	// iptables.
-	for _, w := range d.ipsetsWriters {
+	for _, w := range d.ipSetRegistries {
 		w.ApplyUpdates()
 	}
 
@@ -358,12 +358,12 @@ func (d *InternalDataplane) apply() {
 	}
 
 	// Now clean up any left-over IP sets.
-	for _, w := range d.ipsetsWriters {
+	for _, w := range d.ipSetRegistries {
 		w.ApplyDeletions()
 	}
 
 	if d.cleanupPending {
-		for _, w := range d.ipsetsWriters {
+		for _, w := range d.ipSetRegistries {
 			w.AttemptCleanup()
 		}
 		d.cleanupPending = false

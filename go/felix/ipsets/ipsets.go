@@ -26,13 +26,18 @@ import (
 	"time"
 )
 
-type IPSets struct {
+// A Registry manages the life-cycles of the IP sets for a particular IP version.  All IPSet
+// objects should be created through a Registry so that the Registry is aware of the IPSet.
+//
+// We need the Registry in order to manage clean-up. The IPSets created through it are white-listed
+// when cleaning up old IP sets.
+type Registry struct {
 	IPVersionConfig *IPVersionConfig
 
-	// activeIPSets maps from IP set ID to the IPSet object managing that IP set.
-	activeIPSets map[string]*IPSet
-	// dirtyIPSets contains IDs of IP sets that need updating.
-	dirtyIPSets set.Set
+	// ipSetIDToActiveIPSet maps from IP set ID to the IPSet object managing that IP set.
+	ipSetIDToActiveIPSet map[string]*IPSet
+	// dirtyIPSetIDs contains IDs of IP sets that need updating.
+	dirtyIPSetIDs set.Set
 	// pendingIPSetDeletions contains IDs of IP sets that need to be deleted.
 	pendingIPSetDeletions set.Set
 
@@ -40,42 +45,42 @@ type IPSets struct {
 	existenceCache existenceCache
 }
 
-func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
-	return NewIPSetsWithOverrides(ipVersionConfig, NewExistenceCache())
+func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
+	return NewRegistryWithOverrides(ipVersionConfig, NewExistenceCache())
 }
 
-func NewIPSetsWithOverrides(ipVersionConfig *IPVersionConfig, existenceCache existenceCache) *IPSets {
-	return &IPSets{
+func NewRegistryWithOverrides(ipVersionConfig *IPVersionConfig, existenceCache existenceCache) *Registry {
+	return &Registry{
 		IPVersionConfig:       ipVersionConfig,
-		activeIPSets:          map[string]*IPSet{},
-		dirtyIPSets:           set.New(),
+		ipSetIDToActiveIPSet:  map[string]*IPSet{},
+		dirtyIPSetIDs:         set.New(),
 		pendingIPSetDeletions: set.New(),
 		existenceCache:        existenceCache,
 	}
 }
 
-func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
+func (s *Registry) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
 	members = s.filterMembersByIPVersion(members)
 	ipSet := NewIPSet(s.IPVersionConfig, setMetadata, s.existenceCache)
 	ipSet.ReplaceMembers(members)
-	s.activeIPSets[ipSet.SetID] = ipSet
-	s.dirtyIPSets.Add(ipSet.SetID)
+	s.ipSetIDToActiveIPSet[ipSet.SetID] = ipSet
+	s.dirtyIPSetIDs.Add(ipSet.SetID)
 	s.pendingIPSetDeletions.Discard(ipSet.SetID)
 }
 
-func (s *IPSets) AddMembers(setID string, newMembers []string) {
+func (s *Registry) AddMembers(setID string, newMembers []string) {
 	newMembers = s.filterMembersByIPVersion(newMembers)
-	s.activeIPSets[setID].AddMembers(newMembers)
-	s.dirtyIPSets.Add(setID)
+	s.ipSetIDToActiveIPSet[setID].AddMembers(newMembers)
+	s.dirtyIPSetIDs.Add(setID)
 }
 
-func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
+func (s *Registry) RemoveMembers(setID string, removedMembers []string) {
 	removedMembers = s.filterMembersByIPVersion(removedMembers)
-	s.activeIPSets[setID].RemoveMembers(removedMembers)
-	s.dirtyIPSets.Add(setID)
+	s.ipSetIDToActiveIPSet[setID].RemoveMembers(removedMembers)
+	s.dirtyIPSetIDs.Add(setID)
 }
 
-func (s *IPSets) filterMembersByIPVersion(members []string) []string {
+func (s *Registry) filterMembersByIPVersion(members []string) []string {
 	var filtered []string
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
 	for _, member := range members {
@@ -88,24 +93,24 @@ func (s *IPSets) filterMembersByIPVersion(members []string) []string {
 	return filtered
 }
 
-func (s *IPSets) RemoveIPSet(setID string) {
-	delete(s.activeIPSets, setID)
-	s.dirtyIPSets.Discard(setID)
+func (s *Registry) RemoveIPSet(setID string) {
+	delete(s.ipSetIDToActiveIPSet, setID)
+	s.dirtyIPSetIDs.Discard(setID)
 	s.pendingIPSetDeletions.Add(setID)
 }
 
 // ApplyUpdates flushes any updates (or creations) to the dataplane.
 // Separate from ApplyDeletions to allow for proper sequencing with updates to iptables chains.
-func (s *IPSets) ApplyUpdates() {
-	s.dirtyIPSets.Iter(func(item interface{}) error {
-		s.activeIPSets[item.(string)].Apply()
+func (s *Registry) ApplyUpdates() {
+	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
+		s.ipSetIDToActiveIPSet[item.(string)].Apply()
 		return set.RemoveItem
 	})
 }
 
 // ApplyDeletions tries to delete any IP sets that are no longer needed.
 // Failures are ignored, deletions will be retried the next time AttemptCleanup() is called.
-func (s *IPSets) ApplyDeletions() {
+func (s *Registry) ApplyDeletions() {
 	reloadCache := false
 	s.pendingIPSetDeletions.Iter(func(item interface{}) error {
 		setID := item.(string)
@@ -114,7 +119,7 @@ func (s *IPSets) ApplyDeletions() {
 			s.IPVersionConfig.NameForMainIPSet(setID),
 			s.IPVersionConfig.NameForTempIPSet(setID),
 		} {
-			if s.existenceCache.Exists(setName) {
+			if s.existenceCache.IPSetExists(setName) {
 				if err := s.deleteIPSet(setName); err != nil {
 					reloadCache = true
 				}
@@ -128,7 +133,7 @@ func (s *IPSets) ApplyDeletions() {
 	}
 }
 
-func (s *IPSets) deleteIPSet(setName string) error {
+func (s *Registry) deleteIPSet(setName string) error {
 	log.WithField("setName", setName).Info("Deleting IP set.")
 	cmd := exec.Command("ipset", "destroy", string(setName))
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -140,17 +145,17 @@ func (s *IPSets) deleteIPSet(setName string) error {
 	} else {
 		// Success, update the cache.
 		log.WithField("setName", setName).Info("Deleted IP set")
-		s.existenceCache.SetExists(setName, false)
+		s.existenceCache.SetIPSetExists(setName, false)
 	}
 	return nil
 }
 
 // AttemptCleanup() attempts to delete any left-over IP sets, either from a previous run of
 // Felix, or from a failed deletion.
-func (s *IPSets) AttemptCleanup() {
+func (s *Registry) AttemptCleanup() {
 	// Find the names of all the IP sets that we expect to be there.
 	expectedIPSets := set.New()
-	for setID := range s.activeIPSets {
+	for setID := range s.ipSetIDToActiveIPSet {
 		mainName := s.IPVersionConfig.NameForMainIPSet(setID)
 		expectedIPSets.Add(mainName)
 		tempName := s.IPVersionConfig.NameForTempIPSet(setID)
@@ -194,13 +199,8 @@ func (s *IPSets) AttemptCleanup() {
 	})
 }
 
-type IPSetType string
-
-const (
-	IPSetTypeHashIP  IPSetType = "hash:ip"
-	IPSetTypeHashNet IPSetType = "hash:net"
-)
-
+// IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by other
+// this and other components to calculate IP set names from IP set IDs, for example.
 type IPVersionConfig struct {
 	Family                IPFamily
 	setNamePrefix         string
@@ -209,7 +209,7 @@ type IPVersionConfig struct {
 	ourNamePrefixesRegexp *regexp.Regexp
 }
 
-func NewIPSetConfig(
+func NewIPVersionConfig(
 	family IPFamily,
 	namePrefix string,
 	allHistoricPrefixes []string,
@@ -241,19 +241,43 @@ func NewIPSetConfig(
 	}
 }
 
+const MaxIPSetNameLength = 31
+
+// NameForTempIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
+// a name for use in the dataplane.  The return value will have the configured prefix and is
+// guaranteed to be short enough to use as an ipset name (example:
+// "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb").
 func (c IPVersionConfig) NameForTempIPSet(setID string) string {
-	// Replace main set's dash with a "t" so that we maintain the same length.
-	return combineAndTrunc(c.tempSetNamePrefix, setID, 31)
+	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
+	/// to length to get maximum entropy.
+	return combineAndTrunc(c.tempSetNamePrefix, setID, MaxIPSetNameLength)
 }
 
+// NameForMainIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
+// a name for use in the dataplane.  The return value will have the configured prefix and is
+// guaranteed to be short enough to use as an ipset name (example:
+// "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb").
 func (c IPVersionConfig) NameForMainIPSet(setID string) string {
-	return combineAndTrunc(c.mainSetNamePrefix, setID, 31)
+	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
+	/// to length to get maximum entropy.
+	return combineAndTrunc(c.mainSetNamePrefix, setID, MaxIPSetNameLength)
 }
 
+// OwnsIPSet returns true if the given IP set name appears to belong to Felix.  i.e. whether it
+// starts with an expected prefix.
 func (c IPVersionConfig) OwnsIPSet(setName string) bool {
 	return c.ourNamePrefixesRegexp.MatchString(setName)
 }
 
+// IPSetType constants for the different kinds of IP set.
+type IPSetType string
+
+const (
+	IPSetTypeHashIP  IPSetType = "hash:ip"
+	IPSetTypeHashNet IPSetType = "hash:net"
+)
+
+// IPSetType constants for the names that the ipset command uses for the IP versions.
 type IPFamily string
 
 const (
@@ -261,12 +285,22 @@ const (
 	IPFamilyV6 = IPFamily("inet6")
 )
 
+// IPSetMetadata contains the metadata for a particular IP set, such as its name, type and size.
 type IPSetMetadata struct {
 	SetID   string
 	Type    IPSetType
 	MaxSize int
 }
 
+// IPSet represents a single IP set.  In general, a Registry should be used to create and manage
+// the collection of IP sets for a particular IP version.
+//
+// The IPSet object defers the actual updates to the IP set.  It expects a series of
+// Add/Remove/ReplaceMember() calls followed by a cal to Apply(), which actually writes to the
+// dataplane.
+//
+// For performance, the IPSet objects created by a single Registry share a cache of IP set
+// existence.
 type IPSet struct {
 	IPSetMetadata
 
@@ -329,6 +363,9 @@ func (s *IPSet) RemoveMembers(removedMembers []string) {
 }
 
 func (s *IPSet) Apply() {
+	// In previous versions of Felix, we've observed that, rarely, the ipset command
+	// fails at random, either with a segfault or due to the kernel temporarily rejecting the
+	// connection.  Allow a few retries.
 	retries := 3
 	for {
 		if s.rewritePending {
@@ -348,12 +385,14 @@ func (s *IPSet) Apply() {
 				retries--
 				continue
 			}
+			s.rewritePending = false
 			break
 		} else {
 			// IP set should already exist, just write deltas.
 			err := s.flushDeltas()
 			if err != nil {
 				log.WithError(err).Warn("Failed to update IP set, attempting to rewrite it")
+				s.rewritePending = true
 				continue
 			}
 			break
@@ -392,8 +431,8 @@ func (s *IPSet) rewriteIPSet() error {
 
 	// Success, we know the main set exists and the temp set has been deleted.
 	logCxt.Info("Rewrote IP set")
-	s.existenceCache.SetExists(s.MainIPSetName(), true)
-	s.existenceCache.SetExists(s.TempIPSetName(), false)
+	s.existenceCache.SetIPSetExists(s.MainIPSetName(), true)
+	s.existenceCache.SetIPSetExists(s.TempIPSetName(), false)
 
 	return nil
 }
@@ -408,7 +447,7 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 	// Our general approach is to create a temporary IP set with the right contents, then
 	// atomically swap it into place.
 	mainSetName := s.MainIPSetName()
-	if !s.existenceCache.Exists(mainSetName) {
+	if !s.existenceCache.IPSetExists(mainSetName) {
 		// Create empty main IP set so we can share the atomic swap logic below.
 		// Note: we can't use the -exist flag (which should make the create idempotent)
 		// because it still fails if the IP set was previously created with different
@@ -418,7 +457,7 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize))
 	}
 	tempSetName := s.TempIPSetName()
-	if s.existenceCache.Exists(tempSetName) {
+	if s.existenceCache.IPSetExists(tempSetName) {
 		// Explicitly delete the temporary IP set so that we can recreate it with new
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Temp IP set exists, deleting it before rewrite")
@@ -459,6 +498,7 @@ func (s *IPSet) MainIPSetName() string {
 	return s.IPVersionConfig.NameForMainIPSet(s.SetID)
 }
 
+// combineAndTrunc concatenates the given prefix and suffix and truncates the result to maxLength.
 func combineAndTrunc(prefix, suffix string, maxLength int) string {
 	combined := prefix + suffix
 	if len(combined) > maxLength {
@@ -468,9 +508,10 @@ func combineAndTrunc(prefix, suffix string, maxLength int) string {
 	}
 }
 
+// existenceCache is an interface for the ExistenceCache, used to allow the latter to be mocked.
 type existenceCache interface {
-	Exists(setName string) bool
-	SetExists(setName string, exists bool)
+	IPSetExists(setName string) bool
+	SetIPSetExists(setName string, exists bool)
 	Iter(func(setName string))
 	Reload() error
 }
@@ -487,6 +528,7 @@ func NewExistenceCache() *ExistenceCache {
 	return cache
 }
 
+// Reload reloads the cache from the dataplane.
 func (c *ExistenceCache) Reload() error {
 	log.Info("Reloading IP set existence cache.")
 	cmd := exec.Command("ipset", "list", "-n")
@@ -509,7 +551,9 @@ func (c *ExistenceCache) Reload() error {
 	return nil
 }
 
-func (c *ExistenceCache) SetExists(setName string, exists bool) {
+// SetIPSetExists is used to incrementally update the ExistenceCache after we create/delete an IP
+// set.
+func (c *ExistenceCache) SetIPSetExists(setName string, exists bool) {
 	if exists {
 		c.existingIPSetNames.Add(setName)
 	} else {
@@ -517,10 +561,12 @@ func (c *ExistenceCache) SetExists(setName string, exists bool) {
 	}
 }
 
-func (c *ExistenceCache) Exists(setName string) bool {
+// IPSetExists returns true if the cache believes the IP set exists.
+func (c *ExistenceCache) IPSetExists(setName string) bool {
 	return c.existingIPSetNames.Contains(setName)
 }
 
+// Iter calls the given function once for each IP set name that exists.
 func (c *ExistenceCache) Iter(f func(setName string)) {
 	c.existingIPSetNames.Iter(func(item interface{}) error {
 		f(item.(string))
