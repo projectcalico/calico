@@ -51,13 +51,13 @@ func New() *InterfaceMonitor {
 func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
 	updates := make(chan netlink.LinkUpdate)
-	addr_updates := make(chan netlink.AddrUpdate)
+	addrUpdates := make(chan netlink.AddrUpdate)
 	cancel := make(chan struct{})
 
 	if err := netlink.LinkSubscribe(updates, cancel); err != nil {
 		log.WithError(err).Fatal("Failed to subscribe to link updates")
 	}
-	if err := netlink.AddrSubscribe(addr_updates, cancel); err != nil {
+	if err := netlink.AddrSubscribe(addrUpdates, cancel); err != nil {
 		log.WithError(err).Fatal("Failed to subscribe to addr updates")
 	}
 	log.Info("Subscribed to netlink updates.")
@@ -80,7 +80,7 @@ readLoop:
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
-		case addr_update, ok := <-addr_updates:
+		case addr_update, ok := <-addrUpdates:
 			if !ok {
 				break readLoop
 			}
