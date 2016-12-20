@@ -787,7 +787,7 @@ class TestWorkloadEndpoint(BaseTestCase):
                                                  reset_arp=False)
             self.assertFalse(m_rem_conntrack.called)
 
-    def test_on_endpoint_update_delete_fail(self):
+    def _test_on_endpoint_update_delete_fail(self, set_routes_exc, iface_exists_after_fail, exp_exc_log_level):
         combined_id = WloadEndpointId("host_id", "orchestrator_id",
                                       "workload_id", "endpoint_id")
         ip_type = futils.IPV4
@@ -828,9 +828,10 @@ class TestWorkloadEndpoint(BaseTestCase):
         # Send empty data, which deletes the endpoint.  Raise an exception
         # from set_routes to check that it's handled.
         with mock.patch('calico.felix.devices.set_routes') as m_set_routes,\
-               mock.patch('calico.felix.devices.interface_exists', return_value=True),\
-               mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack:
-            m_set_routes.side_effect = FailedSystemCall("", [], 1, "", "")
+               mock.patch('calico.felix.devices.interface_exists', return_value=iface_exists_after_fail),\
+               mock.patch('calico.felix.devices.remove_conntrack_flows') as m_rem_conntrack,\
+               mock.patch.object(endpoint._log, "exception") as m_exc_fn:
+            m_set_routes.side_effect = set_routes_exc
             local_ep.on_endpoint_update(None, async=True)
             self.step_actor(local_ep)
             m_set_routes.assert_called_once_with(ip_type, set(),
@@ -839,6 +840,46 @@ class TestWorkloadEndpoint(BaseTestCase):
             m_rem_conntrack.assert_called_once_with(
                 set(['1.2.3.4']), 4
             )
+            if exp_exc_log_level == "exception":
+                self.assertTrue(m_exc_fn.called)
+            else:
+                self.assertFalse(m_exc_fn.called)
+
+    def test_on_endpoint_update_delete_fail_unknown(self):
+        self._test_on_endpoint_update_delete_fail(
+            FailedSystemCall(
+                "", [], 1,
+                stdout="",
+                stderr='Foo bar'
+            ),
+            False,
+            "exception",
+        )
+
+    def test_on_endpoint_update_delete_fail_deleted(self):
+        self._test_on_endpoint_update_delete_fail(
+            FailedSystemCall(
+                "", [], 1,
+                stdout="",
+                stderr='Cannot find device "tapabcdef"'
+            ),
+            False,
+            "info",
+        )
+
+    def test_on_endpoint_update_delete_io_error_iface_still_exists(self):
+        self._test_on_endpoint_update_delete_fail(
+            IOError(),
+            True,
+            "exception",
+        )
+
+    def test_on_endpoint_update_delete_io_error_iface_gone(self):
+        self._test_on_endpoint_update_delete_fail(
+            IOError(),
+            False,
+            "info",
+        )
 
     def test_on_endpoint_update_v6(self):
         combined_id = WloadEndpointId("host_id", "orchestrator_id",
