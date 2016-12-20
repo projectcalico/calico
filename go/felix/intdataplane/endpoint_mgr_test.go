@@ -28,13 +28,13 @@ var dpConfig = intdataplane.Config{
 	RulesConfig: rules.Config{
 		WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
-		IPSetConfigV4: ipsets.NewIPSetConfig(
+		IPSetConfigV4: ipsets.NewIPVersionConfig(
 			ipsets.IPFamilyV4,
 			rules.IPSetNamePrefix,
 			rules.AllHistoricIPSetNamePrefixes,
 			rules.LegacyV4IPSetNames,
 		),
-		IPSetConfigV6: ipsets.NewIPSetConfig(
+		IPSetConfigV6: ipsets.NewIPVersionConfig(
 			ipsets.IPFamilyV6,
 			rules.IPSetNamePrefix,
 			rules.AllHistoricIPSetNamePrefixes,
