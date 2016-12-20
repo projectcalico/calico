@@ -207,6 +207,9 @@ configRetry:
 
 				ActionOnDrop:         configParams.DropActionOverride,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
+
+				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
+				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
 			},
 			IPIPMTU: configParams.IpInIpMtu,
 		}

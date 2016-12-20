@@ -31,6 +31,9 @@ const (
 	ChainFilterForward = ChainNamePrefix + "-FORWARD"
 	ChainFilterOutput  = ChainNamePrefix + "-OUTPUT"
 
+	ChainFailsafeIn  = ChainNamePrefix + "-FAILSAFE-IN"
+	ChainFailsafeOut = ChainNamePrefix + "-FAILSAFE-OUT"
+
 	ChainNATPrerouting  = ChainNamePrefix + "-PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "-POSTROUTING"
 	ChainNATOutgoing    = ChainNamePrefix + "-nat-outgoing"
@@ -136,6 +139,9 @@ type Config struct {
 
 	ActionOnDrop         string
 	EndpointToHostAction string
+
+	FailsafeInboundHostPorts  []uint16
+	FailsafeOutboundHostPorts []uint16
 }
 
 func NewRenderer(config Config) RuleRenderer {

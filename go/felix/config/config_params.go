@@ -144,8 +144,8 @@ type Config struct {
 	PrometheusMetricsPort                int  `config:"int(0,65535);9091"`
 	DataplaneDriverPrometheusMetricsPort int  `config:"int(0,65535);9092"`
 
-	FailsafeInboundHostPorts  []int `config:"port-list;22;die-on-fail"`
-	FailsafeOutboundHostPorts []int `config:"port-list;2379,2380,4001,7001;die-on-fail"`
+	FailsafeInboundHostPorts  []uint16 `config:"port-list;22;die-on-fail"`
+	FailsafeOutboundHostPorts []uint16 `config:"port-list;2379,2380,4001,7001;die-on-fail"`
 
 	UsageReportingEnabled bool   `config:"bool;true"`
 	ClusterGUID           string `config:"string;baddecaf"`

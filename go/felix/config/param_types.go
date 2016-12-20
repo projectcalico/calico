@@ -210,7 +210,7 @@ type PortListParam struct {
 }
 
 func (p *PortListParam) Parse(raw string) (interface{}, error) {
-	result := []int{}
+	result := []uint16{}
 	for _, portStr := range strings.Split(raw, ",") {
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
@@ -221,7 +221,7 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			err = p.parseFailed(raw, "ports must be in range 0-65535")
 			return nil, err
 		}
-		result = append(result, int(port))
+		result = append(result, uint16(port))
 	}
 	return result, nil
 }
