@@ -39,9 +39,10 @@ func newMockDataplane() *mockDataplane {
 }
 
 type mockDataplane struct {
-	IPSetMembers  map[string]set.Set
-	IPSetMetadata map[string]setMetadata
-	Cmds          []CmdIface
+	IPSetMembers    map[string]set.Set
+	IPSetMetadata   map[string]setMetadata
+	Cmds            []CmdIface
+	FailNextRestore bool
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
@@ -114,6 +115,11 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 	_, err := buf.ReadFrom(d.Stdin)
 	Expect(err).NotTo(HaveOccurred())
 	input := buf.String()
+
+	if d.Dataplane.FailNextRestore {
+		d.Dataplane.FailNextRestore = false
+		return nil, errors.New("Simulated failure")
+	}
 
 	// Process it line by line.
 	lines := strings.Split(input, "\n")

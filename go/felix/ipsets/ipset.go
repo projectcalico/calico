@@ -88,6 +88,7 @@ type IPSet struct {
 	existenceCache existenceCache
 
 	newCmd cmdFactory
+	Sleep  func(time.Duration)
 }
 
 func NewIPSet(
@@ -105,6 +106,7 @@ func NewIPSet(
 		rewritePending:   true,
 		existenceCache:   existenceCache,
 		newCmd:           cmdFactory,
+		Sleep:            time.Sleep,
 	}
 }
 
@@ -155,7 +157,7 @@ func (s *IPSet) Apply() {
 					log.WithError(err).Fatal("Failed to rewrite ipset after retries, giving up")
 				}
 				log.WithError(err).Warn("Sleeping before retrying ipset rewrite")
-				time.Sleep(100 * time.Millisecond)
+				s.Sleep(100 * time.Millisecond)
 				// Reload the existence cache in case we're out of sync.
 				s.existenceCache.Reload()
 				retries--
