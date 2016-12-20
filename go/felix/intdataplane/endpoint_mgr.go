@@ -89,18 +89,18 @@ func newEndpointManager(
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 
-		activeEndpoints:  nil,
+		activeEndpoints:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeUpIfaces:   set.New(),
-		activeIdToChains: nil,
+		activeIdToChains: map[proto.WorkloadEndpointID][]*iptables.Chain{},
 
 		activeIfacesNeedingConfig: set.New(),
 
-		pendingEndpointUpdates:   make(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint),
-		pendingIfaceUpdates:      make(map[string]ifacemonitor.State),
-		ifaceAddrs:               make(map[string][]string),
-		rawHostEndpoints:         make(map[proto.HostEndpointID]*proto.HostEndpoint),
+		pendingEndpointUpdates:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingIfaceUpdates:      map[string]ifacemonitor.State{},
+		ifaceAddrs:               map[string][]string{},
+		rawHostEndpoints:         map[proto.HostEndpointID]*proto.HostEndpoint{},
 		dirtyHostEndpoints:       true,
-		activeHostIdToChains:     make(map[*proto.HostEndpointID][]*iptables.Chain),
+		activeHostIdToChains:     map[*proto.HostEndpointID][]*iptables.Chain{},
 		activeHostDispatchChains: nil,
 	}
 }
