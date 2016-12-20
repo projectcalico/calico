@@ -94,7 +94,7 @@ type RuleRenderer interface {
 	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain
 
 	HostDispatchChains(map[string]*proto.HostEndpointID) []*iptables.Chain
-	HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
 	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain

@@ -132,7 +132,10 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
 			return
 		}
-		m.ifaceAddrs[msg.Name] = msg.Addrs
+		m.ifaceAddrs[msg.Name] = make([]string, len(msg.Addrs))
+		for i, addr := range msg.Addrs {
+			m.ifaceAddrs[msg.Name][i] = addr
+		}
 		m.dirtyHostEndpoints = true
 	}
 }
@@ -266,12 +269,17 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	// HostEndpoint on its own.  Rather it is looking at the set of local
 	// non-workload interfaces and seeing which of them are matched by
 	// the current set of HostEndpoints as a whole.
-	var resolvedHostEpIds map[string]*proto.HostEndpointID = nil
+	resolvedHostEpIds := map[string]*proto.HostEndpointID{}
 	for ifaceName, ifaceAddrs := range m.ifaceAddrs {
+		logCxt := log.WithFields(log.Fields{
+			"ifaceName":  ifaceName,
+			"ifaceAddrs": ifaceAddrs,
+		})
 		var bestHostEpId *proto.HostEndpointID = nil
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
-			logCxt := log.WithField("id", id)
+			logCxt = logCxt.WithField("id", id)
+			logCxt.Debug("See if HostEp matches interface")
 			if (bestHostEpId != nil) && (bestHostEpId.EndpointId < id.EndpointId) {
 				// We already have a HostEndpointId that is
 				// better than this one, so no point looking any
@@ -292,30 +300,36 @@ func (m *endpointManager) resolveHostEndpoints() error {
 				logCxt.Debug("Rejected on explicit iface name")
 				continue
 			}
-			for wanted := range append(hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs...) {
-				for actual := range ifaceAddrs {
-					if wanted == actual {
-						// The HostEndpoint expects an
-						// IP address that is on this
-						// interface.
-						logCxt.Debug("Match on address")
-						bestHostEpId = &id
-						continue HostEpLoop
+			wantedLists := [][]string{hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs}
+			for _, wantedList := range wantedLists {
+				for _, wanted := range wantedList {
+					logCxt.WithField("wanted", wanted).Debug("Address wanted by HostEp")
+					for _, actual := range ifaceAddrs {
+						if wanted == actual {
+							// The HostEndpoint
+							// expects an IP address
+							// that is on this
+							// interface.
+							logCxt.Debug("Match on address")
+							bestHostEpId = &id
+							continue HostEpLoop
+						}
 					}
 				}
 			}
 		}
 		if bestHostEpId != nil {
+			log.WithField("ifaceName", ifaceName).WithField("bestHostEpId", bestHostEpId).Debug("Got HostEp for interface")
 			resolvedHostEpIds[ifaceName] = bestHostEpId
 		}
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
-	var newHostEpChains map[*proto.HostEndpointID][]*iptables.Chain = nil
-	for _, id := range resolvedHostEpIds {
-		log.WithField("id", id).Info("Updating per-endpoint chains.")
+	newHostEpChains := map[*proto.HostEndpointID][]*iptables.Chain{}
+	for ifaceName, id := range resolvedHostEpIds {
+		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[*id]
-		chains := m.ruleRenderer.HostEndpointToIptablesChains(id, hostEp)
+		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
 		m.filterTable.UpdateChains(chains)
 		newHostEpChains[id] = chains
 		delete(m.activeHostIdToChains, id)

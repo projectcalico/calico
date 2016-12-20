@@ -91,6 +91,8 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 		endpoint.Name,
 		PolicyInboundPfx,
 		PolicyOutboundPfx,
+		WorkloadToEndpointPfx,
+		WorkloadFromEndpointPfx,
 		"",
 		"",
 	)
@@ -100,8 +102,10 @@ func (r *ruleRenderer) endpointToIptablesChains(
 	tiers []*proto.TierInfo,
 	profileIds []string,
 	name string,
-	toPrefix string,
-	fromPrefix string,
+	toPolicyPrefix string,
+	fromPolicyPrefix string,
+	toEndpointPrefix string,
+	fromEndpointPrefix string,
 	toFailsafeChain string,
 	fromFailsafeChain string,
 ) []*Chain {
@@ -153,7 +157,7 @@ func (r *ruleRenderer) endpointToIptablesChains(
 		// Then, jump to each policy in turn.
 		for _, polID := range tier.Policies {
 			toPolChainName := PolicyChainName(
-				toPrefix,
+				toPolicyPrefix,
 				&proto.PolicyID{Tier: tier.Name, Name: polID},
 			)
 			toRules = append(toRules,
@@ -169,7 +173,7 @@ func (r *ruleRenderer) endpointToIptablesChains(
 					Comment: "Return if policy accepted",
 				})
 			fromPolChainName := PolicyChainName(
-				fromPrefix,
+				fromPolicyPrefix,
 				&proto.PolicyID{Tier: tier.Name, Name: polID},
 			)
 			fromRules = append(fromRules,
@@ -192,8 +196,8 @@ func (r *ruleRenderer) endpointToIptablesChains(
 
 	// Then, jump to each profile in turn.
 	for _, profileID := range profileIds {
-		toProfChainName := ProfileChainName(toPrefix, &proto.ProfileID{Name: profileID})
-		fromProfChainName := ProfileChainName(fromPrefix, &proto.ProfileID{Name: profileID})
+		toProfChainName := ProfileChainName(toPolicyPrefix, &proto.ProfileID{Name: profileID})
+		fromProfChainName := ProfileChainName(fromPolicyPrefix, &proto.ProfileID{Name: profileID})
 		toRules = append(toRules,
 			Rule{Action: JumpAction{Target: toProfChainName}},
 			// If policy marked packet as accepted, it returns, setting the
@@ -218,11 +222,11 @@ func (r *ruleRenderer) endpointToIptablesChains(
 	fromRules = append(fromRules, r.DropRules(Match(), "Drop if no profiles matched")...)
 
 	toEndpointChain := Chain{
-		Name:  EndpointChainName(WorkloadToEndpointPfx, name),
+		Name:  EndpointChainName(toEndpointPrefix, name),
 		Rules: toRules,
 	}
 	fromEndpointChain := Chain{
-		Name:  EndpointChainName(WorkloadFromEndpointPfx, name),
+		Name:  EndpointChainName(fromEndpointPrefix, name),
 		Rules: fromRules,
 	}
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
@@ -246,13 +250,15 @@ func (r *ruleRenderer) HostDispatchChains(endpoints map[string]*proto.HostEndpoi
 	)
 }
 
-func (r *ruleRenderer) HostEndpointToIptablesChains(epID *proto.HostEndpointID, endpoint *proto.HostEndpoint) []*Chain {
+func (r *ruleRenderer) HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*Chain {
 	return r.endpointToIptablesChains(
 		endpoint.Tiers,
 		endpoint.ProfileIds,
-		epID.EndpointId,
+		ifaceName,
 		PolicyOutboundPfx,
 		PolicyInboundPfx,
+		HostToEndpointPfx,
+		HostFromEndpointPfx,
 		ChainFailsafeOut,
 		ChainFailsafeIn,
 	)
