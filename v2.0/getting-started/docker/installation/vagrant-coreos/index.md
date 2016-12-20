@@ -3,7 +3,7 @@ title: Running the Calico tutorials on CoreOS using Vagrant and VirtualBox
 ---
 
 These instructions allow you to set up a CoreOS cluster ready to network Docker containers with
-[Calico Docker networking][calico-networking] using Vagrant.
+Calico networking using Vagrant.
 
 ## 1. Streamlined setup of the VMs
 
@@ -82,7 +82,6 @@ You should see output like this on each node
 
 Now that you have a basic two node CoreOS cluster setup, see the [simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
 
-[calico-networking]: https://github.com/projectcalico/calico-containers
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [using-coreos]: http://coreos.com/using-coreos/

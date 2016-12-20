@@ -3,7 +3,7 @@ title: Running the Calico tutorials on Ubuntu using Vagrant and VirtualBox
 ---
 
 These instructions allow you to set up an Ubuntu cluster ready to network Docker containers with
-[Calico Docker networking][calico-networking] using Vagrant.
+Calico using Vagrant.
 
 ## 1. Streamlined setup of the VMs
 
@@ -86,4 +86,3 @@ Now that you have a basic two node Ubuntu cluster setup, see the [simple policy 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [git]: http://git-scm.com/
-[calico-networking]: https://github.com/projectcalico/calico-containers
