@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
+	"github.com/projectcalico/felix/go/felix/set"
 	"time"
 )
 
@@ -216,7 +217,7 @@ type ifaceUpdate struct {
 
 // onIfaceAddrsChange is our interface address monitor callback.  It gets called
 // from the monitor's thread.
-func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs []string) {
+func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs set.Set) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
@@ -229,7 +230,7 @@ func (d *InternalDataplane) onIfaceAddrsChange(ifaceName string, addrs []string)
 
 type ifaceAddrsUpdate struct {
 	Name  string
-	Addrs []string
+	Addrs set.Set
 }
 
 func (d *InternalDataplane) SendMessage(msg interface{}) error {

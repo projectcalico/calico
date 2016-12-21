@@ -64,7 +64,7 @@ type endpointManager struct {
 	pendingIfaceUpdates    map[string]ifacemonitor.State
 
 	// Host endpoint processing.
-	ifaceAddrs               map[string][]string
+	ifaceAddrs               map[string]set.Set
 	rawHostEndpoints         map[proto.HostEndpointID]*proto.HostEndpoint
 	dirtyHostEndpoints       bool
 	activeHostIdToChains     map[*proto.HostEndpointID][]*iptables.Chain
@@ -97,7 +97,7 @@ func newEndpointManager(
 
 		pendingEndpointUpdates:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates:      map[string]ifacemonitor.State{},
-		ifaceAddrs:               map[string][]string{},
+		ifaceAddrs:               map[string]set.Set{},
 		rawHostEndpoints:         map[proto.HostEndpointID]*proto.HostEndpoint{},
 		dirtyHostEndpoints:       true,
 		activeHostIdToChains:     map[*proto.HostEndpointID][]*iptables.Chain{},
@@ -133,10 +133,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			return
 		}
 		if msg.Addrs != nil {
-			m.ifaceAddrs[msg.Name] = make([]string, len(msg.Addrs))
-			for i, addr := range msg.Addrs {
-				m.ifaceAddrs[msg.Name][i] = addr
-			}
+			m.ifaceAddrs[msg.Name] = msg.Addrs
 		} else {
 			delete(m.ifaceAddrs, msg.Name)
 		}
@@ -312,15 +309,12 @@ func (m *endpointManager) resolveHostEndpoints() error {
 			for _, wantedList := range [][]string{hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs} {
 				for _, wanted := range wantedList {
 					logCxt.WithField("wanted", wanted).Debug("Address wanted by HostEp")
-					for _, actual := range ifaceAddrs {
-						if wanted == actual {
-							// The HostEndpoint expects an IP
-							// address that is on this
-							// interface.
-							logCxt.Debug("Match on address")
-							bestHostEpId = &id
-							continue HostEpLoop
-						}
+					if ifaceAddrs.Contains(wanted) {
+						// The HostEndpoint expects an IP address
+						// that is on this interface.
+						logCxt.Debug("Match on address")
+						bestHostEpId = &id
+						continue HostEpLoop
 					}
 				}
 			}

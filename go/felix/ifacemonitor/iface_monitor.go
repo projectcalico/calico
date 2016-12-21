@@ -30,21 +30,21 @@ const (
 )
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State)
-type AddrStateCallback func(ifaceName string, addrs []string)
+type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type InterfaceMonitor struct {
 	upIfaces     set.Set
 	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
-	ifaceAddrs   map[int][]string
+	ifaceAddrs   map[int]set.Set
 }
 
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
 		upIfaces:   set.New(),
 		ifaceName:  map[int]string{},
-		ifaceAddrs: map[int][]string{},
+		ifaceAddrs: map[int]set.Set{},
 	}
 }
 
@@ -132,44 +132,24 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 	}
 
 	if exists {
-		if !m.addrKnownForIface(addr, ifIndex) {
-			m.addAddrForIface(addr, ifIndex)
+		if !m.ifaceAddrs[ifIndex].Contains(addr) {
+			m.ifaceAddrs[ifIndex].Add(addr)
 			m.notifyIfaceAddrs(ifIndex)
 		}
 	} else {
-		if m.addrKnownForIface(addr, ifIndex) {
-			m.delAddrForIface(addr, ifIndex)
+		if m.ifaceAddrs[ifIndex].Contains(addr) {
+			m.ifaceAddrs[ifIndex].Discard(addr)
 			m.notifyIfaceAddrs(ifIndex)
-		}
-	}
-}
-
-func (m *InterfaceMonitor) addrKnownForIface(addr string, ifIndex int) bool {
-	for _, known := range m.ifaceAddrs[ifIndex] {
-		if addr == known {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *InterfaceMonitor) addAddrForIface(addr string, ifIndex int) {
-	m.ifaceAddrs[ifIndex] = append(m.ifaceAddrs[ifIndex], addr)
-}
-
-func (m *InterfaceMonitor) delAddrForIface(addr string, ifIndex int) {
-	for i, known := range m.ifaceAddrs[ifIndex] {
-		if addr == known {
-			last := len(m.ifaceAddrs[ifIndex]) - 1
-			m.ifaceAddrs[ifIndex][i] = m.ifaceAddrs[ifIndex][last]
-			m.ifaceAddrs[ifIndex] = m.ifaceAddrs[ifIndex][:last]
-			break
 		}
 	}
 }
 
 func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
-	m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex])
+	if m.ifaceAddrs[ifIndex] != nil {
+		m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex].Copy())
+	} else {
+		m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex])
+	}
 }
 
 func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Link) {
@@ -197,14 +177,14 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 		// Get addresses for the link and store and notify those too; then we
 		// don't have to worry about a possible race between the link and address
 		// update channels.
-		new_addrs := []string{}
+		new_addrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 			addrs, err := netlink.AddrList(link, family)
 			if err != nil {
 				log.WithError(err).Warn("Netlink addr list operation failed.")
 			}
 			for _, addr := range addrs {
-				new_addrs = append(new_addrs, addr.IPNet.IP.String())
+				new_addrs.Add(addr.IPNet.IP.String())
 			}
 		}
 		m.ifaceAddrs[ifIndex] = new_addrs
