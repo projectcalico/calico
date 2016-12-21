@@ -77,11 +77,13 @@ readLoop:
 		select {
 		case update, ok := <-updates:
 			if !ok {
+				log.Warn("Failed to read a link update")
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
 		case addr_update, ok := <-addrUpdates:
 			if !ok {
+				log.Warn("Failed to read an address update")
 				break readLoop
 			}
 			m.handleNetlinkAddrUpdate(addr_update)
@@ -117,8 +119,7 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		"exists":  exists,
 	}).Info("Netlink address update.")
 
-	_, ifaceKnown := m.ifaceName[ifIndex]
-	if !ifaceKnown {
+	if _, known := m.ifaceName[ifIndex]; known {
 		log.WithField("ifIndex", ifIndex).Warn("No known iface with this index.")
 		return
 	}
