@@ -13,8 +13,7 @@ Use the version selector at the top-right of this page to view a different relea
 - For Kubernetes deployments, Calico now has the option of
 [using the Kubernetes API server as its backend datastore]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/) instead of etcd. Under the covers, this is
 implemented using a new pluggable datastore API introduced in libcalico-go.
-- [Felix has been rewritten in golang](https://github.com/projectcalico/felix/pull/1122), greatly improving startup performance,
-particularly around resync, graceful restart, and catch-up behavior.
+- Improved Felix startup performance, particularly around resync, graceful restart, and catch-up behavior.
 - Improved packaging that now vendors our dependencies; removes potential Python dependency issues such as incompatible urllib3/requests versions
 - Felix introduces a new dataplane driver API, which will allow for non-iptables
 dataplanes in the future.
