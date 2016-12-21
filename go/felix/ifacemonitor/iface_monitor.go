@@ -177,17 +177,17 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 		// Get addresses for the link and store and notify those too; then we
 		// don't have to worry about a possible race between the link and address
 		// update channels.
-		new_addrs := set.New()
+		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 			addrs, err := netlink.AddrList(link, family)
 			if err != nil {
 				log.WithError(err).Warn("Netlink addr list operation failed.")
 			}
 			for _, addr := range addrs {
-				new_addrs.Add(addr.IPNet.IP.String())
+				newAddrs.Add(addr.IPNet.IP.String())
 			}
 		}
-		m.ifaceAddrs[ifIndex] = new_addrs
+		m.ifaceAddrs[ifIndex] = newAddrs
 		m.notifyIfaceAddrs(ifIndex)
 	} else if ifaceWasUp && !ifaceIsUp {
 		logCxt.Debug("Interface now down")
