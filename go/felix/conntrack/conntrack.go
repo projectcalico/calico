@@ -30,7 +30,7 @@ var conntrackDirections = []string{
 
 const numRetries = 3
 
-func RemoveConntrackFlows(ipVersion uint8, ipAddresses []net.IP) {
+func RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	var family string
 	switch ipVersion {
 	case 4:
@@ -40,39 +40,30 @@ func RemoveConntrackFlows(ipVersion uint8, ipAddresses []net.IP) {
 	default:
 		log.WithField("version", ipVersion).Panic("Unknown IP version")
 	}
-	log.WithField("ips", ipList(ipAddresses)).Info("Removing conntrack flows")
-	for _, ip := range ipAddresses {
-		for _, direction := range conntrackDirections {
-			logCxt := log.WithFields(log.Fields{"ip": ip, "direction": direction})
-			// Retry a few times because the conntrack command seems to fail at random.
-			for retry := 0; retry <= numRetries; retry += 1 {
-				cmd := exec.Command("conntrack", "--family", family, "--delete", direction, ip.String())
-				output, err := cmd.CombinedOutput()
-				if err == nil {
-					logCxt.Debug("Successfully removed conntrack flows.")
-					break
-				}
-				if strings.Contains(string(output), "0 flow entries") {
-					// Success, there were no flows.
-					logCxt.Debug("IP wasn't in conntrack")
-					break
-				}
-				if retry == numRetries {
-					logCxt.WithError(err).Error("Failed to remove conntrack flows after retries.")
-				} else {
-					logCxt.WithError(err).Warn("Failed to remove conntrack flows, will retry...")
-				}
+	log.WithField("ip", ipAddr).Info("Removing conntrack flows")
+	for _, direction := range conntrackDirections {
+		logCxt := log.WithFields(log.Fields{"ip": ipAddr, "direction": direction})
+		// Retry a few times because the conntrack command seems to fail at random.
+		for retry := 0; retry <= numRetries; retry += 1 {
+			cmd := exec.Command("conntrack",
+				"--family", family,
+				"--delete", direction,
+				ipAddr.String())
+			output, err := cmd.CombinedOutput()
+			if err == nil {
+				logCxt.Debug("Successfully removed conntrack flows.")
+				break
+			}
+			if strings.Contains(string(output), "0 flow entries") {
+				// Success, there were no flows.
+				logCxt.Debug("IP wasn't in conntrack")
+				break
+			}
+			if retry == numRetries {
+				logCxt.WithError(err).Error("Failed to remove conntrack flows after retries.")
+			} else {
+				logCxt.WithError(err).Warn("Failed to remove conntrack flows, will retry...")
 			}
 		}
 	}
-}
-
-type ipList []net.IP
-
-func (l ipList) String() string {
-	var parts []string
-	for _, ip := range l {
-		parts = append(parts, ip.String())
-	}
-	return "[" + strings.Join(parts, ",") + "]"
 }
