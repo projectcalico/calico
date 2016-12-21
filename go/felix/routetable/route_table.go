@@ -106,7 +106,6 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	} else {
 		logCxt.Debug("Interface down, blacklisting from route sync")
 		r.activeUpIfaces.Discard(ifaceName)
-		r.dirtyIfaces.Discard(ifaceName) // Can't update routes if it's down.
 	}
 }
 
