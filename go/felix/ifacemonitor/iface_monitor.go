@@ -43,8 +43,8 @@ type InterfaceMonitor struct {
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
 		upIfaces:   set.New(),
-		ifaceName:  make(map[int]string),
-		ifaceAddrs: make(map[int][]string),
+		ifaceName:  map[int]string{},
+		ifaceAddrs: map[int][]string{},
 	}
 }
 
@@ -81,12 +81,12 @@ readLoop:
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
-		case addr_update, ok := <-addrUpdates:
+		case addrUpdate, ok := <-addrUpdates:
 			if !ok {
 				log.Warn("Failed to read an address update")
 				break readLoop
 			}
-			m.handleNetlinkAddrUpdate(addr_update)
+			m.handleNetlinkAddrUpdate(addrUpdate)
 		case <-resyncTicker.C:
 			err := m.resync()
 			if err != nil {
@@ -106,7 +106,7 @@ func (m *InterfaceMonitor) handleNetlinkUpdate(update netlink.LinkUpdate) {
 	}
 	msgType := update.Header.Type
 	ifaceExists := msgType == syscall.RTM_NEWLINK // Alternative is an RTM_DELLINK
-	m.storeUpdateAndNotifyOnChange(ifaceExists, attrs)
+	m.storeAndNotifyLink(ifaceExists, update.Link)
 }
 
 func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
@@ -119,8 +119,15 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		"exists":  exists,
 	}).Info("Netlink address update.")
 
-	if _, known := m.ifaceName[ifIndex]; known {
+	if _, known := m.ifaceName[ifIndex]; !known {
 		log.WithField("ifIndex", ifIndex).Warn("No known iface with this index.")
+		return
+	}
+	if _, known := m.ifaceAddrs[ifIndex]; !known {
+		// We think this interface is down, or haven't yet heard about it at all -
+		// indicates a race between the link and address update channels.
+		// Addresses will be notified when we process the link update.
+		log.WithField("ifIndex", ifIndex).Warn("Race for new interface.")
 		return
 	}
 
@@ -165,29 +172,54 @@ func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
 	m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex])
 }
 
-func (m *InterfaceMonitor) storeUpdateAndNotifyOnChange(ifaceExists bool, attrs *netlink.LinkAttrs) {
+func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Link) {
 	// Store or remove mapping between this interface's index and name.
+	attrs := link.Attrs()
+	ifIndex := attrs.Index
+	ifaceName := attrs.Name
 	if ifaceExists {
-		m.ifaceName[attrs.Index] = attrs.Name
+		m.ifaceName[ifIndex] = ifaceName
 	} else {
-		delete(m.ifaceName, attrs.Index)
+		delete(m.ifaceName, ifIndex)
 	}
 	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.
 	// The IFF_UP flag contains the admin state, which doesn't tell us whether we can
 	// program routes etc.
 	rawFlags := attrs.RawFlags
 	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
-	ifaceName := attrs.Name
 	ifaceWasUp := m.upIfaces.Contains(ifaceName)
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if ifaceIsUp && !ifaceWasUp {
 		logCxt.Debug("Interface now up")
 		m.upIfaces.Add(ifaceName)
 		m.Callback(ifaceName, StateUp)
+
+		// Get addresses for the link and store and notify those too; then we
+		// don't have to worry about a possible race between the link and address
+		// update channels.
+		new_addrs := []string{}
+		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
+			addrs, err := netlink.AddrList(link, family)
+			if err != nil {
+				log.WithError(err).Warn("Netlink addr list operation failed.")
+			}
+			for _, addr := range addrs {
+				new_addrs = append(new_addrs, addr.IPNet.IP.String())
+			}
+		}
+		m.ifaceAddrs[ifIndex] = new_addrs
+		m.notifyIfaceAddrs(ifIndex)
 	} else if ifaceWasUp && !ifaceIsUp {
 		logCxt.Debug("Interface now down")
+
+		// Notify to address callback consumers.
+		delete(m.ifaceAddrs, ifIndex)
+		m.notifyIfaceAddrs(ifIndex)
+
 		m.upIfaces.Discard(ifaceName)
 		m.Callback(ifaceName, StateDown)
+	} else {
+		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
 	}
 }
 
@@ -208,22 +240,7 @@ func (m *InterfaceMonitor) resync() error {
 			continue
 		}
 		currentIfaces.Add(attrs.Name)
-		m.storeUpdateAndNotifyOnChange(true, attrs)
-
-		ifIndex := attrs.Index
-		new_addrs := []string{}
-		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
-			addrs, err := netlink.AddrList(link, family)
-			if err != nil {
-				log.WithError(err).Warn("Netlink addr list operation failed.")
-				return err
-			}
-			for _, addr := range addrs {
-				new_addrs = append(new_addrs, addr.IPNet.IP.String())
-			}
-		}
-		m.ifaceAddrs[ifIndex] = new_addrs
-		m.notifyIfaceAddrs(ifIndex)
+		m.storeAndNotifyLink(true, link)
 	}
 	m.upIfaces.Iter(func(name interface{}) error {
 		if currentIfaces.Contains(name) {

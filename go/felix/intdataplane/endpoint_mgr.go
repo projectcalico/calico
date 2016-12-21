@@ -76,9 +76,9 @@ func newEndpointManager(
 	ruleRenderer rules.RuleRenderer,
 	routeTable *routetable.RouteTable,
 	ipVersion int,
-	ourInterfacePrefixes []string,
+	wlInterfacePrefixes []string,
 ) *endpointManager {
-	wlIfacesPattern := "^(" + strings.Join(ourInterfacePrefixes, "|") + ").*"
+	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
 
 	return &endpointManager{
@@ -132,9 +132,13 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			log.WithField("update", msg).Debug("Workload interface, ignoring.")
 			return
 		}
-		m.ifaceAddrs[msg.Name] = make([]string, len(msg.Addrs))
-		for i, addr := range msg.Addrs {
-			m.ifaceAddrs[msg.Name][i] = addr
+		if msg.Addrs != nil {
+			m.ifaceAddrs[msg.Name] = make([]string, len(msg.Addrs))
+			for i, addr := range msg.Addrs {
+				m.ifaceAddrs[msg.Name][i] = addr
+			}
+		} else {
+			delete(m.ifaceAddrs, msg.Name)
 		}
 		m.dirtyHostEndpoints = true
 	}
@@ -150,6 +154,23 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		}
 	}
 
+	if err := m.resolveWorkloadEndpoints(); err != nil {
+		log.WithError(err).Warn("Failed to resolve workload endpoints")
+		return err
+	}
+
+	if m.dirtyHostEndpoints {
+		if err := m.resolveHostEndpoints(); err != nil {
+			log.WithError(err).Warn("Failed to resolve host endpoints")
+			return err
+		}
+		m.dirtyHostEndpoints = false
+	}
+
+	return nil
+}
+
+func (m *endpointManager) resolveWorkloadEndpoints() error {
 	// Update any dirty endpoints.
 	for id, workload := range m.pendingEndpointUpdates {
 		logCxt := log.WithField("id", id)
@@ -227,15 +248,6 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		return set.RemoveItem
 	})
 
-	if m.dirtyHostEndpoints {
-		err := m.resolveHostEndpoints()
-		if err != nil {
-			log.WithError(err).Warn("Failed to resolve host endpoints")
-			return err
-		}
-		m.dirtyHostEndpoints = false
-	}
-
 	return nil
 }
 
@@ -244,12 +256,11 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	// Host endpoint resolution
 	// ------------------------
 	//
-	// There is a set of non-workload interfaces on the local host, each
-	// possibly with IP addresses, that might be controlled by HostEndpoint
-	// resources in the Calico data model.  The data model syntactically
-	// allows multiple HostEndpoint resources to match a given interface -
-	// for example, an interface 'eth1' might have address 10.240.0.34 and
-	// 172.19.2.98, and the data model might include:
+	// There is a set of non-workload interfaces on the local host, each possibly with
+	// IP addresses, that might be controlled by HostEndpoint resources in the Calico
+	// data model.  The data model syntactically allows multiple HostEndpoint
+	// resources to match a given interface - for example, an interface 'eth1' might
+	// have address 10.240.0.34 and 172.19.2.98, and the data model might include:
 	//
 	// - HostEndpoint A with Name 'eth1'
 	//
@@ -257,58 +268,54 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	//
 	// - HostEndpoint C with ExpectedIpv4Addrs including '172.19.2.98'.
 	//
-	// but at one runtime, at any given time, we only allow one HostEndpoint
-	// to govern that interface.  That HostEndpoint becomes the active one,
-	// and the others remain inactive.  (But if, for example, the active
-	// HostEndpoint resource was deleted, then one of the inactive ones
-	// could take over.)  Given multiple matching HostEndpoint resources,
-	// the one that wins is the one with the alphabetically earliest
-	// HostEndpointId
+	// but at runtime, at any given time, we only allow one HostEndpoint to govern
+	// that interface.  That HostEndpoint becomes the active one, and the others
+	// remain inactive.  (But if, for example, the active HostEndpoint resource was
+	// deleted, then one of the inactive ones could take over.)  Given multiple
+	// matching HostEndpoint resources, the one that wins is the one with the
+	// alphabetically earliest HostEndpointId
 	//
-	// So the process here is not about 'resolving' a particular
-	// HostEndpoint on its own.  Rather it is looking at the set of local
-	// non-workload interfaces and seeing which of them are matched by
-	// the current set of HostEndpoints as a whole.
+	// So the process here is not about 'resolving' a particular HostEndpoint on its
+	// own.  Rather it is looking at the set of local non-workload interfaces and
+	// seeing which of them are matched by the current set of HostEndpoints as a
+	// whole.
 	resolvedHostEpIds := map[string]*proto.HostEndpointID{}
 	for ifaceName, ifaceAddrs := range m.ifaceAddrs {
-		logCxt := log.WithFields(log.Fields{
+		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
 			"ifaceAddrs": ifaceAddrs,
 		})
 		var bestHostEpId *proto.HostEndpointID = nil
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
-			logCxt = logCxt.WithField("id", id)
+			logCxt := ifaceCxt.WithField("id", id)
 			logCxt.Debug("See if HostEp matches interface")
 			if (bestHostEpId != nil) && (bestHostEpId.EndpointId < id.EndpointId) {
-				// We already have a HostEndpointId that is
-				// better than this one, so no point looking any
-				// further.
+				// We already have a HostEndpointId that is better than
+				// this one, so no point looking any further.
 				logCxt.Debug("No better than existing match")
 				continue
 			}
 			if hostEp.Name == ifaceName {
-				// The HostEndpoint has an explicit name that
-				// matches the interface.
+				// The HostEndpoint has an explicit name that matches the
+				// interface.
 				logCxt.Debug("Match on explicit iface name")
 				bestHostEpId = &id
 				continue
 			} else if hostEp.Name != "" {
-				// The HostEndpoint has an explicit name that
-				// isn't this interface.  Continue, so as not to
-				// allow it to match on an IP address instead.
+				// The HostEndpoint has an explicit name that isn't this
+				// interface.  Continue, so as not to allow it to match on
+				// an IP address instead.
 				logCxt.Debug("Rejected on explicit iface name")
 				continue
 			}
-			wantedLists := [][]string{hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs}
-			for _, wantedList := range wantedLists {
+			for _, wantedList := range [][]string{hostEp.ExpectedIpv4Addrs, hostEp.ExpectedIpv6Addrs} {
 				for _, wanted := range wantedList {
 					logCxt.WithField("wanted", wanted).Debug("Address wanted by HostEp")
 					for _, actual := range ifaceAddrs {
 						if wanted == actual {
-							// The HostEndpoint
-							// expects an IP address
-							// that is on this
+							// The HostEndpoint expects an IP
+							// address that is on this
 							// interface.
 							logCxt.Debug("Match on address")
 							bestHostEpId = &id
