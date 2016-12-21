@@ -100,6 +100,20 @@ b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds a
 
 The [`calicoctl` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) has commandline options and configuration.
 
+### Running calicoctl as a container
+
+Alternatively to downloading the `calicoctl` binary it can be run as a container.
+
+```
+sudo rkt run quay.io/calico/ctl --exec /calicoctl -- version
+```
+
+To also specify the ETCD_ENDPOINTS use:
+
+```
+sudo rkt run --set-env=ETCD_ENDPOINTS="http://etcd1:2379" quay.io/calico/ctl --exec /calicoctl -- version
+```
+
 ## Installing Calico as a CNI plugin
 
 To install Calico as a CNI plugin used by rkt, we need to first install the
