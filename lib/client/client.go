@@ -15,10 +15,10 @@
 package client
 
 import (
+	"encoding/hex"
+	goerrors "errors"
 	"io/ioutil"
 	"reflect"
-
-	"errors"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/kelseyhightower/envconfig"
@@ -28,6 +28,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/satori/go.uuid"
 )
 
 // Client contains
@@ -92,6 +94,39 @@ func (c *Client) Config() ConfigInterface {
 	return newConfigs(c)
 }
 
+// EnsureInitialized is used to ensure the backend datastore is correctly
+// initialized for use by Calico.  This method may be called multiple times, and
+// will have no effect if the datastore is already correctly initialized.
+//
+// Most Calico deployment scenarios will automatically implicitly invoke this
+// method and so a general consumer of this API can assume that the datastore
+// is already initialized.
+func (c *Client) EnsureInitialized() error {
+
+	// Perform datastore specific initialization first.
+	if err := c.backend.EnsureInitialized(); err != nil {
+		return err
+	}
+
+	// Ensure a cluster GUID is set.  This is required for all datastore
+	// types.
+	kv := &model.KVPair{
+		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
+		Value: hex.EncodeToString(uuid.NewV4().Bytes()),
+	}
+	if _, err := c.backend.Create(kv); err == nil {
+		log.WithField("ClusterGUID", kv.Value).Info("Assigned ClusterGUID")
+	} else {
+		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			log.WithError(err).Warnf("Failed to set ClusterGUID")
+			return err
+		}
+		log.Info("Using previously configured ClusterGUID")
+	}
+
+	return nil
+}
+
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)
 // or from environment variables (if the file is not specified).
 func LoadClientConfig(filename string) (*api.CalicoAPIConfig, error) {
@@ -128,10 +163,10 @@ func LoadClientConfigFromBytes(b []byte) (*api.CalicoAPIConfig, error) {
 
 	// Validate the version and kind.
 	if c.APIVersion != unversioned.VersionCurrent {
-		return nil, errors.New("invalid config file: unknown APIVersion '" + c.APIVersion + "'")
+		return nil, goerrors.New("invalid config file: unknown APIVersion '" + c.APIVersion + "'")
 	}
 	if c.Kind != "calicoApiConfig" {
-		return nil, errors.New("invalid config file: expected kind 'calicoApiConfig', got '" + c.Kind + "'")
+		return nil, goerrors.New("invalid config file: expected kind 'calicoApiConfig', got '" + c.Kind + "'")
 	}
 
 	log.Info("Datastore type: ", c.Spec.DatastoreType)
