@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/conntrack"
 	"github.com/projectcalico/felix/go/felix/ifacemonitor"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/iptables"
@@ -175,6 +176,18 @@ func (m *endpointManager) CompleteDeferredWork() error {
 				logCxt.Info("Workload removed, deleting its routes.")
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
 				m.activeIfacesNeedingConfig.Discard(oldWorkload.Name)
+				var oldIPs []net.IP
+				var ipStrings []string
+				if m.ipVersion == 4 {
+					ipStrings = oldWorkload.Ipv4Nets
+				} else {
+					ipStrings = oldWorkload.Ipv6Nets
+				}
+				for _, cidrStr := range ipStrings {
+					ipStr := strings.Split(cidrStr, "/")[0]
+					oldIPs = append(oldIPs, net.ParseIP(ipStr))
+				}
+				conntrack.RemoveConntrackFlows(uint8(m.ipVersion), oldIPs)
 			}
 			delete(m.activeEndpoints, id)
 			delete(m.pendingEndpointUpdates, id)
@@ -211,6 +224,8 @@ func (m *endpointManager) configureInterface(name string) error {
 			"Skipping configuration of interface because it is oper down.")
 		return nil
 	}
+	log.WithField("ifaceName", name).Info(
+		"Applying /proc/sys configuration to interface.")
 	if m.ipVersion == 4 {
 		// TODO(smc) Retry, don't panic!
 		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
