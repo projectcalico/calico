@@ -34,6 +34,7 @@ var (
 	ListFailed        = errors.New("netlink list operation failed")
 	UpdateFailed      = errors.New("netlink update operation failed")
 	IfaceDown         = errors.New("interface was down")
+	IfaceNotPresent   = errors.New("interface not present")
 	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
 )
 
@@ -144,7 +145,10 @@ func (r *RouteTable) Apply() error {
 		logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 		for retries > 0 {
 			err := r.syncRoutesForLink(ifaceName)
-			if err != nil {
+			if err == IfaceNotPresent {
+				logCxt.Info("Interface missing, will retry if it appears.")
+				break
+			} else if err != nil {
 				logCxt.WithError(err).Warn("Failed to syncronise interface routes.")
 				retries--
 				continue
@@ -202,6 +206,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	}
 
 	updatesFailed := false
+	linkFound := false
 
 	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
@@ -214,6 +219,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		}
 	} else {
 		// Got the link try to sync its routes.
+		linkFound = true
 		linkAttrs := link.Attrs()
 		if linkAttrs.Flags&net.FlagUp == 0 || linkAttrs.RawFlags&syscall.IFF_RUNNING == 0 {
 			// Interface must have gone down but the monitoring thread hasn't told us yet.
@@ -290,6 +296,9 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		return nil
 	})
 
+	if !linkFound {
+		return IfaceNotPresent
+	}
 	if updatesFailed {
 		return UpdateFailed
 	}
