@@ -26,7 +26,7 @@ The following option allows configuration of the Calico datastore type.
 
 * `datastore_type` (default: etcdv2)
 
-The Calico CNI plugin supports the following datastore types: 
+The Calico CNI plugin supports the following datastore types:
 
 * etcdv2 (default)
 * kubernetes (experimental)
@@ -129,7 +129,7 @@ There is a single supported policy type, `k8s` which uses the Kubernetes Network
 
 When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
 
-Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calico-containers/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
+Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calicoctl/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
 
 ### Deprecated ways of specifying Kubernetes API access details
 

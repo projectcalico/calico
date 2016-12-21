@@ -14,7 +14,7 @@ repositories.
 | felix | Binary | Felix interfaces with the Linux kernel to configure routes and ACLs that control network policy and connectivity. |
 
 
-### [Calico-Containers](https://github.com/projectcalico/calico-containers)
+### [calicoctl](https://github.com/projectcalico/calicoctl)
 
 | Artifact | Type | Description |
 |---------|-------|-----------|
