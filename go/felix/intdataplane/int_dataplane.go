@@ -279,18 +279,26 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			switch msg := msg.(type) {
 
 			case *proto.WorkloadEndpointUpdate:
-				// TODO(smc) For now, report every workload endpoint as "UP".
-				d.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
-					Id: msg.Id,
-					Status: &proto.EndpointStatus{
-						Status: "up",
-					},
-				}
+				// FIXME(smc) For now, report every workload endpoint as "UP" so we get through the OpenStack FV tests.
+				go func() {
+					// Delay to avoid a race in the OpenStack server, needs to be removed when we move to
+					// do real status reporting.
+					time.Sleep(5 * time.Second)
+					d.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
+						Id: msg.Id,
+						Status: &proto.EndpointStatus{
+							Status: "up",
+						},
+					}
+				}()
 			case *proto.WorkloadEndpointRemove:
 				// TODO(smc) For now, report every workload endpoint as "UP".
-				d.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
-					Id: msg.Id,
-				}
+				go func() {
+					time.Sleep(5 * time.Second)
+					d.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
+						Id: msg.Id,
+					}
+				}()
 			case *proto.InSync:
 				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 				log.Info("Datastore in sync, flushing the dataplane for the first time...")
