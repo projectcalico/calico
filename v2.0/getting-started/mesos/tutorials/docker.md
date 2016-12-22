@@ -1,5 +1,5 @@
 ---
-title: Calico-Mesos Usage Guide with the Docker Containerizer
+title: Calico-Mesos Usage Guide for the Docker Containerizer
 ---
 
 This guide shows how to use Marathon to start
@@ -21,7 +21,7 @@ This guide assumes you have a running Mesos Cluster that meets the following spe
 
 To generate a cluster that meets all of these requirements, follow the [Calico Mesos Vagrant guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/vagrant) before continuing.
 
-For info on upgrading an Agent to meet the above requirements and be ready for Calico, see the [Manual Install Docker Containerizer Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/docker)
+For info on upgrading an Agent to meet the above requirements and be ready for Calico, see the [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/integration)
 
 
 ## Creating a Docker network and managing network policy

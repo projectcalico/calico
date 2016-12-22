@@ -20,7 +20,7 @@ git clone https://github.com/projectcalico/calico.git
 ## 3. Startup
 
 ```shell
-cd calico/master/getting-started/mesos/vagrant/
+cd calico/{{page.version}}/getting-started/mesos/vagrant/
 vagrant up
 ```
 
