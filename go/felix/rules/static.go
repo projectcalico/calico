@@ -36,6 +36,7 @@ func (r *ruleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
+		r.filterFailsafeInChain(),
 	}
 }
 
@@ -75,7 +76,10 @@ func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	// TODO Apply host endpoint policy...
+	// Apply host endpoint policy.
+	inputRules = append(inputRules, Rule{
+		Action: GotoAction{Target: ChainDispatchFromHostEndpoint},
+	})
 
 	return &Chain{
 		Name:  ChainFilterInput,
@@ -177,6 +181,38 @@ func (r *ruleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
 	}
 }
 
+func (r *ruleRenderer) filterFailsafeInChain() *Chain {
+	rules := []Rule{}
+
+	for _, port := range r.Config.FailsafeInboundHostPorts {
+		rules = append(rules, Rule{
+			Match:  Match().Protocol("tcp").DestPorts(port),
+			Action: AcceptAction{},
+		})
+	}
+
+	return &Chain{
+		Name:  ChainFailsafeIn,
+		Rules: rules,
+	}
+}
+
+func (r *ruleRenderer) filterFailsafeOutChain() *Chain {
+	rules := []Rule{}
+
+	for _, port := range r.Config.FailsafeOutboundHostPorts {
+		rules = append(rules, Rule{
+			Match:  Match().Protocol("tcp").DestPorts(port),
+			Action: AcceptAction{},
+		})
+	}
+
+	return &Chain{
+		Name:  ChainFailsafeOut,
+		Rules: rules,
+	}
+}
+
 func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
@@ -249,6 +285,13 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 }
 
 func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
+	return []*Chain{
+		r.filterOutputChain(),
+		r.filterFailsafeOutChain(),
+	}
+}
+
+func (r *ruleRenderer) filterOutputChain() *Chain {
 	rules := []Rule{}
 
 	// conntrack rules.
@@ -279,13 +322,14 @@ func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
 	// If we reach here, the packet is not going to a workload so it must be going to a
 	// host endpoint.
 
-	// TODO(smc) jump to host endpoint chains.
+	// Apply host endpoint policy.
+	rules = append(rules, Rule{
+		Action: GotoAction{Target: ChainDispatchToHostEndpoint},
+	})
 
-	return []*Chain{
-		{
-			Name:  ChainFilterOutput,
-			Rules: rules,
-		},
+	return &Chain{
+		Name:  ChainFilterOutput,
+		Rules: rules,
 	}
 }
 
