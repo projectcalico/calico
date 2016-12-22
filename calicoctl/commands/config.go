@@ -22,9 +22,9 @@ import (
 	"fmt"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )

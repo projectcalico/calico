@@ -25,9 +25,7 @@ around is to join one of the channels listed below:
 
 ## Reporting issues
 
-Before raising an issue with *Calico for containers*, please check for
-duplicate issues, and read our [Troubleshooting](Troubleshooting.md)
-and our [Frequently Asked Questions](FAQ.md) documents.
+Before raising an issue with *calicoctl*, please check for duplicate issues.
 
 If you have a question, please hop on to our IRC or Slack channels (see above).
 
@@ -42,11 +40,11 @@ a bad thing):
 -  Versions of appropriate binaries and libraries.  For example, the output from
    `calicoctl version`, your version of Docker, rkt, Kubernetes etc.
 -  A link to any diagnostics (e.g. if using `calicoctl`, you can gathered
-   diagnostics using `calicoctl diags` - this provides instructions for
+   diagnostics using `calicoctl node diags` - this provides instructions for
    uploading the diags bundle to transfer.sh - or alternatively if the
    diagnostics contains sensitive information we can set up an alternative
    method for transfer).
--  If using `calicoctl` the output from `calicoctl status` run on each node
+-  If using `calicoctl` the output from `calicoctl node status` run on each node
    might also be useful.
 -  Details of your OS.
 -  Environment details such as GCE, bare metal, VirtualBox.
@@ -71,8 +69,7 @@ test suites. It is vital that our master branch be passing tests at all times.
 If you tests are failing the automated tests and you don't believe they should
 be, you may need to rebase your branch off the latest master.
 
-Read the [Building and testing calico-containers images guide](docs/Building.md)
-for details on running the UTs and STs.
+Read the project [README](README.md) for details on running the UTs and STs.
 
 Where possible, please add any additional tests to ensure we maintain healthy
 code and feature coverage.
@@ -98,7 +95,10 @@ ensure we have a cleaner commit history.
 
 ### Coding style
 
-The majority of the code is written in Python and we generally follow the
+The majority of the code is written in Go, we follow standard Go guidelines.
+Be sure to run gofmt and goimport tools over the code to maintain formatting.
+
+For code that is written in Python and we generally follow the
 [PEP-8 coding style](https://www.python.org/dev/peps/pep-0008).
 
 ### Format of the commit message
@@ -118,4 +118,4 @@ with the following format:
 Fixes #29
 ```
 
-[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-containers/CONTRIBUTING.md?pixel)](https://github.com/igrigorik/ga-beacon)
+[![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calicoctl/CONTRIBUTING.md?pixel)](https://github.com/igrigorik/ga-beacon)

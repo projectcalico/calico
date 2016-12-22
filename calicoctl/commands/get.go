@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
 func Get(args []string) {

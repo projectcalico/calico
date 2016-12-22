@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"

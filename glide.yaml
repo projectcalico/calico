@@ -1,4 +1,4 @@
-package: github.com/projectcalico/calico-containers
+package: github.com/projectcalico/calicoctl
 homepage: https://projectcalico.org
 license: Apache-2.0
 owners:
