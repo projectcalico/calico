@@ -28,7 +28,7 @@ kind: calicoApiConfig
 metadata:
 spec:
   datastoreType: "kubernetes"
-  k8sKubeconfig: "/path/to/kubeconfig"
+  kubeconfig: "/path/to/kubeconfig"
   ...
 ```
 
@@ -75,7 +75,7 @@ kind: calicoApiConfig
 metadata:
 spec:
   datastoreType: "kubernetes"
-  k8sKubeconfig: "/path/to/.kube/config"
+  kubeconfig: "/path/to/.kube/config"
 ```
 
 #### Example using environment variables 
