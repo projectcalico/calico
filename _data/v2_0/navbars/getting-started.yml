@@ -50,18 +50,18 @@ toc:
     path: /getting-started/mesos/
   - title: Installation
     section:
-    - title: Prerequisites
+    - title: Requirements
       path: /getting-started/mesos/installation/prerequisites
-    - title: 'Unified Containerizer (CNI)'
-      path: /getting-started/mesos/installation/unified
-    - title: Docker Containerizer (libnetwork)
-      path: /getting-started/mesos/installation/docker
+    - title: Integration Guide
+      path: /getting-started/mesos/installation/integration
     - title: DC/OS
       section:
       - title: Overview
         path: /getting-started/mesos/installation/dc-os/
-      - title: Framework Install Walkthrough
+      - title: Universe Package Install
         path: /getting-started/mesos/installation/dc-os/framework
+      - title: Customize Universe Package Install
+        path: /getting-started/mesos/installation/dc-os/custom
   - title: Tutorials
     section:
     - title: Docker Containerizer
