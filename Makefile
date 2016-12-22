@@ -39,8 +39,7 @@ update-tools:
 	go get -u github.com/onsi/ginkgo/ginkgo
 
 ## Run etcd as a container
-run-etcd:
-	@-docker rm -f calico-etcd
+run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
@@ -82,6 +81,9 @@ stop-kubernetes-master:
 	# Remove any left over volumes
 	-docker volume ls -qf dangling=true | xargs docker volume rm
 	-mount |grep kubelet | awk '{print $$3}' |xargs umount
+
+stop-etcd:
+	@-docker rm -f calico-etcd
 
 $(BUILD_CONTAINER_MARKER):
 	docker build -f Dockerfile -t $(BUILD_CONTAINER_NAME) .
