@@ -19,11 +19,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 
 	docopt "github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.

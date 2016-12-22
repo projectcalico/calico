@@ -77,4 +77,4 @@ class TestBGPBackends(TestBase):
                 check_bird_status(target, expected)
 
             # TODO Need to test when IPs across hosts are in the same /26
-            # see https://github.com/projectcalico/calico-containers/issues/1362
+            # see https://github.com/projectcalico/calicoctl/issues/1362

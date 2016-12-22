@@ -330,7 +330,7 @@ ut: dist/calicoctl
 PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
 test-containerized: dist/calicoctl calicoctl_test_container.created
-	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw \
+	docker run --rm -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:rw \
 	$(TEST_CALICOCTL_CONTAINER_NAME) bash -c 'make ut'
 
 ###############################################################################
@@ -348,10 +348,10 @@ CALICOCTL_NODE_VERSION?="latest"
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-LDFLAGS=-ldflags "-X github.com/projectcalico/calico-containers/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
-	-X github.com/projectcalico/calico-containers/calicoctl/commands/node.VERSION=$(CALICOCTL_NODE_VERSION) \
-	-X github.com/projectcalico/calico-containers/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
-	-X github.com/projectcalico/calico-containers/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
+LDFLAGS=-ldflags "-X github.com/projectcalico/calicoctl/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
+	-X github.com/projectcalico/calicoctl/calicoctl/commands/node.VERSION=$(CALICOCTL_NODE_VERSION) \
+	-X github.com/projectcalico/calicoctl/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
+	-X github.com/projectcalico/calicoctl/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
 GLIDE_CONTAINER_NAME?=dockerepo/glide
 TEST_CALICOCTL_CONTAINER_NAME=calico/calicoctl_test_container
@@ -369,9 +369,9 @@ vendor: glide.lock
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm \
-		-v ${PWD}:/go/src/github.com/projectcalico/calico-containers:rw $$EXTRA_DOCKER_BIND \
+		-v ${PWD}:/go/src/github.com/projectcalico/calicoctl:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GLIDE_CONTAINER_NAME) -e -c ' \
-        cd /go/src/github.com/projectcalico/calico-containers && \
+        cd /go/src/github.com/projectcalico/calicoctl && \
         glide install -strip-vendor && \
         chown $(shell id -u):$(shell id -u) -R vendor'
 
@@ -391,10 +391,10 @@ startup-go:
 dist/startup-go: $(CALICOCTL_FILES) vendor
 	mkdir -p dist
 	docker run --rm \
-	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
-	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
+	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
+	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
 	  golang:1.7 bash -c '\
-	    cd /go/src/github.com/projectcalico/calico-containers && \
+	    cd /go/src/github.com/projectcalico/calicoctl && \
 	    make startup-go && \
 	    chown -R $(shell id -u):$(shell id -u) dist'
 
@@ -423,10 +423,10 @@ binary-containerized: $(CALICOCTL_FILES) vendor
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -e CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) -e CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
 	  -e CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	  -v ${PWD}:/go/src/github.com/projectcalico/calico-containers:ro \
-	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calico-containers/dist \
+	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
+	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
 	  golang:1.7 bash -c '\
-	    cd /go/src/github.com/projectcalico/calico-containers && \
+	    cd /go/src/github.com/projectcalico/calicoctl && \
 	    make OS=$(OS) ARCH=$(ARCH) \
 	         CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
 	         CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
@@ -479,7 +479,7 @@ static-checks: vendor
 
 .PHONY: install
 install:
-	CGO_ENABLED=0 go install github.com/projectcalico/calico-containers/calicoctl
+	CGO_ENABLED=0 go install github.com/projectcalico/calicoctl/calicoctl
 
 release: clean
 ifndef VERSION

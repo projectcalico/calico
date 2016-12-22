@@ -28,7 +28,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/go-json/json"
-	"github.com/projectcalico/calico-containers/calicoctl/resourcemgr"
+	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )

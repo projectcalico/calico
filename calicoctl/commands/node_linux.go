@@ -20,8 +20,8 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/constants"
-	"github.com/projectcalico/calico-containers/calicoctl/commands/node"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/node"
 )
 
 // Node function is a switch to node related sub-commands
