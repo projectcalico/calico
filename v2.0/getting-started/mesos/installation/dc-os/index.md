@@ -1,11 +1,11 @@
 ---
-title: Installing Calico in DC/OS
+title: Overview of Calico for DC/OS
 ---
 
 The following information details Calico's installation and runtime dependencies
 in DC/OS, and looks at how to leverage Calico-DC/OS Framework to get up and running.
 
-## Background
+## Overview
 
 Calico provides multi-host networking for DC/OS, giving each task its own IP
 address and isolated networking namespace, with highly flexible policy configuration.
@@ -29,14 +29,22 @@ steps on every agent in the cluster:
 The framework is flexible, allowing users to enable, disable, or customize each step.
 Below, we'll see what each step does, and how it can be modified.
 
-**Alternatives: Installing Manually**
-
 The framework runs Calico (and its configuration) **within DC/OS.**
 This means it registers as a Mesos Framework, and uses Mesos Resource offers
 to run and configure the cluster with Calico. Alternative to this approach,
 Calico can be manually installed directly onto Agents as a daemon service integrated
 with the OS (using systemd) to ensure it is available when tasks are eventually
 provisioned.
+
+### Note on rp_filter in DC/OS
+
+Containers with permission `CAP_NET_RAW` can spoof their IP address if the
+`rp_filter` kernel setting is set to 'loose'. Typically, `rp_filter` is
+configured to 'strict', preventing this behavior.
+[DC/OS, however, arbitrarily sets `rp_filter` to 'loose' across all interfaces](https://dcosjira.atlassian.net/browse/DCOS-265), including the interfaces
+Calico creates and uses. By default, [Felix notices this and refuses to launch](https://github.com/projectcalico/calicoctl/issues/1082#issue-168163079). In DC/OS, however, we configure Felix to ignore this by setting
+[IgnoreLooseRPF](https://github.com/projectcalico/felix/blob/ab8799eaea66627e5db7717e62fca61fd9c08646/python/calico/felix/config.py#L198) to true. As a result, be cautious when granting containers `CAP_NET_RAW` since, if compromised, these
+containers will be able to spoof their IP address, potentially allowing them to bypass firewall restrictions.
 
 Next, we'll dive into each task the Framework performs.
 
@@ -105,18 +113,10 @@ be restarted to pick up the change. This step of the Framework performs the foll
 
 4. Restart the slave process with `systemctl restart dcos-mesos-slave`
 
-### Calico Libnetwork
-
-To receive networking hook calls from the Docker engine, Calico's libnetwork plugin must
-be running on every agent. This task ensures the `calico/node-libnetwork` container
-is running.
-
 ### Run Calico Node
 
-No matter which networking plugin you use, Calico's core processes must be run
-on each agent. This task ensures the `calico/node` container is running.
+This task ensures the Calico's core process `calico/node` is running.
 
 ## Next Steps: Installing
 
-For a walkthrough of how to deploy common configurations of the Calico-DC/OS Framework,
-see [The Calico-DC/OS Framework Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/dc-os/framework)
+For installation instructions, see [The Calico DC/OS Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/mesos/installation/dc-os/framework)
