@@ -33,8 +33,9 @@ type InterfaceStateCallback func(ifaceName string, ifaceState State)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type InterfaceMonitor struct {
-	upIfaces     set.Set
-	Callback     InterfaceStateCallback
+	upIfaces set.Set
+	Callback InterfaceStateCallback
+
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
 	ifaceAddrs   map[int]set.Set
@@ -42,7 +43,8 @@ type InterfaceMonitor struct {
 
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
-		upIfaces:   set.New(),
+		upIfaces: set.New(),
+
 		ifaceName:  map[int]string{},
 		ifaceAddrs: map[int]set.Set{},
 	}
