@@ -75,6 +75,8 @@ type InternalDataplane struct {
 	ifaceUpdates     chan *ifaceUpdate
 	ifaceAddrUpdates chan *ifaceAddrsUpdate
 
+	endpointStatusCombiner *endpointStatusCombiner
+
 	allManagers []Manager
 
 	ruleRenderer rules.RuleRenderer
@@ -128,6 +130,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
+	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, !config.DisableIPv6)
+
 	dp.RegisterManager(newIPSetsManager(ipSetRegV4))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
@@ -135,7 +139,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer,
 		routeTableV4,
 		4,
-		config.RulesConfig.WorkloadIfacePrefixes))
+		config.RulesConfig.WorkloadIfacePrefixes,
+		dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
 	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, 1000000, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
@@ -169,7 +174,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			routeTableV6,
 			6,
-			config.RulesConfig.WorkloadIfacePrefixes))
+			config.RulesConfig.WorkloadIfacePrefixes,
+			dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
 		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, 1000000, 6))
 	}
 	return dp
@@ -303,32 +309,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			for _, mgr := range d.allManagers {
 				mgr.OnUpdate(msg)
 			}
-
-			switch msg := msg.(type) {
-
-			case *proto.WorkloadEndpointUpdate:
-				// FIXME(smc) For now, report every workload endpoint as "UP" so we get through the OpenStack FV tests.
-				go func() {
-					// Delay to avoid a race in the OpenStack server, needs to be removed when we move to
-					// do real status reporting.
-					time.Sleep(5 * time.Second)
-					d.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
-						Id: msg.Id,
-						Status: &proto.EndpointStatus{
-							Status: "up",
-						},
-					}
-				}()
-			case *proto.WorkloadEndpointRemove:
-				// TODO(smc) For now, report every workload endpoint as "UP".
-				go func() {
-					time.Sleep(5 * time.Second)
-					d.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
-						Id: msg.Id,
-					}
-				}()
+			switch msg.(type) {
 			case *proto.InSync:
-				// TODO(smc) need to generate InSync message after each flush of the EventSequencer?
 				log.Info("Datastore in sync, flushing the dataplane for the first time...")
 				datastoreInSync = true
 			}
@@ -403,6 +385,9 @@ func (d *InternalDataplane) apply() {
 	for _, w := range d.ipSetRegistries {
 		w.ApplyDeletions()
 	}
+
+	// And publish and status updates.
+	d.endpointStatusCombiner.Apply()
 
 	if d.cleanupPending {
 		for _, w := range d.ipSetRegistries {

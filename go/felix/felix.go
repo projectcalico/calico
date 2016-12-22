@@ -514,6 +514,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 			log.WithError(err).Error("Failed to read from front-end socket")
 			fc.shutDownProcess("Failed to read from front-end socket")
 		}
+		log.WithField("payload", payload).Debug("New message from dataplane")
 		switch msg := payload.(type) {
 		case *proto.ProcessStatusUpdate:
 			fc.handleProcessStatusUpdate(msg)

@@ -43,7 +43,7 @@ import (
 // to CompleteDeferredWork().  This is also the basis of our failure handling; updates
 // that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
-	ipVersion      int
+	ipVersion      uint8
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
@@ -53,11 +53,13 @@ type endpointManager struct {
 
 	// Active state, updated in CompleteDeferredWork.
 	activeEndpoints      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeIfaceNameToID  map[string]proto.WorkloadEndpointID
 	activeUpIfaces       set.Set
 	activeIdToChains     map[proto.WorkloadEndpointID][]*iptables.Chain
 	activeDispatchChains []*iptables.Chain
 
-	activeIfacesNeedingConfig set.Set
+	ifaceNamesToReconfigure set.Set
+	ifaceIDsToUpdateStatus  set.Set
 
 	// Pending updates, cleared in CompleteDeferredWork.
 	pendingEndpointUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -69,14 +71,20 @@ type endpointManager struct {
 	dirtyHostEndpoints       bool
 	activeHostIdToChains     map[*proto.HostEndpointID][]*iptables.Chain
 	activeHostDispatchChains []*iptables.Chain
+
+	// Callbacks
+	OnWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback
 }
+
+type EndpointStatusUpdateCallback func(ipVersion uint8, id proto.WorkloadEndpointID, status string)
 
 func newEndpointManager(
 	filterTable *iptables.Table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable *routetable.RouteTable,
-	ipVersion int,
+	ipVersion uint8,
 	wlInterfacePrefixes []string,
+	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -89,11 +97,13 @@ func newEndpointManager(
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
 
-		activeEndpoints:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		activeUpIfaces:   set.New(),
-		activeIdToChains: map[proto.WorkloadEndpointID][]*iptables.Chain{},
+		activeEndpoints:     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeIfaceNameToID: map[string]proto.WorkloadEndpointID{},
+		activeUpIfaces:      set.New(),
+		activeIdToChains:    map[proto.WorkloadEndpointID][]*iptables.Chain{},
 
-		activeIfacesNeedingConfig: set.New(),
+		ifaceNamesToReconfigure: set.New(),
+		ifaceIDsToUpdateStatus:  set.New(),
 
 		pendingEndpointUpdates:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates:      map[string]ifacemonitor.State{},
@@ -102,6 +112,8 @@ func newEndpointManager(
 		dirtyHostEndpoints:       true,
 		activeHostIdToChains:     map[*proto.HostEndpointID][]*iptables.Chain{},
 		activeHostDispatchChains: nil,
+
+		OnWorkloadEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 	}
 }
 
@@ -142,13 +154,26 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 }
 
 func (m *endpointManager) CompleteDeferredWork() error {
+	// Copy the pending interface updates to the active set.  Mark any interfaces that
+	// have come up to be reconfigured.
 	for ifaceName, state := range m.pendingIfaceUpdates {
 		if state == ifacemonitor.StateUp {
 			m.activeUpIfaces.Add(ifaceName)
-			m.activeIfacesNeedingConfig.Add(ifaceName)
+			m.ifaceNamesToReconfigure.Add(ifaceName)
 		} else {
 			m.activeUpIfaces.Discard(ifaceName)
 		}
+		logCxt := log.WithField("ifaceName", ifaceName)
+		if epID, ok := m.activeIfaceNameToID[ifaceName]; ok {
+			logCxt.Info("Interface state changed; marking for status update.")
+			m.ifaceIDsToUpdateStatus.Add(epID)
+		} else {
+			// We don't know about this interface yet (or it's already been deleted).
+			// If the endpoint gets created, we'll do the update then. If it's been
+			// deleted, we've already cleaned it up.
+			logCxt.Debug("Ignoring interface state change for unknown interface.")
+		}
+		delete(m.pendingIfaceUpdates, ifaceName)
 	}
 
 	if err := m.resolveWorkloadEndpoints(); err != nil {
@@ -187,9 +212,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			}
 
 			if oldWorkload != nil && oldWorkload.Name != workload.Name {
-				logCxt.Debug("Interface name changed, cleaning up old routes")
+				logCxt.Debug("Interface name changed, cleaning up old state")
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
-				m.activeIfacesNeedingConfig.Discard(oldWorkload.Name)
+				m.ifaceNamesToReconfigure.Discard(oldWorkload.Name)
+				delete(m.activeIfaceNameToID, oldWorkload.Name)
 			}
 			var mac net.HardwareAddr
 			if workload.Mac != "" {
@@ -208,8 +234,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 				}
 			}
 			m.routeTable.SetRoutes(workload.Name, routeTargets)
-			m.activeIfacesNeedingConfig.Add(workload.Name)
+			m.ifaceNamesToReconfigure.Add(workload.Name)
 			m.activeEndpoints[id] = workload
+			m.activeIfaceNameToID[workload.Name] = id
 			delete(m.pendingEndpointUpdates, id)
 		} else {
 			logCxt.Info("Workload removed, deleting its chains.")
@@ -217,13 +244,17 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			if oldWorkload := m.activeEndpoints[id]; oldWorkload != nil {
 				// Remove any routes from the routing table.  The RouteTable will
 				// remove any conntrack entries as a side-effect.
-				logCxt.Info("Workload removed, deleting its routes.")
+				logCxt.Info("Workload removed, deleting old state.")
 				m.routeTable.SetRoutes(oldWorkload.Name, nil)
-				m.activeIfacesNeedingConfig.Discard(oldWorkload.Name)
+				m.ifaceNamesToReconfigure.Discard(oldWorkload.Name)
+				delete(m.activeIfaceNameToID, oldWorkload.Name)
 			}
 			delete(m.activeEndpoints, id)
 			delete(m.pendingEndpointUpdates, id)
 		}
+
+		// Update or deletion, make sure we update the interface status.
+		m.ifaceIDsToUpdateStatus.Add(id)
 	}
 
 	// Rewrite the dispatch chains if they've changed.
@@ -237,13 +268,40 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 		m.activeDispatchChains = newDispatchChains
 	}
 
-	m.activeIfacesNeedingConfig.Iter(func(item interface{}) error {
+	m.ifaceNamesToReconfigure.Iter(func(item interface{}) error {
 		ifaceName := item.(string)
 		err := m.configureInterface(ifaceName)
 		if err != nil {
 			log.WithError(err).Warn("Failed to configure interface, will retry")
 			return nil
 		}
+		return set.RemoveItem
+	})
+
+	m.ifaceIDsToUpdateStatus.Iter(func(item interface{}) error {
+		log.WithField("workloadID", item).Info("Re-evaluating endpoint status")
+		workloadID := item.(proto.WorkloadEndpointID)
+		var known, operUp, adminUp, failed bool
+
+		workload, known := m.activeEndpoints[workloadID]
+		if known {
+			adminUp = workload.State == "active"
+			operUp = m.activeUpIfaces.Contains(workload.Name)
+			failed = m.ifaceNamesToReconfigure.Contains(workload.Name)
+		}
+
+		var status string
+		if known {
+			if failed {
+				status = "error"
+			} else if operUp && adminUp {
+				status = "up"
+			} else {
+				status = "down"
+			}
+		}
+		m.OnWorkloadEndpointStatusUpdate(m.ipVersion, workloadID, status)
+
 		return set.RemoveItem
 	})
 
