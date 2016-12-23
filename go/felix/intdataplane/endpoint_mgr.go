@@ -381,9 +381,9 @@ func (m *endpointManager) resolveHostEndpoints() error {
 		}
 		if bestHostEpId != nil {
 			log.WithFields(log.Fields{
-				"ifaceName": ifaceName,
-				"bestHostEpId": *bestHostEpId,
-			})).Debug("Got HostEp for interface")
+				"ifaceName":    ifaceName,
+				"bestHostEpId": bestHostEpId,
+			}).Debug("Got HostEp for interface")
 			resolvedHostEpIds[ifaceName] = *bestHostEpId
 		}
 	}
