@@ -70,14 +70,26 @@ var _ = Describe("Hash extraction tests", func() {
 			4,
 			[]string{"felix-", "cali"},
 			"cali:",
-			"",
+			"an-old-rule",
 		)
 	})
 
-	It("should extract an old felix rule with no hash", func() {
+	It("should extract an old felix rule by prefix", func() {
 		hashes := table.getHashesFromBuffer(bytes.NewBufferString("-A FORWARD -j felix-FORWARD\n"))
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"OLD INSERT RULE"},
+		}))
+	})
+	It("should extract an old felix rule by special case", func() {
+		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+			"-A FORWARD -j an-old-rule\n" +
+				"-A FORWARD -j ignore-me\n",
+		))
+		Expect(hashes).To(Equal(map[string][]string{
+			"FORWARD": []string{
+				"OLD INSERT RULE",
+				"",
+			},
 		}))
 	})
 	It("should extract a hash", func() {
@@ -85,6 +97,38 @@ var _ = Describe("Hash extraction tests", func() {
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
+		}))
+	})
+	It("should extract a hash or a gap from each rule", func() {
+		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
+				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
+				"-A FORWARD --src '1.2.3.4'\n" +
+				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
+		Expect(hashes).To(Equal(map[string][]string{
+			"FORWARD": []string{
+				"wUHhoiAYhphO9Mso",
+				"abcdefghij1234-_",
+				"",
+				"1234567890093213",
+			},
+		}))
+	})
+	It("should handle multiple chains", func() {
+		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+			"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
+				"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
+				"-A FORWARD --src '1.2.3.4'\n" +
+				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
+		Expect(hashes).To(Equal(map[string][]string{
+			"cali-abcd": []string{
+				"wUHhoiAYhphO9Mso",
+				"abcdefghij1234-_",
+			},
+			"FORWARD": []string{
+				"",
+				"1234567890093213",
+			},
 		}))
 	})
 })

@@ -31,6 +31,7 @@ const (
 )
 
 var (
+	// List of all the top-level kernel-created chains by iptables table.
 	tableToKernelChains = map[string][]string{
 		"filter": []string{"INPUT", "FORWARD", "OUTPUT"},
 		"nat":    []string{"PREROUTING", "INPUT", "OUTPUT", "POSTROUTING"},
@@ -38,11 +39,97 @@ var (
 		"raw":    []string{"PREROUTING", "OUTPUT"},
 	}
 
+	// chainCreateRegexp matches iptables-save output lines for chain forward reference lines.
+	// It captures the name of the chain.
 	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
-	appendRegexp      = regexp.MustCompile(`^-A (\S+)`)
+	// appendRegexp matches an iptables-save output line for an append operation.
+	appendRegexp = regexp.MustCompile(`^-A (\S+)`)
 )
 
-// Table represents a single one of the iptables tables i.e. "raw", "nat", "filter", etc.
+// Table represents a single one of the iptables tables i.e. "raw", "nat", "filter", etc.  It
+// caches the desired state of that table, then attempts to bring it into sync when Apply() is
+// called.
+//
+// API Model
+//
+// Table supports two classes of operation:  "rule insertions" and "full chain updates".
+//
+// As the name suggests, rule insertions allow for inserting one or more rules into a pre-existing
+// chain.  Rule insertions are intended to be used to hook kernel chains (such as "FORWARD") in
+// order to direct them to a Felix-owned chain.  It is important to minimise the use of rule
+// insertions because the top-level chains are shared resources, which can be modified by other
+// applications.  In addition, rule insertions are harder to clean up after an upgrade to a new
+// version of Felix (because we need a way to recognise our rules in a crowded chain).
+//
+// Full chain updates replace the entire contents of a Felix-owned chain with a new set of rules.
+// Limiting the operation to "replace whole chain" in this way significantly simplifies the API.
+// Although the API operates on full chains, the dataplane write logic tries to avoid rewriting
+// a whole chain if only part of it has changed (this was not the case in Felix 1.4).  This
+// prevents iptables counters from being reset unnecessarily.
+//
+// In either case, the actual dataplane updates are deferred until the next call to Apply() so
+// chain updates and insertions may occur in any order as long as they are consistent (i.e. there
+// are no references to non-existent chains) by the time Apply() is called.
+//
+// Design
+//
+// We had several goals in designing the iptables machinery in 2.0.0:
+//
+// (1) High performance. Felix needs to handle high churn of endpoints and rules.
+//
+// (2) Ability to restore rules, even if other applications accidentally break them: we found that
+// other applications sometimes misuse iptables-save and iptables-restore to do a read, modify,
+// write cycle. That behaviour is not safe under concurrent modification.
+//
+// (3) Avoid rewriting rules that haven't changed so that we don't reset iptables counters.
+//
+// (4) Avoid parsing iptables commands (for example, the output from iptables/iptables-save).
+// This is very hard to do robustly because iptables rules do not necessarily round-trip through
+// the kernel in the same form.  In addition, the format could easily change due to changes or
+// fixes in the iptables/iptables-save command.
+//
+// (5) Support for graceful restart.  I.e. deferring potentially incorrect updates until we're
+// in-sync with the datastore.  For example, if we have 100 endpoints on a host, after a restart
+// we don't want to write a "dispatch" chain when we learn about the first endpoint (possibly
+// replacing an existing one that had all 100 endpoints in place and causing traffic to glitch);
+// instead, we want to defer until we've seen all 100 and then do the write.
+//
+// (6) Improved handling of rule inserts vs Felix 1.4.x.  Previous versions of Felix sometimes
+// inserted special-case rules that were not marked as Calico rules in any sensible way making
+// cleanup of those rules after an upgrade difficult.
+//
+// Implementation
+//
+// For high performance (goal 1), we use iptables-restore to do bulk updates to iptables.  This is
+// much faster than individual iptables calls.
+//
+// To allow us to restore rules after they are clobbered by another process (goal 2), we cache
+// them at this layer.  This means that we don't need a mechanism to ask the other layers of Felix
+// to do a resync.  Note: Table doesn't start a thread of its own so it relies on the main event
+// loop to trigger any dataplane resync polls.
+//
+// There is tension between goals 3 and 4.  In order to avoid full rewrites (goal 3), we need to
+// know what rules are in place, but we also don't want to parse them to find out (goal 4)!  As
+// a compromise, we deterministically calculate an ID for each rule and store it in an iptables
+// comment.  Then, when we want to know what rules are in place, we _do_ parse the output from
+// iptables-save, but only to read back the rule IDs.  That limits the amount of parsing we need
+// to do and keeps it manageable/robust.
+//
+// To support graceful restart (goal 5), we defer updates to the dataplane until Apply() is called,
+// then we do an atomic update using iptables-restore.  As long as the first Apply() call is
+// after we're in sync, the dataplane won't be touched until the irght time.  Felix 1.4.x had a
+// more complex mechanism to support partial updates during the graceful restart period but
+// Felix 2.0.0 resyncs so quickly that the added complexity is not justified.
+//
+// To make it easier to manage rule insertions (goal 6), we add rule IDs to those too.  With
+// rule IDs in place, we can easily distinguish Calico rules from non-Calico rules without needing
+// to know exactly which rules to expect.
+//
+// Thread safety
+//
+// Table doesn't do any internal synchronization, its methods should only be called from one
+// thread.  To avoid conflicts in the dataplane itself, there should only be one instance of
+// Table for each iptable table in an application.
 type Table struct {
 	Name      string
 	IPVersion uint8
