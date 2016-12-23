@@ -69,7 +69,7 @@ type endpointManager struct {
 	ifaceAddrs               map[string]set.Set
 	rawHostEndpoints         map[proto.HostEndpointID]*proto.HostEndpoint
 	dirtyHostEndpoints       bool
-	activeHostIdToChains     map[*proto.HostEndpointID][]*iptables.Chain
+	activeHostIdToChains     map[proto.HostEndpointID][]*iptables.Chain
 	activeHostDispatchChains []*iptables.Chain
 
 	// Callbacks
@@ -110,7 +110,7 @@ func newEndpointManager(
 		ifaceAddrs:               map[string]set.Set{},
 		rawHostEndpoints:         map[proto.HostEndpointID]*proto.HostEndpoint{},
 		dirtyHostEndpoints:       true,
-		activeHostIdToChains:     map[*proto.HostEndpointID][]*iptables.Chain{},
+		activeHostIdToChains:     map[proto.HostEndpointID][]*iptables.Chain{},
 		activeHostDispatchChains: nil,
 
 		OnWorkloadEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
@@ -336,7 +336,7 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	// own.  Rather it is looking at the set of local non-workload interfaces and
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
-	resolvedHostEpIds := map[string]*proto.HostEndpointID{}
+	resolvedHostEpIds := map[string]proto.HostEndpointID{}
 	for ifaceName, ifaceAddrs := range m.ifaceAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
@@ -381,15 +381,15 @@ func (m *endpointManager) resolveHostEndpoints() error {
 		}
 		if bestHostEpId != nil {
 			log.WithField("ifaceName", ifaceName).WithField("bestHostEpId", bestHostEpId).Debug("Got HostEp for interface")
-			resolvedHostEpIds[ifaceName] = bestHostEpId
+			resolvedHostEpIds[ifaceName] = *bestHostEpId
 		}
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
-	newHostEpChains := map[*proto.HostEndpointID][]*iptables.Chain{}
+	newHostEpChains := map[proto.HostEndpointID][]*iptables.Chain{}
 	for ifaceName, id := range resolvedHostEpIds {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
-		hostEp := m.rawHostEndpoints[*id]
+		hostEp := m.rawHostEndpoints[id]
 		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
 		m.filterTable.UpdateChains(chains)
 		newHostEpChains[id] = chains

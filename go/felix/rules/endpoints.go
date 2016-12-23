@@ -232,7 +232,7 @@ func (r *ruleRenderer) endpointToIptablesChains(
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
 }
 
-func (r *ruleRenderer) HostDispatchChains(endpoints map[string]*proto.HostEndpointID) []*Chain {
+func (r *ruleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpointID) []*Chain {
 
 	// Extract endpoint names.
 	names := make([]string, 0, len(endpoints))
