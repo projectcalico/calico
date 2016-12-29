@@ -89,11 +89,6 @@ spec:
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
 ```
 
-## Environment Variables
-
-Each of the above configuration options can also be set through environment variables.  For example,
-`etcdEndpoints` can also be represented as `ETCD_ENDPOINTS`.
-
 ## calico/node
 
 It is important to note that not only will calicoctl will use the specified keys directly
