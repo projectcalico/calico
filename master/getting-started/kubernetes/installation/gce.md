@@ -2,7 +2,7 @@
 title: Deploying Calico and Kubernetes on GCE
 ---
 
-These instructions allow you to set up a Kubernetes cluster with Calico networking on GCE using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
+These instructions allow you to set up a Kubernetes cluster with Calico networking on GCE using the [Calico CNI plugin][cni-plugin]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with GCE
 
@@ -160,6 +160,6 @@ You should now have a fully functioning Kubernetes cluster using Calico for netw
 
 We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/simple-policy).
 
-[calico-cni]: https://github.com/projectcalico/calico-cni
+[cni-plugin]: https://github.com/projectcalico/cni-plugin
 [coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html
 [gcloud-instructions]: https://cloud.google.com/sdk/

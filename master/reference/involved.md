@@ -22,7 +22,7 @@ Repository         | Description
 -------------------|----------------------------
 [felix](https://github.com/projectcalico/felix) | The felix policy enforcement agent.
 [calicoctl](https://github.com/projectcalico/calicoctl) | Home of the calico/node and calicoctl components.
-[calico-cni](https://github.com/projectcalico/calico-cni) | The Calico CNI plugin.
+[cni-plugin](https://github.com/projectcalico/cni-plugin) | The Calico CNI plugin.
 [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | The Calico libnetwork plugin for Docker.
 [k8s-policy](https://github.com/projectcalico/k8s-policy) | Kubernetes policy controller.
 [libcalico](https://github.com/projectcalico/libcalico) | Python Calico library.

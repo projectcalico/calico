@@ -1,5 +1,5 @@
 ---
-title: Networking Mesos Tasks with Calico-CNI
+title: Networking Mesos Tasks with Calico
 ---
 
 ## Prerequisites
@@ -35,7 +35,7 @@ With your CNI network configured, you are now ready to launch tasks on it. There
 
 #### a.) Using Mesos-Execute
 
-To test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico-CNI network:
+To test that Calico's network is functioning correctly, use `mesos-execute` and set `--networks` to launch a task on your Calico CNI network:
 
 ```shell
 mesos-execute --containerizer=mesos \
@@ -103,9 +103,9 @@ The application will show its Calico IP when viewed using the Marathon UI, howev
 
 ## 3. Configuring Policy
 
-Calico-CNI v1.4.1+ supports selector-based policy for Mesos v1.0.0+.
+Calico CNI v1.4.1+ supports selector-based policy for Mesos v1.0.0+.
 
-The above Marathon Application Definition has assigned the labels `app=frontend` and `group=production` to the task's NetworkInfo. Calico-CNI automatically reads these labels and assign them to the endpoint, allowing us to enforce policy based on them.
+The above Marathon Application Definition has assigned the labels `app=frontend` and `group=production` to the task's NetworkInfo. The Calico CNI plugin automatically reads these labels and assign them to the endpoint, allowing us to enforce policy based on them.
 
 The following YAML policy spec describes rules based on these labels:
 

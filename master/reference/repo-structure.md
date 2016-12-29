@@ -43,7 +43,7 @@ There are several integrations available for Calico in a containerized
 environment.  The repositories below hold the plugin code for these
 integrations.
 
-## [calico-cni](https://github.com/projectcalico/calico-cni)
+## [cni-plugin](https://github.com/projectcalico/cni-plugin)
 
 | Artifact | Type | Description |
 |---------|-------|-----------|

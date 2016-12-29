@@ -2,7 +2,7 @@
 title: Deploying Calico and Kubernetes on AWS
 ---
 
-These instructions allow you to set up a Kubernetes cluster with Calico networking on AWS using the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
+These instructions allow you to set up a Kubernetes cluster with Calico networking on AWS using the [Calico CNI plugin][cni-plugin]. This guide does not setup TLS between Kubernetes components or on the Kubernetes API.
 
 ## 1. Getting started with AWS
 
@@ -310,4 +310,4 @@ We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}
 
 [install-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/installing.html#install-bundle-other-os
 [configure-aws-cli]: http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-calico-with-docker.html
-[calico-cni]: https://github.com/projectcalico/calico-cni
+[cni-plugin]: https://github.com/projectcalico/cni-plugin
