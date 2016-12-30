@@ -28,7 +28,7 @@ and is currently only supported as via hosted install.
 There are three components of a Calico / Kubernetes integration.
 
 - The Calico per-node docker container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
-- The [calico-cni](https://github.com/projectcalico/calico-cni) network plugin binaries.
+- The [cni-plugin](https://github.com/projectcalico/cni-plugin) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
 - When using Kubernetes NetworkPolicy, the Calico policy controller is also required.
 
@@ -36,7 +36,7 @@ The `calico/node` docker container must be run on the Kubernetes master and each
 Kubernetes node in your cluster.  It contains the BGP agent necessary for Calico routing to occur,
 and the Felix agent which programs network policy rules.
 
-The `calico-cni` plugin integrates directly with the Kubernetes `kubelet` process
+The `cni-plugin` plugin integrates directly with the Kubernetes `kubelet` process
 on each node to discover which pods have been created, and adds them to Calico networking.
 
 The `calico/kube-policy-controller` container runs as a pod on top of Kubernetes and implements
@@ -113,8 +113,8 @@ The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ip
 Download the binaries and make sure they're executable
 
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 

@@ -23,7 +23,7 @@ There are three components of a Calico / rkt integration.
 
 - The Calico per-node rkt container, [calico/node](https://quay.io/repository/calico/node?tab=tags)
 - The [`calicoctl`](https://github.com/projectcalico/calicoctl/releases) command line tool.
-- The [calico-cni](https://github.com/projectcalico/calico-cni/releases) network plugin binaries.
+- The [cni-plugin](https://github.com/projectcalico/cni-plugin/releases) network plugin binaries.
   - This is the combination of two binary executables and a configuration file.
 
 The `calico/node` docker container must be run on each node in your cluster.  It contains
@@ -33,7 +33,7 @@ rules.
 The `calicoctl` binary is a command line utility that can be used to manage network policy
 for your rkt containers, and can be used to monitor the status of your Calico services.
 
-The `calico-cni` network plugin binaries are a combination of two binary executables.
+The Calico CNI network plugin binaries are a combination of two binary executables.
 These binaries are invoked from the rkt container lifecycle hooks on each node to configure
 the container interfaces,  manage IP addresses and enable Calico policy on the containers.
 
@@ -128,8 +128,8 @@ for config discovery.  You may change the location and override the rkt configur
 if desired.
 
 ```bash
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico-ipam
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico
+wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico-ipam
 chmod +x /etc/rkt/net.d/calico /etc/rkt/net.d/calico-ipam
 ```
 
