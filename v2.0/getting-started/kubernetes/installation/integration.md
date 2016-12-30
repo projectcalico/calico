@@ -16,7 +16,8 @@ for most users.
 
 - An existing Kubernetes cluster running Kubernetes >= v1.1.  To use NetworkPolicy, Kubernetes >= v1.3.0 is required.
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
-  - Calico can share the etcd cluster used by Kubernetes, but it's recommended that a separate cluster is set up.
+  - Calico can share the etcd cluster used by Kubernetes, but in some cases it's recommended that a separate cluster is set up.
+    A number of production users do share the etcd cluster between the two, but separating them gives better performance at high scale.
 
 > **NOTE:**
 >
