@@ -89,6 +89,40 @@ spec:
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
 ```
 
+#### Example using IPv6
+
+Create a single node etcd cluster listening on IPv6 localhost `[::1]`.
+
+```
+etcd --listen-client-urls=http://[::1]:2379 --advertise-client-urls=http://[::1]:2379
+```
+
+Use the etcd IPv6 cluster:
+
+```
+ETCD_ENDPOINTS=http://[::1]:2379 calicoctl get bgppeers
+```
+
+#### Example using mixed IPv4/IPv6
+
+Create a single node etcd cluster listening on IPv4 and IPv6 localhost `[::1]`.
+
+```
+etcd --listen-client-urls=http://[::1]:2379,http://127.0.0.1:2379 --advertise-client-urls=http://[::1]:2379
+```
+
+Use the IPv6 endpoint:
+
+```
+ETCD_ENDPOINTS=http://[::1]:2379 calicoctl get bgppeers
+```
+
+Use the IPv4 endpoint:
+
+```
+ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl get bgppeers
+```
+
 ## calico/node
 
 It is important to note that not only will calicoctl will use the specified keys directly
