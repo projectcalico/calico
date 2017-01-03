@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ type Registry struct {
 }
 
 func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
-	return NewRegistryWithOverrides(
+	return NewRegistryWithShims(
 		ipVersionConfig,
 		NewExistenceCache(newRealCmd),
 		newRealCmd,
@@ -52,7 +52,7 @@ func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
 }
 
 // newRegistryWithOverrides is an internal test constructor.
-func NewRegistryWithOverrides(
+func NewRegistryWithShims(
 	ipVersionConfig *IPVersionConfig,
 	existenceCache existenceCache,
 	cmdFactory cmdFactory,

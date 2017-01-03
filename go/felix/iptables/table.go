@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/set"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
@@ -117,13 +116,14 @@ var (
 //
 // To support graceful restart (goal 5), we defer updates to the dataplane until Apply() is called,
 // then we do an atomic update using iptables-restore.  As long as the first Apply() call is
-// after we're in sync, the dataplane won't be touched until the irght time.  Felix 1.4.x had a
+// after we're in sync, the dataplane won't be touched until the right time.  Felix 1.4.x had a
 // more complex mechanism to support partial updates during the graceful restart period but
 // Felix 2.0.0 resyncs so quickly that the added complexity is not justified.
 //
 // To make it easier to manage rule insertions (goal 6), we add rule IDs to those too.  With
 // rule IDs in place, we can easily distinguish Calico rules from non-Calico rules without needing
-// to know exactly which rules to expect.
+// to know exactly which rules to expect.  To deal with cleanup after upgrade from older versions
+// that did not write rule IDs, we support special-case regexes to detect our old rules.
 //
 // Thread safety
 //
@@ -164,11 +164,13 @@ type Table struct {
 	// oldInsertRegexp matches inserted rules from old pre rule-hash versions of felix.
 	oldInsertRegexp *regexp.Regexp
 
-	restoreCmd  string
-	saveCmd     string
-	iptablesCmd string
+	iptablesRestoreCmd string
+	iptablesSaveCmd    string
 
 	logCxt *log.Entry
+
+	// Factory for making commands, used by UTs to shim exec.Command().
+	newCmd cmdFactory
 }
 
 func NewTable(
@@ -178,6 +180,27 @@ func NewTable(
 	hashPrefix string,
 	extraCleanupRegexPattern string,
 ) *Table {
+	return NewTableWithShims(
+		name,
+		ipVersion,
+		historicChainPrefixes,
+		hashPrefix,
+		extraCleanupRegexPattern,
+		newRealCmd,
+	)
+}
+
+// NewTableWithShims is a test constructor, allowing
+func NewTableWithShims(
+	name string,
+	ipVersion uint8,
+	historicChainPrefixes []string,
+	hashPrefix string,
+	extraCleanupRegexPattern string,
+	newCmd cmdFactory,
+) *Table {
+	// Calculate the regex used to match the hash comment.  The comment looks like this:
+	// --comment "cali:abcd1234_-".
 	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
 	ourChainsPattern := "^(" + strings.Join(historicChainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
@@ -218,16 +241,16 @@ func NewTable(
 		hashCommentRegexp: hashCommentRegexp,
 		ourChainsRegexp:   ourChainsRegexp,
 		oldInsertRegexp:   oldInsertRegexp,
+
+		newCmd: newCmd,
 	}
 
 	if ipVersion == 4 {
-		table.restoreCmd = "iptables-restore"
-		table.saveCmd = "iptables-save"
-		table.iptablesCmd = "iptables"
+		table.iptablesRestoreCmd = "iptables-restore"
+		table.iptablesSaveCmd = "iptables-save"
 	} else {
-		table.restoreCmd = "ip6tables-restore"
-		table.saveCmd = "ip6tables-save"
-		table.iptablesCmd = "ip6tables"
+		table.iptablesRestoreCmd = "ip6tables-restore"
+		table.iptablesSaveCmd = "ip6tables-save"
 	}
 	return table
 }
@@ -336,7 +359,7 @@ func (t *Table) loadDataplaneState() {
 // containing the hashes for the rules in that table.  Rules with no hashes are represented by
 // an empty string.
 func (t *Table) getHashesFromDataplane() map[string][]string {
-	cmd := exec.Command(t.saveCmd, "-t", t.Name)
+	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
 	output, err := cmd.Output()
 	if err != nil {
 		t.logCxt.WithError(err).Panic("iptables save failed")
@@ -384,7 +407,9 @@ func (t *Table) getHashesFromBuffer(buf *bytes.Buffer) map[string][]string {
 		chainName := captures[1]
 
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
-		// so that they get cleaned up.
+		// so that they get cleaned up.  Note: we're implicitly capturing the first match
+		// of the regex.  When writing the rules, we ensure that the hash is written as the
+		// first comment.
 		hash := ""
 		captures = t.hashCommentRegexp.FindStringSubmatch(line)
 		if captures != nil {
@@ -480,16 +505,16 @@ func (t *Table) applyUpdates() error {
 					}
 					// Hash doesn't match, replace the rule.
 					ruleNum := i + 1 // 1-indexed.
-					hashComment := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, hashComment)
+					prefixFrag := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
 					line = deleteRule(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
-					hashComment := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, hashComment)
+					prefixFrag := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderAppend(chainName, prefixFrag)
 				}
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
@@ -552,8 +577,8 @@ func (t *Table) applyUpdates() error {
 			}
 		}
 		for i := len(rules) - 1; i >= 0; i-- {
-			comment := t.commentFrag(currentHashes[i])
-			line := chain.Rules[i].RenderInsert(chainName, comment)
+			prefixFrag := t.commentFrag(currentHashes[i])
+			line := chain.Rules[i].RenderInsert(chainName, prefixFrag)
 			inputBuf.WriteString(line)
 			inputBuf.WriteString("\n")
 		}
@@ -586,10 +611,10 @@ func (t *Table) applyUpdates() error {
 	t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
 
 	var outputBuf, errBuf bytes.Buffer
-	cmd := exec.Command(t.restoreCmd, "--noflush", "--verbose")
-	cmd.Stdin = &inputBuf
-	cmd.Stdout = &outputBuf
-	cmd.Stderr = &errBuf
+	cmd := t.newCmd(t.iptablesRestoreCmd, "--noflush", "--verbose")
+	cmd.SetStdin(&inputBuf)
+	cmd.SetStdout(&outputBuf)
+	cmd.SetStderr(&errBuf)
 	err := cmd.Run()
 	if err != nil {
 		t.logCxt.WithFields(log.Fields{
@@ -602,7 +627,8 @@ func (t *Table) applyUpdates() error {
 		return err
 	}
 
-	// TODO(smc) check for COMMIT errors vs others and retry or not as appropriate.
+	// TODO(smc) Do a local retry of COMMIT errors since they're expected and common if others
+	// are modifying iptables.
 
 	// Now we've successfully updated iptables, clear the dirty sets.
 	t.dirtyChains = set.New()

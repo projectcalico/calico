@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package iptables_test
+package iptables
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -26,7 +26,7 @@ func init() {
 	testutils.HookLogrusForGinkgo()
 }
 
-func TestIptables(t *testing.T) {
+func TestIptablesUT(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Iptables Suite")
 }
