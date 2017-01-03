@@ -1,5 +1,5 @@
-hash: f4d727e2266dbd0d1be43b523257dc5e8eaf0c428ebe603483681d443ebd74f6
-updated: 2016-12-13T20:56:57.328253138-08:00
+hash: 828ec2f1cc33053b46cb24095d665b9a8c81e28974da51c2ca240fb75f3ccbf5
+updated: 2017-01-09T12:11:34.058177378-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -80,7 +80,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -108,6 +108,8 @@ imports:
   - pkg/escape
 - name: github.com/jonboulle/clockwork
   version: 2eee05ed794112d45db504eb05aa693efd2b8b09
+- name: github.com/juju/ratelimit
+  version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
   version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
 - name: github.com/magiconair/properties
@@ -176,7 +178,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f87d39740b5a49891d6ee2646a17326c5e337b20
+  version: 7c09c32a3cdb6bbc1c9ac5343fd43ba51b0a9eab
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -255,7 +257,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 478fcf54317e52ab69f40bb4c7a1520288d7f7ea
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -307,7 +309,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/client-go
-  version: 41a99d711af778a177f07402217b85d456b50da1
+  version: 243d8a9cb66a51ad8676157f79e71033b4014a2a
   subpackages:
   - discovery
   - kubernetes
@@ -327,7 +329,6 @@ imports:
   - pkg/api/errors
   - pkg/api/install
   - pkg/api/meta
-  - pkg/api/meta/metatypes
   - pkg/api/resource
   - pkg/api/unversioned
   - pkg/api/v1
@@ -357,6 +358,8 @@ imports:
   - pkg/apis/extensions
   - pkg/apis/extensions/install
   - pkg/apis/extensions/v1beta1
+  - pkg/apis/meta/v1
+  - pkg/apis/meta/v1/unstructured
   - pkg/apis/policy
   - pkg/apis/policy/install
   - pkg/apis/policy/v1beta1
@@ -400,7 +403,6 @@ imports:
   - pkg/util/net
   - pkg/util/parsers
   - pkg/util/rand
-  - pkg/util/ratelimit
   - pkg/util/runtime
   - pkg/util/sets
   - pkg/util/uuid
