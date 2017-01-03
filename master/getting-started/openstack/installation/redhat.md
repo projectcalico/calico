@@ -2,8 +2,13 @@
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
 ---
 
-These instructions will take you through a first-time install of Calico.
-If you are upgrading an existing system, please see the [Calico on OpenStack upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade) document instead for upgrade instructions.
+For this version of Calico, with OpenStack on RHEL 7 or CentOS 7, we recommend
+using OpenStack Liberty or later.
+
+These instructions will take you through a first-time install of Calico.  If
+you are upgrading an existing system, please see the [Calico on OpenStack
+upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
+document instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
 control nodes to use Calico, and upgrading compute nodes to use Calico.
@@ -24,8 +29,8 @@ sections.
 
 Before starting this you will need the following:
 
--   One or more machines running RHEL 7, with OpenStack Juno, Kilo,
-    Liberty or Mitaka installed.
+-   One or more machines running RHEL 7, with OpenStack Liberty or Mitaka
+    installed.
 -   SSH access to these machines.
 -   Working DNS between these machines (use `/etc/hosts` if you don't
     have DNS on your network).
@@ -39,39 +44,14 @@ These steps are detailed in this section.
 
 If you haven't already done so, install Openstack with Neutron and ML2
 networking. Instructions for installing OpenStack on RHEL can be found
-here
---[Juno](http://docs.openstack.org/juno/install-guide/install/yum/content/index.html)
-/
-[Kilo](http://docs.openstack.org/kilo/install-guide/install/yum/content/index.html)
-/ [Liberty](http://docs.openstack.org/liberty/index.html).
+[here](http://docs.openstack.org/liberty/index.html).
 
 ### Configure YUM repositories
-
-The latest version of Calico for OpenStack is 2.0, and we recommend using it
-with OpenStack Liberty or later.  Other possible combinations are shown by the
-following table.
-
-| OpenStack release | Calico version | Repository     |
-|-------------------+----------------+----------------|
-| Mitaka            |            2.0 | rpm/calico-2.0 |
-| Liberty           |            2.0 | rpm/calico-2.0 |
-| Mitaka            |            1.4 | rpm/calico-1.4 |
-| Liberty           |            1.4 | rpm/calico-1.4 |
-| (deprecated) Kilo |            1.3 | rpm_kilo       |
-| (deprecated) Juno |            1.3 | rpm_juno       |
-
-If you're using CentOS with Juno or Kilo, check the yum priorities
-plugin is installed:
-
-```
-    yum install yum-plugin-priorities
-```
 
 Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
 You may have already added this to install OpenStack.
 
-Configure the Calico repository as indicated above for your chosen OpenStack
-release.  For example, for Mitaka:
+Configure the Calico repository:
 
 ```
     cat > /etc/yum.repos.d/calico.repo <<EOF
@@ -85,10 +65,6 @@ release.  For example, for Mitaka:
     priority=97
     EOF
 ```
-
-**NOTE**: With OpenStack Juno or Kilo, the priority setting in `calico.repo` is
-needed so that the Calico repository can install Calico-enhanced versions of
-some of the OpenStack Nova and Neutron packages.
 
 ## Etcd Install
 
@@ -284,31 +260,20 @@ On each control node, perform the following steps:
     > left around.
     >
 
-2.  Run `yum update`. This will bring in Calico-specific updates to the
-    OpenStack packages and to `dnsmasq`. (OpenStack updates are not
-    needed for Liberty.)
+2.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
 
 3.  Edit the `/etc/neutron/neutron.conf` file. In the \[DEFAULT\]
     section:
     -   Find the line beginning with `core_plugin`, and change it to
         read `core_plugin = calico`.
 
-4.  With OpenStack releases earlier than Liberty, edit the
-    `/etc/neutron/neutron.conf` file. In the \[DEFAULT\] section:
-    -   Find the line for the `dhcp_agents_per_network` setting,
-        uncomment it, and set its value to the number of compute nodes
-        that you will have (or any number larger than that). This allows
-        a DHCP agent to run on every compute node, which Calico requires
-        because the networks on different compute nodes are not
-        bridged together.
-
-5.  Install the `calico-control` package:
+4.  Install the `calico-control` package:
 
     ```
         yum install calico-control
     ```
 
-6.  Restart the neutron server process:
+5.  Restart the neutron server process:
 
     ```
         service neutron-server restart
@@ -413,9 +378,7 @@ On each compute node, perform the following steps:
         neutron agent-delete <agent-id>
     ```
 
-4.  Run `yum update`. This will bring in Calico-specific updates to the
-    OpenStack packages and to `dnsmasq`. For OpenStack Liberty, this
-    step only upgrades `dnsmasq`.
+4.  Run `yum update`. This will bring in Calico-specific updates to `dnsmasq`.
 
 5.  Install Neutron infrastructure code on the compute host:
 
@@ -423,24 +386,8 @@ On each compute node, perform the following steps:
         yum install openstack-neutron
     ```
 
-6.  For OpenStack Juno or Kilo, open `/etc/neutron/dhcp_agent.ini`, and
-    in the `[DEFAULT]` section add the following line (removing any
-    existing `interface_driver =` line):
-
-    ```
-        interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
-    ```
-
-    then restart and enable the Neutron DHCP agent:
-
-    ```
-        service neutron-dhcp-agent restart
-        chkconfig neutron-dhcp-agent on
-    ```
-
-    For OpenStack Liberty or later, modify `/etc/neutron/neutron.conf`.
-    In the `[oslo_concurrency]` section, ensure that the `lock_path`
-    variable is uncommented and set as follows:
+6.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
+    ensure that the `lock_path` variable is uncommented and set as follows:
 
     ```
         # Directory to use for lock files. For security, the specified directory should

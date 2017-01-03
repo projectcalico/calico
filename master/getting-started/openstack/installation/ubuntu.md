@@ -2,11 +2,16 @@
 title: 'Ubuntu Packaged Install Instructions'
 ---
 
+For this version of Calico, with OpenStack on Ubuntu Trusty or Xenial, we
+recommend using OpenStack Liberty or later; Kilo is also known to work on
+Ubuntu Trusty.
+
 These instructions will take you through a first-time install of Calico using
 the latest packages on a system running Ubuntu 14.04 (Trusty) or 16.04
-(Xenial), with OpenStack Icehouse, Juno, Kilo, Liberty or Mitaka. If you are
-upgrading an existing system, please see [this document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade) instead
-for upgrade instructions.
+(Xenial), with OpenStack Kilo, Liberty or Mitaka. If you are upgrading an
+existing system, please see [this
+document]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
+instead for upgrade instructions.
 
 There are three sections to the install: installing etcd, upgrading
 control nodes to use Calico, and upgrading compute nodes to use Calico.
@@ -32,35 +37,24 @@ If you haven't already done so, you should install OpenStack with
 Neutron and ML2 networking. Instructions for installing OpenStack can be
 found at <http://docs.openstack.org>.
 
-### Configuring the APT software sources
+### Configuring APT software sources
 
-The latest version of Calico for OpenStack is 2.0, and we recommend using it
-with OpenStack Liberty or later.  Other possible combinations are shown by the
-following table.
-
-| OpenStack release     | Calico version | Ubuntu versions | PPAs             |
-|-----------------------+----------------+-----------------+------------------|
-| Mitaka                |            2.0 | Xenial, Trusty  | calico-2.0       |
-| Liberty               |            2.0 | Xenial, Trusty  | calico-2.0       |
-| Mitaka                |            1.4 | Xenial, Trusty  | calico-1.4       |
-| Liberty               |            1.4 | Xenial, Trusty  | calico-1.4       |
-| Kilo                  |            1.4 | Trusty          | calico-1.4, kilo |
-| (deprecated) Kilo     |            1.3 | Trusty          | kilo             |
-| (deprecated) Juno     |            1.3 | Trusty          | juno             |
-| (deprecated) Icehouse |            1.3 | Trusty          | icehouse         |
-
-For your chosen combination, you need to configure APT to use the corresponding
-PPA(s).  For example, for Calico 2.0 with Liberty or later:
+Configure APT to use the Calico PPA:
 
 ```shell
     $ sudo apt-add-repository ppa:project-calico/calico-2.0
 ```
 
-Before OpenStack Liberty, Calico needed patched versions of Nova and Neutron.
-If you're using a version of OpenStack prior to Liberty, edit
-`/etc/apt/preferences` to add the following lines, whose effect is to prefer
-Calico-provided packages for Nova and Neutron even if later versions of those
-packages are released by Ubuntu.
+With Kilo, Calico also needs patched versions of Nova and Neutron that are
+provided by our 'kilo' PPA.  So if you are using Kilo:
+
+```shell
+    $ sudo apt-add-repository ppa:project-calico/kilo
+```
+
+and also edit `/etc/apt/preferences` to add the following lines, whose effect
+is to prefer the Calico-provided packages for Nova and Neutron even if later
+versions of those packages are released by Ubuntu.
 
 ```
     Package: *
@@ -328,9 +322,8 @@ perform the following steps:
     >      $ sudo apt-get upgrade
         ```
 
-6.  If you're using OpenStack Icehouse, Juno or Kilo, open
-    `/etc/neutron/dhcp_agent.ini` in your preferred text editor, and set
-    the following in the `[DEFAULT]` section:
+6.  If you're using OpenStack Kilo, open `/etc/neutron/dhcp_agent.ini` in your
+    preferred text editor, and set the following in the `[DEFAULT]` section:
 
     ```shell
         interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver

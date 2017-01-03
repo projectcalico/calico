@@ -9,8 +9,8 @@ to distinguish them from "workload endpoints" (such as containers or VMs).
 
 Calico supports the same rich security policy model for host endpoints
 that it supports for workload endpoints.  Host endpoints can have labels, and
-their labels are in the same "namespace" as those of workload endpoints. This 
-allows security rules for either type of endpoint to refer to the other type 
+their labels are in the same "namespace" as those of workload endpoints. This
+allows security rules for either type of endpoint to refer to the other type
 (or a mix of the two) using labels and selectors.
 
 Calico does not support setting IPs or policing MAC addresses for host
@@ -83,15 +83,12 @@ To create a production cluster, you should follow the guidance in the
 
 There are several ways to install Felix.
 
--   if you are running Ubuntu 14.04, then you can install a version from
-    our PPA:
+-   if you are running Ubuntu 14.04 or 16.04, you can install from our PPA:
 
-        sudo apt-add-repository ppa:project-calico/calico-<version>
+        sudo apt-add-repository ppa:project-calico/calico-2.0
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix
-
-    As of writing, &lt;version&gt; should be 2.0.
 
 -   if you are running a RedHat 7-derived distribution, you can install
     from our RPM repository:
@@ -99,11 +96,11 @@ There are several ways to install Felix.
         cat > /etc/yum.repos.d/calico.repo <<EOF
         [calico]
         name=Calico Repository
-        baseurl=http://binaries.projectcalico.org/rpm_stable/
+        baseurl=http://binaries.projectcalico.org/rpm/calico-2.0/
         enabled=1
         skip_if_unavailable=0
         gpgcheck=1
-        gpgkey=http://binaries.projectcalico.org/rpm/key
+        gpgkey=http://binaries.projectcalico.org/rpm/calico-2.0/key
         priority=97
         EOF
 
@@ -289,7 +286,7 @@ key/value pairs that can be used in selector expressions.
 
 > **Warning**
 >
-> When rendering security rules on other hosts, Calico uses the 
+> When rendering security rules on other hosts, Calico uses the
 > `expectedIPs` field to resolve label selectors
 > to IP addresses. If the `expectedIPs` field is omitted
 > then security rules that use labels will fail to match
