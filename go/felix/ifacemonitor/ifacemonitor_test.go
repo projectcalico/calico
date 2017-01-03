@@ -16,6 +16,8 @@ package ifacemonitor_test
 
 import (
 	"fmt"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/projectcalico/felix/go/felix/ifacemonitor"
@@ -26,9 +28,85 @@ import (
 	//. "github.com/onsi/gomega"
 )
 
+type linkModel struct {
+	index int
+	state string
+	addrs set.Set
+}
+
 type netlinkTest struct {
 	linkUpdates chan netlink.LinkUpdate
 	addrUpdates chan netlink.AddrUpdate
+
+	nextIndex int
+	links     map[string]linkModel
+}
+
+func (nl *netlinkTest) addLink(name string) {
+	if nl.links == nil {
+		nl.links = map[string]linkModel{}
+		nl.nextIndex = 10
+	}
+	nl.links[name] = linkModel{
+		index: nl.nextIndex,
+		state: "down",
+		addrs: set.New(),
+	}
+	nl.nextIndex++
+	nl.signalLink(name)
+}
+
+func (nl *netlinkTest) changeLinkState(name string, state string) {
+	link := nl.links[name]
+	link.state = state
+	nl.links[name] = link
+	nl.signalLink(name)
+}
+
+func (nl *netlinkTest) delLink(name string) {
+	delete(nl.links, name)
+	nl.signalLink(name)
+}
+
+func (nl *netlinkTest) signalLink(name string) {
+	// Values for a link that does not exist...
+	index := 0
+	var rawFlags uint32 = 0
+	var msgType uint16 = syscall.RTM_DELLINK
+
+	// If the link does exist, overwrite appropriately.
+	link, prs := nl.links[name]
+	if prs {
+		msgType = syscall.RTM_NEWLINK
+		index = link.index
+		if link.state == "up" {
+			rawFlags = syscall.IFF_RUNNING
+		}
+	}
+
+	// Build the update.
+	update := netlink.LinkUpdate{
+		Header: syscall.NlMsghdr{
+			Type: msgType,
+		},
+		Link: &netlink.Dummy{
+			LinkAttrs: netlink.LinkAttrs{
+				Name:     name,
+				Index:    index,
+				RawFlags: rawFlags,
+			},
+		},
+	}
+
+	// Send it.
+	nl.linkUpdates <- update
+}
+
+func (nl *netlinkTest) addAddr(name string, addr string) {
+	link := nl.links[name]
+	link.addrs.Add(addr)
+	nl.links[name] = link
+	nl.signalLink(name)
 }
 
 func (nl *netlinkTest) Subscribe(
@@ -45,12 +123,38 @@ func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 }
 
 func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	return []netlink.Addr{}, nil
+	name := link.Attrs().Name
+	model, prs := nl.links[name]
+	addrs := []netlink.Addr{}
+	if prs {
+		model.addrs.Iter(func(item interface{}) error {
+			addr := item.(string)
+			net, err := netlink.ParseIPNet(addr)
+			if err != nil {
+				panic("Address parsing failed")
+			}
+			if strings.ContainsRune(addr, ':') {
+				if family == netlink.FAMILY_V6 {
+					addrs = append(addrs, netlink.Addr{
+						IPNet: net,
+					})
+				}
+			} else {
+				if family == netlink.FAMILY_V4 {
+					addrs = append(addrs, netlink.Addr{
+						IPNet: net,
+					})
+				}
+			}
+			return nil
+		})
+	}
+	return addrs, nil
 }
 
 func linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
-	fmt.Println("addrStateCallback: ifaceName", ifaceName)
-	fmt.Println("addrStateCallback: ifaceState", ifaceState)
+	fmt.Println("linkStateCallback: ifaceName", ifaceName)
+	fmt.Println("linkStateCallback: ifaceState", ifaceState)
 }
 
 func addrStateCallback(ifaceName string, addrs set.Set) {
@@ -65,6 +169,20 @@ var _ = Describe("ifacemonitor", func() {
 		im.Callback = linkStateCallback
 		im.AddrCallback = addrStateCallback
 		go im.MonitorInterfaces()
+		time.Sleep(1 * time.Second)
+		nl.addLink("eth0")
+		time.Sleep(1 * time.Second)
+		nl.addAddr("eth0", "10.0.240.10/24")
+		time.Sleep(1 * time.Second)
+		nl.changeLinkState("eth0", "up")
+		time.Sleep(1 * time.Second)
+		nl.addAddr("eth0", "172.19.34.1/27")
+		time.Sleep(1 * time.Second)
+		nl.changeLinkState("eth0", "down")
+		time.Sleep(1 * time.Second)
+		nl.changeLinkState("eth0", "up")
+		time.Sleep(1 * time.Second)
+		nl.delLink("eth0")
 		time.Sleep(1 * time.Second)
 	})
 })
