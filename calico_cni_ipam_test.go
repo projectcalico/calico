@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	. "github.com/projectcalico/calico-cni/test_utils"
+	. "github.com/projectcalico/cni-plugin/test_utils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 

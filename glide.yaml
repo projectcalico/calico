@@ -1,4 +1,4 @@
-package: github.com/projectcalico/calico-cni
+package: github.com/projectcalico/cni-plugin
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/containernetworking/cni

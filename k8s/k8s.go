@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/projectcalico/calico-cni/utils"
+	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
