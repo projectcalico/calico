@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,15 @@ import (
 	"time"
 )
 
+type Netlink interface {
+	Subscribe(
+		linkUpdates chan netlink.LinkUpdate,
+		addrUpdates chan netlink.AddrUpdate,
+	) error
+	LinkList() ([]netlink.Link, error)
+	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+}
+
 type State string
 
 const (
@@ -33,34 +42,33 @@ type InterfaceStateCallback func(ifaceName string, ifaceState State)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type InterfaceMonitor struct {
-	upIfaces set.Set
-	Callback InterfaceStateCallback
-
+	netlinkStub  Netlink
+	upIfaces     set.Set
+	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
 	ifaceAddrs   map[int]set.Set
 }
 
-func New() *InterfaceMonitor {
+func New(netlinkStub Netlink) *InterfaceMonitor {
+	if netlinkStub == nil {
+		netlinkStub = &netlinkReal{}
+	}
 	return &InterfaceMonitor{
-		upIfaces: set.New(),
-
-		ifaceName:  map[int]string{},
-		ifaceAddrs: map[int]set.Set{},
+		netlinkStub: netlinkStub,
+		upIfaces:    set.New(),
+		ifaceName:   map[int]string{},
+		ifaceAddrs:  map[int]set.Set{},
 	}
 }
 
 func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
+
 	updates := make(chan netlink.LinkUpdate)
 	addrUpdates := make(chan netlink.AddrUpdate)
-	cancel := make(chan struct{})
-
-	if err := netlink.LinkSubscribe(updates, cancel); err != nil {
-		log.WithError(err).Fatal("Failed to subscribe to link updates")
-	}
-	if err := netlink.AddrSubscribe(addrUpdates, cancel); err != nil {
-		log.WithError(err).Fatal("Failed to subscribe to addr updates")
+	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
+		log.WithError(err).Fatal("Failed to subscribe to netlink stub")
 	}
 	log.Info("Subscribed to netlink updates.")
 
@@ -195,7 +203,7 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	if ifaceExists {
 		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
-			addrs, err := netlink.AddrList(link, family)
+			addrs, err := m.netlinkStub.AddrList(link, family)
 			if err != nil {
 				log.WithError(err).Warn("Netlink addr list operation failed.")
 			}
@@ -210,7 +218,7 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 
 func (m *InterfaceMonitor) resync() error {
 	log.Debug("Resyncing interface state.")
-	links, err := netlink.LinkList()
+	links, err := m.netlinkStub.LinkList()
 	if err != nil {
 		log.WithError(err).Warn("Netlink list operation failed.")
 		return err
