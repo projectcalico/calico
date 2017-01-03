@@ -25,7 +25,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/projectcalico/calico-cni/utils"
+	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )

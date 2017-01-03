@@ -63,9 +63,9 @@ vendor: glide.yaml
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
+	-v ${PWD}:/go/src/github.com/projectcalico/cni-plugin:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
-	cd /go/src/github.com/projectcalico/calico-cni && \
+	cd /go/src/github.com/projectcalico/cni-plugin && \
 	glide install -strip-vendor && \
 	chown $(shell id -u):$(shell id -u) -R vendor'
 
@@ -116,7 +116,7 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+	-v ${PWD}:/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(BUILD_CONTAINER_NAME) /bin/sh -e -c \
         'make dist/host-local && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
 	make stop-etcd
@@ -126,8 +126,8 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized
 build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 	mkdir -p dist
 	docker run --rm \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
-	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-cni/dist \
+	-v ${PWD}:/go/src/github.com/projectcalico/cni-plugin:ro \
+	-v ${PWD}/dist:/go/src/github.com/projectcalico/cni-plugin/dist \
 	$(BUILD_CONTAINER_NAME) bash -c '\
 		make binary && \
 		chown -R $(shell id -u):$(shell id -u) dist'
@@ -191,13 +191,13 @@ static-checks: vendor
 
 static-checks-containerized: vendor $(BUILD_CONTAINER_MARKER)
 	docker run --rm \
-        -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+        -v ${PWD}:/go/src/github.com/projectcalico/cni-plugin:rw \
         --entrypoint /bin/sh $(BUILD_CONTAINER_NAME) -e -c ' \
-        cd /go/src/github.com/projectcalico/calico-cni && \
+        cd /go/src/github.com/projectcalico/cni-plugin && \
         make update-tools static-checks'
 
 install:
-	CGO_ENABLED=0 go install github.com/projectcalico/calico-cni
+	CGO_ENABLED=0 go install github.com/projectcalico/cni-plugin
 
 # Retrieve a host-local plugin for use in the tests
 dist/host-local:
@@ -206,12 +206,12 @@ dist/host-local:
 
 # Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-python:
-	$(CURL) -L https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico -o $@
+	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico -o $@
 	chmod +x $@
 
 # Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-ipam-python:
-	$(CURL) -L https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico-ipam -o $@
+	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico-ipam -o $@
 	chmod +x $@
 
 # Copy the plugin into place
