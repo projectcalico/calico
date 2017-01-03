@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,11 @@ func (e *endpointStatusCombiner) OnWorkloadEndpointStatusUpdate(
 	id proto.WorkloadEndpointID,
 	status string,
 ) {
-	log.WithFields(log.Fields{}).Info("Storing endpoint status update")
+	log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"workload":  id,
+		"status":    status,
+	}).Info("Storing endpoint status update")
 	e.dirtyIDs.Add(id)
 	if status == "" {
 		delete(e.ipVersionToStatuses[ipVersion], id)

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -279,7 +279,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 	})
 
 	m.ifaceIDsToUpdateStatus.Iter(func(item interface{}) error {
-		log.WithField("workloadID", item).Info("Re-evaluating endpoint status")
+		logCxt := log.WithField("workloadID", item)
+		logCxt.Debug("Re-evaluating endpoint status")
 		workloadID := item.(proto.WorkloadEndpointID)
 		var known, operUp, adminUp, failed bool
 
@@ -300,6 +301,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 				status = "down"
 			}
 		}
+		logCxt = logCxt.WithFields(log.Fields{
+			"known":   known,
+			"failed":  failed,
+			"operUp":  operUp,
+			"adminUp": adminUp,
+			"status":  status,
+		})
+		logCxt.Info("Re-evaluated endpoint status")
 		m.OnWorkloadEndpointStatusUpdate(m.ipVersion, workloadID, status)
 
 		return set.RemoveItem
