@@ -84,7 +84,14 @@ VERSION_REPLACE = [
      'calico/kube-policy-controller:{kube-policy-controller-version}'),
 
     (re.compile(r'calico/cni:latest'),
-     'calico/cni:{calico-cni-version}')
+     'calico/cni:{calico-cni-version}'),
+
+    (re.compile(r'binaries.projectcalico.org/rpm/calico-[0-9.]+/'),
+     'binaries.projectcalico.org/rpm/calico-{calico-version-no-v}/'),
+
+    (re.compile(r'ppa:project-calico/calico-[0-9.]+'),
+     'ppa:project-calico/calico-{calico-version-no-v}'),
+
 ]
 
 
@@ -147,6 +154,7 @@ def start_release():
 
     versions = {
         "calico-version": new_version,
+        "calico-version-no-v": new_version[1:],
         "calico-containers-version": calico_containers_version,
         "calico-containers-version-no-v": calico_containers_version[1:],
         "felix-version": felix_version,
