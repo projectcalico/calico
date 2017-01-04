@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2014-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2014-2017 Tigera, Inc. All rights reserved.
 # Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -85,6 +85,7 @@ KNOWN_RULE_KEYS = set(
         "action",
         "ip_version",
         "log_prefix",
+        "rule_id",
     ] +
     NEGATABLE_MATCH_KEYS +
     ["!%s" % k for k in NEGATABLE_MATCH_KEYS]

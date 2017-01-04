@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,10 +49,10 @@ func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
 		s.Reset()
 		s.Write(hash)
 
-		// Wee need a form of the rule that we can hash.  Convert it to the protobuf
-		// binary representation, which is deterministic, at least ofr a given rev of the
+		// We need a form of the rule that we can hash.  Convert it to the protobuf
+		// binary representation, which is deterministic, at least for a given rev of the
 		// library.
-		// TODO(smc) Can we do better here?
+		// TODO(smc) Can we do better than hashing the protobuf?
 		rule.RuleId = ""
 		data, err := rule.Marshal()
 		if err != nil {

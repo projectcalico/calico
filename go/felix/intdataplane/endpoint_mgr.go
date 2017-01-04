@@ -437,7 +437,6 @@ func (m *endpointManager) configureInterface(name string) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 	if m.ipVersion == 4 {
-		// TODO(smc) Retry, don't panic!
 		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
 		if err != nil {
 			return err

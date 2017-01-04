@@ -198,8 +198,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 }
 
 type Manager interface {
-	// TODO(smc) add machinery to send only the required messages to each Manager.
-
 	// OnUpdate is called for each protobuf message from the datastore.  May either directly
 	// send updates to the IPSets and iptables.Table objects (which will queue the updates
 	// until the main loop instructs them to act) or (for efficiency) may wait until

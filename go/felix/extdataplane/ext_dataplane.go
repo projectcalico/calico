@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 package extdataplane
 
 import (
+	"bytes"
 	"encoding/binary"
-	"errors"
 	log "github.com/Sirupsen/logrus"
 	pb "github.com/gogo/protobuf/proto"
 	_ "github.com/projectcalico/felix/go/felix/config"
@@ -167,32 +167,28 @@ func (fc *extDataplaneConn) SendMessage(msg interface{}) error {
 		log.WithField("msg", msg).Panic("Unknown message type")
 	}
 	data, err := pb.Marshal(envelope)
+
 	if err != nil {
 		log.WithError(err).WithField("msg", msg).Panic(
 			"Failed to marshal data to front end")
 	}
 
-	lengthBuffer := make([]byte, 8)
-	binary.LittleEndian.PutUint64(lengthBuffer, uint64(len(data)))
-
-	numBytes, err := fc.toDataplane.Write(lengthBuffer)
-	if err != nil || numBytes != len(lengthBuffer) {
-		log.WithError(err).WithField("bytesWritten", numBytes).Error(
-			"Failed to write to dataplane driver")
-		if err == nil {
-			// TODO(smc) check if we can legitimately fail to write here.
-			err = errors.New("Failed to write all bytes")
+	lengthBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lengthBytes, uint64(len(data)))
+	var messageBuf bytes.Buffer
+	messageBuf.Write(lengthBytes)
+	messageBuf.Write(data)
+	for {
+		_, err := messageBuf.WriteTo(fc.toDataplane)
+		if err == io.ErrShortWrite {
+			log.Warn("Short write to dataplane driver; buffer full?")
+			continue
 		}
-		return err
-	}
-	numBytes, err = fc.toDataplane.Write(data)
-	if err != nil || numBytes != len(data) {
-		log.WithError(err).WithField("bytesWritten", numBytes).Error(
-			"Failed to write to dataplane driver")
-		if err == nil {
-			err = errors.New("Failed to write all bytes")
+		if err != nil {
+			return err
 		}
-		return err
+		log.Debug("Wrote message to dataplane driver")
+		break
 	}
 	return nil
 }

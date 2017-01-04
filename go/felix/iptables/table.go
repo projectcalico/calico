@@ -664,9 +664,6 @@ func (t *Table) applyUpdates() error {
 		}
 	}
 
-	// TODO(smc) Do a local retry of COMMIT errors since they're expected and common if others
-	// are modifying iptables.
-
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
