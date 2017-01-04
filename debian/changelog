@@ -1,3 +1,25 @@
+felix (1.4.6-1~xenial) xenial; urgency=low
+
+  * felix release (from Git commit 060e8ed).
+    - Document 1.4.x branch release process
+    - Do floating IP DNATs from OUTPUT as well as from PREROUTING
+    - Revert "Pin pycparser version."
+    - If an interface is down, make sure we remove its routes.
+    - Fix that packets weren't properly policed when there were multiple interface prefixes.
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 04 Jan 2017 11:14:59 +0000
+
+felix (1.4.6-1~trusty) trusty; urgency=low
+
+  * felix release (from Git commit 060e8ed).
+    - Document 1.4.x branch release process
+    - Do floating IP DNATs from OUTPUT as well as from PREROUTING
+    - Revert "Pin pycparser version."
+    - If an interface is down, make sure we remove its routes.
+    - Fix that packets weren't properly policed when there were multiple interface prefixes.
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 04 Jan 2017 11:14:59 +0000
+
 felix (1.4.5-4~xenial) xenial; urgency=low
 
   * Felix 1.4.5 (from Git commit fd3f909).

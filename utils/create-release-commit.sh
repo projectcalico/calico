@@ -57,13 +57,14 @@ nextrel=`grep '##' CHANGES.md | head -1 | awk '{print $2;}'`
 package=felix
 
 # Update the Debian changelog.
-series=__STREAM__ update_debian_changelog
+series=trusty update_debian_changelog
+series=xenial update_debian_changelog
 
 # Update the RPM spec.
 update_rpm_spec
 
 # Update version setting (if present) in setup.py.
-sed -i "s/^    version=.*$/    version=\"${nextrel#*:}\",/" python/setup.py
+sed -i "s/^    version=.*$/    version=\"${nextrel#*:}\",/" setup.py
 
 # Git commit release changes so far.
-git commit -a -m "Version ${nextrel#*:}"
+git commit -a -m "Felix ${nextrel#*:}"

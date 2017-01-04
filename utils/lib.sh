@@ -73,12 +73,12 @@ function update_debian_changelog {
     if test "${qualifier}"; then
 	debver=${version}~${qualifier}
     else
-	debver=${version}
+	debver=${version}-1
     fi
 
     {
 	cat <<EOF
-${package} (${debver}-${series}) ${series}; urgency=low
+${package} (${debver}~${series}) ${series}; urgency=low
 
 EOF
 	cat <<EOF

@@ -2,8 +2,8 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.5
-Release:        4%{?dist}
+Version:        1.4.6
+Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
@@ -148,6 +148,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Jan 04 2017 Neil Jerram <neil@tigera.io> 1.4.6-1
+  - felix version 1.4.6-1 release
+    - Document 1.4.x branch release process
+    - Do floating IP DNATs from OUTPUT as well as from PREROUTING
+    - Revert "Pin pycparser version."
+    - If an interface is down, make sure we remove its routes.
+    - Fix that packets weren't properly policed when there were multiple interface prefixes.
+
 * Mon Nov 28 2016 Neil Jerram <neil@tigera.io> 1.4.5-4
   - Felix 1.4.5 (from Git commit fd3f909).
     - Fix usage reporting
