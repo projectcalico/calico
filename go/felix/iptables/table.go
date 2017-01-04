@@ -190,7 +190,7 @@ func NewTable(
 	)
 }
 
-// NewTableWithShims is a test constructor, allowing
+// NewTableWithShims is a test constructor, allowing exec.Command to be shimmed.
 func NewTableWithShims(
 	name string,
 	ipVersion uint8,
