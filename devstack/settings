@@ -65,6 +65,5 @@ Q_AGENT=calico-felix
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
 
-# Test Felix floating IP fix.
-FELIX_REPO=https://github.com/neiljerram/felix.git
-FELIX_BRANCH=fip-output-dnat-1.4-unpin-pycparser
+# Use Felix 1.4.x.
+FELIX_BRANCH=1.4
