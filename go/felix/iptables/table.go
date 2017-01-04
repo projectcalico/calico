@@ -287,11 +287,11 @@ func (t *Table) RemoveChainByName(name string) {
 
 func (t *Table) loadDataplaneState() {
 	// Load the hashes from the dataplane.
+	t.logCxt.Info("Scanning for out-of-sync iptables chains")
 	dataplaneHashes := t.getHashesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
-	t.logCxt.Info("Scanning for out-of-sync iptables chains")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
 		if t.dirtyChains.Contains(chainName) {
@@ -300,33 +300,49 @@ func (t *Table) loadDataplaneState() {
 			continue
 		}
 		if !t.ourChainsRegexp.MatchString(chainName) {
+			// Not one of our chains, check for any insertions.
+			logCxt.Debug("Scanning chain for inserts")
 			seenNonCalicoRule := false
 			dirty := false
 			expectedRules := t.chainToInsertedRules[chainName]
 			expectedHashes := calculateRuleInsertHashes(chainName, expectedRules)
-			for i, hash := range dataplaneHashes[chainName] {
-				if hash == "" {
-					seenNonCalicoRule = true
-					continue
+			numHashesSeen := 0
+			if len(dataplaneHashes[chainName]) < len(expectedHashes) {
+				// Chain is too short to contain all out rules.
+				logCxt.Info("Chain too short to hold all Calico rules.")
+				dirty = true
+			} else {
+				// Chain is long enough to contain all our rules, if we iterate
+				// over the chain then we're guaranteed to check all the hashes.
+				for i, hash := range dataplaneHashes[chainName] {
+					if hash == "" {
+						seenNonCalicoRule = true
+						continue
+					}
+					numHashesSeen += 1
+					if seenNonCalicoRule {
+						// Calico rule after a non-calico rule, need to re-insert
+						// our rules to move them to the top.
+						logCxt.Info("Calico rules moved.")
+						dirty = true
+						break
+					}
+					if i >= len(expectedRules) {
+						// More insertions than we're expecting, need to clean up.
+						logCxt.Info("Found extra Calico rule insertions")
+						dirty = true
+						break
+					}
+					if hash != expectedHashes[i] {
+						// Incorrect hash.
+						logCxt.Info("Found incorrect Calico rule insertions.")
+						dirty = true
+						break
+					}
 				}
-				if seenNonCalicoRule {
-					// Calico rule after a non-calico rule, need to re-insert
-					// our rules to move them to the top.
-					logCxt.Info("Calico rules moved.")
+				if !dirty && numHashesSeen != len(expectedHashes) {
+					logCxt.Info("Chain has incorrect number of insertions.")
 					dirty = true
-					break
-				}
-				if i >= len(expectedRules) {
-					// More insertions than we're expecting, need to clean up.
-					logCxt.Info("Found extra Calico rule insertions")
-					dirty = true
-					break
-				}
-				if hash != expectedHashes[i] {
-					// Incorrect hash.
-					logCxt.Info("Found incorrect Calico rule insertions.")
-					dirty = true
-					break
 				}
 			}
 			if dirty {
@@ -462,7 +478,6 @@ func (t *Table) Apply() {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
 			// sync.  Refresh it.  This may mark more chains as dirty.
-			t.logCxt.Info("Out-of-sync with iptables, loading current state")
 			t.loadDataplaneState()
 		}
 

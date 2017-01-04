@@ -108,6 +108,52 @@ var _ = Describe("Table with an empty dataplane", func() {
 				}))
 			})
 		})
+
+		Describe("after another process removes the insertion (empty chain)", func() {
+			BeforeEach(func() {
+				dataplane.Chains = map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}
+			})
+			It("should put it back on the next refresh", func() {
+				table.InvalidateDataplaneCache()
+				table.Apply()
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+		})
+		Describe("after another process replaces the insertion (non-empty chain)", func() {
+			BeforeEach(func() {
+				dataplane.Chains = map[string][]string{
+					"FORWARD": {
+						`-A FORWARD -j ufw-before-logging-forward`,
+						`-A FORWARD -j ufw-before-forward`,
+						`-A FORWARD -j ufw-after-forward`,
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}
+			})
+			It("should put it back on the next refresh", func() {
+				table.InvalidateDataplaneCache()
+				table.Apply()
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`,
+						`-A FORWARD -j ufw-before-logging-forward`,
+						`-A FORWARD -j ufw-before-forward`,
+						`-A FORWARD -j ufw-after-forward`,
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+			})
+		})
 	})
 
 	Describe("after adding a chain", func() {

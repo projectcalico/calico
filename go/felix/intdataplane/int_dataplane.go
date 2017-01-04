@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/ifacemonitor"
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
+	"github.com/projectcalico/felix/go/felix/jitter"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
@@ -30,6 +31,8 @@ type Config struct {
 	DisableIPv6          bool
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
+
+	IptablesRefreshInterval time.Duration
 
 	RulesConfig rules.Config
 }
@@ -66,6 +69,7 @@ type InternalDataplane struct {
 	toDataplane   chan interface{}
 	fromDataplane chan interface{}
 
+	allIptablesTables    []*iptables.Table
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
@@ -86,6 +90,7 @@ type InternalDataplane struct {
 	routeTables []*routetable.RouteTable
 
 	dataplaneNeedsSync bool
+	refreshIptables    bool
 	cleanupPending     bool
 
 	config Config
@@ -178,6 +183,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
 		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, 1000000, 6))
 	}
+
+	for _, t := range dp.iptablesNATTables {
+		dp.allIptablesTables = append(dp.allIptablesTables, t)
+	}
+	for _, t := range dp.iptablesFilterTables {
+		dp.allIptablesTables = append(dp.allIptablesTables, t)
+	}
+	for _, t := range dp.iptablesRawTables {
+		dp.allIptablesTables = append(dp.allIptablesTables, t)
+	}
+
 	return dp
 }
 
@@ -300,6 +316,14 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	// Retry any failed operations every 10s.
 	retryTicker := time.NewTicker(10 * time.Second)
+	var refreshC <-chan time.Time
+	if d.config.IptablesRefreshInterval > 0 {
+		refreshTicker := jitter.NewTicker(
+			d.config.IptablesRefreshInterval,
+			d.config.IptablesRefreshInterval/10,
+		)
+		refreshC = refreshTicker.C
+	}
 
 	datastoreInSync := false
 	for {
@@ -329,6 +353,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			for _, mgr := range d.allManagers {
 				mgr.OnUpdate(ifaceAddrsUpdate)
 			}
+			d.dataplaneNeedsSync = true
+		case <-refreshC:
+			log.Debug("Refreshing iptables dataplane state")
+			d.refreshIptables = true
 			d.dataplaneNeedsSync = true
 		case <-retryTicker.C:
 		}
@@ -361,14 +389,14 @@ func (d *InternalDataplane) apply() {
 		w.ApplyUpdates()
 	}
 
+	if d.refreshIptables {
+		for _, t := range d.allIptablesTables {
+			t.InvalidateDataplaneCache()
+		}
+		d.refreshIptables = false
+	}
 	// Update iptables, this should sever any references to now-unused IP sets.
-	for _, t := range d.iptablesFilterTables {
-		t.Apply()
-	}
-	for _, t := range d.iptablesNATTables {
-		t.Apply()
-	}
-	for _, t := range d.iptablesRawTables {
+	for _, t := range d.allIptablesTables {
 		t.Apply()
 	}
 
