@@ -289,19 +289,20 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	}
 
 	if d.config.RulesConfig.IPIPEnabled {
-		// TODO(smc) Should we maintain this IP (and replace it if someone removes it by
-		// accident)
-		err := configureIPIPDevice(d.config.IPIPMTU,
-			d.config.RulesConfig.IPIPTunnelAddress)
-		if err != nil {
-			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
-			time.Sleep(1 * time.Second)
-			err := configureIPIPDevice(d.config.IPIPMTU,
-				d.config.RulesConfig.IPIPTunnelAddress)
-			if err != nil {
-				log.WithError(err).Panic("IPIP enabled but failed to configure tunnel.")
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+		go func() {
+			log.Info("IPIP thread started.")
+			for {
+				err := configureIPIPDevice(d.config.IPIPMTU,
+					d.config.RulesConfig.IPIPTunnelAddress)
+				if err != nil {
+					log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				time.Sleep(10 * time.Second)
 			}
-		}
+		}()
 	}
 
 	for _, t := range d.iptablesNATTables {

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,10 +30,9 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 	log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
-	}).Info("Configuring IPIP tunnel")
+	}).Debug("Configuring IPIP tunnel")
 	link, err := netlink.LinkByName("tunl0")
 	if err != nil {
-		// TODO(smc) WIBNI we could use netlink here too?
 		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
 		// needed.  The tunl0 device is actually created automatically by the kernel
@@ -59,10 +58,11 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 		return err
 	}
 
-	return setLinkAddressV4(
-		"tunl0",
-		address,
-	)
+	if err := setLinkAddressV4("tunl0", address); err != nil {
+		log.WithError(err).Warn("Failed to set tunnel device IP")
+		return err
+	}
+	return nil
 }
 
 // setLinkAddressV4 updates the given link to set its local IP address.  It removes any other
