@@ -15,6 +15,7 @@
 package iptables
 
 import (
+	"fmt"
 	"io"
 	"os/exec"
 )
@@ -25,6 +26,7 @@ type CmdIface interface {
 	SetStderr(io.Writer)
 	Run() error
 	Output() ([]byte, error)
+	String() string
 }
 
 type cmdFactory func(name string, arg ...string) CmdIface
@@ -54,4 +56,8 @@ func (c *cmdAdapter) Run() error {
 
 func (c *cmdAdapter) Output() ([]byte, error) {
 	return (*exec.Cmd)(c).Output()
+}
+
+func (c *cmdAdapter) String() string {
+	return fmt.Sprintf("%v", (*exec.Cmd)(c))
 }

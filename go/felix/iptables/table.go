@@ -207,7 +207,7 @@ func NewTableWithShims(
 
 	oldInsertRegexpParts := []string{}
 	for _, prefix := range historicChainPrefixes {
-		part := fmt.Sprintf("-j %s", prefix)
+		part := fmt.Sprintf("(?:-j|--jump) %s", prefix)
 		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
 	}
 	if extraCleanupRegexPattern != "" {
@@ -300,25 +300,43 @@ func (t *Table) loadDataplaneState() {
 			continue
 		}
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Not one of our chains.  See if we've inserted any rules into it.
-			containsInserts := false
-			for _, hash := range dataplaneHashes[chainName] {
-				if hash != "" {
-					containsInserts = true
+			seenNonCalicoRule := false
+			dirty := false
+			expectedRules := t.chainToInsertedRules[chainName]
+			expectedHashes := calculateRuleInsertHashes(chainName, expectedRules)
+			for i, hash := range dataplaneHashes[chainName] {
+				if hash == "" {
+					seenNonCalicoRule = true
+					continue
+				}
+				if seenNonCalicoRule {
+					// Calico rule after a non-calico rule, need to re-insert
+					// our rules to move them to the top.
+					logCxt.Info("Calico rules moved.")
+					dirty = true
+					break
+				}
+				if i >= len(expectedRules) {
+					// More insertions than we're expecting, need to clean up.
+					logCxt.Info("Found extra Calico rule insertions")
+					dirty = true
+					break
+				}
+				if hash != expectedHashes[i] {
+					// Incorrect hash.
+					logCxt.Info("Found incorrect Calico rule insertions.")
+					dirty = true
+					break
 				}
 			}
-			shouldContainInserts := len(t.chainToInsertedRules) > 0
-			if containsInserts && !shouldContainInserts {
-				logCxt.WithField("chainName", chainName).Warn("Found unexpected rule, marking for cleanup")
-				t.dirtyInserts.Add(chainName)
-			} else if containsInserts || shouldContainInserts {
-				// TODO(smc) for now, always mark for refresh.  The re-write logic will spot if there's no change.
+			if dirty {
+				logCxt.Info("Marking chain for refresh.")
 				t.dirtyInserts.Add(chainName)
 			}
 		} else {
 			// One of our chains, should match exactly.
 			if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
-				logCxt.Warn("Detected out-of-sync iptables chain, marking for resync")
+				logCxt.Warn("Detected out-of-sync Calico chain, marking for resync")
 				t.dirtyChains.Add(chainName)
 			}
 		}
@@ -424,8 +442,12 @@ func (t *Table) getHashesFromBuffer(buf *bytes.Buffer) map[string][]string {
 		}
 		newHashes[chainName] = append(newHashes[chainName], hash)
 	}
-	t.logCxt.WithField("newHashes", newHashes).Debug("Read hashes from dataplane")
+	t.logCxt.Debugf("Read hashes from dataplane: %#v", newHashes)
 	return newHashes
+}
+
+func (t *Table) InvalidateDataplaneCache() {
+	t.inSyncWithDataPlane = false
 }
 
 func (t *Table) Apply() {
@@ -467,7 +489,8 @@ func (t *Table) Apply() {
 func (t *Table) applyUpdates() error {
 	var inputBuf bytes.Buffer
 	// iptables-restore input starts with a line indicating the table name.
-	inputBuf.WriteString(fmt.Sprintf("*%s\n", t.Name))
+	tableNameLine := fmt.Sprintf("*%s\n", t.Name)
+	inputBuf.WriteString(tableNameLine)
 
 	// Make a pass over the dirty chains and generate a forward reference for any that need to
 	// be created or flushed.
@@ -529,14 +552,9 @@ func (t *Table) applyUpdates() error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
 
-		// Form a temporary chain containing our expected insertions.  We'll use it to
-		// calculate the hashes that we need to compare against those in the dataplane.
+		// Calculate the hashes for our inserted rules.
 		rules := t.chainToInsertedRules[chainName]
-		chain := &Chain{
-			Name:  chainName,
-			Rules: rules,
-		}
-		currentHashes := chain.RuleHashes()
+		currentHashes := calculateRuleInsertHashes(chainName, rules)
 
 		needsRewrite := false
 		if len(previousHashes) < len(currentHashes) ||
@@ -578,7 +596,7 @@ func (t *Table) applyUpdates() error {
 		}
 		for i := len(rules) - 1; i >= 0; i-- {
 			prefixFrag := t.commentFrag(currentHashes[i])
-			line := chain.Rules[i].RenderInsert(chainName, prefixFrag)
+			line := rules[i].RenderInsert(chainName, prefixFrag)
 			inputBuf.WriteString(line)
 			inputBuf.WriteString("\n")
 		}
@@ -602,35 +620,41 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	// iptables-restore input ends with a COMMIT.
-	inputBuf.WriteString("COMMIT\n")
+	if inputBuf.Len() > len(tableNameLine) {
+		// We've figured out that we need to make some changes, finish off the input then
+		// execute iptables-restore.  iptables-restore input ends with a COMMIT.
+		inputBuf.WriteString("COMMIT\n")
 
-	// Annoying to have to copy the buffer here but reading from a buffer is destructive so
-	// if we want to trace out the contents after a failure, we have to take a copy.
-	input := inputBuf.String()
-	t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
+		// Annoying to have to copy the buffer here but reading from a buffer is
+		// destructive so if we want to trace out the contents after a failure, we have to
+		// take a copy.
+		input := inputBuf.String()
+		t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
 
-	var outputBuf, errBuf bytes.Buffer
-	cmd := t.newCmd(t.iptablesRestoreCmd, "--noflush", "--verbose")
-	cmd.SetStdin(&inputBuf)
-	cmd.SetStdout(&outputBuf)
-	cmd.SetStderr(&errBuf)
-	err := cmd.Run()
-	if err != nil {
-		t.logCxt.WithFields(log.Fields{
-			"output":      outputBuf.String(),
-			"errorOutput": errBuf.String(),
-			"error":       err,
-			"input":       input,
-		}).Warn("Failed to execute iptable restore command")
-		t.inSyncWithDataPlane = false
-		return err
+		var outputBuf, errBuf bytes.Buffer
+		cmd := t.newCmd(t.iptablesRestoreCmd, "--noflush", "--verbose")
+		cmd.SetStdin(&inputBuf)
+		cmd.SetStdout(&outputBuf)
+		cmd.SetStderr(&errBuf)
+		err := cmd.Run()
+		if err != nil {
+			t.logCxt.WithFields(log.Fields{
+				"output":      outputBuf.String(),
+				"errorOutput": errBuf.String(),
+				"error":       err,
+				"input":       input,
+			}).Warn("Failed to execute ip(6)tables-restore command")
+			t.inSyncWithDataPlane = false
+			return err
+		}
 	}
 
 	// TODO(smc) Do a local retry of COMMIT errors since they're expected and common if others
 	// are modifying iptables.
 
-	// Now we've successfully updated iptables, clear the dirty sets.
+	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
+	// found there was nothing to do above, since we may have found out that a dirty chain
+	// was actually a no-op update.
 	t.dirtyChains = set.New()
 	t.dirtyInserts = set.New()
 
@@ -651,4 +675,12 @@ func (t *Table) commentFrag(hash string) string {
 
 func deleteRule(chainName string, ruleNum int) string {
 	return fmt.Sprintf("-D %s %d", chainName, ruleNum)
+}
+
+func calculateRuleInsertHashes(chainName string, rules []Rule) []string {
+	chain := Chain{
+		Name:  chainName,
+		Rules: rules,
+	}
+	return (&chain).RuleHashes()
 }
