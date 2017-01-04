@@ -16,6 +16,7 @@ package ifacemonitor_test
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -100,6 +101,7 @@ func (nl *netlinkTest) signalLink(name string) {
 
 	// Send it.
 	nl.linkUpdates <- update
+	runtime.Gosched()
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
@@ -107,6 +109,32 @@ func (nl *netlinkTest) addAddr(name string, addr string) {
 	link.addrs.Add(addr)
 	nl.links[name] = link
 	nl.signalLink(name)
+	nl.signalAddr(name, addr, true)
+}
+
+func (nl *netlinkTest) delAddr(name string, addr string) {
+	link := nl.links[name]
+	link.addrs.Discard(addr)
+	nl.links[name] = link
+	nl.signalLink(name)
+	nl.signalAddr(name, addr, false)
+}
+
+func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
+	// Build the update.
+	net, err := netlink.ParseIPNet(addr)
+	if err != nil {
+		panic("Address parsing failed")
+	}
+	update := netlink.AddrUpdate{
+		LinkIndex:   nl.links[name].index,
+		NewAddr:     exists,
+		LinkAddress: *net,
+	}
+
+	// Send it.
+	nl.addrUpdates <- update
+	runtime.Gosched()
 }
 
 func (nl *netlinkTest) Subscribe(
@@ -119,7 +147,21 @@ func (nl *netlinkTest) Subscribe(
 }
 
 func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
-	return []netlink.Link{}, nil
+	links := []netlink.Link{}
+	for name, link := range nl.links {
+		var rawFlags uint32 = 0
+		if link.state == "up" {
+			rawFlags = syscall.IFF_RUNNING
+		}
+		links = append(links, &netlink.Dummy{
+			LinkAttrs: netlink.LinkAttrs{
+				Name:     name,
+				Index:    link.index,
+				RawFlags: rawFlags,
+			},
+		})
+	}
+	return links, nil
 }
 
 func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
@@ -165,24 +207,25 @@ func addrStateCallback(ifaceName string, addrs set.Set) {
 var _ = Describe("ifacemonitor", func() {
 	It("New", func() {
 		nl := &netlinkTest{}
-		im := ifacemonitor.New(nl)
+		resyncC := make(chan time.Time)
+		im := ifacemonitor.NewWithStubs(nl, resyncC)
 		im.Callback = linkStateCallback
 		im.AddrCallback = addrStateCallback
 		go im.MonitorInterfaces()
-		time.Sleep(1 * time.Second)
+		runtime.Gosched()
 		nl.addLink("eth0")
-		time.Sleep(1 * time.Second)
 		nl.addAddr("eth0", "10.0.240.10/24")
-		time.Sleep(1 * time.Second)
 		nl.changeLinkState("eth0", "up")
-		time.Sleep(1 * time.Second)
 		nl.addAddr("eth0", "172.19.34.1/27")
-		time.Sleep(1 * time.Second)
+		nl.delAddr("eth0", "172.19.34.1/27")
+		nl.addAddr("eth0", "172.19.34.1/27")
+		nl.delAddr("eth0", "8.8.8.8/32")
 		nl.changeLinkState("eth0", "down")
-		time.Sleep(1 * time.Second)
 		nl.changeLinkState("eth0", "up")
-		time.Sleep(1 * time.Second)
+		// Allow a resync.
+		resyncC <- time.Time{}
 		nl.delLink("eth0")
-		time.Sleep(1 * time.Second)
+		// Allow a resync.
+		resyncC <- time.Time{}
 	})
 })

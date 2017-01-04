@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-type Netlink interface {
+type netlinkStub interface {
 	Subscribe(
 		linkUpdates chan netlink.LinkUpdate,
 		addrUpdates chan netlink.AddrUpdate,
@@ -42,7 +42,8 @@ type InterfaceStateCallback func(ifaceName string, ifaceState State)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type InterfaceMonitor struct {
-	netlinkStub  Netlink
+	netlinkStub  netlinkStub
+	resyncC      <-chan time.Time
 	upIfaces     set.Set
 	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
@@ -50,12 +51,17 @@ type InterfaceMonitor struct {
 	ifaceAddrs   map[int]set.Set
 }
 
-func New(netlinkStub Netlink) *InterfaceMonitor {
-	if netlinkStub == nil {
-		netlinkStub = &netlinkReal{}
-	}
+func New() *InterfaceMonitor {
+	// Interface monitor using the real netlink, and resyncing
+	// every 10 seconds.
+	resyncTicker := time.NewTicker(10 * time.Second)
+	return NewWithStubs(&netlinkReal{}, resyncTicker.C)
+}
+
+func NewWithStubs(netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceMonitor {
 	return &InterfaceMonitor{
 		netlinkStub: netlinkStub,
+		resyncC:     resyncC,
 		upIfaces:    set.New(),
 		ifaceName:   map[int]string{},
 		ifaceAddrs:  map[int]set.Set{},
@@ -80,8 +86,6 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 		log.WithError(err).Fatal("Failed to read link states from netlink.")
 	}
 
-	// Schedule periodic resyncs after that.
-	resyncTicker := time.NewTicker(10 * time.Second)
 readLoop:
 	for {
 		select {
@@ -97,7 +101,7 @@ readLoop:
 				break readLoop
 			}
 			m.handleNetlinkAddrUpdate(addrUpdate)
-		case <-resyncTicker.C:
+		case <-m.resyncC:
 			err := m.resync()
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read link states from netlink.")

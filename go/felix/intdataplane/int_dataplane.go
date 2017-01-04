@@ -107,7 +107,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer:      ruleRenderer,
 		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
 		cleanupPending:    true,
-		ifaceMonitor:      ifacemonitor.New(nil),
+		ifaceMonitor:      ifacemonitor.New(),
 		ifaceUpdates:      make(chan *ifaceUpdate, 100),
 		ifaceAddrUpdates:  make(chan *ifaceAddrsUpdate, 100),
 		config:            config,
