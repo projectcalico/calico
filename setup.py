@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2014-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2014-2017 Tigera, Inc. All rights reserved.
 #
 # All Rights Reserved.
 #
@@ -71,7 +71,7 @@ def collect_requirements():
 
 setuptools.setup(
     name="felix",
-    version="1.4.6.dev1",
+    version="1.4.6",
     packages=setuptools.find_packages(),
     entry_points={
         'console_scripts': [

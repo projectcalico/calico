@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.6
+
+- Document 1.4.x branch release process
+- Do floating IP DNATs from OUTPUT as well as from PREROUTING
+- Revert "Pin pycparser version."
+- If an interface is down, make sure we remove its routes.
+- Fix that packets weren't properly policed when there were multiple interface prefixes.
+
 ## 1.4.5
 
 - Fix usage reporting
