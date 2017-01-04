@@ -1,3 +1,25 @@
 ---
 ---
-@import '../_sass/bootstrap';
+@import "../_sass/bootstrap";
+@import "../css/sidebar";
+
+table {
+  @extend .table;
+  @extend .table-bordered;
+}
+
+// Default blockquotes are too big in Bootstrap.
+// Shrink them down
+blockquote {
+  font-size: inherit;
+}
+
+
+#getting-started-icons {
+  img {
+    max-height: 94px;
+  }
+  h3 {
+    text-align: center;
+  }
+}
