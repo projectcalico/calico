@@ -15,18 +15,17 @@
 package ifacemonitor_test
 
 import (
-	"fmt"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ifacemonitor"
 	"github.com/projectcalico/felix/go/felix/set"
 	"github.com/vishvananda/netlink"
 
 	. "github.com/onsi/ginkgo"
-	//. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 )
 
 type linkModel struct {
@@ -100,15 +99,14 @@ func (nl *netlinkTest) signalLink(name string) {
 	}
 
 	// Send it.
+	log.Info("Test code signaling a link update")
 	nl.linkUpdates <- update
-	runtime.Gosched()
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
 	link := nl.links[name]
 	link.addrs.Add(addr)
 	nl.links[name] = link
-	nl.signalLink(name)
 	nl.signalAddr(name, addr, true)
 }
 
@@ -116,7 +114,6 @@ func (nl *netlinkTest) delAddr(name string, addr string) {
 	link := nl.links[name]
 	link.addrs.Discard(addr)
 	nl.links[name] = link
-	nl.signalLink(name)
 	nl.signalAddr(name, addr, false)
 }
 
@@ -133,8 +130,8 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 	}
 
 	// Send it.
+	log.Info("Test code signaling an addr update")
 	nl.addrUpdates <- update
-	runtime.Gosched()
 }
 
 func (nl *netlinkTest) Subscribe(
@@ -194,14 +191,30 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 	return addrs, nil
 }
 
+var linkC = make(chan string, 1)
+
 func linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
-	fmt.Println("linkStateCallback: ifaceName", ifaceName)
-	fmt.Println("linkStateCallback: ifaceState", ifaceState)
+	log.Info("linkStateCallback: ifaceName=", ifaceName)
+	log.Info("linkStateCallback: ifaceState=", ifaceState)
+	linkC <- ifaceName
 }
 
+func expectLinkStateCb(ifaceName string) {
+	cbIface := <-linkC
+	Expect(cbIface).To(Equal(ifaceName))
+}
+
+var addrC = make(chan string, 1)
+
 func addrStateCallback(ifaceName string, addrs set.Set) {
-	fmt.Println("addrStateCallback: ifaceName", ifaceName)
-	fmt.Println("addrStateCallback: addrs", addrs)
+	log.Info("addrStateCallback: ifaceName=", ifaceName)
+	log.Info("addrStateCallback: addrs=", addrs)
+	addrC <- ifaceName
+}
+
+func expectAddrStateCb(ifaceName string) {
+	cbIface := <-addrC
+	Expect(cbIface).To(Equal(ifaceName))
 }
 
 var _ = Describe("ifacemonitor", func() {
@@ -212,19 +225,30 @@ var _ = Describe("ifacemonitor", func() {
 		im.Callback = linkStateCallback
 		im.AddrCallback = addrStateCallback
 		go im.MonitorInterfaces()
-		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
 		nl.addLink("eth0")
 		nl.addAddr("eth0", "10.0.240.10/24")
 		nl.changeLinkState("eth0", "up")
+		expectLinkStateCb("eth0")
+		expectAddrStateCb("eth0")
 		nl.addAddr("eth0", "172.19.34.1/27")
+		expectAddrStateCb("eth0")
 		nl.delAddr("eth0", "172.19.34.1/27")
+		expectAddrStateCb("eth0")
 		nl.addAddr("eth0", "172.19.34.1/27")
+		expectAddrStateCb("eth0")
 		nl.delAddr("eth0", "8.8.8.8/32")
 		nl.changeLinkState("eth0", "down")
+		expectAddrStateCb("eth0")
+		expectLinkStateCb("eth0")
 		nl.changeLinkState("eth0", "up")
+		expectLinkStateCb("eth0")
+		expectAddrStateCb("eth0")
 		// Allow a resync.
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
+		expectLinkStateCb("eth0")
+		expectAddrStateCb("eth0")
 		// Allow a resync.
 		resyncC <- time.Time{}
 	})
