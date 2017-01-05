@@ -219,37 +219,79 @@ func expectAddrStateCb(ifaceName string) {
 
 var _ = Describe("ifacemonitor", func() {
 	It("New", func() {
+
+		// Make an Interface Monitor that uses a test netlink
+		// stub implementation and resync trigger channel -
+		// both controlled by this code.
 		nl := &netlinkTest{}
 		resyncC := make(chan time.Time)
 		im := ifacemonitor.NewWithStubs(nl, resyncC)
+
+		// Register this test code's callbacks, which (a) log;
+		// and (b) send to a 1-buffered channel, so that the
+		// test code _must_ explicitly indicate when it
+		// expects those callbacks to have occurred.
 		im.Callback = linkStateCallback
 		im.AddrCallback = addrStateCallback
+
+		// Start the monitor running, and give it time for its
+		// initial resync (which will be a no-op) before we
+		// start adding link state.
 		go im.MonitorInterfaces()
 		time.Sleep(10 * time.Millisecond)
+
+		// Add a link and an address.  No callbacks expected
+		// because the link is not up yet.
 		nl.addLink("eth0")
 		nl.addAddr("eth0", "10.0.240.10/24")
+
+		// Set the link up, and expect callbacks.
 		nl.changeLinkState("eth0", "up")
 		expectLinkStateCb("eth0")
 		expectAddrStateCb("eth0")
+
+		// Add an address.
 		nl.addAddr("eth0", "172.19.34.1/27")
 		expectAddrStateCb("eth0")
+
+		// Delete that address.
 		nl.delAddr("eth0", "172.19.34.1/27")
 		expectAddrStateCb("eth0")
+
+		// Add address again.
 		nl.addAddr("eth0", "172.19.34.1/27")
 		expectAddrStateCb("eth0")
+
+		// Delete an address that wasn't actually there - no callback.
 		nl.delAddr("eth0", "8.8.8.8/32")
+
+		// Set link down.
 		nl.changeLinkState("eth0", "down")
 		expectAddrStateCb("eth0")
 		expectLinkStateCb("eth0")
+
+		// Set link up again.
 		nl.changeLinkState("eth0", "up")
 		expectLinkStateCb("eth0")
 		expectAddrStateCb("eth0")
-		// Allow a resync.
+
+		// Trigger a resync, then immediately delete the link.
+		// What happens is that the test code deletes its
+		// state for eth0 before the monitor's resync() calls
+		// LinkList, and so the monitor reports "Spotted
+		// interface removal on resync" and makes link and
+		// address callbacks accordingly.
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
 		expectLinkStateCb("eth0")
 		expectAddrStateCb("eth0")
-		// Allow a resync.
+
+		// Trigger another resync.  Nothing is expected.  We
+		// ensure that the resync processing completes, before
+		// exiting from this test, by sending a further resync
+		// trigger.  (This would block if the interface
+		// monitor's main loop was not yet ready to read it.)
+		resyncC <- time.Time{}
 		resyncC <- time.Time{}
 	})
 })
