@@ -46,6 +46,7 @@ The code is a little roundabout for a few reasons:
 	<link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
 	<link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
 	<link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
+	<link rel="stylesheet" href="{{site.baseurl}}/css/offcanvas.css"/>
 	<script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
 	<script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
 	<script src="{{site.baseurl}}/js/script.js"></script>
@@ -71,7 +72,7 @@ The code is a little roundabout for a few reasons:
 		<nav class="navbar navbar-inverse navbar-static-top">
 			<div class="container">
 				<div class="navbar-header">
-					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar" aria-expanded="false" aria-controls="tigera-navbar">
 						<span class="sr-only">Toggle navigation</span>
 						<span class="icon-bar"></span>
 						<span class="icon-bar"></span>
@@ -79,7 +80,7 @@ The code is a little roundabout for a few reasons:
 					</button>
 					<a class="navbar-brand" href="">Project Calico</a>
 				</div>
-				<div class="navbar-collapse collapse">
+				<div id="tigera-navbar" class="navbar-collapse collapse">
 					<ul class="nav navbar-nav navbar-right">
 						<li ><a href="#">Documentation</a></li>
 						<li><a href="#">Support</a></li>
@@ -103,14 +104,21 @@ The code is a little roundabout for a few reasons:
 						</li>
 					</ul>
 				</div><!--/.nav-collapse -->
+				<div class="row">
+					<div class="col-sm-0">
+				</div>
 			</div><!--/.container-fluid -->
 		</nav>
 <div class="container">
-		<div class="row">
-			<div class="col-sm-4 col-md-3">
+		<div class="row row-offcanvas row-offcanvas-left">
+			<p class="pull-left visible-xs">
+					<button type="button" class="btn btn-primary btn-xs" data-toggle="offcanvas">Toggle nav</button>
+			</p>
+			<div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
 				<div id="sidebar">{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}</div>
 			</div>
-			<div class="col-sm-8 col-md-9">
+			<div class="col-xs-12 col-sm-8 col-md-9">
+
 				<div id="">
 		    	<h1>{{ page.title }}</h1>
 					{{ content }}

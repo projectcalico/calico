@@ -20,4 +20,8 @@ $(document).ready(function(){
   $('#sidebar').on('hide.bs.collapse', function(event) {
     $(event.target).prev().prev().removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
   })
+
+  $('[data-toggle="offcanvas"]').click(function () {
+    $('.row-offcanvas').toggleClass('active')
+  });
 });
