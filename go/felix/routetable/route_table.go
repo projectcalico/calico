@@ -30,10 +30,10 @@ import (
 )
 
 var (
-	ListFailed        = errors.New("netlink list operation failed")
-	UpdateFailed      = errors.New("netlink update operation failed")
-	IfaceDown         = errors.New("interface was down")
-	IfaceNotPresent   = errors.New("interface not present")
+	ListFailed      = errors.New("netlink list operation failed")
+	UpdateFailed    = errors.New("netlink update operation failed")
+	IfaceNotPresent = errors.New("interface not present")
+
 	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
 )
 
@@ -228,9 +228,15 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 
 		oldRoutes, err := r.dataplane.RouteList(link, r.netlinkFamily)
 		if err != nil {
-			logCxt.WithError(err).WithField("link", ifaceName).Error(
-				"Failed to list routes. Interface may have been removed.")
-			return ListFailed
+			// Recheck whether the interface exists so we don't produce spammy logs
+			// during interface removal.
+			if exists, err2 := r.ifaceExists(ifaceName); exists || err2 != nil {
+				logCxt.WithError(err).Error("Failed to list routes. Unable to sync.")
+				return ListFailed
+			} else {
+				logCxt.Info("Link removed during sync.")
+				return IfaceNotPresent
+			}
 		}
 
 		seenCIDRs := set.New()
@@ -296,8 +302,25 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		return IfaceNotPresent
 	}
 	if updatesFailed {
-		return UpdateFailed
+		// Recheck whether the interface exists so we don't produce spammy logs during
+		// interface removal.
+		exists, err := r.ifaceExists(ifaceName)
+		if err == nil || exists {
+			return UpdateFailed
+		} else {
+			return IfaceNotPresent
+		}
 	}
 
 	return nil
+}
+
+func (r *RouteTable) ifaceExists(name string) (bool, error) {
+	_, err := r.dataplane.LinkByName(name)
+	if err == nil {
+		return true, nil
+	} else if strings.Contains(err.Error(), "not found") {
+		return false, nil
+	}
+	return false, err
 }
