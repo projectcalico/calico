@@ -32,6 +32,11 @@ import (
 	"strings"
 )
 
+type table interface {
+	UpdateChains([]*iptables.Chain)
+	RemoveChains([]*iptables.Chain)
+}
+
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
@@ -47,7 +52,7 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	filterTable  *iptables.Table
+	filterTable  table
 	ruleRenderer rules.RuleRenderer
 	routeTable   *routetable.RouteTable
 
@@ -79,7 +84,7 @@ type endpointManager struct {
 type EndpointStatusUpdateCallback func(ipVersion uint8, id proto.WorkloadEndpointID, status string)
 
 func newEndpointManager(
-	filterTable *iptables.Table,
+	filterTable table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable *routetable.RouteTable,
 	ipVersion uint8,
