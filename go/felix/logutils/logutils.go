@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -165,12 +165,12 @@ func filterLevels(maxLevel log.Level) []log.Level {
 	return levels
 }
 
-// Formatter is our custom log formatter, which mimics the style used by the
-// Python version of Felix.  In particular, it uses a sortable timestamp and
-// logs the level and PID.  Since logrus deosn't yet expose file and line
-// numbers, we log "go" as a placeholder.
+// Formatter is our custom log formatter, which mimics the style used by the Python version of
+// Felix.  In particular, it uses a sortable timestamp and it includes the level, PID file and line
+// number.
 //
-//    2016-10-04 14:45:45,999 [ERROR][70826] go: Hello world key=value
+//    2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
+//    interface because it is oper down. ifaceName="cali1234"
 type Formatter struct{}
 
 func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
