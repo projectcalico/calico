@@ -244,6 +244,8 @@ func (m *InterfaceMonitor) resync() error {
 			return nil
 		}
 		log.WithField("ifaceName", name).Info("Spotted interface removal on resync.")
+		m.Callback(name.(string), StateDown)
+		m.AddrCallback(name.(string), nil)
 		return set.RemoveItem
 	})
 	return nil
