@@ -159,10 +159,12 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 }
 
 func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
-	if m.ifaceAddrs[ifIndex] != nil {
-		m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex].Copy())
-	} else {
-		m.AddrCallback(m.ifaceName[ifIndex], m.ifaceAddrs[ifIndex])
+	if name, prs := m.ifaceName[ifIndex]; prs {
+		if m.ifaceAddrs[ifIndex] != nil {
+			m.AddrCallback(name, m.ifaceAddrs[ifIndex].Copy())
+		} else {
+			m.AddrCallback(name, m.ifaceAddrs[ifIndex])
+		}
 	}
 }
 
