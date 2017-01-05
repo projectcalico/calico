@@ -468,9 +468,16 @@ func (t *Table) InvalidateDataplaneCache() {
 
 func (t *Table) Apply() {
 	// Retry until we succeed.  There are several reasons that updating iptables may fail:
-	// - a concurrent write may invalidate iptables-restore's compare-and-swap
-	// - another process may have clobbered some of our state, resulting in inconsistencies
-	//   in what we try to program.
+	//
+	// - A concurrent write may invalidate iptables-restore's compare-and-swap; this manifests
+	//   as a failure on the COMMIT line.
+	// - Another process may have clobbered some of our state, resulting in inconsistencies
+	//   in what we try to program.  This could manifest in a number of ways depending on what
+	//   the other process did.
+	// - Random transient failure.
+	//
+	// It's also possible that we're bugged and trying to write bad data so we give up
+	// eventually.
 	retries := 10
 	backoffTime := 1 * time.Millisecond
 	failedAtLeastOnce := false

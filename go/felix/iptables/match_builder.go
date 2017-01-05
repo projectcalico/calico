@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,14 @@ func (m MatchCriteria) MarkClear(mark uint32) MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
 	}
-	return append(m, fmt.Sprintf("-m mark --mark 0/%x", mark))
+	return append(m, fmt.Sprintf("-m mark --mark 0/%#x", mark))
 }
 
 func (m MatchCriteria) MarkSet(mark uint32) MatchCriteria {
 	if mark == 0 {
 		log.Panic("Probably bug: zero mark")
 	}
-	return append(m, fmt.Sprintf("-m mark --mark %x/%x", mark, mark))
+	return append(m, fmt.Sprintf("-m mark --mark %#x/%#x", mark, mark))
 }
 
 func (m MatchCriteria) InInterface(ifaceMatch string) MatchCriteria {
@@ -107,35 +107,20 @@ func (m MatchCriteria) NotSourceNet(net string) MatchCriteria {
 	return append(m, fmt.Sprintf("! --source %s", net))
 }
 
-func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
-	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
-}
-
-func (m MatchCriteria) NotSourceIPSet(name string) MatchCriteria {
-	return append(m, fmt.Sprintf("-m set ! --match-set %s src", name))
-}
-
-func (m MatchCriteria) SourcePorts(ports ...uint16) MatchCriteria {
-	portsString := PortsToMultiport(ports)
-	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
-}
-
-func (m MatchCriteria) SourcePortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
-	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
-}
-
-func (m MatchCriteria) NotSourcePortRanges(ports []*proto.PortRange) MatchCriteria {
-	portsString := PortRangessToMultiport(ports)
-	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
-}
-
 func (m MatchCriteria) DestNet(net string) MatchCriteria {
 	return append(m, fmt.Sprintf("--destination %s", net))
 }
 
 func (m MatchCriteria) NotDestNet(net string) MatchCriteria {
 	return append(m, fmt.Sprintf("! --destination %s", net))
+}
+
+func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set --match-set %s src", name))
+}
+
+func (m MatchCriteria) NotSourceIPSet(name string) MatchCriteria {
+	return append(m, fmt.Sprintf("-m set ! --match-set %s src", name))
 }
 
 func (m MatchCriteria) DestIPSet(name string) MatchCriteria {
@@ -146,9 +131,34 @@ func (m MatchCriteria) NotDestIPSet(name string) MatchCriteria {
 	return append(m, fmt.Sprintf("-m set ! --match-set %s dst", name))
 }
 
+func (m MatchCriteria) SourcePorts(ports ...uint16) MatchCriteria {
+	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
+}
+
+func (m MatchCriteria) NotSourcePorts(ports ...uint16) MatchCriteria {
+	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
+}
+
 func (m MatchCriteria) DestPorts(ports ...uint16) MatchCriteria {
 	portsString := PortsToMultiport(ports)
 	return append(m, fmt.Sprintf("-m multiport --destination-ports %s", portsString))
+}
+
+func (m MatchCriteria) NotDestPorts(ports ...uint16) MatchCriteria {
+	portsString := PortsToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport ! --destination-ports %s", portsString))
+}
+
+func (m MatchCriteria) SourcePortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport --source-ports %s", portsString))
+}
+
+func (m MatchCriteria) NotSourcePortRanges(ports []*proto.PortRange) MatchCriteria {
+	portsString := PortRangessToMultiport(ports)
+	return append(m, fmt.Sprintf("-m multiport ! --source-ports %s", portsString))
 }
 
 func (m MatchCriteria) DestPortRanges(ports []*proto.PortRange) MatchCriteria {

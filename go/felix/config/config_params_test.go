@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -122,4 +122,17 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("FailsafeInboundHostPorts", "FailsafeInboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
 	Entry("FailsafeOutboundHostPorts", "FailsafeOutboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
+)
+
+var _ = DescribeTable("Mark bit calculation tests",
+	func(mask string, bitNum int, expected uint32) {
+		config := New()
+		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask},
+			EnvironmentVariable)
+		Expect(config.NthIPTablesMark(bitNum)).To(Equal(expected))
+	},
+	Entry("0th bit in 0xf", "0xf", 0, uint32(0x1)),
+	Entry("1st bit in 0xf", "0xf", 1, uint32(0x2)),
+	Entry("7th bit in 0xff", "0xff", 7, uint32(0x80)),
+	Entry("0th bit of 0xff000000", "0xff000000", 0, uint32(0x01000000)),
 )

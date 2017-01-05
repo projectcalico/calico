@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,83 +28,6 @@ const (
 	// resistant.
 	HashLength = 16
 )
-
-type Action interface {
-	ToFragment() string
-}
-
-type GotoAction struct {
-	Target string
-}
-
-func (g GotoAction) ToFragment() string {
-	return "--goto " + g.Target
-}
-
-type JumpAction struct {
-	Target string
-}
-
-func (g JumpAction) ToFragment() string {
-	return "--jump " + g.Target
-}
-
-type ReturnAction struct{}
-
-func (r ReturnAction) ToFragment() string {
-	return "--jump RETURN"
-}
-
-type DropAction struct{}
-
-func (g DropAction) ToFragment() string {
-	return "--jump DROP"
-}
-
-type LogAction struct {
-	Prefix string
-}
-
-func (g LogAction) ToFragment() string {
-	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
-}
-
-type AcceptAction struct{}
-
-func (g AcceptAction) ToFragment() string {
-	return "--jump ACCEPT"
-}
-
-type DNATAction struct {
-	DestAddr string
-	DestPort uint16
-}
-
-func (g DNATAction) ToFragment() string {
-	return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
-}
-
-type MasqAction struct{}
-
-func (g MasqAction) ToFragment() string {
-	return "--jump MASQUERADE"
-}
-
-type ClearMarkAction struct {
-	Mark uint32
-}
-
-func (c ClearMarkAction) ToFragment() string {
-	return fmt.Sprintf("--jump MARK --set-mark 0/%x", c.Mark)
-}
-
-type SetMarkAction struct {
-	Mark uint32
-}
-
-func (c SetMarkAction) ToFragment() string {
-	return fmt.Sprintf("--jump MARK --set-mark %x/%x", c.Mark, c.Mark)
-}
 
 type Rule struct {
 	Match   MatchCriteria

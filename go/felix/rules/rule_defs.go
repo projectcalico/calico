@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -145,6 +145,7 @@ type Config struct {
 }
 
 func NewRenderer(config Config) RuleRenderer {
+	log.WithField("config", config).Info("Creating rule renderer.")
 	// Convert configured actions to rule slices.  First, what should we actually do when we'd
 	// normally drop a packet?  For sandbox mode, we support allowing the packet instead, or
 	// logging it.

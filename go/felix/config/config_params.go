@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,6 +201,24 @@ func (config *Config) OpenstackActive() bool {
 	}
 	log.Debug("No evidence this is an OpenStack deployment; diabling OpenStack special-cases")
 	return false
+}
+
+func (config *Config) NthIPTablesMark(n int) uint32 {
+	numBitsFound := 0
+	for shift := uint(0); shift < 32; shift++ {
+		candidate := uint32(1) << shift
+		if config.IptablesMarkMask&candidate > 0 {
+			if numBitsFound == n {
+				return candidate
+			}
+			numBitsFound += 1
+		}
+	}
+	log.WithFields(log.Fields{
+		"IptablesMarkMask": config.IptablesMarkMask,
+		"requestedMark":    n,
+	}).Panic("Not enough iptables mark bits available.")
+	return 0
 }
 
 func (config *Config) resolve() (changed bool, err error) {
