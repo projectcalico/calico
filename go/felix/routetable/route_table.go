@@ -24,7 +24,6 @@ import (
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/vishvananda/netlink"
 	"net"
-	"os/exec"
 	"regexp"
 	"strings"
 	"syscall"
@@ -49,8 +48,7 @@ type RouteTable struct {
 	ipVersion     uint8
 	netlinkFamily int
 
-	activeUpIfaces set.Set
-	dirtyIfaces    set.Set
+	dirtyIfaces set.Set
 
 	ifacePrefixes     set.Set
 	ifacePrefixRegexp *regexp.Regexp
@@ -60,16 +58,17 @@ type RouteTable struct {
 
 	inSync bool
 
-	// netlink is our shim for the netlink interface.  In production, it maps directly through
-	// to calls to the netlink package.
-	netlink netlinkIface
+	// dataplane is our shim for the netlink/arp interface.  In production, it maps directly
+	// through to calls to the netlink package and the arp command.
+	dataplane dataplaneIface
 }
 
 func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
-	return NewWithShims(interfacePrefixes, ipVersion, realNetlink{})
+	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{})
 }
 
-func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl netlinkIface) *RouteTable {
+// NewWithShims is a test constructor, which allows netlink to be replaced by a shim.
+func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl dataplaneIface) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
 	for _, prefix := range interfacePrefixes {
@@ -97,9 +96,8 @@ func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl netlinkIface) 
 		ifacePrefixRegexp:         regexp.MustCompile(ifaceNamePattern),
 		ifaceNameToTargets:        map[string][]Target{},
 		pendingIfaceNameToTargets: map[string][]Target{},
-		activeUpIfaces:            set.New(),
 		dirtyIfaces:               set.New(),
-		netlink:                   nl,
+		dataplane:                 nl,
 	}
 }
 
@@ -111,11 +109,7 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	}
 	if state == ifacemonitor.StateUp {
 		logCxt.Debug("Interface up, marking for route sync")
-		r.activeUpIfaces.Add(ifaceName)
 		r.dirtyIfaces.Add(ifaceName)
-	} else {
-		logCxt.Debug("Interface down, blacklisting from route sync")
-		r.activeUpIfaces.Discard(ifaceName)
 	}
 }
 
@@ -126,7 +120,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
-		links, err := r.netlink.LinkList()
+		links, err := r.dataplane.LinkList()
 		if err != nil {
 			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
 			return ListFailed
@@ -218,7 +212,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	updatesFailed := false
 	linkFound := false
 
-	link, err := r.netlink.LinkByName(ifaceName)
+	link, err := r.dataplane.LinkByName(ifaceName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
 			// Unexpected error, return it.
@@ -231,16 +225,11 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		// Got the link try to sync its routes.
 		linkFound = true
 		linkAttrs := link.Attrs()
-		if linkAttrs.Flags&net.FlagUp == 0 || linkAttrs.RawFlags&syscall.IFF_RUNNING == 0 {
-			// Interface must have gone down but the monitoring thread hasn't told us yet.
-			logCxt.Debug("Interface is down, skipping")
-			return IfaceDown
-		}
 
-		oldRoutes, err := r.netlink.RouteList(link, r.netlinkFamily)
+		oldRoutes, err := r.dataplane.RouteList(link, r.netlinkFamily)
 		if err != nil {
 			logCxt.WithError(err).WithField("link", ifaceName).Error(
-				"Failed to list routes.")
+				"Failed to list routes. Interface may have been removed.")
 			return ListFailed
 		}
 
@@ -253,7 +242,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			if !expectedCIDRs.Contains(dest) {
 				logCxt := logCxt.WithField("dest", dest)
 				logCxt.Info("Syncing routes: removing old route.")
-				if err := r.netlink.RouteDel(&route); err != nil {
+				if err := r.dataplane.RouteDel(&route); err != nil {
 					// Probably a race with the interface being deleted.
 					logCxt.WithError(err).Info(
 						"Route deletion failed, assuming someone got there first.")
@@ -280,19 +269,16 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 					Protocol:  syscall.RTPROT_BOOT,
 					Scope:     netlink.SCOPE_LINK,
 				}
-				if err := r.netlink.RouteAdd(&route); err != nil {
+				if err := r.dataplane.RouteAdd(&route); err != nil {
 					logCxt.WithError(err).Warn("Failed to add route")
 					updatesFailed = true
 				}
 			}
 			if r.ipVersion == 4 && target.DestMAC != nil {
 				// TODO(smc) clean up/sync old ARP entries
-				cmd := exec.Command("arp",
-					"-s", cidr.Addr().String(), target.DestMAC.String(),
-					"-i", ifaceName)
-				err := cmd.Run()
+				err := r.dataplane.AddStaticArpEntry(cidr, target.DestMAC, ifaceName)
 				if err != nil {
-					logCxt.WithError(err).WithField("cmd", cmd).Warn("Failed to set ARP entry")
+					logCxt.WithError(err).Warn("Failed to set ARP entry")
 					updatesFailed = true
 				}
 			}

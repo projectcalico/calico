@@ -15,37 +15,48 @@
 package routetable
 
 import (
+	"github.com/projectcalico/felix/go/felix/ip"
 	. "github.com/vishvananda/netlink"
+	"net"
+	"os/exec"
 )
 
-type netlinkIface interface {
+type dataplaneIface interface {
 	LinkList() ([]Link, error)
 	LinkByName(name string) (Link, error)
 	RouteList(link Link, family int) ([]Route, error)
 	RouteAdd(route *Route) error
 	RouteDel(route *Route) error
+	AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 }
 
-type realNetlink struct{}
+type realDataplane struct{}
 
-func (r realNetlink) LinkList() ([]Link, error) {
+func (r realDataplane) LinkList() ([]Link, error) {
 	return LinkList()
 }
 
-func (r realNetlink) LinkByName(name string) (Link, error) {
+func (r realDataplane) LinkByName(name string) (Link, error) {
 	return LinkByName(name)
 }
 
-func (r realNetlink) RouteList(link Link, family int) ([]Route, error) {
+func (r realDataplane) RouteList(link Link, family int) ([]Route, error) {
 	return RouteList(link, family)
 }
 
-func (r realNetlink) RouteAdd(route *Route) error {
+func (r realDataplane) RouteAdd(route *Route) error {
 	return RouteAdd(route)
 }
 
-func (r realNetlink) RouteDel(route *Route) error {
+func (r realDataplane) RouteDel(route *Route) error {
 	return RouteDel(route)
 }
 
-var _ netlinkIface = realNetlink{}
+func (r realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
+	cmd := exec.Command("arp",
+		"-s", cidr.Addr().String(), destMAC.String(),
+		"-i", ifaceName)
+	return cmd.Run()
+}
+
+var _ dataplaneIface = realDataplane{}
