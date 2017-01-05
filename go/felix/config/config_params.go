@@ -267,14 +267,14 @@ func (config *Config) resolve() (changed bool, err error) {
 			} else {
 				value, err = param.Parse(rawValue)
 				if err != nil {
-					log.Errorf("%v (source %v)", err, source)
+					logCxt := log.WithError(err).WithField("source", source)
 					if metadata.DieOnParseFailure {
-						log.Errorf("Cannot continue with invalid value for %v.", name)
+						logCxt.Error("Invalid (required) config value.")
 						config.Err = err
 						return
 					} else {
-						log.Errorf("Replacing invalid value with default value for %v: %v",
-							name, metadata.Default)
+						logCxt.WithField("default", metadata.Default).Warn(
+							"Replacing invalid value with default")
 						value = metadata.Default
 						err = nil
 					}
