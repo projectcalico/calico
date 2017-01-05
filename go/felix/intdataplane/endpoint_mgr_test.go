@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,9 +45,8 @@ var dpConfig = intdataplane.Config{
 		OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
 		OpenStackMetadataPort:        uint16(configParams.MetadataPort),
 
-		// TODO(smc) honour config of iptables mark marks.
-		IptablesMarkAccept:   0x1,
-		IptablesMarkNextTier: 0x2,
+		IptablesMarkAccept:   0x1000000,
+		IptablesMarkNextTier: 0x2000000,
 
 		IPIPEnabled:       configParams.IpInIpEnabled,
 		IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
