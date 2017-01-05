@@ -33,8 +33,9 @@ type InterfaceStateCallback func(ifaceName string, ifaceState State)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type InterfaceMonitor struct {
-	upIfaces     set.Set
-	Callback     InterfaceStateCallback
+	upIfaces set.Set
+	Callback InterfaceStateCallback
+
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
 	ifaceAddrs   map[int]set.Set
@@ -42,7 +43,8 @@ type InterfaceMonitor struct {
 
 func New() *InterfaceMonitor {
 	return &InterfaceMonitor{
-		upIfaces:   set.New(),
+		upIfaces: set.New(),
+
 		ifaceName:  map[int]string{},
 		ifaceAddrs: map[int]set.Set{},
 	}
@@ -124,9 +126,9 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		return
 	}
 	if _, known := m.ifaceAddrs[ifIndex]; !known {
-		// We think this interface is down, or haven't yet heard about it at all -
-		// indicates a race between the link and address update channels.
-		// Addresses will be notified when we process the link update.
+		// We think this interface does not exist - indicates a race between the
+		// link and address update channels.  Addresses will be notified when we
+		// process the link update.
 		log.WithField("ifIndex", ifIndex).Warn("Race for new interface.")
 		return
 	}
@@ -160,8 +162,12 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	if ifaceExists {
 		m.ifaceName[ifIndex] = ifaceName
 	} else {
+		// Notify link non-existence to address callback consumers.
+		delete(m.ifaceAddrs, ifIndex)
+		m.notifyIfaceAddrs(ifIndex)
 		delete(m.ifaceName, ifIndex)
 	}
+
 	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.
 	// The IFF_UP flag contains the admin state, which doesn't tell us whether we can
 	// program routes etc.
@@ -173,33 +179,32 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 		logCxt.Debug("Interface now up")
 		m.upIfaces.Add(ifaceName)
 		m.Callback(ifaceName, StateUp)
+	} else if ifaceWasUp && !ifaceIsUp {
+		logCxt.Debug("Interface now down")
+		m.upIfaces.Discard(ifaceName)
+		m.Callback(ifaceName, StateDown)
+	} else {
+		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
+	}
 
-		// Get addresses for the link and store and notify those too; then we
-		// don't have to worry about a possible race between the link and address
-		// update channels.
-		new_addrs := set.New()
+	// If the link now exists, get addresses for the link and store and notify those
+	// too; then we don't have to worry about a possible race between the link and
+	// address update channels.  We deliberately do this regardless of the link state,
+	// as in some cases this will allow us to secure a Host Endpoint interface
+	// _before_ it comes up, and so eliminate a small window of insecurity.
+	if ifaceExists {
+		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 			addrs, err := netlink.AddrList(link, family)
 			if err != nil {
 				log.WithError(err).Warn("Netlink addr list operation failed.")
 			}
 			for _, addr := range addrs {
-				new_addrs.Add(addr.IPNet.IP.String())
+				newAddrs.Add(addr.IPNet.IP.String())
 			}
 		}
-		m.ifaceAddrs[ifIndex] = new_addrs
+		m.ifaceAddrs[ifIndex] = newAddrs
 		m.notifyIfaceAddrs(ifIndex)
-	} else if ifaceWasUp && !ifaceIsUp {
-		logCxt.Debug("Interface now down")
-
-		// Notify to address callback consumers.
-		delete(m.ifaceAddrs, ifIndex)
-		m.notifyIfaceAddrs(ifIndex)
-
-		m.upIfaces.Discard(ifaceName)
-		m.Callback(ifaceName, StateDown)
-	} else {
-		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
 	}
 }
 
