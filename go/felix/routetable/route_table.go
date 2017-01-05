@@ -59,9 +59,17 @@ type RouteTable struct {
 	pendingIfaceNameToTargets map[string][]Target
 
 	inSync bool
+
+	// netlink is our shim for the netlink interface.  In production, it maps directly through
+	// to calls to the netlink package.
+	netlink netlinkIface
 }
 
 func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
+	return NewWithShims(interfacePrefixes, ipVersion, realNetlink{})
+}
+
+func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl netlinkIface) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
 	for _, prefix := range interfacePrefixes {
@@ -91,6 +99,7 @@ func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
 		pendingIfaceNameToTargets: map[string][]Target{},
 		activeUpIfaces:            set.New(),
 		dirtyIfaces:               set.New(),
+		netlink:                   nl,
 	}
 }
 
@@ -117,7 +126,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
-		links, err := netlink.LinkList()
+		links, err := r.netlink.LinkList()
 		if err != nil {
 			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
 			return ListFailed
@@ -209,7 +218,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	updatesFailed := false
 	linkFound := false
 
-	link, err := netlink.LinkByName(ifaceName)
+	link, err := r.netlink.LinkByName(ifaceName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
 			// Unexpected error, return it.
@@ -228,7 +237,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			return IfaceDown
 		}
 
-		oldRoutes, err := netlink.RouteList(link, r.netlinkFamily)
+		oldRoutes, err := r.netlink.RouteList(link, r.netlinkFamily)
 		if err != nil {
 			logCxt.WithError(err).WithField("link", ifaceName).Error(
 				"Failed to list routes.")
@@ -244,7 +253,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			if !expectedCIDRs.Contains(dest) {
 				logCxt := logCxt.WithField("dest", dest)
 				logCxt.Info("Syncing routes: removing old route.")
-				if err := netlink.RouteDel(&route); err != nil {
+				if err := r.netlink.RouteDel(&route); err != nil {
 					// Probably a race with the interface being deleted.
 					logCxt.WithError(err).Info(
 						"Route deletion failed, assuming someone got there first.")
@@ -271,7 +280,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 					Protocol:  syscall.RTPROT_BOOT,
 					Scope:     netlink.SCOPE_LINK,
 				}
-				if err := netlink.RouteAdd(&route); err != nil {
+				if err := r.netlink.RouteAdd(&route); err != nil {
 					logCxt.WithError(err).Warn("Failed to add route")
 					updatesFailed = true
 				}
