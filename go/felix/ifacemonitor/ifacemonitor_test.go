@@ -240,10 +240,13 @@ var _ = Describe("ifacemonitor", func() {
 		go im.MonitorInterfaces()
 		time.Sleep(10 * time.Millisecond)
 
-		// Add a link and an address.  No callbacks expected
-		// because the link is not up yet.
+		// Add a link and an address.  No link callback
+		// expected because the link is not up yet.  But we do
+		// get an address callback because those are
+		// independent of link state.
 		nl.addLink("eth0")
 		nl.addAddr("eth0", "10.0.240.10/24")
+		expectAddrStateCb("eth0")
 
 		// Set the link up, and expect callbacks.
 		nl.changeLinkState("eth0", "up")
