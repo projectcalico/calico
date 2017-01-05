@@ -22,18 +22,14 @@ installing on your cluster. You can check the status of the installation by
 visiting Calico's web status interface:
 
  - Go to the **Services** tab
- - Find Calico in the list of running services
+ - Select "calico-install-framework" in the list of running services
    (note that it may take a few minutes for Calico
     to appear).
- - Once the Calico service is `Healthy`, click the
-   square pop-out icon next to the service name to
-   open the Calico status page in a new tab.
+ - Once the Calico service is `Healthy`,
+   Select the "calico-install-framework" task.
+ - Click the Endpoint URL to open the Calico status page in a new tab.
 
-![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-open-status.png)
-
-You should see a page that looks like the following:
-
-![alt tag]({{site.baseurl}}/images/mesos/dcos-calico-status.png)
+![sample demonstrating how to locate the framework service page]({{site.baseurl}}/images/dcos-calico-status.gif)
 
 ## Further Reading
 
