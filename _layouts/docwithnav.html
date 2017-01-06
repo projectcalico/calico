@@ -115,6 +115,9 @@ The code is a little roundabout for a few reasons:
 					<button type="button" class="btn btn-primary btn-xs" data-toggle="offcanvas">Toggle nav</button>
 			</p>
 			<div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
+				<div class="row">
+					<gcse:search></gcse:search>
+				</div>
 				<div id="sidebar">{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}</div>
 			</div>
 			<div class="col-xs-12 col-sm-8 col-md-9">
