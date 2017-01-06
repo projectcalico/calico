@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,23 +28,41 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 		names = append(names, endpoint.Name)
 	}
 
-	return dispatchChains(
+	return r.dispatchChains(
 		names,
 		WorkloadFromEndpointPfx,
 		WorkloadToEndpointPfx,
 		ChainFromWorkloadDispatch,
 		ChainToWorkloadDispatch,
-		DropAction{},
+		true,
 	)
 }
 
-func dispatchChains(
+func (r *ruleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpointID) []*Chain {
+
+	// Extract endpoint names.
+	names := make([]string, 0, len(endpoints))
+	for ifaceName, _ := range endpoints {
+		names = append(names, ifaceName)
+	}
+
+	return r.dispatchChains(
+		names,
+		HostFromEndpointPfx,
+		HostToEndpointPfx,
+		ChainDispatchFromHostEndpoint,
+		ChainDispatchToHostEndpoint,
+		false,
+	)
+}
+
+func (r *ruleRenderer) dispatchChains(
 	names []string,
 	fromEndpointPfx,
 	toEndpointPfx,
 	dispatchFromEndpoint,
 	dispatchToEndpoint string,
-	unknownInterfaceAction Action,
+	dropAtEndOfChain bool,
 ) []*Chain {
 	toEndpointRules := make([]Rule, 0, len(names)+1)
 	fromEndpointRules := make([]Rule, 0, len(names)+1)
@@ -63,14 +81,12 @@ func dispatchChains(
 		})
 	}
 
-	fromEndpointRules = append(fromEndpointRules, Rule{
-		Action:  unknownInterfaceAction,
-		Comment: "Unknown interface",
-	})
-	toEndpointRules = append(toEndpointRules, Rule{
-		Action:  unknownInterfaceAction,
-		Comment: "Unknown interface",
-	})
+	if dropAtEndOfChain {
+		fromEndpointRules = append(fromEndpointRules,
+			r.DropRules(Match(), "Unknown interface")...)
+		toEndpointRules = append(toEndpointRules,
+			r.DropRules(Match(), "Unknown interface")...)
+	}
 
 	fromEndpointDispatchChain := Chain{
 		Name:  dispatchFromEndpoint,
@@ -230,24 +246,6 @@ func (r *ruleRenderer) endpointToIptablesChains(
 		Rules: fromRules,
 	}
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
-}
-
-func (r *ruleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpointID) []*Chain {
-
-	// Extract endpoint names.
-	names := make([]string, 0, len(endpoints))
-	for ifaceName, _ := range endpoints {
-		names = append(names, ifaceName)
-	}
-
-	return dispatchChains(
-		names,
-		HostFromEndpointPfx,
-		HostToEndpointPfx,
-		ChainDispatchFromHostEndpoint,
-		ChainDispatchToHostEndpoint,
-		ReturnAction{},
-	)
 }
 
 func (r *ruleRenderer) HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*Chain {
