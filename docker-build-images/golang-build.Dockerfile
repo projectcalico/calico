@@ -9,9 +9,12 @@ ARG GID
 # - bsdmainutils contains the "column" command, used to format the coverage
 #   data.
 RUN apt-get update && \
-    apt-get install -y bsdmainutils && \
+    apt-get install -y bsdmainutils openssh-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+RUN mkdir /.ssh
+RUN echo 'StrictHostKeyChecking no' > /.ssh/config
 
 RUN go get github.com/Masterminds/glide \
            github.com/onsi/ginkgo/ginkgo \
