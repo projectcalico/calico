@@ -48,8 +48,7 @@ func newNodes(c *Client) NodeInterface {
 func (h *nodes) Create(a *api.Node) (*api.Node, error) {
 	// When creating or updating a node, initialize global defaults if they
 	// are not yet initialized.
-	err := h.c.EnsureInitialized()
-	if err != nil {
+	if err := h.c.EnsureInitialized(); err != nil {
 		return nil, err
 	}
 	return a, h.c.create(*a, h)
@@ -59,8 +58,7 @@ func (h *nodes) Create(a *api.Node) (*api.Node, error) {
 func (h *nodes) Update(a *api.Node) (*api.Node, error) {
 	// When creating or updating a node, initialize global defaults if they
 	// are not yet initialized.
-	err := h.c.EnsureInitialized()
-	if err != nil {
+	if err := h.c.EnsureInitialized(); err != nil {
 		return nil, err
 	}
 	return a, h.c.update(*a, h)
@@ -70,8 +68,7 @@ func (h *nodes) Update(a *api.Node) (*api.Node, error) {
 func (h *nodes) Apply(a *api.Node) (*api.Node, error) {
 	// When creating or updating a node, initialize global defaults if they
 	// are not yet initialized.
-	err := h.c.EnsureInitialized()
-	if err != nil {
+	if err := h.c.EnsureInitialized(); err != nil {
 		return nil, err
 	}
 	return a, h.c.apply(*a, h)

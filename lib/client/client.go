@@ -17,6 +17,7 @@ package client
 import (
 	"encoding/hex"
 	goerrors "errors"
+	"fmt"
 	"io/ioutil"
 	"reflect"
 
@@ -34,7 +35,11 @@ import (
 
 // Client contains
 type Client struct {
-	backend bapi.Client
+	// The backend client is currently public to allow access to datastore
+	// specific functions that are used by calico/node.  This is a temporary
+	// measure and users of the client API should not assume that the backend
+	// will be available in the future.
+	Backend bapi.Client
 }
 
 // New returns a connected Client.  This is the only mechanism by which to create a
@@ -43,7 +48,7 @@ type Client struct {
 func New(config api.CalicoAPIConfig) (*Client, error) {
 	var err error
 	cc := Client{}
-	if cc.backend, err = backend.NewClient(config); err != nil {
+	if cc.Backend, err = backend.NewClient(config); err != nil {
 		return nil, err
 	}
 	return &cc, err
@@ -102,26 +107,25 @@ func (c *Client) Config() ConfigInterface {
 // method and so a general consumer of this API can assume that the datastore
 // is already initialized.
 func (c *Client) EnsureInitialized() error {
-
 	// Perform datastore specific initialization first.
-	if err := c.backend.EnsureInitialized(); err != nil {
+	if err := c.Backend.EnsureInitialized(); err != nil {
 		return err
 	}
 
-	// Ensure a cluster GUID is set.  This is required for all datastore
-	// types.
+	// Ensure a cluster GUID is set for the deployment.  We do this
+	// irrespective of how Calico is deployed.
 	kv := &model.KVPair{
 		Key:   model.GlobalConfigKey{Name: "ClusterGUID"},
-		Value: hex.EncodeToString(uuid.NewV4().Bytes()),
+		Value: fmt.Sprintf("%v", hex.EncodeToString(uuid.NewV4().Bytes())),
 	}
-	if _, err := c.backend.Create(kv); err == nil {
-		log.WithField("ClusterGUID", kv.Value).Info("Assigned ClusterGUID")
+	if _, err := c.Backend.Create(kv); err == nil {
+		log.WithField("ClusterGUID", kv.Value).Info("Assigned cluster GUID")
 	} else {
 		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
-			log.WithError(err).Warnf("Failed to set ClusterGUID")
+			log.WithError(err).WithField("ClusterGUID", kv.Value).Warn("Failed to assign cluster GUID")
 			return err
 		}
-		log.Info("Using previously configured ClusterGUID")
+		log.Infof("Using previously configured cluster GUID")
 	}
 
 	return nil
@@ -204,7 +208,7 @@ type conversionHelper interface {
 func (c *Client) create(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.backend.Create(d); err != nil {
+	} else if d, err = c.Backend.Create(d); err != nil {
 		return err
 	} else {
 		return nil
@@ -216,7 +220,7 @@ func (c *Client) create(apiObject unversioned.Resource, helper conversionHelper)
 func (c *Client) update(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.backend.Update(d); err != nil {
+	} else if d, err = c.Backend.Update(d); err != nil {
 		return err
 	} else {
 		return nil
@@ -228,7 +232,7 @@ func (c *Client) update(apiObject unversioned.Resource, helper conversionHelper)
 func (c *Client) apply(apiObject unversioned.Resource, helper conversionHelper) error {
 	if d, err := helper.convertAPIToKVPair(apiObject); err != nil {
 		return err
-	} else if d, err = c.backend.Apply(d); err != nil {
+	} else if d, err = c.Backend.Apply(d); err != nil {
 		return err
 	} else {
 		return nil
@@ -240,7 +244,7 @@ func (c *Client) apply(apiObject unversioned.Resource, helper conversionHelper) 
 func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversionHelper) error {
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
-	} else if err := c.backend.Delete(&model.KVPair{Key: k}); err != nil {
+	} else if err := c.Backend.Delete(&model.KVPair{Key: k}); err != nil {
 		return err
 	} else {
 		return nil
@@ -252,7 +256,7 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHelper) (unversioned.Resource, error) {
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return nil, err
-	} else if d, err := c.backend.Get(k); err != nil {
+	} else if d, err := c.Backend.Get(k); err != nil {
 		return nil, err
 	} else if a, err := helper.convertKVPairToAPI(d); err != nil {
 		return nil, err
@@ -266,7 +270,7 @@ func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHel
 func (c *Client) list(metadata unversioned.ResourceMetadata, helper conversionHelper, listp interface{}) error {
 	if l, err := helper.convertMetadataToListInterface(metadata); err != nil {
 		return err
-	} else if dos, err := c.backend.List(l); err != nil {
+	} else if dos, err := c.Backend.List(l); err != nil {
 		return err
 	} else {
 		// The supplied resource list object will have an Items field.  Append the

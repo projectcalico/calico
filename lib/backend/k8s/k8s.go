@@ -138,6 +138,11 @@ func (c *KubeClient) EnsureInitialized() error {
 	return nil
 }
 
+func (c *KubeClient) EnsureCalicoNodeInitialized(node string) error {
+	log.WithField("Node", node).Info("Ensuring node is initialized")
+	return nil
+}
+
 // ensureThirdPartyResources ensures the necessary thirdparty resources are created
 // and will retry every second for 30 seconds or until they exist.
 func (c *KubeClient) ensureThirdPartyResources() error {

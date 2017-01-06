@@ -32,6 +32,7 @@ import (
 var (
 	etcdApplyOpts        = &etcd.SetOptions{PrevExist: etcd.PrevIgnore}
 	etcdCreateOpts       = &etcd.SetOptions{PrevExist: etcd.PrevNoExist}
+	etcdCreateDirOpts    = &etcd.SetOptions{PrevExist: etcd.PrevNoExist, Dir: true}
 	etcdDeleteEmptyOpts  = &etcd.DeleteOptions{Recursive: false, Dir: true}
 	etcdGetOpts          = &etcd.GetOptions{Quorum: true}
 	etcdListOpts         = &etcd.GetOptions{Quorum: true, Recursive: true, Sort: true}
@@ -120,6 +121,32 @@ func (c *EtcdClient) EnsureInitialized() error {
 		log.Info("Ready flag is already set")
 	}
 
+	return nil
+}
+
+// EnsureCalicoNodeInitialized() performs additional initialization required
+// by the calico/node components [startup/ipip-allocation/confd].  This is a
+// temporary requirement until the calico/node components are updated to not
+// require special etcd setup, or until the global and per-node config is
+// reworked to allow the node to perform the necessary updates.
+func (c *EtcdClient) EnsureCalicoNodeInitialized(node string) error {
+
+	// The confd agent used for BIRD configuration monitors certain
+	// directories and doesn't handle the non-existence of these directories
+	// very well, so create the required directories.
+	if err := c.ensureDirectory("/calico/v1/ipam/v4/pool"); err != nil {
+		return err
+	} else if err = c.ensureDirectory("/calico/v1/ipam/v6/pool"); err != nil {
+		return err
+	} else if err = c.ensureDirectory("/calico/bgp/v1/global/custom_filters/v4"); err != nil {
+		return err
+	} else if err = c.ensureDirectory("/calico/bgp/v1/global/custom_filters/v6"); err != nil {
+		return err
+	} else if err := c.ensureDirectory("/calico/ipam/v2/host/" + node + "/ipv4/block"); err != nil {
+		return err
+	} else if err = c.ensureDirectory("/calico/ipam/v2/host/" + node + "/ipv6/block"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -423,4 +450,17 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 		}
 		return kvs, nil
 	}
+}
+
+// ensureDirectory makes sure the specified directory exists in etcd.
+func (c *EtcdClient) ensureDirectory(dir string) error {
+	log.WithField("Dir", dir).Debug("Ensure directory exists")
+	_, err := c.etcdKeysAPI.Set(context.Background(), dir, "", etcdCreateDirOpts)
+	if err != nil {
+		err = convertEtcdError(err, nil)
+		if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			return err
+		}
+	}
+	return nil
 }

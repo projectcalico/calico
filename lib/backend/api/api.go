@@ -105,6 +105,11 @@ type Client interface {
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.
 	EnsureInitialized() error
+
+	// Perform any "backdoor" initialization required by the components
+	// used in calico/node.  This is a temporary mechanism and will be
+	// removed.
+	EnsureCalicoNodeInitialized(node string) error
 }
 
 type Syncer interface {

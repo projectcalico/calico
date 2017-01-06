@@ -39,6 +39,10 @@ func (c *ModelAdaptor) EnsureInitialized() error {
 	return c.client.EnsureInitialized()
 }
 
+func (c *ModelAdaptor) EnsureCalicoNodeInitialized(node string) error {
+	return c.client.EnsureCalicoNodeInitialized(node)
+}
+
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 	var err error
