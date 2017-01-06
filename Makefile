@@ -245,10 +245,13 @@ vendor go/vendor go/vendor/.up-to-date: go/glide.lock
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
 	  EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
+	if [ -n "$$SSH_AUTH_SOCK" ]; then \
+          SSH_AGENT_FORWARD="-v $$SSH_AUTH_SOCK:/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent"; \
+	fi; \
 	$(DOCKER_RUN_RM) \
 	    --net=host \
 	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $$HOME/.glide:/.glide:rw $$EXTRA_DOCKER_BIND \
+	    -v $$HOME/.glide:/.glide:rw $$EXTRA_DOCKER_BIND $$SSH_AGENT_FORWARD \
 	    -w /go/src/github.com/projectcalico/felix/go \
 	    calico-build/golang \
 	    glide install --strip-vendor
