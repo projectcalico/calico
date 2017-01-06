@@ -15,6 +15,7 @@
 package routetable
 
 import (
+	"github.com/projectcalico/felix/go/felix/conntrack"
 	"github.com/projectcalico/felix/go/felix/ip"
 	. "github.com/vishvananda/netlink"
 	"net"
@@ -28,6 +29,7 @@ type dataplaneIface interface {
 	RouteAdd(route *Route) error
 	RouteDel(route *Route) error
 	AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
+	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
 }
 
 type realDataplane struct{}
@@ -57,6 +59,10 @@ func (r realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr,
 		"-s", cidr.Addr().String(), destMAC.String(),
 		"-i", ifaceName)
 	return cmd.Run()
+}
+
+func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
+	conntrack.RemoveConntrackFlows(ipVersion, ipAddr)
 }
 
 var _ dataplaneIface = realDataplane{}
