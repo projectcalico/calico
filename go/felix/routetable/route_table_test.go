@@ -231,7 +231,7 @@ var _ = Describe("RouteTable", func() {
 				Expect(err).To(BeNil())
 				Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route))
 			})
-			It(fmt.Sprintf("it should ignore Down updates", failure), func() {
+			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {
 				// First Apply() with a failure.
 				dataplane.failuresToSimulate = failure
 				rt.Apply()

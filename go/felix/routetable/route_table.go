@@ -316,6 +316,8 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	return nil
 }
 
+// filterErrorByIfaceState checks the current state of the interface; it's down or gone, it returns
+// IfaceDown or IfaceError, otherwise, it returns the given defaultErr.
 func (r *RouteTable) filterErrorByIfaceState(ifaceName string, defaultErr error) error {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	if link, err := r.dataplane.LinkByName(ifaceName); err == nil {
@@ -335,14 +337,4 @@ func (r *RouteTable) filterErrorByIfaceState(ifaceName string, defaultErr error)
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
 		return defaultErr
 	}
-}
-
-func (r *RouteTable) ifaceExists(name string) (bool, error) {
-	_, err := r.dataplane.LinkByName(name)
-	if err == nil {
-		return true, nil
-	} else if strings.Contains(err.Error(), "not found") {
-		return false, nil
-	}
-	return false, err
 }
