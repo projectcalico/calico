@@ -88,6 +88,21 @@ var _ = Describe("Set", func() {
 			Expect(c).NotTo(BeIdenticalTo(s)) // Check they're not the same object.
 			Expect(c).To(Equal(s))            // DeepEquals, will check the contents.
 		})
+		It("should correctly determine set equality", func() {
+			c := s.Copy()
+			Expect(c.Equals(s)).To(BeTrue())
+			Expect(s.Equals(c)).To(BeTrue())
+			c.Add(3)
+			Expect(c.Equals(s)).To(BeFalse())
+			Expect(s.Equals(c)).To(BeFalse())
+			c.Discard(2)
+			Expect(c.Equals(s)).To(BeFalse())
+			Expect(s.Equals(c)).To(BeFalse())
+			c.Add(2)
+			c.Discard(3)
+			Expect(c.Equals(s)).To(BeTrue())
+			Expect(s.Equals(c)).To(BeTrue())
+		})
 
 		Describe("after removing 2", func() {
 			BeforeEach(func() {

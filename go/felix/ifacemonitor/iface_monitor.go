@@ -217,8 +217,10 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 				newAddrs.Add(addr.IPNet.IP.String())
 			}
 		}
-		m.ifaceAddrs[ifIndex] = newAddrs
-		m.notifyIfaceAddrs(ifIndex)
+		if (m.ifaceAddrs[ifIndex] == nil) || !m.ifaceAddrs[ifIndex].Equals(newAddrs) {
+			m.ifaceAddrs[ifIndex] = newAddrs
+			m.notifyIfaceAddrs(ifIndex)
+		}
 	}
 }
 

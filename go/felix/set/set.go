@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ type Set interface {
 	Contains(interface{}) bool
 	Iter(func(item interface{}) error)
 	Copy() Set
+	Equals(Set) bool
 }
 
 type empty struct{}
@@ -87,4 +88,16 @@ func (set mapSet) Copy() Set {
 		cpy.Add(item)
 	}
 	return cpy
+}
+
+func (set mapSet) Equals(other Set) bool {
+	if set.Len() != other.Len() {
+		return false
+	}
+	for item := range set {
+		if !other.Contains(item) {
+			return false
+		}
+	}
+	return true
 }

@@ -248,10 +248,11 @@ var _ = Describe("ifacemonitor", func() {
 		nl.addAddr("eth0", "10.0.240.10/24")
 		expectAddrStateCb("eth0")
 
-		// Set the link up, and expect callbacks.
+		// Set the link up, and expect a link callback.
+		// Addresses are unchanged, so there is no address
+		// callback.
 		nl.changeLinkState("eth0", "up")
 		expectLinkStateCb("eth0")
-		expectAddrStateCb("eth0")
 
 		// Add an address.
 		nl.addAddr("eth0", "172.19.34.1/27")
@@ -270,13 +271,11 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Set link down.
 		nl.changeLinkState("eth0", "down")
-		expectAddrStateCb("eth0")
 		expectLinkStateCb("eth0")
 
 		// Set link up again.
 		nl.changeLinkState("eth0", "up")
 		expectLinkStateCb("eth0")
-		expectAddrStateCb("eth0")
 
 		// Trigger a resync, then immediately delete the link.
 		// What happens is that the test code deletes its
