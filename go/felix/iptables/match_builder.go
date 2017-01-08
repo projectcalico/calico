@@ -32,7 +32,7 @@ func (m MatchCriteria) Render() string {
 }
 
 func (m MatchCriteria) String() string {
-	return m.Render()
+	return fmt.Sprintf("MatchCriteria[%s]", m.Render())
 }
 
 func (m MatchCriteria) MarkClear(mark uint32) MatchCriteria {

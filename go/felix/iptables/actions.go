@@ -28,6 +28,10 @@ func (g GotoAction) ToFragment() string {
 	return "--goto " + g.Target
 }
 
+func (g GotoAction) String() string {
+	return "Goto->" + g.Target
+}
+
 type JumpAction struct {
 	Target string
 }
@@ -36,16 +40,28 @@ func (g JumpAction) ToFragment() string {
 	return "--jump " + g.Target
 }
 
+func (g JumpAction) String() string {
+	return "Jump->" + g.Target
+}
+
 type ReturnAction struct{}
 
 func (r ReturnAction) ToFragment() string {
 	return "--jump RETURN"
 }
 
+func (r ReturnAction) String() string {
+	return "Return"
+}
+
 type DropAction struct{}
 
 func (g DropAction) ToFragment() string {
 	return "--jump DROP"
+}
+
+func (g DropAction) String() string {
+	return "Drop"
 }
 
 type LogAction struct {
@@ -56,10 +72,18 @@ func (g LogAction) ToFragment() string {
 	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
 }
 
+func (g LogAction) String() string {
+	return "Log"
+}
+
 type AcceptAction struct{}
 
 func (g AcceptAction) ToFragment() string {
 	return "--jump ACCEPT"
+}
+
+func (g AcceptAction) String() string {
+	return "Accept"
 }
 
 type DNATAction struct {
@@ -71,10 +95,18 @@ func (g DNATAction) ToFragment() string {
 	return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
 }
 
+func (g DNATAction) String() string {
+	return fmt.Sprintf("DNAT->%s:%d", g.DestAddr, g.DestPort)
+}
+
 type MasqAction struct{}
 
 func (g MasqAction) ToFragment() string {
 	return "--jump MASQUERADE"
+}
+
+func (g MasqAction) String() string {
+	return "Masq"
 }
 
 type ClearMarkAction struct {
@@ -85,10 +117,18 @@ func (c ClearMarkAction) ToFragment() string {
 	return fmt.Sprintf("--jump MARK --set-mark 0/%#x", c.Mark)
 }
 
+func (c ClearMarkAction) String() string {
+	return fmt.Sprintf("Clear:%#x", c.Mark)
+}
+
 type SetMarkAction struct {
 	Mark uint32
 }
 
 func (c SetMarkAction) ToFragment() string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mark)
+}
+
+func (c SetMarkAction) String() string {
+	return fmt.Sprintf("Set:%#x", c.Mark)
 }

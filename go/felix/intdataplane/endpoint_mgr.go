@@ -408,7 +408,9 @@ func (m *endpointManager) resolveHostEndpoints() error {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
 		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
-		m.filterTable.UpdateChains(chains)
+		if !reflect.DeepEqual(chains, m.activeHostIdToChains[id]) {
+			m.filterTable.UpdateChains(chains)
+		}
 		newHostEpChains[id] = chains
 		delete(m.activeHostIdToChains, id)
 	}
