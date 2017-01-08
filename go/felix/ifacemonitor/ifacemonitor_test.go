@@ -42,6 +42,11 @@ type netlinkTest struct {
 	links     map[string]linkModel
 }
 
+type mockDataplane struct {
+	linkC chan string
+	addrC chan string
+}
+
 func (nl *netlinkTest) addLink(name string) {
 	if nl.links == nil {
 		nl.links = map[string]linkModel{}
@@ -191,29 +196,25 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 	return addrs, nil
 }
 
-var linkC = make(chan string, 1)
-
-func linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
+func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
 	log.Info("linkStateCallback: ifaceName=", ifaceName)
 	log.Info("linkStateCallback: ifaceState=", ifaceState)
-	linkC <- ifaceName
+	dp.linkC <- ifaceName
 }
 
-func expectLinkStateCb(ifaceName string) {
-	cbIface := <-linkC
+func (dp *mockDataplane) expectLinkStateCb(ifaceName string) {
+	cbIface := <-dp.linkC
 	Expect(cbIface).To(Equal(ifaceName))
 }
 
-var addrC = make(chan string, 1)
-
-func addrStateCallback(ifaceName string, addrs set.Set) {
+func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.Info("addrStateCallback: ifaceName=", ifaceName)
 	log.Info("addrStateCallback: addrs=", addrs)
-	addrC <- ifaceName
+	dp.addrC <- ifaceName
 }
 
-func expectAddrStateCb(ifaceName string) {
-	cbIface := <-addrC
+func (dp *mockDataplane) expectAddrStateCb(ifaceName string) {
+	cbIface := <-dp.addrC
 	Expect(cbIface).To(Equal(ifaceName))
 }
 
@@ -231,8 +232,12 @@ var _ = Describe("ifacemonitor", func() {
 		// and (b) send to a 1-buffered channel, so that the
 		// test code _must_ explicitly indicate when it
 		// expects those callbacks to have occurred.
-		im.Callback = linkStateCallback
-		im.AddrCallback = addrStateCallback
+		dp := &mockDataplane{
+			linkC: make(chan string, 1),
+			addrC: make(chan string, 1),
+		}
+		im.Callback = dp.linkStateCallback
+		im.AddrCallback = dp.addrStateCallback
 
 		// Start the monitor running, and give it time for its
 		// initial resync (which will be a no-op) before we
@@ -246,36 +251,36 @@ var _ = Describe("ifacemonitor", func() {
 		// independent of link state.
 		nl.addLink("eth0")
 		nl.addAddr("eth0", "10.0.240.10/24")
-		expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0")
 
 		// Set the link up, and expect a link callback.
 		// Addresses are unchanged, so there is no address
 		// callback.
 		nl.changeLinkState("eth0", "up")
-		expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0")
 
 		// Add an address.
 		nl.addAddr("eth0", "172.19.34.1/27")
-		expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0")
 
 		// Delete that address.
 		nl.delAddr("eth0", "172.19.34.1/27")
-		expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0")
 
 		// Add address again.
 		nl.addAddr("eth0", "172.19.34.1/27")
-		expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0")
 
 		// Delete an address that wasn't actually there - no callback.
 		nl.delAddr("eth0", "8.8.8.8/32")
 
 		// Set link down.
 		nl.changeLinkState("eth0", "down")
-		expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0")
 
 		// Set link up again.
 		nl.changeLinkState("eth0", "up")
-		expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0")
 
 		// Trigger a resync, then immediately delete the link.
 		// What happens is that the test code deletes its
@@ -285,8 +290,8 @@ var _ = Describe("ifacemonitor", func() {
 		// address callbacks accordingly.
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
-		expectLinkStateCb("eth0")
-		expectAddrStateCb("eth0")
+		dp.expectLinkStateCb("eth0")
+		dp.expectAddrStateCb("eth0")
 
 		// Trigger another resync.  Nothing is expected.  We
 		// ensure that the resync processing completes, before
