@@ -225,20 +225,24 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string) {
 }
 
 var _ = Describe("ifacemonitor", func() {
-	It("New", func() {
+	var nl *netlinkTest
+	var resyncC chan time.Time
+	var im *ifacemonitor.InterfaceMonitor
+	var dp *mockDataplane
 
+	BeforeEach(func() {
 		// Make an Interface Monitor that uses a test netlink
 		// stub implementation and resync trigger channel -
 		// both controlled by this code.
-		nl := &netlinkTest{userSubscribed: make(chan int)}
-		resyncC := make(chan time.Time)
-		im := ifacemonitor.NewWithStubs(nl, resyncC)
+		nl = &netlinkTest{userSubscribed: make(chan int)}
+		resyncC = make(chan time.Time)
+		im = ifacemonitor.NewWithStubs(nl, resyncC)
 
 		// Register this test code's callbacks, which (a) log;
 		// and (b) send to a 1-buffered channel, so that the
 		// test code _must_ explicitly indicate when it
 		// expects those callbacks to have occurred.
-		dp := &mockDataplane{
+		dp = &mockDataplane{
 			linkC: make(chan string, 1),
 			addrC: make(chan string, 1),
 		}
@@ -249,7 +253,9 @@ var _ = Describe("ifacemonitor", func() {
 		// subscribed to our test netlink stub.
 		go im.MonitorInterfaces()
 		<-nl.userSubscribed
+	})
 
+	It("should handle mainline netlink updates", func() {
 		// Add a link and an address.  No link callback
 		// expected because the link is not up yet.  But we do
 		// get an address callback because those are
