@@ -409,26 +409,17 @@ class FelixIptablesGenerator(FelixPlugin):
         :returns Tuple: list of rules, set of deps.
         """
         forward_chain = []
-        for iface_match in self.IFACE_MATCH:
-            forward_chain.extend(self.drop_rules(
-                ip_version, CHAIN_FORWARD,
-                "--in-interface %s --match conntrack --ctstate "
-                "INVALID" % iface_match, None))
-            forward_chain.extend(
-                self.drop_rules(
-                    ip_version, CHAIN_FORWARD,
-                    "--out-interface %s --match conntrack --ctstate "
-                    "INVALID" % iface_match, None))
-            forward_chain.extend([
-                # First, a pair of conntrack rules, which accept established
-                # flows to/from workload interfaces.
-                "--append %s --in-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, iface_match),
-                "--append %s --out-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, iface_match),
-            ])
+
+        forward_chain.extend(self.drop_rules(
+            ip_version, CHAIN_FORWARD,
+            "--match conntrack --ctstate INVALID", None))
+        forward_chain.extend([
+            # First, a pair of conntrack rules, which accept established
+            # flows to/from workload interfaces.
+            "--append %s --match conntrack "
+            "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+            (CHAIN_FORWARD,),
+        ])
 
         for iface_match in self.IFACE_MATCH:
             forward_chain.extend([
