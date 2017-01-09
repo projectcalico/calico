@@ -70,7 +70,7 @@ The following subsections flesh out these steps.
 ### Prepare a Fuel master node
 
 Follow Mirantis's instructions for preparing a Fuel master node, from
-the [Fuel 6.1 User Guide](https://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#download-and-install-fuel).
+the [Fuel 6.1 User Guide](http://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#download-and-install-fuel).
 You will need to download a Fuel 6.1 ISO image from the [Mirantis
 website](https://www.mirantis.com/products/mirantis-openstack-software/).
 
@@ -94,7 +94,7 @@ You can check that the plugin was successfully installed using:
 Deploy an OpenStack cluster
 ---------------------------
 
-Use the Fuel web UI to deploy an OpenStack cluster in the [usual way](https://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#create-a-new-openstack-environment),
+Use the Fuel web UI to deploy an OpenStack cluster in the [usual way](http://docs.mirantis.com/openstack/fuel/fuel-6.1/user-guide.html#create-a-new-openstack-environment),
 with the following guidelines.
 
 -   Create a new OpenStack environment, selecting:
