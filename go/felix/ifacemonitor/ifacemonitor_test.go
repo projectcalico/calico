@@ -35,8 +35,9 @@ type linkModel struct {
 }
 
 type netlinkTest struct {
-	linkUpdates chan netlink.LinkUpdate
-	addrUpdates chan netlink.AddrUpdate
+	linkUpdates    chan netlink.LinkUpdate
+	addrUpdates    chan netlink.AddrUpdate
+	userSubscribed chan int
 
 	nextIndex int
 	links     map[string]linkModel
@@ -104,8 +105,9 @@ func (nl *netlinkTest) signalLink(name string) {
 	}
 
 	// Send it.
-	log.Info("Test code signaling a link update")
+	log.WithField("channel", nl.linkUpdates).Info("Test code signaling a link update")
 	nl.linkUpdates <- update
+	log.Info("Test code signaled a link update")
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
@@ -135,8 +137,9 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 	}
 
 	// Send it.
-	log.Info("Test code signaling an addr update")
+	log.WithField("channel", nl.linkUpdates).Info("Test code signaling an addr update")
 	nl.addrUpdates <- update
+	log.Info("Test code signaled an addr update")
 }
 
 func (nl *netlinkTest) Subscribe(
@@ -145,6 +148,7 @@ func (nl *netlinkTest) Subscribe(
 ) error {
 	nl.linkUpdates = linkUpdates
 	nl.addrUpdates = addrUpdates
+	nl.userSubscribed <- 1
 	return nil
 }
 
@@ -200,6 +204,7 @@ func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemon
 	log.Info("linkStateCallback: ifaceName=", ifaceName)
 	log.Info("linkStateCallback: ifaceState=", ifaceState)
 	dp.linkC <- ifaceName
+	log.Info("mock dataplane reported link callback")
 }
 
 func (dp *mockDataplane) expectLinkStateCb(ifaceName string) {
@@ -211,6 +216,7 @@ func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.Info("addrStateCallback: ifaceName=", ifaceName)
 	log.Info("addrStateCallback: addrs=", addrs)
 	dp.addrC <- ifaceName
+	log.Info("mock dataplane reported address callback")
 }
 
 func (dp *mockDataplane) expectAddrStateCb(ifaceName string) {
@@ -224,7 +230,7 @@ var _ = Describe("ifacemonitor", func() {
 		// Make an Interface Monitor that uses a test netlink
 		// stub implementation and resync trigger channel -
 		// both controlled by this code.
-		nl := &netlinkTest{}
+		nl := &netlinkTest{userSubscribed: make(chan int)}
 		resyncC := make(chan time.Time)
 		im := ifacemonitor.NewWithStubs(nl, resyncC)
 
@@ -239,16 +245,23 @@ var _ = Describe("ifacemonitor", func() {
 		im.Callback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
 
-		// Start the monitor running, and give it time for its
-		// initial resync (which will be a no-op) before we
-		// start adding link state.
+		// Start the monitor running, and wait until it has
+		// subscribed to our test netlink stub.
 		go im.MonitorInterfaces()
-		time.Sleep(10 * time.Millisecond)
+		<-nl.userSubscribed
 
 		// Add a link and an address.  No link callback
 		// expected because the link is not up yet.  But we do
 		// get an address callback because those are
-		// independent of link state.
+		// independent of link state.  (Note that if the
+		// monitor's initial resync runs slowly enough, it
+		// might see the new link and addr as part of that
+		// resync - whereas normally what happens is that the
+		// resync completes as a no-op first, and the addLink
+		// causes a notification afterwards.  But either way
+		// we expect to get the same callbacks to the
+		// dataplane, so we don't need to distinguish between
+		// these two possibilities.
 		nl.addLink("eth0")
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0")

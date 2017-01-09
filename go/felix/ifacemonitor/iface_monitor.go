@@ -88,20 +88,24 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 
 readLoop:
 	for {
+		log.WithField("channel", updates).Debug("About to select on possible triggers")
 		select {
 		case update, ok := <-updates:
+			log.Debug("Link update")
 			if !ok {
 				log.Warn("Failed to read a link update")
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
 		case addrUpdate, ok := <-addrUpdates:
+			log.Debug("Address update")
 			if !ok {
 				log.Warn("Failed to read an address update")
 				break readLoop
 			}
 			m.handleNetlinkAddrUpdate(addrUpdate)
 		case <-m.resyncC:
+			log.Debug("Resync trigger")
 			err := m.resync()
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read link states from netlink.")
@@ -252,5 +256,6 @@ func (m *InterfaceMonitor) resync() error {
 		m.AddrCallback(name.(string), nil)
 		return set.RemoveItem
 	})
+	log.Debug("Resync complete")
 	return nil
 }
