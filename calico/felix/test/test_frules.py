@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 # Copyright 2015 Cisco Systems
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -140,11 +140,10 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000 '
+                '--match conntrack --ctstate UNTRACKED',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
@@ -407,11 +406,10 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000 '
+                '--match conntrack --ctstate UNTRACKED',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
@@ -533,11 +531,10 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --jump ACCEPT --match mark --mark 0x1000000/0x1000000 '
+                '--match conntrack --ctstate UNTRACKED',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
