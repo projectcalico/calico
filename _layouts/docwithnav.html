@@ -70,6 +70,7 @@ The code is a little roundabout for a few reasons:
 
 <section>
 		<nav class="navbar navbar-inverse navbar-static-top">
+		<nav class="navbar navbar-default navbar-inverse navbar-static-top">
 			<div class="container">
 				<div class="navbar-header">
 					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar" aria-expanded="false" aria-controls="tigera-navbar">
@@ -86,6 +87,25 @@ The code is a little roundabout for a few reasons:
 						<li><a href="#">Support</a></li>
 						<li><a href="#">Blog</a></li>
 					</ul>
+					<form class="navbar-form visible-xs">
+						<ul class="nav navbar-nav navbar-right">
+							{% for navbar in navbars %}
+								<li {% if this_pages_navbar == navbar %} class="active"{% endif %}>
+									<a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">{{ navbar.bigheader }}</a>
+								</li>
+							{% endfor %}
+						</ul>
+					</form>
+					<ul class="visible-xs nav navbar-nav navbar-right">
+					 <li class="dropdown">
+						 <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Versions <span class="caret"></span></a>
+						 <ul class="dropdown-menu">
+							 <li><a href="#">Master</a></li>
+							 <li role="separator" class="divider"></li>
+							 <li><a href="#">Latest (v1.5)</a></li>
+						 </ul>
+					 </li>
+				 </ul>
 				</div><!--/.nav-collapse -->
 				<div id="navbar" class="navbar-collapse collapse">
 					<ul class="nav navbar-nav">
