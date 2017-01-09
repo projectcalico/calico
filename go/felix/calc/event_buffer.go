@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -282,6 +282,8 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 					Ipv4Nets:   netsToStrings(ep.IPv4Nets),
 					Ipv6Nets:   netsToStrings(ep.IPv6Nets),
 					Tiers:      tiers,
+					Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
+					Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
 				},
 			})
 	case model.HostEndpointKey:
@@ -386,4 +388,15 @@ func ipsToStrings(ips []net.IP) []string {
 		strings[ii] = ip.String()
 	}
 	return strings
+}
+
+func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
+	protoNats := make([]*proto.NatInfo, len(nats))
+	for ii, nat := range nats {
+		protoNats[ii] = &proto.NatInfo{
+			ExtIp: nat.ExtIP.String(),
+			IntIp: nat.IntIP.String(),
+		}
+	}
+	return protoNats
 }

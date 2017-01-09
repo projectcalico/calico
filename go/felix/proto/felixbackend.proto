@@ -232,6 +232,8 @@ message WorkloadEndpoint {
   repeated string ipv4_nets = 5;
   repeated string ipv6_nets = 6;
   repeated TierInfo tiers = 7;
+  repeated NatInfo ipv4_nat = 8;
+  repeated NatInfo ipv6_nat = 9;
 }
 
 message WorkloadEndpointRemove {
@@ -265,6 +267,11 @@ message HostEndpointRemove {
 message TierInfo {
   string name = 1;
   repeated string policies = 2;
+}
+
+message NatInfo {
+  string ext_ip = 1;
+  string int_ip = 2;
 }
 
 message ProcessStatusUpdate {
