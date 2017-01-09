@@ -51,7 +51,7 @@ This can be done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-containers/releases/download/v0.23.0/calicoctl
+wget https://github.com/projectcalico/calico-containers/releases/download/v0.23.1/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -75,7 +75,7 @@ Requires=docker.service
 User=root
 Environment=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT>
 PermissionsStartOnly=true
-ExecStartPre=/usr/bin/wget -N -P /opt/bin https://github.com/projectcalico/calico-containers/releases/download/v0.23.0/calicoctl
+ExecStartPre=/usr/bin/wget -N -P /opt/bin https://github.com/projectcalico/calico-containers/releases/download/v0.23.1/calicoctl
 ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
 ExecStart=/opt/bin/calicoctl node --detach=false
 Restart=always
@@ -92,8 +92,8 @@ The Kubernetes `kubelet` calls out to the `calico` and `calico-ipam` plugins.
 Download the binaries and make sure they're executable
 
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.3/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.3/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.4/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.4.4/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 

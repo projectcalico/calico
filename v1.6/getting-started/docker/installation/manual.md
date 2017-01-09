@@ -60,7 +60,7 @@ If you prefer not to do this you can still run the demo but remember to run
 
 Get the calicoctl binary onto each host.
 
-	wget https://github.com/projectcalico/calico-containers/releases/download/v0.23.0/calicoctl
+	wget https://github.com/projectcalico/calico-containers/releases/download/v0.23.1/calicoctl
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any
@@ -72,7 +72,7 @@ You can optionally preload the Calico Docker image to avoid the delay when you
 run `calicoctl node` the first time.  Select the appropriate version of the
 `calico/node` as required by the version of calicoctl:
 
-    docker pull calico/node:v0.23.0
+    docker pull calico/node:v0.23.1
 
 ### Final checks
 

@@ -107,7 +107,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 gcloud compute ssh kubernetes-master
 
 # Enable outgoing NAT and ipip on the Calico pool.
-docker run --rm --net=host calico/ctl:v0.23.0 pool add 192.168.0.0/16 --ipip --nat-outgoing
+docker run --rm --net=host calico/ctl:v0.23.1 pool add 192.168.0.0/16 --ipip --nat-outgoing
 ```
 
 ### 3.2 Configure kubectl
