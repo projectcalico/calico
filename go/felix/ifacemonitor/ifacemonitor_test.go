@@ -43,9 +43,14 @@ type netlinkTest struct {
 	links     map[string]linkModel
 }
 
+type addrState struct {
+	ifaceName string
+	addrs     set.Set
+}
+
 type mockDataplane struct {
 	linkC chan string
-	addrC chan string
+	addrC chan addrState
 }
 
 func (nl *netlinkTest) addLink(name string) {
@@ -222,13 +227,40 @@ func (dp *mockDataplane) expectLinkStateCb(ifaceName string) {
 func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.Info("addrStateCallback: ifaceName=", ifaceName)
 	log.Info("addrStateCallback: addrs=", addrs)
-	dp.addrC <- ifaceName
+	dp.addrC <- addrState{ifaceName: ifaceName, addrs: addrs}
 	log.Info("mock dataplane reported address callback")
 }
 
-func (dp *mockDataplane) expectAddrStateCb(ifaceName string) {
-	cbIface := <-dp.addrC
-	Expect(cbIface).To(Equal(ifaceName))
+func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, present bool) {
+	log.WithFields(log.Fields{
+		"ifaceName": ifaceName,
+		"addr":      addr,
+		"present":   present,
+	}).Debug("expectAddrStateCb")
+	for {
+		cbIface := <-dp.addrC
+		log.WithFields(log.Fields{
+			"ifaceName": cbIface.ifaceName,
+			"addrs":     cbIface.addrs,
+		}).Debug("Mock dp got addr cb")
+		if cbIface.ifaceName != ifaceName {
+			log.Debug("Wrong interface")
+			continue
+		}
+		if (addr == "") && (!present) && (cbIface.addrs != nil) {
+			log.Debug("Expected nil addrs, didn't get it")
+			continue
+		}
+		if (addr != "") && (!present) && cbIface.addrs.Contains(addr) {
+			log.Debug("Expected addr to be missing, but it's there")
+			continue
+		}
+		if (addr != "") && present && !cbIface.addrs.Contains(addr) {
+			log.Debug("Expected addr to be present, but it's missing")
+			continue
+		}
+		break
+	}
 }
 
 var _ = Describe("ifacemonitor", func() {
@@ -246,12 +278,19 @@ var _ = Describe("ifacemonitor", func() {
 		im = ifacemonitor.NewWithStubs(nl, resyncC)
 
 		// Register this test code's callbacks, which (a) log;
-		// and (b) send to a 1-buffered channel, so that the
-		// test code _must_ explicitly indicate when it
-		// expects those callbacks to have occurred.
+		// and (b) send to a 1- or 2-buffered channel, so that
+		// the test code _must_ explicitly indicate when it
+		// expects those callbacks to have occurred.  For the
+		// link channel a buffer of 1 is enough, because link
+		// callbacks only result from link updates from the
+		// netlink stub.  For the address channel we sometimes
+		// need a buffer of 2 because both link and address
+		// updates from the stub can generate address
+		// callbacks.  expectAddrStateCb takes care to check
+		// that we eventually get the callback that we expect.
 		dp = &mockDataplane{
 			linkC: make(chan string, 1),
-			addrC: make(chan string, 1),
+			addrC: make(chan addrState, 2),
 		}
 		im.Callback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
@@ -276,8 +315,10 @@ var _ = Describe("ifacemonitor", func() {
 		// dataplane, so we don't need to distinguish between
 		// these two possibilities.
 		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
-		dp.expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
 
 		// Set the link up, and expect a link callback.
 		// Addresses are unchanged, so there is no address
@@ -287,15 +328,15 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Add an address.
 		nl.addAddr("eth0", "172.19.34.1/27")
-		dp.expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0", "172.19.34.1", true)
 
 		// Delete that address.
 		nl.delAddr("eth0", "172.19.34.1/27")
-		dp.expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0", "172.19.34.1", false)
 
 		// Add address again.
 		nl.addAddr("eth0", "172.19.34.1/27")
-		dp.expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0", "172.19.34.1", true)
 
 		// Delete an address that wasn't actually there - no callback.
 		nl.delAddr("eth0", "8.8.8.8/32")
@@ -317,7 +358,7 @@ var _ = Describe("ifacemonitor", func() {
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
 		dp.expectLinkStateCb("eth0")
-		dp.expectAddrStateCb("eth0")
+		dp.expectAddrStateCb("eth0", "", false)
 
 		// Trigger another resync.  Nothing is expected.  We
 		// ensure that the resync processing completes, before
