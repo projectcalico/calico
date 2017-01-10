@@ -410,9 +410,25 @@ class FelixIptablesGenerator(FelixPlugin):
         """
         forward_chain = []
 
+        # Drop immediately if conntrack thinks this packet is not valid (for
+        # example a mid-stream TCP packet for an unknown session).
         forward_chain.extend(self.drop_rules(
             ip_version, CHAIN_FORWARD,
             "--match conntrack --ctstate INVALID", None))
+
+        # Accept immediately if this packet is part of an ongoing connection.
+        # We need this for two reasons:
+        #
+        # - to avoid the overhead of running all our iptables rules against
+        #   every packet
+        # - to accept return traffic.
+        #
+        # We used to limit these rules to apply only to workload traffic but
+        # Calico now supports policing through traffic on a gateway or router,
+        # which means we need to match all traffic here.  Ideally, we'd only
+        # match traffic that is destined to/from a known host endpoint but
+        # that would mean moving the rules down into the per-endpoint chains,
+        # increasing per-packet overhead.
         forward_chain.extend([
             # First, a pair of conntrack rules, which accept established
             # flows to/from workload interfaces.
