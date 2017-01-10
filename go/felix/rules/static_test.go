@@ -190,22 +190,24 @@ var _ = Describe("Static", func() {
 		})
 
 		It("IPv4: Should return expected NAT prerouting chain", func() {
-			Expect(rr.StaticNATPreroutingChains(4)).To(Equal([]*Chain{
-				{
-					Name:  "cali-PREROUTING",
-					Rules: []Rule{},
-				},
+			Expect(findChain(rr.StaticNATTableChains(4), "cali-PREROUTING")).To(Equal(&Chain{
+				Name:  "cali-PREROUTING",
+				Rules: []Rule{},
 			}))
 		})
 		It("IPv4: Should return expected NAT postrouting chain", func() {
-			Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{
-				{
-					Name: "cali-POSTROUTING",
-					Rules: []Rule{
-						{Action: JumpAction{Target: "cali-nat-outgoing"}},
-					},
+			Expect(findChain(rr.StaticNATTableChains(4), "cali-POSTROUTING")).To(Equal(&Chain{
+				Name: "cali-POSTROUTING",
+				Rules: []Rule{
+					{Action: JumpAction{Target: "cali-nat-outgoing"}},
 				},
 			}))
+		})
+		It("IPv4: Should return only the expected nat chains", func() {
+			Expect(len(rr.StaticNATTableChains(4))).To(Equal(2))
+		})
+		It("IPv6: Should return only the expected nat chains", func() {
+			Expect(len(rr.StaticNATTableChains(6))).To(Equal(2))
 		})
 	})
 
