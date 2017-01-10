@@ -88,6 +88,7 @@ var (
 
 type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
+	StaticFilterForwardChains() []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
