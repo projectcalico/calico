@@ -212,7 +212,10 @@ func (r *ruleRenderer) filterFailsafeOutChain() *Chain {
 func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// conntrack rules to accept established connections.
+	// conntrack rules to reject invalid packets and accept established connections.
+	// Ideally, we'd limit these rules to the interfaces that we're managing so that we
+	// co-exist better with the user's other rules. However, to do that we'd have to push
+	// them down into the per-endpoint chains, which would increase per-packet overhead.
 	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
 	rules = append(rules,
 		Rule{
