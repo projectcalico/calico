@@ -206,8 +206,12 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 				})
 		}
 		// If no policy in the tier marked the packet as next-tier, drop the packet.
-		toRules = append(toRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
-		fromRules = append(fromRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
+		toRules = append(toRules, r.DropRules(
+			Match().MarkClear(r.IptablesMarkNextTier),
+			"Drop if no policies passed packet")...)
+		fromRules = append(fromRules, r.DropRules(
+			Match().MarkClear(r.IptablesMarkNextTier),
+			"Drop if no policies passed packet")...)
 	}
 
 	// Then, jump to each profile in turn.

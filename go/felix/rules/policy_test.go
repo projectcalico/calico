@@ -25,17 +25,6 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
-var (
-	rrConfigNormal = Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkNextTier: 0x10,
-	}
-)
-
 var ruleTestData = []TableEntry{
 	Entry("Empty rule", 4, proto.Rule{}, ""),
 
@@ -193,6 +182,15 @@ var ruleTestData = []TableEntry{
 }
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
+	var rrConfigNormal = Config{
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x8,
+		IptablesMarkNextTier: 0x10,
+	}
+
 	DescribeTable(
 		"Allow rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
