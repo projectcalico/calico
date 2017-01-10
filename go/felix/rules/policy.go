@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
+func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain {
 	inbound := iptables.Chain{
 		Name:  PolicyChainName(PolicyInboundPfx, policyID),
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion),
@@ -37,7 +37,7 @@ func (r *ruleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *
 	return []*iptables.Chain{&inbound, &outbound}
 }
 
-func (r *ruleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) []*iptables.Chain {
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) []*iptables.Chain {
 	inbound := iptables.Chain{
 		Name:  ProfileChainName(PolicyInboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion),
@@ -49,7 +49,7 @@ func (r *ruleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profi
 	return []*iptables.Chain{&inbound, &outbound}
 }
 
-func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVersion uint8) []iptables.Rule {
+func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVersion uint8) []iptables.Rule {
 	var rules []iptables.Rule
 	for _, protoRule := range protoRules {
 		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion)...)
@@ -57,7 +57,7 @@ func (r *ruleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVer
 	return rules
 }
 
-func (r *ruleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
+func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
 	rules := []iptables.Rule{}
 	ruleCopy := *pRule
 
@@ -135,7 +135,7 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	return
 }
 
-func (r *ruleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
+func (r *DefaultRuleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
 	actions = []iptables.Action{}
 
 	if pRule.LogPrefix != "" || pRule.Action == "log" {
@@ -173,7 +173,7 @@ func (r *ruleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *pro
 
 var SkipRule = errors.New("Rule skipped")
 
-func (r *ruleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (iptables.MatchCriteria, error) {
+func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) (iptables.MatchCriteria, error) {
 	match := iptables.Match()
 
 	logCxt := log.WithFields(log.Fields{
