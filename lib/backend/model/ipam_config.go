@@ -39,6 +39,10 @@ func (key IPAMConfigKey) valueType() reflect.Type {
 	return typeIPAMConfig
 }
 
+func (key IPAMConfigKey) String() string {
+	return "IPAMConfigKey()"
+}
+
 type IPAMConfig struct {
 	StrictAffinity     bool `json:"strict_affinity,omitempty"`
 	AutoAllocateBlocks bool `json:"auto_allocate_blocks,omitempty"`

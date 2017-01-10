@@ -15,6 +15,7 @@
 package model
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -47,6 +48,10 @@ func (key IPAMHostKey) defaultDeleteParentPaths() ([]string, error) {
 
 func (key IPAMHostKey) valueType() reflect.Type {
 	return typeIPAMHost
+}
+
+func (key IPAMHostKey) String() string {
+	return fmt.Sprintf("IPAMHostKey(host=%s)", key.Host)
 }
 
 type IPAMHost struct {

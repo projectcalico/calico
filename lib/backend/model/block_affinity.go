@@ -73,6 +73,10 @@ func (key BlockAffinityKey) valueType() reflect.Type {
 	return typeBlockAff
 }
 
+func (key BlockAffinityKey) String() string {
+	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s)", key.CIDR, key.Host)
+}
+
 type BlockAffinityListOptions struct {
 	Host      string
 	IPVersion int

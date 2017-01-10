@@ -59,6 +59,10 @@ type Key interface {
 
 	// valueType returns the object type associated with this key.
 	valueType() reflect.Type
+
+	// String returns a unique string representation of this key.  The string
+	// returned by this method must uniquely identify this Key.
+	String() string
 }
 
 // Interface used to perform datastore lookups.
