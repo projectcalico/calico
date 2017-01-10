@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,10 +56,6 @@ func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	// Allow established connections via the conntrack table.
 	inputRules = append(inputRules, r.DropRules(Match().ConntrackState("INVALID"))...)
 	inputRules = append(inputRules,
-		Rule{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
-		},
 		Rule{
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 			Action: AcceptAction{},
@@ -216,35 +212,25 @@ func (r *ruleRenderer) filterFailsafeOutChain() *Chain {
 func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// To handle multiple interface prefixes, we want 3 batches of rules.
+	// conntrack rules to accept established connections.
+	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
+		},
+	)
+
+	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
-	// The first batch handles conntrack, accepting packets from established flows.
-	//
-	// The second dispatches the packet to our dispatch chains if it is going to/from an
+	// The first dispatches the packet to our dispatch chains if it is going to/from an
 	// interface that we're responsible for.  Note: the dispatch chains represent "allow" by
 	// returning to this chain for further processing; this is required to handle traffic that
 	// is going between endpoints on the same host.  In that case we need to apply the egress
 	// policy for one endpoint and the ingress policy for the other.
 	//
-	// The third batch actually accepts the packets if they passed through the policy
+	// The second batch actually accepts the packets if they passed through the workload policy
 	// and were returned.
-
-	// conntrack rules.
-	for _, prefix := range r.WorkloadIfacePrefixes {
-		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
-		ifaceMatch := prefix + "+"
-		rules = append(rules, r.DropRules(Match().InInterface(ifaceMatch).ConntrackState("INVALID"))...)
-		rules = append(rules,
-			Rule{
-				Match:  Match().InInterface(ifaceMatch).ConntrackState("RELATED,ESTABLISHED"),
-				Action: AcceptAction{},
-			},
-			Rule{
-				Match:  Match().OutInterface(ifaceMatch).ConntrackState("RELATED,ESTABLISHED"),
-				Action: AcceptAction{},
-			},
-		)
-	}
 
 	// Jump to dispatch chains.
 	for _, prefix := range r.WorkloadIfacePrefixes {
@@ -277,6 +263,18 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 			},
 		)
 	}
+
+	// If we get here, the packet is not going to or from a workload, but, since we're in the
+	// FORWARD chain, it is being forwarded.  Apply host endpoint rules in that case.  This
+	// allows Calico to police traffic that is flowing through a NAT gateway or router.
+	rules = append(rules,
+		Rule{
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
+		},
+		Rule{
+			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+		},
+	)
 
 	return []*Chain{{
 		Name:  ChainFilterForward,
