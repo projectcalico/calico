@@ -163,7 +163,9 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 }
 
 func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
+	log.WithField("ifIndex", ifIndex).Debug("notifyIfaceAddrs")
 	if name, prs := m.ifaceName[ifIndex]; prs {
+		log.WithField("ifIndex", ifIndex).Debug("Known interface")
 		if m.ifaceAddrs[ifIndex] != nil {
 			m.AddrCallback(name, m.ifaceAddrs[ifIndex].Copy())
 		} else {
@@ -173,6 +175,11 @@ func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
 }
 
 func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Link) {
+	log.WithFields(log.Fields{
+		"ifaceExists": ifaceExists,
+		"link":        link,
+	}).Debug("storeAndNotifyLink")
+
 	// Store or remove mapping between this interface's index and name.
 	attrs := link.Attrs()
 	ifIndex := attrs.Index
@@ -180,7 +187,7 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	if ifaceExists {
 		m.ifaceName[ifIndex] = ifaceName
 	} else {
-		// Notify link non-existence to address callback consumers.
+		log.Debug("Notify link non-existence to address callback consumers")
 		delete(m.ifaceAddrs, ifIndex)
 		m.notifyIfaceAddrs(ifIndex)
 		delete(m.ifaceName, ifIndex)

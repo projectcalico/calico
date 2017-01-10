@@ -59,24 +59,31 @@ func (nl *netlinkTest) addLink(name string) {
 		addrs: set.New(),
 	}
 	nl.nextIndex++
-	nl.signalLink(name)
+	nl.signalLink(name, 0)
 }
 
 func (nl *netlinkTest) changeLinkState(name string, state string) {
 	link := nl.links[name]
 	link.state = state
 	nl.links[name] = link
-	nl.signalLink(name)
+	nl.signalLink(name, 0)
 }
 
 func (nl *netlinkTest) delLink(name string) {
+	var oldIndex int
+	link, prs := nl.links[name]
+	if prs {
+		oldIndex = link.index
+	} else {
+		oldIndex = 0
+	}
 	delete(nl.links, name)
-	nl.signalLink(name)
+	nl.signalLink(name, oldIndex)
 }
 
-func (nl *netlinkTest) signalLink(name string) {
+func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 	// Values for a link that does not exist...
-	index := 0
+	index := oldIndex
 	var rawFlags uint32 = 0
 	var msgType uint16 = syscall.RTM_DELLINK
 
