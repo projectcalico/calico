@@ -429,9 +429,11 @@ class FelixIptablesGenerator(FelixPlugin):
         """
         forward_chain = []
 
-        # Accept immediately if packet is already marked for acceptance.  This
-        # will be the case if the packet has already been allowed by rules in
-        # the raw table.
+        # Accept immediately if packet was already marked for acceptance by
+        # one of our "untracked" rules in the raw table.  The rules in the
+        # raw table set the accept bit in the MARK and mark the packet as
+        # NOTRACK.  Match on both to minimise the impact if a user happens
+        # to use our MARK bit (or happens to use NOTRACK for something else).
         forward_chain.append(
             "--append {chain} --jump ACCEPT --match mark "
             "--mark {mark}/{mark} "
@@ -440,9 +442,25 @@ class FelixIptablesGenerator(FelixPlugin):
                 mark=self.IPTABLES_MARK_ACCEPT)
         )
 
+        # Drop immediately if conntrack thinks this packet is not valid (for
+        # example a mid-stream TCP packet for an unknown session).
         forward_chain.extend(self.drop_rules(
             ip_version, CHAIN_FORWARD,
             "--match conntrack --ctstate INVALID", None))
+
+        # Accept immediately if this packet is part of an ongoing connection.
+        # We need this for two reasons:
+        #
+        # - to avoid the overhead of running all our iptables rules against
+        #   every packet
+        # - to accept return traffic.
+        #
+        # We used to limit these rules to apply only to workload traffic but
+        # Calico now supports policing through traffic on a gateway or router,
+        # which means we need to match all traffic here.  Ideally, we'd only
+        # match traffic that is destined to/from a known host endpoint but
+        # that would mean moving the rules down into the per-endpoint chains,
+        # increasing per-packet overhead.
         forward_chain.extend([
             # First, a pair of conntrack rules, which accept established
             # flows to/from workload interfaces.
