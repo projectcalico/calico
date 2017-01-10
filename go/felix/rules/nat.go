@@ -16,9 +16,9 @@ package rules
 
 import "github.com/projectcalico/felix/go/felix/iptables"
 
-func (r *DefaultRuleRenderer) NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain {
+func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
-	if active {
+	if natOutgoingActive {
 		ipConf := r.ipSetConfig(ipVersion)
 		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
