@@ -32,7 +32,9 @@ type dataplaneIface interface {
 	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
 }
 
-type realDataplane struct{}
+type realDataplane struct {
+	conntrack *conntrack.Conntrack
+}
 
 func (r realDataplane) LinkList() ([]Link, error) {
 	return LinkList()
@@ -62,7 +64,7 @@ func (r realDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr,
 }
 
 func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
-	conntrack.RemoveConntrackFlows(ipVersion, ipAddr)
+	r.conntrack.RemoveConntrackFlows(ipVersion, ipAddr)
 }
 
 var _ dataplaneIface = realDataplane{}
