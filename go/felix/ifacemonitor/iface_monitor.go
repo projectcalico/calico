@@ -52,8 +52,7 @@ type InterfaceMonitor struct {
 }
 
 func New() *InterfaceMonitor {
-	// Interface monitor using the real netlink, and resyncing
-	// every 10 seconds.
+	// Interface monitor using the real netlink, and resyncing every 10 seconds.
 	resyncTicker := time.NewTicker(10 * time.Second)
 	return NewWithStubs(&netlinkReal{}, resyncTicker.C)
 }
@@ -88,17 +87,21 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 
 readLoop:
 	for {
-		log.WithField("channel", updates).Debug("About to select on possible triggers")
+		log.WithFields(log.Fields{
+			"updates":     updates,
+			"addrUpdates": addrUpdates,
+			"resyncC":     m.resyncC,
+		}).Debug("About to select on possible triggers")
 		select {
 		case update, ok := <-updates:
-			log.Debug("Link update")
+			log.WithField("update", update).Debug("Link update")
 			if !ok {
 				log.Warn("Failed to read a link update")
 				break readLoop
 			}
 			m.handleNetlinkUpdate(update)
 		case addrUpdate, ok := <-addrUpdates:
-			log.Debug("Address update")
+			log.WithField("addrUpdate", addrUpdate).Debug("Address update")
 			if !ok {
 				log.Warn("Failed to read an address update")
 				break readLoop
@@ -142,9 +145,9 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		return
 	}
 	if _, known := m.ifaceAddrs[ifIndex]; !known {
-		// We think this interface does not exist - indicates a race between the
-		// link and address update channels.  Addresses will be notified when we
-		// process the link update.
+		// We think this interface does not exist - indicates a race between the link and
+		// address update channels.  Addresses will be notified when we process the link
+		// update.
 		log.WithField("ifIndex", ifIndex).Warn("Race for new interface.")
 		return
 	}
@@ -164,13 +167,15 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 
 func (m *InterfaceMonitor) notifyIfaceAddrs(ifIndex int) {
 	log.WithField("ifIndex", ifIndex).Debug("notifyIfaceAddrs")
-	if name, prs := m.ifaceName[ifIndex]; prs {
+	if name, known := m.ifaceName[ifIndex]; known {
 		log.WithField("ifIndex", ifIndex).Debug("Known interface")
-		if m.ifaceAddrs[ifIndex] != nil {
-			m.AddrCallback(name, m.ifaceAddrs[ifIndex].Copy())
-		} else {
-			m.AddrCallback(name, m.ifaceAddrs[ifIndex])
+		addrs := m.ifaceAddrs[ifIndex]
+		if addrs != nil {
+			// Take a copy, so that the dataplane's set of addresses is independent of
+			// ours.
+			addrs = addrs.Copy()
 		}
+		m.AddrCallback(name, addrs)
 	}
 }
 
@@ -193,9 +198,9 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 		delete(m.ifaceName, ifIndex)
 	}
 
-	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.
-	// The IFF_UP flag contains the admin state, which doesn't tell us whether we can
-	// program routes etc.
+	// We need the operstate of the interface; this is carried in the IFF_RUNNING flag.  The
+	// IFF_UP flag contains the admin state, which doesn't tell us whether we can program routes
+	// etc.
 	rawFlags := attrs.RawFlags
 	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
 	ifaceWasUp := m.upIfaces.Contains(ifaceName)
@@ -212,11 +217,11 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
 	}
 
-	// If the link now exists, get addresses for the link and store and notify those
-	// too; then we don't have to worry about a possible race between the link and
-	// address update channels.  We deliberately do this regardless of the link state,
-	// as in some cases this will allow us to secure a Host Endpoint interface
-	// _before_ it comes up, and so eliminate a small window of insecurity.
+	// If the link now exists, get addresses for the link and store and notify those too; then
+	// we don't have to worry about a possible race between the link and address update
+	// channels.  We deliberately do this regardless of the link state, as in some cases this
+	// will allow us to secure a Host Endpoint interface _before_ it comes up, and so eliminate
+	// a small window of insecurity.
 	if ifaceExists {
 		newAddrs := set.New()
 		for _, family := range [2]int{netlink.FAMILY_V4, netlink.FAMILY_V6} {

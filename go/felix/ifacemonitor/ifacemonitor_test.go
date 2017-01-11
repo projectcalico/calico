@@ -270,24 +270,20 @@ var _ = Describe("ifacemonitor", func() {
 	var dp *mockDataplane
 
 	BeforeEach(func() {
-		// Make an Interface Monitor that uses a test netlink
-		// stub implementation and resync trigger channel -
-		// both controlled by this code.
+		// Make an Interface Monitor that uses a test netlink stub implementation and resync
+		// trigger channel - both controlled by this code.
 		nl = &netlinkTest{userSubscribed: make(chan int)}
 		resyncC = make(chan time.Time)
 		im = ifacemonitor.NewWithStubs(nl, resyncC)
 
-		// Register this test code's callbacks, which (a) log;
-		// and (b) send to a 1- or 2-buffered channel, so that
-		// the test code _must_ explicitly indicate when it
-		// expects those callbacks to have occurred.  For the
-		// link channel a buffer of 1 is enough, because link
-		// callbacks only result from link updates from the
-		// netlink stub.  For the address channel we sometimes
-		// need a buffer of 2 because both link and address
-		// updates from the stub can generate address
-		// callbacks.  expectAddrStateCb takes care to check
-		// that we eventually get the callback that we expect.
+		// Register this test code's callbacks, which (a) log; and (b) send to a 1- or
+		// 2-buffered channel, so that the test code _must_ explicitly indicate when it
+		// expects those callbacks to have occurred.  For the link channel a buffer of 1 is
+		// enough, because link callbacks only result from link updates from the netlink
+		// stub.  For the address channel we sometimes need a buffer of 2 because both link
+		// and address updates from the stub can generate address callbacks.
+		// expectAddrStateCb takes care to check that we eventually get the callback that we
+		// expect.
 		dp = &mockDataplane{
 			linkC: make(chan string, 1),
 			addrC: make(chan addrState, 2),
@@ -295,34 +291,28 @@ var _ = Describe("ifacemonitor", func() {
 		im.Callback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
 
-		// Start the monitor running, and wait until it has
-		// subscribed to our test netlink stub.
+		// Start the monitor running, and wait until it has subscribed to our test netlink
+		// stub.
 		go im.MonitorInterfaces()
 		<-nl.userSubscribed
 	})
 
 	It("should handle mainline netlink updates", func() {
-		// Add a link and an address.  No link callback
-		// expected because the link is not up yet.  But we do
-		// get an address callback because those are
-		// independent of link state.  (Note that if the
-		// monitor's initial resync runs slowly enough, it
-		// might see the new link and addr as part of that
-		// resync - whereas normally what happens is that the
-		// resync completes as a no-op first, and the addLink
-		// causes a notification afterwards.  But either way
-		// we expect to get the same callbacks to the
-		// dataplane, so we don't need to distinguish between
-		// these two possibilities.
+		// Add a link and an address.  No link callback expected because the link is not up
+		// yet.  But we do get an address callback because those are independent of link
+		// state.  (Note that if the monitor's initial resync runs slowly enough, it might
+		// see the new link and addr as part of that resync - whereas normally what happens
+		// is that the resync completes as a no-op first, and the addLink causes a
+		// notification afterwards.  But either way we expect to get the same callbacks to
+		// the dataplane, so we don't need to distinguish between these two possibilities.
 		nl.addLink("eth0")
 		resyncC <- time.Time{}
 		dp.expectAddrStateCb("eth0", "", true)
 		nl.addAddr("eth0", "10.0.240.10/24")
 		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
 
-		// Set the link up, and expect a link callback.
-		// Addresses are unchanged, so there is no address
-		// callback.
+		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
+		// is no address callback.
 		nl.changeLinkState("eth0", "up")
 		dp.expectLinkStateCb("eth0")
 
@@ -349,22 +339,19 @@ var _ = Describe("ifacemonitor", func() {
 		nl.changeLinkState("eth0", "up")
 		dp.expectLinkStateCb("eth0")
 
-		// Trigger a resync, then immediately delete the link.
-		// What happens is that the test code deletes its
-		// state for eth0 before the monitor's resync() calls
-		// LinkList, and so the monitor reports "Spotted
-		// interface removal on resync" and makes link and
-		// address callbacks accordingly.
+		// Trigger a resync, then immediately delete the link.  What happens is that the
+		// test code deletes its state for eth0 before the monitor's resync() calls
+		// LinkList, and so the monitor reports "Spotted interface removal on resync" and
+		// makes link and address callbacks accordingly.
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
 		dp.expectLinkStateCb("eth0")
 		dp.expectAddrStateCb("eth0", "", false)
 
-		// Trigger another resync.  Nothing is expected.  We
-		// ensure that the resync processing completes, before
-		// exiting from this test, by sending a further resync
-		// trigger.  (This would block if the interface
-		// monitor's main loop was not yet ready to read it.)
+		// Trigger another resync.  Nothing is expected.  We ensure that the resync
+		// processing completes, before exiting from this test, by sending a further resync
+		// trigger.  (This would block if the interface monitor's main loop was not yet
+		// ready to read it.)
 		resyncC <- time.Time{}
 		resyncC <- time.Time{}
 	})

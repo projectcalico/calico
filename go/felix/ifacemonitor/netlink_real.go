@@ -42,11 +42,9 @@ func (nl *netlinkReal) Subscribe(
 }
 
 func (nl *netlinkReal) LinkList() ([]netlink.Link, error) {
-	links, err := netlink.LinkList()
-	return links, err
+	return netlink.LinkList()
 }
 
 func (nl *netlinkReal) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	addrs, err := netlink.AddrList(link, family)
-	return addrs, err
+	return netlink.AddrList(link, family)
 }
