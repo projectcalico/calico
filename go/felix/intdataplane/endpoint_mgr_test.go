@@ -15,13 +15,17 @@
 package intdataplane
 
 import (
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/go/felix/testutils"
 	"strings"
 )
 
@@ -60,9 +64,23 @@ var hostDispatchEmpty = []*iptables.Chain{
 }
 
 func hostChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
+	return chainsForIfaces(ifaceTierNames, true)
+}
+
+func wlChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
+	return chainsForIfaces(ifaceTierNames, false)
+}
+
+func chainsForIfaces(ifaceTierNames []string, host bool) []*iptables.Chain {
 	chains := []*iptables.Chain{}
 	dispatchOut := []iptables.Rule{}
 	dispatchIn := []iptables.Rule{}
+	hostOrWlLetter := "w"
+	hostOrWlDispatch := "wl-dispatch"
+	if host {
+		hostOrWlLetter = "h"
+		hostOrWlDispatch = "host-endpoint"
+	}
 	for _, ifaceTierName := range ifaceTierNames {
 		var ifaceName, tierName string
 		nameParts := strings.Split(ifaceTierName, "_")
@@ -73,16 +91,17 @@ func hostChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
 			ifaceName = nameParts[0]
 			tierName = nameParts[1]
 		}
-		outRules := []iptables.Rule{
-			{
+		outRules := []iptables.Rule{}
+		if host {
+			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match(),
 				Action: iptables.JumpAction{Target: "cali-failsafe-out"},
-			},
-			{
-				Match:  iptables.Match(),
-				Action: iptables.ClearMarkAction{Mark: 8},
-			},
+			})
 		}
+		outRules = append(outRules, iptables.Rule{
+			Match:  iptables.Match(),
+			Action: iptables.ClearMarkAction{Mark: 8},
+		})
 		if tierName != "" {
 			outRules = append(outRules, []iptables.Rule{
 				{
@@ -102,16 +121,17 @@ func hostChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
 			Action:  iptables.DropAction{},
 			Comment: "Drop if no profiles matched",
 		})
-		inRules := []iptables.Rule{
-			{
+		inRules := []iptables.Rule{}
+		if host {
+			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match(),
 				Action: iptables.JumpAction{Target: "cali-failsafe-in"},
-			},
-			{
-				Match:  iptables.Match(),
-				Action: iptables.ClearMarkAction{Mark: 8},
-			},
+			})
 		}
+		inRules = append(inRules, iptables.Rule{
+			Match:  iptables.Match(),
+			Action: iptables.ClearMarkAction{Mark: 8},
+		})
 		if tierName != "" {
 			inRules = append(inRules, []iptables.Rule{
 				{
@@ -133,38 +153,78 @@ func hostChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
 		})
 		chains = append(chains,
 			&iptables.Chain{
-				Name:  "calith-" + ifaceName,
+				Name:  "calit" + hostOrWlLetter + "-" + ifaceName,
 				Rules: outRules,
 			},
 			&iptables.Chain{
-				Name:  "califh-" + ifaceName,
+				Name:  "calif" + hostOrWlLetter + "-" + ifaceName,
 				Rules: inRules,
 			},
 		)
 		dispatchOut = append(dispatchOut,
 			iptables.Rule{
 				Match:  iptables.Match().OutInterface(ifaceName),
-				Action: iptables.GotoAction{Target: "calith-" + ifaceName},
+				Action: iptables.GotoAction{Target: "calit" + hostOrWlLetter + "-" + ifaceName},
 			},
 		)
 		dispatchIn = append(dispatchIn,
 			iptables.Rule{
 				Match:  iptables.Match().InInterface(ifaceName),
-				Action: iptables.GotoAction{Target: "califh-" + ifaceName},
+				Action: iptables.GotoAction{Target: "calif" + hostOrWlLetter + "-" + ifaceName},
+			},
+		)
+	}
+	if !host {
+		dispatchOut = append(dispatchOut,
+			iptables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown interface",
+			},
+		)
+		dispatchIn = append(dispatchIn,
+			iptables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.DropAction{},
+				Comment: "Unknown interface",
 			},
 		)
 	}
 	chains = append(chains,
 		&iptables.Chain{
-			Name:  "cali-to-host-endpoint",
+			Name:  "cali-to-" + hostOrWlDispatch,
 			Rules: dispatchOut,
 		},
 		&iptables.Chain{
-			Name:  "cali-from-host-endpoint",
+			Name:  "cali-from-" + hostOrWlDispatch,
 			Rules: dispatchIn,
 		},
 	)
 	return chains
+}
+
+type mockRouteTable struct {
+	currentRoutes map[string][]routetable.Target
+}
+
+func (t *mockRouteTable) SetRoutes(ifaceName string, targets []routetable.Target) {
+	log.WithFields(log.Fields{
+		"ifaceName": ifaceName,
+		"targets":   targets,
+	}).Debug("SetRoutes")
+	t.currentRoutes[ifaceName] = targets
+}
+
+func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Target) {
+	Expect(t.currentRoutes[ifaceName]).To(Equal(expected))
+}
+
+func endpointStatusUpdateCallback(ipVersion uint8, id proto.WorkloadEndpointID, status string) {
+	log.WithFields(log.Fields{
+		"ipVersion": ipVersion,
+		"id":        id,
+		"status":    status,
+	}).Debug("endpointStatusUpdateCallback")
 }
 
 type hostEpSpec struct {
@@ -189,6 +249,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 			eth0Addrs      set.Set
 			loAddrs        set.Set
 			eth1Addrs      set.Set
+			routeTable     *mockRouteTable
+			mockProcSys    *testProcSys
 		)
 
 		BeforeEach(func() {
@@ -213,13 +275,18 @@ func endpointManagerTests(ipVersion uint8) func() {
 		JustBeforeEach(func() {
 			renderer := rules.NewRenderer(rrConfigNormal)
 			filterTable = newMockTable()
-			epMgr = newEndpointManager(
+			routeTable = &mockRouteTable{
+				currentRoutes: map[string][]routetable.Target{},
+			}
+			mockProcSys = &testProcSys{state: map[string]string{}}
+			epMgr = newEndpointManagerWithShims(
 				filterTable,
 				renderer,
-				nil,
+				routeTable,
 				ipVersion,
 				[]string{"cali"},
-				nil,
+				endpointStatusUpdateCallback,
+				mockProcSys.write,
 			)
 		})
 
@@ -492,9 +559,176 @@ func endpointManagerTests(ipVersion uint8) func() {
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
 		})
+
+		expectWlChainsFor := func(names ...string) func() {
+			return func() {
+				filterTable.checkChains([][]*iptables.Chain{
+					hostDispatchEmpty,
+					wlChainsForIfaces(names),
+				})
+			}
+		}
+
+		Describe("workload endpoints", func() {
+
+			Context("with a workload endpoint", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &proto.WorkloadEndpointID{
+							OrchestratorId: "k8s",
+							WorkloadId:     "pod-11",
+							EndpointId:     "endpoint-id-11",
+						},
+						Endpoint: &proto.WorkloadEndpoint{
+							State:      "up",
+							Mac:        "01:02:03:04:05:06",
+							Name:       "cali12345-ab",
+							ProfileIds: []string{},
+							Tiers:      []*proto.TierInfo{},
+							Ipv4Nets:   []string{"10.0.240.2/24"},
+							Ipv6Nets:   []string{"2001:db8:2::2/128"},
+						},
+					})
+					epMgr.CompleteDeferredWork()
+				})
+
+				It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+
+				It("should set routes", func() {
+					if ipVersion == 6 {
+						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
+							CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+						}})
+					} else {
+						routeTable.checkRoutes("cali12345-ab", []routetable.Target{{
+							CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+							DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+						}})
+					}
+				})
+
+				Context("with updates for the workload's iface", func() {
+					JustBeforeEach(func() {
+						epMgr.OnUpdate(&ifaceUpdate{
+							Name:  "cali12345-ab",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "cali12345-ab",
+							Addrs: set.New(),
+						})
+						epMgr.CompleteDeferredWork()
+					})
+
+					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+
+					It("should write /proc/sys entries", func() {
+						if ipVersion == 6 {
+							mockProcSys.checkState(map[string]string{
+								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp": "1",
+							})
+						} else {
+							mockProcSys.checkState(map[string]string{
+								"/proc/sys/net/ipv4/conf/cali12345-ab/rp_filter":      "1",
+								"/proc/sys/net/ipv4/conf/cali12345-ab/route_localnet": "1",
+								"/proc/sys/net/ipv4/conf/cali12345-ab/proxy_arp":      "1",
+								"/proc/sys/net/ipv4/neigh/cali12345-ab/proxy_delay":   "0",
+							})
+						}
+					})
+
+					Context("with the endpoint removed", func() {
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &proto.WorkloadEndpointID{
+									OrchestratorId: "k8s",
+									WorkloadId:     "pod-11",
+									EndpointId:     "endpoint-id-11",
+								},
+							})
+							epMgr.CompleteDeferredWork()
+						})
+
+						It("should have empty dispatch chains", expectEmptyChains())
+
+						It("should have removed routes", func() {
+							routeTable.checkRoutes("cali12345-ab", nil)
+						})
+					})
+
+					Context("changing the endpoint to another up interface", func() {
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&ifaceUpdate{
+								Name:  "cali12345-cd",
+								State: "up",
+							})
+							epMgr.OnUpdate(&ifaceAddrsUpdate{
+								Name:  "cali12345-cd",
+								Addrs: set.New(),
+							})
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &proto.WorkloadEndpointID{
+									OrchestratorId: "k8s",
+									WorkloadId:     "pod-11",
+									EndpointId:     "endpoint-id-11",
+								},
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "up",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-cd",
+									ProfileIds: []string{},
+									Tiers:      []*proto.TierInfo{},
+									Ipv4Nets:   []string{"10.0.240.2/24"},
+									Ipv6Nets:   []string{"2001:db8:2::2/128"},
+								},
+							})
+							epMgr.CompleteDeferredWork()
+						})
+
+						It("should have expected chains", expectWlChainsFor("cali12345-cd"))
+
+						It("should have removed routes for old iface", func() {
+							routeTable.checkRoutes("cali12345-ab", nil)
+						})
+
+						It("should have set routes for new iface", func() {
+							if ipVersion == 6 {
+								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
+									CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+								}})
+							} else {
+								routeTable.checkRoutes("cali12345-cd", []routetable.Target{{
+									CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+									DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+								}})
+							}
+						})
+					})
+				})
+			})
+		})
 	}
 }
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4))
 
 var _ = Describe("EndpointManager IPv6", endpointManagerTests(6))
+
+type testProcSys struct {
+	state map[string]string
+}
+
+func (t *testProcSys) write(path, value string) error {
+	log.WithFields(log.Fields{
+		"path":  path,
+		"value": value,
+	}).Info("testProcSys writer")
+	t.state[path] = value
+	return nil
+}
+
+func (t *testProcSys) checkState(expected map[string]string) {
+	Expect(t.state).To(Equal(expected))
+}

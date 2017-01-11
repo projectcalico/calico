@@ -32,6 +32,10 @@ import (
 	"strings"
 )
 
+type routeTable interface {
+	SetRoutes(ifaceName string, targets []routetable.Target)
+}
+
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
@@ -47,9 +51,10 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	filterTable  iptablesTable
-	ruleRenderer rules.RuleRenderer
-	routeTable   *routetable.RouteTable
+	filterTable   iptablesTable
+	ruleRenderer  rules.RuleRenderer
+	routeTable    routeTable
+	procSysWriter procSysWriter
 
 	// Active state, updated in CompleteDeferredWork.
 	activeEndpoints      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -78,13 +83,35 @@ type endpointManager struct {
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id proto.WorkloadEndpointID, status string)
 
+type procSysWriter func(path, value string) error
+
 func newEndpointManager(
 	filterTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
-	routeTable *routetable.RouteTable,
+	routeTable routeTable,
 	ipVersion uint8,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
+) *endpointManager {
+	return newEndpointManagerWithShims(
+		filterTable,
+		ruleRenderer,
+		routeTable,
+		ipVersion,
+		wlInterfacePrefixes,
+		onWorkloadEndpointStatusUpdate,
+		writeProcSys,
+	)
+}
+
+func newEndpointManagerWithShims(
+	filterTable iptablesTable,
+	ruleRenderer rules.RuleRenderer,
+	routeTable routeTable,
+	ipVersion uint8,
+	wlInterfacePrefixes []string,
+	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
+	procSysWriter procSysWriter,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -93,9 +120,10 @@ func newEndpointManager(
 		ipVersion:      ipVersion,
 		wlIfacesRegexp: wlIfacesRegexp,
 
-		filterTable:  filterTable,
-		ruleRenderer: ruleRenderer,
-		routeTable:   routeTable,
+		filterTable:   filterTable,
+		ruleRenderer:  ruleRenderer,
+		routeTable:    routeTable,
+		procSysWriter: procSysWriter,
 
 		activeEndpoints:     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeIfaceNameToID: map[string]proto.WorkloadEndpointID{},
@@ -443,24 +471,24 @@ func (m *endpointManager) configureInterface(name string) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 	if m.ipVersion == 4 {
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
+		err := m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
 		if err != nil {
 			return err
 		}
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
 		if err != nil {
 			return err
 		}
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
 		if err != nil {
 			return err
 		}
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
 		if err != nil {
 			return err
 		}
 	} else {
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		err := m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
 		if err != nil {
 			return err
 		}
