@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,30 @@ var conntrackDirections = []string{
 
 const numRetries = 3
 
-func RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
+type Conntrack struct {
+	newCmd newCmd
+}
+
+func New() *Conntrack {
+	return NewWithCmdShim(func(name string, arg ...string) CmdIface {
+		return exec.Command(name, arg...)
+	})
+}
+
+// NewWithCmdShim is a test constructor that allows for shimming exec.Command.
+func NewWithCmdShim(newCmd newCmd) *Conntrack {
+	return &Conntrack{
+		newCmd: newCmd,
+	}
+}
+
+type newCmd func(name string, arg ...string) CmdIface
+
+type CmdIface interface {
+	CombinedOutput() ([]byte, error)
+}
+
+func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	var family string
 	switch ipVersion {
 	case 4:
@@ -45,7 +68,7 @@ func RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 		logCxt := log.WithFields(log.Fields{"ip": ipAddr, "direction": direction})
 		// Retry a few times because the conntrack command seems to fail at random.
 		for retry := 0; retry <= numRetries; retry += 1 {
-			cmd := exec.Command("conntrack",
+			cmd := c.newCmd("conntrack",
 				"--family", family,
 				"--delete", direction,
 				ipAddr.String())

@@ -17,6 +17,7 @@ package routetable
 import (
 	"errors"
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/go/felix/conntrack"
 	"github.com/projectcalico/felix/go/felix/ifacemonitor"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/set"
@@ -65,7 +66,7 @@ type RouteTable struct {
 }
 
 func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
-	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{})
+	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()})
 }
 
 // NewWithShims is a test constructor, which allows netlink to be replaced by a shim.
