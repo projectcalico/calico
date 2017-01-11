@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@ package rules
 
 import "github.com/projectcalico/felix/go/felix/iptables"
 
-func (r *ruleRenderer) NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain {
+func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
-	if active {
+	if natOutgoingActive {
 		ipConf := r.ipSetConfig(ipVersion)
 		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
