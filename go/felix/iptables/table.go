@@ -171,6 +171,8 @@ type Table struct {
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdFactory
+	// sleep is a shim for time.Sleep.
+	sleep func(d time.Duration)
 }
 
 func NewTable(
@@ -187,6 +189,7 @@ func NewTable(
 		hashPrefix,
 		extraCleanupRegexPattern,
 		newRealCmd,
+		time.Sleep,
 	)
 }
 
@@ -198,6 +201,7 @@ func NewTableWithShims(
 	hashPrefix string,
 	extraCleanupRegexPattern string,
 	newCmd cmdFactory,
+	sleep func(d time.Duration),
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
 	// --comment "cali:abcd1234_-".
@@ -243,6 +247,7 @@ func NewTableWithShims(
 		oldInsertRegexp:   oldInsertRegexp,
 
 		newCmd: newCmd,
+		sleep:  sleep,
 	}
 
 	if ipVersion == 4 {
@@ -393,13 +398,27 @@ func (t *Table) loadDataplaneState() {
 // containing the hashes for the rules in that table.  Rules with no hashes are represented by
 // an empty string.
 func (t *Table) getHashesFromDataplane() map[string][]string {
-	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
-	output, err := cmd.Output()
-	if err != nil {
-		t.logCxt.WithError(err).Panic("iptables save failed")
+	retries := 3
+	retryDelay := 100 * time.Millisecond
+	// Retry a few times before we panic.  This deals with any transient errors and it prevents
+	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
+	for {
+		cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
+		output, err := cmd.Output()
+		if err != nil {
+			t.logCxt.WithError(err).Warnf("%s command failed", t.iptablesSaveCmd)
+			if retries > 0 {
+				retries--
+				t.sleep(retryDelay)
+				retryDelay *= 2
+			} else {
+				t.logCxt.Panicf("%s command failed after retries", t.iptablesSaveCmd)
+			}
+			continue
+		}
+		buf := bytes.NewBuffer(output)
+		return t.getHashesFromBuffer(buf)
 	}
-	buf := bytes.NewBuffer(output)
-	return t.getHashesFromBuffer(buf)
 }
 
 // getHashesFromBuffer parses a buffer containing iptables-save output for this table, extracting
@@ -492,7 +511,7 @@ func (t *Table) Apply() {
 			if retries > 0 {
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program iptables, will retry")
-				time.Sleep(backoffTime)
+				t.sleep(backoffTime)
 				backoffTime *= 2
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true

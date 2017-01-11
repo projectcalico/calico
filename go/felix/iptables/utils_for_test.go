@@ -26,6 +26,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // This file contains shared test infrastructure for testing the iptables package.
@@ -51,8 +52,11 @@ type mockDataplane struct {
 	ChainMods       set.Set
 	Cmds            []CmdIface
 	FailNextRestore bool
+	FailAllRestores bool
 	OnPreRestore    func()
 	FailNextSave    bool
+	FailAllSaves    bool
+	CumulativeSleep time.Duration
 }
 
 func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
@@ -61,6 +65,8 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 		"args":            arg,
 		"FailNextRestore": d.FailNextRestore,
 		"FailNextSave":    d.FailNextSave,
+		"FailAllRestores": d.FailAllRestores,
+		"FailAllSaves":    d.FailAllSaves,
 	}).Info("Simulating new command.")
 
 	var cmd CmdIface
@@ -83,6 +89,10 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	d.Cmds = append(d.Cmds, cmd)
 
 	return cmd
+}
+
+func (d *mockDataplane) sleep(duration time.Duration) {
+	d.CumulativeSleep += duration
 }
 
 func (d *mockDataplane) ChainFlushed(chainName string) bool {
@@ -143,6 +153,10 @@ func (d *restoreCmd) Run() error {
 	if d.Dataplane.FailNextRestore {
 		log.Warn("Simulating an iptables-restore failure")
 		d.Dataplane.FailNextRestore = false
+		return errors.New("Simulated failure")
+	}
+	if d.Dataplane.FailAllRestores {
+		log.Warn("Simulating an iptables-restore failure")
 		return errors.New("Simulated failure")
 	}
 
@@ -268,6 +282,9 @@ func (d *saveCmd) SetStderr(w io.Writer) {
 func (d *saveCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextSave {
 		d.Dataplane.FailNextSave = false
+		return nil, errors.New("Simulated failure")
+	}
+	if d.Dataplane.FailAllSaves {
 		return nil, errors.New("Simulated failure")
 	}
 	var buf bytes.Buffer

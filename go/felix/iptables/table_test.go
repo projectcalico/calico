@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/rules"
 
 	log "github.com/Sirupsen/logrus"
+	"time"
 )
 
 var _ = Describe("Table with an empty dataplane", func() {
@@ -41,6 +42,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			rules.RuleHashPrefix,
 			"",
 			dataplane.newCmd,
+			dataplane.sleep,
 		)
 	})
 
@@ -385,6 +387,7 @@ var _ = Describe("Table with a dirty dataplane", func() {
 			rules.RuleHashPrefix,
 			"sneaky-rule",
 			dataplane.newCmd,
+			dataplane.sleep,
 		)
 	})
 
@@ -461,7 +464,44 @@ var _ = Describe("Table with a dirty dataplane", func() {
 		It("with no errors, it should get to correct final state", func() {
 			table.Apply()
 			checkFinalState()
+			Expect(len(dataplane.Cmds)).To(Equal(2)) // a save and a restore
 		})
+		It("with no errors, it shouldn't sleep", func() {
+			table.Apply()
+			Expect(dataplane.CumulativeSleep).To(BeZero())
+		})
+		Describe("With a transient iptables-save failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextSave = true
+				table.Apply()
+			})
+			It("it should get to correct final state", func() {
+				checkFinalState()
+			})
+			It("it should retry once", func() {
+				Expect(len(dataplane.Cmds)).To(Equal(3)) // 2 saves and a restore
+			})
+			It("it should sleep", func() {
+				Expect(dataplane.CumulativeSleep).To(Equal(100 * time.Millisecond))
+			})
+		})
+		Describe("With a persistent iptables-save failure", func() {
+			BeforeEach(func() {
+				dataplane.FailAllSaves = true
+			})
+			It("it should panic", func() {
+				Expect(table.Apply).To(Panic())
+			}, 1)
+			It("it should do exponential backoff", func() {
+				Expect(table.Apply).To(Panic())
+				Expect(dataplane.CumulativeSleep).To(Equal((100 + 200 + 400) * time.Millisecond))
+			}, 1)
+			It("it should retry 3 times", func() {
+				Expect(table.Apply).To(Panic())
+				Expect(len(dataplane.Cmds)).To(Equal(4))
+			}, 1)
+		})
+
 		It("shouldn't touch already-correct chain", func() {
 			table.Apply()
 			Expect(dataplane.RuleTouched("cali-correct", 1)).To(BeFalse())
@@ -482,38 +522,60 @@ var _ = Describe("Table with a dirty dataplane", func() {
 			Expect(dataplane.FailNextRestore).To(BeFalse()) // Flag should be reset
 			checkFinalState()
 		})
-		It("with a simulated clobber of chains before first write, it should get to correct final state", func() {
-			// After the iptables-save call but before the iptables-restore, another
-			// process comes in and clobbers the dataplane, causing a failure.  It
-			// should reload and do the right thing.
-			dataplane.OnPreRestore = func() {
-				dataplane.Chains = map[string][]string{
-					"FORWARD": {},
-					"INPUT":   {},
-					"OUTPUT":  {},
-				}
-			}
-			dataplane.FailNextRestore = true
-			table.Apply()
-			Expect(dataplane.Chains).To(Equal(map[string][]string{
-				"FORWARD": {
-					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
-					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
-				},
-				"cali-foobar": {
-					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
-					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
-					"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
-				},
-				"INPUT": {},
-				"OUTPUT": {
-					"-m comment --comment \"cali:RtPHXnCQBd3uyJfJ\" --jump DROP",
-				},
-				"cali-correct": {
-					"-m comment --comment \"cali:dCKeL4JtUEDC2GQu\" --jump ACCEPT",
-				},
-			}))
+		Describe("with a persistent iptables-restore error", func() {
+			BeforeEach(func() {
+				dataplane.FailAllRestores = true
+			})
+			It("it should panic", func() {
+				Expect(table.Apply).To(Panic())
+			}, 1)
+			It("it should do exponential backoff", func() {
+				Expect(table.Apply).To(Panic())
+				Expect(dataplane.CumulativeSleep).To(Equal(
+					(1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512) * time.Millisecond))
+			}, 1)
 		})
+
+		Describe("with a simulated clobber of chains before first write", func() {
+			BeforeEach(func() {
+				// After the iptables-save call but before the iptables-restore, another
+				// process comes in and clobbers the dataplane, causing a failure.  It
+				// should reload and do the right thing.
+				dataplane.OnPreRestore = func() {
+					dataplane.Chains = map[string][]string{
+						"FORWARD": {},
+						"INPUT":   {},
+						"OUTPUT":  {},
+					}
+				}
+				dataplane.FailNextRestore = true
+				table.Apply()
+			})
+			It("should get to correct final state", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
+					},
+					"cali-foobar": {
+						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+						"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
+					},
+					"INPUT": {},
+					"OUTPUT": {
+						"-m comment --comment \"cali:RtPHXnCQBd3uyJfJ\" --jump DROP",
+					},
+					"cali-correct": {
+						"-m comment --comment \"cali:dCKeL4JtUEDC2GQu\" --jump ACCEPT",
+					},
+				}))
+			})
+			It("should sleep for correct time", func() {
+				Expect(dataplane.CumulativeSleep).To(Equal(1 * time.Millisecond))
+			})
+		})
+
 		Describe("with a clobber after initial write", func() {
 			// These tests allow the first write to succeed so that the Table's cache
 			// of the dataplane state is primed with the Calico chains.  Then they
@@ -533,6 +595,10 @@ var _ = Describe("Table with a dirty dataplane", func() {
 				// Next Apply() should fix it.
 				table.Apply()
 				checkFinalState()
+			})
+			It("it shouldn't sleep", func() {
+				table.Apply()
+				Expect(dataplane.CumulativeSleep).To(BeZero())
 			})
 			It("and pending updates, should get to correct state", func() {
 				// And we make some updates in the same batch.
