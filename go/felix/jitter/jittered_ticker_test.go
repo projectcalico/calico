@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jitter_test
+package jitter
 
 import (
-	. "github.com/projectcalico/felix/go/felix/jitter"
-
+	"fmt"
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"time"
 )
 
-var _ = Describe("20ms + 10ms Ticker", func() {
+var _ = Describe("Real 20ms + 10ms Ticker", func() {
 	var ticker *Ticker
 	var startTime time.Time
 	BeforeEach(func() {
@@ -39,12 +38,6 @@ var _ = Describe("20ms + 10ms Ticker", func() {
 		now := time.Now()
 		duration := now.Sub(startTime)
 		Expect(duration).To(BeNumerically(">=", 20*time.Millisecond))
-	}, 1)
-	It("should tick before max delay", func() {
-		now := <-ticker.C
-		duration := now.Sub(startTime)
-		// We give it an extra few ms to allow for a timer variance.
-		Expect(duration).To(BeNumerically("<=", 32*time.Millisecond))
 	}, 1)
 	It("should produce longer and shorter ticks", func() {
 		lastTime := startTime
@@ -64,6 +57,43 @@ var _ = Describe("20ms + 10ms Ticker", func() {
 				break
 			}
 			lastTime = now
+		}
+		Expect(foundLT5).To(BeTrue())
+		Expect(foundGT5).To(BeTrue())
+	}, 1)
+})
+
+var _ = Describe("Delay calculation", func() {
+	var ticker *Ticker
+	BeforeEach(func() {
+		ticker = NewTicker(20*time.Millisecond, 10*time.Millisecond)
+		ticker.Stop()
+	})
+	for i := 0; i < 10; i++ {
+		It(fmt.Sprintf("should tick before max delay, trial: %v", i), func() {
+			duration := ticker.calculateDelay()
+			Expect(duration).To(BeNumerically("<=", 30*time.Millisecond))
+		})
+		It(fmt.Sprintf("should never tick before min delay, trial: %v", i), func() {
+			duration := ticker.calculateDelay()
+			Expect(duration).To(BeNumerically(">=", 20*time.Millisecond))
+		})
+	}
+
+	It("should produce longer and shorter ticks", func() {
+		foundLT5 := false
+		foundGT5 := false
+		for i := 0; i < 40; i++ {
+			duration := ticker.calculateDelay()
+			logrus.WithField("duration", duration).Debug("Tick")
+			if duration < 25*time.Millisecond {
+				foundLT5 = true
+			} else {
+				foundGT5 = true
+			}
+			if foundLT5 && foundGT5 {
+				break
+			}
 		}
 		Expect(foundLT5).To(BeTrue())
 		Expect(foundGT5).To(BeTrue())

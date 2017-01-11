@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,9 +49,7 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 func (t *Ticker) loop(c chan time.Time) {
 tickLoop:
 	for {
-		jitter := time.Duration(rand.Int63n(int64(t.MaxJitter)))
-		delay := t.MinDuration + jitter
-		time.Sleep(delay)
+		time.Sleep(t.calculateDelay())
 		// Send best-effort then go back to sleep.
 		select {
 		case <-t.stop:
@@ -62,6 +60,12 @@ tickLoop:
 		default:
 		}
 	}
+}
+
+func (t *Ticker) calculateDelay() time.Duration {
+	jitter := time.Duration(rand.Int63n(int64(t.MaxJitter)))
+	delay := t.MinDuration + jitter
+	return delay
 }
 
 func (t *Ticker) Stop() {
