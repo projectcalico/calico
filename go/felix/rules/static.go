@@ -20,7 +20,7 @@ import (
 	"strings"
 )
 
-func (r *ruleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain) {
+func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*Chain) {
 	chains = append(chains, r.StaticFilterForwardChains()...)
 	chains = append(chains, r.StaticFilterInputChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterOutputChains()...)
@@ -32,7 +32,7 @@ const (
 	ProtoICMPv6 = 58
 )
 
-func (r *ruleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
+func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
@@ -40,7 +40,7 @@ func (r *ruleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain {
 	}
 }
 
-func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
+func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
 	if ipVersion == 4 && r.IPIPEnabled {
@@ -83,7 +83,7 @@ func (r *ruleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 }
 
-func (r *ruleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
+func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
 	var rules []Rule
 
 	// For IPv6, we need to white-list certain ICMP traffic from workloads in order to to act
@@ -112,6 +112,7 @@ func (r *ruleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
 	}
 
 	if r.OpenStackSpecialCasesEnabled {
+		log.Info("Adding OpenStack special-case rules.")
 		if ipVersion == 4 && r.OpenStackMetadataIP != nil {
 			// For OpenStack compatibility, we support a special-case to allow incoming traffic
 			// to the OpenStack metadata IP/port.
@@ -177,7 +178,7 @@ func (r *ruleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain {
 	}
 }
 
-func (r *ruleRenderer) filterFailsafeInChain() *Chain {
+func (r *DefaultRuleRenderer) filterFailsafeInChain() *Chain {
 	rules := []Rule{}
 
 	for _, port := range r.Config.FailsafeInboundHostPorts {
@@ -193,7 +194,7 @@ func (r *ruleRenderer) filterFailsafeInChain() *Chain {
 	}
 }
 
-func (r *ruleRenderer) filterFailsafeOutChain() *Chain {
+func (r *DefaultRuleRenderer) filterFailsafeOutChain() *Chain {
 	rules := []Rule{}
 
 	for _, port := range r.Config.FailsafeOutboundHostPorts {
@@ -209,7 +210,7 @@ func (r *ruleRenderer) filterFailsafeOutChain() *Chain {
 	}
 }
 
-func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
+func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
 	// conntrack rules to reject invalid packets and accept established connections.
@@ -285,14 +286,14 @@ func (r *ruleRenderer) StaticFilterForwardChains() []*Chain {
 	}}
 }
 
-func (r *ruleRenderer) StaticFilterOutputChains() []*Chain {
+func (r *DefaultRuleRenderer) StaticFilterOutputChains() []*Chain {
 	return []*Chain{
 		r.filterOutputChain(),
 		r.filterFailsafeOutChain(),
 	}
 }
 
-func (r *ruleRenderer) filterOutputChain() *Chain {
+func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	rules := []Rule{}
 
 	// conntrack rules.
@@ -334,16 +335,16 @@ func (r *ruleRenderer) filterOutputChain() *Chain {
 	}
 }
 
-func (r *ruleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
+func (r *DefaultRuleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
 	chains = append(chains, r.StaticNATPreroutingChains(ipVersion)...)
 	chains = append(chains, r.StaticNATPostroutingChains(ipVersion)...)
 	return
 }
 
-func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
+func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{}
 
-	if ipVersion == 4 && r.OpenStackMetadataIP != nil {
+	if ipVersion == 4 && r.OpenStackSpecialCasesEnabled && r.OpenStackMetadataIP != nil {
 		rules = append(rules, Rule{
 			Match: Match().
 				Protocol("tcp").
@@ -362,13 +363,13 @@ func (r *ruleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 	}}
 }
 
-func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
+func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
 		{
 			Action: JumpAction{Target: ChainNATOutgoing},
 		},
 	}
-	if r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
+	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
 		// Add a rule to catch packets that are being sent down the IPIP tunnel from an
 		// incorrect local IP address of the host and NAT them to use the tunnel IP as its
 		// source.  This happens if:
@@ -407,7 +408,7 @@ func (r *ruleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	}}
 }
 
-func (r ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
+func (r DefaultRuleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
 	rules := []Rule{}
 
 	for _, action := range r.DropActions() {
@@ -421,6 +422,6 @@ func (r ruleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string)
 	return rules
 }
 
-func (r *ruleRenderer) DropActions() []Action {
+func (r *DefaultRuleRenderer) DropActions() []Action {
 	return r.dropActions
 }

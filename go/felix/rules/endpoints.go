@@ -20,7 +20,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 )
 
-func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*Chain {
+func (r *DefaultRuleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*Chain {
 
 	// Extract endpoint names.
 	names := make([]string, 0, len(endpoints))
@@ -38,7 +38,7 @@ func (r *ruleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpoi
 	)
 }
 
-func (r *ruleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpointID) []*Chain {
+func (r *DefaultRuleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpointID) []*Chain {
 
 	// Extract endpoint names.
 	names := make([]string, 0, len(endpoints))
@@ -56,7 +56,7 @@ func (r *ruleRenderer) HostDispatchChains(endpoints map[string]proto.HostEndpoin
 	)
 }
 
-func (r *ruleRenderer) dispatchChains(
+func (r *DefaultRuleRenderer) dispatchChains(
 	names []string,
 	fromEndpointPfx,
 	toEndpointPfx,
@@ -100,7 +100,7 @@ func (r *ruleRenderer) dispatchChains(
 	return []*Chain{&toEndpointDispatchChain, &fromEndpointDispatchChain}
 }
 
-func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*Chain {
+func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*Chain {
 	return r.endpointToIptablesChains(
 		endpoint.Tiers,
 		endpoint.ProfileIds,
@@ -114,7 +114,7 @@ func (r *ruleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndp
 	)
 }
 
-func (r *ruleRenderer) endpointToIptablesChains(
+func (r *DefaultRuleRenderer) endpointToIptablesChains(
 	tiers []*proto.TierInfo,
 	profileIds []string,
 	name string,
@@ -206,8 +206,12 @@ func (r *ruleRenderer) endpointToIptablesChains(
 				})
 		}
 		// If no policy in the tier marked the packet as next-tier, drop the packet.
-		toRules = append(toRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
-		fromRules = append(fromRules, r.DropRules(Match().MarkClear(r.IptablesMarkNextTier), "Drop if no policies passed packet")...)
+		toRules = append(toRules, r.DropRules(
+			Match().MarkClear(r.IptablesMarkNextTier),
+			"Drop if no policies passed packet")...)
+		fromRules = append(fromRules, r.DropRules(
+			Match().MarkClear(r.IptablesMarkNextTier),
+			"Drop if no policies passed packet")...)
 	}
 
 	// Then, jump to each profile in turn.
@@ -248,7 +252,7 @@ func (r *ruleRenderer) endpointToIptablesChains(
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
 }
 
-func (r *ruleRenderer) HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*Chain {
+func (r *DefaultRuleRenderer) HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*Chain {
 	return r.endpointToIptablesChains(
 		endpoint.Tiers,
 		endpoint.ProfileIds,
