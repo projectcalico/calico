@@ -266,16 +266,34 @@ you can configure incoming NAT with port mapping on the host on which the contai
 is running on.
 
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport <EXPOSED_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
+# First create a new chain called "expose-ports" to hold the NAT rules
+# and jump to that chain from the OUTPUT and PREROUTING chains.
+# The OUTPUT chain is hit by traffic originating on the host itself;
+# The PREROUTING chain is hit by traffic coming from elsewhere.
+iptables -t nat -N expose-ports
+iptables -t nat -A OUTPUT -j expose-ports
+iptables -t nat -A PREROUTING -j expose-ports
+
+# Then, for each port you want to expose, add a rule to the 
+# expose-ports chain, replacing <PUBLIC_IP> with the host IP that you
+# want to use to expose the port and <PUBLIC_PORT> with the host port.
+iptables -t nat -A expose-ports -p tcp --destination <PUBLIC_IP> --dport <PUBLIC_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
 ```
 
-For example, you have a container to which you've assigned the CALICO_IP of 192.168.7.4, and you have NGINX running on port 80 inside the container. If you want to expose this service on port 80, then you could run the following command:
+For example, you have a container to which you've assigned the CALICO_IP 
+of 192.168.7.4, and you have NGINX running on port 8080 inside the container. 
+If you want to expose this service on port 80 and your host has IP 192.0.2.1, 
+then you could run the following commands:
 
 ```
-iptables -A PREROUTING -t nat -i eth0 -p tcp --dport 80 -j DNAT  --to 192.168.7.4:80
+iptables -t nat -N expose-ports
+iptables -t nat -A OUTPUT -j expose-ports
+iptables -t nat -A PREROUTING -j expose-ports
+
+iptables -t nat -A expose-ports -p tcp --destination 192.0.2.1 --dport 80 -j DNAT --to 192.168.7.4:8080
 ```
 
-The command will need to be run each time the host is restarted.
+The commands will need to be run each time the host is restarted.
 
 Remember: the security profile for the container will need to allow traffic to the exposed port as well.
 Refer to the appropriate guide for your orchestration system for details on how to configure policy.
