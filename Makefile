@@ -71,12 +71,18 @@ $(NODE_CONTAINER_BIN_DIR)/%: $(NODE_CONTAINER_DIR)/%.py
 	 sh -c 'pyinstaller -ayF --specpath /tmp/spec --workpath /tmp/build --distpath $(@D) $< && chown $(shell id -u):$(shell id -g) -R $(@D)'
 
 # Get felix binaries
-$(NODE_CONTAINER_BIN_DIR)/calico-felix:
+.PHONY: update-felix
+$(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
 	-docker rm -f calico-felix
 	# Latest felix binaries are stored in automated builds of calico/felix.
-	# To get them, we pull that image, then copy the binaries out to our host
+	# To get them, we create (but don't start) a container from that image.
 	docker create --name calico-felix $(FELIX_CONTAINER_NAME)
-	docker cp calico-felix:/code/. $(@D)
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	docker cp calico-felix:/code/. $(NODE_CONTAINER_BIN_DIR) && \
+	  test -e $(NODE_CONTAINER_BIN_DIR)/calico-felix && \
+	  touch $(NODE_CONTAINER_BIN_DIR)/calico-felix
 	-docker rm -f calico-felix
 
 # Get libnetwork-plugin binaries
