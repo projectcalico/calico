@@ -1,3 +1,17 @@
+felix (1.4.7-1~xenial) xenial; urgency=low
+
+  * felix release (from Git commit 4ff3ed8).
+    - Add support for policing forwarded traffic via host endpoints.
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 12 Jan 2017 11:39:46 +0000
+
+felix (1.4.7-1~trusty) trusty; urgency=low
+
+  * felix release (from Git commit 4ff3ed8).
+    - Add support for policing forwarded traffic via host endpoints.
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 12 Jan 2017 11:39:46 +0000
+
 felix (1.4.6-1~xenial) xenial; urgency=low
 
   * felix release (from Git commit 060e8ed).

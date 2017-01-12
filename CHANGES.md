@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.7
+
+- Add support for policing forwarded traffic via host endpoints.
+
 ## 1.4.6
 
 - Document 1.4.x branch release process
