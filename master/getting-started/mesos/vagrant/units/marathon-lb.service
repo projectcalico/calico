@@ -10,9 +10,8 @@ EnvironmentFile=/etc/sysconfig/marathon-lb
 ExecStart=/usr/bin/docker run --name marathon-lb \
 	--privileged \
 	--net=host \
-	-e PORTS=9090 \
-	robbrockbank/marathon-lb:assign-service-ports sse --marathon http://${MARATHON_IP}:8080 --group external \
-        --min-serv-port-ip-per-task 20001 --max-serv-port-ip-per-task 29999
+	-e PORTS=80 \
+	mesosphere/marathon-lb:v1.4.3 sse --marathon http://localhost:8080 --group external
 
 [Install]
 WantedBy=multi-user.target
