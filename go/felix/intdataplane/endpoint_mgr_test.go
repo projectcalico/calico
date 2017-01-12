@@ -170,7 +170,7 @@ func hostDispatchForIface(ifaceName string) []*iptables.Chain {
 	}
 }
 
-var _ = FDescribe("EndpointManager testing", func() {
+var _ = Describe("EndpointManager testing", func() {
 	const (
 		ipv4 = "10.0.240.10"
 		ipv6 = "2001:db8::10.0.240.10"
@@ -370,9 +370,6 @@ var _ = FDescribe("EndpointManager testing", func() {
 				})
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
-		})
-
-		It("should process a workload endpoint update", func() {
 		})
 	}
 })
