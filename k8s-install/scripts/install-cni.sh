@@ -60,10 +60,12 @@ if [ -w "/host/secondary-bin-dir/" ]; then
 	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"
 fi
 
-# Make the network configuration file.
+# If specified, overwrite the network configuration file.
+if [ -z "${CNI_NETWORK_CONFIG}" ]; then
 cat >calico.conf.tmp <<EOF
 ${CNI_NETWORK_CONFIG}
 EOF
+fi
 
 # Write a kubeconfig file for the CNI plugin.  Do this
 # to skip TLS verification for now.  We should eventually support
