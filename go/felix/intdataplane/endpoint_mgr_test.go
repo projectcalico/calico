@@ -170,160 +170,206 @@ func hostDispatchForIface(ifaceName string) []*iptables.Chain {
 	}
 }
 
-var _ = Describe("EndpointManager test", func() {
+var _ = FDescribe("EndpointManager testing", func() {
+	const (
+		ipv4 = "10.0.240.10"
+		ipv6 = "2001:db8::10.0.240.10"
+	)
+	var (
+		epMgr          *endpointManager
+		filterTable    *mockTable
+		rrConfigNormal rules.Config
+		ipVersion      int
+		eth0Addrs      set.Set
+		loAddrs        set.Set
+	)
 
-	var epMgr *endpointManager
-	var filterTable *mockTable
+	BeforeEach(func() {
+		rrConfigNormal = rules.Config{
+			IPIPEnabled:          true,
+			IPIPTunnelAddress:    nil,
+			IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			IptablesMarkAccept:   0x8,
+			IptablesMarkNextTier: 0x10,
+		}
+		eth0Addrs = set.New()
+		eth0Addrs.Add(ipv4)
+		eth0Addrs.Add(ipv6)
+		loAddrs = set.New()
+		loAddrs.Add("127.0.1.1")
+		loAddrs.Add("::1")
+	})
 
-	rrConfigNormal := rules.Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkNextTier: 0x10,
-	}
+	JustBeforeEach(func() {
+		renderer := rules.NewRenderer(rrConfigNormal)
+		filterTable = newMockTable()
+		epMgr = newEndpointManager(
+			filterTable,
+			renderer,
+			nil,
+			uint8(ipVersion),
+			[]string{"cali"},
+			nil,
+		)
+	})
 
-	for ip_version := range []uint8{4, 6} {
-		BeforeEach(func() {
-			renderer := rules.NewRenderer(rrConfigNormal)
-			filterTable = newMockTable()
-			epMgr = newEndpointManager(
-				filterTable,
-				renderer,
-				nil,
-				uint8(ip_version),
-				[]string{"cali"},
-				nil,
-			)
-		})
-
+	for ipVersion = range []uint8{4, 6} {
 		It("should be constructable", func() {
 			Expect(epMgr).ToNot(BeNil())
 		})
 
-		It("should process host endpoints", func() {
+		configureHostEp := func(id string, name string, ipv4Addrs []string, ipv6Addrs []string) func() {
+			return func() {
+				epMgr.OnUpdate(&proto.HostEndpointUpdate{
+					Id: &proto.HostEndpointID{
+						EndpointId: id,
+					},
+					Endpoint: &proto.HostEndpoint{
+						Name:              name,
+						ProfileIds:        []string{},
+						Tiers:             []*proto.TierInfo{},
+						ExpectedIpv4Addrs: ipv4Addrs,
+						ExpectedIpv6Addrs: ipv6Addrs,
+					},
+				})
+				epMgr.CompleteDeferredWork()
+			}
+		}
 
-			log.Info("TEST: Define a host endpoint for a named interface")
-			epMgr.OnUpdate(&proto.HostEndpointUpdate{
-				Id: &proto.HostEndpointID{
-					EndpointId: "endpoint-id-11",
-				},
-				Endpoint: &proto.HostEndpoint{
-					Name:              "eth0",
-					ProfileIds:        []string{},
-					Tiers:             []*proto.TierInfo{},
-					ExpectedIpv4Addrs: []string{},
-					ExpectedIpv6Addrs: []string{},
-				},
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
+		expectChainsFor := func(name string) func() {
+			return func() {
+				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchForIface(name)...))
+			}
+		}
 
-			log.Info("TEST: Signal that that interface exists")
-			epMgr.OnUpdate(&ifaceUpdate{
-				Name:  "eth0",
-				State: "up",
-			})
-			addrs := set.New()
-			epMgr.OnUpdate(&ifaceAddrsUpdate{
-				Name:  "eth0",
-				Addrs: addrs,
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChains(append(wlDispatchEmpty, hostDispatchForIface("eth0")...))
+		expectEmptyChains := func() func() {
+			return func() {
+				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
+			}
+		}
 
-			log.Info("TEST: Add an address to the interface")
-			addrs.Add("10.0.240.10")
-			epMgr.OnUpdate(&ifaceAddrsUpdate{
-				Name:  "eth0",
-				Addrs: addrs,
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChainsSameAsBefore()
+		removeHostEp := func(id string) func() {
+			return func() {
+				epMgr.OnUpdate(&proto.HostEndpointRemove{
+					Id: &proto.HostEndpointID{
+						EndpointId: id,
+					},
+				})
+				epMgr.CompleteDeferredWork()
+			}
+		}
 
-			log.Info("TEST: Change host endpoint to expect that address instead of a named interface")
-			epMgr.OnUpdate(&proto.HostEndpointUpdate{
-				Id: &proto.HostEndpointID{
-					EndpointId: "endpoint-id-11",
-				},
-				Endpoint: &proto.HostEndpoint{
-					ProfileIds:        []string{},
-					Tiers:             []*proto.TierInfo{},
-					ExpectedIpv4Addrs: []string{"10.0.240.10"},
-					ExpectedIpv6Addrs: []string{},
-				},
+		Context("with host interfaces eth0, lo", func() {
+			JustBeforeEach(func() {
+				epMgr.OnUpdate(&ifaceUpdate{
+					Name:  "eth0",
+					State: "up",
+				})
+				epMgr.OnUpdate(&ifaceAddrsUpdate{
+					Name:  "eth0",
+					Addrs: eth0Addrs,
+				})
+				epMgr.OnUpdate(&ifaceUpdate{
+					Name:  "lo",
+					State: "up",
+				})
+				epMgr.OnUpdate(&ifaceAddrsUpdate{
+					Name:  "lo",
+					Addrs: loAddrs,
+				})
+				epMgr.CompleteDeferredWork()
 			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChainsSameAsBefore()
 
-			log.Info("TEST: Signal another host endpoint that also matches the IP address")
-			epMgr.OnUpdate(&proto.HostEndpointUpdate{
-				Id: &proto.HostEndpointID{
-					EndpointId: "other-endpoint-id-55",
-				},
-				Endpoint: &proto.HostEndpoint{
-					ProfileIds:        []string{},
-					Tiers:             []*proto.TierInfo{},
-					ExpectedIpv4Addrs: []string{"8.8.8.8", "10.0.240.10"},
-					ExpectedIpv6Addrs: []string{},
-				},
+			It("should have empty dispatch chains", func() {
+				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
 			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChainsSameAsBefore()
 
-			log.Info("TEST: Remove that other host endpoint again")
-			epMgr.OnUpdate(&proto.HostEndpointRemove{
-				Id: &proto.HostEndpointID{
-					EndpointId: "other-endpoint-id-55",
-				},
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChainsSameAsBefore()
+			Describe("with host endpoint matching eth0", func() {
+				JustBeforeEach(configureHostEp("id1", "eth0", []string{}, []string{}))
+				It("should have expected chains", expectChainsFor("eth0"))
 
-			log.Info("TEST: Change host endpoint to expect a different address")
-			epMgr.OnUpdate(&proto.HostEndpointUpdate{
-				Id: &proto.HostEndpointID{
-					EndpointId: "endpoint-id-11",
-				},
-				Endpoint: &proto.HostEndpoint{
-					ProfileIds:        []string{},
-					Tiers:             []*proto.TierInfo{},
-					ExpectedIpv4Addrs: []string{"10.0.240.11"},
-					ExpectedIpv6Addrs: []string{},
-				},
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
+				Context("with another host ep that matches the IPv4 address", func() {
+					JustBeforeEach(configureHostEp("id2", "", []string{ipv4}, []string{}))
+					It("should have expected chains", expectChainsFor("eth0"))
 
-			log.Info("TEST: Change host endpoint to be for an interface that doesn't exist yet")
-			epMgr.OnUpdate(&proto.HostEndpointUpdate{
-				Id: &proto.HostEndpointID{
-					EndpointId: "endpoint-id-11",
-				},
-				Endpoint: &proto.HostEndpoint{
-					Name:              "eth1",
-					ProfileIds:        []string{},
-					Tiers:             []*proto.TierInfo{},
-					ExpectedIpv4Addrs: []string{},
-					ExpectedIpv6Addrs: []string{},
-				},
-			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChainsSameAsBefore()
+					Context("with the first host ep removed", func() {
+						JustBeforeEach(removeHostEp("id1"))
+						It("should have expected chains", expectChainsFor("eth0"))
 
-			log.Info("TEST: Signal that interface")
-			epMgr.OnUpdate(&ifaceUpdate{
-				Name:  "eth1",
-				State: "up",
+						Context("with both host eps removed", func() {
+							JustBeforeEach(removeHostEp("id2"))
+							It("should have empty dispatch chains", expectEmptyChains())
+						})
+					})
+				})
 			})
-			addrs = set.New()
-			epMgr.OnUpdate(&ifaceAddrsUpdate{
-				Name:  "eth1",
-				Addrs: addrs,
+
+			Describe("with host endpoint matching non-existent interface", func() {
+				JustBeforeEach(configureHostEp("id3", "eth1", []string{}, []string{}))
+				It("should have empty dispatch chains", expectEmptyChains())
 			})
-			epMgr.CompleteDeferredWork()
-			filterTable.checkChains(append(wlDispatchEmpty, hostDispatchForIface("eth1")...))
+
+			Describe("with host endpoint matching IPv4 address", func() {
+				JustBeforeEach(configureHostEp("id4", "", []string{ipv4}, []string{}))
+				It("should have expected chains", expectChainsFor("eth0"))
+			})
+
+			Describe("with host endpoint matching IPv6 address", func() {
+				JustBeforeEach(configureHostEp("id5", "", []string{}, []string{ipv6}))
+				It("should have expected chains", expectChainsFor("eth0"))
+			})
+
+			Describe("with host endpoint matching IPv4 address and correct interface name", func() {
+				JustBeforeEach(configureHostEp("id3", "eth0", []string{ipv4}, []string{}))
+				It("should have expected chains", expectChainsFor("eth0"))
+			})
+
+			Describe("with host endpoint matching IPv6 address and correct interface name", func() {
+				JustBeforeEach(configureHostEp("id3", "eth0", []string{}, []string{ipv6}))
+				It("should have expected chains", expectChainsFor("eth0"))
+			})
+
+			Describe("with host endpoint matching IPv4 address and wrong interface name", func() {
+				JustBeforeEach(configureHostEp("id3", "eth1", []string{ipv4}, []string{}))
+				It("should have empty dispatch chains", expectEmptyChains())
+			})
+
+			Describe("with host endpoint matching IPv6 address and wrong interface name", func() {
+				JustBeforeEach(configureHostEp("id3", "eth1", []string{}, []string{ipv6}))
+				It("should have empty dispatch chains", expectEmptyChains())
+			})
+
+			Describe("with host endpoint with unmatched IPv4 address", func() {
+				JustBeforeEach(configureHostEp("id4", "", []string{"8.8.8.8"}, []string{}))
+				It("should have empty dispatch chains", expectEmptyChains())
+			})
+
+			Describe("with host endpoint with unmatched IPv6 address", func() {
+				JustBeforeEach(configureHostEp("id5", "", []string{}, []string{"fe08::2"}))
+				It("should have empty dispatch chains", expectEmptyChains())
+			})
+
+		})
+
+		Context("with host endpoint configured before interface signaled", func() {
+			JustBeforeEach(configureHostEp("id3", "eth0", []string{}, []string{}))
+			It("should have empty dispatch chains", expectEmptyChains())
+
+			Context("with interface signaled", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&ifaceUpdate{
+						Name:  "eth0",
+						State: "up",
+					})
+					epMgr.OnUpdate(&ifaceAddrsUpdate{
+						Name:  "eth0",
+						Addrs: eth0Addrs,
+					})
+					epMgr.CompleteDeferredWork()
+				})
+				It("should have expected chains", expectChainsFor("eth0"))
+			})
 		})
 
 		It("should process a workload endpoint update", func() {
