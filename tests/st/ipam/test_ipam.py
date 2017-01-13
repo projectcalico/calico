@@ -13,32 +13,17 @@
 # limitations under the License.
 import logging
 import random
-import unittest
 
 import netaddr
 import yaml
 from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
-from tests.st.utils.exceptions import CommandExecError
-from tests.st.utils.utils import ETCD_CA, ETCD_CERT, \
-    ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip
+from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 
 POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
                         "docker load -i /code/busybox.tar",
                         "docker load -i /code/workload.tar"]
-
-if ETCD_SCHEME == "https":
-    ADDITIONAL_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " \
-                                "--cluster-store-opt kv.cacertfile=%s " \
-                                "--cluster-store-opt kv.certfile=%s " \
-                                "--cluster-store-opt kv.keyfile=%s " % \
-                                (ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
-                                 ETCD_KEY)
-else:
-    ADDITIONAL_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
-                                get_ip()
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -50,11 +35,11 @@ class MultiHostIpam(TestBase):
         super(TestBase, cls).setUpClass()
         cls.hosts = []
         cls.hosts.append(DockerHost("host1",
-                                    additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                                    additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                                     post_docker_commands=POST_DOCKER_COMMANDS,
                                     start_calico=False))
         cls.hosts.append(DockerHost("host2",
-                                    additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                                    additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                                     post_docker_commands=POST_DOCKER_COMMANDS,
                                     start_calico=False))
         cls.hosts[0].start_calico_node()

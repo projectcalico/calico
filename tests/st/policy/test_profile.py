@@ -17,26 +17,14 @@ import yaml
 from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.exceptions import CommandExecError
 from tests.st.utils.utils import assert_network, assert_profile, \
-    assert_number_endpoints, get_profile_name, ETCD_CA, ETCD_CERT, \
-    ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip
+    assert_number_endpoints, get_profile_name
 
 POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
                         "docker load -i /code/busybox.tar",
                         "docker load -i /code/workload.tar"]
-
-if ETCD_SCHEME == "https":
-    ADDITIONAL_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " \
-                                "--cluster-store-opt kv.cacertfile=%s " \
-                                "--cluster-store-opt kv.certfile=%s " \
-                                "--cluster-store-opt kv.keyfile=%s " % \
-                                (ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
-                                 ETCD_KEY)
-else:
-    ADDITIONAL_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
-                                get_ip()
 
 
 class MultiHostMainline(TestBase):
@@ -68,11 +56,11 @@ class MultiHostMainline(TestBase):
         - Check that connectivity goes back to what it was originally.
         """
         with DockerHost("host1",
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         post_docker_commands=POST_DOCKER_COMMANDS,
                         start_calico=False) as host1, \
                 DockerHost("host2",
-                           additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                           additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                            post_docker_commands=POST_DOCKER_COMMANDS,
                            start_calico=False) as host2:
             (n1_workloads, n2_workloads, networks) = \

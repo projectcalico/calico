@@ -1,5 +1,5 @@
-hash: e821ee1612764ee74f4987671e20a2cc965014b6719c5532520fc9e8d76323c8
-updated: 2017-02-07T15:24:17.271940076Z
+hash: 4cc60931034c4259ddde2cc1a4022812ea7cd550810fa5c0ed0e6f5a893abf75
+updated: 2017-02-08T12:54:29.458481149-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 739accc242e0bdc963d0fc13785989e323fc3793
+  version: 9b72c8ba1ba484802e155c9f6f0ddc21e9c256ce
   subpackages:
   - client
   - pkg/fileutil
@@ -107,7 +107,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 98e19f257c33ceb8e1717fa57236de473054641e
+  version: 8c25f0104eba8c0060e44a489f9d549e7d6a7a4d
   subpackages:
   - client/v2
   - models
@@ -184,7 +184,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1cb7a035e0d535c264e5c8787c7606519c835841
+  version: 83090c92db7fde08538caea98d766464f94aadd0
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -200,6 +200,7 @@ imports:
   - lib/errors
   - lib/hash
   - lib/hwm
+  - lib/ipip
   - lib/net
   - lib/numorstring
   - lib/scope
@@ -235,7 +236,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: dbc72376c86301bb873c332830857e73c9f701e3
+  version: c19091b1c6fb954a80f9f67abed2e2d780bb485b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns

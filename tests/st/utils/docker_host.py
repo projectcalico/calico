@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import json
 import os
 import uuid
 from functools import partial
@@ -32,6 +33,17 @@ if CHECKOUT_DIR == "":
     CHECKOUT_DIR = os.getcwd()
 
 NODE_CONTAINER_NAME = os.getenv("NODE_CONTAINER_NAME", "calico/node:latest")
+
+if ETCD_SCHEME == "https":
+    CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " \
+                                "--cluster-store-opt kv.cacertfile=%s " \
+                                "--cluster-store-opt kv.certfile=%s " \
+                                "--cluster-store-opt kv.keyfile=%s " % \
+                                (ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
+                                 ETCD_KEY)
+else:
+    CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
+                                get_ip()
 
 class DockerHost(object):
     """
@@ -471,3 +483,15 @@ class DockerHost(object):
         :return: Return code of execute operation.
         """
         return self.execute("cat << EOF > %s\n%s" % (filename, data))
+
+    def writejson(self, filename, data):
+        """
+        Converts a python dict to json and outputs to a file.
+        :param filename: filename to write
+        :param data: dictionary to write out as json
+        """
+        text = json.dumps(data,
+                          sort_keys=True,
+                          indent=2,
+                          separators=(',', ': '))
+        self.writefile(filename, text)
