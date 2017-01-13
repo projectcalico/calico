@@ -22,7 +22,6 @@ import (
 	"github.com/vishvananda/netlink"
 	"net"
 	"os/exec"
-	"reflect"
 )
 
 // configureIPIPDevice ensures the IPIP tunneld evice is up and configures correctly.
@@ -72,7 +71,7 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 		"link": linkName,
 		"addr": address,
 	})
-	logCxt.Info("Setting local IPv4 address on link.")
+	logCxt.Debug("Setting local IPv4 address on link.")
 	link, err := netlink.LinkByName(linkName)
 	if err != nil {
 		log.WithError(err).WithField("name", linkName).Warning("Failed to get device")
@@ -86,14 +85,14 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 	}
 
 	found := false
-	for _, addr := range addrs {
-		if reflect.DeepEqual(addr.IP, address) {
-			logCxt.Info("Address already present.")
+	for _, oldAddr := range addrs {
+		if address != nil && oldAddr.IP.Equal(address) {
+			logCxt.Debug("Address already present.")
 			found = true
 			continue
 		}
-		logCxt.WithField("oldAddr", addr).Info("Removing old address")
-		if err := netlink.AddrDel(link, &addr); err != nil {
+		logCxt.WithField("oldAddr", oldAddr).Info("Removing old address")
+		if err := netlink.AddrDel(link, &oldAddr); err != nil {
 			log.WithError(err).Warn("Failed to delete address")
 			return err
 		}
@@ -113,7 +112,7 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 			return err
 		}
 	}
-	logCxt.Info("Address set.")
+	logCxt.Debug("Address set.")
 
 	return nil
 }
