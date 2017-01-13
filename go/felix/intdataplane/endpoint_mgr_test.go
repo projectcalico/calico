@@ -76,6 +76,10 @@ func (t *mockTable) checkChains(expecteds [][]*iptables.Chain) {
 }
 
 func (t *mockTable) checkChainsSameAsBefore() {
+	log.Debug("Expected chains")
+	for _, chain := range t.expectedChains {
+		log.WithField("chain", *chain).Debug("")
+	}
 	Expect(reflect.DeepEqual(t.currentChains, t.expectedChains)).To(BeTrue())
 }
 
@@ -113,69 +117,80 @@ var hostDispatchEmpty = []*iptables.Chain{
 	},
 }
 
-func hostDispatchForIface(ifaceName string) []*iptables.Chain {
-	return []*iptables.Chain{
-		&iptables.Chain{
-			Name: "calith-" + ifaceName,
-			Rules: []iptables.Rule{
-				{
-					Match:  iptables.Match(),
-					Action: iptables.JumpAction{Target: "cali-failsafe-out"},
-				},
-				{
-					Match:  iptables.Match(),
-					Action: iptables.ClearMarkAction{Mark: 8},
-				},
-				{
-					Match:   iptables.Match(),
-					Action:  iptables.DropAction{},
-					Comment: "Drop if no profiles matched",
-				},
-			},
-		},
-		&iptables.Chain{
-			Name: "califh-" + ifaceName,
-			Rules: []iptables.Rule{
-				{
-					Match:  iptables.Match(),
-					Action: iptables.JumpAction{Target: "cali-failsafe-in"},
-				},
-				{
-					Match:  iptables.Match(),
-					Action: iptables.ClearMarkAction{Mark: 8},
-				},
-				{
-					Match:   iptables.Match(),
-					Action:  iptables.DropAction{},
-					Comment: "Drop if no profiles matched",
+func hostChainsForIfaces(ifaceNames []string) []*iptables.Chain {
+	chains := []*iptables.Chain{}
+	dispatchOut := []iptables.Rule{}
+	dispatchIn := []iptables.Rule{}
+	for _, ifaceName := range ifaceNames {
+		chains = append(chains,
+			&iptables.Chain{
+				Name: "calith-" + ifaceName,
+				Rules: []iptables.Rule{
+					{
+						Match:  iptables.Match(),
+						Action: iptables.JumpAction{Target: "cali-failsafe-out"},
+					},
+					{
+						Match:  iptables.Match(),
+						Action: iptables.ClearMarkAction{Mark: 8},
+					},
+					{
+						Match:   iptables.Match(),
+						Action:  iptables.DropAction{},
+						Comment: "Drop if no profiles matched",
+					},
 				},
 			},
-		},
-		&iptables.Chain{
-			Name: "cali-to-host-endpoint",
-			Rules: []iptables.Rule{
-				{
-					Match:  iptables.Match().OutInterface(ifaceName),
-					Action: iptables.GotoAction{Target: "calith-" + ifaceName},
+			&iptables.Chain{
+				Name: "califh-" + ifaceName,
+				Rules: []iptables.Rule{
+					{
+						Match:  iptables.Match(),
+						Action: iptables.JumpAction{Target: "cali-failsafe-in"},
+					},
+					{
+						Match:  iptables.Match(),
+						Action: iptables.ClearMarkAction{Mark: 8},
+					},
+					{
+						Match:   iptables.Match(),
+						Action:  iptables.DropAction{},
+						Comment: "Drop if no profiles matched",
+					},
 				},
 			},
-		},
-		&iptables.Chain{
-			Name: "cali-from-host-endpoint",
-			Rules: []iptables.Rule{
-				{
-					Match:  iptables.Match().InInterface(ifaceName),
-					Action: iptables.GotoAction{Target: "califh-" + ifaceName},
-				},
+		)
+		dispatchOut = append(dispatchOut,
+			iptables.Rule{
+				Match:  iptables.Match().OutInterface(ifaceName),
+				Action: iptables.GotoAction{Target: "calith-" + ifaceName},
 			},
-		},
+		)
+		dispatchIn = append(dispatchIn,
+			iptables.Rule{
+				Match:  iptables.Match().InInterface(ifaceName),
+				Action: iptables.GotoAction{Target: "califh-" + ifaceName},
+			},
+		)
 	}
+	chains = append(chains,
+		&iptables.Chain{
+			Name:  "cali-to-host-endpoint",
+			Rules: dispatchOut,
+		},
+		&iptables.Chain{
+			Name:  "cali-from-host-endpoint",
+			Rules: dispatchIn,
+		},
+	)
+	return chains
 }
 
 var _ = Describe("EndpointManager testing", func() {
 	const (
-		ipv4 = "10.0.240.10"
-		ipv6 = "2001:db8::10.0.240.10"
+		ipv4     = "10.0.240.10"
+		ipv4Eth1 = "10.0.240.30"
+		ipv6     = "2001:db8::10.0.240.10"
 	)
 	var (
 		epMgr          *endpointManager
@@ -184,6 +199,7 @@ var _ = Describe("EndpointManager testing", func() {
 		ipVersion      int
 		eth0Addrs      set.Set
 		loAddrs        set.Set
+		eth1Addrs      set.Set
 	)
 
 	BeforeEach(func() {
@@ -201,6 +217,8 @@ var _ = Describe("EndpointManager testing", func() {
 		loAddrs = set.New()
 		loAddrs.Add("127.0.1.1")
 		loAddrs.Add("::1")
+		eth1Addrs = set.New()
+		eth1Addrs.Add(ipv4Eth1)
 	})
 
 	JustBeforeEach(func() {
@@ -239,11 +257,11 @@ var _ = Describe("EndpointManager testing", func() {
 			}
 		}
 
-		expectChainsFor := func(name string) func() {
+		expectChainsFor := func(names ...string) func() {
 			return func() {
 				filterTable.checkChains([][]*iptables.Chain{
 					wlDispatchEmpty,
-					hostDispatchForIface(name),
+					hostChainsForIfaces(names),
 				})
 			}
 		}
@@ -307,6 +325,32 @@ var _ = Describe("EndpointManager testing", func() {
 							JustBeforeEach(removeHostEp("id2"))
 							It("should have empty dispatch chains", expectEmptyChains())
 						})
+					})
+				})
+
+				Context("with another host interface eth1", func() {
+					JustBeforeEach(func() {
+						epMgr.OnUpdate(&ifaceUpdate{
+							Name:  "eth1",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "eth1",
+							Addrs: eth1Addrs,
+						})
+						epMgr.CompleteDeferredWork()
+					})
+
+					It("should have expected chains", expectChainsFor("eth0"))
+
+					Context("with host ep matching eth1's IP", func() {
+						JustBeforeEach(configureHostEp("id22", "", []string{ipv4Eth1}, []string{}))
+						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+					})
+
+					Context("with host ep matching eth1", func() {
+						JustBeforeEach(configureHostEp("id22", "eth1", []string{}, []string{}))
+						It("should have expected chains", expectChainsFor("eth0", "eth1"))
 					})
 				})
 			})

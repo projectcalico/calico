@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/felix/go/felix/hashutils"
 	. "github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
+	"sort"
 )
 
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*Chain {
@@ -45,6 +46,7 @@ func (r *DefaultRuleRenderer) HostDispatchChains(endpoints map[string]proto.Host
 	for ifaceName, _ := range endpoints {
 		names = append(names, ifaceName)
 	}
+	sort.Strings(names)
 
 	return r.dispatchChains(
 		names,
