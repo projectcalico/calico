@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -362,18 +362,19 @@ class _FelixEtcdWatcher(gevent.Greenlet):
         interval = 86400   # Once every 24 hours minus 12 minute jitter
         jitter = random.random() * 0.01 * interval
         try:
-            calico_version = str(pkg_resources.require("calico")[0].version)
+            calico_version = str(pkg_resources.require("felix")[0].version)
         except (pkg_resources.ResolutionError, IndexError, AttributeError):
             _log.exception("Failed to look up calico's version")
             calico_version = "NA"
 
-        _log.info("Started usage report thread.  Usage report interval: %s, pre-jitter: %s", interval, jitter)
+        _log.info("Started usage report thread.  Version: %s; interval: %s; pre-jitter: %s",
+                  calico_version, interval, jitter)
 
         # Pre-Jitter the reporting thread start by 1% of interval (about 12 minutes)
         # Jitter prevents thundering herd for large clusters when the cluster first starts
         # Do pre-jitter only for clusters greater than 25.
         felix_count = self.estimated_host_count()
-        if (felix_count >= 25):
+        if felix_count >= 25:
             gevent.sleep(jitter)
 
         while True:
@@ -381,9 +382,10 @@ class _FelixEtcdWatcher(gevent.Greenlet):
             felix_count = self.estimated_host_count()
             cluster_type = "NA"
 
-            if self._config.USAGE_REPORT:
-                _log.info("usage report is enabled")
-                report_usage_and_get_warnings(calico_version, config.HOSTNAME, config.CLUSTER_GUID, felix_count, cluster_type)
+            if config.USAGE_REPORT:
+                _log.info("Making a usage report")
+                report_usage_and_get_warnings(calico_version, config.HOSTNAME, config.CLUSTER_GUID,
+                                              felix_count, cluster_type)
 
             # Jitter by 10% of interval (about 120 minutes)
             jitter = random.random() * 0.1 * interval
