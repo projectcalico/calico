@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -409,26 +409,33 @@ class FelixIptablesGenerator(FelixPlugin):
         :returns Tuple: list of rules, set of deps.
         """
         forward_chain = []
-        for iface_match in self.IFACE_MATCH:
-            forward_chain.extend(self.drop_rules(
-                ip_version, CHAIN_FORWARD,
-                "--in-interface %s --match conntrack --ctstate "
-                "INVALID" % iface_match, None))
-            forward_chain.extend(
-                self.drop_rules(
-                    ip_version, CHAIN_FORWARD,
-                    "--out-interface %s --match conntrack --ctstate "
-                    "INVALID" % iface_match, None))
-            forward_chain.extend([
-                # First, a pair of conntrack rules, which accept established
-                # flows to/from workload interfaces.
-                "--append %s --in-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, iface_match),
-                "--append %s --out-interface %s --match conntrack "
-                "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
-                (CHAIN_FORWARD, iface_match),
-            ])
+
+        # Drop immediately if conntrack thinks this packet is not valid (for
+        # example a mid-stream TCP packet for an unknown session).
+        forward_chain.extend(self.drop_rules(
+            ip_version, CHAIN_FORWARD,
+            "--match conntrack --ctstate INVALID", None))
+
+        # Accept immediately if this packet is part of an ongoing connection.
+        # We need this for two reasons:
+        #
+        # - to avoid the overhead of running all our iptables rules against
+        #   every packet
+        # - to accept return traffic.
+        #
+        # We used to limit these rules to apply only to workload traffic but
+        # Calico now supports policing through traffic on a gateway or router,
+        # which means we need to match all traffic here.  Ideally, we'd only
+        # match traffic that is destined to/from a known host endpoint but
+        # that would mean moving the rules down into the per-endpoint chains,
+        # increasing per-packet overhead.
+        forward_chain.extend([
+            # First, a pair of conntrack rules, which accept established
+            # flows to/from workload interfaces.
+            "--append %s --match conntrack "
+            "--ctstate RELATED,ESTABLISHED --jump ACCEPT" %
+            (CHAIN_FORWARD,),
+        ])
 
         for iface_match in self.IFACE_MATCH:
             forward_chain.extend([
@@ -458,7 +465,18 @@ class FelixIptablesGenerator(FelixPlugin):
                 (CHAIN_FORWARD, iface_match),
             ])
 
-        return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT])
+        # If we get to this point in the chain, the packet is not from or to
+        # a workload endpoint.  Hence, it must be being forwarded through
+        # this host, potentially via host endpoints that we want to police.
+        # Send the traffic to the host endpoint chains for processing.
+        # If there are no host endpoints configured, these chains are no-ops.
+        forward_chain.append("--append {chain} --jump {jump}".format(
+                chain=CHAIN_FORWARD, jump=CHAIN_FROM_IFACE))
+        forward_chain.append("--append {chain} --jump {jump}".format(
+                chain=CHAIN_FORWARD, jump=CHAIN_TO_IFACE))
+
+        return forward_chain, set([CHAIN_FROM_ENDPOINT, CHAIN_TO_ENDPOINT,
+                                   CHAIN_FROM_IFACE, CHAIN_TO_IFACE])
 
     def endpoint_chain_names(self, endpoint_suffix):
         """

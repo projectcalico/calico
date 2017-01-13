@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -699,10 +699,8 @@ TO_HOST_ENDPOINT_CHAIN = [
 
 TAP_FORWARD_CHAIN = [
     # Conntrack rules.
-    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
 
     # Jump to egress and ingress policies.
     '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
@@ -711,18 +709,16 @@ TAP_FORWARD_CHAIN = [
     # Then accept the packet if both pass.
     '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
     '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+
+    # For non-workload packets, sent to the host endpoint chains.
+    "--append felix-FORWARD --jump felix-FROM-HOST-IF",
+    "--append felix-FORWARD --jump felix-TO-HOST-IF",
 ]
 
 TAP_CALI_FORWARD_CHAIN = [
     # Conntrack rules for all interfaces come first.
-    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-    '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-    '--append felix-FORWARD --in-interface cali+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --out-interface cali+ --match conntrack --ctstate INVALID --jump DROP',
-    '--append felix-FORWARD --in-interface cali+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-    '--append felix-FORWARD --out-interface cali+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+    '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+    '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
 
     # Then, all policies.  It's important that these come as a block since a packet may be going
     # from one prefix to another so we need to make sure it hits the tap and cali policies
@@ -737,6 +733,10 @@ TAP_CALI_FORWARD_CHAIN = [
     '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
     '--append felix-FORWARD --jump ACCEPT --in-interface cali+',
     '--append felix-FORWARD --jump ACCEPT --out-interface cali+',
+
+    # For non-workload packets, sent to the host endpoint chains.
+    "--append felix-FORWARD --jump felix-FROM-HOST-IF",
+    "--append felix-FORWARD --jump felix-TO-HOST-IF",
 ]
 
 
@@ -790,7 +790,9 @@ class TestGlobalChains(BaseTestCase):
         self.maxDiff = None
         self.assertEqual(chain, TAP_FORWARD_CHAIN)
         self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
-                                    "felix-TO-ENDPOINT"]))
+                                    "felix-TO-ENDPOINT",
+                                    "felix-TO-HOST-IF",
+                                    "felix-FROM-HOST-IF"]))
 
     def test_forward_chain_multiple_prefixes(self):
         host_dict = {
@@ -802,7 +804,9 @@ class TestGlobalChains(BaseTestCase):
         self.maxDiff = None
         self.assertEqual(chain, TAP_CALI_FORWARD_CHAIN)
         self.assertEqual(deps, set(["felix-FROM-ENDPOINT",
-                                    "felix-TO-ENDPOINT"]))
+                                    "felix-TO-ENDPOINT",
+                                    "felix-TO-HOST-IF",
+                                    "felix-FROM-HOST-IF"]))
 
 
 class TestRules(BaseTestCase):
