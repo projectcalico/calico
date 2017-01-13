@@ -65,10 +65,12 @@ func (t *mockTable) RemoveChains(chains []*iptables.Chain) {
 	}
 }
 
-func (t *mockTable) checkChains(expected []*iptables.Chain) {
+func (t *mockTable) checkChains(expecteds [][]*iptables.Chain) {
 	t.expectedChains = map[string]*iptables.Chain{}
-	for _, chain := range expected {
-		t.expectedChains[chain.Name] = chain
+	for _, expected := range expecteds {
+		for _, chain := range expected {
+			t.expectedChains[chain.Name] = chain
+		}
 	}
 	t.checkChainsSameAsBefore()
 }
@@ -239,13 +241,19 @@ var _ = Describe("EndpointManager testing", func() {
 
 		expectChainsFor := func(name string) func() {
 			return func() {
-				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchForIface(name)...))
+				filterTable.checkChains([][]*iptables.Chain{
+					wlDispatchEmpty,
+					hostDispatchForIface(name),
+				})
 			}
 		}
 
 		expectEmptyChains := func() func() {
 			return func() {
-				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
+				filterTable.checkChains([][]*iptables.Chain{
+					wlDispatchEmpty,
+					hostDispatchEmpty,
+				})
 			}
 		}
 
@@ -281,9 +289,7 @@ var _ = Describe("EndpointManager testing", func() {
 				epMgr.CompleteDeferredWork()
 			})
 
-			It("should have empty dispatch chains", func() {
-				filterTable.checkChains(append(wlDispatchEmpty, hostDispatchEmpty...))
-			})
+			It("should have empty dispatch chains", expectEmptyChains())
 
 			Describe("with host endpoint matching eth0", func() {
 				JustBeforeEach(configureHostEp("id1", "eth0", []string{}, []string{}))
