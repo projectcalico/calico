@@ -26,10 +26,11 @@ import (
 
 // configureIPIPDevice ensures the IPIP tunneld evice is up and configures correctly.
 func configureIPIPDevice(mtu int, address net.IP) error {
-	log.WithFields(log.Fields{
+	logCxt := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
-	}).Debug("Configuring IPIP tunnel")
+	})
+	logCxt.Debug("Configuring IPIP tunnel")
 	link, err := netlink.LinkByName("tunl0")
 	if err != nil {
 		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
@@ -48,13 +49,24 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 			return err
 		}
 	}
-	if err := netlink.LinkSetMTU(link, mtu); err != nil {
-		log.WithError(err).Warn("Failed to set tunnel device MTU")
-		return err
+
+	attrs := link.Attrs()
+	oldMTU := attrs.MTU
+	if oldMTU != mtu {
+		logCxt.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
+		if err := netlink.LinkSetMTU(link, mtu); err != nil {
+			log.WithError(err).Warn("Failed to set tunnel device MTU")
+			return err
+		}
+		logCxt.Info("Updated tunnel MTU")
 	}
-	if err := netlink.LinkSetUp(link); err != nil {
-		log.WithError(err).Warn("Failed to set tunnel device up")
-		return err
+	if attrs.Flags&net.FlagUp == 0 {
+		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
+		if err := netlink.LinkSetUp(link); err != nil {
+			log.WithError(err).Warn("Failed to set tunnel device up")
+			return err
+		}
+		logCxt.Info("Set tunnel admin up")
 	}
 
 	if err := setLinkAddressV4("tunl0", address); err != nil {
