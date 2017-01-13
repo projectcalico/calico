@@ -1,8 +1,24 @@
-startup-go || exit 1
+# Handle old CALICO_NETWORKING environment by converting to the new config.
+if [ -n "$CALICO_NETWORKING" ]; then
+    echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
+    if [ "$CALICO_NETWORKING" == "false" ]; then
+        export CALICO_NETWORKING_BACKEND=none
+    else
+        export CALICO_NETWORKING_BACKEND=bird
+    fi
+fi
+
+# Run the startup initialisation script.  These ensure the node is correctly
+# configured to run.
 startup || exit 1
 
-# Source any additional environment that was added by the startup script
+# Source any additional environment that was added by the startup script.  This
+# is done immediately after the startup script because the environments are
+# required by the remaining processing.
 . startup.env
+
+# If possible pre-allocate the IP address on the IPIP tunnel.
+allocate-ipip-addr || exit 1
 
 if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
 	rm -r /etc/service/available/bird/log
@@ -17,15 +33,6 @@ mkdir /etc/service/enabled
 
 # Felix is always enabled
 mv /etc/service/available/felix /etc/service/enabled/
-
-if [ -n "$CALICO_NETWORKING" ]; then
-    echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
-    if [ "$CALICO_NETWORKING" == "false" ]; then
-        export CALICO_NETWORKING_BACKEND=none
-    else
-        export CALICO_NETWORKING_BACKEND=bird
-    fi
-fi
 
 case "$CALICO_NETWORKING_BACKEND" in
     "none" )

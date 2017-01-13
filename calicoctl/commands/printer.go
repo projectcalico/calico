@@ -26,9 +26,9 @@ import (
 	"text/template"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/go-yaml-wrapper"
-	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
+	"github.com/projectcalico/go-json/json"
+	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
@@ -108,7 +108,7 @@ func (r resourcePrinterTable) print(client *client.Client, resources []unversion
 		// Convert the template string into a template - we need to include the join
 		// function.
 		fns := template.FuncMap{
-			"join": join,
+			"join":   join,
 			"config": config(client),
 		}
 		tmpl, err := template.New("get").Funcs(fns).Parse(tpls)
@@ -161,7 +161,7 @@ func (r resourcePrinterTemplate) print(client *client.Client, resources []unvers
 	// We include a join function in the template as it's useful for multi
 	// value columns.
 	fns := template.FuncMap{
-		"join": join,
+		"join":   join,
 		"config": config(client),
 	}
 	tmpl, err := template.New("get").Funcs(fns).Parse(r.template)
