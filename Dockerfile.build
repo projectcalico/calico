@@ -1,7 +1,0 @@
-FROM golang:1.7
-
-MAINTAINER Tom Denham <tom@tigera.io>
-
-RUN go get github.com/onsi/ginkgo/ginkgo
-WORKDIR /go/src/github.com/projectcalico/cni-plugin
-
