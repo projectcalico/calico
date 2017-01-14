@@ -143,7 +143,7 @@ containers.  This works as follows:
    database containers)
 
 For details on all of the possible match criteria, see the
-[profile resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+[profile resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
 documentation.
 
 ### b) Global policy applied through label selection
@@ -280,7 +280,7 @@ This works as follows:
    `role = database` (i.e. to database containers)
 
 For details on all of the possible match criteria, see the
-[policy resource ]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+[policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
 documentation.
 
 ## Multiple networks
