@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"errors"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ipsets"
 	. "github.com/vishvananda/netlink"
@@ -26,16 +27,22 @@ import (
 )
 
 var (
-	notImplemented = errors.New("Not implemented")
-	notFound       = errors.New("not found")
+	notFound    = errors.New("not found")
+	mockFailure = errors.New("mock failure")
 )
 
-var _ = Describe("IpipMgr", func() {
+var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
 		ipipMgr   *ipipManager
 		ipSets    *mockIPSets
 		dataplane *mockIPIPDataplane
 	)
+
+	ip, _, err := net.ParseCIDR("10.0.0.1/32")
+	if err != nil {
+		panic("Failed to parse test IP")
+	}
+
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
 		ipSets = &mockIPSets{}
@@ -43,10 +50,6 @@ var _ = Describe("IpipMgr", func() {
 	})
 
 	Describe("after calling configureIPIPDevice", func() {
-		ip, _, err := net.ParseCIDR("10.0.0.1/32")
-		if err != nil {
-			panic("Failed to parse test IP")
-		}
 		ip2, _, err := net.ParseCIDR("10.0.0.2/32")
 		if err != nil {
 			panic("Failed to parse test IP")
@@ -147,6 +150,27 @@ var _ = Describe("IpipMgr", func() {
 			Expect(dataplane.addrs).To(HaveLen(0))
 		})
 	})
+
+	// Cover the error cases.  We pass the error back up the stack, check that that happens
+	// for all calls.
+	expNumCalls := 9
+	It("a successful call should only call into dataplane expected number of times", func() {
+		Expect(dataplane.NumCalls).To(BeNumerically("<=", expNumCalls))
+	})
+	for i := 1; i < expNumCalls; i++ {
+		if i == 1 {
+			continue // First LinkByName failure is handled.
+		}
+		i := i
+		Describe(fmt.Sprintf("with a failure after %v calls", i), func() {
+			BeforeEach(func() {
+				dataplane.ErrorAtCall = i
+			})
+			It("should return the error", func() {
+				Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
+			})
+		})
+	}
 })
 
 type mockIPSets struct{}
@@ -170,6 +194,9 @@ type mockIPIPDataplane struct {
 	LinkSetMTUCalled bool
 	LinkSetUpCalled  bool
 	AddrUpdated      bool
+
+	NumCalls    int
+	ErrorAtCall int
 }
 
 func (d *mockIPIPDataplane) ResetCalls() {
@@ -179,8 +206,22 @@ func (d *mockIPIPDataplane) ResetCalls() {
 	d.AddrUpdated = false
 }
 
+func (d *mockIPIPDataplane) incCallCount() error {
+	d.NumCalls += 1
+	if d.NumCalls == d.ErrorAtCall {
+		log.Warn("Simulating an error due to call count")
+		return mockFailure
+	}
+	return nil
+}
+
 func (d *mockIPIPDataplane) LinkByName(name string) (Link, error) {
 	log.WithField("name", name).Info("LinkByName called")
+
+	if err := d.incCallCount(); err != nil {
+		return nil, err
+	}
+
 	Expect(name).To(Equal("tunl0"))
 	if d.tunnelLink == nil {
 		return nil, notFound
@@ -190,6 +231,9 @@ func (d *mockIPIPDataplane) LinkByName(name string) (Link, error) {
 
 func (d *mockIPIPDataplane) LinkSetMTU(link Link, mtu int) error {
 	d.LinkSetMTUCalled = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	Expect(link.Attrs().Name).To(Equal("tunl0"))
 	d.tunnelLinkAttrs.MTU = mtu
 	return nil
@@ -197,18 +241,27 @@ func (d *mockIPIPDataplane) LinkSetMTU(link Link, mtu int) error {
 
 func (d *mockIPIPDataplane) LinkSetUp(link Link) error {
 	d.LinkSetUpCalled = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	Expect(link.Attrs().Name).To(Equal("tunl0"))
 	d.tunnelLinkAttrs.Flags |= net.FlagUp
 	return nil
 }
 
 func (d *mockIPIPDataplane) AddrList(link Link, family int) ([]Addr, error) {
+	if err := d.incCallCount(); err != nil {
+		return nil, err
+	}
 	Expect(link.Attrs().Name).To(Equal("tunl0"))
 	return d.addrs, nil
 }
 
 func (d *mockIPIPDataplane) AddrAdd(link Link, addr *Addr) error {
 	d.AddrUpdated = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	Expect(d.addrs).NotTo(ContainElement(*addr))
 	d.addrs = append(d.addrs, *addr)
 	return nil
@@ -216,6 +269,9 @@ func (d *mockIPIPDataplane) AddrAdd(link Link, addr *Addr) error {
 
 func (d *mockIPIPDataplane) AddrDel(link Link, addr *Addr) error {
 	d.AddrUpdated = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	Expect(d.addrs).To(HaveLen(1))
 	Expect(d.addrs[0].IP.String()).To(Equal(addr.IP.String()))
 	d.addrs = nil
@@ -224,6 +280,9 @@ func (d *mockIPIPDataplane) AddrDel(link Link, addr *Addr) error {
 
 func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
 	d.RunCmdCalled = true
+	if err := d.incCallCount(); err != nil {
+		return err
+	}
 	log.WithFields(log.Fields{"name": name, "args": args}).Info("RunCmd called")
 	Expect(name).To(Equal("ip"))
 	Expect(args).To(Equal([]string{"tunnel", "add", "tunl0", "mode", "ipip"}))
