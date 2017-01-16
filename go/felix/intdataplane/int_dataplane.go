@@ -75,6 +75,8 @@ type InternalDataplane struct {
 	iptablesFilterTables []*iptables.Table
 	ipSetRegistries      []*ipsets.Registry
 
+	ipipManager *ipipManager
+
 	ifaceMonitor     *ifacemonitor.InterfaceMonitor
 	ifaceUpdates     chan *ifaceUpdate
 	ifaceAddrUpdates chan *ifaceAddrsUpdate
@@ -150,7 +152,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, 1000000, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
-		dp.RegisterManager(newIPIPManager(ipSetRegV4, 1000000)) // IPv4-only
+		dp.ipipManager = newIPIPManager(ipSetRegV4, 1000000)
+		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
 	if !config.DisableIPv6 {
 		natTableV6 := iptables.NewTable(
@@ -289,19 +292,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	if d.config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go func() {
-			log.Info("IPIP thread started.")
-			for {
-				err := configureIPIPDevice(d.config.IPIPMTU,
-					d.config.RulesConfig.IPIPTunnelAddress)
-				if err != nil {
-					log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				time.Sleep(10 * time.Second)
-			}
-		}()
+		go d.ipipManager.KeepIPIPDeviceInSync(
+			d.config.IPIPMTU,
+			d.config.RulesConfig.IPIPTunnelAddress,
+		)
 	} else {
 		log.Info("IPIP disabled. Not starting tunnel update thread.")
 	}
