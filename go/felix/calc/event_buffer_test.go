@@ -23,7 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var _ = FDescribeTable("ModelWorkloadEndpointToProto",
+var _ = DescribeTable("ModelWorkloadEndpointToProto",
 	func(in model.WorkloadEndpoint, expected proto.WorkloadEndpoint) {
 		out := calc.ModelWorkloadEndpointToProto(&in, []*proto.TierInfo{})
 		Expect(*out).To(Equal(expected))
