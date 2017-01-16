@@ -30,7 +30,7 @@ import (
 //
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
-	ipsetReg *ipsets.Registry
+	ipsetReg ipsetsRegistry
 	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
@@ -46,7 +46,7 @@ func newIPIPManager(
 }
 
 func newIPIPManagerWithShim(
-	ipSetReg *ipsets.Registry,
+	ipSetReg ipsetsRegistry,
 	maxIPSetSize int,
 	dataplane ipipDataplane,
 ) *ipipManager {
@@ -168,9 +168,10 @@ func (d *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 
 	if !found && address != nil {
 		logCxt.Info("Address wasn't present, adding it.")
+		mask := net.CIDRMask(32, 32)
 		ipNet := net.IPNet{
-			IP:   address,
-			Mask: net.CIDRMask(32, 32),
+			IP:   address.Mask(mask), // Mask the IP to match ParseCIDR()'s behaviour.
+			Mask: mask,
 		}
 		addr := &netlink.Addr{
 			IPNet: &ipNet,
@@ -221,4 +222,11 @@ func (d *ipipManager) OnUpdate(msg interface{}) {
 func (m *ipipManager) CompleteDeferredWork() error {
 	// Nothing to do, we don't defer any work.
 	return nil
+}
+
+// ipsetsRegistry is a shim interface for mocking the IPSet registry.
+type ipsetsRegistry interface {
+	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
+	AddMembers(setID string, newMembers []string)
+	RemoveMembers(setID string, removedMembers []string)
 }
