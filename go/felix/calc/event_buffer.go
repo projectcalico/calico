@@ -242,6 +242,24 @@ func (buf *EventBuffer) OnProfileInactive(key model.ProfileRulesKey) {
 	})
 }
 
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+	mac := ""
+	if ep.Mac != nil {
+		mac = ep.Mac.String()
+	}
+	return &proto.WorkloadEndpoint{
+		State:      ep.State,
+		Name:       ep.Name,
+		Mac:        mac,
+		ProfileIds: ep.ProfileIDs,
+		Ipv4Nets:   netsToStrings(ep.IPv4Nets),
+		Ipv6Nets:   netsToStrings(ep.IPv6Nets),
+		Tiers:      tiers,
+		Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
+		Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
+	}
+}
+
 func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 	endpoint interface{},
 	filteredTiers []tierInfo) {
@@ -260,12 +278,7 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 				})
 			return
 		}
-		ep := endpoint.(*model.WorkloadEndpoint)
 
-		mac := ""
-		if ep.Mac != nil {
-			mac = ep.Mac.String()
-		}
 		buf.pendingUpdates = append(buf.pendingUpdates,
 			&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
@@ -273,18 +286,10 @@ func (buf *EventBuffer) OnEndpointTierUpdate(endpointKey model.Key,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-
-				Endpoint: &proto.WorkloadEndpoint{
-					State:      ep.State,
-					Name:       ep.Name,
-					Mac:        mac,
-					ProfileIds: ep.ProfileIDs,
-					Ipv4Nets:   netsToStrings(ep.IPv4Nets),
-					Ipv6Nets:   netsToStrings(ep.IPv6Nets),
-					Tiers:      tiers,
-					Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
-					Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
-				},
+				Endpoint: ModelWorkloadEndpointToProto(
+					endpoint.(*model.WorkloadEndpoint),
+					tiers,
+				),
 			})
 	case model.HostEndpointKey:
 		if endpoint == nil {
