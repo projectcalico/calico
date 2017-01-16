@@ -43,7 +43,12 @@ type mockDataplane struct {
 	IPSetMetadata   map[string]setMetadata
 	Cmds            []CmdIface
 	FailNextRestore bool
+	FailAllRestores bool
 	FailNextDestroy bool
+
+	// Record when various (expected) error cases are hit.
+	TriedToDeleteNonExistent bool
+	TriedToAddExistent       bool
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
@@ -121,6 +126,9 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 		d.Dataplane.FailNextRestore = false
 		return nil, errors.New("Simulated failure")
 	}
+	if d.Dataplane.FailAllRestores {
+		return nil, errors.New("Simulated failure")
+	}
 
 	// Process it line by line.
 	lines := strings.Split(input, "\n")
@@ -188,9 +196,29 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 			if currentMembers, ok := d.Dataplane.IPSetMembers[name]; !ok {
 				return []byte("set doesn't exist"), &exec.ExitError{}
 			} else {
-				Expect(currentMembers.Contains(newMember)).To(BeFalse())
+				if currentMembers.Contains(newMember) {
+					d.Dataplane.TriedToAddExistent = true
+					logCxt.Warn("Add of existing member")
+					return []byte("member already exists"), &exec.ExitError{}
+				}
 				currentMembers.Add(newMember)
 				logCxt.WithField("member", newMember).Info("Member added")
+			}
+		case "del":
+			Expect(len(parts)).To(Equal(3))
+			name := parts[1]
+			newMember := parts[2]
+			logCxt := log.WithField("setName", name)
+			if currentMembers, ok := d.Dataplane.IPSetMembers[name]; !ok {
+				return []byte("set doesn't exist"), &exec.ExitError{}
+			} else {
+				if !currentMembers.Contains(newMember) {
+					d.Dataplane.TriedToDeleteNonExistent = true
+					logCxt.Warn("Delete of non-existent member")
+					return []byte("member doesn't exist"), &exec.ExitError{}
+				}
+				currentMembers.Discard(newMember)
+				logCxt.WithField("member", newMember).Info("Member deleted")
 			}
 		case "swap":
 			Expect(len(parts)).To(Equal(3))
@@ -217,9 +245,10 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 				d.Dataplane.IPSetMetadata[name1] = meta2
 				d.Dataplane.IPSetMetadata[name2] = meta1
 			}
-
 		case "COMMIT":
 			commitSeen = true
+		default:
+			Fail("Unknown action: " + line)
 		}
 	}
 	Expect(commitSeen).To(BeTrue())

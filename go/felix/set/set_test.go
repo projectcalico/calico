@@ -27,6 +27,22 @@ var _ = Describe("Set", func() {
 		s = set.New()
 	})
 
+	It("should be empty", func() {
+		Expect(s.Len()).To(BeZero())
+	})
+	It("should iterate over no items", func() {
+		called := false
+		s.Iter(func(item interface{}) error {
+			called = true
+			return nil
+		})
+		Expect(called).To(BeFalse())
+	})
+	It("should do nothing on clear", func() {
+		s.Clear()
+		Expect(s.Len()).To(BeZero())
+	})
+
 	Describe("after adding 1 and 2", func() {
 		BeforeEach(func() {
 			s.Add(1)
@@ -116,6 +132,15 @@ var _ = Describe("Set", func() {
 			})
 			It("should not contain 3", func() {
 				Expect(s.Contains(3)).To(BeFalse())
+			})
+		})
+
+		Describe("after Clear()", func() {
+			BeforeEach(func() {
+				s.Clear()
+			})
+			It("should be empty", func() {
+				Expect(s.Len()).To(BeZero())
 			})
 		})
 	})

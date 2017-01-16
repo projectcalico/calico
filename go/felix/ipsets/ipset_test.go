@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -168,6 +168,19 @@ var _ = Describe("Ipset", func() {
 				ipset.Apply()
 				dataplane.ExpectMembers(map[string][]string{v4MainIPSetName: {"10.0.0.1"}})
 			})
+			It("should retry after an inconsistency", func() {
+				ipset.Apply()
+				// Remove the IP from the dataplane so that there's an inconsistency.
+				Expect(dataplane.IPSetMembers[v4MainIPSetName].Contains("10.0.0.2")).To(BeTrue())
+				dataplane.IPSetMembers[v4MainIPSetName].Discard("10.0.0.2")
+				// Tell the IP set to remove it.
+				ipset.RemoveMembers([]string{"10.0.0.2"})
+				ipset.Apply()
+				// Should hit the expected error case.
+				Expect(dataplane.TriedToDeleteNonExistent).To(BeTrue())
+				// Should still get to the right state.
+				dataplane.ExpectMembers(map[string][]string{v4MainIPSetName: {"10.0.0.1"}})
+			})
 			It("should coalesce deletions then a rewrite", func() {
 				ipset.RemoveMembers([]string{"10.0.0.2"})
 				ipset.ReplaceMembers(v4Members2And3)
@@ -178,6 +191,25 @@ var _ = Describe("Ipset", func() {
 				ipset.Apply()
 				Expect(cache.IPSetExists(v4MainIPSetName)).To(BeTrue())
 				Expect(cache.IPSetExists(v4TempIPSetName)).To(BeFalse())
+			})
+			It("should make consistent updates", func() {
+				// This test does several rounds of updates to catch any failure to
+				// clear out the pendingAdd/Delete caches.  If we didn't clear those
+				// up, the IPSet would try to delete/add an existing IP.
+				ipset.Apply()
+				ipset.RemoveMembers([]string{"10.0.0.2"})
+				ipset.AddMembers([]string{"10.0.0.3"})
+				ipset.Apply()
+				ipset.RemoveMembers([]string{"10.0.0.1"})
+				ipset.AddMembers([]string{"10.0.0.4"})
+				ipset.Apply()
+				ipset.RemoveMembers([]string{"10.0.0.3"})
+				ipset.AddMembers([]string{"10.0.0.5"})
+				ipset.RemoveMembers([]string{"10.0.0.3"})
+				ipset.AddMembers([]string{"10.0.0.5"})
+				ipset.Apply()
+				Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+				Expect(dataplane.TriedToAddExistent).To(BeFalse())
 			})
 		})
 
@@ -214,4 +246,50 @@ var _ = Describe("Ipset", func() {
 	}
 	describeTests(true)
 	describeTests(false)
+
+	Describe("With a persistent failure", func() {
+		BeforeEach(func() {
+			sleeps = nil
+			dataplane = newMockDataplane()
+			dataplane.FailAllRestores = true
+			cache = NewExistenceCache(dataplane.newCmd)
+			ipset = NewIPSet(
+				v4VersionConf,
+				meta,
+				cache,
+				dataplane.newCmd,
+			)
+			ipset.Sleep = func(d time.Duration) {
+				sleeps = append(sleeps, d)
+			}
+			ipset.ReplaceMembers(v4Members1And2)
+		})
+		It("should panic", func() {
+			Expect(ipset.Apply).To(Panic())
+		})
+	})
+})
+
+var _ = Describe("IPSetType", func() {
+	It("should treat invalid strings as invalid", func() {
+		Expect(IPSetType("").IsValid()).To(BeFalse())
+	})
+	It("should treat hash:ip as valid", func() {
+		Expect(IPSetType("hash:ip").IsValid()).To(BeTrue())
+	})
+	It("should treat hash:net as valid", func() {
+		Expect(IPSetType("hash:net").IsValid()).To(BeTrue())
+	})
+})
+
+var _ = Describe("IPFamily", func() {
+	It("should treat invalid strings as invalid", func() {
+		Expect(IPFamily("").IsValid()).To(BeFalse())
+	})
+	It("should treat inet as valid", func() {
+		Expect(IPFamily("inet").IsValid()).To(BeTrue())
+	})
+	It("should treat inet6 as valid", func() {
+		Expect(IPFamily("inet6").IsValid()).To(BeTrue())
+	})
 })
