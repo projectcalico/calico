@@ -87,6 +87,7 @@ go_copyright_check_failed=false
 gofmt_failed=false
 go_apache_check_failed=false
 logrus_hook_check_failed=false
+focussing_check_failed=false
 
 for filename in $changed_go_files; do
   if [ ! -e  "${filename}" ]; then
@@ -104,6 +105,12 @@ for filename in $changed_go_files; do
     if ! grep -q 'HookLogrus' "$filename"; then
       echo "  Test suite doesn't call HookLogrusForGinkgo(): $filename"
       logrus_hook_check_failed=true
+    fi
+  fi
+  if echo $filename | grep -q '_test.go'; then
+    if grep -q 'FDescribe\|FIt' "$filename"; then
+      echo "  Test file still includes focussing: $filename"
+      focussing_check_failed=true
     fi
   fi
 done
@@ -127,6 +134,12 @@ for filename in $changed_go_files; do
     go_copyright_check_failed=true
   fi
 done
+
+if $focussing_check_failed; then
+  echo
+  echo "One or more test files still includes test focussing, i.e. 'FIt' or"
+  echo "'FDescribe' instead of 'It' or 'Describe'."
+fi
 
 if $logrus_hook_check_failed; then
   echo
@@ -173,7 +186,7 @@ fi
 
 if $go_apache_check_failed || $go_copyright_check_failed || \
    $py_apache_check_failed || $py_copyright_check_failed || \
-   $logrus_hook_check_failed; then
+   $logrus_hook_check_failed || $focussing_check_failed; then
   exit 1
 fi
 
