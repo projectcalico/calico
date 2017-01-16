@@ -46,7 +46,6 @@ func (r *DefaultRuleRenderer) HostDispatchChains(endpoints map[string]proto.Host
 	for ifaceName, _ := range endpoints {
 		names = append(names, ifaceName)
 	}
-	sort.Strings(names)
 
 	return r.dispatchChains(
 		names,
@@ -66,6 +65,9 @@ func (r *DefaultRuleRenderer) dispatchChains(
 	dispatchToEndpoint string,
 	dropAtEndOfChain bool,
 ) []*Chain {
+	// Sort interface names so that rules in the dispatch chain are ordered deterministically.
+	// Otherwise we would reprogram the dispatch chain when there is no real change.
+	sort.Strings(names)
 	toEndpointRules := make([]Rule, 0, len(names)+1)
 	fromEndpointRules := make([]Rule, 0, len(names)+1)
 	for _, name := range names {
