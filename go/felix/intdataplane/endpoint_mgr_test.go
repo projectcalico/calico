@@ -226,6 +226,14 @@ func hostChainsForIfaces(ifaceTierNames []string) []*iptables.Chain {
 	return chains
 }
 
+type hostEpSpec struct {
+	id        string
+	name      string
+	ipv4Addrs []string
+	ipv6Addrs []string
+	tierName  string
+}
+
 var _ = Describe("EndpointManager testing", func() {
 	const (
 		ipv4     = "10.0.240.10"
@@ -279,22 +287,22 @@ var _ = Describe("EndpointManager testing", func() {
 			Expect(epMgr).ToNot(BeNil())
 		})
 
-		configureHostEp := func(id string, name string, ipv4Addrs []string, ipv6Addrs []string, tierName string) func() {
+		configureHostEp := func(spec *hostEpSpec) func() {
 			tiers := []*proto.TierInfo{}
-			if tierName != "" {
-				tiers = append(tiers, &proto.TierInfo{Name: tierName})
+			if spec.tierName != "" {
+				tiers = append(tiers, &proto.TierInfo{Name: spec.tierName})
 			}
 			return func() {
 				epMgr.OnUpdate(&proto.HostEndpointUpdate{
 					Id: &proto.HostEndpointID{
-						EndpointId: id,
+						EndpointId: spec.id,
 					},
 					Endpoint: &proto.HostEndpoint{
-						Name:              name,
+						Name:              spec.name,
 						ProfileIds:        []string{},
 						Tiers:             tiers,
-						ExpectedIpv4Addrs: ipv4Addrs,
-						ExpectedIpv6Addrs: ipv6Addrs,
+						ExpectedIpv4Addrs: spec.ipv4Addrs,
+						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
 				})
 				epMgr.CompleteDeferredWork()
@@ -358,11 +366,19 @@ var _ = Describe("EndpointManager testing", func() {
 			// interface.  When more than one host endpoint matches a given interface,
 			// we expect the one used to be the one with the alphabetically earliest ID.
 			Describe("with host endpoint with tier matching eth0", func() {
-				JustBeforeEach(configureHostEp("id1", "eth0", []string{}, []string{}, "tierA"))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:       "id1",
+					name:     "eth0",
+					tierName: "tierA",
+				}))
 				It("should have expected chains", expectChainsFor("eth0_tierA"))
 
 				Context("with another host ep (>ID) that matches the IPv4 address", func() {
-					JustBeforeEach(configureHostEp("id2", "", []string{ipv4}, []string{}, "tierB"))
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:        "id2",
+						ipv4Addrs: []string{ipv4},
+						tierName:  "tierB",
+					}))
 					It("should have expected chains", expectChainsFor("eth0_tierA"))
 
 					Context("with the first host ep removed", func() {
@@ -377,7 +393,11 @@ var _ = Describe("EndpointManager testing", func() {
 				})
 
 				Context("with another host ep (<ID) that matches the IPv4 address", func() {
-					JustBeforeEach(configureHostEp("id0", "", []string{ipv4}, []string{}, "tierB"))
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:        "id0",
+						ipv4Addrs: []string{ipv4},
+						tierName:  "tierB",
+					}))
 					It("should have expected chains", expectChainsFor("eth0_tierB"))
 
 					Context("with the first host ep removed", func() {
@@ -393,7 +413,10 @@ var _ = Describe("EndpointManager testing", func() {
 			})
 
 			Describe("with host endpoint matching eth0", func() {
-				JustBeforeEach(configureHostEp("id1", "eth0", []string{}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:   "id1",
+					name: "eth0",
+				}))
 				It("should have expected chains", expectChainsFor("eth0"))
 
 				Context("with another host interface eth1", func() {
@@ -412,66 +435,106 @@ var _ = Describe("EndpointManager testing", func() {
 					It("should have expected chains", expectChainsFor("eth0"))
 
 					Context("with host ep matching eth1's IP", func() {
-						JustBeforeEach(configureHostEp("id22", "", []string{ipv4Eth1}, []string{}, ""))
+						JustBeforeEach(configureHostEp(&hostEpSpec{
+							id:        "id22",
+							ipv4Addrs: []string{ipv4Eth1},
+						}))
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
 					})
 
 					Context("with host ep matching eth1", func() {
-						JustBeforeEach(configureHostEp("id22", "eth1", []string{}, []string{}, ""))
+						JustBeforeEach(configureHostEp(&hostEpSpec{
+							id:   "id22",
+							name: "eth1",
+						}))
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
 					})
 				})
 			})
 
 			Describe("with host endpoint matching non-existent interface", func() {
-				JustBeforeEach(configureHostEp("id3", "eth1", []string{}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:   "id3",
+					name: "eth1",
+				}))
 				It("should have empty dispatch chains", expectEmptyChains())
 			})
 
 			Describe("with host endpoint matching IPv4 address", func() {
-				JustBeforeEach(configureHostEp("id4", "", []string{ipv4}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id4",
+					ipv4Addrs: []string{ipv4},
+				}))
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
 
 			Describe("with host endpoint matching IPv6 address", func() {
-				JustBeforeEach(configureHostEp("id5", "", []string{}, []string{ipv6}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id5",
+					ipv6Addrs: []string{ipv6},
+				}))
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
 
 			Describe("with host endpoint matching IPv4 address and correct interface name", func() {
-				JustBeforeEach(configureHostEp("id3", "eth0", []string{ipv4}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id3",
+					name:      "eth0",
+					ipv4Addrs: []string{ipv4},
+				}))
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
 
 			Describe("with host endpoint matching IPv6 address and correct interface name", func() {
-				JustBeforeEach(configureHostEp("id3", "eth0", []string{}, []string{ipv6}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id3",
+					name:      "eth0",
+					ipv6Addrs: []string{ipv6},
+				}))
 				It("should have expected chains", expectChainsFor("eth0"))
 			})
 
 			Describe("with host endpoint matching IPv4 address and wrong interface name", func() {
-				JustBeforeEach(configureHostEp("id3", "eth1", []string{ipv4}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id3",
+					name:      "eth1",
+					ipv4Addrs: []string{ipv4},
+				}))
 				It("should have empty dispatch chains", expectEmptyChains())
 			})
 
 			Describe("with host endpoint matching IPv6 address and wrong interface name", func() {
-				JustBeforeEach(configureHostEp("id3", "eth1", []string{}, []string{ipv6}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id3",
+					name:      "eth1",
+					ipv6Addrs: []string{ipv6},
+				}))
 				It("should have empty dispatch chains", expectEmptyChains())
 			})
 
 			Describe("with host endpoint with unmatched IPv4 address", func() {
-				JustBeforeEach(configureHostEp("id4", "", []string{"8.8.8.8"}, []string{}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id4",
+					ipv4Addrs: []string{"8.8.8.8"},
+				}))
 				It("should have empty dispatch chains", expectEmptyChains())
 			})
 
 			Describe("with host endpoint with unmatched IPv6 address", func() {
-				JustBeforeEach(configureHostEp("id5", "", []string{}, []string{"fe08::2"}, ""))
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id5",
+					ipv6Addrs: []string{"fe08::2"},
+				}))
 				It("should have empty dispatch chains", expectEmptyChains())
 			})
 
 		})
 
 		Context("with host endpoint configured before interface signaled", func() {
-			JustBeforeEach(configureHostEp("id3", "eth0", []string{}, []string{}, ""))
+			JustBeforeEach(configureHostEp(&hostEpSpec{
+				id:   "id3",
+				name: "eth0",
+			}))
 			It("should have empty dispatch chains", expectEmptyChains())
 
 			Context("with interface signaled", func() {
