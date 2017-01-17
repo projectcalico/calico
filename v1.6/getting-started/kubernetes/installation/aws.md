@@ -287,7 +287,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 ssh -i ~/mykey.pem core@$MASTER_DNS
 
 # Enable outgoing NAT on the Calico pool.
-docker run --rm --net=host calico/ctl:v0.23.0 pool add 192.168.0.0/16 --nat-outgoing
+docker run --rm --net=host calico/ctl:v0.23.1 pool add 192.168.0.0/16 --nat-outgoing
 ```
 
 ## 5. Install Addons
