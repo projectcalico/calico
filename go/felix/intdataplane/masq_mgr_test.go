@@ -81,6 +81,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should program the chain", func() {
+			Expect(natTable.UpdateCalled).To(BeTrue())
 			natTable.checkChains([][]*iptables.Chain{{{
 				Name: "cali-nat-outgoing",
 				Rules: []iptables.Rule{
@@ -92,6 +93,20 @@ var _ = Describe("Masquerade manager", func() {
 					},
 				},
 			}}})
+		})
+		It("an extra CompleteDeferredWork should be a no-op", func() {
+			natTable.UpdateCalled = false
+			masqMgr.CompleteDeferredWork()
+			Expect(natTable.UpdateCalled).To(BeFalse())
+		})
+		It("an unrelated update shouldn't trigger work", func() {
+			natTable.UpdateCalled = false
+			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
+				Hostname: "foo",
+				Ipv4Addr: "10.0.0.17",
+			})
+			masqMgr.CompleteDeferredWork()
+			Expect(natTable.UpdateCalled).To(BeFalse())
 		})
 
 		Describe("after adding a non-masq pool", func() {

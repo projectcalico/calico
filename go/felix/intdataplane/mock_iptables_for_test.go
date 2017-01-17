@@ -23,6 +23,7 @@ import (
 type mockTable struct {
 	currentChains  map[string]*iptables.Chain
 	expectedChains map[string]*iptables.Chain
+	UpdateCalled   bool
 }
 
 func newMockTable() *mockTable {
@@ -48,6 +49,7 @@ func (t *mockTable) UpdateChain(chain *iptables.Chain) {
 }
 
 func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
+	t.UpdateCalled = true
 	logChains("UpdateChains", chains)
 	for _, chain := range chains {
 		t.currentChains[chain.Name] = chain
