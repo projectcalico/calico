@@ -32,6 +32,11 @@ import (
 	"strings"
 )
 
+type table interface {
+	UpdateChains([]*iptables.Chain)
+	RemoveChains([]*iptables.Chain)
+}
+
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
 // the "dispatch chains" that fan out packets to the right per-endpoint chain.
 //
@@ -47,7 +52,7 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	filterTable  *iptables.Table
+	filterTable  table
 	ruleRenderer rules.RuleRenderer
 	routeTable   *routetable.RouteTable
 
@@ -69,7 +74,7 @@ type endpointManager struct {
 	ifaceAddrs               map[string]set.Set
 	rawHostEndpoints         map[proto.HostEndpointID]*proto.HostEndpoint
 	dirtyHostEndpoints       bool
-	activeHostIdToChains     map[proto.HostEndpointID][]*iptables.Chain
+	activeHostIfaceToChains  map[string][]*iptables.Chain
 	activeHostDispatchChains []*iptables.Chain
 
 	// Callbacks
@@ -79,7 +84,7 @@ type endpointManager struct {
 type EndpointStatusUpdateCallback func(ipVersion uint8, id proto.WorkloadEndpointID, status string)
 
 func newEndpointManager(
-	filterTable *iptables.Table,
+	filterTable table,
 	ruleRenderer rules.RuleRenderer,
 	routeTable *routetable.RouteTable,
 	ipVersion uint8,
@@ -110,7 +115,7 @@ func newEndpointManager(
 		ifaceAddrs:               map[string]set.Set{},
 		rawHostEndpoints:         map[proto.HostEndpointID]*proto.HostEndpoint{},
 		dirtyHostEndpoints:       true,
-		activeHostIdToChains:     map[proto.HostEndpointID][]*iptables.Chain{},
+		activeHostIfaceToChains:  map[string][]*iptables.Chain{},
 		activeHostDispatchChains: nil,
 
 		OnWorkloadEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
@@ -398,28 +403,31 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
-	newHostEpChains := map[proto.HostEndpointID][]*iptables.Chain{}
+	newHostIfaceChains := map[string][]*iptables.Chain{}
 	for ifaceName, id := range resolvedHostEpIds {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
 		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
-		m.filterTable.UpdateChains(chains)
-		newHostEpChains[id] = chains
-		delete(m.activeHostIdToChains, id)
+		if !reflect.DeepEqual(chains, m.activeHostIfaceToChains[ifaceName]) {
+			m.filterTable.UpdateChains(chains)
+		}
+		newHostIfaceChains[ifaceName] = chains
+		delete(m.activeHostIfaceToChains, ifaceName)
 	}
 
 	// Remove programming for host endpoints that are not now in use.
-	for id, chains := range m.activeHostIdToChains {
-		log.WithField("id", id).Info("HostEp removed, deleting its chains.")
+	for ifaceName, chains := range m.activeHostIfaceToChains {
+		log.WithField("ifaceName", ifaceName).Info("Host interface no longer protected, deleting its chains.")
 		m.filterTable.RemoveChains(chains)
 	}
 
 	// Remember the host endpoints that are now in use.
-	m.activeHostIdToChains = newHostEpChains
+	m.activeHostIfaceToChains = newHostIfaceChains
 
 	// Rewrite the dispatch chains if they've changed.
 	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
 	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
+	log.WithField("resolvedHostEpIds", resolvedHostEpIds).Debug("Rewrite dispatch chains?")
 	newDispatchChains := m.ruleRenderer.HostDispatchChains(resolvedHostEpIds)
 	if !reflect.DeepEqual(newDispatchChains, m.activeHostDispatchChains) {
 		log.Info("HostEps changed, updating dispatch chains.")
