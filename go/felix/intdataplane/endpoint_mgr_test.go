@@ -15,7 +15,6 @@
 package intdataplane
 
 import (
-	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/go/felix/ipsets"
@@ -23,69 +22,11 @@ import (
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/set"
-	"reflect"
 	"strings"
 )
 
-type mockTable struct {
-	currentChains  map[string]*iptables.Chain
-	expectedChains map[string]*iptables.Chain
-}
-
-func newMockTable() *mockTable {
-	return &mockTable{
-		currentChains:  map[string]*iptables.Chain{},
-		expectedChains: map[string]*iptables.Chain{},
-	}
-}
-
-func logChains(message string, chains []*iptables.Chain) {
-	if chains == nil {
-		log.Debug(message, " with nil chains")
-	} else {
-		log.WithField("chains", chains).Debug(message)
-		for _, chain := range chains {
-			log.WithField("chain", *chain).Debug("")
-		}
-	}
-}
-
-func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
-	logChains("UpdateChains", chains)
-	for _, chain := range chains {
-		t.currentChains[chain.Name] = chain
-	}
-}
-
-func (t *mockTable) RemoveChains(chains []*iptables.Chain) {
-	logChains("RemoveChains", chains)
-	for _, chain := range chains {
-		_, prs := t.currentChains[chain.Name]
-		Expect(prs).To(BeTrue())
-		delete(t.currentChains, chain.Name)
-	}
-}
-
-func (t *mockTable) checkChains(expecteds [][]*iptables.Chain) {
-	t.expectedChains = map[string]*iptables.Chain{}
-	for _, expected := range expecteds {
-		for _, chain := range expected {
-			t.expectedChains[chain.Name] = chain
-		}
-	}
-	t.checkChainsSameAsBefore()
-}
-
-func (t *mockTable) checkChainsSameAsBefore() {
-	log.Debug("Expected chains")
-	for _, chain := range t.expectedChains {
-		log.WithField("chain", *chain).Debug("")
-	}
-	Expect(reflect.DeepEqual(t.currentChains, t.expectedChains)).To(BeTrue())
-}
-
 var wlDispatchEmpty = []*iptables.Chain{
-	&iptables.Chain{
+	{
 		Name: "cali-to-wl-dispatch",
 		Rules: []iptables.Rule{
 			{
@@ -95,7 +36,7 @@ var wlDispatchEmpty = []*iptables.Chain{
 			},
 		},
 	},
-	&iptables.Chain{
+	{
 		Name: "cali-from-wl-dispatch",
 		Rules: []iptables.Rule{
 			{
@@ -108,11 +49,11 @@ var wlDispatchEmpty = []*iptables.Chain{
 }
 
 var hostDispatchEmpty = []*iptables.Chain{
-	&iptables.Chain{
+	{
 		Name:  "cali-to-host-endpoint",
 		Rules: []iptables.Rule{},
 	},
-	&iptables.Chain{
+	{
 		Name:  "cali-from-host-endpoint",
 		Rules: []iptables.Rule{},
 	},

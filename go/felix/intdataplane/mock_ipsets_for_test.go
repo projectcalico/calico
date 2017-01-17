@@ -38,7 +38,9 @@ func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMemb
 	s.Metadata[setMetadata.SetID] = setMetadata
 	members := set.New()
 	for _, member := range newMembers {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
+		if setMetadata.Type == ipsets.IPSetTypeHashIP {
+			Expect(net.ParseIP(member)).ToNot(BeNil())
+		}
 		members.Add(member)
 	}
 	s.Members[setMetadata.SetID] = members
@@ -47,7 +49,9 @@ func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMemb
 func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
 	members := s.Members[setID]
 	for _, member := range newMembers {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
+		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
+			Expect(net.ParseIP(member)).ToNot(BeNil())
+		}
 		Expect(members.Contains(member)).To(BeFalse())
 		members.Add(member)
 	}
@@ -56,7 +60,9 @@ func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
 func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
 	members := s.Members[setID]
 	for _, member := range removedMembers {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
+		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
+			Expect(net.ParseIP(member)).ToNot(BeNil())
+		}
 		Expect(members.Contains(member)).To(BeTrue())
 		members.Discard(member)
 	}

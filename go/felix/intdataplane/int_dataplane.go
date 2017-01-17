@@ -437,3 +437,10 @@ func (d *InternalDataplane) loopReportingStatus() {
 		}
 	}
 }
+
+// iptablesTable is a shim interface for iptables.Table.
+type iptablesTable interface {
+	UpdateChain(chain *iptables.Chain)
+	UpdateChains([]*iptables.Chain)
+	RemoveChains([]*iptables.Chain)
+}
