@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,12 +24,17 @@ import (
 // policyManager simply renders policy/profile updates into iptables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
-	filterTable  *iptables.Table
-	ruleRenderer rules.RuleRenderer
+	filterTable  iptablesTable
+	ruleRenderer policyRenderer
 	ipVersion    uint8
 }
 
-func newPolicyManager(filterTable *iptables.Table, ruleRenderer rules.RuleRenderer, ipVersion uint8) *policyManager {
+type policyRenderer interface {
+	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
+	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
+}
+
+func newPolicyManager(filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,

@@ -59,10 +59,14 @@ func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
 func (t *mockTable) RemoveChains(chains []*iptables.Chain) {
 	logChains("RemoveChains", chains)
 	for _, chain := range chains {
-		_, prs := t.currentChains[chain.Name]
-		Expect(prs).To(BeTrue())
+		Expect(t.currentChains).To(HaveKey(chain.Name))
 		delete(t.currentChains, chain.Name)
 	}
+}
+
+func (t *mockTable) RemoveChainByName(name string) {
+	Expect(t.currentChains).To(HaveKey(name))
+	delete(t.currentChains, name)
 }
 
 func (t *mockTable) checkChains(expecteds [][]*iptables.Chain) {

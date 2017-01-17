@@ -443,4 +443,5 @@ type iptablesTable interface {
 	UpdateChain(chain *iptables.Chain)
 	UpdateChains([]*iptables.Chain)
 	RemoveChains([]*iptables.Chain)
+	RemoveChainByName(name string)
 }
