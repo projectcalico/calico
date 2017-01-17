@@ -225,8 +225,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 		})
 
 		It("should add host1's IP to the IP set", func() {
-			Expect(allHostsSet().Len()).To(Equal(1))
-			Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
+			Expect(allHostsSet()).To(Equal(set.From("10.0.0.1")))
 		})
 
 		Describe("after adding an IP for host2", func() {
@@ -238,9 +237,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should add the IP to the IP set", func() {
-				Expect(allHostsSet().Len()).To(Equal(2))
-				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
-				Expect(allHostsSet().Contains("10.0.0.2")).To(BeTrue())
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2")))
 			})
 		})
 
@@ -253,8 +250,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should tolerate the duplicate", func() {
-				Expect(allHostsSet().Len()).To(Equal(1))
-				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1")))
 			})
 
 			Describe("after removing a duplicate IP", func() {
@@ -265,8 +261,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 					ipipMgr.CompleteDeferredWork()
 				})
 				It("should keep the IP in the IP set", func() {
-					Expect(allHostsSet().Len()).To(Equal(1))
-					Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
+					Expect(allHostsSet()).To(Equal(set.From("10.0.0.1")))
 				})
 
 				Describe("after removing iniital copy of IP", func() {
@@ -295,8 +290,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should keep the IP in the IP set", func() {
-				Expect(allHostsSet().Len()).To(Equal(1))
-				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1")))
 			})
 		})
 
@@ -309,8 +303,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should update the IP set", func() {
-				Expect(allHostsSet().Len()).To(Equal(1))
-				Expect(allHostsSet().Contains("10.0.0.2")).To(BeTrue())
+				Expect(allHostsSet()).To(Equal(set.From("10.0.0.2")))
 			})
 		})
 

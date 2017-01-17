@@ -27,7 +27,6 @@ var _ = Describe("Set", func() {
 		s = set.New()
 	})
 
-<<<<<<< 369494803c8730eca18e569b1b3edfdcf440f4eb
 	It("should be empty", func() {
 		Expect(s.Len()).To(BeZero())
 	})
@@ -42,7 +41,8 @@ var _ = Describe("Set", func() {
 	It("should do nothing on clear", func() {
 		s.Clear()
 		Expect(s.Len()).To(BeZero())
-=======
+	})
+
 	Describe("Set created by FromArray", func() {
 		BeforeEach(func() {
 			s = set.FromArray([]int{1, 2})
@@ -56,7 +56,21 @@ var _ = Describe("Set", func() {
 		It("should not contain 3", func() {
 			Expect(s.Contains(3)).To(BeFalse())
 		})
->>>>>>> Add set.FromArray() and Set.AddAll() functions.
+	})
+
+	Describe("Set created by From", func() {
+		BeforeEach(func() {
+			s = set.From(1, 2)
+		})
+		It("should contain 1", func() {
+			Expect(s.Contains(1)).To(BeTrue())
+		})
+		It("should contain 2", func() {
+			Expect(s.Contains(2)).To(BeTrue())
+		})
+		It("should not contain 3", func() {
+			Expect(s.Contains(3)).To(BeFalse())
+		})
 	})
 
 	Describe("after adding 1 and 2", func() {
@@ -150,15 +164,6 @@ var _ = Describe("Set", func() {
 				Expect(s.Contains(3)).To(BeFalse())
 			})
 		})
-<<<<<<< 369494803c8730eca18e569b1b3edfdcf440f4eb
-
-		Describe("after Clear()", func() {
-			BeforeEach(func() {
-				s.Clear()
-			})
-			It("should be empty", func() {
-				Expect(s.Len()).To(BeZero())
-=======
 		Describe("after using AddAll to add 2, 3, 4", func() {
 			BeforeEach(func() {
 				s.AddAll([]int{2, 3, 4})
@@ -174,7 +179,15 @@ var _ = Describe("Set", func() {
 			})
 			It("should contain 4", func() {
 				Expect(s.Contains(4)).To(BeTrue())
->>>>>>> Add set.FromArray() and Set.AddAll() functions.
+			})
+		})
+
+		Describe("after Clear()", func() {
+			BeforeEach(func() {
+				s.Clear()
+			})
+			It("should be empty", func() {
+				Expect(s.Len()).To(BeZero())
 			})
 		})
 	})

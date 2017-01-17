@@ -46,7 +46,7 @@ var _ = Describe("IP Sets manager", func() {
 		})
 		It("should add the right members", func() {
 			Expect(ipSets.Members).To(HaveLen(1))
-			expIPs := set.FromArray([]string{"10.0.0.1", "10.0.0.2"})
+			expIPs := set.From("10.0.0.1", "10.0.0.2")
 			Expect(ipSets.Members["id1"]).To(Equal(expIPs))
 		})
 
@@ -64,7 +64,7 @@ var _ = Describe("IP Sets manager", func() {
 				Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
 			})
 			It("should contain the right IPs", func() {
-				expIPs := set.FromArray([]string{"10.0.0.2", "10.0.0.3", "10.0.0.4"})
+				expIPs := set.From("10.0.0.2", "10.0.0.3", "10.0.0.4")
 				Expect(ipSets.Members["id1"]).To(Equal(expIPs))
 			})
 
@@ -95,7 +95,7 @@ var _ = Describe("IP Sets manager", func() {
 			})
 			It("should add the right members", func() {
 				Expect(ipSets.Members).To(HaveLen(1))
-				expIPs := set.FromArray([]string{"10.0.0.2", "10.0.0.3"})
+				expIPs := set.From("10.0.0.2", "10.0.0.3")
 				Expect(ipSets.Members["id1"]).To(Equal(expIPs))
 			})
 		})
