@@ -193,7 +193,7 @@ func (s *IPSet) flushDeltas() error {
 	var buf bytes.Buffer
 	s.writeDeltas(&buf)
 	if log.GetLevel() >= log.DebugLevel {
-		// Only strigify the buffer if we're debugging.
+		// Only stringify the buffer if we're debugging.
 		logCxt.WithField("input", buf.String()).Debug("About to apply deltas to IP set")
 	}
 
@@ -218,7 +218,7 @@ func (s *IPSet) rewriteIPSet() error {
 	var buf bytes.Buffer
 	s.writeFullRewrite(&buf)
 	if log.GetLevel() >= log.DebugLevel {
-		// Only strigify the buffer if we're debugging.
+		// Only stringify the buffer if we're debugging.
 		logCxt.WithField("input", buf.String()).Debug("About to rewrite IP set")
 	}
 
@@ -249,6 +249,7 @@ func (s *IPSet) execIpsetRestore(stdin io.Reader) error {
 }
 
 type stringWriter interface {
+	io.Writer
 	WriteString(s string) (n int, err error)
 }
 
@@ -264,29 +265,29 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 		// because it still fails if the IP set was previously created with different
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Pre-creating main IP set")
-		buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n",
-			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize))
+		fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
+			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize)
 	}
 	tempSetName := s.TempIPSetName()
 	if s.existenceCache.IPSetExists(tempSetName) {
 		// Explicitly delete the temporary IP set so that we can recreate it with new
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Temp IP set exists, deleting it before rewrite")
-		buf.WriteString(fmt.Sprintf("destroy %s\n", tempSetName))
+		fmt.Fprintf(buf, "destroy %s\n", tempSetName)
 	}
 	// Create the temporary IP set with the current parameters.
-	buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n",
-		tempSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize))
+	fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
+		tempSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize)
 	// Write all the members into the temporary IP set.
 	s.desiredMembers.Iter(func(item interface{}) error {
 		member := item.(string)
-		buf.WriteString(fmt.Sprintf("add %s %s\n", tempSetName, member))
+		fmt.Fprintf(buf, "add %s %s\n", tempSetName, member)
 		return nil
 	})
 	// Atomically swap the temporary set into place.
-	buf.WriteString(fmt.Sprintf("swap %s %s\n", mainSetName, tempSetName))
+	fmt.Fprintf(buf, "swap %s %s\n", mainSetName, tempSetName)
 	// Then remove the temporary set (which was the old main set).
-	buf.WriteString(fmt.Sprintf("destroy %s\n", tempSetName))
+	fmt.Fprintf(buf, "destroy %s\n", tempSetName)
 	// ipset restore input ends with "COMMIT" (but only the swap instruction is guaranteed to be
 	// atomic).
 	buf.WriteString("COMMIT\n")
@@ -298,12 +299,12 @@ func (s *IPSet) writeDeltas(buf stringWriter) {
 	mainSetName := s.MainIPSetName()
 	s.pendingDeletions.Iter(func(item interface{}) error {
 		member := item.(string)
-		buf.WriteString(fmt.Sprintf("del %s %s\n", mainSetName, member))
+		fmt.Fprintf(buf, "del %s %s\n", mainSetName, member)
 		return nil
 	})
 	s.pendingAdds.Iter(func(item interface{}) error {
 		member := item.(string)
-		buf.WriteString(fmt.Sprintf("add %s %s\n", mainSetName, member))
+		fmt.Fprintf(buf, "add %s %s\n", mainSetName, member)
 		return nil
 	})
 	buf.WriteString("COMMIT\n")

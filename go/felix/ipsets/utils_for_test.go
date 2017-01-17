@@ -31,6 +31,11 @@ import (
 
 // This file contains shared test infrastructure for testing the ipsets package.
 
+var (
+	transientFailure = errors.New("Simulated transient failure")
+	permanentFailure = errors.New("Simulated permanent failure")
+)
+
 func newMockDataplane() *mockDataplane {
 	return &mockDataplane{
 		IPSetMembers:  make(map[string]set.Set),
@@ -124,10 +129,10 @@ func (d *restoreCmd) CombinedOutput() ([]byte, error) {
 
 	if d.Dataplane.FailNextRestore {
 		d.Dataplane.FailNextRestore = false
-		return nil, errors.New("Simulated failure")
+		return nil, transientFailure
 	}
 	if d.Dataplane.FailAllRestores {
-		return nil, errors.New("Simulated failure")
+		return nil, permanentFailure
 	}
 
 	// Process it line by line.
