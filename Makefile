@@ -6,8 +6,9 @@ _site:
 	docker run --rm -v $$PWD:/srv/jekyll jekyll/jekyll jekyll build
 
 clean:
-	docker run --rm -v $$PWD:/srv/jekyll jekyll/jekyll jekyll clean 
-	
+	docker run --rm -v $$PWD:/srv/jekyll jekyll/jekyll jekyll clean
+
 
 htmlproofer: _site
-	docker run --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore
+	docker run --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore /v1.5/,/v1.6/ --assume-extension --check-html --empty-alt-ignore
+	-docker run --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore
