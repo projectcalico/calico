@@ -17,9 +17,9 @@ package backend_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -29,50 +29,156 @@ var etcdConfig = &etcd.EtcdConfig{
 }
 
 var _ = Describe("Backend tests", func() {
-	Describe("etcd GET/List Revision values", func() {
+	etcdClient, _ := etcd.NewEtcdClient(etcdConfig)
+
+	var (
+		block model.KVPair
+		err   error
+	)
+
+	BeforeEach(func() {
 		testutils.CleanEtcd()
 
-		etcdClient, _ := etcd.NewEtcdClient(etcdConfig)
-
-		Context("CREATE a Block", func() {
-			block := &model.KVPair{
-				Key: model.BlockKey{
-					CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
-				},
-				Value: model.AllocationBlock{
-					CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
-				},
-			}
-
-			_, cErr := etcdClient.Create(block)
-
-			It("should succeed without an error", func() {
-				Expect(cErr).NotTo(HaveOccurred())
-			})
-		})
-
-		Context("GET BlockKey", func() {
-			key := model.BlockKey{
+		block = model.KVPair{
+			Key: model.BlockKey{
 				CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
-			}
-			b, bErr := etcdClient.Get(key)
-			It("Revision field should not be nil", func() {
-				Expect(bErr).NotTo(HaveOccurred())
-				Expect(b.Revision).NotTo(BeNil())
-			})
+			},
+			Value: model.AllocationBlock{
+				CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
+			},
+		}
+
+		_, err = etcdClient.Create(&block)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Describe("Create", func() {
+
+		It("persists a new kv pair", func() {
+			kv, err := etcdClient.Get(block.Key)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedCIDR := kv.Value.(*model.AllocationBlock).CIDR
+			persitedCIRD := block.Value.(model.AllocationBlock).CIDR
+
+			Expect(expectedCIDR).To(Equal(persitedCIRD))
 		})
 
-		Context("LIST BlockKey", func() {
-			blockListOpt := model.BlockListOptions{
-				IPVersion: 4,
-			}
-			bl, blErr := etcdClient.List(blockListOpt)
-			for _, blv := range bl {
-				It("Revision field should not be nil", func() {
-					Expect(blErr).NotTo(HaveOccurred())
-					Expect(blv.Revision).NotTo(BeNil())
-				})
-			}
+		It("sets revision field", func() {
+			kv, err := etcdClient.Get(block.Key)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kv.Revision).NotTo(BeNil())
 		})
+
 	})
+
+	Describe("Update", func() {
+
+		It("updates a kv pair", func() {
+			block.Value = model.AllocationBlock{
+				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+			}
+
+			kv, err := etcdClient.Update(&block)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedCIDR := kv.Value.(model.AllocationBlock).CIDR
+			persitedCIRD := block.Value.(model.AllocationBlock).CIDR
+
+			Expect(expectedCIDR).To(Equal(persitedCIRD))
+		})
+
+		It("sets revision field", func() {
+			kv, err := etcdClient.Update(&block)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kv.Revision).NotTo(BeNil())
+		})
+
+		It("validates revision field", func() {
+			block.Revision = uint64(1000)
+			_, err := etcdClient.Update(&block)
+			Expect(err).To(HaveOccurred())
+		})
+
+	})
+
+	Describe("Apply", func() {
+
+		It("updates a kv pair", func() {
+			block.Value = model.AllocationBlock{
+				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+			}
+
+			kv, err := etcdClient.Apply(&block)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedCIDR := kv.Value.(model.AllocationBlock).CIDR
+			persitedCIRD := block.Value.(model.AllocationBlock).CIDR
+
+			Expect(expectedCIDR).To(Equal(persitedCIRD))
+		})
+
+		It("creates a kv pair", func() {
+			block.Key = model.BlockKey{
+				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+			}
+
+			kv, err := etcdClient.Apply(&block)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedCIDR := kv.Value.(model.AllocationBlock).CIDR
+			persitedCIRD := block.Value.(model.AllocationBlock).CIDR
+
+			Expect(expectedCIDR).To(Equal(persitedCIRD))
+		})
+
+		It("sets revision field", func() {
+			block.Value = model.AllocationBlock{
+				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+			}
+
+			kv, err := etcdClient.Apply(&block)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kv.Revision).NotTo(BeNil())
+		})
+
+		It("validates revision field", func() {
+			block.Revision = uint64(1000)
+			_, err := etcdClient.Apply(&block)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+	})
+
+	Describe("Delete", func() {
+
+		It("deletes the kv pair", func() {
+			err := etcdClient.Delete(&block)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = etcdClient.Get(block.Key)
+			Expect(err).To(HaveOccurred())
+		})
+
+	})
+
+	Describe("List", func() {
+		blockListOpt := model.BlockListOptions{
+			IPVersion: 4,
+		}
+
+		bl, err := etcdClient.List(blockListOpt)
+
+		for _, blv := range bl {
+			It("sets revision field", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(blv.Revision).NotTo(BeNil())
+			})
+		}
+
+	})
+
 })
