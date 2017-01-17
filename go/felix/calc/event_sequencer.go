@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -300,6 +300,24 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+	mac := ""
+	if ep.Mac != nil {
+		mac = ep.Mac.String()
+	}
+	return &proto.WorkloadEndpoint{
+		State:      ep.State,
+		Name:       ep.Name,
+		Mac:        mac,
+		ProfileIds: ep.ProfileIDs,
+		Ipv4Nets:   netsToStrings(ep.IPv4Nets),
+		Ipv6Nets:   netsToStrings(ep.IPv6Nets),
+		Tiers:      tiers,
+		Ipv4Nat:    natsToProtoNatInfo(ep.IPv4NAT),
+		Ipv6Nat:    natsToProtoNatInfo(ep.IPv6NAT),
+	}
+}
+
 func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 	endpoint interface{},
 	filteredTiers []tierInfo,
@@ -325,27 +343,16 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		tiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
-			ep := endpoint.(*model.WorkloadEndpoint)
-			mac := ""
-			if ep.Mac != nil {
-				mac = ep.Mac.String()
-			}
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-
-				Endpoint: &proto.WorkloadEndpoint{
-					State:      ep.State,
-					Name:       ep.Name,
-					Mac:        mac,
-					ProfileIds: ep.ProfileIDs,
-					Ipv4Nets:   netsToStrings(ep.IPv4Nets),
-					Ipv6Nets:   netsToStrings(ep.IPv6Nets),
-					Tiers:      tiers,
-				},
+				Endpoint: ModelWorkloadEndpointToProto(
+					endpoint.(*model.WorkloadEndpoint),
+					tiers,
+				),
 			})
 		case model.HostEndpointKey:
 			ep := endpoint.(*model.HostEndpoint)
@@ -403,10 +410,10 @@ func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
 }
 
 func (buf *EventSequencer) flushHostIPUpdates() {
-	for hostname, ip := range buf.pendingHostIPUpdates {
+	for hostname, hostIP := range buf.pendingHostIPUpdates {
 		buf.Callback(&proto.HostMetadataUpdate{
 			Hostname: hostname,
-			Ipv4Addr: ip.IP.String(),
+			Ipv4Addr: hostIP.IP.String(),
 		})
 		buf.sentHostIPs.Add(hostname)
 		delete(buf.pendingHostIPUpdates, hostname)
@@ -547,12 +554,12 @@ func (buf *EventSequencer) flushAddsOrRemoves(setID string) {
 		Id: setID,
 	}
 	buf.pendingAddedIPs.Iter(setID, func(item interface{}) {
-		ip := item.(ip.Addr).String()
-		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, ip)
+		addrStr := item.(ip.Addr).String()
+		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, addrStr)
 	})
 	buf.pendingRemovedIPs.Iter(setID, func(item interface{}) {
-		ip := item.(ip.Addr).String()
-		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, ip)
+		addrStr := item.(ip.Addr).String()
+		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, addrStr)
 	})
 	buf.pendingAddedIPs.DiscardKey(setID)
 	buf.pendingRemovedIPs.DiscardKey(setID)
@@ -578,17 +585,28 @@ func tierInfoToProtoTierInfo(filteredTiers []tierInfo) []*proto.TierInfo {
 }
 
 func netsToStrings(nets []net.IPNet) []string {
-	strings := make([]string, len(nets))
-	for ii, ip := range nets {
-		strings[ii] = ip.String()
+	output := make([]string, len(nets))
+	for ii, ipNet := range nets {
+		output[ii] = ipNet.String()
 	}
-	return strings
+	return output
 }
 
 func ipsToStrings(ips []net.IP) []string {
-	strings := make([]string, len(ips))
-	for ii, ip := range ips {
-		strings[ii] = ip.String()
+	output := make([]string, len(ips))
+	for ii, netIP := range ips {
+		output[ii] = netIP.String()
 	}
-	return strings
+	return output
+}
+
+func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
+	protoNats := make([]*proto.NatInfo, len(nats))
+	for ii, nat := range nats {
+		protoNats[ii] = &proto.NatInfo{
+			ExtIp: nat.ExtIP.String(),
+			IntIp: nat.IntIP.String(),
+		}
+	}
+	return protoNats
 }

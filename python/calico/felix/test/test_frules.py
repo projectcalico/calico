@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 # Copyright 2015 Cisco Systems
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,7 +35,8 @@ _log = logging.getLogger(__name__)
 EXPECTED_TOP_LEVEL_DEPS = {
     'felix-INPUT': set(['felix-FROM-ENDPOINT', 'felix-FROM-HOST-IF']),
     'felix-OUTPUT': set(['felix-TO-HOST-IF']),
-    'felix-FORWARD': set(['felix-FROM-ENDPOINT', 'felix-TO-ENDPOINT']),
+    'felix-FORWARD': set(['felix-FROM-ENDPOINT', 'felix-TO-ENDPOINT',
+                          'felix-TO-HOST-IF', 'felix-FROM-HOST-IF']),
     'felix-FAILSAFE-IN': set(), 'felix-FAILSAFE-OUT': set()
 }
 
@@ -139,14 +140,14 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -344,14 +345,14 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'
@@ -466,14 +467,14 @@ class TestRules(BaseTestCase):
                 '--append felix-OUTPUT --goto felix-TO-HOST-IF --match mark --mark 0/0x4000000',
             ],
             'felix-FORWARD': [
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate INVALID --jump DROP',
-                '--append felix-FORWARD --in-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
-                '--append felix-FORWARD --out-interface tap+ --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
+                '--append felix-FORWARD --match conntrack --ctstate INVALID --jump DROP',
+                '--append felix-FORWARD --match conntrack --ctstate RELATED,ESTABLISHED --jump ACCEPT',
                 '--append felix-FORWARD --jump felix-FROM-ENDPOINT --in-interface tap+',
                 '--append felix-FORWARD --jump felix-TO-ENDPOINT --out-interface tap+',
                 '--append felix-FORWARD --jump ACCEPT --in-interface tap+',
-                '--append felix-FORWARD --jump ACCEPT --out-interface tap+'
+                '--append felix-FORWARD --jump ACCEPT --out-interface tap+',
+                '--append felix-FORWARD --jump felix-FROM-HOST-IF',
+                '--append felix-FORWARD --jump felix-TO-HOST-IF',
             ],
             'felix-FAILSAFE-IN': [
                 '--append felix-FAILSAFE-IN --protocol tcp --dport 22 --jump ACCEPT'

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -405,6 +405,8 @@ class DatastoreReader(TimedGreenlet):
             "ipv4_nets": msg.endpoint.ipv4_nets,
             "ipv6_nets": msg.endpoint.ipv6_nets,
             "tiers": convert_pb_tiers(msg.endpoint.tiers),
+            "ipv4_nat": convert_nats(msg.endpoint.ipv4_nat),
+            "ipv6_nat": convert_nats(msg.endpoint.ipv6_nat),
         }
         self.splitter.on_endpoint_update(combined_id, endpoint)
 
@@ -681,6 +683,14 @@ def combine_statuses(status_a, status_b):
         return {"status": ENDPOINT_STATUS_DOWN}
     else:
         return {"status": ENDPOINT_STATUS_UP}
+
+
+def convert_nats(nats):
+    dict_nats = []
+    for nat in nats:
+        d_nat = {"ext_ip": nat.ext_ip, "int_ip": nat.int_ip}
+        dict_nats.append(d_nat)
+    return dict_nats
 
 
 def convert_pb_tiers(tiers):

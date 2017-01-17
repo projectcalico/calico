@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2014-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2014-2017 Tigera, Inc. All rights reserved.
 #
 # All Rights Reserved.
 #
@@ -195,6 +195,10 @@ class Config(object):
                            "One of 'DROP', 'ACCEPT', 'LOG-and-DROP', "
                            "'LOG-and-ACCEPT'.",
                            "DROP")
+        self.add_parameter("LogPrefix",
+                           "Prefix of the iptables logged packets. Defaults to "
+                           "calico-drop",
+                           "calico-drop")
         self.add_parameter("IgnoreLooseRPF",
                            "If set to true, Felix will ignore the kernel's "
                            "RPF check setting.  If set to false, Felix will "
@@ -346,6 +350,7 @@ class Config(object):
         self.FAILSAFE_OUTBOUND_PORTS = \
             self.parameters["FailsafeOutboundHostPorts"].value
         self.ACTION_ON_DROP = self.parameters["DropActionOverride"].value
+        self.LOG_PREFIX = self.parameters["LogPrefix"].value
         self.IGNORE_LOOSE_RPF = self.parameters["IgnoreLooseRPF"].value
         self.IPV6_SUPPORT = self.parameters["Ipv6Support"].value.lower()
         self.CHAIN_INSERT_MODE = self.parameters["ChainInsertMode"].value
