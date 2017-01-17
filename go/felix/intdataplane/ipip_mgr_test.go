@@ -158,11 +158,13 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	// Cover the error cases.  We pass the error back up the stack, check that that happens
 	// for all calls.
-	expNumCalls := 9
+	const expNumCalls = 8
 	It("a successful call should only call into dataplane expected number of times", func() {
-		Expect(dataplane.NumCalls).To(BeNumerically("<=", expNumCalls))
+		// This spec is a sanity-check that we've got the expNumCalls constant correct.
+		ipipMgr.configureIPIPDevice(1400, ip)
+		Expect(dataplane.NumCalls).To(BeNumerically("==", expNumCalls))
 	})
-	for i := 1; i < expNumCalls; i++ {
+	for i := 1; i <= expNumCalls; i++ {
 		if i == 1 {
 			continue // First LinkByName failure is handled.
 		}
@@ -264,7 +266,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 					Expect(allHostsSet()).To(Equal(set.From("10.0.0.1")))
 				})
 
-				Describe("after removing iniital copy of IP", func() {
+				Describe("after removing initial copy of IP", func() {
 					BeforeEach(func() {
 						ipipMgr.OnUpdate(&proto.HostMetadataRemove{
 							Hostname: "host1",
