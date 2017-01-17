@@ -32,6 +32,8 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 
+	MaxIPSetSize int
+
 	IptablesRefreshInterval time.Duration
 
 	RulesConfig rules.Config
@@ -140,7 +142,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, !config.DisableIPv6)
 
-	dp.RegisterManager(newIPSetsManager(ipSetRegV4))
+	dp.RegisterManager(newIPSetsManager(ipSetRegV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		filterTableV4,
@@ -176,7 +178,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetRegV6))
+		dp.RegisterManager(newIPSetsManager(ipSetRegV6, config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			filterTableV6,

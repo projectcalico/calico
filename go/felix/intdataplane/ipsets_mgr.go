@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,28 +23,31 @@ import (
 // dataplane layer.
 type ipSetsManager struct {
 	ipsetReg *ipsets.Registry
+	maxSize  int
 }
 
-func newIPSetsManager(ipsets *ipsets.Registry) *ipSetsManager {
+func newIPSetsManager(ipsets ipsetsRegistry, maxIPSetSize int) *ipSetsManager {
 	return &ipSetsManager{
 		ipsetReg: ipsets,
+		maxSize:  maxIPSetSize,
 	}
 }
 
-func (d *ipSetsManager) OnUpdate(msg interface{}) {
+func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
-		d.ipsetReg.AddMembers(msg.Id, msg.AddedMembers)
-		d.ipsetReg.RemoveMembers(msg.Id, msg.RemovedMembers)
+		m.ipsetReg.AddMembers(msg.Id, msg.AddedMembers)
+		m.ipsetReg.RemoveMembers(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
-		d.ipsetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+		metadata := ipsets.IPSetMetadata{
 			Type:    ipsets.IPSetTypeHashIP,
 			SetID:   msg.Id,
-			MaxSize: 1024 * 1024,
-		}, msg.Members)
+			MaxSize: m.maxSize,
+		}
+		m.ipsetReg.AddOrReplaceIPSet(metadata, msg.Members)
 	case *proto.IPSetRemove:
-		d.ipsetReg.RemoveIPSet(msg.Id)
+		m.ipsetReg.RemoveIPSet(msg.Id)
 	}
 }
 
