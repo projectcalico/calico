@@ -22,7 +22,7 @@ import (
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
 // dataplane layer.
 type ipSetsManager struct {
-	ipsetReg *ipsets.Registry
+	ipsetReg ipsetsRegistry
 	maxSize  int
 }
 

@@ -225,4 +225,5 @@ type ipsetsRegistry interface {
 	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
 	AddMembers(setID string, newMembers []string)
 	RemoveMembers(setID string, removedMembers []string)
+	RemoveIPSet(setID string)
 }

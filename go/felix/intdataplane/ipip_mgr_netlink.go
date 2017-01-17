@@ -15,44 +15,44 @@
 package intdataplane
 
 import (
-	. "github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink"
 	"os/exec"
 )
 
 // ipipDataplane is a shim interface for mocking netlink and os/exec in the IPIP manager.
 type ipipDataplane interface {
-	LinkByName(name string) (Link, error)
-	LinkSetMTU(link Link, mtu int) error
-	LinkSetUp(link Link) error
-	AddrList(link Link, family int) ([]Addr, error)
-	AddrAdd(link Link, addr *Addr) error
-	AddrDel(link Link, addr *Addr) error
+	LinkByName(name string) (netlink.Link, error)
+	LinkSetMTU(link netlink.Link, mtu int) error
+	LinkSetUp(link netlink.Link) error
+	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+	AddrAdd(link netlink.Link, addr *netlink.Addr) error
+	AddrDel(link netlink.Link, addr *netlink.Addr) error
 	RunCmd(name string, args ...string) error
 }
 
 type realIPIPNetlink struct{}
 
-func (r realIPIPNetlink) LinkByName(name string) (Link, error) {
-	return LinkByName(name)
+func (r realIPIPNetlink) LinkByName(name string) (netlink.Link, error) {
+	return netlink.LinkByName(name)
 }
-func (r realIPIPNetlink) LinkSetMTU(link Link, mtu int) error {
-	return LinkSetMTU(link, mtu)
-}
-
-func (r realIPIPNetlink) LinkSetUp(link Link) error {
-	return LinkSetUp(link)
+func (r realIPIPNetlink) LinkSetMTU(link netlink.Link, mtu int) error {
+	return netlink.LinkSetMTU(link, mtu)
 }
 
-func (r realIPIPNetlink) AddrList(link Link, family int) ([]Addr, error) {
-	return AddrList(link, family)
+func (r realIPIPNetlink) LinkSetUp(link netlink.Link) error {
+	return netlink.LinkSetUp(link)
 }
 
-func (r realIPIPNetlink) AddrAdd(link Link, addr *Addr) error {
-	return AddrAdd(link, addr)
+func (r realIPIPNetlink) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
+	return netlink.AddrList(link, family)
 }
 
-func (r realIPIPNetlink) AddrDel(link Link, addr *Addr) error {
-	return AddrDel(link, addr)
+func (r realIPIPNetlink) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
+	return netlink.AddrAdd(link, addr)
+}
+
+func (r realIPIPNetlink) AddrDel(link netlink.Link, addr *netlink.Addr) error {
+	return netlink.AddrDel(link, addr)
 }
 
 func (r realIPIPNetlink) RunCmd(name string, args ...string) error {

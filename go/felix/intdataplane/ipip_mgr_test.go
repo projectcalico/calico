@@ -21,10 +21,9 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/ipsets"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/set"
-	. "github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink"
 	"net"
 )
 
@@ -51,9 +50,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = &mockIPSets{
-			Members: set.New(),
-		}
+		ipSets = newMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane)
 	})
 
@@ -181,9 +178,10 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 			Describe("with an IP to remove", func() {
 				BeforeEach(func() {
-					dataplane.addrs = append(dataplane.addrs, Addr{
-						IPNet: ipNet2,
-					})
+					dataplane.addrs = append(dataplane.addrs,
+						netlink.Addr{
+							IPNet: ipNet2,
+						})
 				})
 				It("should return the error", func() {
 					Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
@@ -202,9 +200,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = &mockIPSets{
-			Members: set.New(),
-		}
+		ipSets = newMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane)
 	})
 
@@ -213,6 +209,11 @@ var _ = Describe("ipipManager IP set updates", func() {
 		ipipMgr.CompleteDeferredWork()
 		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 	})
+
+	allHostsSet := func() set.Set {
+		Expect(ipSets.Members).To(HaveLen(1))
+		return ipSets.Members["all-hosts"]
+	}
 
 	Describe("after adding an IP for host1", func() {
 		BeforeEach(func() {
@@ -224,8 +225,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 		})
 
 		It("should add host1's IP to the IP set", func() {
-			Expect(ipSets.Members.Len()).To(Equal(1))
-			Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+			Expect(allHostsSet().Len()).To(Equal(1))
+			Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
 		})
 
 		Describe("after adding an IP for host2", func() {
@@ -237,9 +238,9 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should add the IP to the IP set", func() {
-				Expect(ipSets.Members.Len()).To(Equal(2))
-				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
-				Expect(ipSets.Members.Contains("10.0.0.2")).To(BeTrue())
+				Expect(allHostsSet().Len()).To(Equal(2))
+				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
+				Expect(allHostsSet().Contains("10.0.0.2")).To(BeTrue())
 			})
 		})
 
@@ -252,8 +253,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should tolerate the duplicate", func() {
-				Expect(ipSets.Members.Len()).To(Equal(1))
-				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+				Expect(allHostsSet().Len()).To(Equal(1))
+				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
 			})
 
 			Describe("after removing a duplicate IP", func() {
@@ -264,8 +265,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 					ipipMgr.CompleteDeferredWork()
 				})
 				It("should keep the IP in the IP set", func() {
-					Expect(ipSets.Members.Len()).To(Equal(1))
-					Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+					Expect(allHostsSet().Len()).To(Equal(1))
+					Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
 				})
 
 				Describe("after removing iniital copy of IP", func() {
@@ -276,7 +277,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 						ipipMgr.CompleteDeferredWork()
 					})
 					It("should remove the IP", func() {
-						Expect(ipSets.Members.Len()).To(BeZero())
+						Expect(allHostsSet().Len()).To(BeZero())
 					})
 				})
 			})
@@ -294,8 +295,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should keep the IP in the IP set", func() {
-				Expect(ipSets.Members.Len()).To(Equal(1))
-				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+				Expect(allHostsSet().Len()).To(Equal(1))
+				Expect(allHostsSet().Contains("10.0.0.1")).To(BeTrue())
 			})
 		})
 
@@ -308,8 +309,8 @@ var _ = Describe("ipipManager IP set updates", func() {
 				ipipMgr.CompleteDeferredWork()
 			})
 			It("should update the IP set", func() {
-				Expect(ipSets.Members.Len()).To(Equal(1))
-				Expect(ipSets.Members.Contains("10.0.0.2")).To(BeTrue())
+				Expect(allHostsSet().Len()).To(Equal(1))
+				Expect(allHostsSet().Contains("10.0.0.2")).To(BeTrue())
 			})
 		})
 
@@ -325,46 +326,10 @@ var _ = Describe("ipipManager IP set updates", func() {
 	})
 })
 
-type mockIPSets struct {
-	Members            set.Set
-	AddOrReplaceCalled bool
-}
-
-func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string) {
-	Expect(setMetadata).To(Equal(ipsets.IPSetMetadata{
-		MaxSize: 1024,
-		SetID:   "all-hosts",
-		Type:    ipsets.IPSetTypeHashIP,
-	}))
-	s.Members = set.New()
-	for _, member := range members {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
-		s.Members.Add(member)
-	}
-	s.AddOrReplaceCalled = true
-}
-func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
-	Expect(setID).To(Equal("all-hosts"))
-	for _, member := range newMembers {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
-		Expect(s.Members.Contains(member)).To(BeFalse())
-		s.Members.Add(member)
-	}
-}
-
-func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
-	Expect(setID).To(Equal("all-hosts"))
-	for _, member := range removedMembers {
-		Expect(net.ParseIP(member)).ToNot(BeNil())
-		Expect(s.Members.Contains(member)).To(BeTrue())
-		s.Members.Discard(member)
-	}
-}
-
 type mockIPIPDataplane struct {
 	tunnelLink      *mockLink
-	tunnelLinkAttrs *LinkAttrs
-	addrs           []Addr
+	tunnelLinkAttrs *netlink.LinkAttrs
+	addrs           []netlink.Addr
 
 	RunCmdCalled     bool
 	LinkSetMTUCalled bool
@@ -391,7 +356,7 @@ func (d *mockIPIPDataplane) incCallCount() error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkByName(name string) (Link, error) {
+func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 	log.WithField("name", name).Info("LinkByName called")
 
 	if err := d.incCallCount(); err != nil {
@@ -405,7 +370,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (Link, error) {
 	return d.tunnelLink, nil
 }
 
-func (d *mockIPIPDataplane) LinkSetMTU(link Link, mtu int) error {
+func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	d.LinkSetMTUCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -415,7 +380,7 @@ func (d *mockIPIPDataplane) LinkSetMTU(link Link, mtu int) error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkSetUp(link Link) error {
+func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
 	d.LinkSetUpCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -425,7 +390,7 @@ func (d *mockIPIPDataplane) LinkSetUp(link Link) error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) AddrList(link Link, family int) ([]Addr, error) {
+func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
 	if err := d.incCallCount(); err != nil {
 		return nil, err
 	}
@@ -433,7 +398,7 @@ func (d *mockIPIPDataplane) AddrList(link Link, family int) ([]Addr, error) {
 	return d.addrs, nil
 }
 
-func (d *mockIPIPDataplane) AddrAdd(link Link, addr *Addr) error {
+func (d *mockIPIPDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
 	d.AddrUpdated = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -443,7 +408,7 @@ func (d *mockIPIPDataplane) AddrAdd(link Link, addr *Addr) error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) AddrDel(link Link, addr *Addr) error {
+func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
 	d.AddrUpdated = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -474,10 +439,10 @@ func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
 }
 
 type mockLink struct {
-	attrs LinkAttrs
+	attrs netlink.LinkAttrs
 }
 
-func (l *mockLink) Attrs() *LinkAttrs {
+func (l *mockLink) Attrs() *netlink.LinkAttrs {
 	return &l.attrs
 }
 
