@@ -31,10 +31,16 @@ import (
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
 	ipsetReg ipsetsRegistry
+
 	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
+	ipSetInSync        bool
 
+	// Config for creating/refreshing the IP set.
+	ipSetMetadata ipsets.IPSetMetadata
+
+	// Dataplane shim.
 	dataplane ipipDataplane
 }
 
@@ -50,20 +56,17 @@ func newIPIPManagerWithShim(
 	maxIPSetSize int,
 	dataplane ipipDataplane,
 ) *ipipManager {
-	// Make sure our IP set exists.  We set the contents to empty here
-	// but the IPSets object will defer writing the IP sets until we're
-	// in sync, by which point we'll have added all our CIDRs into the sets.
-	ipSetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
-		MaxSize: maxIPSetSize,
-		SetID:   rules.IPSetIDAllHostIPs,
-		Type:    ipsets.IPSetTypeHashIP,
-	}, []string{})
-
-	return &ipipManager{
+	ipipMgr := &ipipManager{
 		ipsetReg:           ipSetReg,
 		activeHostnameToIP: map[string]string{},
 		dataplane:          dataplane,
+		ipSetMetadata: ipsets.IPSetMetadata{
+			MaxSize: maxIPSetSize,
+			SetID:   rules.IPSetIDAllHostIPs,
+			Type:    ipsets.IPSetTypeHashIP,
+		},
 	}
+	return ipipMgr
 }
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
@@ -187,44 +190,37 @@ func (d *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 }
 
 func (d *ipipManager) OnUpdate(msg interface{}) {
-	var hostname string
-	var newIP string
-
 	switch msg := msg.(type) {
 	case *proto.HostMetadataUpdate:
 		log.WithField("hostanme", msg.Hostname).Debug("Host update/create")
-		hostname = msg.Hostname
-		newIP = msg.Ipv4Addr
+		d.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
+		d.ipSetInSync = false
 	case *proto.HostMetadataRemove:
 		log.WithField("hostname", msg.Hostname).Debug("Host removed")
-		hostname = msg.Hostname
-	default:
-		return
-	}
-
-	logCxt := log.WithField("hostname", hostname)
-	if oldIP := d.activeHostnameToIP[hostname]; oldIP != "" {
-		// For simplicity always remove the old value from the IP set.  The IPSets object
-		// defers and coalesces the update so removing then adding the same IP is a no-op
-		// anyway.
-		logCxt.WithField("oldIP", oldIP).Debug("Removing old IP.")
-		d.ipsetReg.RemoveMembers(rules.IPSetIDAllHostIPs, []string{oldIP})
-		delete(d.activeHostnameToIP, hostname)
-	}
-	if newIP != "" {
-		// Update the IP sets.
-		logCxt.Debug("Adding host to IP set.")
-		d.ipsetReg.AddMembers(rules.IPSetIDAllHostIPs, []string{newIP})
-		d.activeHostnameToIP[hostname] = newIP
+		delete(d.activeHostnameToIP, msg.Hostname)
+		d.ipSetInSync = false
 	}
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	// Nothing to do, we don't defer any work.
+	if !m.ipSetInSync {
+		// For simplicity (and on the assumption that host add/removes are rare) rewrite
+		// the whole IP set whenever we get a change.  To replace this with delta handling
+		// would require reference counting the IPs because it's possible for two hosts
+		// to (at least transiently) share an IP.  That would add occupancy and make the
+		// code more complex.
+		log.Info("All-hosts IP set out-of sync, refreshing it.")
+		members := make([]string, 0, len(m.activeHostnameToIP))
+		for _, ip := range m.activeHostnameToIP {
+			members = append(members, ip)
+		}
+		m.ipsetReg.AddOrReplaceIPSet(m.ipSetMetadata, members)
+		m.ipSetInSync = true
+	}
 	return nil
 }
 
-// ipsetsRegistry is a shim interface for mocking the IPSet registry.
+// ipsetsRegistry is a shim interface for mocking the IPSet Registry.
 type ipsetsRegistry interface {
 	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
 	AddMembers(setID string, newMembers []string)

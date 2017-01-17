@@ -22,6 +22,8 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ipsets"
+	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/go/felix/set"
 	. "github.com/vishvananda/netlink"
 	"net"
 )
@@ -42,10 +44,16 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	if err != nil {
 		panic("Failed to parse test IP")
 	}
+	_, ipNet2, err := net.ParseCIDR("10.0.0.2/32")
+	if err != nil {
+		panic("Failed to parse test IP")
+	}
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = &mockIPSets{}
+		ipSets = &mockIPSets{
+			Members: set.New(),
+		}
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane)
 	})
 
@@ -166,23 +174,191 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			BeforeEach(func() {
 				dataplane.ErrorAtCall = i
 			})
+
 			It("should return the error", func() {
 				Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
+			})
+
+			Describe("with an IP to remove", func() {
+				BeforeEach(func() {
+					dataplane.addrs = append(dataplane.addrs, Addr{
+						IPNet: ipNet2,
+					})
+				})
+				It("should return the error", func() {
+					Expect(ipipMgr.configureIPIPDevice(1400, ip)).To(Equal(mockFailure))
+				})
 			})
 		})
 	}
 })
 
-type mockIPSets struct{}
+var _ = Describe("ipipManager IP set updates", func() {
+	var (
+		ipipMgr   *ipipManager
+		ipSets    *mockIPSets
+		dataplane *mockIPIPDataplane
+	)
+
+	BeforeEach(func() {
+		dataplane = &mockIPIPDataplane{}
+		ipSets = &mockIPSets{
+			Members: set.New(),
+		}
+		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane)
+	})
+
+	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
+		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
+		ipipMgr.CompleteDeferredWork()
+		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+	})
+
+	Describe("after adding an IP for host1", func() {
+		BeforeEach(func() {
+			ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+				Hostname: "host1",
+				Ipv4Addr: "10.0.0.1",
+			})
+			ipipMgr.CompleteDeferredWork()
+		})
+
+		It("should add host1's IP to the IP set", func() {
+			Expect(ipSets.Members.Len()).To(Equal(1))
+			Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+		})
+
+		Describe("after adding an IP for host2", func() {
+			BeforeEach(func() {
+				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+					Hostname: "host2",
+					Ipv4Addr: "10.0.0.2",
+				})
+				ipipMgr.CompleteDeferredWork()
+			})
+			It("should add the IP to the IP set", func() {
+				Expect(ipSets.Members.Len()).To(Equal(2))
+				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+				Expect(ipSets.Members.Contains("10.0.0.2")).To(BeTrue())
+			})
+		})
+
+		Describe("after adding a duplicate IP", func() {
+			BeforeEach(func() {
+				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+					Hostname: "host2",
+					Ipv4Addr: "10.0.0.1",
+				})
+				ipipMgr.CompleteDeferredWork()
+			})
+			It("should tolerate the duplicate", func() {
+				Expect(ipSets.Members.Len()).To(Equal(1))
+				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+			})
+
+			Describe("after removing a duplicate IP", func() {
+				BeforeEach(func() {
+					ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+						Hostname: "host2",
+					})
+					ipipMgr.CompleteDeferredWork()
+				})
+				It("should keep the IP in the IP set", func() {
+					Expect(ipSets.Members.Len()).To(Equal(1))
+					Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+				})
+
+				Describe("after removing iniital copy of IP", func() {
+					BeforeEach(func() {
+						ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+							Hostname: "host1",
+						})
+						ipipMgr.CompleteDeferredWork()
+					})
+					It("should remove the IP", func() {
+						Expect(ipSets.Members.Len()).To(BeZero())
+					})
+				})
+			})
+		})
+
+		Describe("after adding/removing a duplicate IP in one batch", func() {
+			BeforeEach(func() {
+				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+					Hostname: "host2",
+					Ipv4Addr: "10.0.0.1",
+				})
+				ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+					Hostname: "host2",
+				})
+				ipipMgr.CompleteDeferredWork()
+			})
+			It("should keep the IP in the IP set", func() {
+				Expect(ipSets.Members.Len()).To(Equal(1))
+				Expect(ipSets.Members.Contains("10.0.0.1")).To(BeTrue())
+			})
+		})
+
+		Describe("after changing IP for host1", func() {
+			BeforeEach(func() {
+				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+					Hostname: "host1",
+					Ipv4Addr: "10.0.0.2",
+				})
+				ipipMgr.CompleteDeferredWork()
+			})
+			It("should update the IP set", func() {
+				Expect(ipSets.Members.Len()).To(Equal(1))
+				Expect(ipSets.Members.Contains("10.0.0.2")).To(BeTrue())
+			})
+		})
+
+		Describe("after a no-op batch", func() {
+			BeforeEach(func() {
+				ipSets.AddOrReplaceCalled = false
+				ipipMgr.CompleteDeferredWork()
+			})
+			It("shouldn't rewrite the IP set", func() {
+				Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
+			})
+		})
+	})
+})
+
+type mockIPSets struct {
+	Members            set.Set
+	AddOrReplaceCalled bool
+}
 
 func (s *mockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string) {
-
+	Expect(setMetadata).To(Equal(ipsets.IPSetMetadata{
+		MaxSize: 1024,
+		SetID:   "all-hosts",
+		Type:    ipsets.IPSetTypeHashIP,
+	}))
+	s.Members = set.New()
+	for _, member := range members {
+		Expect(net.ParseIP(member)).ToNot(BeNil())
+		s.Members.Add(member)
+	}
+	s.AddOrReplaceCalled = true
 }
 func (s *mockIPSets) AddMembers(setID string, newMembers []string) {
-
+	Expect(setID).To(Equal("all-hosts"))
+	for _, member := range newMembers {
+		Expect(net.ParseIP(member)).ToNot(BeNil())
+		Expect(s.Members.Contains(member)).To(BeFalse())
+		s.Members.Add(member)
+	}
 }
-func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
 
+func (s *mockIPSets) RemoveMembers(setID string, removedMembers []string) {
+	Expect(setID).To(Equal("all-hosts"))
+	for _, member := range removedMembers {
+		Expect(net.ParseIP(member)).ToNot(BeNil())
+		Expect(s.Members.Contains(member)).To(BeTrue())
+		s.Members.Discard(member)
+	}
 }
 
 type mockIPIPDataplane struct {
