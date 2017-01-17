@@ -23,6 +23,7 @@ type Set interface {
 	Len() int
 	Add(interface{})
 	Discard(interface{})
+	Clear()
 	Contains(interface{}) bool
 	Iter(func(item interface{}) error)
 	Copy() Set
@@ -58,6 +59,12 @@ func (set mapSet) Add(item interface{}) {
 
 func (set mapSet) Discard(item interface{}) {
 	delete(set, item)
+}
+
+func (set mapSet) Clear() {
+	for item := range set {
+		delete(set, item)
+	}
 }
 
 func (set mapSet) Contains(item interface{}) bool {

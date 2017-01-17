@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@ package ipsets
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/set"
+	"io"
 	"time"
 )
 
@@ -154,7 +154,7 @@ func (s *IPSet) Apply() {
 			err := s.rewriteIPSet()
 			if err != nil {
 				if retries <= 0 {
-					log.WithError(err).Fatal("Failed to rewrite ipset after retries, giving up")
+					log.WithError(err).Panic("Failed to rewrite ipset after retries, giving up")
 				}
 				log.WithError(err).Warn("Sleeping before retrying ipset rewrite")
 				s.Sleep(100 * time.Millisecond)
@@ -166,7 +166,7 @@ func (s *IPSet) Apply() {
 			s.rewritePending = false
 			break
 		} else {
-			// IP set should already exist, just write deltas.
+			// IP set should already exist, just write deltas to the main IP set.
 			err := s.flushDeltas()
 			if err != nil {
 				log.WithError(err).Warn("Failed to update IP set, attempting to rewrite it")
@@ -176,10 +176,34 @@ func (s *IPSet) Apply() {
 			break
 		}
 	}
+	s.pendingDeletions.Clear()
+	s.pendingAdds.Clear()
 }
 
 func (s *IPSet) flushDeltas() error {
-	return errors.New("Not implemented") // Will force a full rewrite
+	logCxt := log.WithFields(log.Fields{
+		"setID":      s.SetID,
+		"numMembers": s.desiredMembers.Len(),
+		"numAdds":    s.pendingAdds.Len(),
+		"numDeletes": s.pendingDeletions.Len(),
+	})
+	logCxt.Info("Applying deltas to IP set")
+
+	// Pre-calculate the commands to issue in a buffer.
+	var buf bytes.Buffer
+	s.writeDeltas(&buf)
+	if log.GetLevel() >= log.DebugLevel {
+		// Only stringify the buffer if we're debugging.
+		logCxt.WithField("input", buf.String()).Debug("About to apply deltas to IP set")
+	}
+
+	// Execute the commands via the bulk "restore" sub-command.
+	if err := s.execIpsetRestore(&buf); err != nil {
+		return err
+	}
+
+	logCxt.Info("Applied deltas to IP set")
+	return nil
 }
 
 // rewriteIPSet does a full, atomic, idempotent rewrite of the IP set.
@@ -191,19 +215,15 @@ func (s *IPSet) rewriteIPSet() error {
 	logCxt.Info("Rewriting IP Set")
 
 	// Pre-calculate the commands to issue in a buffer.
-	// TODO(smc) We could write the input directly to a pipe instead to save a bit of occupancy.
 	var buf bytes.Buffer
 	s.writeFullRewrite(&buf)
 	if log.GetLevel() >= log.DebugLevel {
+		// Only stringify the buffer if we're debugging.
 		logCxt.WithField("input", buf.String()).Debug("About to rewrite IP set")
 	}
 
 	// Execute the commands via the bulk "restore" sub-command.
-	cmd := s.newCmd("ipset", "restore")
-	cmd.SetStdin(&buf)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("output", string(output)).Warn("Failed to execute ipset restore")
+	if err := s.execIpsetRestore(&buf); err != nil {
 		return err
 	}
 
@@ -215,7 +235,21 @@ func (s *IPSet) rewriteIPSet() error {
 	return nil
 }
 
+func (s *IPSet) execIpsetRestore(stdin io.Reader) error {
+	// Execute the commands via the bulk "restore" sub-command.
+	cmd := s.newCmd("ipset", "restore")
+	cmd.SetStdin(stdin)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithField("output", string(output)).Warn(
+			"Failed to execute 'ipset restore'.")
+		return err
+	}
+	return nil
+}
+
 type stringWriter interface {
+	io.Writer
 	WriteString(s string) (n int, err error)
 }
 
@@ -231,31 +265,48 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 		// because it still fails if the IP set was previously created with different
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Pre-creating main IP set")
-		buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n",
-			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize))
+		fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
+			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize)
 	}
 	tempSetName := s.TempIPSetName()
 	if s.existenceCache.IPSetExists(tempSetName) {
 		// Explicitly delete the temporary IP set so that we can recreate it with new
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Temp IP set exists, deleting it before rewrite")
-		buf.WriteString(fmt.Sprintf("destroy %s\n", tempSetName))
+		fmt.Fprintf(buf, "destroy %s\n", tempSetName)
 	}
 	// Create the temporary IP set with the current parameters.
-	buf.WriteString(fmt.Sprintf("create %s %s family %s maxelem %d\n",
-		tempSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize))
+	fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
+		tempSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize)
 	// Write all the members into the temporary IP set.
 	s.desiredMembers.Iter(func(item interface{}) error {
 		member := item.(string)
-		buf.WriteString(fmt.Sprintf("add %s %s\n", tempSetName, member))
+		fmt.Fprintf(buf, "add %s %s\n", tempSetName, member)
 		return nil
 	})
 	// Atomically swap the temporary set into place.
-	buf.WriteString(fmt.Sprintf("swap %s %s\n", mainSetName, tempSetName))
+	fmt.Fprintf(buf, "swap %s %s\n", mainSetName, tempSetName)
 	// Then remove the temporary set (which was the old main set).
-	buf.WriteString(fmt.Sprintf("destroy %s\n", tempSetName))
+	fmt.Fprintf(buf, "destroy %s\n", tempSetName)
 	// ipset restore input ends with "COMMIT" (but only the swap instruction is guaranteed to be
 	// atomic).
+	buf.WriteString("COMMIT\n")
+}
+
+// writeDeltas calculates the ipset restore input required to apply the pending adds/deletes to the
+// main IP set.
+func (s *IPSet) writeDeltas(buf stringWriter) {
+	mainSetName := s.MainIPSetName()
+	s.pendingDeletions.Iter(func(item interface{}) error {
+		member := item.(string)
+		fmt.Fprintf(buf, "del %s %s\n", mainSetName, member)
+		return nil
+	})
+	s.pendingAdds.Iter(func(item interface{}) error {
+		member := item.(string)
+		fmt.Fprintf(buf, "add %s %s\n", mainSetName, member)
+		return nil
+	})
 	buf.WriteString("COMMIT\n")
 }
 
