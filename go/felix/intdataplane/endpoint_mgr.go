@@ -241,9 +241,15 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			logCxt.Info("Updating endpoint routes.")
 			var ipStrings []string
 			if m.ipVersion == 4 {
-				ipStrings = workload.Ipv4Nets
+				ipStrings = copy(workload.Ipv4Nets)
+				for _, natInfo := range workload.Ipv4Nat {
+					ipStrings = append(ipStrings, natInfo.ExtIp)
+				}
 			} else {
-				ipStrings = workload.Ipv6Nets
+				ipStrings = copy(workload.Ipv6Nets)
+				for _, natInfo := range workload.Ipv6Nat {
+					ipStrings = append(ipStrings, natInfo.ExtIp)
+				}
 			}
 
 			var mac net.HardwareAddr

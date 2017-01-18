@@ -36,12 +36,16 @@ const (
 
 	ChainNATPrerouting  = ChainNamePrefix + "-PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "-POSTROUTING"
+	ChainNATOutput      = ChainNamePrefix + "-OUTPUT"
 	ChainNATOutgoing    = ChainNamePrefix + "-nat-outgoing"
 
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostIPs = "all-hosts"
+
+	ChainFipDnat = ChainNamePrefix + "-fip-dnat"
+	ChainFipSnat = ChainNamePrefix + "-fip-snat"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
@@ -101,6 +105,9 @@ type RuleRenderer interface {
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule
 
 	NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain
+
+	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
+	SNATsToIptablesChains(snats map[string]string) []*iptables.Chain
 }
 
 type DefaultRuleRenderer struct {
