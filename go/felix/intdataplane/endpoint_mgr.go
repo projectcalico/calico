@@ -227,6 +227,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 		oldWorkload := m.activeEndpoints[id]
 		if workload != nil {
 			logCxt.Info("Updating per-endpoint chains.")
+			if oldWorkload != nil && oldWorkload.Name != workload.Name {
+				logCxt.Debug("Interface name changed, cleaning up old state")
+				m.filterTable.RemoveChains(m.activeIdToChains[id])
+				m.routeTable.SetRoutes(oldWorkload.Name, nil)
+				m.ifaceNamesToReconfigure.Discard(oldWorkload.Name)
+				delete(m.activeIfaceNameToID, oldWorkload.Name)
+			}
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(&id, workload)
 			m.filterTable.UpdateChains(chains)
 			m.activeIdToChains[id] = chains
@@ -239,12 +246,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 				ipStrings = workload.Ipv6Nets
 			}
 
-			if oldWorkload != nil && oldWorkload.Name != workload.Name {
-				logCxt.Debug("Interface name changed, cleaning up old state")
-				m.routeTable.SetRoutes(oldWorkload.Name, nil)
-				m.ifaceNamesToReconfigure.Discard(oldWorkload.Name)
-				delete(m.activeIfaceNameToID, oldWorkload.Name)
-			}
 			var mac net.HardwareAddr
 			if workload.Mac != "" {
 				var err error
@@ -269,7 +270,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 		} else {
 			logCxt.Info("Workload removed, deleting its chains.")
 			m.filterTable.RemoveChains(m.activeIdToChains[id])
-			if oldWorkload := m.activeEndpoints[id]; oldWorkload != nil {
+			if oldWorkload != nil {
 				// Remove any routes from the routing table.  The RouteTable will
 				// remove any conntrack entries as a side-effect.
 				logCxt.Info("Workload removed, deleting old state.")
