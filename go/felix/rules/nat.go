@@ -14,7 +14,10 @@
 
 package rules
 
-import "github.com/projectcalico/felix/go/felix/iptables"
+import (
+	"github.com/projectcalico/felix/go/felix/iptables"
+	"sort"
+)
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
@@ -46,17 +49,17 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 	sort.Strings(sortedExtIps)
 
 	rules := []iptables.Rule{}
-	for extIp := range sortedExtIps {
+	for _, extIp := range sortedExtIps {
 		intIp := dnats[extIp]
 		rules = append(rules, iptables.Rule{
 			Match:  iptables.Match().DestNet(extIp),
 			Action: iptables.DNATAction{DestAddr: intIp},
 		})
 	}
-	return []*iptables.Chain{
+	return []*iptables.Chain{{
 		Name:  ChainFipDnat,
 		Rules: rules,
-	}
+	}}
 }
 
 func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*iptables.Chain {
@@ -68,15 +71,15 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	sort.Strings(sortedIntIps)
 
 	rules := []iptables.Rule{}
-	for intIp := range sortedIntIps {
+	for _, intIp := range sortedIntIps {
 		extIp := snats[intIp]
 		rules = append(rules, iptables.Rule{
 			Match:  iptables.Match().DestNet(intIp).SourceNet(intIp),
 			Action: iptables.SNATAction{DestAddr: extIp},
 		})
 	}
-	return []*iptables.Chain{
+	return []*iptables.Chain{{
 		Name:  ChainFipSnat,
 		Rules: rules,
-	}
+	}}
 }

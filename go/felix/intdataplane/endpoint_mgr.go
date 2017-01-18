@@ -241,14 +241,24 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			logCxt.Info("Updating endpoint routes.")
 			var ipStrings []string
 			if m.ipVersion == 4 {
-				ipStrings = copy(workload.Ipv4Nets)
-				for _, natInfo := range workload.Ipv4Nat {
-					ipStrings = append(ipStrings, natInfo.ExtIp)
+				ipStrings = workload.Ipv4Nets
+				if len(workload.Ipv4Nat) != 0 {
+					old := ipStrings
+					ipStrings = make([]string, len(old)+len(workload.Ipv4Nat))
+					copy(ipStrings, old)
+					for ii, natInfo := range workload.Ipv4Nat {
+						ipStrings[ii+len(old)] = natInfo.ExtIp
+					}
 				}
 			} else {
-				ipStrings = copy(workload.Ipv6Nets)
-				for _, natInfo := range workload.Ipv6Nat {
-					ipStrings = append(ipStrings, natInfo.ExtIp)
+				ipStrings = workload.Ipv6Nets
+				if len(workload.Ipv6Nat) != 0 {
+					old := ipStrings
+					ipStrings = make([]string, len(old)+len(workload.Ipv6Nat))
+					copy(ipStrings, old)
+					for ii, natInfo := range workload.Ipv6Nat {
+						ipStrings[ii+len(old)] = natInfo.ExtIp
+					}
 				}
 			}
 

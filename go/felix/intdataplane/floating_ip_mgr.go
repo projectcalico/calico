@@ -15,21 +15,11 @@
 package intdataplane
 
 import (
-	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/ifacemonitor"
-	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/routetable"
 	"github.com/projectcalico/felix/go/felix/rules"
-	"github.com/projectcalico/felix/go/felix/set"
-	"io"
-	"net"
-	"os"
 	"reflect"
-	"regexp"
-	"strings"
 )
 
 // A floating IP is an IP that can be used to reach a particular workload endpoint, but that the
@@ -80,13 +70,13 @@ type floatingIpManager struct {
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
-	activeDnatchains []*iptables.Chain
+	activeDnatChains []*iptables.Chain
 	activeSnatChains []*iptables.Chain
 	natInfo          map[proto.WorkloadEndpointID][]*proto.NatInfo
 	dirtyNatInfo     bool
 }
 
-func newEndpointManager(
+func newFloatingIpManager(
 	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
@@ -106,7 +96,7 @@ func newEndpointManager(
 func (m *floatingIpManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
-		if ipVersion == 4 {
+		if m.ipVersion == 4 {
 			m.natInfo[*msg.Id] = msg.Endpoint.Ipv4Nat
 		} else {
 			m.natInfo[*msg.Id] = msg.Endpoint.Ipv6Nat
@@ -119,7 +109,7 @@ func (m *floatingIpManager) OnUpdate(protoBufMsg interface{}) {
 }
 
 func (m *floatingIpManager) CompleteDeferredWork() error {
-	if dirtyNatInfo {
+	if m.dirtyNatInfo {
 		// Collate required DNATs.
 		dnats := map[string]string{}
 		for _, natInfos := range m.natInfo {
@@ -167,7 +157,7 @@ func (m *floatingIpManager) CompleteDeferredWork() error {
 			m.natTable.UpdateChains(snatChains)
 			m.activeSnatChains = snatChains
 		}
-		dirtyNatInfo = false
+		m.dirtyNatInfo = false
 	}
 	return nil
 }
