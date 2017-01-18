@@ -175,55 +175,54 @@ type hostEpSpec struct {
 	tierName  string
 }
 
-var _ = Describe("EndpointManager testing", func() {
-	const (
-		ipv4     = "10.0.240.10"
-		ipv4Eth1 = "10.0.240.30"
-		ipv6     = "2001:db8::10.0.240.10"
-	)
-	var (
-		epMgr          *endpointManager
-		filterTable    *mockTable
-		rrConfigNormal rules.Config
-		ipVersion      int
-		eth0Addrs      set.Set
-		loAddrs        set.Set
-		eth1Addrs      set.Set
-	)
-
-	BeforeEach(func() {
-		rrConfigNormal = rules.Config{
-			IPIPEnabled:          true,
-			IPIPTunnelAddress:    nil,
-			IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:   0x8,
-			IptablesMarkNextTier: 0x10,
-		}
-		eth0Addrs = set.New()
-		eth0Addrs.Add(ipv4)
-		eth0Addrs.Add(ipv6)
-		loAddrs = set.New()
-		loAddrs.Add("127.0.1.1")
-		loAddrs.Add("::1")
-		eth1Addrs = set.New()
-		eth1Addrs.Add(ipv4Eth1)
-	})
-
-	JustBeforeEach(func() {
-		renderer := rules.NewRenderer(rrConfigNormal)
-		filterTable = newMockTable()
-		epMgr = newEndpointManager(
-			filterTable,
-			renderer,
-			nil,
-			uint8(ipVersion),
-			[]string{"cali"},
-			nil,
+func endpointManagerTests(ipVersion uint8) func() {
+	return func() {
+		const (
+			ipv4     = "10.0.240.10"
+			ipv4Eth1 = "10.0.240.30"
+			ipv6     = "2001:db8::10.0.240.10"
 		)
-	})
+		var (
+			epMgr          *endpointManager
+			filterTable    *mockTable
+			rrConfigNormal rules.Config
+			eth0Addrs      set.Set
+			loAddrs        set.Set
+			eth1Addrs      set.Set
+		)
 
-	for ipVersion = range []uint8{4, 6} {
+		BeforeEach(func() {
+			rrConfigNormal = rules.Config{
+				IPIPEnabled:          true,
+				IPIPTunnelAddress:    nil,
+				IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				IptablesMarkAccept:   0x8,
+				IptablesMarkNextTier: 0x10,
+			}
+			eth0Addrs = set.New()
+			eth0Addrs.Add(ipv4)
+			eth0Addrs.Add(ipv6)
+			loAddrs = set.New()
+			loAddrs.Add("127.0.1.1")
+			loAddrs.Add("::1")
+			eth1Addrs = set.New()
+			eth1Addrs.Add(ipv4Eth1)
+		})
+
+		JustBeforeEach(func() {
+			renderer := rules.NewRenderer(rrConfigNormal)
+			filterTable = newMockTable()
+			epMgr = newEndpointManager(
+				filterTable,
+				renderer,
+				nil,
+				ipVersion,
+				[]string{"cali"},
+				nil,
+			)
+		})
+
 		It("should be constructable", func() {
 			Expect(epMgr).ToNot(BeNil())
 		})
@@ -494,4 +493,8 @@ var _ = Describe("EndpointManager testing", func() {
 			})
 		})
 	}
-})
+}
+
+var _ = Describe("EndpointManager IPv4", endpointManagerTests(4))
+
+var _ = Describe("EndpointManager IPv6", endpointManagerTests(6))
