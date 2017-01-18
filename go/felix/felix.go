@@ -210,6 +210,7 @@ configRetry:
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
+				DropLogPrefix:        configParams.LogPrefix,
 				ActionOnDrop:         configParams.DropActionOverride,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 
