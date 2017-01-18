@@ -6,7 +6,6 @@ owners:
   email: rob@tigera.io
 import:
 - package: github.com/coreos/etcd
-  version: ea057115224138376622d63a51b699133310ea31
   subpackages:
   - client
   - pkg/transport
