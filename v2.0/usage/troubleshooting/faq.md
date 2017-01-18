@@ -28,11 +28,11 @@ For a more detailed discussion of this topic, see our blog post at
 Yes! Calico's core components support IPv6 out-of-the box. However,
 not all orchestrators that we integrate with support IPv6 yet.
 
-## "Why does my container have a route to 169.245.1.1?"
+## "Why does my container have a route to 169.254.1.1?"
 
 In a Calico network, each host acts as a gateway router for the
 workloads that it hosts.  In container deployments, Calico uses
-169.245.1.1 as the address for the Calico router.  By using a
+169.254.1.1 as the address for the Calico router.  By using a
 link-local address, Calico saves precious IP addresses and avoids
 burdoning the user with configuring a suitable address.
 
@@ -40,13 +40,13 @@ While the routing table may look a little odd to someone who is used to
 configuring  LAN networking, using explicit routes rather than
 subnet-local gateways is fairly common in WAN networking.
 
-## Why can't I see the 169.245.1.1 address mentioned above on my host?
+## Why can't I see the 169.254.1.1 address mentioned above on my host?
 
 Calico tries hard to avoid interfering with any other configuration
 on the host.  Rather than adding the gateway address to the host side
 of each workload interface, Calico sets the `proxy_arp` flag on the
 interface.  This makes the host behave like a gateway, responding to
-ARPs for 169.245.1.1 without having to actually allocate the IP address
+ARPs for 169.254.1.1 without having to actually allocate the IP address
 to the interface.
 
 ## Can I prevent my Kubernetes pods from initiating outgoing connections?
@@ -63,8 +63,8 @@ CIDRs, and ports.
 It can, but not in the way that Calico uses it.
 
 In container deployments, Calico only uses proxy ARP for resolving the
-169.245.1.1 address.  The routing table inside the container ensures
-that all traffic goes via the 169.245.1.1 gateway so that is the only
+169.254.1.1 address.  The routing table inside the container ensures
+that all traffic goes via the 169.254.1.1 gateway so that is the only
 IP that will be ARPed by the container.
 
 ## "Is Calico compliant with PCI/DSS requirements?"
