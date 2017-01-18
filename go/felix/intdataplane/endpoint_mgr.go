@@ -51,10 +51,10 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
-	filterTable   iptablesTable
-	ruleRenderer  rules.RuleRenderer
-	routeTable    routeTable
-	procSysWriter procSysWriter
+	filterTable  iptablesTable
+	ruleRenderer rules.RuleRenderer
+	routeTable   routeTable
+	writeProcSys procSysWriter
 
 	// Active state, updated in CompleteDeferredWork.
 	activeEndpoints      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -120,10 +120,10 @@ func newEndpointManagerWithShims(
 		ipVersion:      ipVersion,
 		wlIfacesRegexp: wlIfacesRegexp,
 
-		filterTable:   filterTable,
-		ruleRenderer:  ruleRenderer,
-		routeTable:    routeTable,
-		procSysWriter: procSysWriter,
+		filterTable:  filterTable,
+		ruleRenderer: ruleRenderer,
+		routeTable:   routeTable,
+		writeProcSys: procSysWriter,
 
 		activeEndpoints:     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeIfaceNameToID: map[string]proto.WorkloadEndpointID{},
@@ -472,24 +472,24 @@ func (m *endpointManager) configureInterface(name string) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 	if m.ipVersion == 4 {
-		err := m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
+		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
 		if err != nil {
 			return err
 		}
-		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
 		if err != nil {
 			return err
 		}
-		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
 		if err != nil {
 			return err
 		}
-		err = m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
 		if err != nil {
 			return err
 		}
 	} else {
-		err := m.procSysWriter(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
 		if err != nil {
 			return err
 		}
