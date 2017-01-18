@@ -21,29 +21,88 @@ import (
 	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/vishvananda/netlink"
 	"net"
-	"os/exec"
+	"time"
 )
 
-// configureIPIPDevice ensures the IPIP tunneld evice is up and configures correctly.
-func configureIPIPDevice(mtu int, address net.IP) error {
+// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
+// when IPIP is enabled.  It doesn't actually program the rules, because they are part of the
+// top-level static chains.
+//
+// ipipManager also takes care of the configuration of the IPIP tunnel device.
+type ipipManager struct {
+	ipsetReg ipsetsRegistry
+
+	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
+	// net.IPs because we're going to pass them directly to the IPSet API.
+	activeHostnameToIP map[string]string
+	ipSetInSync        bool
+
+	// Config for creating/refreshing the IP set.
+	ipSetMetadata ipsets.IPSetMetadata
+
+	// Dataplane shim.
+	dataplane ipipDataplane
+}
+
+func newIPIPManager(
+	ipSetReg *ipsets.Registry,
+	maxIPSetSize int,
+) *ipipManager {
+	return newIPIPManagerWithShim(ipSetReg, maxIPSetSize, realIPIPNetlink{})
+}
+
+func newIPIPManagerWithShim(
+	ipSetReg ipsetsRegistry,
+	maxIPSetSize int,
+	dataplane ipipDataplane,
+) *ipipManager {
+	ipipMgr := &ipipManager{
+		ipsetReg:           ipSetReg,
+		activeHostnameToIP: map[string]string{},
+		dataplane:          dataplane,
+		ipSetMetadata: ipsets.IPSetMetadata{
+			MaxSize: maxIPSetSize,
+			SetID:   rules.IPSetIDAllHostIPs,
+			Type:    ipsets.IPSetTypeHashIP,
+		},
+	}
+	return ipipMgr
+}
+
+// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
+// checks that it is still correctly configured.
+func (d *ipipManager) KeepIPIPDeviceInSync(mtu int, address net.IP) {
+	log.Info("IPIP thread started.")
+	for {
+		err := d.configureIPIPDevice(mtu, address)
+		if err != nil {
+			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		time.Sleep(10 * time.Second)
+	}
+}
+
+// configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
+func (d *ipipManager) configureIPIPDevice(mtu int, address net.IP) error {
 	logCxt := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
 	})
 	logCxt.Debug("Configuring IPIP tunnel")
-	link, err := netlink.LinkByName("tunl0")
+	link, err := d.dataplane.LinkByName("tunl0")
 	if err != nil {
 		log.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
 		// We call out to "ip tunnel", which takes care of loading the kernel module if
 		// needed.  The tunl0 device is actually created automatically by the kernel
 		// module.
-		cmd := exec.Command("ip", "tunnel", "add", "tunl0", "mode", "ipip")
-		err := cmd.Run()
+		err := d.dataplane.RunCmd("ip", "tunnel", "add", "tunl0", "mode", "ipip")
 		if err != nil {
 			log.WithError(err).Warning("Failed to add IPIP tunnel device")
 			return err
 		}
-		link, err = netlink.LinkByName("tunl0")
+		link, err = d.dataplane.LinkByName("tunl0")
 		if err != nil {
 			log.WithError(err).Warning("Failed to get tunnel device")
 			return err
@@ -54,7 +113,7 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 	oldMTU := attrs.MTU
 	if oldMTU != mtu {
 		logCxt.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
-		if err := netlink.LinkSetMTU(link, mtu); err != nil {
+		if err := d.dataplane.LinkSetMTU(link, mtu); err != nil {
 			log.WithError(err).Warn("Failed to set tunnel device MTU")
 			return err
 		}
@@ -62,14 +121,14 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 	}
 	if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
-		if err := netlink.LinkSetUp(link); err != nil {
+		if err := d.dataplane.LinkSetUp(link); err != nil {
 			log.WithError(err).Warn("Failed to set tunnel device up")
 			return err
 		}
 		logCxt.Info("Set tunnel admin up")
 	}
 
-	if err := setLinkAddressV4("tunl0", address); err != nil {
+	if err := d.setLinkAddressV4("tunl0", address); err != nil {
 		log.WithError(err).Warn("Failed to set tunnel device IP")
 		return err
 	}
@@ -78,19 +137,19 @@ func configureIPIPDevice(mtu int, address net.IP) error {
 
 // setLinkAddressV4 updates the given link to set its local IP address.  It removes any other
 // addresses.
-func setLinkAddressV4(linkName string, address net.IP) error {
+func (d *ipipManager) setLinkAddressV4(linkName string, address net.IP) error {
 	logCxt := log.WithFields(log.Fields{
 		"link": linkName,
 		"addr": address,
 	})
 	logCxt.Debug("Setting local IPv4 address on link.")
-	link, err := netlink.LinkByName(linkName)
+	link, err := d.dataplane.LinkByName(linkName)
 	if err != nil {
 		log.WithError(err).WithField("name", linkName).Warning("Failed to get device")
 		return err
 	}
 
-	addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+	addrs, err := d.dataplane.AddrList(link, netlink.FAMILY_V4)
 	if err != nil {
 		log.WithError(err).Warn("Failed to list interface addresses")
 		return err
@@ -104,7 +163,7 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 			continue
 		}
 		logCxt.WithField("oldAddr", oldAddr).Info("Removing old address")
-		if err := netlink.AddrDel(link, &oldAddr); err != nil {
+		if err := d.dataplane.AddrDel(link, &oldAddr); err != nil {
 			log.WithError(err).Warn("Failed to delete address")
 			return err
 		}
@@ -112,14 +171,15 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 
 	if !found && address != nil {
 		logCxt.Info("Address wasn't present, adding it.")
+		mask := net.CIDRMask(32, 32)
 		ipNet := net.IPNet{
-			IP:   address,
-			Mask: net.CIDRMask(32, 32),
+			IP:   address.Mask(mask), // Mask the IP to match ParseCIDR()'s behaviour.
+			Mask: mask,
 		}
 		addr := &netlink.Addr{
 			IPNet: &ipNet,
 		}
-		if err := netlink.AddrAdd(link, addr); err != nil {
+		if err := d.dataplane.AddrAdd(link, addr); err != nil {
 			log.WithError(err).WithField("addr", address).Warn("Failed to add address")
 			return err
 		}
@@ -129,69 +189,41 @@ func setLinkAddressV4(linkName string, address net.IP) error {
 	return nil
 }
 
-// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
-// when IPIP is enabled.  It doesn't actually program the rules, because they are part of the
-// top-level static chains.
-type ipipManager struct {
-	ipsetReg *ipsets.Registry
-	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
-	// net.IPs because we're going to pass them directly to the IPSet API.
-	activeHostnameToIP map[string]string
-}
-
-func newIPIPManager(
-	ipSetReg *ipsets.Registry,
-	maxIPSetSize int,
-) *ipipManager {
-	// Make sure our IP set exists.  We set the contents to empty here
-	// but the IPSets object will defer writing the IP sets until we're
-	// in sync, by which point we'll have added all our CIDRs into the sets.
-	ipSetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
-		MaxSize: maxIPSetSize,
-		SetID:   rules.IPSetIDAllHostIPs,
-		Type:    ipsets.IPSetTypeHashIP,
-	}, []string{})
-
-	return &ipipManager{
-		ipsetReg:           ipSetReg,
-		activeHostnameToIP: map[string]string{},
-	}
-}
-
 func (d *ipipManager) OnUpdate(msg interface{}) {
-	var hostname string
-	var newIP string
-
 	switch msg := msg.(type) {
 	case *proto.HostMetadataUpdate:
 		log.WithField("hostanme", msg.Hostname).Debug("Host update/create")
-		hostname = msg.Hostname
-		newIP = msg.Ipv4Addr
+		d.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
+		d.ipSetInSync = false
 	case *proto.HostMetadataRemove:
 		log.WithField("hostname", msg.Hostname).Debug("Host removed")
-		hostname = msg.Hostname
-	default:
-		return
-	}
-
-	logCxt := log.WithField("hostname", hostname)
-	if oldIP := d.activeHostnameToIP[hostname]; oldIP != "" {
-		// For simplicity always remove the old value from the IP set.  The IPSets object
-		// defers and coalesces the update so removing then adding the same IP is a no-op
-		// anyway.
-		logCxt.WithField("oldIP", oldIP).Debug("Removing old IP.")
-		d.ipsetReg.RemoveMembers(rules.IPSetIDAllHostIPs, []string{oldIP})
-		delete(d.activeHostnameToIP, hostname)
-	}
-	if newIP != "" {
-		// Update the IP sets.
-		logCxt.Debug("Adding host to IP set.")
-		d.ipsetReg.AddMembers(rules.IPSetIDAllHostIPs, []string{newIP})
-		d.activeHostnameToIP[hostname] = newIP
+		delete(d.activeHostnameToIP, msg.Hostname)
+		d.ipSetInSync = false
 	}
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	// Nothing to do, we don't defer any work.
+	if !m.ipSetInSync {
+		// For simplicity (and on the assumption that host add/removes are rare) rewrite
+		// the whole IP set whenever we get a change.  To replace this with delta handling
+		// would require reference counting the IPs because it's possible for two hosts
+		// to (at least transiently) share an IP.  That would add occupancy and make the
+		// code more complex.
+		log.Info("All-hosts IP set out-of sync, refreshing it.")
+		members := make([]string, 0, len(m.activeHostnameToIP))
+		for _, ip := range m.activeHostnameToIP {
+			members = append(members, ip)
+		}
+		m.ipsetReg.AddOrReplaceIPSet(m.ipSetMetadata, members)
+		m.ipSetInSync = true
+	}
 	return nil
+}
+
+// ipsetsRegistry is a shim interface for mocking the IPSet Registry.
+type ipsetsRegistry interface {
+	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
+	AddMembers(setID string, newMembers []string)
+	RemoveMembers(setID string, removedMembers []string)
+	RemoveIPSet(setID string)
 }

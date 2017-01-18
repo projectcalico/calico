@@ -97,7 +97,7 @@ type RuleRenderer interface {
 	HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
-	ProfileToIptablesChains(policyID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
+	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule
 
 	NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain

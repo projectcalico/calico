@@ -218,6 +218,7 @@ configRetry:
 			},
 			IPIPMTU:                 configParams.IpInIpMtu,
 			IptablesRefreshInterval: time.Duration(configParams.IptablesRefreshInterval) * time.Second,
+			MaxIPSetSize:            configParams.MaxIpsetSize,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()

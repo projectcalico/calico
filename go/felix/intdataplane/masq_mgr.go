@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package intdataplane
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/iptables"
 	"github.com/projectcalico/felix/go/felix/proto"
 	"github.com/projectcalico/felix/go/felix/rules"
 	"github.com/projectcalico/felix/go/felix/set"
@@ -37,8 +36,8 @@ import (
 // pool is excluded.
 type masqManager struct {
 	ipVersion    uint8
-	ipsetReg     *ipsets.Registry
-	natTable     *iptables.Table
+	ipsetReg     ipsetsRegistry
+	natTable     iptablesTable
 	activePools  map[string]*proto.IPAMPool
 	masqPools    set.Set
 	dirty        bool
@@ -48,8 +47,8 @@ type masqManager struct {
 }
 
 func newMasqManager(
-	ipSetReg *ipsets.Registry,
-	natTable *iptables.Table,
+	ipSetReg ipsetsRegistry,
+	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,
 	ipVersion uint8,

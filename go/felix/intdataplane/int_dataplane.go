@@ -32,6 +32,8 @@ type Config struct {
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 
+	MaxIPSetSize int
+
 	IptablesRefreshInterval time.Duration
 
 	RulesConfig rules.Config
@@ -74,6 +76,8 @@ type InternalDataplane struct {
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
 	ipSetRegistries      []*ipsets.Registry
+
+	ipipManager *ipipManager
 
 	ifaceMonitor     *ifacemonitor.InterfaceMonitor
 	ifaceUpdates     chan *ifaceUpdate
@@ -138,7 +142,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, !config.DisableIPv6)
 
-	dp.RegisterManager(newIPSetsManager(ipSetRegV4))
+	dp.RegisterManager(newIPSetsManager(ipSetRegV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		filterTableV4,
@@ -147,10 +151,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		4,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
-	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, 1000000, 4))
+	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
-		dp.RegisterManager(newIPIPManager(ipSetRegV4, 1000000)) // IPv4-only
+		dp.ipipManager = newIPIPManager(ipSetRegV4, config.MaxIPSetSize)
+		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
 	if !config.DisableIPv6 {
 		natTableV6 := iptables.NewTable(
@@ -173,7 +178,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetRegV6))
+		dp.RegisterManager(newIPSetsManager(ipSetRegV6, config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			filterTableV6,
@@ -182,7 +187,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			6,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
-		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, 1000000, 6))
+		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
 
 	for _, t := range dp.iptablesNATTables {
@@ -289,19 +294,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	if d.config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go func() {
-			log.Info("IPIP thread started.")
-			for {
-				err := configureIPIPDevice(d.config.IPIPMTU,
-					d.config.RulesConfig.IPIPTunnelAddress)
-				if err != nil {
-					log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				time.Sleep(10 * time.Second)
-			}
-		}()
+		go d.ipipManager.KeepIPIPDeviceInSync(
+			d.config.IPIPMTU,
+			d.config.RulesConfig.IPIPTunnelAddress,
+		)
 	} else {
 		log.Info("IPIP disabled. Not starting tunnel update thread.")
 	}
@@ -440,4 +436,12 @@ func (d *InternalDataplane) loopReportingStatus() {
 			Uptime:       uptimeSecs,
 		}
 	}
+}
+
+// iptablesTable is a shim interface for iptables.Table.
+type iptablesTable interface {
+	UpdateChain(chain *iptables.Chain)
+	UpdateChains([]*iptables.Chain)
+	RemoveChains([]*iptables.Chain)
+	RemoveChainByName(name string)
 }
