@@ -175,47 +175,36 @@ type Table struct {
 	sleep func(d time.Duration)
 }
 
+type TableOptions struct {
+	HistoricChainPrefixes    []string
+	ExtraCleanupRegexPattern string
+
+	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
+	NewCmdOverride cmdFactory
+	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
+	SleepOverride func(d time.Duration)
+}
+
 func NewTable(
 	name string,
 	ipVersion uint8,
-	historicChainPrefixes []string,
 	hashPrefix string,
-	extraCleanupRegexPattern string,
-) *Table {
-	return NewTableWithShims(
-		name,
-		ipVersion,
-		historicChainPrefixes,
-		hashPrefix,
-		extraCleanupRegexPattern,
-		newRealCmd,
-		time.Sleep,
-	)
-}
-
-// NewTableWithShims is a test constructor, allowing exec.Command to be shimmed.
-func NewTableWithShims(
-	name string,
-	ipVersion uint8,
-	historicChainPrefixes []string,
-	hashPrefix string,
-	extraCleanupRegexPattern string,
-	newCmd cmdFactory,
-	sleep func(d time.Duration),
+	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
 	// --comment "cali:abcd1234_-".
 	hashCommentRegexp := regexp.MustCompile(`--comment "?` + hashPrefix + `([a-zA-Z0-9_-]+)"?`)
-	ourChainsPattern := "^(" + strings.Join(historicChainPrefixes, "|") + ")"
+	ourChainsPattern := "^(" + strings.Join(options.HistoricChainPrefixes, "|") + ")"
 	ourChainsRegexp := regexp.MustCompile(ourChainsPattern)
 
 	oldInsertRegexpParts := []string{}
-	for _, prefix := range historicChainPrefixes {
+	for _, prefix := range options.HistoricChainPrefixes {
 		part := fmt.Sprintf("(?:-j|--jump) %s", prefix)
 		oldInsertRegexpParts = append(oldInsertRegexpParts, part)
 	}
-	if extraCleanupRegexPattern != "" {
-		oldInsertRegexpParts = append(oldInsertRegexpParts, extraCleanupRegexPattern)
+	if options.ExtraCleanupRegexPattern != "" {
+		oldInsertRegexpParts = append(oldInsertRegexpParts,
+			options.ExtraCleanupRegexPattern)
 	}
 	oldInsertPattern := strings.Join(oldInsertRegexpParts, "|")
 	oldInsertRegexp := regexp.MustCompile(oldInsertPattern)
@@ -227,6 +216,16 @@ func NewTableWithShims(
 	for _, kernelChain := range tableToKernelChains[name] {
 		inserts[kernelChain] = []Rule{}
 		dirtyInserts.Add(kernelChain)
+	}
+
+	// Allow override of exec.Command() and time.Sleep() for test purposes.
+	newCmd := newRealCmd
+	if options.NewCmdOverride != nil {
+		newCmd = options.NewCmdOverride
+	}
+	sleep := time.Sleep
+	if options.SleepOverride != nil {
+		sleep = options.SleepOverride
 	}
 
 	table := &Table{

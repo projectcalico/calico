@@ -35,14 +35,16 @@ var _ = Describe("Table with an empty dataplane", func() {
 			"INPUT":   {},
 			"OUTPUT":  {},
 		})
-		table = NewTableWithShims(
+		table = NewTable(
 			"filter",
 			4,
-			rules.AllHistoricChainNamePrefixes,
 			rules.RuleHashPrefix,
-			"",
-			dataplane.newCmd,
-			dataplane.sleep,
+			TableOptions{
+				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				ExtraCleanupRegexPattern: "",
+				NewCmdOverride:           dataplane.newCmd,
+				SleepOverride:            dataplane.sleep,
+			},
 		)
 	})
 
@@ -380,14 +382,16 @@ var _ = Describe("Table with a dirty dataplane", func() {
 	}
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", initialChains())
-		table = NewTableWithShims(
+		table = NewTable(
 			"filter",
 			4,
-			rules.AllHistoricChainNamePrefixes,
 			rules.RuleHashPrefix,
-			"sneaky-rule",
-			dataplane.newCmd,
-			dataplane.sleep,
+			TableOptions{
+				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				ExtraCleanupRegexPattern: "sneaky-rule",
+				NewCmdOverride:           dataplane.newCmd,
+				SleepOverride:            dataplane.sleep,
+			},
 		)
 	})
 
