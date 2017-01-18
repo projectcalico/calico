@@ -35,6 +35,7 @@ type Config struct {
 	MaxIPSetSize int
 
 	IptablesRefreshInterval time.Duration
+	IptablesInsertMode      string
 
 	RulesConfig rules.Config
 }

@@ -167,6 +167,10 @@ type Table struct {
 	iptablesRestoreCmd string
 	iptablesSaveCmd    string
 
+	// insertMode is either "insert" or "append"; whether we insert our rules or append them
+	// to top-level chains.
+	insertMode string
+
 	logCxt *log.Entry
 
 	// Factory for making commands, used by UTs to shim exec.Command().
@@ -178,6 +182,7 @@ type Table struct {
 type TableOptions struct {
 	HistoricChainPrefixes    []string
 	ExtraCleanupRegexPattern string
+	InsertMode               string
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdFactory
@@ -218,6 +223,16 @@ func NewTable(
 		dirtyInserts.Add(kernelChain)
 	}
 
+	var insertMode string
+	switch options.InsertMode {
+	case "", "insert":
+		insertMode = "insert"
+	case "append":
+		insertMode = "append"
+	default:
+		log.WithField("insertMode", options.InsertMode).Panic("Unknown insert mode")
+	}
+
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
 	newCmd := newRealCmd
 	if options.NewCmdOverride != nil {
@@ -244,6 +259,7 @@ func NewTable(
 		hashCommentRegexp: hashCommentRegexp,
 		ourChainsRegexp:   ourChainsRegexp,
 		oldInsertRegexp:   oldInsertRegexp,
+		insertMode:        insertMode,
 
 		newCmd: newCmd,
 		sleep:  sleep,
@@ -303,59 +319,23 @@ func (t *Table) loadDataplaneState() {
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
 		}
+		dpHashes := dataplaneHashes[chainName]
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Not one of our chains, check for any insertions.
-			logCxt.Debug("Scanning chain for inserts")
-			seenNonCalicoRule := false
-			dirty := false
-			expectedRules := t.chainToInsertedRules[chainName]
-			expectedHashes := calculateRuleInsertHashes(chainName, expectedRules)
-			numHashesSeen := 0
-			if len(dataplaneHashes[chainName]) < len(expectedHashes) {
-				// Chain is too short to contain all out rules.
-				logCxt.Info("Chain too short to hold all Calico rules.")
-				dirty = true
-			} else {
-				// Chain is long enough to contain all our rules, if we iterate
-				// over the chain then we're guaranteed to check all the hashes.
-				for i, hash := range dataplaneHashes[chainName] {
-					if hash == "" {
-						seenNonCalicoRule = true
-						continue
-					}
-					numHashesSeen += 1
-					if seenNonCalicoRule {
-						// Calico rule after a non-calico rule, need to re-insert
-						// our rules to move them to the top.
-						logCxt.Info("Calico rules moved.")
-						dirty = true
-						break
-					}
-					if i >= len(expectedRules) {
-						// More insertions than we're expecting, need to clean up.
-						logCxt.Info("Found extra Calico rule insertions")
-						dirty = true
-						break
-					}
-					if hash != expectedHashes[i] {
-						// Incorrect hash.
-						logCxt.Info("Found incorrect Calico rule insertions.")
-						dirty = true
-						break
-					}
-				}
-				if !dirty && numHashesSeen != len(expectedHashes) {
-					logCxt.Info("Chain has incorrect number of insertions.")
-					dirty = true
-				}
-			}
-			if dirty {
-				logCxt.Info("Marking chain for refresh.")
+			// Not one of our chains so it may be one that we're inserting rules into.
+			// Re-calculate the expected rule insertions based on the current length
+			// of the chain (since other processes may have inserted/removed rules
+			// from the chain, throwing off the numbers).
+			expectedHashes, _ = t.expectedHashesForInsertChain(
+				chainName,
+				numEmptyStrings(dpHashes),
+			)
+			if !reflect.DeepEqual(dpHashes, expectedHashes) {
+				logCxt.Warn("Detected out-of-sync inserts, marking for resync")
 				t.dirtyInserts.Add(chainName)
 			}
 		} else {
 			// One of our chains, should match exactly.
-			if !reflect.DeepEqual(dataplaneHashes[chainName], expectedHashes) {
+			if !reflect.DeepEqual(dpHashes, expectedHashes) {
 				logCxt.Warn("Detected out-of-sync Calico chain, marking for resync")
 				t.dirtyChains.Add(chainName)
 			}
@@ -365,21 +345,27 @@ func (t *Table) loadDataplaneState() {
 
 	// Now scan for chains that shouldn't be there and mark for deletion.
 	t.logCxt.Info("Scanning for unexpected iptables chains")
-	for chainName := range dataplaneHashes {
+	for chainName, dataplaneHashes := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
 		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
 			// Already an update pending for this chain.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
 		}
-		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Skip non-felix chain
-			logCxt.Debug("Skipping non-calico chain")
-			continue
-		}
 		if _, ok := t.chainToDataplaneHashes[chainName]; ok {
 			// Chain expected, we'll have checked its contents above.
 			logCxt.Debug("Skipping expected chain")
+			continue
+		}
+		if !t.ourChainsRegexp.MatchString(chainName) {
+			// Non-calico chain, check it doesn't have any rule insertions in it.
+			for _, hash := range dataplaneHashes {
+				if hash != "" {
+					logCxt.Info("Found unexpected insert, marking for cleanup")
+					t.dirtyInserts.Add(chainName)
+					break
+				}
+			}
 			continue
 		}
 		// Chain exists in dataplane but not in memory, mark as dirty so we'll clean it up.
@@ -390,6 +376,28 @@ func (t *Table) loadDataplaneState() {
 	t.logCxt.Info("Done scanning, in sync with dataplane")
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.inSyncWithDataPlane = true
+}
+
+// expectedHashesForInsertChain calculates the expected hashes for a whole top-level chain
+// given our inserts.  If we're in append mode, that consists of numNonCalicoRules empty strings
+// followed by our hashes; in insert mode, the opposite way round.  To avoid recalculation, it
+// returns the rule hashes as a second output.
+func (t *Table) expectedHashesForInsertChain(
+	chainName string,
+	numNonCalicoRules int,
+) (allHashes, ruleHashes []string) {
+	insertedRules := t.chainToInsertedRules[chainName]
+	allHashes = make([]string, len(insertedRules)+numNonCalicoRules)
+	ruleHashes = calculateRuleInsertHashes(chainName, insertedRules)
+	offset := 0
+	if t.insertMode == "append" {
+		log.Debug("In append mode, returning our hashes at end.")
+		offset = numNonCalicoRules
+	}
+	for i, hash := range ruleHashes {
+		allHashes[i+offset] = hash
+	}
+	return
 }
 
 // getHashesFromDataplane loads the current state of our table and parses out the hashes that we
@@ -593,28 +601,10 @@ func (t *Table) applyUpdates() error {
 		previousHashes := t.chainToDataplaneHashes[chainName]
 
 		// Calculate the hashes for our inserted rules.
-		rules := t.chainToInsertedRules[chainName]
-		currentHashes := calculateRuleInsertHashes(chainName, rules)
+		newChainHashes, newRuleHashes := t.expectedHashesForInsertChain(
+			chainName, numEmptyStrings(previousHashes))
 
-		needsRewrite := false
-		if len(previousHashes) < len(currentHashes) ||
-			!reflect.DeepEqual(currentHashes, previousHashes[:len(currentHashes)]) {
-			// Hashes are wrong, rules need to be re-inserted.
-			t.logCxt.WithField("chainName", chainName).Info("Inserted rules changed, updating.")
-			needsRewrite = true
-		} else {
-			// Hashes were correct for the first few rules, check whether there are any
-			// stray rules further down the chain.
-			for i := len(currentHashes); i < len(previousHashes); i++ {
-				if previousHashes[i] != "" {
-					t.logCxt.WithField("chainName", chainName).Info(
-						"Chain contains old rule insertion, updating.")
-					needsRewrite = true
-					break
-				}
-			}
-		}
-		if !needsRewrite {
+		if reflect.DeepEqual(newChainHashes, previousHashes) {
 			// Chain is in sync, skip to next one.
 			return nil
 		}
@@ -629,18 +619,29 @@ func (t *Table) applyUpdates() error {
 				line := deleteRule(chainName, ruleNum)
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
-			} else {
-				// Make sure currentHashes ends up the right length.
-				currentHashes = append(currentHashes, "")
 			}
 		}
-		for i := len(rules) - 1; i >= 0; i-- {
-			prefixFrag := t.commentFrag(currentHashes[i])
-			line := rules[i].RenderInsert(chainName, prefixFrag)
-			inputBuf.WriteString(line)
-			inputBuf.WriteString("\n")
+
+		rules := t.chainToInsertedRules[chainName]
+		if t.insertMode == "insert" {
+			log.Debug("Rendering insert rules.")
+			for i := len(rules) - 1; i >= 0; i-- {
+				prefixFrag := t.commentFrag(newRuleHashes[i])
+				line := rules[i].RenderInsert(chainName, prefixFrag)
+				inputBuf.WriteString(line)
+				inputBuf.WriteString("\n")
+			}
+		} else {
+			log.Debug("Rendering append rules.")
+			for i := 0; i < len(rules); i++ {
+				prefixFrag := t.commentFrag(newRuleHashes[i])
+				line := rules[i].RenderAppend(chainName, prefixFrag)
+				inputBuf.WriteString(line)
+				inputBuf.WriteString("\n")
+			}
 		}
-		newHashes[chainName] = currentHashes
+
+		newHashes[chainName] = newChainHashes
 
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
@@ -720,4 +721,14 @@ func calculateRuleInsertHashes(chainName string, rules []Rule) []string {
 		Rules: rules,
 	}
 	return (&chain).RuleHashes()
+}
+
+func numEmptyStrings(strs []string) int {
+	count := 0
+	for _, s := range strs {
+		if s == "" {
+			count++
+		}
+	}
+	return count
 }
