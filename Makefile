@@ -371,6 +371,19 @@ go-ut-no-cover: go/vendor/.up-to-date $(GO_FILES)
 	    calico-build/golang \
 	    ginkgo -r
 
+.PHONY: go-ut-watch
+go-ut-watch: go/vendor/.up-to-date $(GO_FILES)
+	@echo Watching go UTs for changes...
+	$(MAKE) calico-build/golang
+	mkdir -p .go-pkg-cache
+	$(DOCKER_RUN_RM) \
+	    --net=host \
+	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
+	    -w /go/src/github.com/projectcalico/felix/go \
+	    calico-build/golang \
+	    ginkgo watch -r
+
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: go-cover-browser
 go-cover-browser: go/combined.coverprofile
