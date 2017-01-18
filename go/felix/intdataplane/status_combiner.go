@@ -30,12 +30,13 @@ type endpointStatusCombiner struct {
 
 func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
 	e := &endpointStatusCombiner{
-		ipVersionToStatuses: map[uint8]map[proto.WorkloadEndpointID]string{
-			4: map[proto.WorkloadEndpointID]string{},
-		},
-		dirtyIDs:      set.New(),
-		fromDataplane: fromDataplane,
+		ipVersionToStatuses: map[uint8]map[proto.WorkloadEndpointID]string{},
+		dirtyIDs:            set.New(),
+		fromDataplane:       fromDataplane,
 	}
+
+	// IPv4 is always enabled.
+	e.ipVersionToStatuses[4] = map[proto.WorkloadEndpointID]string{}
 	if ipv6Enabled {
 		// If IPv6 is enabled, track the IPv6 state too.  We use the presence of this
 		// extra map to trigger merging.
