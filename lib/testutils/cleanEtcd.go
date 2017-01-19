@@ -15,13 +15,24 @@
 package testutils
 
 import (
+	"context"
 	"log"
 	"os/exec"
+
+	etcdclient "github.com/coreos/etcd/client"
 )
+
+var kapi etcdclient.KeysAPI
+
+func init() {
+	cfg := etcdclient.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
+	c, _ := etcdclient.New(cfg)
+	kapi = etcdclient.NewKeysAPI(c)
+}
 
 // CleanEtcd is a utility function to wipe clean "/calico" recursively from etcd.
 func CleanEtcd() {
-	err := exec.Command("etcdctl", "rm", "/calico", "--recursive").Run()
+	_, err := kapi.Delete(context.Background(), "/calico", &etcdclient.DeleteOptions{Dir: true, Recursive: true})
 	if err != nil {
 		log.Println(err)
 	}
