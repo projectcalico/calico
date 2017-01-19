@@ -314,7 +314,7 @@ class Controller(object):
             except Queue.Full:
                 _log.exception("Event queue full")
             except Exception:
-                _log.exception("Unahandled exception killed %s manager", resource_type)
+                _log.exception("Unhandled exception killed %s manager", resource_type)
             finally:
                 # Sleep for a second so that we don't tight-loop.
                 _log.warning("Re-starting watch on resource: %s",
