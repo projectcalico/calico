@@ -337,6 +337,10 @@ func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) s
 }
 
 func (m *endpointManager) resolveWorkloadEndpoints() error {
+	// Optimisation, only recalculate the dispatch chains if we've never done so or if the
+	// workloads have changed in some way.
+	needToCheckDispatchChains := m.activeDispatchChains == nil || len(m.pendingWlEpUpdates) > 0
+
 	// Update any dirty endpoints.
 	for id, workload := range m.pendingWlEpUpdates {
 		logCxt := log.WithField("id", id)
@@ -419,15 +423,15 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 		m.epIDsToUpdateStatus.Add(id)
 	}
 
-	// Rewrite the dispatch chains if they've changed.
-	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
-	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
-	newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
-	if !reflect.DeepEqual(newDispatchChains, m.activeDispatchChains) {
-		log.Info("Workloads changed, updating dispatch chains.")
-		m.filterTable.RemoveChains(m.activeDispatchChains)
-		m.filterTable.UpdateChains(newDispatchChains)
-		m.activeDispatchChains = newDispatchChains
+	if needToCheckDispatchChains {
+		// Rewrite the dispatch chains if they've changed.
+		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
+		if !reflect.DeepEqual(newDispatchChains, m.activeDispatchChains) {
+			log.Info("Workloads changed, updating dispatch chains.")
+			m.filterTable.RemoveChains(m.activeDispatchChains)
+			m.filterTable.UpdateChains(newDispatchChains)
+			m.activeDispatchChains = newDispatchChains
+		}
 	}
 
 	m.wlIfaceNamesToReconfigure.Iter(func(item interface{}) error {
