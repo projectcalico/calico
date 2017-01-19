@@ -1,20 +1,25 @@
 .PHONY: all test
 
-BUILD_CONTAINER_NAME=calico/libcalico_test_container
-BUILD_CONTAINER_MARKER=libcalico_test_container.created
-
-K8S_VERSION=1.4.5
-
-GO_FILES:=$(shell find lib -name '*.go')
-
 default: all
 all: test
 test: ut
 
-## Use this to populate the vendor directory after checking out the repository.
-## To update upstream dependencies, delete the glide.lock file first.
-vendor: 
-	glide install -strip-vendor
+K8S_VERSION=1.4.5
+CALICO_BUILD?=calico/go-build
+PACKAGE_NAME?=projectcalico/libcalico-go
+LOCAL_USER_ID?=$(shell id -u $$USER)
+
+# Use this to populate the vendor directory after checking out the repository.
+# To update upstream dependencies, delete the glide.lock file first.
+vendor: glide.yaml
+	# To build without Docker just run "glide install -strip-vendor"
+	docker run --rm \
+    -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
+    -v $(HOME)/.glide:/home/user/.glide:rw \
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    $(CALICO_BUILD) /bin/sh -c ' \
+		  cd /go/src/github.com/$(PACKAGE_NAME) && \
+      glide install -strip-vendor'
 
 .PHONY: ut
 ## Run the UTs locally.  This requires a local etcd to be running.
@@ -23,20 +28,13 @@ ut: vendor
 
 .PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: $(BUILD_CONTAINER_MARKER) run-kubernetes-master 
+test-containerized: vendor run-kubernetes-master 
+	-mkdir -p .go-pkg-cache
 	docker run --rm --privileged --net=host \
-	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/projectcalico/libcalico-go:rw \
-	$(BUILD_CONTAINER_NAME) bash -c 'make WHAT=$(WHAT) ut && chown $(shell id -u):$(shell id -g) -R ./vendor'
-
-## Install or update the tools used by the build
-.PHONY: update-tools
-update-tools:
-	go get -u github.com/Masterminds/glide
-	go get -u github.com/kisielk/errcheck
-	go get -u golang.org/x/tools/cmd/goimports
-	go get -u github.com/golang/lint/golint
-	go get -u github.com/onsi/ginkgo/ginkgo
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+    -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
+    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && make WHAT=$(WHAT) ut'
 
 ## Run etcd as a container
 run-etcd: stop-etcd
@@ -85,15 +83,10 @@ stop-kubernetes-master:
 stop-etcd:
 	@-docker rm -f calico-etcd
 
-$(BUILD_CONTAINER_MARKER):
-	docker build -f Dockerfile -t $(BUILD_CONTAINER_NAME) .
-	touch $@
-
 .PHONY: clean
 clean:
 	find . -name '*.coverprofile' -type f -delete
-	rm -rf vendor
-	-rm $(BUILD_CONTAINER_MARKER)
+	rm -rf vendor .go-pkg-cache
 
 .PHONY: help
 ## Display this help text
