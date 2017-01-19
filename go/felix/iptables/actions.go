@@ -104,15 +104,15 @@ func (g DNATAction) String() string {
 }
 
 type SNATAction struct {
-	DestAddr string
+	ToAddr string
 }
 
 func (g SNATAction) ToFragment() string {
-	return fmt.Sprintf("--jump SNAT --to-source %s", g.DestAddr)
+	return fmt.Sprintf("--jump SNAT --to-source %s", g.ToAddr)
 }
 
 func (g SNATAction) String() string {
-	return fmt.Sprintf("SNAT->%s", g.DestAddr)
+	return fmt.Sprintf("SNAT->%s", g.ToAddr)
 }
 
 type MasqAction struct{}

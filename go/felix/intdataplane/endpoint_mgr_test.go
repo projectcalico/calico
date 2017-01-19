@@ -638,6 +638,72 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}
 					})
 
+					Context("with floating IPs added to the endpoint", func() {
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &proto.WorkloadEndpointID{
+									OrchestratorId: "k8s",
+									WorkloadId:     "pod-11",
+									EndpointId:     "endpoint-id-11",
+								},
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "up",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers:      []*proto.TierInfo{},
+									Ipv4Nets:   []string{"10.0.240.2/24"},
+									Ipv6Nets:   []string{"2001:db8:2::2/128"},
+									Ipv4Nat: []*proto.NatInfo{
+										{ExtIp: "172.16.1.3", IntIp: "10.0.240.2"},
+										{ExtIp: "172.18.1.4", IntIp: "10.0.240.2"},
+									},
+									Ipv6Nat: []*proto.NatInfo{
+										{ExtIp: "2001:db8:3::2", IntIp: "2001:db8:2::2"},
+										{ExtIp: "2001:db8:4::2", IntIp: "2001:db8:4::2"},
+									},
+								},
+							})
+							epMgr.CompleteDeferredWork()
+						})
+
+						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+
+						It("should set routes", func() {
+							if ipVersion == 6 {
+								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+									{
+										CIDR:    ip.MustParseCIDR("2001:db8:2::2/128"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+									{
+										CIDR:    ip.MustParseCIDR("2001:db8:3::2/128"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+									{
+										CIDR:    ip.MustParseCIDR("2001:db8:4::2/128"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+								})
+							} else {
+								routeTable.checkRoutes("cali12345-ab", []routetable.Target{
+									{
+										CIDR:    ip.MustParseCIDR("10.0.240.0/24"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+									{
+										CIDR:    ip.MustParseCIDR("172.16.1.3/32"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+									{
+										CIDR:    ip.MustParseCIDR("172.18.1.4/32"),
+										DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+									},
+								})
+							}
+						})
+					})
+
 					Context("with the endpoint removed", func() {
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{

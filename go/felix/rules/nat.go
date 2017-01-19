@@ -75,7 +75,7 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 		extIp := snats[intIp]
 		rules = append(rules, iptables.Rule{
 			Match:  iptables.Match().DestNet(intIp).SourceNet(intIp),
-			Action: iptables.SNATAction{DestAddr: extIp},
+			Action: iptables.SNATAction{ToAddr: extIp},
 		})
 	}
 	return []*iptables.Chain{{

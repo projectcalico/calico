@@ -241,22 +241,25 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			// Collect the IP prefixes that we want to route locally to this endpoint:
 			logCxt.Info("Updating endpoint routes.")
 			var (
-				ipStrings []string
-				natInfos  []*proto.NatInfo
+				ipStrings  []string
+				natInfos   []*proto.NatInfo
+				addrSuffix string
 			)
 			if m.ipVersion == 4 {
 				ipStrings = workload.Ipv4Nets
 				natInfos = workload.Ipv4Nat
+				addrSuffix = "/32"
 			} else {
 				ipStrings = workload.Ipv6Nets
 				natInfos = workload.Ipv6Nat
+				addrSuffix = "/128"
 			}
 			if len(natInfos) != 0 {
 				old := ipStrings
 				ipStrings = make([]string, len(old)+len(natInfos))
 				copy(ipStrings, old)
 				for ii, natInfo := range natInfos {
-					ipStrings[len(old)+ii] = natInfo.ExtIp
+					ipStrings[len(old)+ii] = natInfo.ExtIp + addrSuffix
 				}
 			}
 
