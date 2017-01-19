@@ -47,6 +47,7 @@ type routeTable interface {
 // to CompleteDeferredWork().  This is also the basis of our failure handling; updates
 // that fail are left in the pending state so they can be retried later.
 type endpointManager struct {
+	// Config.
 	ipVersion      uint8
 	wlIfacesRegexp *regexp.Regexp
 
@@ -68,19 +69,30 @@ type endpointManager struct {
 	activeWlIDToChains    map[proto.WorkloadEndpointID][]*iptables.Chain
 	activeDispatchChains  []*iptables.Chain
 
+	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
+	// their configuration (sysctls etc.) refreshed.
 	wlIfaceNamesToReconfigure set.Set
-	epIDsToUpdateStatus       set.Set
 
-	// Host endpoint processing.
-	hostIfaceAddrs           map[string]set.Set
-	rawHostEndpoints         map[proto.HostEndpointID]*proto.HostEndpoint
-	hostEndpointsDirty       bool
-	activeHostIfaceToChains  map[string][]*iptables.Chain
+	// epIDsToUpdateStatus contains IDs of endpoints that we need to report status for.
+	// Mix of host and workload endpoint IDs.
+	epIDsToUpdateStatus set.Set
+
+	// hostIfaceToAddrs maps host interface name to the set of IPs on that interface (reported
+	// fro the dataplane).
+	hostIfaceToAddrs map[string]set.Set
+	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
+	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
+	// hostEndpointsDirty is set to true when host endpoints are updated.
+	hostEndpointsDirty bool
+	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
+	activeHostIfaceToChains map[string][]*iptables.Chain
+	// activeHostDispatchChains contains the dispatch chains that we've programmed for host
+	// endpoints.
 	activeHostDispatchChains []*iptables.Chain
-	// hostEpIDToIfaceName records which interface we resolved each host endpoint to.
-	hostEpIDToIfaceName map[proto.HostEndpointID]string
-	// ifaceNameToHostEpID records which endpoint we resolved each host interface to.
-	ifaceNameToHostEpID map[string]proto.HostEndpointID
+	// activeHostEpIDToIfaceName records which interface we resolved each host endpoint to.
+	activeHostEpIDToIfaceName map[proto.HostEndpointID]string
+	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
+	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
 
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
@@ -141,15 +153,11 @@ func newEndpointManagerWithShims(
 		activeWlIfaceNameToID: map[string]proto.WorkloadEndpointID{},
 		activeWlIDToChains:    map[proto.WorkloadEndpointID][]*iptables.Chain{},
 
-		// wlIfaceNamesToReconfigure contains names of workload interfaces that need to
-		// have their configuration (sysctls etc.) refreshed.
 		wlIfaceNamesToReconfigure: set.New(),
 
-		// epIDsToUpdateStatus contains IDs of endpoints that we need to report status for.
-		// Mix of host and workload endpoint IDs.
 		epIDsToUpdateStatus: set.New(),
 
-		hostIfaceAddrs:     map[string]set.Set{},
+		hostIfaceToAddrs:   map[string]set.Set{},
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
@@ -184,9 +192,9 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			return
 		}
 		if msg.Addrs != nil {
-			m.hostIfaceAddrs[msg.Name] = msg.Addrs
+			m.hostIfaceToAddrs[msg.Name] = msg.Addrs
 		} else {
-			delete(m.hostIfaceAddrs, msg.Name)
+			delete(m.hostIfaceToAddrs, msg.Name)
 		}
 		m.hostEndpointsDirty = true
 	}
@@ -243,7 +251,7 @@ func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {
 	if epID, ok := m.activeWlIfaceNameToID[ifaceName]; ok {
 		logCxt.Info("Workload interface state changed; marking for status update.")
 		m.epIDsToUpdateStatus.Add(epID)
-	} else if epID, ok := m.ifaceNameToHostEpID[ifaceName]; ok {
+	} else if epID, ok := m.activeIfaceNameToHostEpID[ifaceName]; ok {
 		logCxt.Info("Host interface state changed; marking for status update.")
 		m.epIDsToUpdateStatus.Add(epID)
 	} else {
@@ -308,7 +316,7 @@ func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) s
 	_, known := m.rawHostEndpoints[id]
 	if known {
 		var ifaceName string
-		ifaceName, resolved = m.hostEpIDToIfaceName[id]
+		ifaceName, resolved = m.activeHostEpIDToIfaceName[id]
 		if resolved {
 			operUp = m.activeUpIfaces.Contains(ifaceName)
 		}
@@ -475,9 +483,9 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	// own.  Rather it is looking at the set of local non-workload interfaces and
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
-	m.ifaceNameToHostEpID = map[string]proto.HostEndpointID{}
-	m.hostEpIDToIfaceName = map[proto.HostEndpointID]string{}
-	for ifaceName, ifaceAddrs := range m.hostIfaceAddrs {
+	m.activeIfaceNameToHostEpID = map[string]proto.HostEndpointID{}
+	m.activeHostEpIDToIfaceName = map[proto.HostEndpointID]string{}
+	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
 			"ifaceAddrs": ifaceAddrs,
@@ -524,14 +532,14 @@ func (m *endpointManager) resolveHostEndpoints() error {
 				"ifaceName":    ifaceName,
 				"bestHostEpId": bestHostEpId,
 			}).Debug("Got HostEp for interface")
-			m.ifaceNameToHostEpID[ifaceName] = bestHostEpId
-			m.hostEpIDToIfaceName[bestHostEpId] = ifaceName
+			m.activeIfaceNameToHostEpID[ifaceName] = bestHostEpId
+			m.activeHostEpIDToIfaceName[bestHostEpId] = ifaceName
 		}
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
 	newHostIfaceChains := map[string][]*iptables.Chain{}
-	for ifaceName, id := range m.ifaceNameToHostEpID {
+	for ifaceName, id := range m.activeIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
 		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
@@ -552,10 +560,8 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	m.activeHostIfaceToChains = newHostIfaceChains
 
 	// Rewrite the dispatch chains if they've changed.
-	// TODO(smc) avoid re-rendering chains if nothing has changed.  (Slightly tricky because
-	// the dispatch chains depend on the interface names and maybe later the IPs in the data.)
-	log.WithField("resolvedHostEpIds", m.ifaceNameToHostEpID).Debug("Rewrite dispatch chains?")
-	newDispatchChains := m.ruleRenderer.HostDispatchChains(m.ifaceNameToHostEpID)
+	log.WithField("resolvedHostEpIds", m.activeIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
+	newDispatchChains := m.ruleRenderer.HostDispatchChains(m.activeIfaceNameToHostEpID)
 	if !reflect.DeepEqual(newDispatchChains, m.activeHostDispatchChains) {
 		log.Info("HostEps changed, updating dispatch chains.")
 		m.filterTable.RemoveChains(m.activeHostDispatchChains)
