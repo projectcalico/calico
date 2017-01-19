@@ -374,10 +374,11 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				// This rule will get rewritten because its hash is incorrect.
 				"-m comment --comment \"cali:1234567890ksamdl\" --jump DROP",
 			},
-			"non-calico-insert": {
-				// This rule will get cleaned up because we don't insert any rules
-				// into this chain.
+			"unexpected-insert": {
 				"--jump ACCEPT",
+				// This rule will get cleaned up because it looks like a Calico
+				// insert rule but it's in a chain that we don't insert anything
+				// into.
 				"-m comment --comment \"cali:hecdSCslEjdBPfds\" --jump DROP",
 				"--jump DROP",
 			},
@@ -439,7 +440,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 			"non-calico": {
 				"--jump ACCEPT",
 			},
-			"non-calico-insert": {
+			"unexpected-insert": {
 				"--jump ACCEPT",
 				"--jump DROP",
 			},
@@ -473,19 +474,12 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		})
 		checkFinalState := func() {
 			expChains := map[string][]string{
-				"FORWARD": {
-					"--jump RETURN",
-					"--jump ACCEPT",
-					"--jump foo-bar",
-					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
-					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
-				},
 				"cali-foobar": {
 					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
 					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
 					"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
 				},
-				"non-calico-insert": {
+				"unexpected-insert": {
 					"--jump ACCEPT",
 					"--jump DROP",
 				},
@@ -679,7 +673,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
 						"-m comment --comment \"cali:ilM9uz5oPwfm0FE-\" --jump RETURN",
 					},
-					"non-calico-insert": {
+					"unexpected-insert": {
 						"--jump ACCEPT",
 						"--jump DROP",
 					},

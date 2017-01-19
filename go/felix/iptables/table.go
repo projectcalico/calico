@@ -358,7 +358,10 @@ func (t *Table) loadDataplaneState() {
 			continue
 		}
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Non-calico chain, check it doesn't have any rule insertions in it.
+			// Non-calico chain that is not tracked in chainToDataplaneHashes. We
+			// haven't seen the chain before and we haven't been asked to insert
+			// anything into it.  Check that it doesn't have an rule insertions in it
+			// from a previous run of Felix.
 			for _, hash := range dataplaneHashes {
 				if hash != "" {
 					logCxt.Info("Found unexpected insert, marking for cleanup")
@@ -385,16 +388,16 @@ func (t *Table) loadDataplaneState() {
 func (t *Table) expectedHashesForInsertChain(
 	chainName string,
 	numNonCalicoRules int,
-) (allHashes, ruleHashes []string) {
+) (allHashes, ourHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
 	allHashes = make([]string, len(insertedRules)+numNonCalicoRules)
-	ruleHashes = calculateRuleInsertHashes(chainName, insertedRules)
+	ourHashes = calculateRuleInsertHashes(chainName, insertedRules)
 	offset := 0
 	if t.insertMode == "append" {
 		log.Debug("In append mode, returning our hashes at end.")
 		offset = numNonCalicoRules
 	}
-	for i, hash := range ruleHashes {
+	for i, hash := range ourHashes {
 		allHashes[i+offset] = hash
 	}
 	return
@@ -610,9 +613,10 @@ func (t *Table) applyUpdates() error {
 		}
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
-		// inserts from this chain and re-insert them.  Need to remove/insert in reverse
-		// order to preserve rule numbers until we're finished.  This clobbers rule counters
-		// but it should be very rare (startup-only unless someone is altering our rules).
+		// rules from this chain, then re-insert/re-append them below.
+		//
+		// Remove in reverse order so that we don't disturb the rule numbers of rules we're
+		// about to remove.
 		for i := len(previousHashes) - 1; i >= 0; i-- {
 			if previousHashes[i] != "" {
 				ruleNum := i + 1
@@ -625,6 +629,9 @@ func (t *Table) applyUpdates() error {
 		rules := t.chainToInsertedRules[chainName]
 		if t.insertMode == "insert" {
 			log.Debug("Rendering insert rules.")
+			// Since each insert is pushed onto the top of the chain, do the inserts in
+			// reverse order so that they end up in the correct order in the final
+			// state of the chain.
 			for i := len(rules) - 1; i >= 0; i-- {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
 				line := rules[i].RenderInsert(chainName, prefixFrag)
