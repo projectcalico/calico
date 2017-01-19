@@ -47,22 +47,22 @@ import (
 // sends to a floating IP that maps back to itself; for this case the datapath processing must be as
 // follows:
 //
-// 1. Workload sends to <floating IP>, so packet has SRC=<workload IP> DST=<floating IP>
+// 1. Workload sends to <floating IP>, so packet has SRC=<workload IP> DST=<floating IP>.
 //
-// 2. Compute node does DNAT for the floating IP, so now packet has SRC=<workload IP> DST=<workload IP>
+// 2. Compute node does DNAT for the floating IP, so now packet has SRC=<workload IP> DST=<workload IP>.
 //
-// 3. Compute node does SNAT, so that packet has SRC=<floating IP> DST=<workload IP>
+// 3. Compute node does SNAT, so that packet has SRC=<floating IP> DST=<workload IP>.
 //
-// 4. Workload receives packet again, with SRC=<floating IP> DST=<workload IP>
+// 4. Workload receives packet again, with SRC=<floating IP> DST=<workload IP>.
 //
 // If (3) was omitted, the workload would receive a packet from a non-loopback interface with
 // SRC=<my own IP> DST=<my own IP>, and so would probably drop it.
 
-// floatingIpManager programs the 'cali-fip-dnat' and 'cali-fip-snat' chains in the iptables 'nat'
+// floatingIPManager programs the 'cali-fip-dnat' and 'cali-fip-snat' chains in the iptables 'nat'
 // table with DNAT and SNAT rules for the floating IPs associated with local workload endpoints.
 // The cali-fip-dnat chain is statically linked from cali-OUTPUT and cali-PREROUTING, and
 // cali-fip-snat from cali-POSTROUTING.
-type floatingIpManager struct {
+type floatingIPManager struct {
 	ipVersion uint8
 
 	// Our dependencies.
@@ -70,30 +70,30 @@ type floatingIpManager struct {
 	ruleRenderer rules.RuleRenderer
 
 	// Internal state.
-	activeDnatChains []*iptables.Chain
-	activeSnatChains []*iptables.Chain
+	activeDNATChains []*iptables.Chain
+	activeSNATChains []*iptables.Chain
 	natInfo          map[proto.WorkloadEndpointID][]*proto.NatInfo
-	dirtyNatInfo     bool
+	dirtyNATInfo     bool
 }
 
-func newFloatingIpManager(
+func newFloatingIPManager(
 	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
-) *floatingIpManager {
-	return &floatingIpManager{
+) *floatingIPManager {
+	return &floatingIPManager{
 		natTable:     natTable,
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
 
-		activeDnatChains: []*iptables.Chain{},
-		activeSnatChains: []*iptables.Chain{},
+		activeDNATChains: []*iptables.Chain{},
+		activeSNATChains: []*iptables.Chain{},
 		natInfo:          map[proto.WorkloadEndpointID][]*proto.NatInfo{},
-		dirtyNatInfo:     true,
+		dirtyNATInfo:     true,
 	}
 }
 
-func (m *floatingIpManager) OnUpdate(protoBufMsg interface{}) {
+func (m *floatingIPManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		if m.ipVersion == 4 {
@@ -101,63 +101,65 @@ func (m *floatingIpManager) OnUpdate(protoBufMsg interface{}) {
 		} else {
 			m.natInfo[*msg.Id] = msg.Endpoint.Ipv6Nat
 		}
-		m.dirtyNatInfo = true
+		m.dirtyNATInfo = true
 	case *proto.WorkloadEndpointRemove:
 		delete(m.natInfo, *msg.Id)
-		m.dirtyNatInfo = true
+		m.dirtyNATInfo = true
 	}
 }
 
-func (m *floatingIpManager) CompleteDeferredWork() error {
-	if m.dirtyNatInfo {
-		// Collate required DNATs.
+func (m *floatingIPManager) CompleteDeferredWork() error {
+	if m.dirtyNATInfo {
+		// Collate required DNATs as a map from external IP to internal IP.
 		dnats := map[string]string{}
 		for _, natInfos := range m.natInfo {
 			for _, natInfo := range natInfos {
 				log.WithFields(log.Fields{
-					"ExtIp": natInfo.ExtIp,
-					"IntIp": natInfo.IntIp,
+					"ExtIP": natInfo.ExtIp,
+					"IntIP": natInfo.IntIp,
 				}).Debug("NAT mapping")
 
 				// We shouldn't ever have the same floating IP mapping to multiple
 				// workload IPs, but if we do we'll program the mapping to the
 				// alphabetically earlier one.
-				existingIntIp := dnats[natInfo.ExtIp]
-				if existingIntIp == "" || natInfo.IntIp < existingIntIp {
+				existingIntIP := dnats[natInfo.ExtIp]
+				if existingIntIP == "" || natInfo.IntIp < existingIntIP {
 					log.Debug("Wanted NAT mapping")
 					dnats[natInfo.ExtIp] = natInfo.IntIp
 				}
 			}
 		}
-		// Collate required SNATs.
+		// Collate required SNATs as a map from internal IP to external IP.
 		snats := map[string]string{}
-		for extIp, intIp := range dnats {
+		for extIP, intIP := range dnats {
 			log.WithFields(log.Fields{
-				"ExtIp": extIp,
-				"IntIp": intIp,
+				"ExtIP": extIP,
+				"IntIP": intIP,
 			}).Debug("Reverse mapping")
 
 			// For the reverse SNATs, if multiple floating IPs map to the same workload
 			// IP, use the alphabetically earliest floating IP.
-			existingExtIp := snats[intIp]
-			if existingExtIp == "" || extIp < existingExtIp {
+			existingExtIP := snats[intIP]
+			if existingExtIP == "" || extIP < existingExtIP {
 				log.Debug("Wanted reverse mapping")
-				snats[intIp] = extIp
+				snats[intIP] = extIP
 			}
 		}
 		// Render chains for those NATs.
 		dnatChains := m.ruleRenderer.DNATsToIptablesChains(dnats)
 		snatChains := m.ruleRenderer.SNATsToIptablesChains(snats)
 		// Update iptables if they have changed.
-		if !reflect.DeepEqual(m.activeDnatChains, dnatChains) {
+		if !reflect.DeepEqual(m.activeDNATChains, dnatChains) {
+			m.natTable.RemoveChains(m.activeDNATChains)
 			m.natTable.UpdateChains(dnatChains)
-			m.activeDnatChains = dnatChains
+			m.activeDNATChains = dnatChains
 		}
-		if !reflect.DeepEqual(m.activeSnatChains, snatChains) {
+		if !reflect.DeepEqual(m.activeSNATChains, snatChains) {
+			m.natTable.RemoveChains(m.activeSNATChains)
 			m.natTable.UpdateChains(snatChains)
-			m.activeSnatChains = snatChains
+			m.activeSNATChains = snatChains
 		}
-		m.dirtyNatInfo = false
+		m.dirtyNATInfo = false
 	}
 	return nil
 }

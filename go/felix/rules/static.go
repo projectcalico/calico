@@ -345,7 +345,7 @@ func (r *DefaultRuleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*C
 func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
 		{
-			Action: JumpAction{Target: ChainFipDnat},
+			Action: JumpAction{Target: ChainFIPDnat},
 		},
 	}
 
@@ -371,7 +371,7 @@ func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chai
 func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
 		{
-			Action: JumpAction{Target: ChainFipSnat},
+			Action: JumpAction{Target: ChainFIPSnat},
 		},
 		{
 			Action: JumpAction{Target: ChainNATOutgoing},
@@ -419,7 +419,7 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
 		{
-			Action: JumpAction{Target: ChainFipDnat},
+			Action: JumpAction{Target: ChainFIPDnat},
 		},
 	}
 

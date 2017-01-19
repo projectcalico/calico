@@ -44,8 +44,8 @@ const (
 
 	IPSetIDAllHostIPs = "all-hosts"
 
-	ChainFipDnat = ChainNamePrefix + "-fip-dnat"
-	ChainFipSnat = ChainNamePrefix + "-fip-snat"
+	ChainFIPDnat = ChainNamePrefix + "-fip-dnat"
+	ChainFIPSnat = ChainNamePrefix + "-fip-snat"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"

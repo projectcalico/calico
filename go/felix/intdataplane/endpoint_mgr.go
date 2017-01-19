@@ -238,27 +238,25 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 			m.filterTable.UpdateChains(chains)
 			m.activeIdToChains[id] = chains
 
+			// Collect the IP prefixes that we want to route locally to this endpoint:
 			logCxt.Info("Updating endpoint routes.")
-			var ipStrings []string
+			var (
+				ipStrings []string
+				natInfos  []*proto.NatInfo
+			)
 			if m.ipVersion == 4 {
 				ipStrings = workload.Ipv4Nets
-				if len(workload.Ipv4Nat) != 0 {
-					old := ipStrings
-					ipStrings = make([]string, len(old)+len(workload.Ipv4Nat))
-					copy(ipStrings, old)
-					for ii, natInfo := range workload.Ipv4Nat {
-						ipStrings[ii+len(old)] = natInfo.ExtIp
-					}
-				}
+				natInfos = workload.Ipv4Nat
 			} else {
 				ipStrings = workload.Ipv6Nets
-				if len(workload.Ipv6Nat) != 0 {
-					old := ipStrings
-					ipStrings = make([]string, len(old)+len(workload.Ipv6Nat))
-					copy(ipStrings, old)
-					for ii, natInfo := range workload.Ipv6Nat {
-						ipStrings[ii+len(old)] = natInfo.ExtIp
-					}
+				natInfos = workload.Ipv6Nat
+			}
+			if len(natInfos) != 0 {
+				old := ipStrings
+				ipStrings = make([]string, len(old)+len(natInfos))
+				copy(ipStrings, old)
+				for ii, natInfo := range natInfos {
+					ipStrings[len(old)+ii] = natInfo.ExtIp
 				}
 			}
 

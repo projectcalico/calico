@@ -43,7 +43,7 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedExtIps := make([]string, 0, len(dnats))
-	for extIp, _ := range dnats {
+	for extIp := range dnats {
 		sortedExtIps = append(sortedExtIps, extIp)
 	}
 	sort.Strings(sortedExtIps)
@@ -57,7 +57,7 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 		})
 	}
 	return []*iptables.Chain{{
-		Name:  ChainFipDnat,
+		Name:  ChainFIPDnat,
 		Rules: rules,
 	}}
 }
@@ -65,7 +65,7 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*iptables.Chain {
 	// Extract and sort map keys so we can program rules in a determined order.
 	sortedIntIps := make([]string, 0, len(snats))
-	for intIp, _ := range snats {
+	for intIp := range snats {
 		sortedIntIps = append(sortedIntIps, intIp)
 	}
 	sort.Strings(sortedIntIps)
@@ -79,7 +79,7 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 		})
 	}
 	return []*iptables.Chain{{
-		Name:  ChainFipSnat,
+		Name:  ChainFIPSnat,
 		Rules: rules,
 	}}
 }
