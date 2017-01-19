@@ -527,6 +527,45 @@ var _ = Describe("Static", func() {
 	})
 })
 
+var _ = Describe("DropRules", func() {
+	var rr *DefaultRuleRenderer
+	var config Config
+
+	JustBeforeEach(func() {
+		// Cast back to the expected type so we can access a finer-grained API for testing.
+		rr = NewRenderer(config).(*DefaultRuleRenderer)
+	})
+
+	Describe("with LOG-and-DROP override", func() {
+		BeforeEach(func() {
+			config = Config{
+				WorkloadIfacePrefixes: []string{"cali", "tap"},
+				ActionOnDrop:          "LOG-and-DROP",
+			}
+		})
+
+		It("should render a log and a drop", func() {
+			Expect(rr.DropRules(Match().Protocol("tcp"))).To(Equal([]Rule{
+				{Match: Match().Protocol("tcp"), Action: LogAction{Prefix: "calico-drop"}},
+				{Match: Match().Protocol("tcp"), Action: DropAction{}},
+			}))
+		})
+
+		Describe("with a custom prefix", func() {
+			BeforeEach(func() {
+				config.DropLogPrefix = "my-prefix"
+			})
+
+			It("should render a log and a drop", func() {
+				Expect(rr.DropRules(Match().Protocol("tcp"))).To(Equal([]Rule{
+					{Match: Match().Protocol("tcp"), Action: LogAction{Prefix: "my-prefix"}},
+					{Match: Match().Protocol("tcp"), Action: DropAction{}},
+				}))
+			})
+		})
+	})
+})
+
 func findChain(chains []*Chain, name string) *Chain {
 	for _, chain := range chains {
 		if chain.Name == name {

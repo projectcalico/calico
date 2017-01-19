@@ -137,6 +137,7 @@ type Config struct {
 	IPIPEnabled       bool
 	IPIPTunnelAddress net.IP
 
+	DropLogPrefix        string
 	ActionOnDrop         string
 	EndpointToHostAction string
 
@@ -152,7 +153,11 @@ func NewRenderer(config Config) RuleRenderer {
 	var dropActions []iptables.Action
 	if strings.HasPrefix(config.ActionOnDrop, "LOG-") {
 		log.Warn("Action on drop includes LOG.  All dropped packets will be logged.")
-		dropActions = append(dropActions, iptables.LogAction{Prefix: "calico-drop"})
+		logPrefix := "calico-drop"
+		if config.DropLogPrefix != "" {
+			logPrefix = config.DropLogPrefix
+		}
+		dropActions = append(dropActions, iptables.LogAction{Prefix: logPrefix})
 	}
 	if strings.HasSuffix(config.ActionOnDrop, "ACCEPT") {
 		log.Warn("Action on drop set to ACCEPT.  Calico security is disabled!")
