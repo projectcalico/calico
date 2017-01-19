@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/felix/go/felix/ip"
 	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/go/felix/testutils"
 	"github.com/vishvananda/netlink"
 	"net"
 	"syscall"
@@ -37,23 +38,15 @@ var (
 	notFound       = errors.New("not found")
 	alreadyExists  = errors.New("already exists")
 
-	mac1 = mustParseMAC("00:11:22:33:44:51")
-	mac2 = mustParseMAC("00:11:22:33:44:52")
-	mac3 = mustParseMAC("00:11:22:33:44:53")
+	mac1 = testutils.MustParseMAC("00:11:22:33:44:51")
+	mac2 = testutils.MustParseMAC("00:11:22:33:44:52")
+	mac3 = testutils.MustParseMAC("00:11:22:33:44:53")
 
 	ip1  = ip.MustParseCIDR("10.0.0.1/32").ToIPNet()
 	ip2  = ip.MustParseCIDR("10.0.0.2/32").ToIPNet()
 	ip3  = ip.MustParseCIDR("10.0.0.3/32").ToIPNet()
 	ip13 = ip.MustParseCIDR("10.0.1.3/32").ToIPNet()
 )
-
-func mustParseMAC(mac string) net.HardwareAddr {
-	m, err := net.ParseMAC(mac)
-	if err != nil {
-		panic(err)
-	}
-	return m
-}
 
 var _ = Describe("RouteTable", func() {
 	var dataplane *mockDataplane
