@@ -46,6 +46,18 @@ var _ = Describe("Dispatch chains", func() {
 		renderer = NewRenderer(rrConfigNormal)
 	})
 
+	It("should panic if interface name is empty", func() {
+		endpointID := proto.WorkloadEndpointID{
+			OrchestratorId: "foobar",
+			WorkloadId:     "workload",
+			EndpointId:     "noname",
+		}
+		input := map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{
+			endpointID: {},
+		}
+		Expect(func() { renderer.WorkloadDispatchChains(input) }).To(Panic())
+	})
+
 	DescribeTable("workload rendering tests",
 		func(names []string, expectedChains []*iptables.Chain) {
 			var input map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -186,32 +198,16 @@ var _ = Describe("Dispatch chains", func() {
 		// should still render something sensible.
 		Entry("duplicate interface", []string{"cali1234", "cali1234"}, []*iptables.Chain{
 			{
-				Name: "cali-from-wl-dispatch-",
-				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "califw-cali1234"),
-					inboundGotoRule("cali1234", "califw-cali1234"),
-					expDropRule,
-				},
-			},
-			{
-				Name: "cali-to-wl-dispatch-",
-				Rules: []iptables.Rule{
-					outboundGotoRule("cali1234", "calitw-cali1234"),
-					outboundGotoRule("cali1234", "calitw-cali1234"),
-					expDropRule,
-				},
-			},
-			{
 				Name: "cali-from-wl-dispatch",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234+", "cali-from-wl-dispatch-"),
+					inboundGotoRule("cali1234", "califw-cali1234"),
 					expDropRule,
 				},
 			},
 			{
 				Name: "cali-to-wl-dispatch",
 				Rules: []iptables.Rule{
-					outboundGotoRule("cali1234+", "cali-to-wl-dispatch-"),
+					outboundGotoRule("cali1234", "calitw-cali1234"),
 					expDropRule,
 				},
 			},

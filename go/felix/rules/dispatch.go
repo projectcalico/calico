@@ -89,7 +89,17 @@ func (r *DefaultRuleRenderer) dispatchChains(
 	// Then, divide the names into bins based on their next character.
 	prefixes := []string{}
 	prefixToNames := map[string][]string{}
+	lastName := ""
 	for _, name := range names {
+		if name == "" {
+			log.Panic("Unable to render dispatch chain. Empty interface name.")
+		}
+		if name == lastName {
+			log.WithField("ifaceName", name).Error(
+				"Multiple endpoints with same interface name detected. " +
+					"Incorrect policy may be applied.")
+			continue
+		}
 		prefix := commonPrefix
 		if len(name) > len(commonPrefix) {
 			prefix = name[:len(commonPrefix)+1]
@@ -100,10 +110,11 @@ func (r *DefaultRuleRenderer) dispatchChains(
 			prefixes = append(prefixes, prefix)
 		}
 		prefixToNames[prefix] = append(prefixToNames[prefix], name)
+		lastName = name
 	}
 
-	rootFromEndpointRules := make([]Rule, 0, len(prefixes)+2)
-	rootToEndpointRules := make([]Rule, 0, len(prefixes)+2)
+	rootFromEndpointRules := make([]Rule, 0)
+	rootToEndpointRules := make([]Rule, 0)
 
 	// Now, iterate over the prefixes.  If there are multiple names in a prefix, we render a
 	// child chain for that prefix.  Otherwise, we render the rule directly to avoid the cost
@@ -130,6 +141,9 @@ func (r *DefaultRuleRenderer) dispatchChains(
 			logCxt.Debug("Multiple interfaces with prefix, rendering child chain")
 			rootFromEndpointRules = append(rootFromEndpointRules, Rule{
 				Match: Match().InInterface(ifaceMatch),
+				// Note: we use a goto here, which means that packets will not
+				// return to this chain.  This prevents packets from traversing the
+				// rest of the root chain once we've found their prefix.
 				Action: GotoAction{
 					Target: childFromChainName,
 				},
@@ -142,8 +156,8 @@ func (r *DefaultRuleRenderer) dispatchChains(
 			})
 
 			// ...and child chains.
-			childFromEndpointRules := make([]Rule, 0, len(ifaceNames)+2)
-			childToEndpointRules := make([]Rule, 0, len(ifaceNames)+2)
+			childFromEndpointRules := make([]Rule, 0)
+			childToEndpointRules := make([]Rule, 0)
 			for _, name := range ifaceNames {
 				logCxt.WithField("ifaceName", name).Debug("Adding rule to child chains")
 				childFromEndpointRules = append(childFromEndpointRules, Rule{
@@ -160,6 +174,10 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				})
 			}
 			if dropAtEndOfChain {
+				// Since we use a goto in the root chain (as described above), we
+				// need to duplicate the drop rules at the end of the child chain
+				// since packets that reach the end of the child chain would
+				// return up past the root chain, appearing to be accepted.
 				logCxt.Debug("Adding drop rules at end of child chains.")
 				childFromEndpointRules = append(childFromEndpointRules,
 					r.DropRules(Match(), "Unknown interface")...)
