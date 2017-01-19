@@ -46,10 +46,10 @@ var _ = Describe("StatusCombiner", func() {
 				// Eventually to block on the channel.
 				done := make(chan bool)
 				go func() {
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						4, epID, v4Status,
 					)
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						6, epID, v6Status,
 					)
 					statusCombiner.Apply()
@@ -69,10 +69,10 @@ var _ = Describe("StatusCombiner", func() {
 
 				// Then remove the status, should get cleaned up.
 				go func() {
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						4, epID, "",
 					)
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						6, epID, "",
 					)
 					statusCombiner.Apply()
@@ -109,7 +109,7 @@ var _ = Describe("StatusCombiner", func() {
 				// Eventually to block on the channel.
 				done := make(chan bool)
 				go func() {
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						4, epID, v4Status,
 					)
 					statusCombiner.Apply()
@@ -129,7 +129,7 @@ var _ = Describe("StatusCombiner", func() {
 
 				// Then remove the status, should get cleaned up.
 				go func() {
-					statusCombiner.OnWorkloadEndpointStatusUpdate(
+					statusCombiner.OnEndpointStatusUpdate(
 						4, epID, "",
 					)
 					statusCombiner.Apply()

@@ -219,7 +219,7 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 	Expect(t.currentRoutes[ifaceName]).To(Equal(expected))
 }
 
-func endpointStatusUpdateCallback(ipVersion uint8, id proto.WorkloadEndpointID, status string) {
+func endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"id":        id,

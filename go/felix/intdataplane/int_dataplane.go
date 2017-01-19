@@ -165,7 +165,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV4,
 		4,
 		config.RulesConfig.WorkloadIfacePrefixes,
-		dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
+		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
@@ -218,7 +218,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV6,
 			6,
 			config.RulesConfig.WorkloadIfacePrefixes,
-			dp.endpointStatusCombiner.OnWorkloadEndpointStatusUpdate))
+			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
