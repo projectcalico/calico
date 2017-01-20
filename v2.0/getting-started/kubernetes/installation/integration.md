@@ -55,7 +55,7 @@ done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0/calicoctl
+wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.0/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container

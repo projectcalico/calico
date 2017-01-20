@@ -30,8 +30,8 @@ And more! View release notes for the following components below for more informa
 | Component                     | Version                                                                                    |
 |-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0](https://github.com/projectcalico/felix/releases/tag/2.0.0)                         |
-| calicoctl                     | [v1.0.0](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0)           |
-| calico/node                   | [v1.0.0](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0)           |
+| calicoctl                     | [v1.0.0](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0)                   |
+| calico/node                   | [v1.0.0](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0)                   |
 | calico/cni                    | [v1.5.5](https://github.com/projectcalico/calico-cni/releases/tag/v1.5.5)                  |
 | libcalico                     | [v0.19.0](https://github.com/projectcalico/libcalico/releases/tag/v0.19.0)                 |
 | libcalico-go                  | [v1.0.0](https://github.com/projectcalico/libcalico-go/releases/tag/v1.0.0)                |
@@ -47,8 +47,8 @@ And more! View release notes for the following components below for more informa
 | Component                     | Version                                                                                    |
 |-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-rc7](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc7)                 |
-| calicoctl                     | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
-| calico/node                   | [v1.0.0-rc4](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
+| calicoctl                     | [v1.0.0-rc4](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-rc2)           |
+| calico/node                   | [v1.0.0-rc4](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-rc2)           |
 | calico/cni                    | [v1.5.4](https://github.com/projectcalico/calico-cni/releases/tag/v1.5.4)                  |
 | libcalico                     | [v0.19.0](https://github.com/projectcalico/libcalico/releases/tag/v0.19.0)                 |
 | libcalico-go                  | [v1.0.0-rc6](https://github.com/projectcalico/libcalico-go/releases/tag/v1.0.0-rc6)        |
@@ -63,8 +63,8 @@ And more! View release notes for the following components below for more informa
 | Component                     | Version                                                                                    |
 |-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-rc4](https://github.com/projectcalico/felix/releases/tag/2.0.0-rc4)                 |
-| calicoctl                     | [v1.0.0-rc2](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
-| calico/node                   | [v1.0.0-rc2](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-rc2)   |
+| calicoctl                     | [v1.0.0-rc2](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-rc2)           |
+| calico/node                   | [v1.0.0-rc2](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-rc2)           |
 | calico/cni                    | [v1.5.3](https://github.com/projectcalico/calico-cni/releases/tag/v1.5.3)                  |
 | libcalico                     | [v0.19.0](https://github.com/projectcalico/libcalico/releases/tag/v0.19.0)                 |
 | libcalico-go                  | [v1.0.0-rc4](https://github.com/projectcalico/libcalico-go/releases/tag/v1.0.0-rc4)        |
@@ -79,8 +79,8 @@ And more! View release notes for the following components below for more informa
 | Component                     | Version                                                                                    |
 |-------------------------------|--------------------------------------------------------------------------------------------|
 | felix                         | [2.0.0-beta.3](https://github.com/projectcalico/felix/releases/tag/2.0.0-beta.3)           |
-| calicoctl                     | [v1.0.0-beta](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-beta) |
-| calico/node                   | [v1.0.0-beta](https://github.com/projectcalico/calico-containers/releases/tag/v1.0.0-beta) |
+| calicoctl                     | [v1.0.0-beta](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-beta)         |
+| calico/node                   | [v1.0.0-beta](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.0-beta)         |
 | calico/cni                    | [v1.5.0](https://github.com/projectcalico/calico-cni/releases/tag/v1.5.0)                  |
 | libcalico                     | [v0.18.0](https://github.com/projectcalico/libcalico/releases/tag/v0.18.0)                 |
 | libcalico-go                  | [v1.0.0-beta](https://github.com/projectcalico/libcalico-go/releases/tag/v1.0.0-beta)      |
