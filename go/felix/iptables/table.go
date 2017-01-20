@@ -314,8 +314,9 @@ func (t *Table) loadDataplaneState() {
 	// chains for refresh.
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) {
-			// Already an update pending for this chain.
+		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
+			// Already an update pending for this chain; no point in flagging it as
+			// out-of-sync.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
 		}
@@ -330,7 +331,10 @@ func (t *Table) loadDataplaneState() {
 				numEmptyStrings(dpHashes),
 			)
 			if !reflect.DeepEqual(dpHashes, expectedHashes) {
-				logCxt.Warn("Detected out-of-sync inserts, marking for resync")
+				logCxt.WithFields(log.Fields{
+					"expectedRuleIDs": expectedHashes,
+					"actualRuleIDs":   dpHashes,
+				}).Warn("Detected out-of-sync inserts, marking for resync")
 				t.dirtyInserts.Add(chainName)
 			}
 		} else {
