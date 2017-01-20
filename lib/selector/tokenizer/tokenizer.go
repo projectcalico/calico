@@ -54,15 +54,16 @@ type Token struct {
 }
 
 const (
-	identifierExpr = `([a-zA-Z0-9.-]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])*`
-	hasExpr        = `has\(\s*(` + identifierExpr + `)\s*\)`
-	allExpr        = `all\(\s*\)`
-	notInExpr      = `not\s*in\b`
-	inExpr         = `in\b`
+	// LabelKeyMatcher is the base regex for a valid label key.
+	LabelKeyMatcher = `([a-zA-Z0-9_.-/]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?`
+	hasExpr         = `has\(\s*(` + LabelKeyMatcher + `)\s*\)`
+	allExpr         = `all\(\s*\)`
+	notInExpr       = `not\s*in\b`
+	inExpr          = `in\b`
 )
 
 var (
-	identifierRegex = regexp.MustCompile("^" + identifierExpr)
+	identifierRegex = regexp.MustCompile("^" + LabelKeyMatcher)
 	hasRegex        = regexp.MustCompile("^" + hasExpr)
 	allRegex        = regexp.MustCompile("^" + allExpr)
 	notInRegex      = regexp.MustCompile("^" + notInExpr)

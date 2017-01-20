@@ -26,16 +26,18 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
+
 	"gopkg.in/go-playground/validator.v8"
 )
 
 var validate *validator.Validate
 
 var (
+	labelRegex         = regexp.MustCompile(`^` + tokenizer.LabelKeyMatcher + `$`)
+	labelValueRegex    = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
 	nameRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
 	interfaceRegex     = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
-	labelRegex         = regexp.MustCompile("^([a-zA-Z0-9.-]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
-	labelValueRegex    = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
 	actionRegex        = regexp.MustCompile("^(allow|deny|log|pass)$")
 	backendActionRegex = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
 	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")

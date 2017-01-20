@@ -59,6 +59,24 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "c"},
 		{tokenizer.TokEof, nil},
 	}},
+	{`has(calico/k8s_ns)`, []tokenizer.Token{
+		{tokenizer.TokHas, "calico/k8s_ns"},
+		{tokenizer.TokEof, nil},
+	}},
+	{`has(calico/k8s_ns/role)`, []tokenizer.Token{
+		{tokenizer.TokHas, "calico/k8s_ns/role"},
+		{tokenizer.TokEof, nil},
+	}},
+	{`calico/k8s_ns == "kube-system" && k8s-app == "kube-dns"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "calico/k8s_ns"},
+		{tokenizer.TokEq, nil},
+		{tokenizer.TokStringLiteral, "kube-system"},
+		{tokenizer.TokAnd, nil},
+		{tokenizer.TokLabel, "k8s-app"},
+		{tokenizer.TokEq, nil},
+		{tokenizer.TokStringLiteral, "kube-dns"},
+		{tokenizer.TokEof, nil},
+	}},
 	{`a  not  in  "bar"  &&  ! has( foo )  ||  b  in  c `, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
 		{tokenizer.TokNotIn, nil},
