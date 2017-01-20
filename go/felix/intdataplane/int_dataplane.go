@@ -35,6 +35,7 @@ type Config struct {
 	MaxIPSetSize int
 
 	IptablesRefreshInterval time.Duration
+	IptablesInsertMode      string
 
 	RulesConfig rules.Config
 }
@@ -124,12 +125,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	natTableV4 := iptables.NewTable(
 		"nat",
 		4,
-		rules.AllHistoricChainNamePrefixes,
 		rules.RuleHashPrefix,
-		rules.HistoricInsertedNATRuleRegex,
+		iptables.TableOptions{
+			HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+			ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
+		},
 	)
-	rawTableV4 := iptables.NewTable("raw", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
-	filterTableV4 := iptables.NewTable("filter", 4, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
+	rawTableV4 := iptables.NewTable(
+		"raw",
+		4,
+		rules.RuleHashPrefix,
+		iptables.TableOptions{
+			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		})
+	filterTableV4 := iptables.NewTable(
+		"filter",
+		4,
+		rules.RuleHashPrefix,
+		iptables.TableOptions{
+			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
@@ -161,12 +176,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		natTableV6 := iptables.NewTable(
 			"nat",
 			6,
-			rules.AllHistoricChainNamePrefixes,
 			rules.RuleHashPrefix,
-			rules.HistoricInsertedNATRuleRegex,
+			iptables.TableOptions{
+				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
+			},
 		)
-		rawTableV6 := iptables.NewTable("raw", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
-		filterTableV6 := iptables.NewTable("filter", 6, rules.AllHistoricChainNamePrefixes, rules.RuleHashPrefix, "")
+		rawTableV6 := iptables.NewTable(
+			"raw",
+			6,
+			rules.RuleHashPrefix,
+			iptables.TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			},
+		)
+		filterTableV6 := iptables.NewTable(
+			"filter",
+			6,
+			rules.RuleHashPrefix,
+			iptables.TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			},
+		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
 		ipSetRegV6 := ipsets.NewRegistry(ipSetsConfigV6)
