@@ -338,11 +338,16 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 func (r *DefaultRuleRenderer) StaticNATTableChains(ipVersion uint8) (chains []*Chain) {
 	chains = append(chains, r.StaticNATPreroutingChains(ipVersion)...)
 	chains = append(chains, r.StaticNATPostroutingChains(ipVersion)...)
+	chains = append(chains, r.StaticNATOutputChains(ipVersion)...)
 	return
 }
 
 func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chain {
-	rules := []Rule{}
+	rules := []Rule{
+		{
+			Action: JumpAction{Target: ChainFIPDnat},
+		},
+	}
 
 	if ipVersion == 4 && r.OpenStackSpecialCasesEnabled && r.OpenStackMetadataIP != nil {
 		rules = append(rules, Rule{
@@ -365,6 +370,9 @@ func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chai
 
 func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Chain {
 	rules := []Rule{
+		{
+			Action: JumpAction{Target: ChainFIPSnat},
+		},
 		{
 			Action: JumpAction{Target: ChainNATOutgoing},
 		},
@@ -404,6 +412,19 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*Cha
 	}
 	return []*Chain{{
 		Name:  ChainNATPostrouting,
+		Rules: rules,
+	}}
+}
+
+func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
+	rules := []Rule{
+		{
+			Action: JumpAction{Target: ChainFIPDnat},
+		},
+	}
+
+	return []*Chain{{
+		Name:  ChainNATOutput,
 		Rules: rules,
 	}}
 }

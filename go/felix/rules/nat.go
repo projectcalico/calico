@@ -14,7 +14,10 @@
 
 package rules
 
-import "github.com/projectcalico/felix/go/felix/iptables"
+import (
+	"github.com/projectcalico/felix/go/felix/iptables"
+	"sort"
+)
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
@@ -35,4 +38,48 @@ func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion
 		Name:  ChainNATOutgoing,
 		Rules: rules,
 	}
+}
+
+func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain {
+	// Extract and sort map keys so we can program rules in a determined order.
+	sortedExtIps := make([]string, 0, len(dnats))
+	for extIp := range dnats {
+		sortedExtIps = append(sortedExtIps, extIp)
+	}
+	sort.Strings(sortedExtIps)
+
+	rules := []iptables.Rule{}
+	for _, extIp := range sortedExtIps {
+		intIp := dnats[extIp]
+		rules = append(rules, iptables.Rule{
+			Match:  iptables.Match().DestNet(extIp),
+			Action: iptables.DNATAction{DestAddr: intIp},
+		})
+	}
+	return []*iptables.Chain{{
+		Name:  ChainFIPDnat,
+		Rules: rules,
+	}}
+}
+
+func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*iptables.Chain {
+	// Extract and sort map keys so we can program rules in a determined order.
+	sortedIntIps := make([]string, 0, len(snats))
+	for intIp := range snats {
+		sortedIntIps = append(sortedIntIps, intIp)
+	}
+	sort.Strings(sortedIntIps)
+
+	rules := []iptables.Rule{}
+	for _, intIp := range sortedIntIps {
+		extIp := snats[intIp]
+		rules = append(rules, iptables.Rule{
+			Match:  iptables.Match().DestNet(intIp).SourceNet(intIp),
+			Action: iptables.SNATAction{ToAddr: extIp},
+		})
+	}
+	return []*iptables.Chain{{
+		Name:  ChainFIPSnat,
+		Rules: rules,
+	}}
 }
