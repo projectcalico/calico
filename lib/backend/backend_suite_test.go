@@ -1,4 +1,4 @@
-package backend
+package backend_test
 
 import (
 	. "github.com/onsi/ginkgo"
