@@ -313,6 +313,9 @@ spec:
           volumeMounts:
             - name: config-volume
               mountPath: /etc/config
+            # Mount in the etcd TLS secrets.
+            - mountPath: /calico-secrets
+              name: etcd-certs
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -320,10 +323,32 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_cert
       volumes:
-       - name: config-volume
-         configMap:
-           name: calico-config
-           items:
+        - name: config-volume
+          configMap:
+            name: calico-config
+            items:
             - key: ippool.yaml
               path: calico/ippool.yaml
+        # Mount in the etcd TLS secrets.
+        - name: etcd-certs
+          secret:
+            secretName: calico-etcd-secrets
