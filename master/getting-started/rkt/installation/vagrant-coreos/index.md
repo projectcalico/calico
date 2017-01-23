@@ -1,5 +1,5 @@
 ---
-title: Running the Calico rkt tutorials on CoreOS using Vagrant and VirtualBox
+title: Running the Calico rkt tutorials on CoreOS Container Linux using Vagrant and VirtualBox
 ---
 
 This is a Quick Start guide that uses Vagrant and VirtualBox to create a two-node
@@ -45,7 +45,7 @@ To connect to your servers:
 
 ### 4. Verify environment
 
-You should now have two CoreOS servers. The servers are named calico-01 and calico-02
+You should now have two CoreOS Container Linux servers. The servers are named calico-01 and calico-02
 and have IP addresses 172.18.18.101 and 172.18.18.102.
 
 At this point, it's worth checking that your servers can ping each other.
