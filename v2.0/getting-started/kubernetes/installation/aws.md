@@ -6,8 +6,8 @@ These instructions allow you to set up a Kubernetes cluster with Calico networki
 
 ## 1. Getting started with AWS
 
-These instructions describe how to set up two CoreOS hosts on AWS.  For more general background, see
-[the CoreOS on AWS EC2 documentation](https://coreos.com/os/docs/latest/booting-on-ec2.html).
+These instructions describe how to set up two CoreOS Container Linux hosts on AWS.  For more general background, see
+[CoreOS Container Linux on AWS EC2 documentation](https://coreos.com/os/docs/latest/booting-on-ec2.html).
 
 Download and install AWS Command Line Interface:
 
@@ -168,7 +168,7 @@ Then, change into the directory for this guide.
 
     cd calico/{{page.version}}/getting-started/kubernetes/installation
 
-Find your CoreOS stable HVM image for your region and store it as an environment variable.  You can find the
+Find your CoreOS Container Linux stable HVM image for your region and store it as an environment variable.  You can find the
 full list of available images on [the CoreOS website](https://coreos.com/os/docs/latest/booting-on-ec2.html).
 
 ```shell

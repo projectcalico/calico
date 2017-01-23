@@ -13,7 +13,7 @@ if you don't already have a cluster prepared.
 
 Or alternatively, use one of the two quickstart clusters:
 
-- [Vagrant install with CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
+- [Vagrant install with Container Linux by CoreOS]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-coreos/)
 - [Vagrant install with Ubuntu]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/vagrant-ubuntu)
 
 ### 1. Create the network
