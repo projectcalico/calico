@@ -2,13 +2,17 @@
 {% for item in include.sidebar %}
   {% if item.section %}
     {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' }}{% endcapture %}
-    <div class="link">
-      <span class="glyphicon glyphicon-chevron-right navbar-arrow"></span>
-      <a class="section" role="button" data-toggle="collapse" href="#{{titleized}}" aria-expanded="false" aria-controls="{{titleized}}">
-        {{item.title}}
-      </a>
-      <div class="collapse" id="{{ titleized }}">
-        {% include sidebar.html sidebar=item.section prefix=titleized %}
+    <div>
+      <div class="link">
+        <span class="glyphicon glyphicon-chevron-right navbar-arrow"></span>
+        <a role="button" data-toggle="collapse" href="#{{titleized}}" aria-expanded="false" aria-controls="{{titleized}}">
+          {{item.title}}
+        </a>
+      </div>
+      <div class="section">
+        <div class="collapse" id="{{ titleized }}">
+          {% include sidebar.html sidebar=item.section prefix=titleized %}
+        </div>
       </div>
     </div>
   {% else %}

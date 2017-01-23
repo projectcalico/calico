@@ -6,7 +6,7 @@ $(document).ready(function(){
       $(this).parents('div.collapse').each(function(){
         // Toggling will show animation on pageload. instead, just add CSS class
         $(this).addClass("in");
-        $(this).prev().prev().removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+        $(this).parent().prev().find('span.glyphicon').removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
       });
       $(this).parent().addClass('current-page');
       this.onclick = function(e){e.preventDefault();};
@@ -15,10 +15,10 @@ $(document).ready(function(){
   });
 
   $('#sidebar').on('show.bs.collapse', function(event) {
-    $(event.target).prev().prev().removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+    $(event.target).parent().prev().find('span.glyphicon').removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
   });
   $('#sidebar').on('hide.bs.collapse', function(event) {
-    $(event.target).prev().prev().removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+    $(event.target).parent().prev().find('span.glyphicon').removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
   })
 
   $('[data-toggle="offcanvas"]').click(function () {
