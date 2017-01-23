@@ -301,8 +301,10 @@ func (t *Table) RemoveChains(chains []*Chain) {
 
 func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Info("Queing deletion of chain.")
-	delete(t.chainNameToChain, name)
-	t.dirtyChains.Add(name)
+	if _, known := t.chainNameToChain[name]; known {
+		delete(t.chainNameToChain, name)
+		t.dirtyChains.Add(name)
+	}
 }
 
 func (t *Table) loadDataplaneState() {

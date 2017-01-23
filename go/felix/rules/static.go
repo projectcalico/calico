@@ -36,12 +36,25 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 	return []*Chain{
 		r.filterInputChain(ipVersion),
 		r.filterWorkloadToHostChain(ipVersion),
-		r.filterFailsafeInChain(),
+		r.failsafeInChain(),
+	}
+}
+
+func (r *DefaultRuleRenderer) acceptUntrackedRules() []Rule {
+	return []Rule{
+		{
+			Match:  Match().MarkSet(r.IptablesMarkAccept).ConntrackState("UNTRACKED"),
+			Action: AcceptAction{},
+		},
 	}
 }
 
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
+
+	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
+	// raw chain.
+	inputRules = append(inputRules, r.acceptUntrackedRules()...)
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
@@ -178,7 +191,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 	}
 }
 
-func (r *DefaultRuleRenderer) filterFailsafeInChain() *Chain {
+func (r *DefaultRuleRenderer) failsafeInChain() *Chain {
 	rules := []Rule{}
 
 	for _, port := range r.Config.FailsafeInboundHostPorts {
@@ -194,7 +207,7 @@ func (r *DefaultRuleRenderer) filterFailsafeInChain() *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) filterFailsafeOutChain() *Chain {
+func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 	rules := []Rule{}
 
 	for _, port := range r.Config.FailsafeOutboundHostPorts {
@@ -212,6 +225,10 @@ func (r *DefaultRuleRenderer) filterFailsafeOutChain() *Chain {
 
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
+
+	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
+	// raw chain.
+	rules = append(rules, r.acceptUntrackedRules()...)
 
 	// conntrack rules to reject invalid packets and accept established connections.
 	// Ideally, we'd limit these rules to the interfaces that we're managing so that we
@@ -289,12 +306,16 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 func (r *DefaultRuleRenderer) StaticFilterOutputChains() []*Chain {
 	return []*Chain{
 		r.filterOutputChain(),
-		r.filterFailsafeOutChain(),
+		r.failsafeOutChain(),
 	}
 }
 
 func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	rules := []Rule{}
+
+	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
+	// raw chain.
+	rules = append(rules, r.acceptUntrackedRules()...)
 
 	// conntrack rules.
 	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
@@ -427,6 +448,78 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 		Name:  ChainNATOutput,
 		Rules: rules,
 	}}
+}
+
+func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
+	return []*Chain{
+		r.failsafeInChain(),
+		r.failsafeOutChain(),
+		r.StaticRawPreroutingChain(),
+		r.StaticRawOutputChain(),
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticRawPreroutingChain() *Chain {
+	rules := []Rule{}
+
+	// For safety, clear all our mark bits before we start.  (We could be in append mode and
+	// another process' rules could have left the mark bit set.)
+	rules = append(rules,
+		Rule{Action: ClearMarkAction{Mark: r.allMarkBits()}},
+	)
+
+	// Set a mark on the packet if it's from a workload interface.
+	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
+		rules = append(rules, Rule{
+			Match:  Match().InInterface(ifacePrefix + "+"),
+			Action: SetMarkAction{Mark: r.IptablesMarkFromWorkload},
+		})
+	}
+	// Apply strict RPF check to packets from workload interfaces.  This prevents workloads from
+	// spoofing their IPs.  Note: non-privileged containers can't usually spoof but privileged
+	// containers and VMs can.
+	rules = append(rules,
+		r.DropRules(Match().MarkSet(r.IptablesMarkFromWorkload).NotRPFilter())...)
+
+	rules = append(rules,
+		// Send non-workload traffic to the untracked policy chains.
+		Rule{Match: Match().MarkClear(r.IptablesMarkFromWorkload),
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+		// Then, if the packet was marked as allowed, accept it.  Packets also return here
+		// without the mark bit set if the interface wasn't one that we're policing.  We
+		// let those packets fall through to the user's policy.
+		Rule{Match: Match().MarkSet(r.IptablesMarkAccept),
+			Action: AcceptAction{}},
+	)
+
+	return &Chain{
+		Name:  ChainRawPrerouting,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) allMarkBits() uint32 {
+	return r.IptablesMarkFromWorkload |
+		r.IptablesMarkAccept |
+		r.IptablesMarkNextTier
+}
+
+func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
+	return &Chain{
+		Name: ChainRawOutput,
+		Rules: []Rule{
+			// For safety, clear all our mark bits before we start.  (We could be in
+			// append mode and another process' rules could have left the mark bit set.)
+			{Action: ClearMarkAction{Mark: r.allMarkBits()}},
+			// Then, jump to the untracked policy chains.
+			{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+			// Then, if the packet was marked as allowed, accept it.  Packets also
+			// return here without the mark bit set if the interface wasn't one that
+			// we're policing.
+			{Match: Match().MarkSet(r.IptablesMarkAccept),
+				Action: AcceptAction{}},
+		},
+	}
 }
 
 func (r DefaultRuleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {

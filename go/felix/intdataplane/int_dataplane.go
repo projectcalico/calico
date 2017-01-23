@@ -158,8 +158,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, !config.DisableIPv6)
 
 	dp.RegisterManager(newIPSetsManager(ipSetRegV4, config.MaxIPSetSize))
-	dp.RegisterManager(newPolicyManager(filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(newPolicyManager(rawTableV4, filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
+		rawTableV4,
 		filterTableV4,
 		ruleRenderer,
 		routeTableV4,
@@ -211,8 +212,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetRegV6, config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newPolicyManager(rawTableV6, filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
+			rawTableV6,
 			filterTableV6,
 			ruleRenderer,
 			routeTableV6,
@@ -310,6 +312,17 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	// interfaces.  This is required to prevent a race between starting an interface and
 	// Felix being able to configure it.
 	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+
+	for _, t := range d.iptablesRawTables {
+		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion)
+		t.UpdateChains(rawChains)
+		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.ChainRawPrerouting},
+		}})
+		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{rules.ChainRawOutput},
+		}})
+	}
 
 	for _, t := range d.iptablesFilterTables {
 		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion)

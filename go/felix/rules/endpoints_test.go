@@ -184,7 +184,7 @@ var _ = Describe("Endpoints", func() {
 			},
 			ProfileIds: []string{"prof1", "prof2"},
 		}
-		Expect(renderer.HostEndpointToIptablesChains("eth0", &endpoint)).To(Equal([]*Chain{
+		Expect(renderer.HostEndpointToFilterChains("eth0", &endpoint)).To(Equal([]*Chain{
 			{
 				Name: "calith-eth0",
 				Rules: []Rule{

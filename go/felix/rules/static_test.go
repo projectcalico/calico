@@ -38,12 +38,17 @@ var _ = Describe("Static", func() {
 				WorkloadIfacePrefixes:     []string{"cali"},
 				FailsafeInboundHostPorts:  []uint16{22, 1022},
 				FailsafeOutboundHostPorts: []uint16{23, 1023},
+				IptablesMarkAccept:        0x10,
 			}
 		})
 
 		expForwardChain := &Chain{
 			Name: "cali-FORWARD",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: DropAction{}},
@@ -71,6 +76,10 @@ var _ = Describe("Static", func() {
 		expInputChainNoIPIP := &Chain{
 			Name: "cali-INPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: DropAction{}},
@@ -91,6 +100,10 @@ var _ = Describe("Static", func() {
 		expOutputChain := &Chain{
 			Name: "cali-OUTPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: DropAction{}},
@@ -220,6 +233,7 @@ var _ = Describe("Static", func() {
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
+				IptablesMarkAccept:           0x10,
 			}
 		})
 
@@ -315,12 +329,17 @@ var _ = Describe("Static", func() {
 				IPIPEnabled:           true,
 				IPIPTunnelAddress:     net.ParseIP("10.0.0.1"),
 				IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IptablesMarkAccept:    0x10,
 			}
 		})
 
 		expInputChainIPIPV4 := &Chain{
 			Name: "cali-INPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// IPIP rule
 				{Match: Match().ProtocolNum(4).NotSourceIPSet("cali4-all-hosts"),
 					Action:  DropAction{},
@@ -347,6 +366,10 @@ var _ = Describe("Static", func() {
 		expInputChainIPIPV6 := &Chain{
 			Name: "cali-INPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: DropAction{}},
@@ -406,12 +429,17 @@ var _ = Describe("Static", func() {
 			config = Config{
 				WorkloadIfacePrefixes: []string{"cali", "tap"},
 				ActionOnDrop:          "ACCEPT",
+				IptablesMarkAccept:    0x10,
 			}
 		})
 
 		expForwardChain := &Chain{
 			Name: "cali-FORWARD",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: AcceptAction{}}, // OVERRIDDEN.
@@ -447,6 +475,10 @@ var _ = Describe("Static", func() {
 		expInputChainIPIP := &Chain{
 			Name: "cali-INPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: AcceptAction{}}, // OVERRIDDEN.
@@ -469,6 +501,10 @@ var _ = Describe("Static", func() {
 		expOutputChain := &Chain{
 			Name: "cali-OUTPUT",
 			Rules: []Rule{
+				// Untracked packets already matched in raw table.
+				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+					Action: AcceptAction{}},
+
 				// conntrack rules.
 				{Match: Match().ConntrackState("INVALID"),
 					Action: AcceptAction{}}, // OVERRIDDEN.
@@ -550,6 +586,7 @@ var _ = Describe("DropRules", func() {
 			config = Config{
 				WorkloadIfacePrefixes: []string{"cali", "tap"},
 				ActionOnDrop:          "LOG-and-DROP",
+				IptablesMarkAccept:    0x10,
 			}
 		})
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,9 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		oldPolicy := poc.tier.Policies[key]
 		if update.Value != nil {
 			newPolicy := update.Value.(*model.Policy)
-			if oldPolicy == nil || oldPolicy.Order != newPolicy.Order {
+			if oldPolicy == nil ||
+				oldPolicy.Order != newPolicy.Order ||
+				oldPolicy.DoNotTrack != newPolicy.DoNotTrack {
 				dirty = true
 			}
 			poc.tier.Policies[key] = newPolicy
@@ -130,7 +132,11 @@ func NewTierInfo(name string) *tierInfo {
 func (t tierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
-		policies[ii] = pol.Key.Name
+		untracked := "t"
+		if pol.Value != nil && pol.Value.DoNotTrack {
+			untracked = "u"
+		}
+		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, untracked)
 	}
 	return fmt.Sprintf("%v -> %v", t.Name, policies)
 }

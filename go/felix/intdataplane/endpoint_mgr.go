@@ -52,6 +52,7 @@ type endpointManager struct {
 	wlIfacesRegexp *regexp.Regexp
 
 	// Our dependencies.
+	rawTable     iptablesTable
 	filterTable  iptablesTable
 	ruleRenderer rules.RuleRenderer
 	routeTable   routeTable
@@ -85,10 +86,11 @@ type endpointManager struct {
 	// hostEndpointsDirty is set to true when host endpoints are updated.
 	hostEndpointsDirty bool
 	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
-	activeHostIfaceToChains map[string][]*iptables.Chain
-	// activeHostDispatchChains contains the dispatch chains that we've programmed for host
-	// endpoints.
-	activeHostDispatchChains []*iptables.Chain
+	activeHostIfaceToRawChains  map[string][]*iptables.Chain
+	activeHostIfaceToFiltChains map[string][]*iptables.Chain
+	// Dispatch chains that we've programmed for host endpoints.
+	activeHostRawDispatchChains  []*iptables.Chain
+	activeHostFiltDispatchChains []*iptables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
 	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
@@ -103,6 +105,7 @@ type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status s
 type procSysWriter func(path, value string) error
 
 func newEndpointManager(
+	rawTable iptablesTable,
 	filterTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
@@ -111,6 +114,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
+		rawTable,
 		filterTable,
 		ruleRenderer,
 		routeTable,
@@ -122,6 +126,7 @@ func newEndpointManager(
 }
 
 func newEndpointManagerWithShims(
+	rawTable iptablesTable,
 	filterTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	routeTable routeTable,
@@ -137,6 +142,7 @@ func newEndpointManagerWithShims(
 		ipVersion:      ipVersion,
 		wlIfacesRegexp: wlIfacesRegexp,
 
+		rawTable:     rawTable,
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
 		routeTable:   routeTable,
@@ -161,8 +167,8 @@ func newEndpointManagerWithShims(
 		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
-		activeHostIfaceToChains:  map[string][]*iptables.Chain{},
-		activeHostDispatchChains: nil,
+		activeHostIfaceToRawChains:  map[string][]*iptables.Chain{},
+		activeHostIfaceToFiltChains: map[string][]*iptables.Chain{},
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 	}
@@ -486,6 +492,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
 	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	newUntrackedIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
 	newHostEpIDToIfaceNames := map[proto.HostEndpointID][]string{}
 	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
@@ -493,6 +500,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 			"ifaceAddrs": ifaceAddrs,
 		})
 		bestHostEpId := proto.HostEndpointID{}
+		var bestHostEp proto.HostEndpoint
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
 			logCxt := ifaceCxt.WithField("id", id)
@@ -524,17 +532,23 @@ func (m *endpointManager) resolveHostEndpoints() {
 						// that is on this interface.
 						logCxt.Debug("Match on address")
 						bestHostEpId = id
+						bestHostEp = *hostEp
 						continue HostEpLoop
 					}
 				}
 			}
 		}
 		if bestHostEpId.EndpointId != "" {
-			log.WithFields(log.Fields{
+			logCxt := log.WithFields(log.Fields{
 				"ifaceName":    ifaceName,
 				"bestHostEpId": bestHostEpId,
-			}).Debug("Got HostEp for interface")
+			})
+			logCxt.Debug("Got HostEp for interface")
 			newIfaceNameToHostEpID[ifaceName] = bestHostEpId
+			if len(bestHostEp.UntrackedTiers) > 0 {
+				logCxt.Debug("Endpoint has untracked policies.")
+				newUntrackedIfaceNameToHostEpID[ifaceName] = bestHostEpId
+			}
 			newHostEpIDToIfaceNames[bestHostEpId] = append(
 				newHostEpIDToIfaceNames[bestHostEpId], ifaceName)
 		}
@@ -559,38 +573,66 @@ func (m *endpointManager) resolveHostEndpoints() {
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
-	newHostIfaceChains := map[string][]*iptables.Chain{}
+	newHostIfaceRawChains := map[string][]*iptables.Chain{}
+	newHostIfaceFiltChains := map[string][]*iptables.Chain{}
 	for ifaceName, id := range newIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
-		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
-		if !reflect.DeepEqual(chains, m.activeHostIfaceToChains[ifaceName]) {
-			m.filterTable.UpdateChains(chains)
+
+		// Update the filter chain, for normal traffic.
+		filtChains := m.ruleRenderer.HostEndpointToFilterChains(ifaceName, hostEp)
+		if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
+			m.filterTable.UpdateChains(filtChains)
 		}
-		newHostIfaceChains[ifaceName] = chains
-		delete(m.activeHostIfaceToChains, ifaceName)
+		newHostIfaceFiltChains[ifaceName] = filtChains
+		delete(m.activeHostIfaceToFiltChains, ifaceName)
+
+		// Update the raw chain, for untracked traffic.
+		rawChains := m.ruleRenderer.HostEndpointToRawChains(ifaceName, hostEp)
+		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
+			m.rawTable.UpdateChains(rawChains)
+		}
+		newHostIfaceRawChains[ifaceName] = rawChains
+		delete(m.activeHostIfaceToRawChains, ifaceName)
 	}
 
 	// Remove programming for host endpoints that are not now in use.
-	for ifaceName, chains := range m.activeHostIfaceToChains {
-		log.WithField("ifaceName", ifaceName).Info("Host interface no longer protected, deleting its chains.")
+	for ifaceName, chains := range m.activeHostIfaceToFiltChains {
+		log.WithField("ifaceName", ifaceName).Info(
+			"Host interface no longer protected, deleting its tracked chains.")
 		m.filterTable.RemoveChains(chains)
+	}
+	for ifaceName, chains := range m.activeHostIfaceToRawChains {
+		log.WithField("ifaceName", ifaceName).Info(
+			"Host interface no longer protected, deleting its untracked chains.")
+		m.rawTable.RemoveChains(chains)
 	}
 
 	// Remember the host endpoints that are now in use.
 	m.activeIfaceNameToHostEpID = newIfaceNameToHostEpID
 	m.activeHostEpIDToIfaceNames = newHostEpIDToIfaceNames
-	m.activeHostIfaceToChains = newHostIfaceChains
+	m.activeHostIfaceToFiltChains = newHostIfaceFiltChains
+	m.activeHostIfaceToRawChains = newHostIfaceRawChains
 
-	// Rewrite the dispatch chains if they've changed.
+	// Rewrite the filter dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
-	newDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
-	if !reflect.DeepEqual(newDispatchChains, m.activeHostDispatchChains) {
-		log.Info("HostEps changed, updating dispatch chains.")
-		m.filterTable.RemoveChains(m.activeHostDispatchChains)
-		m.filterTable.UpdateChains(newDispatchChains)
-		m.activeHostDispatchChains = newDispatchChains
+	newFiltDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
+	if !reflect.DeepEqual(newFiltDispatchChains, m.activeHostFiltDispatchChains) {
+		log.Info("HostEps changed, updating filter dispatch chains.")
+		m.filterTable.RemoveChains(m.activeHostFiltDispatchChains)
+		m.filterTable.UpdateChains(newFiltDispatchChains)
+		m.activeHostFiltDispatchChains = newFiltDispatchChains
 	}
+
+	// Rewrite the raw dispatch chains if they've changed.
+	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID)
+	if !reflect.DeepEqual(newRawDispatchChains, m.activeHostRawDispatchChains) {
+		log.Info("HostEps changed, updating raw dispatch chains.")
+		m.rawTable.RemoveChains(m.activeHostRawDispatchChains)
+		m.rawTable.UpdateChains(newRawDispatchChains)
+		m.activeHostRawDispatchChains = newRawDispatchChains
+	}
+	log.Debug("Done resolving host endpoints.")
 }
 
 func (m *endpointManager) configureInterface(name string) error {

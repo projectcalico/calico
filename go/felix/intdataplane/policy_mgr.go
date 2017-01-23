@@ -24,6 +24,7 @@ import (
 // policyManager simply renders policy/profile updates into iptables.Chain objects and sends
 // them to the dataplane layer.
 type policyManager struct {
+	rawTable     iptablesTable
 	filterTable  iptablesTable
 	ruleRenderer policyRenderer
 	ipVersion    uint8
@@ -34,8 +35,9 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
 }
 
-func newPolicyManager(filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
+func newPolicyManager(rawTable, filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
+		rawTable:     rawTable,
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
@@ -47,13 +49,25 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	case *proto.ActivePolicyUpdate:
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
-		m.filterTable.UpdateChains(chains)
+		if msg.Policy.Untracked {
+			// Untracked policy, add it to the raw table and make sure it's not
+			// in the filter table.
+			m.rawTable.UpdateChains(chains)
+			m.filterTable.RemoveChains(chains)
+		} else {
+			// Tracked policy, add it to the filter table and make sure it's not
+			// in the raw table.
+			m.rawTable.RemoveChains(chains)
+			m.filterTable.UpdateChains(chains)
+		}
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
 		outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
+		m.rawTable.RemoveChainByName(inName)
+		m.rawTable.RemoveChainByName(outName)
 	case *proto.ActiveProfileUpdate:
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
 		chains := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
