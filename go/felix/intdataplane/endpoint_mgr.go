@@ -89,8 +89,8 @@ type endpointManager struct {
 	// activeHostDispatchChains contains the dispatch chains that we've programmed for host
 	// endpoints.
 	activeHostDispatchChains []*iptables.Chain
-	// activeHostEpIDToIfaceName records which interface we resolved each host endpoint to.
-	activeHostEpIDToIfaceName map[proto.HostEndpointID]string
+	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
+	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
 	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
 
@@ -178,10 +178,12 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		log.WithField("msg", msg).Debug("Host endpoint update")
 		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
 		m.hostEndpointsDirty = true
+		m.epIDsToUpdateStatus.Add(*msg.Id)
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
 		delete(m.rawHostEndpoints, *msg.Id)
 		m.hostEndpointsDirty = true
+		m.epIDsToUpdateStatus.Add(*msg.Id)
 	case *ifaceUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
@@ -219,22 +221,18 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		m.markEndpointStatusDirtyByIface(ifaceName)
 	}
 
-	if err := m.resolveWorkloadEndpoints(); err != nil {
-		log.WithError(err).Warn("Failed to resolve workload endpoints")
-		return err
-	}
+	m.resolveWorkloadEndpoints()
 
 	if m.hostEndpointsDirty {
-		if err := m.resolveHostEndpoints(); err != nil {
-			log.WithError(err).Warn("Failed to resolve host endpoints")
-			return err
-		}
+		log.Debug("Host endpoints updated, resolving them.")
+		m.resolveHostEndpoints()
 		m.hostEndpointsDirty = false
 	}
 
 	// Since the pairings of endpoints and interfaces may have changed, rescan the interface
 	// state updates and mark endpoint statuses for update.
 	for ifaceName := range m.pendingIfaceUpdates {
+		log.WithField("ifaceName", ifaceName).Debug("(Re)marking iface as dirty.")
 		m.markEndpointStatusDirtyByIface(ifaceName)
 		// Clean up as we go...
 		delete(m.pendingIfaceUpdates, ifaceName)
@@ -263,6 +261,7 @@ func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {
 }
 
 func (m *endpointManager) updateEndpointStatuses() {
+	log.WithField("dirtyEndpoints", m.epIDsToUpdateStatus).Debug("Reporting endpoint status.")
 	m.epIDsToUpdateStatus.Iter(func(item interface{}) error {
 		switch id := item.(type) {
 		case proto.WorkloadEndpointID:
@@ -309,22 +308,27 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpo
 	return status
 }
 
-func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) string {
+func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) (status string) {
 	logCxt := log.WithField("hostEndpointID", id)
 	logCxt.Debug("Re-evaluating host endpoint status")
 	var resolved, operUp bool
 	_, known := m.rawHostEndpoints[id]
 	if known {
-		var ifaceName string
-		ifaceName, resolved = m.activeHostEpIDToIfaceName[id]
-		if resolved {
-			operUp = m.activeUpIfaces.Contains(ifaceName)
+		ifaceNames := m.activeHostEpIDToIfaceNames[id]
+		if len(ifaceNames) > 0 {
+			resolved = true
+			operUp = true
+			for _, ifaceName := range ifaceNames {
+				ifaceUp := m.activeUpIfaces.Contains(ifaceName)
+				logCxt.WithFields(log.Fields{
+					"ifaceName": ifaceName,
+					"ifaceUp":   ifaceUp,
+				}).Debug("Status of matching interface.")
+				operUp = operUp && ifaceUp
+			}
 		}
-	}
 
-	var status string
-	if known {
-		if operUp {
+		if resolved && operUp {
 			status = "up"
 		} else if resolved {
 			status = "down"
@@ -344,7 +348,7 @@ func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) s
 	return status
 }
 
-func (m *endpointManager) resolveWorkloadEndpoints() error {
+func (m *endpointManager) resolveWorkloadEndpoints() {
 	// Optimisation, only recalculate the dispatch chains if we've never done so or if the
 	// workloads have changed in some way.
 	needToCheckDispatchChains := m.activeDispatchChains == nil || len(m.pendingWlEpUpdates) > 0
@@ -451,11 +455,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() error {
 		}
 		return set.RemoveItem
 	})
-
-	return nil
 }
 
-func (m *endpointManager) resolveHostEndpoints() error {
+func (m *endpointManager) resolveHostEndpoints() {
 
 	// Host endpoint resolution
 	// ------------------------
@@ -483,8 +485,8 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	// own.  Rather it is looking at the set of local non-workload interfaces and
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
-	m.activeIfaceNameToHostEpID = map[string]proto.HostEndpointID{}
-	m.activeHostEpIDToIfaceName = map[proto.HostEndpointID]string{}
+	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	newHostEpIDToIfaceNames := map[proto.HostEndpointID][]string{}
 	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
@@ -532,14 +534,34 @@ func (m *endpointManager) resolveHostEndpoints() error {
 				"ifaceName":    ifaceName,
 				"bestHostEpId": bestHostEpId,
 			}).Debug("Got HostEp for interface")
-			m.activeIfaceNameToHostEpID[ifaceName] = bestHostEpId
-			m.activeHostEpIDToIfaceName[bestHostEpId] = ifaceName
+			newIfaceNameToHostEpID[ifaceName] = bestHostEpId
+			newHostEpIDToIfaceNames[bestHostEpId] = append(
+				newHostEpIDToIfaceNames[bestHostEpId], ifaceName)
+			m.epIDsToUpdateStatus.Add(bestHostEpId)
+		}
+
+		oldID, wasKnown := m.activeIfaceNameToHostEpID[ifaceName]
+		newID, isKnown := newIfaceNameToHostEpID[ifaceName]
+		if oldID != newID {
+			logCxt := ifaceCxt.WithFields(log.Fields{
+				"oldEndpoint": m.activeIfaceNameToHostEpID[ifaceName],
+				"newEndpoint": newIfaceNameToHostEpID[ifaceName],
+			})
+			logCxt.Info("Endpoint matching interface changed")
+			if wasKnown {
+				logCxt.Debug("Endpoint was known, updating old endpoint status")
+				m.epIDsToUpdateStatus.Add(oldID)
+			}
+			if isKnown {
+				logCxt.Debug("Endpoint is known, updating new endpoint status")
+				m.epIDsToUpdateStatus.Add(newID)
+			}
 		}
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
 	newHostIfaceChains := map[string][]*iptables.Chain{}
-	for ifaceName, id := range m.activeIfaceNameToHostEpID {
+	for ifaceName, id := range newIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
 		chains := m.ruleRenderer.HostEndpointToIptablesChains(ifaceName, hostEp)
@@ -557,19 +579,19 @@ func (m *endpointManager) resolveHostEndpoints() error {
 	}
 
 	// Remember the host endpoints that are now in use.
+	m.activeIfaceNameToHostEpID = newIfaceNameToHostEpID
+	m.activeHostEpIDToIfaceNames = newHostEpIDToIfaceNames
 	m.activeHostIfaceToChains = newHostIfaceChains
 
 	// Rewrite the dispatch chains if they've changed.
-	log.WithField("resolvedHostEpIds", m.activeIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
-	newDispatchChains := m.ruleRenderer.HostDispatchChains(m.activeIfaceNameToHostEpID)
+	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
+	newDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
 	if !reflect.DeepEqual(newDispatchChains, m.activeHostDispatchChains) {
 		log.Info("HostEps changed, updating dispatch chains.")
 		m.filterTable.RemoveChains(m.activeHostDispatchChains)
 		m.filterTable.UpdateChains(newDispatchChains)
 		m.activeHostDispatchChains = newDispatchChains
 	}
-
-	return nil
 }
 
 func (m *endpointManager) configureInterface(name string) error {

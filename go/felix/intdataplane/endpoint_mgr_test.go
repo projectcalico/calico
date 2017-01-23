@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"errors"
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -219,12 +220,21 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 	Expect(t.currentRoutes[ifaceName]).To(Equal(expected))
 }
 
-func endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string) {
+type statusReportRecorder struct {
+	currentState map[interface{}]string
+}
+
+func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"id":        id,
 		"status":    status,
 	}).Debug("endpointStatusUpdateCallback")
+	if status == "" {
+		delete(r.currentState, id)
+	} else {
+		r.currentState[id] = status
+	}
 }
 
 type hostEpSpec struct {
@@ -243,14 +253,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 			ipv6     = "2001:db8::10.0.240.10"
 		)
 		var (
-			epMgr          *endpointManager
-			filterTable    *mockTable
-			rrConfigNormal rules.Config
-			eth0Addrs      set.Set
-			loAddrs        set.Set
-			eth1Addrs      set.Set
-			routeTable     *mockRouteTable
-			mockProcSys    *testProcSys
+			epMgr           *endpointManager
+			filterTable     *mockTable
+			rrConfigNormal  rules.Config
+			eth0Addrs       set.Set
+			loAddrs         set.Set
+			eth1Addrs       set.Set
+			routeTable      *mockRouteTable
+			mockProcSys     *testProcSys
+			statusReportRec *statusReportRecorder
 		)
 
 		BeforeEach(func() {
@@ -279,13 +290,14 @@ func endpointManagerTests(ipVersion uint8) func() {
 				currentRoutes: map[string][]routetable.Target{},
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}}
+			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
 			epMgr = newEndpointManagerWithShims(
 				filterTable,
 				renderer,
 				routeTable,
 				ipVersion,
 				[]string{"cali"},
-				endpointStatusUpdateCallback,
+				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 			)
 		})
@@ -367,6 +379,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 			})
 
 			It("should have empty dispatch chains", expectEmptyChains())
+			It("should make no status reports", func() {
+				Expect(statusReportRec.currentState).To(BeEmpty())
+			})
 
 			// Configure host endpoints with tier names here, so we can check which of
 			// the host endpoints gets used in the programming for a particular host
@@ -379,6 +394,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					tierName: "tierA",
 				}))
 				It("should have expected chains", expectChainsFor("eth0_tierA"))
+				It("should report id1 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id1"}: "up",
+					}))
+				})
 
 				Context("with another host ep (>ID) that matches the IPv4 address", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
@@ -387,11 +407,21 @@ func endpointManagerTests(ipVersion uint8) func() {
 						tierName:  "tierB",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_tierA"))
+					It("should report id1 up, but id2 now in error", func() {
+						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							proto.HostEndpointID{EndpointId: "id1"}: "up",
+							proto.HostEndpointID{EndpointId: "id2"}: "error",
+						}))
+					})
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor("eth0_tierB"))
-
+						It("should report id2 up only", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								proto.HostEndpointID{EndpointId: "id2"}: "up",
+							}))
+						})
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id2"))
 							It("should have empty dispatch chains", expectEmptyChains())
@@ -406,14 +436,29 @@ func endpointManagerTests(ipVersion uint8) func() {
 						tierName:  "tierB",
 					}))
 					It("should have expected chains", expectChainsFor("eth0_tierB"))
+					It("should report id0 up, but id1 now in error", func() {
+						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							proto.HostEndpointID{EndpointId: "id0"}: "up",
+							proto.HostEndpointID{EndpointId: "id1"}: "error",
+						}))
+					})
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
 						It("should have expected chains", expectChainsFor("eth0_tierB"))
+						It("should report id0 up only", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								proto.HostEndpointID{EndpointId: "id0"}: "up",
+							}))
+						})
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
 							It("should have empty dispatch chains", expectEmptyChains())
+
+							It("should remove all status reports", func() {
+								Expect(statusReportRec.currentState).To(BeEmpty())
+							})
 						})
 					})
 				})
@@ -425,6 +470,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name: "eth0",
 				}))
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id1 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id1"}: "up",
+					}))
+				})
 
 				Context("with another host interface eth1", func() {
 					JustBeforeEach(func() {
@@ -440,6 +490,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have expected chains", expectChainsFor("eth0"))
+					It("should report id1 up", func() {
+						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							proto.HostEndpointID{EndpointId: "id1"}: "up",
+						}))
+					})
 
 					Context("with host ep matching eth1's IP", func() {
 						JustBeforeEach(configureHostEp(&hostEpSpec{
@@ -447,6 +502,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 							ipv4Addrs: []string{ipv4Eth1},
 						}))
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						It("should report id1 and id22 up", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								proto.HostEndpointID{EndpointId: "id1"}:  "up",
+								proto.HostEndpointID{EndpointId: "id22"}: "up",
+							}))
+						})
 					})
 
 					Context("with host ep matching eth1", func() {
@@ -455,6 +516,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 							name: "eth1",
 						}))
 						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						It("should report id1 and id22 up", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								proto.HostEndpointID{EndpointId: "id1"}:  "up",
+								proto.HostEndpointID{EndpointId: "id22"}: "up",
+							}))
+						})
 					})
 				})
 			})
@@ -465,6 +532,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name: "eth1",
 				}))
 				It("should have empty dispatch chains", expectEmptyChains())
+				It("should report endpoint in error", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "error",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv4 address", func() {
@@ -473,6 +545,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv4Addrs: []string{ipv4},
 				}))
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id4 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id4"}: "up",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv6 address", func() {
@@ -481,6 +558,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv6Addrs: []string{ipv6},
 				}))
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id5 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id5"}: "up",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv4 address and correct interface name", func() {
@@ -490,6 +572,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv4Addrs: []string{ipv4},
 				}))
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id3 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "up",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv6 address and correct interface name", func() {
@@ -499,6 +586,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv6Addrs: []string{ipv6},
 				}))
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id3 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "up",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv4 address and wrong interface name", func() {
@@ -508,6 +600,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv4Addrs: []string{ipv4},
 				}))
 				It("should have empty dispatch chains", expectEmptyChains())
+				It("should report id3 error", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "error",
+					}))
+				})
 			})
 
 			Describe("with host endpoint matching IPv6 address and wrong interface name", func() {
@@ -517,6 +614,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv6Addrs: []string{ipv6},
 				}))
 				It("should have empty dispatch chains", expectEmptyChains())
+				It("should report id3 error", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "error",
+					}))
+				})
 			})
 
 			Describe("with host endpoint with unmatched IPv4 address", func() {
@@ -525,6 +627,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv4Addrs: []string{"8.8.8.8"},
 				}))
 				It("should have empty dispatch chains", expectEmptyChains())
+				It("should report id4 error", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id4"}: "error",
+					}))
+				})
 			})
 
 			Describe("with host endpoint with unmatched IPv6 address", func() {
@@ -533,6 +640,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ipv6Addrs: []string{"fe08::2"},
 				}))
 				It("should have empty dispatch chains", expectEmptyChains())
+				It("should report id5 error", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id5"}: "error",
+					}))
+				})
 			})
 
 		})
@@ -543,6 +655,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 				name: "eth0",
 			}))
 			It("should have empty dispatch chains", expectEmptyChains())
+			It("should report id3 error", func() {
+				Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+					proto.HostEndpointID{EndpointId: "id3"}: "error",
+				}))
+			})
 
 			Context("with interface signaled", func() {
 				JustBeforeEach(func() {
@@ -557,6 +674,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					epMgr.CompleteDeferredWork()
 				})
 				It("should have expected chains", expectChainsFor("eth0"))
+				It("should report id3 up", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						proto.HostEndpointID{EndpointId: "id3"}: "up",
+					}))
+				})
 			})
 		})
 
@@ -572,15 +694,16 @@ func endpointManagerTests(ipVersion uint8) func() {
 		Describe("workload endpoints", func() {
 
 			Context("with a workload endpoint", func() {
+				wlEPID1 := proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "pod-11",
+					EndpointId:     "endpoint-id-11",
+				}
 				JustBeforeEach(func() {
 					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
-						Id: &proto.WorkloadEndpointID{
-							OrchestratorId: "k8s",
-							WorkloadId:     "pod-11",
-							EndpointId:     "endpoint-id-11",
-						},
+						Id: &wlEPID1,
 						Endpoint: &proto.WorkloadEndpoint{
-							State:      "up",
+							State:      "active",
 							Mac:        "01:02:03:04:05:06",
 							Name:       "cali12345-ab",
 							ProfileIds: []string{},
@@ -607,6 +730,31 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}})
 					}
 				})
+				It("should report endpoint down", func() {
+					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+						wlEPID1: "down",
+					}))
+				})
+
+				Context("with updates for the workload's iface and proc/sys failure", func() {
+					JustBeforeEach(func() {
+						mockProcSys.Fail = true
+						epMgr.OnUpdate(&ifaceUpdate{
+							Name:  "cali12345-ab",
+							State: "up",
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "cali12345-ab",
+							Addrs: set.New(),
+						})
+						epMgr.CompleteDeferredWork()
+					})
+					It("should report the interface in error", func() {
+						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							wlEPID1: "error",
+						}))
+					})
+				})
 
 				Context("with updates for the workload's iface", func() {
 					JustBeforeEach(func() {
@@ -622,6 +770,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+					It("should report endpoint up", func() {
+						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+							wlEPID1: "up",
+						}))
+					})
 
 					It("should write /proc/sys entries", func() {
 						if ipVersion == 6 {
@@ -641,11 +794,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Context("with floating IPs added to the endpoint", func() {
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
-								Id: &proto.WorkloadEndpointID{
-									OrchestratorId: "k8s",
-									WorkloadId:     "pod-11",
-									EndpointId:     "endpoint-id-11",
-								},
+								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
 									State:      "up",
 									Mac:        "01:02:03:04:05:06",
@@ -707,11 +856,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Context("with the endpoint removed", func() {
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
-								Id: &proto.WorkloadEndpointID{
-									OrchestratorId: "k8s",
-									WorkloadId:     "pod-11",
-									EndpointId:     "endpoint-id-11",
-								},
+								Id: &wlEPID1,
 							})
 							epMgr.CompleteDeferredWork()
 						})
@@ -720,6 +865,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 						It("should have removed routes", func() {
 							routeTable.checkRoutes("cali12345-ab", nil)
+						})
+						It("should report endpoint gone", func() {
+							Expect(statusReportRec.currentState).To(BeEmpty())
 						})
 					})
 
@@ -734,13 +882,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 								Addrs: set.New(),
 							})
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
-								Id: &proto.WorkloadEndpointID{
-									OrchestratorId: "k8s",
-									WorkloadId:     "pod-11",
-									EndpointId:     "endpoint-id-11",
-								},
+								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
-									State:      "up",
+									State:      "active",
 									Mac:        "01:02:03:04:05:06",
 									Name:       "cali12345-cd",
 									ProfileIds: []string{},
@@ -756,6 +900,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 						It("should have removed routes for old iface", func() {
 							routeTable.checkRoutes("cali12345-ab", nil)
+						})
+						It("should report endpoint up", func() {
+							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
+								wlEPID1: "up",
+							}))
 						})
 
 						It("should have set routes for new iface", func() {
@@ -784,13 +933,21 @@ var _ = Describe("EndpointManager IPv6", endpointManagerTests(6))
 
 type testProcSys struct {
 	state map[string]string
+	Fail  bool
 }
+
+var (
+	procSysFail = errors.New("mock proc sys failure")
+)
 
 func (t *testProcSys) write(path, value string) error {
 	log.WithFields(log.Fields{
 		"path":  path,
 		"value": value,
 	}).Info("testProcSys writer")
+	if t.Fail {
+		return procSysFail
+	}
 	t.state[path] = value
 	return nil
 }
