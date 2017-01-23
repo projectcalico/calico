@@ -29,7 +29,6 @@ CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releas
 GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1/gobgp
 
 # we can use "custom" build image and test image name
-PYTHON_BUILD_CONTAINER_NAME?=calico/build:v0.19.0
 SYSTEMTEST_CONTAINER?=calico/test
 
 # calicoctl and calico/node current share a single version - this is it.
@@ -566,7 +565,6 @@ clean:
 	# Retag and remove external images so that they will be pulled again
 	# We avoid just deleting the image. We didn't build them here so it would be impolite to delete it.
 	docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME) || true
-	docker tag $(PYTHON_BUILD_CONTAINER_NAME) $(PYTHON_BUILD_CONTAINER_NAME)-backup && docker rmi $(PYTHON_BUILD_CONTAINER_NAME) || true
 	docker tag $(SYSTEMTEST_CONTAINER):latest $(SYSTEMTEST_CONTAINER):latest-backup && docker rmi $(SYSTEMTEST_CONTAINER):latest || true
 
 .PHONY: help
