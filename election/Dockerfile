@@ -1,4 +1,4 @@
-# Copyright 2015 Metaswitch Networks
+# Copyright 2015 Tigera, Inc
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM gcr.io/google_containers/leader-elector:0.4 
+FROM gcr.io/google_containers/leader-elector:0.4
 MAINTAINER Casey Davenport <casey@projectcalico.org>
 
 # Add a kubeconfig file.
