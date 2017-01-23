@@ -1,8 +1,8 @@
 ---
-title: Running the Calico tutorials on CoreOS using Vagrant and VirtualBox
+title: Running the Calico tutorials on CoreOS Container Linux using Vagrant and VirtualBox
 ---
 
-These instructions allow you to set up a CoreOS cluster ready to network Docker containers with
+These instructions allow you to set up a CoreOS Container Linux cluster ready to network Docker containers with
 Calico networking using Vagrant.
 
 ## 1. Streamlined setup of the VMs
@@ -34,7 +34,7 @@ To connect to your servers
 
 ### 1.5 Verify environment
 
-You should now have two CoreOS servers, each running etcd in a cluster. The servers are named calico-01 and calico-02
+You should now have two CoreOS Container Linux servers, each running etcd in a cluster. The servers are named calico-01 and calico-02
 and IP addresses 172.17.8.101 and 172.17.8.102.
 
 At this point, it's worth checking that your servers can ping each other.
@@ -80,7 +80,7 @@ You should see output like this on each node
 
 ## Next Steps
 
-Now that you have a basic two node CoreOS cluster setup, see the [simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
+Now that you have a basic two node CoreOS Container Linux cluster setup, see the [simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html

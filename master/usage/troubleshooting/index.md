@@ -19,7 +19,7 @@ or you can set environment variables for `sudo` commands like this:
 ```
 
 Also be aware that connection information can be specified as a config
-file rather than using environment variables.  See the 
+file rather than using environment variables.  See the
 [Calicoctl Configuration Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
 guide for details.
 
@@ -39,7 +39,7 @@ guide for more information.
 
 ## etcd.EtcdException: No more machines in the cluster
 
-If you see this exception, it means `calicoctl` can't communicate with your etcd 
+If you see this exception, it means `calicoctl` can't communicate with your etcd
 cluster.  Ensure etcd is up and listening on `localhost:2379`
 
 ## No ping between containers on different hosts
@@ -81,7 +81,7 @@ If you do not see this, please check the following.
 Running `ip route` shows what routes have been programmed. Routes from other hosts
 should show that they are programmed by bird.
 
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS
+If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS Container Linux
 image is out of date.  Use `vagrant box update` to pull the new version.  I
 recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 
@@ -90,4 +90,3 @@ If you hit issues, please raise tickets. Diags can be collected with the
 for example:
 
         sudo calicoctl node diags
-

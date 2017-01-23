@@ -1,5 +1,5 @@
 ---
-title: Deploying Calico and Kubernetes on CoreOS using Vagrant and VirtualBox
+title: Deploying Calico and Kubernetes on Container Linux by CoreOS using Vagrant and VirtualBox
 ---
 
 These instructions allow you to set up a Kubernetes cluster with Calico networking using Vagrant and the [Calico CNI plugin][cni-plugin]. This guide does not setup TLS between Kubernetes components.
@@ -38,7 +38,7 @@ To connect to your servers
 
 ### 1.4 Verify environment
 
-You should now have three CoreOS servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02 and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
+You should now have three CoreOS Container Linux servers - one Kubernetes master and two Kubernetes nodes. The servers are named k8s-master, k8s-node-01, and k8s-node-02 and have IP addresses 172.18.18.101, 172.18.18.102, and 172.18.18.103.
 
 At this point, it's worth checking that your servers can ping each other.
 
