@@ -6,7 +6,7 @@ These instructions allow you to set up a Kubernetes cluster with Calico networki
 
 ## 1. Getting started with GCE
 
-These instructions describe how to set up two CoreOS hosts on GCE.  For more general background, see
+These instructions describe how to set up two CoreOS Container Linux hosts on GCE.  For more general background, see
 [the CoreOS on GCE documentation][coreos-gce].
 
 ### 1.1 Install the gcloud tool

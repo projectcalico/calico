@@ -81,7 +81,7 @@ If you do not see this, please check the following.
 Running `ip route` shows what routes have been programmed. Routes from other hosts
 should show that they are programmed by bird.
 
-If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS
+If your hosts reboot themselves with a message from `locksmithd` your cached CoreOS Container Linux
 image is out of date.  Use `vagrant box update` to pull the new version.  I
 recommend doing a `vagrant destroy; vagrant up` to start from a clean slate afterwards.
 

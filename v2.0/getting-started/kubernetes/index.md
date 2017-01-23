@@ -19,19 +19,19 @@ There are two main ways to install Calico on Kubernetes.
 #### [Hosted Install Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted)
 
 This method uses Kubernetes manifests to install Calico for Kubernetes, using Kubernetes.
-Calico manifests ensure the necessary components are installed and run on each node in the cluster. 
+Calico manifests ensure the necessary components are installed and run on each node in the cluster.
 
 #### [Integration Guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/integration)
 
-This method walks through the necessary manual steps to integrate Calico with your own deployment scripts and tools.  Follow 
+This method walks through the necessary manual steps to integrate Calico with your own deployment scripts and tools.  Follow
 this guide if you're integrating Calico with your own configuration management tools.
 
-## Quick Start Guides 
+## Quick Start Guides
 
 The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a 
 Calico self-hosted installation. 
 
-#### [CoreOS Vagrant]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
+#### [Vagrant and Container Linux by CoreOS ]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
 
 This guide uses Vagrant and VirtualBox to locally run a Kubernetes
 cluster with Calico.
@@ -71,7 +71,7 @@ A number of popular Kubernetes installers use Calico to provide networking and/o
 Here are a few, listed alphabetically.
 
 - [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
-- [CoreOS](https://coreos.com/kubernetes/docs/latest/)
+- [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
 - [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
 - [Kargo](https://github.com/kubernetes-incubator/kargo)
 - [StackPointCloud](https://stackpoint.io)

@@ -8,14 +8,14 @@ See also the [main Calico troubleshooting](../../usage/troubleshooting) pages.
 
 ## Frequently Asked Questions
 
-#### Why isn't Calico working on CoreOS / hyperkube? 
+#### Why isn't Calico working on CoreOS Container Linux / hyperkube?
 
 Calico hosted install places the necessary CNI binaries and config on each
 Kubernetes node in a directory on the host as specified in the manifest.  By 
 default it places binaries in /opt/cni/bin and config /etc/cni/net.d.
 
-When running the kubelet as a container using hyperkube as is common on CoreOS, 
-you need to make sure that the containerized kubelet can see the CNI network 
+When running the kubelet as a container using hyperkube as is common on CoreOS Container Linux,
+you need to make sure that the containerized kubelet can see the CNI network
 plugins and config that have been installed by mounting them into the kubelet container.
 
 For example add the following arguments to the kubelet-wrapper service: 

@@ -20,9 +20,9 @@ Learn the two-step process for launching Calico for Docker.
 
 ## Quickstart with "Calico-Ready" Clusters
 
-#### [Vagrant/VirtualBox: CoreOS](installation/vagrant-coreos)
+#### [Vagrant/VirtualBox: Container Linux by CoreOS](installation/vagrant-coreos)
 
-Follow this guide to launch a local 2-node CoreOS cluster with everything
+Follow this guide to launch a local 2-node CoreOS Container Linux cluster with everything
 you need to install and use Calico.
 
 #### [Vagrant Ubuntu](installation/vagrant-ubuntu)
