@@ -121,6 +121,34 @@ $(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr: dist/allocate-ipip-addr
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
 	cp dist/allocate-ipip-addr $(NODE_CONTAINER_BIN_DIR)/allocate-ipip-addr
 
+## Build startup.go
+startup:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o dist/startup $(LDFLAGS) "./calico_node/startup/startup.go"
+
+dist/startup: $(STARTUP_FILES) vendor
+	mkdir -p dist
+	docker run --rm \
+	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
+	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
+	  golang:1.7 bash -c '\
+	    cd /go/src/github.com/projectcalico/calicoctl && \
+	    make startup && \
+	    chown -R $(shell id -u):$(shell id -u) dist'
+
+## Build allocate_ipip_addr.go
+allocate-ipip-addr:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o dist/allocate-ipip-addr $(LDFLAGS) "./calico_node/allocateipip/allocate_ipip_addr.go"
+
+dist/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES) vendor
+	mkdir -p dist
+	docker run --rm \
+	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
+	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
+	  golang:1.7 bash -c '\
+	    cd /go/src/github.com/projectcalico/calicoctl && \
+	    make allocate-ipip-addr && \
+	    chown -R $(shell id -u):$(shell id -u) dist'
+
 ###############################################################################
 # Tests
 # - Support for running etcd (both securely and insecurely)
@@ -396,34 +424,6 @@ $(TEST_CALICOCTL_CONTAINER_MARKER): calicoctl/Dockerfile.calicoctl.build
 $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
 	touch $@
-
-## Build startup.go
-startup:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o dist/startup $(LDFLAGS) "./calico_node/startup/startup.go"
-
-dist/startup: $(STARTUP_FILES) vendor
-	mkdir -p dist
-	docker run --rm \
-	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
-	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
-	  golang:1.7 bash -c '\
-	    cd /go/src/github.com/projectcalico/calicoctl && \
-	    make startup && \
-	    chown -R $(shell id -u):$(shell id -u) dist'
-
-## Build allocate_ipip_addr.go
-allocate-ipip-addr:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -v -o dist/allocate-ipip-addr $(LDFLAGS) "./calico_node/allocateipip/allocate_ipip_addr.go"
-
-dist/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES) vendor
-	mkdir -p dist
-	docker run --rm \
-	  -v ${PWD}:/go/src/github.com/projectcalico/calicoctl:ro \
-	  -v ${PWD}/dist:/go/src/github.com/projectcalico/calicoctl/dist \
-	  golang:1.7 bash -c '\
-	    cd /go/src/github.com/projectcalico/calicoctl && \
-	    make allocate-ipip-addr && \
-	    chown -R $(shell id -u):$(shell id -u) dist'
 
 ## Build calicoctl
 binary: $(CALICOCTL_FILES) vendor
