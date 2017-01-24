@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,11 +29,13 @@ type State struct {
 	Name string
 	// List of KVPairs that are in the datastore.  Stored as a list rather
 	// than a map to give us a deterministic ordering of injection.
-	DatastoreState              []KVPair
-	ExpectedIPSets              map[string]set.Set
-	ExpectedPolicyIDs           set.Set
-	ExpectedProfileIDs          set.Set
-	ExpectedEndpointPolicyOrder map[string][]tierInfo
+	DatastoreState                       []KVPair
+	ExpectedIPSets                       map[string]set.Set
+	ExpectedPolicyIDs                    set.Set
+	ExpectedUntrackedPolicyIDs           set.Set
+	ExpectedProfileIDs                   set.Set
+	ExpectedEndpointPolicyOrder          map[string][]tierInfo
+	ExpectedUntrackedEndpointPolicyOrder map[string][]tierInfo
 }
 
 func (s State) String() string {
@@ -45,16 +47,18 @@ func (s State) String() string {
 
 func NewState() State {
 	return State{
-		DatastoreState:              []KVPair{},
-		ExpectedIPSets:              make(map[string]set.Set),
-		ExpectedPolicyIDs:           set.New(),
-		ExpectedProfileIDs:          set.New(),
-		ExpectedEndpointPolicyOrder: make(map[string][]tierInfo),
+		DatastoreState:                       []KVPair{},
+		ExpectedIPSets:                       make(map[string]set.Set),
+		ExpectedPolicyIDs:                    set.New(),
+		ExpectedUntrackedPolicyIDs:           set.New(),
+		ExpectedProfileIDs:                   set.New(),
+		ExpectedEndpointPolicyOrder:          make(map[string][]tierInfo),
+		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]tierInfo),
 	}
 }
 
 // copy returns a deep copy of the state.
-func (s State) copy() State {
+func (s State) Copy() State {
 	cpy := NewState()
 	cpy.DatastoreState = append(cpy.DatastoreState, s.DatastoreState...)
 	for k, ips := range s.ExpectedIPSets {
@@ -63,14 +67,14 @@ func (s State) copy() State {
 	for k, v := range s.ExpectedEndpointPolicyOrder {
 		cpy.ExpectedEndpointPolicyOrder[k] = v
 	}
-	s.ExpectedPolicyIDs.Iter(func(item interface{}) error {
-		cpy.ExpectedPolicyIDs.Add(item)
-		return nil
-	})
-	s.ExpectedProfileIDs.Iter(func(item interface{}) error {
-		cpy.ExpectedProfileIDs.Add(item)
-		return nil
-	})
+	for k, v := range s.ExpectedUntrackedEndpointPolicyOrder {
+		cpy.ExpectedUntrackedEndpointPolicyOrder[k] = v
+	}
+
+	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
+	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
+	cpy.ExpectedProfileIDs = s.ExpectedProfileIDs.Copy()
+
 	cpy.Name = s.Name
 	return cpy
 }
@@ -80,7 +84,7 @@ func (s State) copy() State {
 // the new KV is appended.  If the value of a new KV is nil, it is removed.
 func (s State) withKVUpdates(kvs ...KVPair) (newState State) {
 	// Start with a clean copy.
-	newState = s.copy()
+	newState = s.Copy()
 	// But replace the datastoreState, which we're about to modify.
 	newState.DatastoreState = make([]KVPair, 0, len(kvs)+len(s.DatastoreState))
 	// Make a set containing the new keys.
@@ -107,7 +111,7 @@ func (s State) withKVUpdates(kvs ...KVPair) (newState State) {
 
 func (s State) withIPSet(name string, members []string) (newState State) {
 	// Start with a clean copy.
-	newState = s.copy()
+	newState = s.Copy()
 	if members == nil {
 		delete(newState.ExpectedIPSets, name)
 	} else {
@@ -121,23 +125,29 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 }
 
 func (s State) withEndpoint(id string, tiers []tierInfo) State {
-	newState := s.copy()
+	return s.withEndpointUntracked(id, tiers, []tierInfo{})
+}
+
+func (s State) withEndpointUntracked(id string, tiers, untrackedTiers []tierInfo) State {
+	newState := s.Copy()
 	if tiers == nil {
 		delete(newState.ExpectedEndpointPolicyOrder, id)
+		delete(newState.ExpectedUntrackedEndpointPolicyOrder, id)
 	} else {
 		newState.ExpectedEndpointPolicyOrder[id] = tiers
+		newState.ExpectedUntrackedEndpointPolicyOrder[id] = untrackedTiers
 	}
 	return newState
 }
 
 func (s State) withName(name string) (newState State) {
-	newState = s.copy()
+	newState = s.Copy()
 	newState.Name = name
 	return newState
 }
 
 func (s State) withActivePolicies(ids ...proto.PolicyID) (newState State) {
-	newState = s.copy()
+	newState = s.Copy()
 	newState.ExpectedPolicyIDs = set.New()
 	for _, id := range ids {
 		newState.ExpectedPolicyIDs.Add(id)
@@ -145,8 +155,17 @@ func (s State) withActivePolicies(ids ...proto.PolicyID) (newState State) {
 	return newState
 }
 
+func (s State) withUntrackedPolicies(ids ...proto.PolicyID) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedUntrackedPolicyIDs = set.New()
+	for _, id := range ids {
+		newState.ExpectedUntrackedPolicyIDs.Add(id)
+	}
+	return newState
+}
+
 func (s State) withActiveProfiles(ids ...proto.ProfileID) (newState State) {
-	newState = s.copy()
+	newState = s.Copy()
 	newState.ExpectedProfileIDs = set.New()
 	for _, id := range ids {
 		newState.ExpectedProfileIDs.Add(id)

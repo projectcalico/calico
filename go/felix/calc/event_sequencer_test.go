@@ -59,3 +59,42 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		Ipv6Nat: []*proto.NatInfo{},
 	}),
 )
+
+var _ = DescribeTable("ModelHostEndpointToProto",
+	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, expected proto.HostEndpoint) {
+		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers)
+		Expect(*out).To(Equal(expected))
+	},
+	Entry("minimal endpoint",
+		model.HostEndpoint{
+			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13")},
+		},
+		nil,
+		nil,
+		proto.HostEndpoint{
+			ExpectedIpv4Addrs: []string{"10.28.0.13"},
+			ExpectedIpv6Addrs: []string{},
+		},
+	),
+	Entry("fully loaded endpoint",
+		model.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
+			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
+			Labels: map[string]string{
+				"a": "b",
+			},
+			ProfileIDs: []string{"prof1"},
+		},
+		[]*proto.TierInfo{{Name: "a", Policies: []string{"b", "c"}}},
+		[]*proto.TierInfo{{Name: "d", Policies: []string{"e", "f"}}},
+		proto.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
+			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
+			Tiers:             []*proto.TierInfo{{Name: "a", Policies: []string{"b", "c"}}},
+			UntrackedTiers:    []*proto.TierInfo{{Name: "d", Policies: []string{"e", "f"}}},
+			ProfileIds:        []string{"prof1"},
+		},
+	),
+)
