@@ -317,10 +317,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion)
 		t.UpdateChains(rawChains)
 		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainRawPrerouting},
+			Action: iptables.JumpAction{Target: rules.ChainRawPrerouting},
 		}})
 		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainRawOutput},
+			Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 		}})
 	}
 
