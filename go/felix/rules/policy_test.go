@@ -438,28 +438,28 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[:7]).
 					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{0x8},
+				Action: iptables.SetMarkAction{Mark: 0x8},
 			},
 			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[:7]).
 					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{0x8},
+				Action: iptables.SetMarkAction{Mark: 0x8},
 			},
 			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[7:8]).
 					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{0x8},
+				Action: iptables.SetMarkAction{Mark: 0x8},
 			},
 			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[7:8]).
 					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{0x8},
+				Action: iptables.SetMarkAction{Mark: 0x8},
 			},
 			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
 		}))

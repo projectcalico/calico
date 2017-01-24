@@ -22,14 +22,14 @@ import (
 
 var (
 	rules1 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"biff"}},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
 	}
 	rules2 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"boff"}},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
 	}
 	rules3 = []Rule{
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"biff"}},
-		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{"boff"}},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "biff"}},
+		{Match: MatchCriteria{"-m foobar --foobar baz"}, Action: JumpAction{Target: "boff"}},
 	}
 )
 

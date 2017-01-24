@@ -315,13 +315,13 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion)
 		t.UpdateChains(filterChains)
 		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainFilterForward},
+			Action: iptables.JumpAction{Target: rules.ChainFilterForward},
 		}})
 		t.SetRuleInsertions("INPUT", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainFilterInput},
+			Action: iptables.JumpAction{Target: rules.ChainFilterInput},
 		}})
 		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainFilterOutput},
+			Action: iptables.JumpAction{Target: rules.ChainFilterOutput},
 		}})
 	}
 
@@ -338,10 +338,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion))
 		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainNATPrerouting},
+			Action: iptables.JumpAction{Target: rules.ChainNATPrerouting},
 		}})
 		t.SetRuleInsertions("POSTROUTING", []iptables.Rule{{
-			Action: iptables.JumpAction{rules.ChainNATPostrouting},
+			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
 		}})
 	}
 
