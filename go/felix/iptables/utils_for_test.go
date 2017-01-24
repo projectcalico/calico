@@ -37,6 +37,7 @@ func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
 		Chains:        chains,
 		FlushedChains: set.New(),
 		ChainMods:     set.New(),
+		DeletedChains: set.New(),
 	}
 }
 
@@ -50,6 +51,7 @@ type mockDataplane struct {
 	Chains          map[string][]string
 	FlushedChains   set.Set
 	ChainMods       set.Set
+	DeletedChains   set.Set
 	Cmds            []CmdIface
 	FailNextRestore bool
 	FailAllRestores bool
@@ -249,6 +251,7 @@ func (d *restoreCmd) Run() error {
 			Expect(len(parts)).To(Equal(2), "--delete-chain only has one argument")
 			Expect(chains[chainName]).To(Equal([]string{}), "Only empty chains can be deleted")
 			delete(chains, chainName)
+			d.Dataplane.DeletedChains.Add(chainName)
 		default:
 			Fail("Unknown action: " + action)
 		}
