@@ -217,8 +217,12 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			m.activeUpIfaces.Discard(ifaceName)
 		}
 		// If this interface is linked to any already-existing endpoints, mark the endpoint
-		// status for recalculation.
+		// status for recalculation.  If the matching endpoint changes when we do
+		// resolveHostEndpoints() then that will mark old and new matching endpoints for
+		// update.
 		m.markEndpointStatusDirtyByIface(ifaceName)
+		// Clean up as we go...
+		delete(m.pendingIfaceUpdates, ifaceName)
 	}
 
 	m.resolveWorkloadEndpoints()
@@ -227,15 +231,6 @@ func (m *endpointManager) CompleteDeferredWork() error {
 		log.Debug("Host endpoints updated, resolving them.")
 		m.resolveHostEndpoints()
 		m.hostEndpointsDirty = false
-	}
-
-	// Since the pairings of endpoints and interfaces may have changed, rescan the interface
-	// state updates and mark endpoint statuses for update.
-	for ifaceName := range m.pendingIfaceUpdates {
-		log.WithField("ifaceName", ifaceName).Debug("(Re)marking iface as dirty.")
-		m.markEndpointStatusDirtyByIface(ifaceName)
-		// Clean up as we go...
-		delete(m.pendingIfaceUpdates, ifaceName)
 	}
 
 	// Now send any endpoint status updates.
@@ -287,6 +282,8 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpo
 		failed = m.wlIfaceNamesToReconfigure.Contains(workload.Name)
 	}
 
+	// Note: if endpoint is not known (i.e. has been deleted), status will be "", which signals
+	// a deletion.
 	var status string
 	if known {
 		if failed {
@@ -313,6 +310,9 @@ func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) (
 	logCxt.Debug("Re-evaluating host endpoint status")
 	var resolved, operUp bool
 	_, known := m.rawHostEndpoints[id]
+
+	// Note: if endpoint is not known (i.e. has been deleted), status will be "", which signals
+	// a deletion.
 	if known {
 		ifaceNames := m.activeHostEpIDToIfaceNames[id]
 		if len(ifaceNames) > 0 {
@@ -537,15 +537,14 @@ func (m *endpointManager) resolveHostEndpoints() {
 			newIfaceNameToHostEpID[ifaceName] = bestHostEpId
 			newHostEpIDToIfaceNames[bestHostEpId] = append(
 				newHostEpIDToIfaceNames[bestHostEpId], ifaceName)
-			m.epIDsToUpdateStatus.Add(bestHostEpId)
 		}
 
 		oldID, wasKnown := m.activeIfaceNameToHostEpID[ifaceName]
 		newID, isKnown := newIfaceNameToHostEpID[ifaceName]
 		if oldID != newID {
 			logCxt := ifaceCxt.WithFields(log.Fields{
-				"oldEndpoint": m.activeIfaceNameToHostEpID[ifaceName],
-				"newEndpoint": newIfaceNameToHostEpID[ifaceName],
+				"oldID": m.activeIfaceNameToHostEpID[ifaceName],
+				"newID": newIfaceNameToHostEpID[ifaceName],
 			})
 			logCxt.Info("Endpoint matching interface changed")
 			if wasKnown {
