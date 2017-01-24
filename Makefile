@@ -179,7 +179,7 @@ static-checks: vendor
 		-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin \
 		calico/go-build sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
-			gometalinter --deadline=300s --disable-all --enable=goimports --enable=vet --enable=errcheck --enable=varcheck --enable=unused --vendor -s test_utils ./...'
+			gometalinter --deadline=300s --disable-all --enable=goimports --enable=vet --enable=errcheck --vendor -s test_utils ./...'
 
 install:
 	CGO_ENABLED=0 go install github.com/projectcalico/cni-plugin
