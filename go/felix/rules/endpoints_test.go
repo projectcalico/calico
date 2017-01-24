@@ -266,7 +266,7 @@ var _ = Describe("Endpoints", func() {
 		}))
 	})
 
-	It("should render a host endpoint raw chains with untracked policies", func() {
+	It("should render host endpoint raw chains with untracked policies", func() {
 		var endpoint = proto.HostEndpoint{
 			Name: "cali1234",
 			// Normal policy should be ignored in raw table.

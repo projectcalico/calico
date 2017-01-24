@@ -175,6 +175,7 @@ func newEndpointManagerWithShims(
 }
 
 func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
+	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		m.pendingWlEpUpdates[*msg.Id] = msg.Endpoint
@@ -516,6 +517,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 				// interface.
 				logCxt.Debug("Match on explicit iface name")
 				bestHostEpId = id
+				bestHostEp = *hostEp
 				continue
 			} else if hostEp.Name != "" {
 				// The HostEndpoint has an explicit name that isn't this
@@ -573,7 +575,6 @@ func (m *endpointManager) resolveHostEndpoints() {
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
-	newHostIfaceRawChains := map[string][]*iptables.Chain{}
 	newHostIfaceFiltChains := map[string][]*iptables.Chain{}
 	for ifaceName, id := range newIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
@@ -586,6 +587,12 @@ func (m *endpointManager) resolveHostEndpoints() {
 		}
 		newHostIfaceFiltChains[ifaceName] = filtChains
 		delete(m.activeHostIfaceToFiltChains, ifaceName)
+	}
+
+	newHostIfaceRawChains := map[string][]*iptables.Chain{}
+	for ifaceName, id := range newUntrackedIfaceNameToHostEpID {
+		log.WithField("id", id).Info("Updating host endpoint raw chains.")
+		hostEp := m.rawHostEndpoints[id]
 
 		// Update the raw chain, for untracked traffic.
 		rawChains := m.ruleRenderer.HostEndpointToRawChains(ifaceName, hostEp)

@@ -21,13 +21,15 @@ import (
 )
 
 type mockTable struct {
+	Table          string
 	currentChains  map[string]*iptables.Chain
 	expectedChains map[string]*iptables.Chain
 	UpdateCalled   bool
 }
 
-func newMockTable() *mockTable {
+func newMockTable(table string) *mockTable {
 	return &mockTable{
+		Table:          table,
 		currentChains:  map[string]*iptables.Chain{},
 		expectedChains: map[string]*iptables.Chain{},
 	}
@@ -83,5 +85,5 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
 	}
-	Expect(t.currentChains).To(Equal(t.expectedChains))
+	Expect(t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
 }

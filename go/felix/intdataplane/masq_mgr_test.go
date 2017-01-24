@@ -35,7 +35,7 @@ var _ = Describe("Masquerade manager", func() {
 
 	BeforeEach(func() {
 		ipSets = newMockIPSets()
-		natTable = newMockTable()
+		natTable = newMockTable("nat")
 		ruleRenderer = rules.NewRenderer(rules.Config{
 			IPSetConfigV4: ipsets.NewIPVersionConfig(
 				ipsets.IPFamilyV4,

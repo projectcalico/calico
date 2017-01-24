@@ -31,8 +31,8 @@ var _ = Describe("Policy manager", func() {
 	)
 
 	BeforeEach(func() {
-		rawTable = newMockTable()
-		filterTable = newMockTable()
+		rawTable = newMockTable("raw")
+		filterTable = newMockTable("filter")
 		ruleRenderer = newMockPolRenderer()
 		policyMgr = newPolicyManager(rawTable, filterTable, ruleRenderer, 4)
 	})
