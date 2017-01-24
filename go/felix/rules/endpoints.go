@@ -199,31 +199,31 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		}
 	}
 
-	// Then, jump to each profile in turn.
-	for _, profileID := range profileIds {
-		toProfChainName := ProfileChainName(toPolicyPrefix, &proto.ProfileID{Name: profileID})
-		fromProfChainName := ProfileChainName(fromPolicyPrefix, &proto.ProfileID{Name: profileID})
-		toRules = append(toRules,
-			Rule{Action: JumpAction{Target: toProfChainName}},
-			// If policy marked packet as accepted, it returns, setting the
-			// accept mark bit.  If that is set, return from this chain.
-			Rule{
-				Match:   Match().MarkSet(r.IptablesMarkAccept),
-				Action:  ReturnAction{},
-				Comment: "Return if profile accepted",
-			})
-		fromRules = append(fromRules,
-			Rule{Action: JumpAction{Target: fromProfChainName}},
-			// If policy marked packet as accepted, it returns, setting the
-			// accept mark bit.  If that is set, return from this chain.
-			Rule{
-				Match:   Match().MarkSet(r.IptablesMarkAccept),
-				Action:  ReturnAction{},
-				Comment: "Return if profile accepted",
-			})
-	}
-
 	if !untracked {
+		// Then, jump to each profile in turn.
+		for _, profileID := range profileIds {
+			toProfChainName := ProfileChainName(toPolicyPrefix, &proto.ProfileID{Name: profileID})
+			fromProfChainName := ProfileChainName(fromPolicyPrefix, &proto.ProfileID{Name: profileID})
+			toRules = append(toRules,
+				Rule{Action: JumpAction{Target: toProfChainName}},
+				// If policy marked packet as accepted, it returns, setting the
+				// accept mark bit.  If that is set, return from this chain.
+				Rule{
+					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Action:  ReturnAction{},
+					Comment: "Return if profile accepted",
+				})
+			fromRules = append(fromRules,
+				Rule{Action: JumpAction{Target: fromProfChainName}},
+				// If policy marked packet as accepted, it returns, setting the
+				// accept mark bit.  If that is set, return from this chain.
+				Rule{
+					Match:   Match().MarkSet(r.IptablesMarkAccept),
+					Action:  ReturnAction{},
+					Comment: "Return if profile accepted",
+				})
+		}
+
 		// When rendering normal rules, if no profile marked the packet as accepted, drop
 		// the packet.
 		//
