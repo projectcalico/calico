@@ -15,7 +15,7 @@ scriptdir=$(dirname $(realpath $0))
 cd `git_repo_root`
 
 # Get the version based on Git state, and the Git commit ID.
-version=`git_auto_version`
+version=${FORCE_VERSION:-`git_auto_version`}
 sha=`git_commit_id`
 
 MY_UID=`id -u`
