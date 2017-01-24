@@ -77,6 +77,103 @@ var _ = Describe("Policy manager", func() {
 		})
 	})
 
+	Describe("after an untracked policy update", func() {
+		BeforeEach(func() {
+			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+				Policy: &proto.Policy{
+					InboundRules: []*proto.Rule{
+						{Action: "deny"},
+					},
+					OutboundRules: []*proto.Rule{
+						{Action: "allow"},
+					},
+					Untracked: true,
+				},
+			})
+			policyMgr.CompleteDeferredWork()
+		})
+
+		It("should install the raw chains", func() {
+			rawTable.checkChains([][]*iptables.Chain{{
+				{Name: "calipi-tier1/pol1"},
+				{Name: "calipo-tier1/pol1"},
+			}})
+		})
+		It("should not install to the filter chain", func() {
+			filterTable.checkChains([][]*iptables.Chain{})
+		})
+		Describe("after toggling policy to tracked", func() {
+			BeforeEach(func() {
+				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Policy: &proto.Policy{
+						InboundRules: []*proto.Rule{
+							{Action: "deny"},
+						},
+						OutboundRules: []*proto.Rule{
+							{Action: "allow"},
+						},
+					},
+				})
+				policyMgr.CompleteDeferredWork()
+			})
+
+			It("should remove the raw chains", func() {
+				rawTable.checkChains([][]*iptables.Chain{})
+			})
+			It("should install to the filter chain", func() {
+				filterTable.checkChains([][]*iptables.Chain{{
+					{Name: "calipi-tier1/pol1"},
+					{Name: "calipo-tier1/pol1"},
+				}})
+			})
+
+			Describe("after toggling back to untracked", func() {
+				BeforeEach(func() {
+					policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+						Policy: &proto.Policy{
+							InboundRules: []*proto.Rule{
+								{Action: "deny"},
+							},
+							OutboundRules: []*proto.Rule{
+								{Action: "allow"},
+							},
+							Untracked: true,
+						},
+					})
+					policyMgr.CompleteDeferredWork()
+				})
+
+				It("should install the raw chains", func() {
+					rawTable.checkChains([][]*iptables.Chain{{
+						{Name: "calipi-tier1/pol1"},
+						{Name: "calipo-tier1/pol1"},
+					}})
+				})
+				It("should remove the filter chains", func() {
+					filterTable.checkChains([][]*iptables.Chain{})
+				})
+			})
+		})
+
+		Describe("after a policy remove", func() {
+			BeforeEach(func() {
+				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+				})
+			})
+
+			It("should remove the raw chains", func() {
+				rawTable.checkChains([][]*iptables.Chain{})
+			})
+			It("should not insert any filter chains", func() {
+				filterTable.checkChains([][]*iptables.Chain{})
+			})
+		})
+	})
+
 	Describe("after a profile update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
