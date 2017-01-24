@@ -169,16 +169,6 @@ workload.tar:
 	cd workload && docker build -t workload .
 	docker save --output workload.tar workload
 
-## Run etcd in a container. Used by the STs and generally useful.
-run-etcd-st:
-	$(MAKE) stop-etcd
-	docker run --detach \
-	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
-	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379" \
-	--listen-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379"
-
 stop-etcd:
 	@-docker rm -f calico-etcd calico-etcd-ssl
 
@@ -209,7 +199,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-st
+st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -468,8 +458,8 @@ run-etcd:
 	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
+	--listen-client-urls "http://0.0.0.0:2379"
 
 ## Etcd is used by the STs
 .PHONY: run-etcd-host
@@ -479,8 +469,8 @@ run-etcd-host:
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
+	--listen-client-urls "http://0.0.0.0:2379"
 
 ## Install or update the tools used by the build
 .PHONY: update-tools
