@@ -35,14 +35,15 @@ var _ = Describe("Table with an empty dataplane", func() {
 			"INPUT":   {},
 			"OUTPUT":  {},
 		})
-		table = NewTableWithShims(
+		table = NewTable(
 			"filter",
 			4,
-			rules.AllHistoricChainNamePrefixes,
 			rules.RuleHashPrefix,
-			"",
-			dataplane.newCmd,
-			dataplane.sleep,
+			TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				NewCmdOverride:        dataplane.newCmd,
+				SleepOverride:         dataplane.sleep,
+			},
 		)
 	})
 
@@ -56,6 +57,22 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(len(dataplane.Cmds)).To(BeZero())
 		table.Apply()
 		Expect(len(dataplane.Cmds)).NotTo(BeZero())
+	})
+
+	It("should police the insert mode", func() {
+		Expect(func() {
+			NewTable(
+				"filter",
+				4,
+				rules.RuleHashPrefix,
+				TableOptions{
+					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+					NewCmdOverride:        dataplane.newCmd,
+					SleepOverride:         dataplane.sleep,
+					InsertMode:            "unknown",
+				},
+			)
+		}).To(Panic())
 	})
 
 	Describe("after inserting a rule", func() {
@@ -320,7 +337,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	})
 })
 
-var _ = Describe("Table with a dirty dataplane", func() {
+func describeDirtyDataplaneTests(appendMode bool) {
 	// These tests all start with some rules already in the dataplane.  We include a mix of
 	// Calico and non-Calico rules.  Within the Calico rules,we include:
 	// - rules that match what we're going to ask the Table to program
@@ -357,6 +374,14 @@ var _ = Describe("Table with a dirty dataplane", func() {
 				// This rule will get rewritten because its hash is incorrect.
 				"-m comment --comment \"cali:1234567890ksamdl\" --jump DROP",
 			},
+			"unexpected-insert": {
+				"--jump ACCEPT",
+				// This rule will get cleaned up because it looks like a Calico
+				// insert rule but it's in a chain that we don't insert anything
+				// into.
+				"-m comment --comment \"cali:hecdSCslEjdBPfds\" --jump DROP",
+				"--jump DROP",
+			},
 			// Calico chain from previous version.  Should be cleaned up.
 			"felix-FORWARD": {
 				"--jump ACCEPT",
@@ -378,16 +403,24 @@ var _ = Describe("Table with a dirty dataplane", func() {
 			},
 		}
 	}
+
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", initialChains())
-		table = NewTableWithShims(
+		insertMode := ""
+		if appendMode {
+			insertMode = "append"
+		}
+		table = NewTable(
 			"filter",
 			4,
-			rules.AllHistoricChainNamePrefixes,
 			rules.RuleHashPrefix,
-			"sneaky-rule",
-			dataplane.newCmd,
-			dataplane.sleep,
+			TableOptions{
+				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				ExtraCleanupRegexPattern: "sneaky-rule",
+				NewCmdOverride:           dataplane.newCmd,
+				SleepOverride:            dataplane.sleep,
+				InsertMode:               insertMode,
+			},
 		)
 	})
 
@@ -406,6 +439,10 @@ var _ = Describe("Table with a dirty dataplane", func() {
 			"OUTPUT": {},
 			"non-calico": {
 				"--jump ACCEPT",
+			},
+			"unexpected-insert": {
+				"--jump ACCEPT",
+				"--jump DROP",
 			},
 		}))
 	})
@@ -436,18 +473,15 @@ var _ = Describe("Table with a dirty dataplane", func() {
 			})
 		})
 		checkFinalState := func() {
-			Expect(dataplane.Chains).To(Equal(map[string][]string{
-				"FORWARD": {
-					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
-					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
-					"--jump RETURN",
-					"--jump ACCEPT",
-					"--jump foo-bar",
-				},
+			expChains := map[string][]string{
 				"cali-foobar": {
 					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
 					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
 					"-m comment --comment \"cali:yilSOZ62PxMhMnS9\" --jump RETURN",
+				},
+				"unexpected-insert": {
+					"--jump ACCEPT",
+					"--jump DROP",
 				},
 				"INPUT": {},
 				"OUTPUT": {
@@ -459,7 +493,27 @@ var _ = Describe("Table with a dirty dataplane", func() {
 				"cali-correct": {
 					"-m comment --comment \"cali:dCKeL4JtUEDC2GQu\" --jump ACCEPT",
 				},
-			}))
+			}
+
+			if appendMode {
+				expChains["FORWARD"] = []string{
+					"--jump RETURN",
+					"--jump ACCEPT",
+					"--jump foo-bar",
+					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
+				}
+			} else {
+				expChains["FORWARD"] = []string{
+					"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+					"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
+					"--jump RETURN",
+					"--jump ACCEPT",
+					"--jump foo-bar",
+				}
+			}
+
+			Expect(dataplane.Chains).To(Equal(expChains))
 		}
 		It("with no errors, it should get to correct final state", func() {
 			table.Apply()
@@ -613,17 +667,15 @@ var _ = Describe("Table with a dirty dataplane", func() {
 				})
 				// Next Apply() should refresh then put everything in sync.
 				table.Apply()
-				Expect(dataplane.Chains).To(Equal(map[string][]string{
-					"FORWARD": {
-						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
-						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
-						"--jump RETURN",
-						"--jump ACCEPT",
-						"--jump foo-bar",
-					},
+
+				expChains := map[string][]string{
 					"cali-foobar": {
 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
 						"-m comment --comment \"cali:ilM9uz5oPwfm0FE-\" --jump RETURN",
+					},
+					"unexpected-insert": {
+						"--jump ACCEPT",
+						"--jump DROP",
 					},
 					"INPUT": {},
 					"OUTPUT": {
@@ -635,8 +687,31 @@ var _ = Describe("Table with a dirty dataplane", func() {
 					"cali-correct": {
 						"-m comment --comment \"cali:dCKeL4JtUEDC2GQu\" --jump ACCEPT",
 					},
-				}))
+				}
+
+				if appendMode {
+					expChains["FORWARD"] = []string{
+						"--jump RETURN",
+						"--jump ACCEPT",
+						"--jump foo-bar",
+						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
+					}
+				} else {
+					expChains["FORWARD"] = []string{
+						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+						"-m comment --comment \"cali:plvr29-ZiKUwbzDV\" --jump ACCEPT",
+						"--jump RETURN",
+						"--jump ACCEPT",
+						"--jump foo-bar",
+					}
+				}
+
+				Expect(dataplane.Chains).To(Equal(expChains))
 			})
 		})
 	})
-})
+}
+
+var _ = Describe("Table with a dirty datatplane in append mode", func() { describeDirtyDataplaneTests(true) })
+var _ = Describe("Table with a dirty datatplane in insert mode", func() { describeDirtyDataplaneTests(false) })

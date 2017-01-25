@@ -92,11 +92,27 @@ type DNATAction struct {
 }
 
 func (g DNATAction) ToFragment() string {
-	return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
+	if g.DestPort == 0 {
+		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
+	} else {
+		return fmt.Sprintf("--jump DNAT --to-destination %s:%d", g.DestAddr, g.DestPort)
+	}
 }
 
 func (g DNATAction) String() string {
 	return fmt.Sprintf("DNAT->%s:%d", g.DestAddr, g.DestPort)
+}
+
+type SNATAction struct {
+	ToAddr string
+}
+
+func (g SNATAction) ToFragment() string {
+	return fmt.Sprintf("--jump SNAT --to-source %s", g.ToAddr)
+}
+
+func (g SNATAction) String() string {
+	return fmt.Sprintf("SNAT->%s", g.ToAddr)
 }
 
 type MasqAction struct{}

@@ -191,23 +191,25 @@ var _ = Describe("Static", func() {
 
 		It("IPv4: Should return expected NAT prerouting chain", func() {
 			Expect(findChain(rr.StaticNATTableChains(4), "cali-PREROUTING")).To(Equal(&Chain{
-				Name:  "cali-PREROUTING",
-				Rules: []Rule{},
-			}))
+				Name: "cali-PREROUTING",
+				Rules: []Rule{
+					{Action: JumpAction{Target: "cali-fip-dnat"}},
+				}}))
 		})
 		It("IPv4: Should return expected NAT postrouting chain", func() {
 			Expect(findChain(rr.StaticNATTableChains(4), "cali-POSTROUTING")).To(Equal(&Chain{
 				Name: "cali-POSTROUTING",
 				Rules: []Rule{
+					{Action: JumpAction{Target: "cali-fip-snat"}},
 					{Action: JumpAction{Target: "cali-nat-outgoing"}},
 				},
 			}))
 		})
 		It("IPv4: Should return only the expected nat chains", func() {
-			Expect(len(rr.StaticNATTableChains(4))).To(Equal(2))
+			Expect(len(rr.StaticNATTableChains(4))).To(Equal(3))
 		})
 		It("IPv6: Should return only the expected nat chains", func() {
-			Expect(len(rr.StaticNATTableChains(6))).To(Equal(2))
+			Expect(len(rr.StaticNATTableChains(6))).To(Equal(3))
 		})
 	})
 
@@ -278,6 +280,9 @@ var _ = Describe("Static", func() {
 					Name: "cali-PREROUTING",
 					Rules: []Rule{
 						{
+							Action: JumpAction{Target: "cali-fip-dnat"},
+						},
+						{
 							Match: Match().
 								Protocol("tcp").
 								DestPorts(80).
@@ -294,8 +299,10 @@ var _ = Describe("Static", func() {
 		It("IPv6: Should return expected NAT prerouting chain", func() {
 			Expect(rr.StaticNATPreroutingChains(6)).To(Equal([]*Chain{
 				{
-					Name:  "cali-PREROUTING",
-					Rules: []Rule{},
+					Name: "cali-PREROUTING",
+					Rules: []Rule{
+						{Action: JumpAction{Target: "cali-fip-dnat"}},
+					},
 				},
 			}))
 		})
@@ -368,6 +375,7 @@ var _ = Describe("Static", func() {
 				{
 					Name: "cali-POSTROUTING",
 					Rules: []Rule{
+						{Action: JumpAction{Target: "cali-fip-snat"}},
 						{Action: JumpAction{Target: "cali-nat-outgoing"}},
 						{
 							Match: Match().
@@ -385,6 +393,7 @@ var _ = Describe("Static", func() {
 				{
 					Name: "cali-POSTROUTING",
 					Rules: []Rule{
+						{Action: JumpAction{Target: "cali-fip-snat"}},
 						{Action: JumpAction{Target: "cali-nat-outgoing"}},
 					},
 				},
