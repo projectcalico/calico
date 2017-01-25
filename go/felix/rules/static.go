@@ -454,12 +454,12 @@ func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
 	return []*Chain{
 		r.failsafeInChain(),
 		r.failsafeOutChain(),
-		r.StaticRawPreroutingChain(),
+		r.StaticRawPreroutingChain(ipVersion),
 		r.StaticRawOutputChain(),
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticRawPreroutingChain() *Chain {
+func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
 
 	// For safety, clear all our mark bits before we start.  (We could be in append mode and
@@ -475,11 +475,20 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain() *Chain {
 			Action: SetMarkAction{Mark: r.IptablesMarkFromWorkload},
 		})
 	}
-	// Apply strict RPF check to packets from workload interfaces.  This prevents workloads from
-	// spoofing their IPs.  Note: non-privileged containers can't usually spoof but privileged
-	// containers and VMs can.
-	rules = append(rules,
-		r.DropRules(Match().MarkSet(r.IptablesMarkFromWorkload).NotRPFilter())...)
+
+	if ipVersion == 6 {
+		// Apply strict RPF check to packets from workload interfaces.  This prevents
+		// workloads from spoofing their IPs.  Note: non-privileged containers can't
+		// usually spoof but privileged containers and VMs can.
+		//
+		// We only do this for IPv6 because the IPv4 RPF check is handled via a sysctl.
+		// In addition, the IPv4 check is complicated by the fact that we have special
+		// case handling for DHCP to the host, which would require an exclusion.
+		rules = append(rules, r.DropRules(
+			Match().MarkSet(r.IptablesMarkFromWorkload).
+				RPFCheckFailed(),
+		)...)
+	}
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.

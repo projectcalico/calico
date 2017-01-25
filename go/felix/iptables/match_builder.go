@@ -57,11 +57,11 @@ func (m MatchCriteria) OutInterface(ifaceMatch string) MatchCriteria {
 	return append(m, fmt.Sprintf("--out-interface %s", ifaceMatch))
 }
 
-func (m MatchCriteria) RPFilter() MatchCriteria {
+func (m MatchCriteria) RPFCheckPassed() MatchCriteria {
 	return append(m, "-m rpfilter")
 }
 
-func (m MatchCriteria) NotRPFilter() MatchCriteria {
+func (m MatchCriteria) RPFCheckFailed() MatchCriteria {
 	return append(m, "-m rpfilter --invert")
 }
 
