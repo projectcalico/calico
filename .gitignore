@@ -1,3 +1,4 @@
+.go-pkg-cache
 calico_node/filesystem/startup
 startup.spec
 allocate-ipip-addr.spec
