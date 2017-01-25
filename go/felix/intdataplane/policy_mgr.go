@@ -49,17 +49,8 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	case *proto.ActivePolicyUpdate:
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
-		if msg.Policy.Untracked {
-			// Untracked policy, add it to the raw table and make sure it's not
-			// in the filter table.
-			m.rawTable.UpdateChains(chains)
-			m.filterTable.RemoveChains(chains)
-		} else {
-			// Tracked policy, add it to the filter table and make sure it's not
-			// in the raw table.
-			m.rawTable.RemoveChains(chains)
-			m.filterTable.UpdateChains(chains)
-		}
+		m.rawTable.UpdateChains(chains)
+		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
 		inName := rules.PolicyChainName(rules.PolicyInboundPfx, msg.Id)
