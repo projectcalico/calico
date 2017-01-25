@@ -21,7 +21,8 @@ type Action interface {
 }
 
 type GotoAction struct {
-	Target string
+	Target   string
+	TypeGoto struct{}
 }
 
 func (g GotoAction) ToFragment() string {
@@ -33,7 +34,8 @@ func (g GotoAction) String() string {
 }
 
 type JumpAction struct {
-	Target string
+	Target   string
+	TypeJump struct{}
 }
 
 func (g JumpAction) ToFragment() string {
@@ -44,7 +46,9 @@ func (g JumpAction) String() string {
 	return "Jump->" + g.Target
 }
 
-type ReturnAction struct{}
+type ReturnAction struct {
+	TypeReturn struct{}
+}
 
 func (r ReturnAction) ToFragment() string {
 	return "--jump RETURN"
@@ -54,7 +58,9 @@ func (r ReturnAction) String() string {
 	return "Return"
 }
 
-type DropAction struct{}
+type DropAction struct {
+	TypeDrop struct{}
+}
 
 func (g DropAction) ToFragment() string {
 	return "--jump DROP"
@@ -65,7 +71,8 @@ func (g DropAction) String() string {
 }
 
 type LogAction struct {
-	Prefix string
+	Prefix  string
+	TypeLog struct{}
 }
 
 func (g LogAction) ToFragment() string {
@@ -76,7 +83,9 @@ func (g LogAction) String() string {
 	return "Log"
 }
 
-type AcceptAction struct{}
+type AcceptAction struct {
+	TypeAccept struct{}
+}
 
 func (g AcceptAction) ToFragment() string {
 	return "--jump ACCEPT"
@@ -89,6 +98,7 @@ func (g AcceptAction) String() string {
 type DNATAction struct {
 	DestAddr string
 	DestPort uint16
+	TypeDNAT struct{}
 }
 
 func (g DNATAction) ToFragment() string {
@@ -104,7 +114,8 @@ func (g DNATAction) String() string {
 }
 
 type SNATAction struct {
-	ToAddr string
+	ToAddr   string
+	TypeSNAT struct{}
 }
 
 func (g SNATAction) ToFragment() string {
@@ -115,7 +126,9 @@ func (g SNATAction) String() string {
 	return fmt.Sprintf("SNAT->%s", g.ToAddr)
 }
 
-type MasqAction struct{}
+type MasqAction struct {
+	TypeMasq struct{}
+}
 
 func (g MasqAction) ToFragment() string {
 	return "--jump MASQUERADE"
@@ -126,7 +139,8 @@ func (g MasqAction) String() string {
 }
 
 type ClearMarkAction struct {
-	Mark uint32
+	Mark          uint32
+	TypeClearMark struct{}
 }
 
 func (c ClearMarkAction) ToFragment() string {
@@ -138,7 +152,8 @@ func (c ClearMarkAction) String() string {
 }
 
 type SetMarkAction struct {
-	Mark uint32
+	Mark        uint32
+	TypeSetMark struct{}
 }
 
 func (c SetMarkAction) ToFragment() string {
