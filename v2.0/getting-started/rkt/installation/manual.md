@@ -74,7 +74,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
   --mount=volume=logs,target=/var/log/calico \
   --net=host \
-  quay.io/calico/node:v1.0.0 &
+  quay.io/calico/node:v1.0.1 &
 ```
 
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.  The `ETCD_ENDPOINTS`
@@ -87,7 +87,7 @@ You can check that it's running using `sudo rkt list`.
 ```shell
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  quay.io/calico/node:v1.0.0  running 10 seconds ago  10 seconds ago
+b52bba11  node  quay.io/calico/node:v1.0.1  running 10 seconds ago  10 seconds ago
 ```
 
 ## Installing calicoctl
