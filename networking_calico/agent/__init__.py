@@ -27,6 +27,10 @@
 
 import sys
 
+# Ensure that eventlet is monkey-patched before we import urllib3.
+import eventlet
+eventlet.monkey_patch()
+
 # Import all the relevant packages so that any clobbering happens now.
 import requests                 # noqa
 import urllib3                  # noqa
