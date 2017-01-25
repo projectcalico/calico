@@ -42,17 +42,17 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 >
 > If CALICO_IP or CALICO_IP6 are left blank, Calico will use the currently
 > configured values for the next hop IP addresses for this node - these can
-> be configured through the node resource.  If no next hop addresses have 
-> been configured, Calico will automatically determine an IPv4 next hop address 
-> by querying the host interfaces (and it will configure this value in the 
-> node resource).  You may set CALICO_IP to `autodetect` to force 
-> auto-detection of IP address every time the node starts.  If you set IP 
+> be configured through the node resource.  If no next hop addresses have
+> been configured, Calico will automatically determine an IPv4 next hop address
+> by querying the host interfaces (and it will configure this value in the
+> node resource).  You may set CALICO_IP to `autodetect` to force
+> auto-detection of IP address every time the node starts.  If you set IP
 > addresses through these environments it will reconfigure any values currently
 > set through the node resource.
 >
 > If CALICO_AS is left blank, Calico will use the currently configured value
-> for the AS Number for the node BGP client - this can be configured through 
-> the node resource.  If no value is set,  Calico will inherit the AS Number 
+> for the AS Number for the node BGP client - this can be configured through
+> the node resource.  If no value is set,  Calico will inherit the AS Number
 > from the global default value.  If you set a value through this environment
 > it will reconfigure any value currently set through the node resource.
 >
@@ -91,7 +91,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
  -v /var/run/calico:/var/run/calico \
- calico/node:latest
+ quay.io/calico/node:latest
 
 ExecStop=-/usr/bin/docker stop calico-node
 

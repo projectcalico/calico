@@ -74,8 +74,8 @@ VERSION_REPLACE = [
     (re.compile(r'calico/node:latest'),
      'calico/node:{calico-containers-version}'),
 
-    (re.compile(r'calico/node-libnetwork:latest'),
-     'calico/node-libnetwork:{libnetwork-version}'),
+    (re.compile(r'quay.io/calico/node:latest'),
+     'quay.io/calico/node:{calico-containers-version}'),
 
     (re.compile(r'calico_libnetwork_ver\s*=\s*"latest"'),
      'calico_libnetwork_ver = "{libnetwork-version}"'),

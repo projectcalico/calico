@@ -159,7 +159,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: calico/cni:latest
+          image: quay.io/calico/cni:latest
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
@@ -234,7 +234,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-policy-controller
-          image: calico/kube-policy-controller:latest
+          image: quay.io/calico/kube-policy-controller:latest
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -305,7 +305,7 @@ spec:
       containers:
         # Writes basic configuration to datastore.
         - name: configure-calico
-          image: calico/ctl:latest
+          image: quay.io/calico/ctl:latest
           args:
           - apply
           - -f

@@ -74,8 +74,8 @@ This will start the `calico/node` container on this host. Check it is running:
 You should see output like this on each node
 
     vagrant@calico-01:~$ docker ps
-    CONTAINER ID        IMAGE                COMMAND             CREATED             STATUS              PORTS               NAMES
-    408bd2b9ba53        calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
+    CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
+    408bd2b9ba53        quay.io/calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
 
 ## Next Steps
 

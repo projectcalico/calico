@@ -93,7 +93,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
-  calico/node:latest
+  quay.io/calico/node:latest
 ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10
