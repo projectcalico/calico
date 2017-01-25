@@ -1,0 +1,143 @@
+###############################################################################
+# calicoctl build
+# - Building the calicoctl binary in a container
+# - Building the calicoctl binary outside a container ("simple-binary")
+# - Building the calico/ctl image
+###############################################################################
+# Determine which OS / ARCH.
+OS := $(shell uname -s | tr A-Z a-z)
+ARCH := amd64
+
+CALICOCTL_DIR=calicoctl
+CTL_CONTAINER_NAME?=calico/ctl
+CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
+CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
+
+CALICOCTL_NODE_VERSION?="latest"
+CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
+CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
+
+CALICO_BUILD?=calico/go-build
+LOCAL_USER_ID?=$(shell id -u $$USER)
+
+PACKAGE_NAME?=github.com/projectcalico/calicoctl
+
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
+	-X $(PACKAGE_NAME)/calicoctl/commands/node.VERSION=$(CALICOCTL_NODE_VERSION) \
+	-X $(PACKAGE_NAME)/calicoctl/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
+	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
+
+LIBCALICOGO_PATH?=none
+
+calico/ctl: $(CTL_CONTAINER_CREATED)      ## Create the calico/ctl image
+
+.PHONY: clean-calicoctl
+clean-calicoctl:
+	docker rmi $(CTL_CONTAINER_NAME):latest || true
+
+#Use this to populate the vendor directory after checking out the repository.
+# To update upstream dependencies, delete the glide.lock file first.
+vendor: glide.yaml
+	# Ensure that the glide cache directory exists.	
+	mkdir -p $(HOME)/.glide
+
+	# To build without Docker just run "glide install -strip-vendor"
+	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
+          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	fi; \
+  docker run --rm \
+    -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+    -v $(HOME)/.glide:/home/user/.glide:rw \
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    $(CALICO_BUILD) /bin/sh -c ' \
+		  cd /go/src/$(PACKAGE_NAME) && \
+      glide install -strip-vendor'
+
+# build calico_ctl image
+$(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
+	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
+	touch $@
+
+## Build calicoctl
+binary: $(CALICOCTL_FILES) vendor
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v -i -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
+
+dist/calicoctl: $(CALICOCTL_FILES) vendor
+	$(MAKE) dist/calicoctl-linux-amd64 
+	mv dist/calicoctl-linux-amd64 dist/calicoctl
+
+dist/calicoctl-linux-amd64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=linux ARCH=amd64 binary-containerized
+
+dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=darwin ARCH=amd64 binary-containerized
+
+dist/calicoctl-windows-amd64.exe: $(CALICOCTL_FILES) vendor
+	$(MAKE) OS=windows ARCH=amd64 binary-containerized
+	mv dist/calicoctl-windows-amd64 dist/calicoctl-windows-amd64.exe
+
+## Run the build in a container. Useful for CI
+binary-containerized: $(CALICOCTL_FILES) vendor
+	mkdir -p dist
+	-mkdir -p .go-pkg-cache
+	docker run --rm \
+	  -e OS=$(OS) -e ARCH=$(ARCH) \
+	  -e CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) -e CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	  -e CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
+	  $(CALICO_BUILD) sh -c '\
+	    cd /go/src/$(PACKAGE_NAME) && \
+	    make OS=$(OS) ARCH=$(ARCH) \
+	         CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	         CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
+	         binary' 
+
+.PHONY: install
+install:
+	CGO_ENABLED=0 go install $(PACKAGE_NAME)/calicoctl
+
+###############################################################################
+# calicoctl UTs
+###############################################################################
+.PHONY: ut
+## Run the Unit Tests locally
+ut: dist/calicoctl
+	# Run tests in random order find tests recursively (-r).
+	ginkgo -cover -r --skipPackage vendor
+
+	@echo
+	@echo '+==============+'
+	@echo '| All coverage |'
+	@echo '+==============+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
+
+	@echo
+	@echo '+==================+'
+	@echo '| Missing coverage |'
+	@echo '+==================+'
+	@echo
+	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
+
+PHONY: test-containerized
+## Run the tests in a container. Useful for CI, Mac dev.
+test-containerized: dist/calicoctl 
+	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make ut'
+
+## Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
+.PHONY: static-checks
+static-checks: vendor
+	# vet and errcheck are disabled since they find problems...
+	docker run --rm \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) sh -c '\
+			cd /go/src/$(PACKAGE_NAME) && \
+			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
+
+
