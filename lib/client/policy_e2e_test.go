@@ -60,6 +60,7 @@ var policySpec2 = api.PolicySpec{
 	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
 	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
 	Selector:     "policy2-selector",
+	DoNotTrack:   true,
 }
 
 var _ = Describe("Policy tests", func() {

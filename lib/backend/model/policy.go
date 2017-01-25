@@ -93,6 +93,7 @@ type Policy struct {
 	InboundRules  []Rule   `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
 	OutboundRules []Rule   `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 	Selector      string   `json:"selector" validate:"selector"`
+	DoNotTrack    bool     `json:"untracked,omitempty"`
 }
 
 func (p Policy) String() string {
@@ -111,5 +112,6 @@ func (p Policy) String() string {
 		outRules[ii] = rule.String()
 	}
 	parts = append(parts, fmt.Sprintf("outbound:%v", strings.Join(outRules, ";")))
+	parts = append(parts, fmt.Sprintf("untracked:%v", p.DoNotTrack))
 	return strings.Join(parts, ",")
 }
