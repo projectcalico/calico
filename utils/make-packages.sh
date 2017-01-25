@@ -15,7 +15,7 @@ scriptdir=$(dirname $(realpath $0))
 cd `git_repo_root`
 
 # Get the version based on Git state, and the Git commit ID.
-version=`git_auto_version`
+version=${FORCE_VERSION:-`git_auto_version`}
 sha=`git_commit_id`
 
 MY_UID=`id -u`
@@ -37,7 +37,17 @@ for package_type in "$@"; do
     case ${package_type} in
 
 	deb )
+	    # The Debian version that we are about to generate.
 	    debver=`git_version_to_deb ${version}`
+
+	    # The last Git tag that was packaged, according to the
+	    # debian/changelog file.
+	    last_pkgd_tag=`awk '/Felix ([^ ]+) \(from Git/{print $3;exit;}' debian/changelog`
+
+	    # We'd like the stanza that we're about to add to include
+	    # release notes from all tags since that previous one.
+	    tags=`git_tags_back_to ${last_pkgd_tag}`
+
 	    if grep felix debian/changelog | head -n 1 | grep -F "${debver}~__STREAM__"; then
 		# debian/changelog already has the version stanza.
 		:
@@ -55,7 +65,10 @@ EOF
 			cat <<EOF
   * Felix ${version} (from Git commit ${sha}).
 EOF
-			git show ${version} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
+			for tag in ${tags}; do
+			    echo "    [Changes recorded in $tag tag]"
+			    git show ${tag} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
+			done
 		    else
 			cat <<EOF
   * Development snapshot (from Git commit ${sha}).
@@ -83,6 +96,14 @@ EOF
 	rpm )
 	    debver=`git_version_to_rpm ${version}`
 	    rpm_spec=rpm/felix.spec
+
+	    # The last Git tag that was packaged, according to the RPM
+	    # spec file.
+	    last_pkgd_tag=`awk '/Felix ([^ ]+) \(from Git/{print $3;exit;}' rpm/felix.spec`
+
+	    # We'd like the stanza that we're about to add to include
+	    # release notes from all tags since that previous one.
+	    tags=`git_tags_back_to ${last_pkgd_tag}`
 
 	    # Generate RPM version and release.
 	    IFS=_ read ver qual <<< ${debver}
@@ -112,7 +133,10 @@ EOF
 			cat <<EOF
   - Felix ${version} (from Git commit ${sha}).
 EOF
-			git show ${version} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
+			for tag in ${tags}; do
+			    echo "    [Changes recorded in $tag tag]"
+			    git show ${tag} --format=oneline -s | head -n -1 | tail -n +5 | sed 's/^/    /'
+			done
 		    else
 			cat <<EOF
   - Development snapshot (from Git commit ${sha}).

@@ -115,3 +115,22 @@ function test_validate_version {
     expect_valid 2.0.0-beta.3
     expect_invalid v2.0.0-beta-rc1
 }
+
+# Return the series of tags from HEAD back to (but excluding) the
+# specified tag, with the most recent tag first.
+function git_tags_back_to {
+
+    backstop_tag=$1
+    cursor=HEAD
+    num_tags=0
+    while [ $num_tags -lt 10 ]; do
+	previous_tag=`git describe --tags --abbrev=0 $cursor`
+	if [ $previous_tag = $backstop_tag ]; then
+	    # We've found the last packaged release, so stop.
+	    break
+	fi
+	echo ${previous_tag}
+	let 'num_tags += 1'
+	cursor="${previous_tag}^"
+    done
+}
