@@ -23,31 +23,31 @@ import (
 // endpointStatusCombiner combines the status reports of endpoints from the IPv4 and IPv6
 // endpoint managers.  Where conflicts occur, it reports the "worse" status.
 type endpointStatusCombiner struct {
-	ipVersionToStatuses map[uint8]map[proto.WorkloadEndpointID]string
+	ipVersionToStatuses map[uint8]map[interface{}]string
 	dirtyIDs            set.Set
 	fromDataplane       chan interface{}
 }
 
 func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
 	e := &endpointStatusCombiner{
-		ipVersionToStatuses: map[uint8]map[proto.WorkloadEndpointID]string{},
+		ipVersionToStatuses: map[uint8]map[interface{}]string{},
 		dirtyIDs:            set.New(),
 		fromDataplane:       fromDataplane,
 	}
 
 	// IPv4 is always enabled.
-	e.ipVersionToStatuses[4] = map[proto.WorkloadEndpointID]string{}
+	e.ipVersionToStatuses[4] = map[interface{}]string{}
 	if ipv6Enabled {
 		// If IPv6 is enabled, track the IPv6 state too.  We use the presence of this
 		// extra map to trigger merging.
-		e.ipVersionToStatuses[6] = map[proto.WorkloadEndpointID]string{}
+		e.ipVersionToStatuses[6] = map[interface{}]string{}
 	}
 	return e
 }
 
-func (e *endpointStatusCombiner) OnWorkloadEndpointStatusUpdate(
+func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 	ipVersion uint8,
-	id proto.WorkloadEndpointID,
+	id interface{}, // proto.HostEndpointID or proto.WorkloadEndpointID
 	status string,
 ) {
 	log.WithFields(log.Fields{
@@ -64,8 +64,7 @@ func (e *endpointStatusCombiner) OnWorkloadEndpointStatusUpdate(
 }
 
 func (e *endpointStatusCombiner) Apply() {
-	e.dirtyIDs.Iter(func(item interface{}) error {
-		id := item.(proto.WorkloadEndpointID)
+	e.dirtyIDs.Iter(func(id interface{}) error {
 		statusToReport := ""
 		logCxt := log.WithField("id", id)
 		for ipVer, statuses := range e.ipVersionToStatuses {
@@ -84,16 +83,33 @@ func (e *endpointStatusCombiner) Apply() {
 		}
 		if statusToReport == "" {
 			logCxt.Info("Reporting endpoint removed.")
-			e.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
-				Id: &id,
+			switch id := id.(type) {
+			case proto.WorkloadEndpointID:
+				e.fromDataplane <- &proto.WorkloadEndpointStatusRemove{
+					Id: &id,
+				}
+			case proto.HostEndpointID:
+				e.fromDataplane <- &proto.HostEndpointStatusRemove{
+					Id: &id,
+				}
 			}
 		} else {
 			logCxt.WithField("status", statusToReport).Info("Reporting combined status.")
-			e.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
-				Id: &id,
-				Status: &proto.EndpointStatus{
-					Status: statusToReport,
-				},
+			switch id := id.(type) {
+			case proto.WorkloadEndpointID:
+				e.fromDataplane <- &proto.WorkloadEndpointStatusUpdate{
+					Id: &id,
+					Status: &proto.EndpointStatus{
+						Status: statusToReport,
+					},
+				}
+			case proto.HostEndpointID:
+				e.fromDataplane <- &proto.HostEndpointStatusUpdate{
+					Id: &id,
+					Status: &proto.EndpointStatus{
+						Status: statusToReport,
+					},
+				}
 			}
 		}
 		return set.RemoveItem
