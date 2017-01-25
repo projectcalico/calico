@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 # Copyright (c) 2015 Cisco Systems.  All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -1060,7 +1060,9 @@ class WorkloadEndpoint(LocalEndpoint):
         try:
             devices.set_routes(self.ip_type, set(), self._iface_name, None)
         except FailedSystemCall as e:
-            if "Cannot find device" in e.stderr:
+            if ("Cannot find device" in e.stderr or
+                    "No such device" in e.stderr or
+                    not devices.interface_exists(self._iface_name)):
                 # Deleted under our feet - so the rules are gone.
                 _log.info("Interface %s for %s already deleted",
                           self._iface_name, self.combined_id)
