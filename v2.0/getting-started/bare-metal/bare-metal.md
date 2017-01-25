@@ -9,8 +9,8 @@ to distinguish them from "workload endpoints" (such as containers or VMs).
 
 Calico supports the same rich security policy model for host endpoints
 that it supports for workload endpoints.  Host endpoints can have labels, and
-their labels are in the same "namespace" as those of workload endpoints. This 
-allows security rules for either type of endpoint to refer to the other type 
+their labels are in the same "namespace" as those of workload endpoints. This
+allows security rules for either type of endpoint to refer to the other type
 (or a mix of the two) using labels and selectors.
 
 Calico does not support setting IPs or policing MAC addresses for host
@@ -59,7 +59,7 @@ these steps, described in more detail below:
 
 Download the calicoctl binary onto your host.
 
-	wget https://github.com/projectcalico/calico-containers/releases/download/v1.0.0/calicoctl
+	wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.0/calicoctl
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any
@@ -289,7 +289,7 @@ key/value pairs that can be used in selector expressions.
 
 > **Warning**
 >
-> When rendering security rules on other hosts, Calico uses the 
+> When rendering security rules on other hosts, Calico uses the
 > `expectedIPs` field to resolve label selectors
 > to IP addresses. If the `expectedIPs` field is omitted
 > then security rules that use labels will fail to match
