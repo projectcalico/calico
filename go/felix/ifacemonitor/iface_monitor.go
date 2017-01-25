@@ -140,14 +140,20 @@ func (m *InterfaceMonitor) handleNetlinkAddrUpdate(update netlink.AddrUpdate) {
 		"exists":  exists,
 	}).Info("Netlink address update.")
 
+	// notifyIfaceAddrs needs m.ifaceName[ifIndex] - because we can only notify when we know the
+	// interface name - so check that we have that.
 	if _, known := m.ifaceName[ifIndex]; !known {
-		log.WithField("ifIndex", ifIndex).Warn("No known iface with this index.")
-		return
-	}
-	if _, known := m.ifaceAddrs[ifIndex]; !known {
 		// We think this interface does not exist - indicates a race between the link and
 		// address update channels.  Addresses will be notified when we process the link
 		// update.
+		log.WithField("ifIndex", ifIndex).Debug("Link not notified yet.")
+		return
+	}
+	if _, known := m.ifaceAddrs[ifIndex]; !known {
+		// m.ifaceAddrs[ifIndex] has exactly the same lifetime as m.ifaceName[ifIndex], so
+		// it should be impossible for m.ifaceAddrs[ifIndex] not to exist if
+		// m.ifaceName[ifIndex] does exist.  However we check anyway and warn in case there
+		// is some possible scenario...
 		log.WithField("ifIndex", ifIndex).Warn("Race for new interface.")
 		return
 	}
