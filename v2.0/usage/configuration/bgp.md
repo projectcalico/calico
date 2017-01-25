@@ -57,7 +57,7 @@ complicated topologies where you are explicitly setting the AS number on each
 node, the default value will not be used and therefore using this command is
 not necessary.
 
-> Prior to version 2.0.0, calicoctl and calico/node set the global default
+> Prior to Calico version 2.0.0, calicoctl and calico/node set the global default
 > AS number to 64511.  Updating your deployment from a pre-2.0.0 version to use
 > the 2.0.0+ calicoctl and calico/node container images will not affect the 
 > global value that was previously set.
