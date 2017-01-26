@@ -59,29 +59,29 @@ class TestPool(TestBase):
             # Write out some yaml files to load in through calicoctl-go
             # We could have sent these via stdout into calicoctl, but this
             # seemed easier.
-            self.writeyaml('ipv4.yaml', ipv4_pool_dict)
-            self.writeyaml('ipv6.yaml', ipv6_pool_dict)
+            self.writeyaml('/tmp/ipv4.yaml', ipv4_pool_dict)
+            self.writeyaml('/tmp/ipv6.yaml', ipv6_pool_dict)
 
             # Create the ipv6 network using calicoctl
-            host.calicoctl("create -f ipv6.yaml")
+            host.calicoctl("create -f /tmp/ipv6.yaml")
             # Now read it out (yaml format) with calicoctl:
             self.check_data_in_datastore(host, [ipv6_pool_dict], "ipPool")
 
             # Add in the ipv4 network with calicoctl
-            host.calicoctl("create -f ipv4.yaml")
+            host.calicoctl("create -f /tmp/ipv4.yaml")
             # Now read it out with the calicoctl:
             self.check_data_in_datastore(
                 host, [ipv4_pool_dict, ipv6_pool_dict], "ipPool")
 
             # Remove both the ipv4 pool and ipv6 pool
-            host.calicoctl("delete -f ipv6.yaml")
-            host.calicoctl("delete -f ipv4.yaml")
+            host.calicoctl("delete -f /tmp/ipv6.yaml")
+            host.calicoctl("delete -f /tmp/ipv4.yaml")
             # Assert output contains neither network
             self.check_data_in_datastore(host, [], "ipPool")
 
             # Assert that deleting the pool again fails.
             self.assertRaises(CommandExecError,
-                              host.calicoctl, "delete -f ipv4.yaml")
+                              host.calicoctl, "delete -f /tmp/ipv4.yaml")
 
 
 class TestCreateFromFile(TestBase):
@@ -250,9 +250,9 @@ class TestCreateFromFile(TestBase):
             res_type = data['kind']
             logger.debug("Testing %s" % res_type)
             # Write out the files to load later
-            self.writeyaml('%s-1.yaml' % res_type, data)
+            self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
 
-            host.calicoctl("create -f %s-1.yaml" % res_type)
+            host.calicoctl("create -f /tmp/%s-1.yaml" % res_type)
             # Test use of create with stdin
 
             # Check both come out OK in yaml:
@@ -264,7 +264,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res_type)
+            host.calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -276,9 +276,9 @@ class TestCreateFromFile(TestBase):
             res_type = data['kind']
             logger.debug("Testing %s" % res_type)
             # Write out the files to load later
-            self.writejson('%s-1.json' % res_type, data)
+            self.writejson('/tmp/%s-1.json' % res_type, data)
 
-            host.calicoctl("create -f %s-1.json" % res_type)
+            host.calicoctl("create -f /tmp/%s-1.json" % res_type)
             # Test use of create with stdin
 
             # Check both come out OK in yaml:
@@ -290,7 +290,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.json" % res_type)
+            host.calicoctl("delete -f /tmp/%s-1.json" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -302,11 +302,11 @@ class TestCreateFromFile(TestBase):
             res_type = data['kind']
             logger.debug("Testing %s" % res_type)
             # Write out the files to load later
-            self.writejson('%s-1.json' % res_type, data)
+            self.writejson('/tmp/%s-1.json' % res_type, data)
 
             # Test use of create with stdin
             host.execute(
-                "cat %s-1.json | /code/dist/calicoctl create -f -" %
+                "cat /tmp/%s-1.json | /code/dist/calicoctl create -f -" %
                 res_type)
 
             # Check both come out OK in yaml:
@@ -318,7 +318,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.json" % res_type)
+            host.calicoctl("delete -f /tmp/%s-1.json" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -330,11 +330,11 @@ class TestCreateFromFile(TestBase):
             res_type = data['kind']
             logger.debug("Testing %s" % res_type)
             # Write out the files to load later
-            self.writeyaml('%s-1.yaml' % res_type, data)
+            self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
 
             # Test use of create with stdin
             host.execute(
-                "cat %s-1.yaml | /code/dist/calicoctl create -f -" %
+                "cat /tmp/%s-1.yaml | /code/dist/calicoctl create -f -" %
                 res_type)
 
             # Check both come out OK in yaml:
@@ -346,7 +346,7 @@ class TestCreateFromFile(TestBase):
                 host, [data], res_type, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res_type)
+            host.calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res_type)
@@ -512,13 +512,13 @@ class TestCreateFromFile(TestBase):
         with DockerHost('host', dind=False, start_calico=False) as host:
             logger.debug("Testing %s" % res)
             # Write out the files to load later
-            self.writeyaml('%s-1.yaml' % res, data1)
-            self.writejson('%s-2.json' % res, data2)
+            self.writeyaml('/tmp/%s-1.yaml' % res, data1)
+            self.writejson('/tmp/%s-2.json' % res, data2)
 
-            host.calicoctl("create -f %s-1.yaml" % res)
+            host.calicoctl("create -f /tmp/%s-1.yaml" % res)
             # Test use of create with stdin
             host.execute(
-                "cat %s-2.json | /code/dist/calicoctl create -f -" % res)
+                "cat /tmp/%s-2.json | /code/dist/calicoctl create -f -" % res)
 
             # Check both come out OK in yaml:
             self.check_data_in_datastore(
@@ -529,8 +529,8 @@ class TestCreateFromFile(TestBase):
                 host, [data1, data2], res, yaml_format=False)
 
             # Tidy up
-            host.calicoctl("delete -f %s-1.yaml" % res)
-            host.calicoctl("delete -f %s-2.json" % res)
+            host.calicoctl("delete -f /tmp/%s-1.yaml" % res)
+            host.calicoctl("delete -f /tmp/%s-2.json" % res)
 
             # Check it deleted
             self.check_data_in_datastore(host, [], res)
@@ -735,31 +735,31 @@ class TestCreateFromFile(TestBase):
             logger.debug("Testing %s" % res)
 
             # Write test data files for loading later
-            self.writeyaml('data1.yaml', data1)
-            self.writejson('data2.json', data2)
+            self.writeyaml('/tmp/data1.yaml', data1)
+            self.writejson('/tmp/data2.json', data2)
 
             # apply - create when not present
-            host.calicoctl("apply -f data1.yaml")
+            host.calicoctl("apply -f /tmp/data1.yaml")
             # Check it went in OK
             self.check_data_in_datastore(host, [data1], res)
 
             # create - skip overwrite with data2
-            host.calicoctl("create -f data2.json --skip-exists")
+            host.calicoctl("create -f /tmp/data2.json --skip-exists")
             # Check that nothing's changed
             self.check_data_in_datastore(host, [data1], res)
 
             # replace - overwrite with data2
-            host.calicoctl("replace -f data2.json")
+            host.calicoctl("replace -f /tmp/data2.json")
             # Check that we now have data2 in the datastore
             self.check_data_in_datastore(host, [data2], res)
 
             # apply - overwrite with data1
-            host.calicoctl("apply -f data1.yaml")
+            host.calicoctl("apply -f /tmp/data1.yaml")
             # Check that we now have data1 in the datastore
             self.check_data_in_datastore(host, [data1], res)
 
             # delete
-            host.calicoctl("delete --filename=data1.yaml")
+            host.calicoctl("delete --filename=/tmp/data1.yaml")
             # Check it deleted
             self.check_data_in_datastore(host, [], res)
 
@@ -772,13 +772,13 @@ class TestCreateFromFile(TestBase):
         :return: None.
         """
         # Do yaml first
-        self.writeyaml('test', data)
-        with open('test', 'r') as f:
+        self.writeyaml('/tmp/test', data)
+        with open('/tmp/test', 'r') as f:
             output = yaml.safe_load(f.read())
         self.assert_same(data, output)
         # Now check json
-        self.writejson('test', data)
-        with open('test', 'r') as f:
+        self.writejson('/tmp/test', data)
+        with open('/tmp/test', 'r') as f:
             output = json.loads(f.read())
         self.assert_same(data, output)
 
@@ -1106,9 +1106,9 @@ class InvalidData(TestBase):
                                      "Injected: %s\n" \
                                      "Got back: %s" % (testdata, output)
 
-            host.writefile("testfile.yaml", testdata)
+            host.writefile("/tmp/testfile.yaml", testdata)
             try:
-                host.calicoctl("create -f testfile.yaml")
+                host.calicoctl("create -f /tmp/testfile.yaml")
             except CommandExecError:
                 logger.debug("calicoctl error hit, as expected")
                 commanderror = True
