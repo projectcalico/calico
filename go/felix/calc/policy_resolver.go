@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,13 +96,6 @@ func (pr *PolicyResolver) refreshSortOrder() {
 	pr.sortedTierData = pr.policySorter.Sorted()
 	pr.sortRequired = false
 	log.Debugf("New sort order: %v", pr.sortedTierData)
-}
-
-func (pr *PolicyResolver) markAllEndpointsDirty() {
-	log.Debugf("Marking all endpoints dirty")
-	pr.endpointIDToPolicyIDs.IterKeys(func(epID interface{}) {
-		pr.dirtyEndpoints.Add(epID)
-	})
 }
 
 func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKey) {

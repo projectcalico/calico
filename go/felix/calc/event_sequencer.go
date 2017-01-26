@@ -228,6 +228,7 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 					rulesOrNil.OutboundRules,
 					"pol-out-default/"+key.Name,
 				),
+				Untracked: rulesOrNil.Untracked,
 			},
 		})
 		buf.sentPolicies.Add(key)
@@ -318,6 +319,17 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 	}
 }
 
+func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo) *proto.HostEndpoint {
+	return &proto.HostEndpoint{
+		Name:              ep.Name,
+		ExpectedIpv4Addrs: ipsToStrings(ep.ExpectedIPv4Addrs),
+		ExpectedIpv6Addrs: ipsToStrings(ep.ExpectedIPv6Addrs),
+		ProfileIds:        ep.ProfileIDs,
+		Tiers:             tiers,
+		UntrackedTiers:    untrackedTiers,
+	}
+}
+
 func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 	endpoint interface{},
 	filteredTiers []tierInfo,
@@ -340,33 +352,25 @@ func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 
 func (buf *EventSequencer) flushEndpointTierUpdates() {
 	for key, endpoint := range buf.pendingEndpointUpdates {
-		tiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
+		tiers, untrackedTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
+			wlep := endpoint.(*model.WorkloadEndpoint)
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(
-					endpoint.(*model.WorkloadEndpoint),
-					tiers,
-				),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
 			})
 		case model.HostEndpointKey:
-			ep := endpoint.(*model.HostEndpoint)
+			hep := endpoint.(*model.HostEndpoint)
 			buf.Callback(&proto.HostEndpointUpdate{
 				Id: &proto.HostEndpointID{
 					EndpointId: key.EndpointID,
 				},
-				Endpoint: &proto.HostEndpoint{
-					Name:              ep.Name,
-					ExpectedIpv4Addrs: ipsToStrings(ep.ExpectedIPv4Addrs),
-					ExpectedIpv6Addrs: ipsToStrings(ep.ExpectedIPv6Addrs),
-					ProfileIds:        ep.ProfileIDs,
-					Tiers:             tiers,
-				},
+				Endpoint: ModelHostEndpointToProto(hep, tiers, untrackedTiers),
 			})
 		}
 		// Record that we've sent this endpoint.
@@ -570,18 +574,32 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 	return strings.Replace(cidr.String(), "/", "-", 1)
 }
 
-func tierInfoToProtoTierInfo(filteredTiers []tierInfo) []*proto.TierInfo {
-	tiers := make([]*proto.TierInfo, len(filteredTiers))
+func tierInfoToProtoTierInfo(filteredTiers []tierInfo) (trackedTiers, untrackedTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
-		for ii, ti := range filteredTiers {
-			pols := make([]string, len(ti.OrderedPolicies))
-			for jj, pol := range ti.OrderedPolicies {
-				pols[jj] = pol.Key.Name
+		for _, ti := range filteredTiers {
+			var trackedPols, untrackedPols []string
+			for _, pol := range ti.OrderedPolicies {
+				if pol.Value.DoNotTrack {
+					untrackedPols = append(untrackedPols, pol.Key.Name)
+				} else {
+					trackedPols = append(trackedPols, pol.Key.Name)
+				}
 			}
-			tiers[ii] = &proto.TierInfo{ti.Name, pols}
+			if len(trackedPols) > 0 {
+				trackedTiers = append(trackedTiers, &proto.TierInfo{
+					Name:     ti.Name,
+					Policies: trackedPols,
+				})
+			}
+			if len(untrackedPols) > 0 {
+				untrackedTiers = append(untrackedTiers, &proto.TierInfo{
+					Name:     ti.Name,
+					Policies: untrackedPols,
+				})
+			}
 		}
 	}
-	return tiers
+	return
 }
 
 func netsToStrings(nets []net.IPNet) []string {

@@ -182,9 +182,13 @@ var _ = Describe("Endpoints", func() {
 			Tiers: []*proto.TierInfo{
 				{Name: "tier1", Policies: []string{"a", "b"}},
 			},
+			// Untracked policy should be ignored for filter table.
+			UntrackedTiers: []*proto.TierInfo{
+				{Name: "tier2", Policies: []string{"c"}},
+			},
 			ProfileIds: []string{"prof1", "prof2"},
 		}
-		Expect(renderer.HostEndpointToIptablesChains("eth0", &endpoint)).To(Equal([]*Chain{
+		Expect(renderer.HostEndpointToFilterChains("eth0", &endpoint)).To(Equal([]*Chain{
 			{
 				Name: "calith-eth0",
 				Rules: []Rule{
@@ -257,6 +261,66 @@ var _ = Describe("Endpoints", func() {
 
 					{Action: DropAction{},
 						Comment: "Drop if no profiles matched"},
+				},
+			},
+		}))
+	})
+
+	It("should render host endpoint raw chains with untracked policies", func() {
+		var endpoint = proto.HostEndpoint{
+			Name: "cali1234",
+			// Normal policy should be ignored in raw table.
+			Tiers: []*proto.TierInfo{
+				{Name: "tier1", Policies: []string{"a", "b"}},
+			},
+			UntrackedTiers: []*proto.TierInfo{
+				{Name: "tier2", Policies: []string{"c"}},
+			},
+			ProfileIds: []string{"prof1", "prof2"},
+		}
+		Expect(renderer.HostEndpointToRawChains("eth0", &endpoint)).To(Equal([]*Chain{
+			{
+				Name: "calith-eth0",
+				Rules: []Rule{
+					// Host endpoints get extra failsafe rules.
+					{Action: JumpAction{Target: "cali-failsafe-out"}},
+
+					{Action: ClearMarkAction{Mark: 0x8}},
+
+					{Comment: "Start of tier tier2",
+						Action: ClearMarkAction{Mark: 0x10}},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "calipo-tier2/c"}},
+					// Extra NOTRACK action before returning in raw table.
+					{Match: Match().MarkSet(0x8),
+						Action: NoTrackAction{}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+
+					// No drop actions or profiles in raw table.
+				},
+			},
+			{
+				Name: "califh-eth0",
+				Rules: []Rule{
+					// Host endpoints get extra failsafe rules.
+					{Action: JumpAction{Target: "cali-failsafe-in"}},
+
+					{Action: ClearMarkAction{Mark: 0x8}},
+
+					{Comment: "Start of tier tier2",
+						Action: ClearMarkAction{Mark: 0x10}},
+					{Match: Match().MarkClear(0x10),
+						Action: JumpAction{Target: "calipi-tier2/c"}},
+					// Extra NOTRACK action before returning in raw table.
+					{Match: Match().MarkSet(0x8),
+						Action: NoTrackAction{}},
+					{Match: Match().MarkSet(0x8),
+						Action:  ReturnAction{},
+						Comment: "Return if policy accepted"},
+
+					// No drop actions or profiles in raw table.
 				},
 			},
 		}))

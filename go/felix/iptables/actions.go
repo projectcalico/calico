@@ -163,3 +163,15 @@ func (c SetMarkAction) ToFragment() string {
 func (c SetMarkAction) String() string {
 	return fmt.Sprintf("Set:%#x", c.Mark)
 }
+
+type NoTrackAction struct {
+	TypeNoTrack struct{}
+}
+
+func (g NoTrackAction) ToFragment() string {
+	return "--jump NOTRACK"
+}
+
+func (g NoTrackAction) String() string {
+	return "NOTRACK"
+}

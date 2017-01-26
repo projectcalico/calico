@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -188,6 +188,18 @@ var policy1_order20 = Policy{
 	},
 }
 
+var policy1_order20_untracked = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	OutboundRules: []Rule{
+		{SrcSelector: bEpBSelector},
+	},
+	DoNotTrack: true,
+}
+
 var profileRules1 = ProfileRules{
 	InboundRules: []Rule{
 		{SrcSelector: allSelector},
@@ -257,6 +269,11 @@ var withPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
 ).withName("with policy")
 
+// withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
+var withUntrackedPolicy = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
+).withName("with untracked policy")
+
 // localEp1WithPolicy adds a local endpoint to the mix.  It matches all and b=="b".
 var localEp1WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
@@ -307,6 +324,49 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 		{"default", []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
+
+var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withUntrackedPolicies(
+	proto.PolicyID{"default", "pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpointUntracked(
+	hostEpWithNameId,
+	[]tierInfo{},
+	[]tierInfo{
+		{"default", []string{"pol-1"}},
+	},
+).withName("host ep1, untracked policy")
+
+var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20},
+).withActivePolicies(
+	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{"default", "pol-2"},
+).withEndpointUntracked(
+	hostEpWithNameId,
+	[]tierInfo{
+		{"default", []string{"pol-2"}},
+	},
+	[]tierInfo{
+		{"default", []string{"pol-1"}},
+	},
+).withName("host ep1, tracked+untracked policy")
 
 var hostEp2WithPolicy = withPolicy.withKVUpdates(
 	KVPair{Key: hostEp2NoNameKey, Value: &hostEp2NoName},
@@ -655,16 +715,26 @@ var baseTests = []StateList{
 		localEpsWithTagInheritProfile,
 		localEpsWithPolicy,
 		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicy,
 		localEpsWithUpdatedProfile,
 		withProfileTagInherit,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
+		hostEp1WithUntrackedPolicy,
 		localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
 		localEpsWithProfile},
 
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy},
+
+	// Untracked policy on its own.
+	{hostEp1WithUntrackedPolicy},
+	// Mixed policy.
+	{hostEp1WithTrackedAndUntrackedPolicy},
+	// Single policy switches between tracked/untracked.
+	{hostEp1WithUntrackedPolicy, hostEp1WithPolicy},
+	{hostEp1WithUntrackedPolicy, hostEp1WithTrackedAndUntrackedPolicy, hostEp1WithPolicy},
 
 	// Tag to label inheritance.  Tag foo should be inherited as label
 	// foo="".
@@ -729,7 +799,7 @@ func reverseKVOrder(baseTests StateList) (desc string, mappedTests []StateList) 
 	desc = "with order of KVs reversed within each state"
 	mappedTest := StateList{}
 	for _, test := range baseTests {
-		mappedState := test.copy()
+		mappedState := test.Copy()
 		state := mappedState.DatastoreState
 		for ii := 0; ii < len(state)/2; ii++ {
 			jj := len(state) - ii - 1
@@ -774,7 +844,7 @@ func squashStates(baseTests StateList) (desc string, mappedTests []StateList) {
 		return
 	}
 	kvs := make([]KVPair, 0)
-	mappedState := baseTests[len(baseTests)-1].copy()
+	mappedState := baseTests[len(baseTests)-1].Copy()
 	lastTest := empty
 	for _, test := range baseTests {
 		for _, update := range test.KVDeltas(lastTest) {
@@ -992,42 +1062,48 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		}
 	}
 
-	It("should calculate correct IP sets", iterStates(func() {
+	// Note: these used to be separate It() blocks but combining them knocks ~10s off the
+	// runtime, which is worthwhile!
+	It("should result in correct active state", iterStates(func() {
 		Expect(tracker.ipsets).To(Equal(state.ExpectedIPSets),
 			"IP sets didn't match expected state after moving to state: %v",
 			state.Name)
-	}))
-	It("should calculate correct active policies", iterStates(func() {
 		Expect(tracker.activePolicies).To(Equal(state.ExpectedPolicyIDs),
 			"Active policy IDs were incorrect after moving to state: %v",
 			state.Name)
-	}))
-	It("should calculate correct active profiles", iterStates(func() {
 		Expect(tracker.activeProfiles).To(Equal(state.ExpectedProfileIDs),
 			"Active profile IDs were incorrect after moving to state: %v",
 			state.Name)
-	}))
-	It("should calculate correct policies", iterStates(func() {
 		Expect(tracker.endpointToPolicyOrder).To(Equal(state.ExpectedEndpointPolicyOrder),
 			"Endpoint policy order incorrect after moving to state: %v",
+			state.Name)
+		Expect(tracker.endpointToUntrackedPolicyOrder).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
+			"Untracked endpoint policy order incorrect after moving to state: %v",
+			state.Name)
+		Expect(tracker.activeUntrackedPolicies).To(Equal(state.ExpectedUntrackedPolicyIDs),
+			"Untracked policies incorrect after moving to state: %v",
 			state.Name)
 	}))
 }
 
 type stateTracker struct {
-	ipsets                map[string]set.Set
-	activePolicies        set.Set
-	activeProfiles        set.Set
-	endpointToPolicyOrder map[string][]tierInfo
-	config                map[string]string
+	ipsets                         map[string]set.Set
+	activePolicies                 set.Set
+	activeUntrackedPolicies        set.Set
+	activeProfiles                 set.Set
+	endpointToPolicyOrder          map[string][]tierInfo
+	endpointToUntrackedPolicyOrder map[string][]tierInfo
+	config                         map[string]string
 }
 
 func newStateTracker() *stateTracker {
 	s := &stateTracker{
-		ipsets:                make(map[string]set.Set),
-		activePolicies:        set.New(),
-		activeProfiles:        set.New(),
-		endpointToPolicyOrder: make(map[string][]tierInfo),
+		ipsets:                         make(map[string]set.Set),
+		activePolicies:                 set.New(),
+		activeProfiles:                 set.New(),
+		activeUntrackedPolicies:        set.New(),
+		endpointToPolicyOrder:          make(map[string][]tierInfo),
+		endpointToUntrackedPolicyOrder: make(map[string][]tierInfo),
 	}
 	return s
 }
@@ -1072,9 +1148,17 @@ func (s *stateTracker) onEvent(event interface{}) {
 		delete(s.ipsets, event.Id)
 	case *proto.ActivePolicyUpdate:
 		// TODO: check rules against expected rules
-		s.activePolicies.Add(*event.Id)
+		policyID := *event.Id
+		s.activePolicies.Add(policyID)
+		if event.Policy.Untracked {
+			s.activeUntrackedPolicies.Add(policyID)
+		} else {
+			s.activeUntrackedPolicies.Discard(policyID)
+		}
 	case *proto.ActivePolicyRemove:
-		s.activePolicies.Discard(*event.Id)
+		policyID := *event.Id
+		s.activePolicies.Discard(policyID)
+		s.activeUntrackedPolicies.Discard(policyID)
 	case *proto.ActiveProfileUpdate:
 		// TODO: check rules against expected rules
 		s.activeProfiles.Add(*event.Id)
@@ -1083,15 +1167,17 @@ func (s *stateTracker) onEvent(event interface{}) {
 	case *proto.WorkloadEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]tierInfo, len(tiers))
-		for i, tier := range tiers {
+		for i, tier := range event.Endpoint.Tiers {
 			tierInfos[i].Name = tier.Name
 			tierInfos[i].PolicyNames = tier.Policies
 		}
 		id := workloadId(*event.Id)
 		s.endpointToPolicyOrder[id.String()] = tierInfos
+		s.endpointToUntrackedPolicyOrder[id.String()] = []tierInfo{}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(*event.Id)
 		delete(s.endpointToPolicyOrder, id.String())
+		delete(s.endpointToUntrackedPolicyOrder, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]tierInfo, len(tiers))
@@ -1101,9 +1187,18 @@ func (s *stateTracker) onEvent(event interface{}) {
 		}
 		id := hostEpId(*event.Id)
 		s.endpointToPolicyOrder[id.String()] = tierInfos
+
+		uTiers := event.Endpoint.UntrackedTiers
+		uTierInfos := make([]tierInfo, len(uTiers))
+		for i, tier := range uTiers {
+			uTierInfos[i].Name = tier.Name
+			uTierInfos[i].PolicyNames = tier.Policies
+		}
+		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
 	case *proto.HostEndpointRemove:
 		id := hostEpId(*event.Id)
 		delete(s.endpointToPolicyOrder, id.String())
+		delete(s.endpointToUntrackedPolicyOrder, id.String())
 	}
 }
 

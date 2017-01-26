@@ -59,6 +59,14 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(len(dataplane.Cmds)).NotTo(BeZero())
 	})
 
+	It("should ignore delete of non-existent chain", func() {
+		table.RemoveChains([]*Chain{
+			{Name: "cali-foobar", Rules: []Rule{{Action: AcceptAction{}}}},
+		})
+		table.Apply()
+		Expect(dataplane.DeletedChains).To(BeEmpty())
+	})
+
 	It("should police the insert mode", func() {
 		Expect(func() {
 			NewTable(

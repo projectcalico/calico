@@ -301,8 +301,10 @@ func (t *Table) RemoveChains(chains []*Chain) {
 
 func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Info("Queing deletion of chain.")
-	delete(t.chainNameToChain, name)
-	t.dirtyChains.Add(name)
+	if _, known := t.chainNameToChain[name]; known {
+		delete(t.chainNameToChain, name)
+		t.dirtyChains.Add(name)
+	}
 }
 
 func (t *Table) loadDataplaneState() {
@@ -531,6 +533,14 @@ func (t *Table) Apply() {
 				failedAtLeastOnce = true
 				continue
 			} else {
+				t.logCxt.WithError(err).Error("Failed to program iptables, loading diags before panic.")
+				cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
+				output, err2 := cmd.Output()
+				if err2 != nil {
+					t.logCxt.WithError(err2).Error("Failed to load iptables state")
+				} else {
+					t.logCxt.WithField("iptablesState", string(output)).Error("Current state of iptables")
+				}
 				t.logCxt.WithError(err).Panic("Failed to program iptables, giving up after retries")
 			}
 		}

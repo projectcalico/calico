@@ -147,6 +147,7 @@ message PolicyID {
 message Policy {
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
+  bool untracked = 3;
 }
 
 enum IPVersion {
@@ -258,6 +259,7 @@ message HostEndpoint {
   string name = 1;
   repeated string profile_ids = 2;
   repeated TierInfo tiers = 3;
+  repeated TierInfo untracked_tiers = 6;
   repeated string expected_ipv4_addrs = 4;
   repeated string expected_ipv6_addrs = 5;
 }

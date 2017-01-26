@@ -21,13 +21,15 @@ import (
 )
 
 type mockTable struct {
+	Table          string
 	currentChains  map[string]*iptables.Chain
 	expectedChains map[string]*iptables.Chain
 	UpdateCalled   bool
 }
 
-func newMockTable() *mockTable {
+func newMockTable(table string) *mockTable {
 	return &mockTable{
+		Table:          table,
 		currentChains:  map[string]*iptables.Chain{},
 		expectedChains: map[string]*iptables.Chain{},
 	}
@@ -59,13 +61,12 @@ func (t *mockTable) UpdateChains(chains []*iptables.Chain) {
 func (t *mockTable) RemoveChains(chains []*iptables.Chain) {
 	logChains("RemoveChains", chains)
 	for _, chain := range chains {
-		Expect(t.currentChains).To(HaveKey(chain.Name))
+		t.RemoveChainByName(chain.Name)
 		delete(t.currentChains, chain.Name)
 	}
 }
 
 func (t *mockTable) RemoveChainByName(name string) {
-	Expect(t.currentChains).To(HaveKey(name))
 	delete(t.currentChains, name)
 }
 
@@ -84,5 +85,5 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
 	}
-	Expect(t.currentChains).To(Equal(t.expectedChains))
+	Expect(t.currentChains).To(Equal(t.expectedChains), t.Table+" chains incorrect")
 }

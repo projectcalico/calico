@@ -31,6 +31,9 @@ const (
 	ChainFilterForward = ChainNamePrefix + "-FORWARD"
 	ChainFilterOutput  = ChainNamePrefix + "-OUTPUT"
 
+	ChainRawPrerouting = ChainNamePrefix + "-PREROUTING"
+	ChainRawOutput     = ChainNamePrefix + "-OUTPUT"
+
 	ChainFailsafeIn  = ChainNamePrefix + "-failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "-failsafe-out"
 
@@ -93,12 +96,14 @@ var (
 type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
+	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain
 
 	HostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
-	HostEndpointToIptablesChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToFilterChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToRawChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
@@ -134,8 +139,9 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept   uint32
-	IptablesMarkNextTier uint32
+	IptablesMarkAccept       uint32
+	IptablesMarkNextTier     uint32
+	IptablesMarkFromWorkload uint32
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16

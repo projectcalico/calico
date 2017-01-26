@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,26 +64,26 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules)
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false)
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil)
+	rs.updateRules(key, nil, nil, false)
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
 func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules)
+	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil)
+	rs.updateRules(key, nil, nil, false)
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked bool) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/tags.
@@ -113,6 +113,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 	parsedRules = &ParsedRules{
 		InboundRules:  parsedInbound,
 		OutboundRules: parsedOutbound,
+		Untracked:     untracked,
 	}
 
 	// Figure out which selectors/tags are new.
@@ -190,6 +191,9 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 type ParsedRules struct {
 	InboundRules  []*ParsedRule
 	OutboundRules []*ParsedRule
+
+	// Untracked is true if these rules should not be "conntracked".
+	Untracked bool
 }
 
 // Rule is like a backend.model.Rule, except the tag and selector matches are
@@ -322,9 +326,9 @@ func tagOrSelFromTag(tag string) tagOrSel {
 }
 
 func tagOrSelFromSel(sel string) (tos tagOrSel, err error) {
-	selector, err := selector.Parse(sel)
+	parsedSel, err := selector.Parse(sel)
 	if err == nil {
-		tos = tagOrSel{selector: selector, uid: selector.UniqueId()}
+		tos = tagOrSel{selector: parsedSel, uid: parsedSel.UniqueId()}
 	}
 	return
 }
