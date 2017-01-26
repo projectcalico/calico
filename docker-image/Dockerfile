@@ -1,5 +1,5 @@
 FROM alpine:3.4
-MAINTAINER Tom Denham <tom@projectcalico.org>
+MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Download and install glibc in one layer
 RUN apk --no-cache add wget ca-certificates libgcc && \
@@ -11,15 +11,17 @@ RUN apk --no-cache add wget ca-certificates libgcc && \
     apk del wget && \
     rm -f glibc-2.23-r3.apk glibc-bin-2.23-r3.apk
 
+# Install Felix's dependencies.
 RUN apk --no-cache add ip6tables ipset iputils iproute2 conntrack-tools 
 
-ADD dist/calico-felix /code
-WORKDIR /code
+ADD felix.cfg /etc/calico/felix.cfg
 
-# Minimal dummy config
-RUN mkdir /etc/calico && echo -e "[global]\nMetadataAddr = None\nLogFilePath = None\nLogSeverityFile = None" >/etc/calico/felix.cfg
+# Put out binary in /code rather than directly in /usr/bin.  This allows the downstream builds
+# to more easily extract the Felix build artefacts from the container.
+RUN mkdir /code
+ADD bin/calico-felix /code
+WORKDIR /code
 RUN ln -s /code/calico-felix /usr/bin
-RUN ln -s /code/calico-iptables-plugin /usr/bin
 
 # Run felix by default
 CMD ["calico-felix"]
