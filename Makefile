@@ -1,49 +1,49 @@
 # This Makefile builds Felix and packages it in various forms:
 #
-#               Python install                                         Go install
-#                 PyInstaller                                             Glide
-#             Key library packages                                          |
-#                      |                                                    |
-#                      |                                                    |
-#                      v              +--------+     +-------+              v
-#           +---------------------+   | Felix  |     | Felix |   +---------------------+
-#           | calico-build/python |   | Python |     |  Go   |   | calico-build/golang |
-#           +---------------------+   |  code  |     |  code |   +---------------------+
-#                             \       +--------+     +-------+         /
-#                              \         /                  \         /
-#                               \       /                    \       /
-#                                \     /                      \     /
-#                              pip install                    go build
-#                           run-pyinstaller.sh                    \
-#                                    |                             \
-#                                    |                              \
-# +----------------------+           |                               :
-# | calico-build/centos7 |           v                               v
-# | calico-build/xenial  |     +------------------------+      +--------------+
-# | calico-build/trusty  |     | calico-iptables-plugin |      | calico-felix |
-# +----------------------+     +------------------------+      +--------------+
-#                     \          /          |        \           /   /      |
-#                      \        /    .------|---------\---------'   /       |
-#                       \      /    /       |          \           /        |
-#                        \    /    /        |           \ .-------'         |
-#                         \  /    /         :            \                  |
-#                     rpm/build-rpms         '-----.    / '-------------.   |
-#                   debian/build-debs               \  /                 \  |
-#                           |                        \/                   \ |
-#                           |                   docker build              tar
-#                           v                         |                    |
-#            +----------------------------+           |                    |
-#            |  RPM packages for Centos7  |           v                    v
-#            | Debian packages for Xenial |    +--------------+   +--------------------+
-#            | Debian packages for Trusty |    | calico/felix |   | PyInstaller bundle |
-#            +----------------------------+    +--------------+   | (tarball of two    |
-#                                                                 |  executables)      |
-#                                                                 +--------------------+
+#                                                                      Go install
+#                                                                         Glide
+#                                                                           |
+#                                                                           |
+#                                                                           |
+#                                                    +-------+              v
+#                                                    | Felix |   +---------------------+
+#                                                    |  Go   |   | calico-build/golang |
+#                                                    |  code |   +---------------------+
+#                                                    +-------+         /
+#                                                           \         /
+#                                                            \       /
+#                                                             \     /
+#                                                             go build
+#                                                                 \
+#                                                                  \
+#                                                                   \
+# +----------------------+                                           :
+# | calico-build/centos7 |                                           v
+# | calico-build/xenial  |                                 +------------------+
+# | calico-build/trusty  |                                 | bin/calico-felix |
+# +----------------------+                                 +------------------+
+#                     \                                          /   /
+#                      \             .--------------------------'   /
+#                       \           /                              /
+#                        \         /                      .-------'
+#                         \       /                      /
+#                     rpm/build-rpms                    /
+#                   debian/build-debs                  /
+#                           |                         /
+#                           |                   docker build
+#                           v                         |
+#            +----------------------------+           |
+#            |  RPM packages for Centos7  |           v
+#            | Debian packages for Xenial |    +--------------+
+#            | Debian packages for Trusty |    | calico/felix |
+#            +----------------------------+    +--------------+
+#
+#
 
 help:
 	@echo "Felix Makefile"
 	@echo
-	@echo "Dependencies: docker 1.12+; go 1.7+; python 2.7; tox; virtualenv"
+	@echo "Dependencies: docker 1.12+; go 1.7+"
 	@echo
 	@echo "Note: initial builds can be slow because they generate docker-based"
 	@echo "build environments."
@@ -51,31 +51,24 @@ help:
 	@echo "Initial set-up:"
 	@echo
 	@echo "  make update-tools  Update/install the go build dependencies."
-	@echo "  make env           Create a Python virtualenv for UT dev."
 	@echo
 	@echo "Builds:"
 	@echo
 	@echo "  make all           Build all the binary packages."
-	@echo "  make pyinstaller   Build pyinstaller bundle in ./dist."
 	@echo "  make deb           Build debs in ./dist."
 	@echo "  make rpm           Build rpms in ./dist."
 	@echo "  make calico/felix  Build calico/felix docker image."
 	@echo
 	@echo "Tests:"
 	@echo
-	@echo "  make ut            Run all UTs."
-	@echo "  make go-ut         Run go UTs (and coverage)."
-	@echo "  make python-ut     Run Python UTs (and coverage)."
+	@echo "  make ut                Run UTs."
 	@echo "  make go-cover-browser  Display go code coverage in browser."
 	@echo
 	@echo "Maintenance:"
 	@echo
 	@echo "  make update-vendor  Update the go/vendor directory with new "
-	@echo "                     versions ofupstream packages.  Record results"
-	@echo "                     in go/glide.lock."
-	@echo "  make update-frozen-reqs  Update the frozen python requirements."
-	@echo "                     Should be run after revving or adding a new"
-	@echo "                     python dependency."
+	@echo "                      versions of upstream packages.  Record results"
+	@echo "                      in go/glide.lock."
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 
@@ -83,17 +76,15 @@ help:
 # considerably.
 .SUFFIXES:
 
-all: pyinstaller deb rpm calico/felix
+all: deb rpm calico/felix
 test: ut
 
 # re-define default --compare-branch=origin/master to some custom name
 UT_COMPARE_BRANCH?=
 
-# Generate and return the python package version.
-PY_VERSION:=$(shell utils/gen-version.sh)
-
 # Figure out what git commit we have checked out.  We'll bake that into the
 # executable.
+# TODO(smc) avoid git commands so we can work from a tarball.
 GIT_COMMIT:=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT:=$(shell git rev-parse --short HEAD)
 GIT_DESCRIPTION:=$(shell git describe --tags)
@@ -101,22 +92,12 @@ GIT_DESCRIPTION:=$(shell git describe --tags)
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-# Calculate the versioned name of the pyinstaller bundle tgz.
-BUNDLE_FILENAME:=dist/calico-felix-${GIT_DESCRIPTION}.tgz
-
 # List of Go files that are generated by the build process.  Builds should
 # depend on these, clean removes them.
 GENERATED_GO_FILES:=go/felix/proto/felixbackend.pb.go
 
 # All go files.
 GO_FILES:=$(shell find go/ -type f -name '*.go') $(GENERATED_GO_FILES)
-
-# Generated python files, builds should depend on these, clean removes them.
-GENERATED_PYTHON_FILES=python/calico/felix/felixbackend_pb2.py
-
-# All our python files.
-PY_FILES:=$(GENERATED_PYTHON_FILES) \
-          $(shell find python/  -type f -name '*.py' | grep -v /.tox/)
 
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
@@ -158,36 +139,10 @@ calico-build/centos7:
 	  -f centos7-build.Dockerfile \
 	  -t calico-build/centos7 .
 
-.PHONY: calico-build/python
-calico-build/python:
-	# Rebuild the container image.  Docker will do its own newness checks.
-	docker build \
-	  --build-arg=UID=$(MY_UID) \
-	  --build-arg=GID=$(MY_GID) \
-	  -t calico-build/python \
-	  -f docker-build-images/pyi/Dockerfile .
-
-.PHONY: update-frozen-reqs
-update-frozen-reqs python/requirements_frozen.txt: python/requirements.txt python/test_requirements.txt
-	$(MAKE) calico-build/python
-	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	"pip --no-cache-dir install -U -r requirements.txt -r test_requirements.txt"\
-	" && pip --no-cache-dir freeze > requirements_frozen.txt"\
-	" && chown $(MY_UID):$(MY_GID) requirements_frozen.txt"
-
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: calico/felix
-calico/felix: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
+calico/felix: dist/calico-felix/calico-felix
 	docker build -t calico/felix .
-
-# Create or rebuild a python virtualenv suitable for developing Python UTs.
-.PHONY: env
-env:
-	virtualenv env
-	. env/bin/activate && \
-	    pip install -U pip && \
-	    pip install -U hypothesis mock nose unittest2 && \
-	    pip install -e ./python
 
 # Pre-configured docker run command that runs as this user with the repo
 # checked out to /code, uses the --rm flag to avoid leaving the container
@@ -197,33 +152,25 @@ DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 
 # Build all the debs.
 .PHONY: deb
-deb: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
+deb: dist/calico-felix/calico-felix
 	$(MAKE) calico-build/trusty
 	$(MAKE) calico-build/xenial
 	utils/make-packages.sh deb
 
 # Build RPMs.
 .PHONY: rpm
-rpm: dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
+rpm: dist/calico-felix/calico-felix
 	$(MAKE) calico-build/centos7
 	utils/make-packages.sh rpm
 
 .PHONY: protobuf
-protobuf: python/calico/felix/felixbackend_pb2.py go/felix/proto/felixbackend.pb.go
+protobuf: go/felix/proto/felixbackend.pb.go
 
 # Generate the protobuf bindings for go.
 go/felix/proto/felixbackend.pb.go: go/felix/proto/felixbackend.proto
 	$(DOCKER_RUN_RM) -v $${PWD}/go/felix/proto:/src:rw \
 	              calico/protoc \
 	              --gogofaster_out=. \
-	              felixbackend.proto
-
-# Generate the protobuf bindings for Python.
-python/calico/felix/felixbackend_pb2.py: go/felix/proto/felixbackend.proto
-	$(DOCKER_RUN_RM) -v $${PWD}/go/felix/proto:/src:rw \
-	              -v $${PWD}/python/calico/felix/:/dst:rw \
-	              calico/protoc \
-	              --python_out=/dst/ \
 	              felixbackend.proto
 
 # Update the vendored dependencies with the latest upstream versions matching
@@ -288,37 +235,8 @@ bin/calico-felix: $(GO_FILES) \
                ( ldd bin/calico-felix | grep -q "not a dynamic executable" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
-# Build the pyinstaller bundle, which is an output artefact in its own right
-# as well as being the input to our Deb and RPM builds.
-.PHONY: pyinstaller
-pyinstaller: $(BUNDLE_FILENAME)
-
-$(BUNDLE_FILENAME): dist/calico-felix/calico-iptables-plugin dist/calico-felix/calico-felix
-	tar -czf $(BUNDLE_FILENAME) -C dist calico-felix
-
-dist/calico-felix/calico-iptables-plugin: $(PY_FILES) python/requirements.txt docker-build-images/pyi/*
-	$(MAKE) calico-build/python
-
-	# Output version information
-	echo "Felix version: $(GIT_DESCRIPTION) \n" \
-	     "Git revision: $(GIT_COMMIT)\n" > version.txt
-
-	# Create and run build container.
-	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	'pip install .'\
-	' && ../docker-build-images/pyi/run-pyinstaller.sh'\
-	' && rm -rf ../build `find . -name "*.pyc"`'\
-	' && chown -R $(MY_UID):$(MY_GID) ../dist'
-
-	# Check that the build succeeded and update the mtimes on the target file
-	# since pyinstaller doesn't seem to do so.
-	test -e dist/calico-felix/calico-iptables-plugin && touch dist/calico-felix/calico-iptables-plugin
-
-# This target adds the calico-felix binary to the PyInstaller build directory.
-# It requires an order-only dependency to ensure that it only gets run after
-# the PyInstaller build itself because the PyInstaller build clobbers the
-# directory.
-dist/calico-felix/calico-felix: bin/calico-felix | dist/calico-felix/calico-iptables-plugin
+dist/calico-felix/calico-felix: bin/calico-felix
+	mkdir -p dist/calico-felix/
 	cp bin/calico-felix dist/calico-felix/calico-felix
 
 # Install or update the tools used by the build
@@ -335,18 +253,7 @@ go-fmt:
 	$(DOCKER_RUN_RM) -w /code/go calico-build/golang sh -c 'glide nv | xargs go fmt'
 
 .PHONY: ut
-ut: python-ut go-ut
-
-.PHONY: python-ut
-python-ut: python/calico/felix/felixbackend_pb2.py
-	$(MAKE) calico-build/python
-	$(DOCKER_RUN_RM_ROOT) -w /code/python calico-build/python sh -c \
-	"pip install ."\
-	" && COMPARE_BRANCH=$(UT_COMPARE_BRANCH) ./run-unit-test.sh"\
-	" && chown -R $(MY_UID):$(MY_GID) coverage.xml .coverage htmlcov"
-
-.PHONY: go-ut
-go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
+ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(MAKE) calico-build/golang
 	mkdir -p .go-pkg-cache
@@ -358,8 +265,8 @@ go-ut go/combined.coverprofile: go/vendor/.up-to-date $(GO_FILES)
 	    calico-build/golang \
 	    ./run-coverage
 
-.PHONY: go-ut-no-cover
-go-ut-no-cover: go/vendor/.up-to-date $(GO_FILES)
+.PHONY: ut-no-cover
+ut-no-cover: go/vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs without coverage.
 	$(MAKE) calico-build/golang
 	mkdir -p .go-pkg-cache
@@ -371,8 +278,8 @@ go-ut-no-cover: go/vendor/.up-to-date $(GO_FILES)
 	    calico-build/golang \
 	    ginkgo -r
 
-.PHONY: go-ut-watch
-go-ut-watch: go/vendor/.up-to-date $(GO_FILES)
+.PHONY: ut-watch
+ut-watch: go/vendor/.up-to-date $(GO_FILES)
 	@echo Watching go UTs for changes...
 	$(MAKE) calico-build/golang
 	mkdir -p .go-pkg-cache
@@ -414,13 +321,6 @@ bin/calico-felix.transfer-url: bin/calico-felix
 patch-script: bin/calico-felix.transfer-url
 	utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)
 
-bin/calico-felix.transfer-url-inc-python: $(BUNDLE_FILENAME)
-	curl --upload-file $(BUNDLE_FILENAME) https://transfer.sh/calico-felix-inc-python > $@
-
-.PHONY: patch-script-inc-python
-patch-script-inc-python: bin/calico-felix.transfer-url-inc-python
-	utils/make-patch-script-inc-python.sh $$(cat bin/calico-felix.transfer-url-inc-python)
-
 # Generate a diagram of Felix's internal calculation graph.
 go/docs/calc.pdf: go/docs/calc.dot
 	cd go/docs/ && dot -Tpdf calc.dot -o calc.pdf
@@ -430,15 +330,11 @@ clean:
 	rm -rf bin \
 	       dist \
 	       build \
-	       $(GENERATED_PYTHON_FILES) \
 	       $(GENERATED_GO_FILES) \
 	       go/docs/calc.pdf \
 	       go/.glide \
 	       go/vendor \
-	       .go-pkg-cache \
-	       python/.tox \
-	       htmlcov \
-	       python/htmlcov
+	       .go-pkg-cache
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
@@ -459,13 +355,22 @@ release-once-tagged:
 	@echo
 	@echo "Will now build release artifacts..."
 	@echo
-	$(MAKE) pyinstaller calico/felix
+	$(MAKE) bin/calico-felix calico/felix
 	docker tag calico/felix calico/felix:$(VERSION)
-	docker tag calico/felix quay.io/calico/felix:$(VERSION)
+	docker tag calico/felix:$(VERSION) quay.io/calico/felix:$(VERSION)
+	@echo
+	@echo "Checking built felix has correct version..."
+	@if docker run quay.io/calico/felix:$(VERSION) calico-felix --version | grep -q '$(VERSION)$'; \
+	then \
+	  echo "Check successful."; \
+	else \
+	  echo "Incorrect version in docker image!"; \
+	  false; \
+	fi
 	@echo
 	@echo "Felix release artifacts have been built:"
 	@echo
-	@echo "- PyInstaller bundle:     $(BUNDLE_FILENAME)"
+	@echo "- Binary:                 bin/calico-felix"
 	@echo "- Docker container image: calico/felix:$(VERSION)"
 	@echo "- Same, tagged for Quay:  quay.io/calico/felix:$(VERSION)"
 	@echo
@@ -476,7 +381,7 @@ release-once-tagged:
 	@echo "- Copy the tag content (release notes) shown on that page"
 	@echo "- Go to https://github.com/projectcalico/felix/releases/new?tag=$(VERSION)"
 	@echo "- Paste the copied tag content into the large textbox"
-	@echo "- Attach the PyInstaller bundle"
+	@echo "- Attach the binary"
 	@echo "- Click the 'This is a pre-release' checkbox, if appropriate"
 	@echo "- Click 'Publish release'"
 	@echo
