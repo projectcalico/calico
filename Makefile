@@ -327,8 +327,8 @@ patch-script: bin/calico-felix.transfer-url
 	utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)
 
 # Generate a diagram of Felix's internal calculation graph.
-go/docs/calc.pdf: go/docs/calc.dot
-	cd go/docs/ && dot -Tpdf calc.dot -o calc.pdf
+docs/calc.pdf: docs/calc.dot
+	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
 .PHONY: clean
 clean:
