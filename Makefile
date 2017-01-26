@@ -79,15 +79,11 @@ help:
 all: deb rpm calico/felix
 test: ut
 
-# re-define default --compare-branch=origin/master to some custom name
-UT_COMPARE_BRANCH?=
-
-# Figure out what git commit we have checked out.  We'll bake that into the
-# executable.
-# TODO(smc) avoid git commands so we can work from a tarball.
-GIT_COMMIT:=$(shell git rev-parse HEAD)
-GIT_COMMIT_SHORT:=$(shell git rev-parse --short HEAD)
-GIT_DESCRIPTION:=$(shell git describe --tags)
+# Figure out version information.  To support builds from release tarballs, we default to
+# <unknown> if this isn't a git checkout.
+GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
+BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
+GIT_DESCRIPTION:=$(shell git describe --tags || echo '<unknown>')
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
@@ -156,6 +152,9 @@ DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 # Build all the debs.
 .PHONY: deb
 deb: dist/calico-felix/calico-felix
+ifeq ($(GIT_COMMIT),<unknown>)
+	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
+endif
 	$(MAKE) calico-build/trusty
 	$(MAKE) calico-build/xenial
 	utils/make-packages.sh deb
@@ -163,6 +162,9 @@ deb: dist/calico-felix/calico-felix
 # Build RPMs.
 .PHONY: rpm
 rpm: dist/calico-felix/calico-felix
+ifeq ($(GIT_COMMIT),<unknown>)
+	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
+endif
 	$(MAKE) calico-build/centos7
 	utils/make-packages.sh rpm
 
@@ -218,7 +220,7 @@ LDFLAGS:=-ldflags "\
         -X github.com/projectcalico/felix/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
         -X github.com/projectcalico/felix/buildinfo.BuildDate=$(DATE) \
         -X github.com/projectcalico/felix/buildinfo.GitRevision=$(GIT_COMMIT) \
-        -B 0x$(GIT_COMMIT)"
+        -B 0x$(BUILD_ID)"
 
 bin/calico-felix: $(GO_FILES) \
                   vendor/.up-to-date \
@@ -349,6 +351,10 @@ release: clean
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=X.Y.Z)
 endif
+ifeq ($(GIT_COMMIT),<unknown>)
+	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
+endif
+	git rev-parse HEAD
 	utils/tag-release.sh $(VERSION)
 	# Now decouple onto another make invocation, as we want some variables
 	# (GIT_DESCRIPTION and BUNDLE_FILENAME) to be recalculated based on the
