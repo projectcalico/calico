@@ -1,2 +1,0 @@
-#!/bin/bash
-systemctl restart calico-dockerless-confd
