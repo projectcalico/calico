@@ -22,3 +22,9 @@ bin
 local-utils
 python/version.py
 .go-pkg-cache
+vendor
+bin
+*.coverprofile
+*.pb.go
+*_pb2.py
+.glide
