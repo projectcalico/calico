@@ -46,6 +46,7 @@ For more detail please see :ref:`semantics`.
    contributing
    semantics
    floating-ips
+   service-ips
    devstack
    kuryr
    implementation-notes
