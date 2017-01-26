@@ -29,9 +29,9 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(epID *proto.Workl
 		PolicyOutboundPfx,
 		WorkloadToEndpointPfx,
 		WorkloadFromEndpointPfx,
-		"",
-		"",
-		untrackedDisabled,
+		"", // No fail-safe chains for workloads.
+		"", // No fail-safe chains for workloads.
+		chainTypeTracked,
 	)
 }
 
@@ -46,7 +46,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(ifaceName string, endpo
 		HostFromEndpointPfx,
 		ChainFailsafeOut,
 		ChainFailsafeIn,
-		untrackedDisabled,
+		chainTypeTracked,
 	)
 }
 
@@ -61,15 +61,15 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(ifaceName string, endpoint
 		HostFromEndpointPfx,
 		ChainFailsafeOut,
 		ChainFailsafeIn,
-		untrackedEnabled,
+		chainTypeUntracked, // Render "untracked" version of chain for the raw table.
 	)
 }
 
-type untracked bool
+type endpointChainType int
 
 const (
-	untrackedEnabled  untracked = true
-	untrackedDisabled untracked = false
+	chainTypeTracked endpointChainType = iota
+	chainTypeUntracked
 )
 
 func (r *DefaultRuleRenderer) endpointToIptablesChains(
@@ -82,7 +82,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 	fromEndpointPrefix string,
 	toFailsafeChain string,
 	fromFailsafeChain string,
-	untracked untracked,
+	chainType endpointChainType,
 ) []*Chain {
 	toRules := []Rule{}
 	fromRules := []Rule{}
@@ -142,7 +142,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 			})
 			// If policy marked packet as accepted, it returns, setting the accept
 			// mark bit.
-			if untracked {
+			if chainType == chainTypeUntracked {
 				// For an untracked policy, map allow to "NOTRACK and ALLOW".
 				toRules = append(toRules, Rule{
 					Match:  Match().MarkSet(r.IptablesMarkAccept),
@@ -168,7 +168,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 			})
 			// If policy marked packet as accepted, it returns, setting the accept
 			// mark bit.
-			if untracked {
+			if chainType == chainTypeUntracked {
 				// For an untracked policy, map allow to "NOTRACK and ALLOW".
 				fromRules = append(fromRules, Rule{
 					Match:  Match().MarkSet(r.IptablesMarkAccept),
@@ -184,7 +184,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 			})
 		}
 
-		if !untracked {
+		if chainType == chainTypeTracked {
 			// When rendering normal rules, if no policy in the tier marked the packet
 			// as next-tier, drop the packet.
 			//
@@ -199,7 +199,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		}
 	}
 
-	if !untracked {
+	if chainType == chainTypeTracked {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
 			toProfChainName := ProfileChainName(toPolicyPrefix, &proto.ProfileID{Name: profileID})

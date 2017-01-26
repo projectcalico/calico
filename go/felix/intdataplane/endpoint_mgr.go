@@ -548,9 +548,17 @@ func (m *endpointManager) resolveHostEndpoints() {
 			logCxt.Debug("Got HostEp for interface")
 			newIfaceNameToHostEpID[ifaceName] = bestHostEpId
 			if len(bestHostEp.UntrackedTiers) > 0 {
+				// Optimisation: only add the endpoint chains to the raw (untracked)
+				// table if there's some untracked policy to apply.  This reduces
+				// per-packet latency since every packet has to traverse the raw
+				// table.
 				logCxt.Debug("Endpoint has untracked policies.")
 				newUntrackedIfaceNameToHostEpID[ifaceName] = bestHostEpId
 			}
+			// Note, in contrast to the check above, we unconditionally record the
+			// match in newHostEpIDToIfaceNames so that we always render the endpoint
+			// into the filter table.  This ensures that we get the correct "default
+			// drop" behaviour and that failsafe rules are applied correctly.
 			newHostEpIDToIfaceNames[bestHostEpId] = append(
 				newHostEpIDToIfaceNames[bestHostEpId], ifaceName)
 		}

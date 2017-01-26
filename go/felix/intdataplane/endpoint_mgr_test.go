@@ -542,7 +542,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 				})
 
-				Describe("replaced with untracekd version", func() {
+				Describe("replaced with untracked version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:       "id1",
 						name:     "eth0",

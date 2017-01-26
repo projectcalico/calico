@@ -269,7 +269,7 @@ var withPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20},
 ).withName("with policy")
 
-// withPolicy adds a tier and policy containing selectors for all and b=="b"
+// withUntrackedPolicy adds a tier and policy containing selectors for all and b=="b"
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
 ).withName("with untracked policy")
