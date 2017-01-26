@@ -16,7 +16,7 @@ package ipsets
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/set"
 	"regexp"
 	"strings"
 )

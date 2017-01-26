@@ -17,8 +17,8 @@ package calc_test
 import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/calc"
-	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )

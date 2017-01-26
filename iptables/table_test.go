@@ -15,12 +15,12 @@
 package iptables_test
 
 import (
-	. "github.com/projectcalico/felix/go/felix/iptables"
+	. "github.com/projectcalico/felix/iptables"
 
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/rules"
+	"github.com/projectcalico/felix/rules"
 
 	log "github.com/Sirupsen/logrus"
 	"time"

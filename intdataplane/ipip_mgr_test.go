@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/set"
 	"github.com/vishvananda/netlink"
 	"net"
 )

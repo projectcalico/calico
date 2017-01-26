@@ -15,21 +15,21 @@
 package routetable_test
 
 import (
-	. "github.com/projectcalico/felix/go/felix/routetable"
+	. "github.com/projectcalico/felix/routetable"
 
 	"errors"
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/ip"
-	"github.com/projectcalico/felix/go/felix/set"
-	"github.com/projectcalico/felix/go/felix/testutils"
+	"github.com/projectcalico/felix/ip"
+	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/felix/testutils"
 	"github.com/vishvananda/netlink"
 	"net"
 	"syscall"
 
-	"github.com/projectcalico/felix/go/felix/ifacemonitor"
+	"github.com/projectcalico/felix/ifacemonitor"
 	"strings"
 )
 

@@ -15,9 +15,9 @@
 package rules
 
 import (
-	"github.com/projectcalico/felix/go/felix/hashutils"
-	. "github.com/projectcalico/felix/go/felix/iptables"
-	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/hashutils"
+	. "github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 )
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*Chain {

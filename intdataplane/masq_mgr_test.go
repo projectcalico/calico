@@ -18,11 +18,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/iptables"
-	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/rules"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/felix/set"
 )
 
 var _ = Describe("Masquerade manager", func() {

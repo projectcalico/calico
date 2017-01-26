@@ -15,7 +15,7 @@
 package rules
 
 import (
-	"github.com/projectcalico/felix/go/felix/iptables"
+	"github.com/projectcalico/felix/iptables"
 	"sort"
 )
 

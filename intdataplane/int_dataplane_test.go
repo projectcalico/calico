@@ -17,10 +17,10 @@ package intdataplane_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/config"
-	"github.com/projectcalico/felix/go/felix/intdataplane"
-	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/rules"
+	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/intdataplane"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/rules"
 	"net"
 )
 

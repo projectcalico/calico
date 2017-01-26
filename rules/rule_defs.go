@@ -16,9 +16,9 @@ package rules
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/iptables"
-	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 	"net"
 	"strings"
 )

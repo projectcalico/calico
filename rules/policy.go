@@ -17,9 +17,9 @@ package rules
 import (
 	"errors"
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/hashutils"
-	"github.com/projectcalico/felix/go/felix/iptables"
-	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/hashutils"
+	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
 	"strings"
 )
 

@@ -18,8 +18,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/set"
 )
 
 var _ = Describe("IP Sets manager", func() {

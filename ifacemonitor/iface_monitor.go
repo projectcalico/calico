@@ -16,7 +16,7 @@ package ifacemonitor
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/set"
 	"github.com/vishvananda/netlink"
 	"syscall"
 	"time"

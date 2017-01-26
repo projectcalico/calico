@@ -15,8 +15,8 @@
 package intdataplane
 
 import (
-	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/proto"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/proto"
 )
 
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets

@@ -16,8 +16,8 @@ package calc_test
 
 import (
 	"fmt"
-	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"reflect"

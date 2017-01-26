@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ package usagerep
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/buildinfo"
-	"github.com/projectcalico/felix/go/felix/calc"
+	"github.com/projectcalico/felix/buildinfo"
+	"github.com/projectcalico/felix/calc"
 	"net/url"
 	"time"
 )

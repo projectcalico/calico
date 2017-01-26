@@ -15,7 +15,7 @@
 package conntrack_test
 
 import (
-	. "github.com/projectcalico/felix/go/felix/conntrack"
+	. "github.com/projectcalico/felix/conntrack"
 
 	"errors"
 	. "github.com/onsi/ginkgo"

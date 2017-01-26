@@ -16,8 +16,8 @@ package intdataplane
 
 import (
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/go/felix/ipsets"
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/set"
 	"net"
 )
 

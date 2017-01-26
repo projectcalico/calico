@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/logutils"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"testing"
 )

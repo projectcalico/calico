@@ -15,8 +15,8 @@
 package routetable
 
 import (
-	"github.com/projectcalico/felix/go/felix/conntrack"
-	"github.com/projectcalico/felix/go/felix/ip"
+	"github.com/projectcalico/felix/conntrack"
+	"github.com/projectcalico/felix/ip"
 	. "github.com/vishvananda/netlink"
 	"net"
 	"os/exec"

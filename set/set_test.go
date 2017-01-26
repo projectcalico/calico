@@ -15,7 +15,7 @@
 package set_test
 
 import (
-	"github.com/projectcalico/felix/go/felix/set"
+	"github.com/projectcalico/felix/set"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

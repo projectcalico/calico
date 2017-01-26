@@ -16,9 +16,9 @@ package intdataplane
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/go/felix/iptables"
-	"github.com/projectcalico/felix/go/felix/proto"
-	"github.com/projectcalico/felix/go/felix/rules"
+	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/felix/rules"
 	"reflect"
 )
 

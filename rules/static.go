@@ -16,7 +16,7 @@ package rules
 
 import (
 	log "github.com/Sirupsen/logrus"
-	. "github.com/projectcalico/felix/go/felix/iptables"
+	. "github.com/projectcalico/felix/iptables"
 	"strings"
 )
 
