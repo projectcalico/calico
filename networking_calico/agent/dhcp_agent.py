@@ -22,7 +22,6 @@ import socket
 import sys
 
 import eventlet
-eventlet.monkey_patch()
 
 from neutron.agent.common import config
 from neutron.agent.dhcp.agent import DhcpAgent
