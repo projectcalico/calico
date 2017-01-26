@@ -102,14 +102,11 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 	touch $@
 
 .PHONY: fetch-cni-bins
-fetch-cni-bins:
+fetch-cni-bins: dist/flannel dist/loopback dist/host-local
+
+dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
-	mkdir -p tmp-cni
-	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz | tar -xz -C tmp-cni/
-	mv tmp-cni/flannel dist/flannel
-	mv tmp-cni/loopback dist/loopback
-	mv tmp-cni/host-local dist/host-local
-	rm -rf tmp-cni/
+	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/v0.4.0/cni-amd64-v0.4.0.tgz | tar -xz -C dist ./flannel ./loopback ./host-local
 
 # Run the tests in a container (as root). Useful for CI but currently slow for 
 # local development because the .go-pkg-cache can't be used (since tests run as root)
@@ -183,11 +180,6 @@ static-checks: vendor
 
 install:
 	CGO_ENABLED=0 go install github.com/projectcalico/cni-plugin
-
-# Retrieve a host-local plugin for use in the tests
-dist/host-local:
-	mkdir -p $(@D)
-	$(CURL) -L https://github.com/containernetworking/cni/releases/download/v0.2.2/cni-v0.2.2.tgz | tar -zxv -C dist
 
 # Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-python:
