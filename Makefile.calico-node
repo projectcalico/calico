@@ -204,6 +204,7 @@ workload.tar:
 stop-etcd:
 	@-docker rm -f calico-etcd calico-etcd-ssl
 
+.PHONY: run-etcd-ssl
 ## Run etcd in a container with SSL verification. Used primarily by STs.
 run-etcd-ssl: certs/.certificates.created add-ssl-hostname
 	$(MAKE) stop-etcd
@@ -313,3 +314,33 @@ run-etcd-host:
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
 	--listen-client-urls "http://0.0.0.0:2379"
+
+###############################################################################
+# calico_node UTs
+###############################################################################
+.PHONY: node-ut
+## Run the Unit Tests locally
+node-ut:
+	# Run tests in random order find tests recursively (-r).
+	ginkgo -cover -r --skipPackage vendor calico_node/*
+
+	@echo
+	@echo '+==============+'
+	@echo '| All coverage |'
+	@echo '+==============+'
+	@echo
+	@find ./calico_node/ -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
+
+	@echo
+	@echo '+==================+'
+	@echo '| Missing coverage |'
+	@echo '+==================+'
+	@echo
+	@find ./calico_node/ -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
+
+PHONY: node-test-containerized
+## Run the tests in a container. Useful for CI, Mac dev.
+node-test-containerized:
+	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-ut'

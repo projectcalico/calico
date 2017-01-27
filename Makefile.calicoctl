@@ -106,21 +106,21 @@ install:
 ## Run the Unit Tests locally
 ut: dist/calicoctl
 	# Run tests in random order find tests recursively (-r).
-	ginkgo -cover -r --skipPackage vendor
+	ginkgo -cover -r --skipPackage vendor calicoctl/*
 
 	@echo
 	@echo '+==============+'
 	@echo '| All coverage |'
 	@echo '+==============+'
 	@echo
-	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
+	@find ./calicoctl/ -iname '*.coverprofile' | xargs -I _ go tool cover -func=_
 
 	@echo
 	@echo '+==================+'
 	@echo '| Missing coverage |'
 	@echo '+==================+'
 	@echo
-	@find . -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
+	@find ./calicoctl/ -iname '*.coverprofile' | xargs -I _ go tool cover -func=_ | grep -v '100.0%'
 
 PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
