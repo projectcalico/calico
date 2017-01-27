@@ -28,3 +28,4 @@ release
 *.coverprofile
 vendor
 calicoctl_build_container.created
+nosetests.xml
