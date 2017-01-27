@@ -37,23 +37,52 @@ your contribution.
 
 ## How do I build Felix?
 
-Felix uses Docker for builds.  We develop on Ubuntu 16.04 but other
-Linux distributions should work (we have not tried OS X).  To build
-Felix, you will need to install:
+Felix mostly uses Docker for builds.  We develop on Ubuntu 16.04 but other
+Linux distributions should work (there are known Makefile that prevent building on OS X).  
+To build Felix, you will need:
 
+- A suitable linux box.
+- To check out the code into your GOPATH.
 - Docker >=1.12
 - GNU make.
 - Plenty of disk space (since the builds use some heavyweight
   full-OS containers in order to build debs and RPMs).
 
-Then, run `make felix-docker-image`, for example, to build the `calico/felix`
-container or `make help` for other options.
+Then, as a one-off, run
+```
+make update-tools
+```
+which will install a couple more go tools that we haven't yet containerised.
+ 
+Then, to build the calico-felix binary:
+```
+make bin/calico-felix
+```
+or, the `calico/felix` docker image:
+```
+make calico/felix
+```
 
 ## How can I run Felix's unit tests?
 
-After installing the prerequisites above, run `make ut` to run all the
-tests, `make go-ut` to run Go tests only or `make python-ut` to run
-Python tests.
+To run all the UTs:
+```
+make ut
+```
+
+To start a `ginkgo watch`, which will re-run the relevant UTs as you update files:
+```
+make ut-watch
+```
+
+To get coverage stats:
+```
+make cover-report
+```
+or 
+```
+make cover-browser
+```
 
 ## How can a subset of the go unit tests?
 
@@ -79,7 +108,8 @@ Ginkgo will re-run tests as files are modified and saved.
 
 ### Docker
 
-After building the docker image (see above), you can run Felix with, for example:
+After building the docker image (see above), you can run Felix and log to screen 
+with, for example:
 `docker run --privileged --net=host -e FELIX_LOGSEVERITYSCREEN=INFO calico/felix`
 
 ### Debs and RPMs
@@ -91,33 +121,3 @@ make deb
 make rpm
 ```
 The packages (and source packages) are output to the dist directory.
-
-### Stand-alone bundle
-
-The `make pyinstaller` target uses [PyInstaller](http://www.pyinstaller.org/)
-to package Felix as a stand-alone bundle containing a Python distribution along
-with Felix's Python dependencies.
-
-To create a bundle run `make pyinstaller`.
-
-The bundle will be output to `dist/calico-felix.tgz`.
-
-Running the bundle requires
-
-- libc version >=2.12
-- Linux kernel >=2.6.32 (note: to support containers running on the
-  host, kernel >=3.10 is required)
-- `iptables`, `ipset` and `conntrack` (typically from the `conntrack-tools`
-  package) to be available.
-
-**Note:** the bundle itself doesn't require Docker.
-
-To use the bundle,
-
-- install the pre-requisites above
-- unpack `calico-felix.tgz` on your target host (`/opt/calico-felix` would be
-  a good place) and create a start-up script (for example, a systemd unit file
-  or an upstart script) that runs the `calico-felix` binary found in the
-  unpacked directory.  Your start-up script should be set to restart Felix on
-  exit because Felix sometimes needs to restart to pick up configuration
-  changes.
