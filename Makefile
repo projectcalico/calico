@@ -1,8 +1,8 @@
-.PHONY: all binary calico/node test ut st st-ssl clean run-etcd run-etcd-ssl help
+.PHONY: all binary calico/node test clean help
 default: help
-all: test                                 ## Run all the tests
-test: st test-containerized               ## Run all the tests
-all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe test-containerized
+all: test                                               ## Run all the tests
+test: st test-containerized node-test-containerized     ## Run all the tests
+all: dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe test-containerized node-test-containerized
 
 # Include the build file for calico/node (This also pulls in Makefile.calicoctl)
 include Makefile.calico-node
@@ -16,6 +16,7 @@ semaphore: clean
 
 	# Run the containerized UTs first.
 	$(MAKE) test-containerized
+	$(MAKE) node-test-containerized
 
 	# Actually run the tests (refreshing the images as required), we only run a
 	# small subset of the tests for testing SSL support.  These tests are run
