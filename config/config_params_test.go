@@ -133,6 +133,9 @@ var _ = DescribeTable("Mark bit calculation tests",
 	Entry("0th bit in 0xf", "0xf", 0, uint32(0x1)),
 	Entry("1st bit in 0xf", "0xf", 1, uint32(0x2)),
 	Entry("7th bit in 0xff", "0xff", 7, uint32(0x80)),
+	Entry("4th bit in 0xf00f", "0xf00f", 4, uint32(0x1000)),
+	Entry("3rd bit in 0xf00f", "0xf00f", 3, uint32(0x0008)),
+	Entry("7th bit in 0xf00f", "0xf00f", 7, uint32(0x8000)),
 	Entry("0th bit of 0xff000000", "0xff000000", 0, uint32(0x01000000)),
 )
 
@@ -149,5 +152,6 @@ var _ = DescribeTable("Next mark bit calculation tests",
 	Entry("0th bit in 0xf", "0xf", 1, uint32(0x1)),
 	Entry("1st bit in 0xf", "0xf", 2, uint32(0x2)),
 	Entry("7th bit in 0xff", "0xff", 8, uint32(0x80)),
+	Entry("7th bit in 0xf00f", "0xf00f", 8, uint32(0x8000)),
 	Entry("0th bit of 0xff000000", "0xff000000", 1, uint32(0x01000000)),
 )
