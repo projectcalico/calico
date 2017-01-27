@@ -158,6 +158,8 @@ type Config struct {
 	sourceToRawConfig map[Source]map[string]string
 	rawValues         map[string]string
 	Err               error
+
+	numIptablesBitsAllocated int
 }
 
 // Load parses and merges the rawData from one particular source into this config object.
@@ -202,6 +204,12 @@ func (config *Config) OpenstackActive() bool {
 	}
 	log.Debug("No evidence this is an OpenStack deployment; diabling OpenStack special-cases")
 	return false
+}
+
+func (config *Config) NextIptablesMark() uint32 {
+	mark := config.NthIPTablesMark(config.numIptablesBitsAllocated)
+	config.numIptablesBitsAllocated++
+	return mark
 }
 
 func (config *Config) NthIPTablesMark(n int) uint32 {

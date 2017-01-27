@@ -177,9 +177,9 @@ configRetry:
 	var dpDriverCmd *exec.Cmd
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal dataplane driver.")
-		markAccept := configParams.NthIPTablesMark(0)
-		markNextTier := configParams.NthIPTablesMark(1)
-		markWorkload := configParams.NthIPTablesMark(2)
+		markAccept := configParams.NextIptablesMark()
+		markNextTier := configParams.NextIptablesMark()
+		markWorkload := configParams.NextIptablesMark()
 		log.WithFields(log.Fields{
 			"acceptMark":   markAccept,
 			"nextMark":     markNextTier,
