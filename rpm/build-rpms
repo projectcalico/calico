@@ -30,14 +30,17 @@ for f in ${repo}/rpm/*; do ln -sf $f; done
 # Tar up the Git source, with the naming that rpmbuild expects.
 dir=${pkg}-${version}
 unpacked_src_dir=/tmp/$dir
-mkdir -p $unpacked_src_dir
-cd /code/
-cp -r dist/calico-felix ${unpacked_src_dir}/pyi
+
+mkdir -p ${unpacked_src_dir}/bin
+cd "${repo}"
+cp bin/calico-felix ${unpacked_src_dir}/bin
+cp etc/calico-diags ${unpacked_src_dir}/bin
+cp etc/*.sh ${unpacked_src_dir}/bin
 cp -r etc \
-      python/* \
       LICENSE \
       README.md \
       ${unpacked_src_dir}
+
 cd /tmp
 tar -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
 

@@ -27,8 +27,8 @@ We will not accept changes that do not consistently pass our automated unit
 test suite. It is vital that our master branch be passing tests at all times:
 hence the restriction.
 
-The relevant tests are our unit tests: you can run them yourself by running the
-`run-unit-test.sh` script from the root of the repository.
+The relevant tests are our unit tests: you can run them yourself by running 
+`make ut` from the root of the repository.
 
 Assuming your code review is finished and tests are passing, your change will
 then be merged as soon as possible! Occasionally we will sit on a change, for

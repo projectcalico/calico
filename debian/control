@@ -2,15 +2,13 @@ Source: felix
 Section: net
 Priority: optional
 Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
-Build-Depends: debhelper (>= 8.0.0), dh-python, dh-systemd, python-all (>= 2.7), python-setuptools
-XS-Python-Version: >= 2.7
+Build-Depends: debhelper (>= 8.0.0), dh-systemd
 Standards-Version: 3.9.4
 
 Package: calico-common
 Architecture: all
 Depends:
- ${misc:Depends},
- ${shlibs:Depends}
+ ${misc:Depends}
 Description: Project Calico virtual networking for cloud data centers.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. Its IP-centric architecture offers numerous
@@ -30,8 +28,7 @@ Depends:
  ipset,
  iproute2,
  net-tools,
- ${misc:Depends},
- ${shlibs:Depends}
+ ${misc:Depends}
 Description: Project Calico virtual networking for cloud data centers.
  Project Calico is an open source solution for virtual networking in
  cloud data centers. Its IP-centric architecture offers numerous

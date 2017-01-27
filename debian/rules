@@ -6,7 +6,7 @@ export CALICODEPS = none
 #export DH_VERBOSE=1
 
 %:
-	dh $@  --with python2,systemd
+	dh $@  --with systemd
 
 override_dh_install:
 	install -d debian/tmp/usr/etc/calico
@@ -14,15 +14,7 @@ override_dh_install:
 	install -d debian/tmp/usr/share/calico/bird
 	install -m 644 etc/bird/*.template debian/tmp/usr/share/calico/bird
 	install -d debian/tmp/usr/bin
-	install -m 755 etc/*.sh debian/tmp/usr/bin
-	install -d debian/tmp/opt/calico-felix
-	cd pyi && find . -type d | xargs -I DIR install -d ../debian/tmp/opt/calico-felix/DIR
-	cd pyi && find . -type f | grep -v -E 'calico-iptables-plugin|calico-felix' | xargs -I FILE install -m 644 FILE ../debian/tmp/opt/calico-felix/FILE
-	install -m 755 pyi/calico-iptables-plugin debian/tmp/opt/calico-felix/calico-iptables-plugin
-	install -m 755 pyi/calico-felix debian/tmp/opt/calico-felix/calico-felix
-	cd pyi && find . -type l | xargs -I FILE install FILE ../debian/tmp/opt/calico-felix/FILE
-	cd debian/tmp/usr/bin && ln -s ../../opt/calico-felix/calico-felix ./calico-felix
-	cd debian/tmp/usr/bin && ln -fs ../../opt/calico-felix/calico-iptables-plugin ./calico-iptables-plugin
+	install -m 755 bin/* debian/tmp/usr/bin/
 	dh_install
 
 # strip fails on some of our binaries, disable it.

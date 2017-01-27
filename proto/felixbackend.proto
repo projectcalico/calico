@@ -1,0 +1,329 @@
+syntax = "proto3";
+package felix;
+option go_package = "proto";
+
+// Rationale for having explicit Remove messages rather than sending and update
+// with empty payload (which is the convention we used to use in Felix):
+// protobuf and golang use zero values to indicate missing data and that makes
+// it impossible to tell the difference between an empty list of IP set members
+// and a deletion, for example.
+
+message ToDataplane {
+  // Sequence number incremented with each message.  Useful for correlating
+  // messages in logs.
+  uint64 sequence_number = 15;
+  oneof payload {
+    // InSync is sent once a complete snapshot of the datastore has been
+    // processed.  The dataplane driver should use it as a signal to
+    // resynchronise the dataplane.
+    InSync in_sync = 1;
+
+    // IPSetUpdate is sent when an IP set becomes active.  It contains the
+    // complete membership of the IP set.
+    IPSetUpdate ipset_update = 2;
+    // IPSetDeltaUpdates are sent after the first IPSetUpdate; they contain
+    // a list of IPs that should be added and removed from the IP set.
+    IPSetDeltaUpdate ipset_delta_update = 3;
+    // IPSet remove is sent when an IP set is no longer needed.
+    IPSetRemove ipset_remove = 4;
+
+    // ActiveProfileUpdate is sent when a profile becomes active or is updated.
+    ActiveProfileUpdate active_profile_update = 5;
+    // ActiveProfileRemove is sent when a profile becomes inactive or is
+    // deleted.
+    ActiveProfileRemove active_profile_remove = 6;
+
+    // ActivePolicyUpdate is sent when a policy becomes active or is updated.
+    ActivePolicyUpdate active_policy_update = 7;
+    // ActivePolicyRemove is sent when a policy becomes inactive or is
+    // deleted.
+    ActivePolicyRemove active_policy_remove = 8;
+
+    // HostEndpointUpdate is sent when a local host endpoint is added or
+    // updated.
+    HostEndpointUpdate host_endpoint_update = 9;
+    // HostEndpointRemove is sent when a local host endpoint is removed.
+    HostEndpointRemove host_endpoint_remove = 10;
+
+    // WorkloadEndpointUpdate is sent when a local workload endpoint is added
+    // or updated.
+    WorkloadEndpointUpdate workload_endpoint_update = 11;
+    // WorkloadEndpointRemove is sent when a local workload endpoint is
+    // removed.
+    WorkloadEndpointRemove workload_endpoint_remove = 12;
+
+    // ConfigUpdate is sent at start of day or when the config changes.
+    ConfigUpdate config_update = 13;
+
+    // HostMetadataUpdate is sent when a host IP is added or updated.  I.e. the
+    // IP used for BGP peering/IPIP.
+    HostMetadataUpdate host_metadata_update = 14;
+    // HostIPRemove is sent when a host IP is removed.
+    HostMetadataRemove host_metadata_remove = 18;
+
+    // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
+    IPAMPoolUpdate ipam_pool_update = 16;
+    // IPAMPoolRemove is sent when an IPAM pool is removed.
+    IPAMPoolRemove ipam_pool_remove = 17;
+  }
+}
+
+message FromDataplane {
+  uint64 sequence_number = 8;
+  oneof payload {
+    // ProcessStatusUpdate is sent as a periodic heartbeat.
+    ProcessStatusUpdate process_status_update = 3;
+
+    // HostEndpointStatusUpdate is sent when the oper status of an endpoint
+    // changes.
+    HostEndpointStatusUpdate host_endpoint_status_update = 4;
+    // HostEndpointStatusRemove is sent when an endpoint is removed to clean
+    // up its oper status entry.
+    HostEndpointStatusRemove host_endpoint_status_remove = 5;
+
+    // WorkloadEndpointStatusUpdate is sent when the oper status of an endpoint
+    // changes.
+    WorkloadEndpointStatusUpdate workload_endpoint_status_update = 6;
+    // WorkloadEndpointStatusRemove is sent when an endpoint is removed to
+    // clean up its oper status entry.
+    WorkloadEndpointStatusRemove workload_endpoint_status_remove = 7;
+  }
+}
+
+message ConfigUpdate {
+  map<string, string> config = 1;
+}
+
+message InSync {
+}
+
+message IPSetUpdate {
+  string id = 1;
+  repeated string members = 2;
+}
+
+message IPSetDeltaUpdate {
+  string id = 1;
+  repeated string added_members = 2;
+  repeated string removed_members = 3;
+}
+
+message IPSetRemove {
+  string id = 1;
+}
+
+message ActiveProfileUpdate {
+  ProfileID id = 1;
+  Profile profile = 2;
+}
+
+message ActiveProfileRemove {
+  ProfileID id = 1;
+}
+
+message ProfileID {
+  string name = 1;
+}
+
+message Profile {
+  repeated Rule inbound_rules = 1;
+  repeated Rule outbound_rules = 2;
+}
+
+message ActivePolicyUpdate {
+  PolicyID id = 1;
+  Policy policy = 2;
+}
+
+message ActivePolicyRemove {
+  PolicyID id = 1;
+}
+
+message PolicyID {
+  string tier = 1;
+  string name = 2;
+}
+
+message Policy {
+  repeated Rule inbound_rules = 1;
+  repeated Rule outbound_rules = 2;
+  bool untracked = 3;
+}
+
+enum IPVersion {
+  ANY = 0;
+  IPV4 = 4;
+  IPV6 = 6;
+}
+
+message Rule {
+  string action = 1;
+  IPVersion ip_version = 2;
+
+  Protocol protocol = 3;
+
+  string src_net = 4;
+  repeated PortRange src_ports = 5;
+  string dst_net = 6;
+  repeated PortRange dst_ports = 7;
+  oneof icmp {
+    // Distinguish between a match on type only and type+code.  We can't use
+    // the fact that fields ar optional because Go can't distinguish 0 from
+    // "not-present".
+    int32 icmp_type = 8;
+    IcmpTypeAndCode icmp_type_code = 9;
+  }
+  repeated string src_ip_set_ids = 10;
+  repeated string dst_ip_set_ids = 11;
+
+  Protocol not_protocol = 102;
+
+  string not_src_net = 103;
+  repeated PortRange not_src_ports = 104;
+  string not_dst_net = 105;
+  repeated PortRange not_dst_ports = 106;
+  oneof not_icmp {
+    int32 not_icmp_type = 107;
+    IcmpTypeAndCode not_icmp_type_code = 108;
+  }
+  repeated string not_src_ip_set_ids = 109;
+  repeated string not_dst_ip_set_ids = 110;
+
+  string log_prefix = 200;
+  // An opaque ID/hash for the rule.
+  string rule_id = 201;
+}
+
+message IcmpTypeAndCode {
+  int32 type = 1;
+  int32 code = 2;
+}
+
+message Protocol {
+  oneof number_or_name {
+    int32 number = 1;
+    string name = 2;
+  }
+}
+
+// Individual ports are sent with first == last.
+message PortRange {
+  int32 first = 1;
+  int32 last = 2;
+}
+
+message WorkloadEndpointID {
+  // hostname not needed since this is implicitly a local endpoint?
+  reserved 1;
+  reserved "hostname";
+
+  string orchestrator_id = 2;
+  string workload_id = 3;
+  string endpoint_id = 4;
+}
+
+message WorkloadEndpointUpdate {
+  WorkloadEndpointID id = 1;
+  WorkloadEndpoint endpoint = 5;
+}
+
+message WorkloadEndpoint {
+  string state = 1;
+  string name = 2;
+  string mac = 3;
+  repeated string profile_ids = 4;
+  repeated string ipv4_nets = 5;
+  repeated string ipv6_nets = 6;
+  repeated TierInfo tiers = 7;
+  repeated NatInfo ipv4_nat = 8;
+  repeated NatInfo ipv6_nat = 9;
+}
+
+message WorkloadEndpointRemove {
+  WorkloadEndpointID id = 1;
+}
+
+message HostEndpointID {
+  // hostname not needed since this is implicitly a local endpoint?
+  reserved 1;
+  reserved "hostname";
+  string endpoint_id = 2;
+}
+
+message HostEndpointUpdate {
+  HostEndpointID id = 1;
+  HostEndpoint endpoint = 3;
+}
+
+message HostEndpoint {
+  string name = 1;
+  repeated string profile_ids = 2;
+  repeated TierInfo tiers = 3;
+  repeated TierInfo untracked_tiers = 6;
+  repeated string expected_ipv4_addrs = 4;
+  repeated string expected_ipv6_addrs = 5;
+}
+
+message HostEndpointRemove {
+  HostEndpointID id = 1;
+}
+
+message TierInfo {
+  string name = 1;
+  repeated string policies = 2;
+}
+
+message NatInfo {
+  string ext_ip = 1;
+  string int_ip = 2;
+}
+
+message ProcessStatusUpdate {
+  string iso_timestamp = 1;
+  double uptime = 2;
+}
+
+message HostEndpointStatusUpdate {
+  HostEndpointID id = 1;
+  EndpointStatus status = 2;
+}
+
+message EndpointStatus {
+  string status = 1;
+}
+
+message HostEndpointStatusRemove {
+  HostEndpointID id = 1;
+}
+
+message WorkloadEndpointStatusUpdate {
+  WorkloadEndpointID id = 1;
+  EndpointStatus status = 2;
+}
+message WorkloadEndpointStatusRemove {
+  WorkloadEndpointID id = 1;
+}
+
+message HostMetadataUpdate {
+  string hostname = 1;
+  string ipv4_addr = 2;
+}
+
+message HostMetadataRemove {
+  string hostname = 1;
+  string ipv4_addr = 2;
+}
+
+message IPAMPoolUpdate {
+  string id = 1;
+  IPAMPool pool = 2;
+}
+
+message IPAMPoolRemove {
+  string id = 1;
+}
+
+message IPAMPool {
+  string cidr = 1;
+  bool masquerade = 2;
+}

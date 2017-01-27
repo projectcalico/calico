@@ -80,25 +80,12 @@ fi
 
 
 %build
-%{__python} setup.py build
 
 
 %install
 rm -rf $RPM_BUILD_ROOT
-%{__python} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
-cd pyi
-find . -type d | xargs -I DIR install -d $RPM_BUILD_ROOT/opt/calico-felix/DIR
-find . -type f | \
-  grep -v -E 'calico-iptables-plugin|calico-felix' | \
-  xargs -I FILE install -m 644 FILE $RPM_BUILD_ROOT/opt/calico-felix/FILE
-install -m 755 calico-iptables-plugin $RPM_BUILD_ROOT/opt/calico-felix/calico-iptables-plugin
-install -m 755 calico-felix $RPM_BUILD_ROOT/opt/calico-felix/calico-felix
-find . -type l | xargs -I FILE install FILE $RPM_BUILD_ROOT/opt/calico-felix/FILE
-cd ..
-pushd $RPM_BUILD_ROOT/usr/bin
-ln -s ../../opt/calico-felix/calico-felix ./calico-felix
-ln -fs ../../opt/calico-felix/calico-iptables-plugin ./calico-iptables-plugin
-popd
+install -d $RPM_BUILD_ROOT/usr/bin/
+install -m 755 bin/* $RPM_BUILD_ROOT/usr/bin/
 
 # Setup directories
 install -d -m 755 %{buildroot}%{_datadir}/calico
@@ -138,7 +125,6 @@ rm -rf $RPM_BUILD_ROOT
 %files -n calico-common
 %defattr(-,root,root,-)
 /usr/bin/calico-diags
-/usr/bin/calico-cleanup
 /usr/bin/calico-gen-bird-conf.sh
 /usr/bin/calico-gen-bird6-conf.sh
 /usr/bin/calico-gen-bird-mesh-conf.sh
@@ -149,9 +135,6 @@ rm -rf $RPM_BUILD_ROOT
 %files -n calico-felix
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
-/usr/bin/calico-iptables-plugin
-/usr/bin/calico-dummydp-plugin
-/opt/calico-felix/*
 /etc/calico/felix.cfg.example
 %if 0%{?el7}
     %{_unitdir}/calico-felix.service
