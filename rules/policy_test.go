@@ -1,0 +1,622 @@
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rules_test
+
+import (
+	. "github.com/projectcalico/felix/rules"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/proto"
+)
+
+var ruleTestData = []TableEntry{
+	Entry("Empty rule", 4, proto.Rule{}, ""),
+
+	// Non-negated matches...
+
+	Entry("Protocol name", 4,
+		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}}},
+		"-p tcp"),
+	Entry("Protocol num", 4,
+		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
+		"-p 8"),
+
+	Entry("Source net", 4,
+		proto.Rule{SrcNet: "10.0.0.0/16"},
+		"--source 10.0.0.0/16"),
+	Entry("Source IP set", 4,
+		proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
+		"-m set --match-set cali4-ipsetid1 src"),
+	Entry("Source IP sets", 4,
+		proto.Rule{SrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		"-m set --match-set cali4-ipsetid1 src -m set --match-set cali4-ipsetid2 src"),
+	Entry("Source ports", 4,
+		proto.Rule{SrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		"-m multiport --source-ports 10:12"),
+	Entry("Source ports (multiple)", 4,
+		proto.Rule{SrcPorts: []*proto.PortRange{
+			{First: 10, Last: 12},
+			{First: 20, Last: 30},
+			{First: 8080, Last: 8080},
+		}},
+		"-m multiport --source-ports 10:12,20:30,8080"),
+	Entry("ICMP", 4,
+		proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
+		"-m icmp --icmp-type 10"),
+	Entry("ICMP with code", 4,
+		proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		"-m icmp --icmp-type 10/12"),
+	Entry("ICMP", 6,
+		proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
+		"-m icmp6 --icmpv6-type 10"),
+	Entry("ICMP with code", 6,
+		proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		"-m icmp6 --icmpv6-type 10/12"),
+
+	Entry("Dest net", 4,
+		proto.Rule{DstNet: "10.0.0.0/16"},
+		"--destination 10.0.0.0/16"),
+	Entry("Dest IP set", 4,
+		proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
+		"-m set --match-set cali4-ipsetid1 dst"),
+	Entry("Dest IP sets", 4,
+		proto.Rule{DstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		"-m set --match-set cali4-ipsetid1 dst -m set --match-set cali4-ipsetid2 dst"),
+	Entry("Dest ports", 4,
+		proto.Rule{DstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		"-m multiport --destination-ports 10:12"),
+	Entry("Dest ports (multiple)", 4,
+		proto.Rule{DstPorts: []*proto.PortRange{
+			{First: 10, Last: 12},
+			{First: 20, Last: 30},
+			{First: 8080, Last: 8080},
+		}},
+		"-m multiport --destination-ports 10:12,20:30,8080"),
+
+	// Negated matches...
+
+	Entry("Protocol name", 4,
+		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}}},
+		"! -p tcp"),
+	Entry("Protocol num", 4,
+		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
+		"! -p 8"),
+
+	Entry("Source net", 4,
+		proto.Rule{NotSrcNet: "10.0.0.0/16"},
+		"! --source 10.0.0.0/16"),
+	Entry("Source IP set", 4,
+		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
+		"-m set ! --match-set cali4-ipsetid1 src"),
+	Entry("Source IP set v6", 6,
+		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
+		"-m set ! --match-set cali6-ipsetid1 src"),
+	Entry("Source IP sets", 4,
+		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		"-m set ! --match-set cali4-ipsetid1 src -m set ! --match-set cali4-ipsetid2 src"),
+	Entry("Source ports", 4,
+		proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		"-m multiport ! --source-ports 10:12"),
+	Entry("Source ports (multiple)", 4,
+		proto.Rule{NotSrcPorts: []*proto.PortRange{
+			{First: 10, Last: 12},
+			{First: 20, Last: 30},
+			{First: 8080, Last: 8080},
+		}},
+		"-m multiport ! --source-ports 10:12,20:30,8080"),
+	Entry("Source ports (>15) should be broken into blocks", 4,
+		proto.Rule{NotSrcPorts: []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}},
+		"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --source-ports 15:16"),
+	Entry("ICMP", 4,
+		proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
+		"-m icmp ! --icmp-type 10"),
+	Entry("ICMP with code", 4,
+		proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		"-m icmp ! --icmp-type 10/12"),
+	Entry("ICMP", 6,
+		proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
+		"-m icmp6 ! --icmpv6-type 10"),
+	Entry("ICMP with code", 6,
+		proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		"-m icmp6 ! --icmpv6-type 10/12"),
+
+	Entry("Dest net", 4,
+		proto.Rule{NotDstNet: "10.0.0.0/16"},
+		"! --destination 10.0.0.0/16"),
+	Entry("Dest IP set", 4,
+		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
+		"-m set ! --match-set cali4-ipsetid1 dst"),
+	Entry("Dest IP set", 6,
+		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
+		"-m set ! --match-set cali6-ipsetid1 dst"),
+	Entry("Dest IP sets", 4,
+		proto.Rule{NotDstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		"-m set ! --match-set cali4-ipsetid1 dst -m set ! --match-set cali4-ipsetid2 dst"),
+	Entry("Dest ports", 4,
+		proto.Rule{NotDstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		"-m multiport ! --destination-ports 10:12"),
+	Entry("Dest ports (>15) should be broken into blocks", 4,
+		proto.Rule{NotDstPorts: []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}},
+		"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --destination-ports 15:16"),
+	Entry("Dest ports (multiple)", 4,
+		proto.Rule{NotDstPorts: []*proto.PortRange{
+			{First: 10, Last: 12},
+			{First: 20, Last: 30},
+			{First: 8080, Last: 8080},
+		}},
+		"-m multiport ! --destination-ports 10:12,20:30,8080"),
+}
+
+var _ = Describe("Protobuf rule to iptables rule conversion", func() {
+	var rrConfigNormal = Config{
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x8,
+		IptablesMarkNextTier: 0x10,
+	}
+
+	DescribeTable(
+		"Allow rules should be correctly rendered",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			// For allow, should be one match rule that sets the mark, then one that reads the
+			// mark and returns.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x8}))
+			Expect(rules[1]).To(Equal(iptables.Rule{
+				Match:  iptables.Match().MarkSet(0x8),
+				Action: iptables.ReturnAction{},
+			}))
+
+			// Explicit allow should be treated the same as empty.
+			in.Action = "allow"
+			rules2 := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"next-tier rules should be correctly rendered",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			in.Action = "next-tier"
+			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			// For next-tier, should be one match rule that sets the mark, then one
+			// that reads the mark and returns.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x10}))
+			Expect(rules[1]).To(Equal(iptables.Rule{
+				Match:  iptables.Match().MarkSet(0x10),
+				Action: iptables.ReturnAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Allow rules with log prefix should be correctly rendered",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			in.LogPrefix = "logme"
+			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			// For allow, should be one match rule that sets the mark, then one that reads the
+			// mark and returns.
+			Expect(len(rules)).To(Equal(3))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x8}))
+			Expect(rules[1]).To(Equal(iptables.Rule{
+				Match:  iptables.Match().MarkSet(0x8),
+				Action: iptables.LogAction{Prefix: "logme"},
+			}))
+			Expect(rules[2]).To(Equal(iptables.Rule{
+				Match:  iptables.Match().MarkSet(0x8),
+				Action: iptables.ReturnAction{},
+			}))
+
+			// Explicit allow should be treated the same as empty.
+			in.Action = "allow"
+			rules2 := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Log rules should be correctly rendered in normal mode.",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
+			// For deny, should be one match rule that just does the DROP.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			By("Rendering an explicit log prefix")
+			logRule.LogPrefix = "foobar"
+			rules = renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
+			// For deny, should be one match rule that just does the DROP.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should be correctly rendered in normal mode.",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			// For deny, should be one match rule that just does the DROP.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.DropAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should be correctly rendered in LOG-and-DROP mode",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			rrConfigLogAndDrop := rrConfigNormal
+			rrConfigLogAndDrop.ActionOnDrop = "LOG-and-DROP"
+			renderer := NewRenderer(rrConfigLogAndDrop)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			// For LOG-and-DROP, should get two rules with the same match criteria;
+			// first should log, second should drop.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-drop"}))
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.DropAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should be correctly rendered in LOG-and-ACCEPT mode",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			rrConfigLogAndAccept := rrConfigNormal
+			rrConfigLogAndAccept.ActionOnDrop = "LOG-and-ACCEPT"
+			renderer := NewRenderer(rrConfigLogAndAccept)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			// For LOG-and-DROP, should get two rules with the same match criteria;
+			// first should log, second should accept.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-drop"}))
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.AcceptAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should be correctly rendered in ACCEPT mode",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			rrConfigLogAndAccept := rrConfigNormal
+			rrConfigLogAndAccept.ActionOnDrop = "ACCEPT"
+			renderer := NewRenderer(rrConfigLogAndAccept)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			// For ACCEPT, should get a single accept rule.
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.AcceptAction{}))
+		},
+		ruleTestData...,
+	)
+
+	var renderer *DefaultRuleRenderer
+	BeforeEach(func() {
+		renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)
+	})
+
+	It("should skip rules of incorrect IP version", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed source CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "10.0.0.1"}}, 6)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed source CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "feed::beef"}}, 4)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed dest CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "10.0.0.1"}}, 6)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed dest CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "feed::beef"}}, 4)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed negated source CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "10.0.0.1"}}, 6)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed negated source CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "feed::beef"}}, 4)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed negated dest CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "10.0.0.1"}}, 6)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("should skip with mixed negated dest CIDR matches", func() {
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "feed::beef"}}, 4)
+		Expect(rules).To(BeEmpty())
+	})
+
+	It("Should correctly render the cross-product of the source/dest ports", func() {
+		srcPorts := []*proto.PortRange{
+			{First: 1, Last: 2},
+			{First: 3, Last: 4},
+			{First: 5, Last: 6},
+			{First: 7, Last: 8},
+			{First: 9, Last: 10},
+			{First: 11, Last: 12},
+			{First: 13, Last: 14},
+			{First: 15, Last: 16},
+		}
+		dstPorts := []*proto.PortRange{
+			{First: 101, Last: 102},
+			{First: 103, Last: 104},
+			{First: 105, Last: 106},
+			{First: 107, Last: 108},
+			{First: 109, Last: 1010},
+			{First: 1011, Last: 1012},
+			{First: 1013, Last: 1014},
+			{First: 1015, Last: 1016},
+		}
+		rule := proto.Rule{
+			Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}},
+			SrcPorts: srcPorts,
+			DstPorts: dstPorts,
+		}
+		renderer := NewRenderer(rrConfigNormal)
+		rules := renderer.ProtoRuleToIptablesRules(&rule, uint8(4))
+		Expect(rules).To(Equal([]iptables.Rule{
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[:7]).
+					DestPortRanges(dstPorts[:7]),
+				Action: iptables.SetMarkAction{Mark: 0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[:7]).
+					DestPortRanges(dstPorts[7:8]),
+				Action: iptables.SetMarkAction{Mark: 0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[7:8]).
+					DestPortRanges(dstPorts[:7]),
+				Action: iptables.SetMarkAction{Mark: 0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{
+				Match: iptables.Match().Protocol("tcp").
+					SourcePortRanges(srcPorts[7:8]).
+					DestPortRanges(dstPorts[7:8]),
+				Action: iptables.SetMarkAction{Mark: 0x8},
+			},
+			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+		}))
+	})
+})
+
+var _ = DescribeTable("Port split tests",
+	func(in []*proto.PortRange, expected [][]*proto.PortRange) {
+		Expect(SplitPortList(in)).To(Equal(expected))
+	},
+	Entry("nil input", ([]*proto.PortRange)(nil), [][]*proto.PortRange{{}}),
+	Entry("empty input", []*proto.PortRange{}, [][]*proto.PortRange{{}}),
+	Entry("single input", []*proto.PortRange{{First: 1, Last: 1}}, [][]*proto.PortRange{{{First: 1, Last: 1}}}),
+	Entry("range input", []*proto.PortRange{{First: 1, Last: 10}}, [][]*proto.PortRange{{{First: 1, Last: 10}}}),
+	Entry("exactly 15 single ports should give exactly one split", []*proto.PortRange{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}}),
+	Entry("exactly 16 single ports should give exactly tow splits", []*proto.PortRange{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+		{First: 16, Last: 16},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 1},
+		{First: 2, Last: 2},
+		{First: 3, Last: 3},
+		{First: 4, Last: 4},
+		{First: 5, Last: 5},
+		{First: 6, Last: 6},
+		{First: 7, Last: 7},
+		{First: 8, Last: 8},
+		{First: 9, Last: 9},
+		{First: 10, Last: 10},
+		{First: 11, Last: 11},
+		{First: 12, Last: 12},
+		{First: 13, Last: 13},
+		{First: 14, Last: 14},
+		{First: 15, Last: 15},
+	}, {
+		{First: 16, Last: 16},
+	}}),
+	Entry("port ranges should count for 2 single ports", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 15},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 15},
+	}}),
+	Entry("port range straggling 15-16 should be put in second group", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+	}, {
+		{First: 15, Last: 16},
+	}}),
+	Entry("further splits should be made in correct place", []*proto.PortRange{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+		{First: 15, Last: 16},
+		{First: 21, Last: 22},
+		{First: 23, Last: 24},
+		{First: 23, Last: 26},
+		{First: 27, Last: 28},
+		{First: 29, Last: 210},
+		{First: 211, Last: 212},
+		{First: 213, Last: 214},
+		{First: 215, Last: 216},
+	}, [][]*proto.PortRange{{
+		{First: 1, Last: 2},
+		{First: 3, Last: 4},
+		{First: 5, Last: 6},
+		{First: 7, Last: 8},
+		{First: 9, Last: 10},
+		{First: 11, Last: 12},
+		{First: 13, Last: 14},
+	}, {
+		{First: 15, Last: 16},
+		{First: 21, Last: 22},
+		{First: 23, Last: 24},
+		{First: 23, Last: 26},
+		{First: 27, Last: 28},
+		{First: 29, Last: 210},
+		{First: 211, Last: 212},
+	}, {
+		{First: 213, Last: 214},
+		{First: 215, Last: 216},
+	}}),
+)
