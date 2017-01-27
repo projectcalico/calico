@@ -147,5 +147,5 @@ toc:
     path: /getting-started/bare-metal/bare-metal
   - title: Installation
     section:
-    - title: Alternative Felix Install with PyInstaller Bundle
-      path: /getting-started/bare-metal/pyi-bare-metal-install
+    - title: Installing Felix as a static binary
+      path: /getting-started/bare-metal/bare-metal-install
