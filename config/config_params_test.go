@@ -127,12 +127,27 @@ var _ = DescribeTable("Config parsing",
 var _ = DescribeTable("Mark bit calculation tests",
 	func(mask string, bitNum int, expected uint32) {
 		config := New()
-		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask},
-			EnvironmentVariable)
+		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask}, EnvironmentVariable)
 		Expect(config.NthIPTablesMark(bitNum)).To(Equal(expected))
 	},
 	Entry("0th bit in 0xf", "0xf", 0, uint32(0x1)),
 	Entry("1st bit in 0xf", "0xf", 1, uint32(0x2)),
 	Entry("7th bit in 0xff", "0xff", 7, uint32(0x80)),
 	Entry("0th bit of 0xff000000", "0xff000000", 0, uint32(0x01000000)),
+)
+
+var _ = DescribeTable("Next mark bit calculation tests",
+	func(mask string, numCalls int, expected uint32) {
+		config := New()
+		config.UpdateFrom(map[string]string{"IptablesMarkMask": mask}, EnvironmentVariable)
+		var mark uint32
+		for i := 0; i < numCalls; i++ {
+			mark = config.NextIptablesMark()
+		}
+		Expect(mark).To(Equal(expected))
+	},
+	Entry("0th bit in 0xf", "0xf", 1, uint32(0x1)),
+	Entry("1st bit in 0xf", "0xf", 2, uint32(0x2)),
+	Entry("7th bit in 0xff", "0xff", 8, uint32(0x80)),
+	Entry("0th bit of 0xff000000", "0xff000000", 1, uint32(0x01000000)),
 )
