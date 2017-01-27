@@ -354,7 +354,6 @@ endif
 ifeq ($(GIT_COMMIT),<unknown>)
 	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
 endif
-	git rev-parse HEAD
 	utils/tag-release.sh $(VERSION)
 	# Now decouple onto another make invocation, as we want some variables
 	# (GIT_DESCRIPTION and BUNDLE_FILENAME) to be recalculated based on the
