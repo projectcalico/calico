@@ -37,11 +37,35 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(podName).To(Equal("podName"))
 	})
 
-	It("should parse policy names", func() {
-		name := "Namespace.policyName"
-		ns, polName := c.parsePolicyName(name)
+	It("should parse valid policy names", func() {
+		// Parse a NetworkPolicy backed Policy.
+		name := "np.projectcalico.org/Namespace.policyName"
+		ns, polName, err := c.parsePolicyNameNetworkPolicy(name)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(ns).To(Equal("Namespace"))
 		Expect(polName).To(Equal("policyName"))
+
+		// Parse a Namespace backed Policy.
+		name = "ns.projectcalico.org/Namespace"
+		ns, err = c.parsePolicyNameNamespace(name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ns).To(Equal("Namespace"))
+
+	})
+
+	It("should not parse invalid policy names", func() {
+		name := "something.projectcalico.org/Namespace.Name"
+
+		// As a NetworkPolicy.
+		ns, polName, err := c.parsePolicyNameNetworkPolicy(name)
+		Expect(err).To(HaveOccurred())
+		Expect(ns).To(Equal(""))
+		Expect(polName).To(Equal(""))
+
+		// As a Namespace.
+		ns, err = c.parsePolicyNameNamespace(name)
+		Expect(err).To(HaveOccurred())
+		Expect(ns).To(Equal(""))
 	})
 
 	It("should parse profile names", func() {
@@ -206,7 +230,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -234,7 +258,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -259,7 +283,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -292,7 +316,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -329,7 +353,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("default.testPolicy"))
+		Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
@@ -347,10 +371,14 @@ var _ = Describe("Test Namespace conversion", func() {
 	// Use a single instance of the converter for these tests.
 	c := converter{}
 
-	It("should parse a Namespace to a Profile with allow rules", func() {
+	It("should parse a Namespace to a Profile", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: k8sapi.ObjectMeta{
-				Name:        "default",
+				Name: "default",
+				Labels: map[string]string{
+					"foo":   "bar",
+					"roger": "rabbit",
+				},
 				Annotations: map[string]string{},
 			},
 			Spec: k8sapi.NamespaceSpec{},
@@ -359,16 +387,47 @@ var _ = Describe("Test Namespace conversion", func() {
 		p, err := c.namespaceToProfile(&ns)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Ensure rules are correct.
+		// Ensure rules are correct for profile.
 		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
 		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
-		Expect(inboundRules[0].Action).To(Equal("allow"))
-		Expect(outboundRules[0].Action).To(Equal("allow"))
+		Expect(len(inboundRules)).To(Equal(0))
+		Expect(len(outboundRules)).To(Equal(0))
+
+		// Check labels.
+		labels := p.Value.(*model.Profile).Labels
+		Expect(labels["k8s_ns/label/foo"]).To(Equal("bar"))
+		Expect(labels["k8s_ns/label/roger"]).To(Equal("rabbit"))
 	})
 
-	It("should parse a Namespace to a Profile with deny rules", func() {
+	It("should parse a Namespace to a Policy", func() {
+		ns := k8sapi.Namespace{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name: "default",
+				Labels: map[string]string{
+					"foo":   "bar",
+					"roger": "rabbit",
+				},
+				Annotations: map[string]string{},
+			},
+			Spec: k8sapi.NamespaceSpec{},
+		}
+
+		// Ensure it generates the correct Policy.
+		kvp, err := c.namespaceToPolicy(&ns)
+		Expect(err).NotTo(HaveOccurred())
+		key := kvp.Key.(model.PolicyKey)
+		policy := kvp.Value.(*model.Policy)
+		Expect(key.Name).To(Equal("ns.projectcalico.org/default"))
+		Expect(policy.Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(policy.InboundRules)).To(Equal(1))
+		Expect(len(policy.OutboundRules)).To(Equal(1))
+
+		allow := model.Rule{Action: "allow"}
+		Expect(policy.InboundRules[0]).To(Equal(allow))
+		Expect(policy.OutboundRules[0]).To(Equal(allow))
+	})
+
+	It("should parse a Namespace to a Profile with no labels", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name: "default",
@@ -385,13 +444,43 @@ var _ = Describe("Test Namespace conversion", func() {
 		// Ensure rules are correct.
 		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
 		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
-		Expect(inboundRules[0].Action).To(Equal("deny"))
-		Expect(outboundRules[0].Action).To(Equal("allow"))
+		Expect(len(inboundRules)).To(Equal(0))
+		Expect(len(outboundRules)).To(Equal(0))
+
+		// Check labels.
+		labels := p.Value.(*model.Profile).Labels
+		Expect(len(labels)).To(Equal(0))
 	})
 
-	It("should fail for invalid annotation", func() {
+	It("should parse a Namespace to Policy (DefaultDeny)", func() {
+		ns := k8sapi.Namespace{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name: "default",
+				Annotations: map[string]string{
+					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
+				},
+			},
+			Spec: k8sapi.NamespaceSpec{},
+		}
+
+		// Ensure it generates the correct Policy.
+		kvp, err := c.namespaceToPolicy(&ns)
+		Expect(err).NotTo(HaveOccurred())
+		key := kvp.Key.(model.PolicyKey)
+		policy := kvp.Value.(*model.Policy)
+		Expect(key.Name).To(Equal("ns.projectcalico.org/default"))
+		Expect(policy.Selector).To(Equal("calico/k8s_ns == 'default'"))
+		Expect(len(policy.InboundRules)).To(Equal(1))
+		Expect(len(policy.OutboundRules)).To(Equal(1))
+
+		allow := model.Rule{Action: "allow"}
+		deny := model.Rule{Action: "deny"}
+		Expect(policy.InboundRules[0]).To(Equal(deny))
+		Expect(policy.OutboundRules[0]).To(Equal(allow))
+
+	})
+
+	It("should not fail for malformed annotation", func() {
 		ns := k8sapi.Namespace{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name: "default",
@@ -402,8 +491,16 @@ var _ = Describe("Test Namespace conversion", func() {
 			Spec: k8sapi.NamespaceSpec{},
 		}
 
-		_, err := c.namespaceToProfile(&ns)
-		Expect(err).To(HaveOccurred())
+		By("converting to a Profile", func() {
+			_, err := c.namespaceToProfile(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("converting to a Policy", func() {
+			_, err := c.namespaceToPolicy(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 	})
 
 	It("should handle a valid but not DefaultDeny annotation", func() {
@@ -417,15 +514,21 @@ var _ = Describe("Test Namespace conversion", func() {
 			Spec: k8sapi.NamespaceSpec{},
 		}
 
-		p, err := c.namespaceToProfile(&ns)
-		Expect(err).NotTo(HaveOccurred())
+		By("converting to a Profile", func() {
+			p, err := c.namespaceToProfile(&ns)
+			Expect(err).NotTo(HaveOccurred())
 
-		// Ensure rules are correct.
-		inboundRules := p.Value.(*model.Profile).Rules.InboundRules
-		outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
-		Expect(len(inboundRules)).To(Equal(1))
-		Expect(len(outboundRules)).To(Equal(1))
-		Expect(inboundRules[0].Action).To(Equal("allow"))
-		Expect(outboundRules[0].Action).To(Equal("allow"))
+			// Ensure rules are correct.
+			inboundRules := p.Value.(*model.Profile).Rules.InboundRules
+			outboundRules := p.Value.(*model.Profile).Rules.OutboundRules
+			Expect(len(inboundRules)).To(Equal(0))
+			Expect(len(outboundRules)).To(Equal(0))
+		})
+
+		By("converting to a Policy", func() {
+			_, err := c.namespaceToPolicy(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 	})
 })
