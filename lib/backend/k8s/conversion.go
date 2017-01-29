@@ -32,6 +32,7 @@ import (
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	"k8s.io/client-go/pkg/util/intstr"
 )
 
 var (
@@ -322,10 +323,26 @@ func (c converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 
 	// Built up a list of the sources and a list of the destinations.
 	for _, f := range r.From {
-		peers = append(peers, &f)
+		// We need to add a copy of the peer so all the rules don't
+		// point to the same location.
+		peers = append(peers, &extensions.NetworkPolicyPeer{
+			NamespaceSelector: f.NamespaceSelector,
+			PodSelector:       f.PodSelector,
+		})
 	}
 	for _, p := range r.Ports {
-		ports = append(ports, &p)
+		// We need to add a copy of the port so all the rules don't
+		// point to the same location.
+		port := extensions.NetworkPolicyPort{}
+		if p.Port != nil {
+			portval := intstr.FromString(p.Port.String())
+			port.Port = &portval
+		}
+		if p.Protocol != nil {
+			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
+			port.Protocol = &protval
+		}
+		ports = append(ports, &port)
 	}
 
 	// If there no peers, or no ports, represent that as nil.
@@ -337,6 +354,8 @@ func (c converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 	}
 
 	// Combine desintations with sources to generate rules.
+	// TODO: This currently creates a lot of rules by making every combination of from / ports
+	// into a rule.  We can combine these so that we don't need as many rules!
 	for _, port := range ports {
 		for _, peer := range peers {
 			// Build rule and append to list.
