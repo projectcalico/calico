@@ -7,7 +7,7 @@
 #                                                                           |
 #                                                    +-------+              v
 #                                                    | Felix |   +---------------------+
-#                                                    |  Go   |   | calico-build/golang |
+#                                                    |  Go   |   | calico/go-build     |
 #                                                    |  code |   +---------------------+
 #                                                    +-------+         /
 #                                                           \         /
@@ -104,17 +104,6 @@ MY_GID:=$(shell id -g)
 # (optional) Local path to the repository with 'libcalico-go' code
 LIBCALICOGO_PATH?=none
 
-# Build a docker image used for building our go code into a binary.
-.PHONY: calico-build/golang
-calico-build/golang:
-	@echo "Checking freshness of calico-build/golang container image."
-	cd docker-build-images && \
-	  docker build \
-	  --build-arg=UID=$(MY_UID) \
-	  --build-arg=GID=$(MY_GID) \
-	  -f golang-build.Dockerfile \
-	  -t calico-build/golang .
-
 # Build a docker image used for building debs for trusty.
 .PHONY: calico-build/trusty
 calico-build/trusty:
@@ -148,6 +137,24 @@ calico/felix: bin/calico-felix
 # around afterwards.
 DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v $${PWD}:/code
 DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
+
+DOCKER_GO_BUILD_PFX := mkdir -p .go-pkg-cache && \
+                       docker run --rm \
+                                  --net=host \
+                                  -e LOCAL_USER_ID=$(MY_UID) \
+                                  -v $${PWD}:/code \
+                                  -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+                                  -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
+                                  -w /go/src/github.com/projectcalico/felix
+DOCKER_GO_BUILD := $(DOCKER_GO_BUILD_PFX) calico/go-build
+
+# Allow libcalico-go and the ssh auth sock to be mapped into the build container.
+ifdef LIBCALICOGO_PATH
+  EXTRA_GLIDE_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
+endif
+ifdef SSH_AUTH_SOCK
+  EXTRA_GLIDE_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
+endif
 
 # Build all the debs.
 .PHONY: deb
@@ -184,29 +191,13 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # want to use the vendor target to install the versions from glide.lock.
 .PHONY: update-vendor
 update-vendor:
-	glide up --strip-vendor
+	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) calico/go-build glide up --strip-vendor
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
-	# Make sure the docker image exists.  Since it's a PHONY, we can't add it
-	# as a dependency or this job will run every time.  Docker does its own
-	# freshness checking for us.
-	$(MAKE) calico-build/golang
 	mkdir -p $$HOME/.glide
-	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-	  EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
-	fi; \
-	if [ -n "$$SSH_AUTH_SOCK" ]; then \
-          SSH_AGENT_FORWARD="-v $$SSH_AUTH_SOCK:/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent"; \
-	fi; \
-	$(DOCKER_RUN_RM) \
-	    --net=host \
-	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $$HOME/.glide:/.glide:rw $$EXTRA_DOCKER_BIND $$SSH_AGENT_FORWARD \
-	    -w /go/src/github.com/projectcalico/felix/ \
-	    calico-build/golang \
-	    glide install --strip-vendor
+	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) calico/go-build glide install --strip-vendor
 	touch vendor/.up-to-date
 
 # Linker flags for building Felix.
@@ -222,22 +213,12 @@ LDFLAGS:=-ldflags "\
         -X github.com/projectcalico/felix/buildinfo.GitRevision=$(GIT_COMMIT) \
         -B 0x$(BUILD_ID)"
 
-bin/calico-felix: $(GO_FILES) \
-                  vendor/.up-to-date \
-                  docker-build-images/golang-build.Dockerfile
-	# Make sure the docker image exists.  Since it's a PHONY, we can't add it
-	# as a dependency or this job will run every time.  Docker does its own
-	# freshness checking for us.
-	$(MAKE) calico-build/golang
-	mkdir -p bin
-	mkdir -p .go-pkg-cache
+bin/calico-felix: $(GO_FILES) vendor/.up-to-date
 	@echo Building felix...
-	$(DOCKER_RUN_RM) \
-	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
-	    calico-build/golang \
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
-               ( ldd bin/calico-felix | grep -q "not a dynamic executable" || \
+               ( ldd bin/calico-felix 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
 dist/calico-felix/calico-felix: bin/calico-felix
@@ -249,52 +230,34 @@ dist/calico-felix/calico-felix: bin/calico-felix
 update-tools:
 	go get -u github.com/Masterminds/glide
 	go get -u github.com/onsi/ginkgo/ginkgo
-	go get -u github.com/wadey/gocovmerge
 
 # Run go fmt on all our go files.
 .PHONY: go-fmt
 go-fmt:
-	$(MAKE) calico-build/golang
-	$(DOCKER_RUN_RM) -w /code/ calico-build/golang sh -c 'glide nv | xargs go fmt'
+	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs go fmt'
+
+licensecheck/dependency-licenses.txt: vendor/.up-to-date
+	$(DOCKER_GO_BUILD) sh -c 'licenses . > licensecheck/dependency-licenses.txt'
 
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
-	$(MAKE) calico-build/golang
-	mkdir -p .go-pkg-cache
-	$(DOCKER_RUN_RM) \
-	    --net=host \
-	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
-	    -w /go/src/github.com/projectcalico/felix \
-	    calico-build/golang \
-	    ./utils/run-coverage
+	$(DOCKER_GO_BUILD) ./utils/run-coverage
+
+.PHONY: check-licenses
+check-licenses: licensecheck/dependency-licenses.txt
+	@echo Checking dependency licenses
+	$(DOCKER_GO_BUILD) ginkgo licensecheck
 
 .PHONY: ut-no-cover
-ut-no-cover: vendor/.up-to-date $(GO_FILES)
+ut-no-cover: vendor/.up-to-date $(GO_FILES) licensecheck/dependency-licenses.txt
 	@echo Running Go UTs without coverage.
-	$(MAKE) calico-build/golang
-	mkdir -p .go-pkg-cache
-	$(DOCKER_RUN_RM) \
-	    --net=host \
-	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
-	    -w /go/src/github.com/projectcalico/felix \
-	    calico-build/golang \
-	    ginkgo -r
+	$(DOCKER_GO_BUILD) ginkgo -r
 
 .PHONY: ut-watch
-ut-watch: vendor/.up-to-date $(GO_FILES)
+ut-watch: vendor/.up-to-date $(GO_FILES) licensecheck/dependency-licenses.txt
 	@echo Watching go UTs for changes...
-	$(MAKE) calico-build/golang
-	mkdir -p .go-pkg-cache
-	$(DOCKER_RUN_RM) \
-	    --net=host \
-	    -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-	    -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
-	    -w /go/src/github.com/projectcalico/felix \
-	    calico-build/golang \
-	    ginkgo watch -r
+	$(DOCKER_GO_BUILD) ginkgo watch -r
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
@@ -308,23 +271,23 @@ cover-report: combined.coverprofile
 	@echo
 	@echo ======== All coverage =========
 	@echo
-	@go tool cover -func combined.coverprofile | \
-	  sed 's=github.com/projectcalico/felix/==' | \
-	  column -t
+	@$(DOCKER_GO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
+	                           sed 's=github.com/projectcalico/felix/==' | \
+	                           column -t'
 	@echo
 	@echo ======== Missing coverage only =========
 	@echo
-	@go tool cover -func combined.coverprofile | \
-	  sed 's=github.com/projectcalico/felix/==' | \
-	  column -t | \
-	  grep -v '100\.0%'
+	@$(DOCKER_GO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
+	                           sed 's=github.com/projectcalico/felix/==' | \
+	                           column -t | \
+	                           grep -v '100\.0%'"
 
 bin/calico-felix.transfer-url: bin/calico-felix
-	curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@
+	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
 
 .PHONY: patch-script
 patch-script: bin/calico-felix.transfer-url
-	utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)
+	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 # Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot
@@ -340,7 +303,9 @@ clean:
 	       go/docs/calc.pdf \
 	       .glide \
 	       vendor \
-	       .go-pkg-cache
+	       .go-pkg-cache \
+	       licensecheck/dependency-licenses.txt \
+	       release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
@@ -354,7 +319,20 @@ endif
 ifeq ($(GIT_COMMIT),<unknown>)
 	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
 endif
-	utils/tag-release.sh $(VERSION)
+	$(DOCKER_GO_BUILD) utils/tag-release.sh $(VERSION)
+
+.PHONY: continue-release
+continue-release:
+	@echo "Edited release notes are:"
+	@echo
+	@cat ./release-notes-$(VERSION)
+	@echo
+	@echo "Hit Return to go ahead and create the tag, or Ctrl-C to cancel."
+	@bash -c read
+	# Create annotated release tag.
+	git tag $(VERSION) -F ./release-notes-$(VERSION)
+	rm ./release-notes-$(VERSION)
+
 	# Now decouple onto another make invocation, as we want some variables
 	# (GIT_DESCRIPTION and BUNDLE_FILENAME) to be recalculated based on the
 	# new tag.

@@ -1,5 +1,5 @@
 hash: 25692a7bdbf477b39121f60bb05e29729897ea0b2aa339ba46a75b6d8b956050
-updated: 2017-01-31T15:40:01.353149226Z
+updated: 2017-01-31T15:45:35.159850797Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 017ea3df50e9b379d5ba3bff647cce6dd8c01a0d
+  version: 7d6280fa8253c327ed6acdeb8942fff2e3031f62
   subpackages:
   - client
   - pkg/fileutil
@@ -21,6 +21,7 @@ imports:
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
+  - version
 - name: github.com/coreos/go-oidc
   version: 5644a2f50e2d2d5ba0b474bc5bc55fea1925936d
   subpackages:
@@ -29,6 +30,10 @@ imports:
   - key
   - oauth2
   - oidc
+- name: github.com/coreos/go-semver
+  version: 568e959cd89871e61434c1143528d9162da89ef2
+  subpackages:
+  - semver
 - name: github.com/coreos/go-systemd
   version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
   subpackages:
@@ -78,7 +83,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -94,7 +99,7 @@ imports:
 - name: github.com/kardianos/osext
   version: c2c54e542fb797ad986b31721e1baedf214ca413
 - name: github.com/kelseyhightower/envconfig
-  version: 4069f29f08928c54bcb1fdf632b31b1bb54b4fdb
+  version: a2b45697040a8149fbf8792e012b5823da91550a
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -108,7 +113,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: a23f924ce96d61f963fb6219b8ff069d8d768cc2
+  version: bb93381d543b0e5725244abe752214a110791d01
   subpackages:
   - config
   - extensions/table
@@ -179,7 +184,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: fcdb11ccb4389efb1b210b7ffb623ab71c5fdd60
+  version: 1878d9fbb537119d24b21ca07effd591627cd160
 - name: github.com/PuerkitoBio/purell
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
@@ -209,13 +214,14 @@ imports:
   - blowfish
   - ssh/terminal
 - name: golang.org/x/net
-  version: 6acef71eb69611914f7a30939ea9f6e194c78172
+  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
   subpackages:
   - context
   - context/ctxhttp
   - http2
   - http2/hpack
   - idna
+  - lex/httplex
 - name: golang.org/x/oauth2
   version: 3c3a985cb79f52a3190fbc056984415ca6763d01
   subpackages:
