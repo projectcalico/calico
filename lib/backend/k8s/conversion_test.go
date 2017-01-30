@@ -19,6 +19,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
+
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
@@ -265,6 +267,145 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
 		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(0))
 		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+	})
+
+	It("should parse a NetworkPolicy with multiple peers", func() {
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{},
+						},
+						From: []extensions.NetworkPolicyPeer{
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		var pol *model.KVPair
+		var err error
+		By("parsing the policy", func() {
+			pol, err = c.networkPolicyToPolicy(&np)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
+			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		})
+
+		By("having the correct endpoint selector", func() {
+			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		})
+
+		By("having the correct peer selectors", func() {
+			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(2))
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+		})
+	})
+
+	It("should parse a NetworkPolicy with multiple peers and ports", func() {
+		tcp := k8sapi.ProtocolTCP
+		udp := k8sapi.ProtocolUDP
+		eighty := intstr.FromInt(80)
+		ninety := intstr.FromInt(90)
+
+		np := extensions.NetworkPolicy{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "testPolicy",
+				Namespace: "default",
+			},
+			Spec: extensions.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{"label": "value"},
+				},
+				Ingress: []extensions.NetworkPolicyIngressRule{
+					extensions.NetworkPolicyIngressRule{
+						Ports: []extensions.NetworkPolicyPort{
+							extensions.NetworkPolicyPort{
+								Port:     &ninety,
+								Protocol: &udp,
+							},
+							extensions.NetworkPolicyPort{
+								Port:     &eighty,
+								Protocol: &tcp,
+							},
+						},
+						From: []extensions.NetworkPolicyPeer{
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+							extensions.NetworkPolicyPeer{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		var pol *model.KVPair
+		var err error
+		By("parsing the policy", func() {
+			pol, err = c.networkPolicyToPolicy(&np)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pol.Key.(model.PolicyKey).Name).To(Equal("np.projectcalico.org/default.testPolicy"))
+			Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
+		})
+
+		By("having the correct endpoint selector", func() {
+			Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		})
+
+		By("having the correct peer selectors", func() {
+			eighty, _ := numorstring.PortFromString("80")
+			ninety, _ := numorstring.PortFromString("90")
+			Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(4))
+			Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[0].DstPorts).To(Equal([]numorstring.Port{ninety}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[1].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[1].DstPorts).To(Equal([]numorstring.Port{ninety}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[2].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[2].DstPorts).To(Equal([]numorstring.Port{eighty}))
+
+			Expect(pol.Value.(*model.Policy).InboundRules[3].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k2 == 'v2'"))
+			Expect(pol.Value.(*model.Policy).InboundRules[3].DstPorts).To(Equal([]numorstring.Port{eighty}))
+
+		})
 	})
 
 	It("should parse a NetworkPolicy with empty podSelector", func() {
