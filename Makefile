@@ -79,6 +79,8 @@ help:
 all: deb rpm calico/felix
 test: ut
 
+GO_BUILD_CONTAINER?=calico/go-build:v0.1
+
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
 GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
@@ -146,7 +148,7 @@ DOCKER_GO_BUILD_PFX := mkdir -p .go-pkg-cache && \
                                   -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
                                   -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
                                   -w /go/src/github.com/projectcalico/felix
-DOCKER_GO_BUILD := $(DOCKER_GO_BUILD_PFX) calico/go-build
+DOCKER_GO_BUILD := $(DOCKER_GO_BUILD_PFX) $(GO_BUILD_CONTAINER)
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
@@ -191,13 +193,13 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # want to use the vendor target to install the versions from glide.lock.
 .PHONY: update-vendor
 update-vendor:
-	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) calico/go-build glide up --strip-vendor
+	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) $(GO_BUILD_CONTAINER) glide up --strip-vendor
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
 	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) calico/go-build glide install --strip-vendor
+	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) $(GO_BUILD_CONTAINER) glide install --strip-vendor
 	touch vendor/.up-to-date
 
 # Linker flags for building Felix.
