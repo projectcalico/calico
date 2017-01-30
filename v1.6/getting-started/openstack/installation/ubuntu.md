@@ -40,9 +40,9 @@ following table.
 
 | OpenStack release     | Calico version | Ubuntu versions | PPAs             |
 |-----------------------+----------------+-----------------+------------------|
-| Mitaka                |            1.4 | Xenial, Trusty  | calico-1.4       |
-| Liberty               |            1.4 | Xenial, Trusty  | calico-1.4       |
-| Kilo                  |            1.4 | Trusty          | calico-1.4, kilo |
+| Mitaka                |            1.4 | Xenial, Trusty  | calico-1.6       |
+| Liberty               |            1.4 | Xenial, Trusty  | calico-1.6       |
+| Kilo                  |            1.4 | Trusty          | calico-1.6, kilo |
 | (deprecated) Kilo     |            1.3 | Trusty          | kilo             |
 | (deprecated) Juno     |            1.3 | Trusty          | juno             |
 | (deprecated) Icehouse |            1.3 | Trusty          | icehouse         |
@@ -51,7 +51,7 @@ For your chosen combination, you need to configure APT to use the corresponding
 PPA(s).  For example, for Calico 1.4 with Liberty or later:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/calico-1.4
+    $ sudo apt-add-repository ppa:project-calico/calico-1.6
 ```
 
 Before OpenStack Liberty, Calico needed patched versions of Nova and Neutron.
