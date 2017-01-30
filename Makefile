@@ -235,7 +235,7 @@ go-fmt:
 	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs go fmt'
 
 .PHONY: ut
-ut combined.coverprofile: vendor/.up-to-date $(GO_FILES)
+ut combined.coverprofile: vendor/.up-to-date $(GO_FILES) licensecheck/dependency-licenses.txt
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
 
