@@ -1,13 +1,11 @@
 ---
-title: Alternative Felix Install with PyInstaller Bundle
+title: Installing Felix as a static binary
 ---
 
 These instructions will take you through a first-time install of
-Calico's per-host daemon, Felix, using the packaged PyInstaller bundle.
-In contrast to the `.rpm` and `.deb` installations, the bundle has
-minimal dependencies on distribution-provided packages. This allows it
-to be installed on systems where the packaged version of Python would be
-too old or where some of its Python dependencies are not available.
+Calico's per-host daemon, Felix, starting with the calico-felix binary.
+These instructions apply to Calico v2.1.0 and above.  Older versions
+ were packaged differently.
 
 > **NOTE**
 >
@@ -18,13 +16,9 @@ too old or where some of its Python dependencies are not available.
 > covered here.
 >
 
-However, since the bundle doesn't take part in the distribution's
-package management, the dependencies that it does have must be installed
-manually.
-
 ## Prerequisites
 
-The bundle has the following pre-requisites:
+Felix has the following pre-requisites:
 
 -   For IPv4 support, Linux kernel v2.6.32 is required. We have tested
     against v2.6.32-573+. Note: if you intend to run containers, Docker
@@ -32,7 +26,6 @@ The bundle has the following pre-requisites:
     `uname -a`.
 -   For IPv6 support, Linux kernel 3.10+ is required (due to the lack of
     reverse path filtering for IPv6 in older versions).
--   glibc >=v2.13 (we build against Debian Wheezy)
 -   [conntrack-tools](http://conntrack-tools.netfilter.org/); in
     particular, the `conntrack` command must be available. We test
     against >=v1.4.1. To check the version, run `conntrack --version`.
@@ -55,19 +48,16 @@ The bundle has the following pre-requisites:
 > its version.
 >
 
-## Unpack the bundle
+## Download and install the binary
 
-Once you have a system with the prerequisites above, the next step is to
-unpack the bundle, which is distributed as a `.tgz`. We recommend
-installing the bundle to `/opt/`:
+The calico-felix binary is distributed via the 
+[Github releases page](https://github.com/projectcalico/felix/releases).
+Download the calico-felix attachment to your system, then make it executable
+and move it to a location on your path, for example:
 
-    cd <directory containing downloaded bundle>
-    # Then, as root:
-    tar -xzf calico-felix.tgz -C /opt/
-
-After unpacking the bundle, you should have a directory
-`/opt/calico-felix`, containing a binary
-`/opt/calico-felix/calico-felix`.
+    curl -o calico-felix <URL of binary>
+    chmod +x calico-felix
+    sudo cp calico-felix /usr/local/bin
 
 ## Create a start-up script
 
@@ -85,7 +75,7 @@ file:
     [Service]
     User=root
     ExecStartPre=/usr/bin/mkdir -p /var/run/calico
-    ExecStart=/opt/calico-felix/calico-felix
+    ExecStart=/usr/local/bin/calico-felix
     KillMode=process
     Restart=on-failure
     LimitNOFILE=32000
@@ -113,7 +103,7 @@ Or, for upstart:
       chown root:root /var/run/calico
     end script
 
-    exec /opt/calico-felix/calico-felix
+    exec /usr/local/bin/calico-felix
 
 ## Configure Felix
 

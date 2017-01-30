@@ -19,9 +19,9 @@ underlying network fabric.
 
 Calico distinguishes workload endpoints from host endpoints by a
 configurable prefix controlled by the `InterfacePrefix` configuration
-value, (see: [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration)). Interfaces that start with the value of
-`InterfacePrefix` are assumed to be workload interfaces. Others are
-treated as host interfaces.
+value, (see: [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration)). 
+Interfaces that start with a value listed in `InterfacePrefix` are assumed to be 
+workload interfaces. Others are treated as host interfaces.
 
 Calico blocks all traffic to/from workload interfaces by default;
 allowing traffic only if the interface is known and policy is in place.
@@ -107,7 +107,8 @@ There are several ways to install Felix.
         yum install calico-felix
 
 -   if you are running another distribution, follow the instructions in
-    [this document](pyi-bare-metal-install) to use our installer bundle.
+    [this document](bare-metal-install) to use the calico-felix binary 
+    directly.
 
 -   if you want to run under docker, you can use `calicoctl node run` to start
     the calico/node container image.  This container packages up the core Calico
