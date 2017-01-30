@@ -44,16 +44,17 @@ func (c cb) OnUpdates(updates []api.Update) {
 	for _, u := range updates {
 		switch u.UpdateType {
 		case api.UpdateTypeKVNew:
-			// Value should not be nil.
-			Expect(u.Value).NotTo(BeNil())
+			// Sometimes the value is nil (e.g ProfileTags)
+			log.Infof("[TEST] Syncer received new: %+v", u)
 		case api.UpdateTypeKVUpdated:
-			// Value should not be nil.
-			Expect(u.Value).NotTo(BeNil())
+			// Sometimes the value is nil (e.g ProfileTags)
+			log.Infof("[TEST] Syncer received updated: %+v", u)
 		case api.UpdateTypeKVDeleted:
-			// Ensure the value is nil.
+			// Ensure the value is nil for deletes.
+			log.Infof("[TEST] Syncer received deleted: %+v", u)
 			Expect(u.Value).To(BeNil())
 		case api.UpdateTypeKVUnknown:
-			panic(fmt.Sprintf("Received unkown update: %+v", u))
+			panic(fmt.Sprintf("[TEST] Syncer received unkown update: %+v", u))
 		}
 	}
 }
@@ -113,9 +114,16 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		_, err = c.List(model.ProfileListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		_, err = c.List(model.PolicyListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
 		// Perform a Get and ensure no error in the Calico API.
 		_, err = c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
 		Expect(err).NotTo(HaveOccurred())
+
+		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+		Expect(err).NotTo(HaveOccurred())
+
 	})
 
 	It("should handle a Namespace without DefaultDeny", func() {
@@ -139,12 +147,26 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a List and ensure it shows up in the Calico API.
-		_, err = c.List(model.ProfileListOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		By("listing Profiles", func() {
+			_, err = c.List(model.ProfileListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("listing Policies", func() {
+			_, err = c.List(model.PolicyListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
 		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
-		Expect(err).NotTo(HaveOccurred())
+		By("getting a Profile", func() {
+			_, err = c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("getting a Policy", func() {
+			_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	It("should handle a basic NetworkPolicy", func() {
@@ -200,7 +222,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("default.%s", np.ObjectMeta.Name)})
+		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("np.projectcalico.org/default.%s", np.ObjectMeta.Name)})
 		Expect(err).NotTo(HaveOccurred())
 	})
 

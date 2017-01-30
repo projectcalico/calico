@@ -352,10 +352,17 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 			tags.Revision = profile.Revision
 			labels.Revision = profile.Revision
 
-			snap = append(snap, *rules, *tags, *labels)
+			// Also create a Policy for this Namespace.
+			policy, err := syn.kc.converter.namespaceToPolicy(&ns)
+			if err != nil {
+				log.Panicf("%s", err)
+			}
+
+			snap = append(snap, *rules, *tags, *labels, *policy)
 			keys[rules.Key.String()] = true
 			keys[tags.Key.String()] = true
 			keys[labels.Key.String()] = true
+			keys[policy.Key.String()] = true
 		}
 
 		// Get NetworkPolicies (Policies)
@@ -467,15 +474,22 @@ func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
 	tags.Revision = profile.Revision
 	labels.Revision = profile.Revision
 
+	// Convert the Namespace into a policy KVPair.
+	policy, err := syn.kc.converter.namespaceToPolicy(ns)
+	if err != nil {
+		log.Panicf("%s", err)
+	}
+
 	// For deletes, we need to nil out the Value part of the KVPair.
 	if e.Type == watch.Deleted {
 		rules.Value = nil
 		tags.Value = nil
 		labels.Value = nil
+		policy.Value = nil
 	}
 
 	// Return the updates.
-	return []model.KVPair{*rules, *tags, *labels}
+	return []model.KVPair{*rules, *tags, *labels, *policy}
 }
 
 // parsePodEvent returns a KVPair for the given event.  If the event isn't

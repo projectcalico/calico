@@ -543,6 +543,19 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 		ret = append(ret, kvp)
 	}
 
+	// List all Namespaces and turn them into Policies as well.
+	namespaces, err := c.clientSet.Namespaces().List(kapiv1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, ns := range namespaces.Items {
+		kvp, err := c.converter.namespaceToPolicy(&ns)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, kvp)
+	}
+
 	return ret, nil
 }
 
@@ -551,20 +564,44 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 	if k.Name == "" {
 		return nil, goerrors.New("Missing policy name")
 	}
-	namespace, policyName := c.converter.parsePolicyName(k.Name)
 
-	networkPolicy := extensions.NetworkPolicy{}
-	err := c.clientSet.Extensions().RESTClient().
-		Get().
-		Resource("networkpolicies").
-		Namespace(namespace).
-		Name(policyName).
-		Timeout(10 * time.Second).
-		Do().Into(&networkPolicy)
-	if err != nil {
-		return nil, resources.K8sErrorToCalico(err, k)
+	// Check to see if this is backed by a NetworkPolicy or a Namespace.
+	if strings.HasPrefix(k.Name, "np.projectcalico.org/") {
+		// Backed by a NetworkPolicy. Parse out the namespace / name.
+		namespace, policyName, err := c.converter.parsePolicyNameNetworkPolicy(k.Name)
+		if err != nil {
+			return nil, errors.ErrorResourceDoesNotExist{Err: err, Identifier: k}
+		}
+
+		// Get the NetworkPolicy from the API and convert it.
+		networkPolicy := extensions.NetworkPolicy{}
+		err = c.clientSet.Extensions().RESTClient().
+			Get().
+			Resource("networkpolicies").
+			Namespace(namespace).
+			Name(policyName).
+			Timeout(10 * time.Second).
+			Do().Into(&networkPolicy)
+		if err != nil {
+			return nil, resources.K8sErrorToCalico(err, k)
+		}
+		return c.converter.networkPolicyToPolicy(&networkPolicy)
+	} else if strings.HasPrefix(k.Name, "ns.projectcalico.org/") {
+		// This is backed by a Namespace.
+		namespace, err := c.converter.parsePolicyNameNamespace(k.Name)
+		if err != nil {
+			return nil, errors.ErrorResourceDoesNotExist{Err: err, Identifier: k}
+		}
+
+		ns, err := c.clientSet.Namespaces().Get(namespace, metav1.GetOptions{})
+		if err != nil {
+			return nil, resources.K8sErrorToCalico(err, k)
+		}
+		return c.converter.namespaceToPolicy(ns)
+	} else {
+		// Received a Get() for a Policy that doesn't exist.
+		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
 	}
-	return c.converter.networkPolicyToPolicy(&networkPolicy)
 }
 
 func (c *KubeClient) getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error) {
@@ -681,7 +718,10 @@ func (c *KubeClient) deleteGlobalConfig(k *model.KVPair) error {
 }
 
 func (c *KubeClient) getHostConfig(k model.HostConfigKey) (*model.KVPair, error) {
-	return nil, goerrors.New("Get for HostConfig not supported in kubernetes backend")
+	return &model.KVPair{
+		Key:   k,
+		Value: nil,
+	}, nil
 }
 
 func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVPair, error) {
