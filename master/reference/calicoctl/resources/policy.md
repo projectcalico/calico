@@ -56,8 +56,11 @@ spec:
 
 The `doNotTrack` field is meaningful for [host
 endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
-only.  Connection tracking is always used for flows to and from [workload
-endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint).
+only.  It does not apply at all to [workload
+endpoints]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint);
+connection tracking is always used for flows to and from those.
+
+[Untracked policy]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/bare-metal) explains more about how `doNotTrack` can be useful for host endpoints.
 
 #### Rule
 

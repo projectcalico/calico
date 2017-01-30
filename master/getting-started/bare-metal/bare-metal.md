@@ -408,5 +408,5 @@ important that the policy's ingress and egress rules are specified
 symmetrically.  For example, for a server on port 999, the policy must include
 an ingress rule allowing access *to* port 999 and an egress rule allowing
 outbound traffic *from* port 999.  (Whereas for a connection tracked policy, it
-is usually enough to specify the ingress rule only, and then connection track
-will automatically allow the return path.)
+is usually enough to specify the ingress rule only, and then connection
+tracking will automatically allow the return path.)
