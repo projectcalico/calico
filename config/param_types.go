@@ -210,8 +210,12 @@ type PortListParam struct {
 }
 
 func (p *PortListParam) Parse(raw string) (interface{}, error) {
-	result := []uint16{}
+	var result []uint16
 	for _, portStr := range strings.Split(raw, ",") {
+		portStr = strings.Trim(portStr, " ")
+		if portStr == "" {
+			continue
+		}
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
 			err = p.parseFailed(raw, "ports should be integers")

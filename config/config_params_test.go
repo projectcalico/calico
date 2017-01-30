@@ -122,6 +122,10 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("FailsafeInboundHostPorts", "FailsafeInboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
 	Entry("FailsafeOutboundHostPorts", "FailsafeOutboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
+	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "none", []uint16(nil)),
+	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "none", []uint16(nil)),
+	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "", []uint16(nil)),
+	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "", []uint16(nil)),
 )
 
 var _ = DescribeTable("Mark bit calculation tests",
