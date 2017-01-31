@@ -40,23 +40,23 @@
 //	         ======= Dataplane ==========
 //
 //
-// Data-model Overview
+// Data model Overview
 //
-// The data-model used on the dataplane driver API uses similar concepts to
-// the main "datastore" data-model (such as host/workload endpoints, policies
+// The data model used on the dataplane driver API uses similar concepts to
+// the main "datastore" data model (such as host/workload endpoints, policies
 // and profiles).  However, the calculation engine does some pre-calculation
 // that simplifies the job of the dataplane driver:
 //
-// Rules in the datastore data-model can contain selectors, such as
+// Rules in the datastore data model can contain selectors, such as
 // "role == webserver", that refer to dynamic groups of endpoints.  The calculation
-// engine pre-renders those selectors (and the older tag mechanism) to sets of
-// IP addresses.  Only the sets of IPs are sent over the API so the dataplane
-// driver doesn't need to render selectors itself, it only needs a way to
-// represent a set of IP addresses on which to match.
+// engine computes sets of IP addresses from those selectors.  Only the sets of
+// IPs are sent over the API so the dataplane driver doesn't need to compute
+// selectors itself, it only needs a way to program a set of IP addresses into
+// the dataplane.
 //
-// Policies in the datastore data-model need to be filtered and sorted. The
+// Policies in the datastore data model need to be filtered and sorted. The
 // calculation engine takes care of that too.  When it sends an endpoint to the
-// datastore driver, it adds the complete list of policies to apply to the
+// datastore driver, it adds the complete list of policies that apply to the
 // endpoint (in the correct order).  If the correct list changes, it sends an
 // update for the endpoint.
 //
