@@ -1,4 +1,4 @@
-package: github.com/projectcalico/felix/go
+package: github.com/projectcalico/felix
 homepage: https://projectcalico.org
 license: Apache-2.0
 owners:
@@ -21,7 +21,7 @@ import:
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: 22c85122096fbad054af1f24c399c090d6427319
+  version: v1.0.2
   subpackages:
   - lib
 - package: github.com/Sirupsen/logrus
