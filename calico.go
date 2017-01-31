@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 
@@ -284,6 +285,30 @@ func cmdDel(args *skel.CmdArgs) error {
 	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
 	logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+
+	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
+	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
+
+		// Use a dummy CIDR from IETF example IP range.
+		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
+		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
+		dummyPodCidr := "192.0.2.0/24"
+		var stdinData map[string]interface{}
+
+		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+			return err
+		}
+
+		logger.WithField("podCidr", dummyPodCidr).Info("Using a dummy podCidr to release the IP")
+		stdinData["ipam"].(map[string]interface{})["subnet"] = dummyPodCidr
+
+		args.StdinData, err = json.Marshal(stdinData)
+		if err != nil {
+			return err
+		}
+		logger.WithField("stdin", args.StdinData).Debug("Updated stdin data for Delete Cmd")
+	}
+
 	ipamErr := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
 
 	if ipamErr != nil {
