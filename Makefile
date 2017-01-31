@@ -103,9 +103,6 @@ GO_FILES:=$(shell find . -type f -name '*.go') $(GENERATED_GO_FILES)
 MY_UID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
-# (optional) Local path to the repository with 'libcalico-go' code
-LIBCALICOGO_PATH?=none
-
 # Build a docker image used for building debs for trusty.
 .PHONY: calico-build/trusty
 calico-build/trusty:
@@ -140,23 +137,22 @@ calico/felix: bin/calico-felix
 DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v $${PWD}:/code
 DOCKER_RUN_RM_ROOT:=docker run --rm -v $${PWD}:/code
 
-DOCKER_GO_BUILD_PFX := mkdir -p .go-pkg-cache && \
-                       docker run --rm \
-                                  --net=host \
-                                  -e LOCAL_USER_ID=$(MY_UID) \
-                                  -v $${PWD}:/code \
-                                  -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
-                                  -v $${PWD}/.go-pkg-cache:/go/pkg/:rw \
-                                  -w /go/src/github.com/projectcalico/felix
-DOCKER_GO_BUILD := $(DOCKER_GO_BUILD_PFX) $(GO_BUILD_CONTAINER)
-
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
-  EXTRA_GLIDE_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
+  EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
 endif
 ifdef SSH_AUTH_SOCK
-  EXTRA_GLIDE_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
+  EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
 endif
+DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
+                   docker run --rm \
+                              --net=host \
+                              $(EXTRA_DOCKER_ARGS) \
+                              -e LOCAL_USER_ID=$(MY_UID) \
+                              -v $${PWD}:/go/src/github.com/projectcalico/felix:rw \
+                              -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
+                              -w /go/src/github.com/projectcalico/felix \
+                              $(GO_BUILD_CONTAINER)
 
 # Build all the debs.
 .PHONY: deb
@@ -193,13 +189,13 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # want to use the vendor target to install the versions from glide.lock.
 .PHONY: update-vendor
 update-vendor:
-	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) $(GO_BUILD_CONTAINER) glide up --strip-vendor
+	$(DOCKER_GO_BUILD) glide up --strip-vendor
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
 	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD_PFX) $(EXTRA_GLIDE_DOCKER_ARGS) $(GO_BUILD_CONTAINER) glide install --strip-vendor
+	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
 # Linker flags for building Felix.
