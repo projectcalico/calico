@@ -356,6 +356,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		t.SetRuleInsertions("POSTROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
 		}})
+		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainNATOutput},
+		}})
 	}
 
 	// Retry any failed operations every 10s.
