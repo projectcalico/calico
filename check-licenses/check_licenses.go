@@ -12,31 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package licensecheck_test
+package main
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	log "github.com/Sirupsen/logrus"
 	"os"
-	"testing"
 
 	"bufio"
+	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/felix/set"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"regexp"
 	"strings"
 )
-
-func init() {
-	testutils.HookLogrusForGinkgo()
-}
-
-func TestLicensecheck(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dependency license checks")
-}
 
 var (
 	whitelistedLicenses = set.From(
@@ -98,59 +85,70 @@ var (
 	}
 )
 
-var _ = Describe("License check", func() {
-	It("should only use white-listed licenses", func() {
-		wd, _ := os.Getwd()
-		log.WithField("PWD", wd).Info("Current directory")
-		file, err := os.Open("dependency-licenses.txt") // For read access.
-		if err != nil {
-			log.WithError(err).Panic("Failed to open licenses file")
+func main() {
+	logutils.ConfigureEarlyLogging()
+
+	wd, _ := os.Getwd()
+	log.WithField("PWD", wd).Info("Current directory")
+	file, err := os.Open("check-licenses/dependency-licenses.txt") // For read access.
+	if err != nil {
+		log.WithError(err).Panic("Failed to open licenses file")
+	}
+	scanner := bufio.NewScanner(file)
+	lineRE := regexp.MustCompile(`^(\S+)\s+(\S.*)$`)
+	badPackages := []pkgInfo{}
+lineLoop:
+	for scanner.Scan() {
+		line := scanner.Text()
+		logCxt := log.WithField("line", line)
+		submatches := lineRE.FindStringSubmatch(line)
+		if len(submatches) != 3 {
+			logCxt.Panic("Expected line to match regex")
 		}
-		scanner := bufio.NewScanner(file)
-		lineRE := regexp.MustCompile(`^(\S+)\s+(\S.*)$`)
-		badPackages := []pkgInfo{}
-	lineLoop:
-		for scanner.Scan() {
-			line := scanner.Text()
-			submatches := lineRE.FindStringSubmatch(line)
-			Expect(len(submatches)).To(Equal(3))
-			pkgName := submatches[1]
-			license := submatches[2]
-			logCxt := log.WithFields(log.Fields{
-				"pkgName": pkgName,
-				"license": license,
-			})
-			logCxt.Debug("Found package")
-			pkgInfo := pkgInfo{
-				pkgName: pkgName,
-				license: license,
-			}
-			if strings.HasPrefix(pkgName, "github.com/projectcalico/felix/vendor/github.com/projectcalico/") ||
-				(strings.HasPrefix(pkgName, "github.com/projectcalico/") &&
-					!strings.Contains(pkgName, "vendor")) {
-				logCxt.Info("One of our packages")
-				continue
-			}
-			if whitelistedLicenses.Contains(license) {
-				logCxt.Info("License is whitelisted")
-				continue
-			}
-			if whitelistedPkgs.Contains(pkgInfo) {
-				logCxt.Info("Package is whitelisted")
-				continue
-			}
-			for _, prefix := range whitelistedPrefixes {
-				if strings.HasPrefix(pkgName, prefix) {
-					logCxt.WithField("prefix", prefix).Info("Package prefix is whitelisted")
-					continue lineLoop
-				}
-			}
-			logCxt.Error("License not whitelisted")
-			badPackages = append(badPackages, pkgInfo)
+		pkgName := submatches[1]
+		license := submatches[2]
+		logCxt = logCxt.WithFields(log.Fields{
+			"pkgName": pkgName,
+			"license": license,
+		})
+		logCxt.Debug("Found package")
+		pkgInfo := pkgInfo{
+			pkgName: pkgName,
+			license: license,
 		}
-		Expect(badPackages).To(BeEmpty(), "Unable to verify dependency licenses")
-	})
-})
+		if strings.HasPrefix(pkgName, "github.com/projectcalico/felix/vendor/github.com/projectcalico/") ||
+			(strings.HasPrefix(pkgName, "github.com/projectcalico/") &&
+				!strings.Contains(pkgName, "vendor")) {
+			logCxt.Info("One of our packages")
+			continue
+		}
+		if whitelistedLicenses.Contains(license) {
+			logCxt.Info("License is whitelisted")
+			continue
+		}
+		if whitelistedPkgs.Contains(pkgInfo) {
+			logCxt.Info("Package is whitelisted")
+			continue
+		}
+		for _, prefix := range whitelistedPrefixes {
+			if strings.HasPrefix(pkgName, prefix) {
+				logCxt.WithField("prefix", prefix).Info("Package prefix is whitelisted")
+				continue lineLoop
+			}
+		}
+		logCxt.Error("License not whitelisted")
+		badPackages = append(badPackages, pkgInfo)
+	}
+
+	if len(badPackages) > 0 {
+		log.Error("Found bad licenses")
+		for _, pkg := range badPackages {
+			log.Errorf("\n\nNon-white-listed license:\n  Package: %v\n  License: %v\n", pkg.pkgName, pkg.license)
+		}
+		log.Info("")
+		os.Exit(1)
+	}
+}
 
 type pkgInfo struct {
 	pkgName string
