@@ -14,8 +14,8 @@ scriptdir=$(dirname $(realpath $0))
 . ${scriptdir}/lib.sh
 
 # Validate the specified new version.
-validate_version $nextrel || {
-    echo "Version $nextrel is not valid."
+validate_version ${nextrel} || {
+    echo "Version ${nextrel} is not valid."
     echo "See 'validate_version' in ${scriptdir}/lib.sh for guidance."
     exit 1
 }
@@ -26,44 +26,24 @@ cd `git_repo_root`
 # Generate raw material for release notes as the list of changes - from Git
 # commit messages - since the last release.
 last_tag=`git_last_tag`
-release_notes=`mktemp -t felix-release-notes.XXXXXXXXXX`
-echo "Felix version $nextrel" > $release_notes
-echo >> $release_notes
+release_notes=./release-notes-${nextrel}
+echo "Felix version ${nextrel}" > ${release_notes}
+echo >> ${release_notes}
 
-git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' >> $release_notes
+git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' >> ${release_notes}
 
-# Open the release notes file in $EDITOR and ask the user to edit it into a
-# more appropriate form.
+# Ask user to edit the relase note to their liking.
 cat <<EOF
 
 Changes (i.e. Git commit messages) since the last release ($last_tag) have been
-written into $release_notes.
+written into ${release_notes}.  These will become the tag release note.
 
-Hit Return for that file to be popped up.  (Assuming that \$EDITOR is usefully
-set on your machine.  If not, hit Return and then open the file yourself.)
-Then review and edit that (as necessary) so as to provide a good set of release
-notes for our partners and customers, saying what is new or changed in this
-release.
+Please examine that file and edit as appropriate.
 
-EOF
-read
+Once you have edited the file to your liking, run
 
-$EDITOR $release_notes
+  make continue-release VERSION=${nextrel}
 
-cat <<EOF
-
-Edited release notes are:
+to create the tag and finish off the release.
 
 EOF
-cat $release_notes
-
-cat <<EOF
-
-Hit Return to confirm that these are good to release.  (Otherwise edit the file
-some more until they are good, and then hit Return.)
-
-EOF
-read
-
-# Create annotated release tag.
-git tag $nextrel -F $release_notes

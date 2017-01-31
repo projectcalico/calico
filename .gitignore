@@ -11,6 +11,7 @@
 *.pb.go
 /.noseids
 /nosetests.xml
+/release-notes-*
 
 # Build directories.
 /bin/
