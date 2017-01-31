@@ -67,7 +67,12 @@ $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 
 ## Build calicoctl
 binary: $(CALICOCTL_FILES) vendor
-	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v -i -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
+	# Don't try to "install" the intermediate build files (.a .o) when not on linux
+	# since there are no write permissions for them in our linux build container.
+	if [ "$(OS)" == "linux" ]; then \
+		INSTALL_FLAG=" -i "; \
+	fi; \
+	GOOS=$(OS) GOARCH=$(ARCH) CGO_ENABLED=0 go build -v $$INSTALL_FLAG -o dist/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 dist/calicoctl: $(CALICOCTL_FILES) vendor
 	$(MAKE) dist/calicoctl-linux-amd64 
