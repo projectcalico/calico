@@ -289,10 +289,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
 	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 
-		// Use a dummy CIDR from IETF example IP range.
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
 		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		dummyPodCidr := "192.0.2.0/24"
+		dummyPodCidr := "0.0.0.0/0"
 		var stdinData map[string]interface{}
 
 		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
