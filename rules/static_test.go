@@ -258,6 +258,14 @@ var _ = Describe("Static", func() {
 				},
 			}))
 		})
+		It("IPv4: Should return expected NAT output chain", func() {
+			Expect(findChain(rr.StaticNATTableChains(4), "cali-OUTPUT")).To(Equal(&Chain{
+				Name: "cali-OUTPUT",
+				Rules: []Rule{
+					{Action: JumpAction{Target: "cali-fip-dnat"}},
+				},
+			}))
+		})
 		It("IPv4: Should return only the expected nat chains", func() {
 			Expect(len(rr.StaticNATTableChains(4))).To(Equal(3))
 		})
