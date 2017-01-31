@@ -234,26 +234,18 @@ update-tools:
 go-fmt:
 	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs go fmt'
 
-licensecheck/dependency-licenses.txt: vendor/.up-to-date
-	$(DOCKER_GO_BUILD) sh -c 'licenses . > licensecheck/dependency-licenses.txt'
-
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
 
-.PHONY: check-licenses
-check-licenses: licensecheck/dependency-licenses.txt
-	@echo Checking dependency licenses
-	$(DOCKER_GO_BUILD) ginkgo licensecheck
-
 .PHONY: ut-no-cover
-ut-no-cover: vendor/.up-to-date $(GO_FILES) licensecheck/dependency-licenses.txt
+ut-no-cover: vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs without coverage.
 	$(DOCKER_GO_BUILD) ginkgo -r
 
 .PHONY: ut-watch
-ut-watch: vendor/.up-to-date $(GO_FILES) licensecheck/dependency-licenses.txt
+ut-watch: vendor/.up-to-date $(GO_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r
 
@@ -302,7 +294,6 @@ clean:
 	       .glide \
 	       vendor \
 	       .go-pkg-cache \
-	       licensecheck/dependency-licenses.txt \
 	       release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
