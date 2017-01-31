@@ -1,21 +1,45 @@
 # Release process
 
 ## Resulting artifacts
-Creating a new release creates the following artifacts
-* `calico/node:$VERSION` container image
-* `calico/ctl` container image
-* `calicoctl`  binary (stored in the `dist` directory.
+Creating a new release creates the following artifacts:
+- Container images:
+  - `calico/node:$VERSION` and `calico/node:latest` 
+  - `calico/ctl:$VERSION` and `calico/ctl:latest`
+  - `quay.io/calico/node:$VERSION` and `quay.io/calico/node:latest`
+  - `quay.io/calico/ctl:$VERSION` and `quay.io/calico/ctl:latest`
+- Binaries (stored in the `dist` directory) :
+  - `calicoctl`
+  - `calicoctl-darwin-amd64`
+  - `calicoctl-windows-amd64.exe`
 
 ## Preparing for a release
-Ensure that the branch you want to release from (typically master) is in a good state.
-e.g. Update the libcalico-go pin to the latest release in glide.yaml and run `glide up -v`, create PR, ensure test pass and merge.
-or update other dependencies in the `Makefile` 
-- `BUILD_CONTAINER_NAME?=calico/build:v0.18.0` - Currently, the startup.py script relies on the Python version of libcalico
-- `FELIX_CONTAINER_NAME?=calico/felix:2.0.0`
-- `LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.0.0`
-- Also, less commonly Bird, GoBGP and confd
+1. Make sure you are on the master branch and don't have any local uncommitted changes. e.g. Update the libcalico-go pin to the latest release in `glide.yaml` and run `glide up -v`, create PR, ensure test pass and merge.
 
-You should have no local changes and tests should be passing.
+2. Pre-requisits for pushing container images:
+  - Make sure you have write access to calico orgs on Dockerhub and quay.io. 
+  - Login using your dockerhub credentials.
+  - `docker login` in your terminal. 
+  - For quay.io: 
+    a. Go to your account on quay.io
+    b. Go to the account settings
+    c. Go to the "settings" tab
+    d. Click on "Generate Encrypted Password", it will popup a new sub-window
+    e. Go to "Docker login" tab in that window
+    f. Copy the command with encrypted password and paste it in your terminal
+  - Now you should be able to push the container images with `docker push` command.
+
+3. Update the sub-component versions in the Makefiles:
+  - Makefile.calico-node:  
+    - `CONFD_VER`
+    - `BIRD_VER`
+    - `GOBGPD_VER`
+    - `FELIX_VER`
+    - `LIBNETWORK_PLUGIN_VER`
+  - Makefile.calicoctl:
+    - `LIBCALICOGO_VER`
+    - `GO_BUILD_VER`
+
+4. If build fails during `make release`, make sure git tag is deleted before doing `make release` again. (This can be done with `git tag -d <tag>`)
 
 ## Creating the release
 1. Choose a version e.g. `export VERSION=v1.0.0`
@@ -26,3 +50,4 @@ You should have no local changes and tests should be passing.
    - `calicoctl`
    - `calicoctl-darwin-amd64`
    - `calicoctl-windows-amd64.exe`
+6. Add release notes for `calicoctl` and `calico/node`. Use `https://github.com/projectcalico/calicoctl/compare/<previous_release>...<new_release>` to find all the commit messages since the last release.

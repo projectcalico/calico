@@ -7,6 +7,13 @@
 # Determine which OS / ARCH.
 OS := $(shell uname -s | tr A-Z a-z)
 ARCH := amd64
+###############################################################################
+# Subcomponent versions:
+GO_BUILD_VER:=latest
+# Set libcalico-go version in glide.yaml first then do a `glide up -v` to update glide.lock.
+# Setting LIBCALICOGO_VER in the Makefile won't update the glide dependencies.
+LIBCALICOGO_VER := v1.0.2
+###############################################################################
 
 CALICOCTL_DIR=calicoctl
 CTL_CONTAINER_NAME?=calico/ctl
@@ -17,7 +24,7 @@ CALICOCTL_NODE_VERSION?="latest"
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
-CALICO_BUILD?=calico/go-build
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calicoctl

@@ -61,6 +61,10 @@ ifndef VERSION
 endif
 	git tag $(VERSION)
 
+	# Check to make sure the tag isn't "-dirty".
+	if git describe --tags --dirty | grep dirty; \
+	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
+
 	# Build the calicoctl binaries, as well as the calico/ctl and calico/node images.
 	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe 
 	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) calico/ctl calico/node
@@ -68,7 +72,12 @@ endif
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds
 	# Release is currently supported on darwin / linux only.
-	if ! docker run $(CTL_CONTAINER_NAME) version | grep 'Version:\s*$(VERSION)$$'; then echo "Reported version:" `docker run $(CTL_CONTAINER_NAME) version` "\nExpected version: $(VERSION)"; false; else echo "Version check passed\n"; fi
+	if ! docker run $(CTL_CONTAINER_NAME) version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(CTL_CONTAINER_NAME) version` "\nExpected version: $(VERSION)"; \
+	  false; \
+	else \
+	  echo "Version check passed\n"; \
+	fi
 
 	# Retag images with corect version and quay
 	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(VERSION)
@@ -88,7 +97,19 @@ endif
 	docker run $(NODE_CONTAINER_NAME) calico-felix --version
 	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
 
-	@echo "\nNow push the tag and images. Then create a release on Github and attach the dist/calicoctl binary"
+	@echo "\nNow push the tag and images. Then create a release on Github and"
+	@echo "attach dist/calicoctl, dist/calicoctl-darwin-amd64, and dist/calicoctl-windows-amd64.exe binaries"
+	@echo "\nAdd release notes for calicoctl and calico/node. Use this command"
+	@echo "to find commit messages for this release: git log --oneline <old_release_version>...$(VERSION)"
+	@echo "\nRelease notes for sub-components can be found at"
+	@echo "https://github.com/projectcalico/<component_name>/releases/tag/<version>"
+	@echo "\nAdd release notes from the following sub-component version releases:"
+	@echo "\nfelix:$(FELIX_VER)"
+	@echo "\nlibnetwork-plugin:$(LIBNETWORK_PLUGIN_VER)"
+	@echo "\nlibcalico-go:$(LIBCALICOGO_VER)"
+	@echo "\ncalico-bgp-daemon:$(GOBGPD_VER)"
+	@echo "\ncalico-bird:$(BIRD_VER)"
+	@echo "\nconfd:$(CONFD_VER)"
 	@echo "git push origin $(VERSION)"
 	@echo "docker push calico/ctl:$(VERSION)"
 	@echo "docker push quay.io/calico/ctl:$(VERSION)"
@@ -98,6 +119,7 @@ endif
 	@echo "docker push quay.io/calico/ctl:latest"
 	@echo "docker push calico/node:latest"
 	@echo "docker push quay.io/calico/node:latest"
+	@echo "See RELEASING.md for detailed instructions."
 
 ## Clean enough that a new release build will be clean
 clean: clean-calicoctl

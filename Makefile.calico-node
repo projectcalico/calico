@@ -1,22 +1,30 @@
 # Include the build file for calico/node (This also pulls in Makefile.calicoctl)
 include Makefile.calicoctl
 
-###############################################################################
-# URL for Calico binaries
-# confd binary
-CONFD_URL?=https://github.com/projectcalico/confd/releases/download/v0.10.0-scale/confd.static
-# bird binaries
-BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/bird
-BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/bird6
-BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/v0.2.0/birdcl
-CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1/calico-bgp-daemon
-GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/v0.1.1/gobgp
-
 # we can use "custom" build image and test image name
-SYSTEMTEST_CONTAINER?=calico/test
+SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
 # calicoctl and calico/node current share a single version - this is it.
 CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
+###############################################################################
+# Subcomponent versions:
+BIRD_VER := v0.2.0
+GOBGPD_VER := v0.1.1
+FELIX_VER := 2.0.3
+LIBNETWORK_PLUGIN_VER := v1.0.0
+CONFD_VER := v0.10.0-scale
+SYSTEMTEST_CONTAINER_VER := latest
+
+###############################################################################
+# URL for Calico binaries
+# confd binary
+CONFD_URL?=https://github.com/projectcalico/confd/releases/download/$(CONFD_VER)/confd.static
+# bird binaries
+BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird
+BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
+BIRDCL_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/birdcl
+CALICO_BGP_DAEMON_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/calico-bgp-daemon
+GOBGP_URL?=https://github.com/projectcalico/calico-bgp-daemon/releases/download/$(GOBGPD_VER)/gobgp
 
 ###############################################################################
 # calico/node build. Contains the following areas
@@ -29,8 +37,8 @@ NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
-FELIX_CONTAINER_NAME?=calico/felix:2.0.1-rc1
-LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:v1.1.0
+FELIX_CONTAINER_NAME?=calico/felix:$(FELIX_VER)
+LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:$(LIBNETWORK_PLUGIN_VER)
 
 STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
 STARTUP_FILES=$(shell find $(STARTUP_DIR) -name '*.go')
