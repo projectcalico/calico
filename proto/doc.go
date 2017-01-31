@@ -40,7 +40,7 @@
 //	         ======= Dataplane ==========
 //
 //
-// Data model Overview
+// Data Model Overview
 //
 // The data model used on the dataplane driver API uses similar concepts to
 // the main "datastore" data model (such as host/workload endpoints, policies
