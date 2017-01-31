@@ -39,7 +39,73 @@
 //	                    |
 //	         ======= Dataplane ==========
 //
-// Overview
+//
+// Data-model Overview
+//
+// The data-model used on the dataplane driver API uses similar concepts to
+// the main "datastore" data-model (such as host/workload endpoints, policies
+// and profiles).  However, the calculation engine does some pre-calculation
+// that simplifies the job of the dataplane driver:
+//
+// Rules in the datastore data-model can contain selectors, such as
+// "role == webserver", that refer to dynamic groups of endpoints.  The calculation
+// engine pre-renders those selectors (and the older tag mechanism) to sets of
+// IP addresses.  Only the sets of IPs are sent over the API so the dataplane
+// driver doesn't need to render selectors itself, it only needs a way to
+// represent a set of IP addresses on which to match.
+//
+// Policies in the datastore data-model need to be filtered and sorted. The
+// calculation engine takes care of that too.  When it sends an endpoint to the
+// datastore driver, it adds the complete list of policies to apply to the
+// endpoint (in the correct order).  If the correct list changes, it sends an
+// update for the endpoint.
+//
+// If a resource fails validation, the calculation engine replaces it with a
+// "safe" stub or it simulates a delete.
+//
+// This means that the dataplane driver sees the following model, filtered
+// to only the resources that are active on this host:
+//
+//	 +------------------+
+//	+------------------+|
+//	| Host/Workload    ||
+//	| Endpoint         ||
+//	|                  ||
+//	| Policy ID list --------+ refers to policies by ID
+//	| List of IPs      ||    |
+//	| Interface name   |+    |
+//	+------------------+     |
+//	                         |
+//	               +---------|---------+
+//	              +----------+--------+|
+//	              | Policy            ||
+//	              |                   ||
+//	              | Inbound rules --------+ (rules embedded in the policy object)
+//	              | Outbound rules --------+
+//	              +-------------------+    |
+//	                                       |
+//	                             +---------|---------+
+//	                            +----------+--------+|
+//	                            | Rule              ||
+//	                            |                   ||
+//	                            | Match criteria    ||
+//	                            | - protocol        ||
+//	                            | - port            ||
+//	                            | - CIDR            ||
+//	                            | - ...             ||
+//	                            | - IP set ID list  -----+ refers to IP sets by ID
+//	                            +-------------------+    |
+//	                                                     |
+//	                                           +---------|---------+
+//	                                          +----------+--------+|
+//	                                          | IP set            ||
+//	                                          |                   ||
+//	                                          | 10.0.0.1          ||
+//	                                          | 10.0.0.21         ||
+//	                                          | 10.0.0.53         ||
+//	                                          +-------------------+
+//
+// Protocol Overview
 //
 // The protocol is defined as a series of protobuf messages.  This allows for
 // a dataplane driver to run either in-process or in another process.
