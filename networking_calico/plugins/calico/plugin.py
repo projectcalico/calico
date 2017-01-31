@@ -16,6 +16,7 @@ from neutron.db import l3_db
 from neutron.plugins.ml2.plugin import Ml2Plugin
 
 from networking_calico.compat import cfg
+from networking_calico.compat import constants
 from networking_calico.compat import log
 
 
@@ -53,3 +54,16 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
                                                     context)
 
         return old_floatingip, new_floatingip
+
+    def _create_floatingip(self, context, floatingip,
+                           initial_status=constants.FLOATINGIP_STATUS_ACTIVE):
+        new_floatingip = super(CalicoPlugin, self)._create_floatingip(
+            context,
+            floatingip,
+            initial_status=initial_status
+        )
+        if new_floatingip['port_id']:
+            context.fip_update_port_id = new_floatingip['port_id']
+            self.mechanism_manager._call_on_drivers('update_floatingip',
+                                                    context)
+        return new_floatingip
