@@ -11,7 +11,7 @@ CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
 BIRD_VER := v0.2.0
 GOBGPD_VER := v0.1.2
 FELIX_VER := 2.0.3
-LIBNETWORK_PLUGIN_VER := v1.0.0
+LIBNETWORK_PLUGIN_VER := v1.1.0
 CONFD_VER := v0.10.0-scale
 SYSTEMTEST_CONTAINER_VER := latest
 

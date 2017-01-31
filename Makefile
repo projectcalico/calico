@@ -128,12 +128,12 @@ clean: clean-calicoctl
 	rm -rf dist build certs *.tar vendor $(NODE_CONTAINER_DIR)/filesystem/bin
 
 	# Delete images that we built in this repo
-	docker rmi calico/node:latest || true
+	docker rmi $(NODE_CONTAINER_NAME):latest || true
 
 	# Retag and remove external images so that they will be pulled again
 	# We avoid just deleting the image. We didn't build them here so it would be impolite to delete it.
 	docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME) || true
-	docker tag $(SYSTEMTEST_CONTAINER):latest $(SYSTEMTEST_CONTAINER):latest-backup && docker rmi $(SYSTEMTEST_CONTAINER):latest || true
+	docker tag $(SYSTEMTEST_CONTAINER) $(SYSTEMTEST_CONTAINER)-backup && docker rmi $(SYSTEMTEST_CONTAINER) || true
 
 .PHONY: help
 ## Display this help text
