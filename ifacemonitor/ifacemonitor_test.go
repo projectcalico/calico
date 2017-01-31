@@ -16,6 +16,7 @@ package ifacemonitor_test
 
 import (
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -41,6 +42,12 @@ type netlinkTest struct {
 
 	nextIndex int
 	links     map[string]linkModel
+
+	// Mutex protecting the two items above.  Note that in many cases we unlock as soon as
+	// possible after we've read and/or written that data - instead of using defer - because we
+	// don't want to hold the mutex when writing to a channel (which is often what happens next
+	// in the same function).
+	linksMutex sync.Mutex
 }
 
 type addrState struct {
@@ -54,6 +61,7 @@ type mockDataplane struct {
 }
 
 func (nl *netlinkTest) addLink(name string) {
+	nl.linksMutex.Lock()
 	if nl.links == nil {
 		nl.links = map[string]linkModel{}
 		nl.nextIndex = 10
@@ -64,18 +72,22 @@ func (nl *netlinkTest) addLink(name string) {
 		addrs: set.New(),
 	}
 	nl.nextIndex++
+	nl.linksMutex.Unlock()
 	nl.signalLink(name, 0)
 }
 
 func (nl *netlinkTest) changeLinkState(name string, state string) {
+	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.state = state
 	nl.links[name] = link
+	nl.linksMutex.Unlock()
 	nl.signalLink(name, 0)
 }
 
 func (nl *netlinkTest) delLink(name string) {
 	var oldIndex int
+	nl.linksMutex.Lock()
 	link, prs := nl.links[name]
 	if prs {
 		oldIndex = link.index
@@ -83,6 +95,7 @@ func (nl *netlinkTest) delLink(name string) {
 		oldIndex = 0
 	}
 	delete(nl.links, name)
+	nl.linksMutex.Unlock()
 	nl.signalLink(name, oldIndex)
 }
 
@@ -93,6 +106,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 	var msgType uint16 = syscall.RTM_DELLINK
 
 	// If the link does exist, overwrite appropriately.
+	nl.linksMutex.Lock()
 	link, prs := nl.links[name]
 	if prs {
 		msgType = syscall.RTM_NEWLINK
@@ -101,6 +115,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 			rawFlags = syscall.IFF_RUNNING
 		}
 	}
+	nl.linksMutex.Unlock()
 
 	// Build the update.
 	update := netlink.LinkUpdate{
@@ -123,16 +138,20 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
+	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.addrs.Add(addr)
 	nl.links[name] = link
+	nl.linksMutex.Unlock()
 	nl.signalAddr(name, addr, true)
 }
 
 func (nl *netlinkTest) delAddr(name string, addr string) {
+	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.addrs.Discard(addr)
 	nl.links[name] = link
+	nl.linksMutex.Unlock()
 	nl.signalAddr(name, addr, false)
 }
 
@@ -142,11 +161,13 @@ func (nl *netlinkTest) signalAddr(name string, addr string, exists bool) {
 	if err != nil {
 		panic("Address parsing failed")
 	}
+	nl.linksMutex.Lock()
 	update := netlink.AddrUpdate{
 		LinkIndex:   nl.links[name].index,
 		NewAddr:     exists,
 		LinkAddress: *net,
 	}
+	nl.linksMutex.Unlock()
 
 	// Send it.
 	log.WithField("channel", nl.linkUpdates).Info("Test code signaling an addr update")
@@ -166,6 +187,7 @@ func (nl *netlinkTest) Subscribe(
 
 func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 	links := []netlink.Link{}
+	nl.linksMutex.Lock()
 	for name, link := range nl.links {
 		var rawFlags uint32 = 0
 		if link.state == "up" {
@@ -179,11 +201,14 @@ func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 			},
 		})
 	}
+	nl.linksMutex.Unlock()
 	return links, nil
 }
 
 func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
 	name := link.Attrs().Name
+	nl.linksMutex.Lock()
+	defer nl.linksMutex.Unlock()
 	model, prs := nl.links[name]
 	addrs := []netlink.Addr{}
 	if prs {
@@ -272,7 +297,9 @@ var _ = Describe("ifacemonitor", func() {
 	BeforeEach(func() {
 		// Make an Interface Monitor that uses a test netlink stub implementation and resync
 		// trigger channel - both controlled by this code.
-		nl = &netlinkTest{userSubscribed: make(chan int)}
+		nl = &netlinkTest{
+			userSubscribed: make(chan int),
+		}
 		resyncC = make(chan time.Time)
 		im = ifacemonitor.NewWithStubs(nl, resyncC)
 
