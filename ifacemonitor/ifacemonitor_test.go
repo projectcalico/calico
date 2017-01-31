@@ -40,9 +40,14 @@ type netlinkTest struct {
 	addrUpdates    chan netlink.AddrUpdate
 	userSubscribed chan int
 
-	nextIndex  int
-	links      map[string]linkModel
-	linksMutex *sync.Mutex
+	nextIndex int
+	links     map[string]linkModel
+
+	// Mutex protecting the two items above.  Note that in many cases we unlock as soon as
+	// possible after we've read and/or written that data - instead of using defer - because we
+	// don't want to hold the mutex when writing to a channel (which is often what happens next
+	// in the same function).
+	linksMutex sync.Mutex
 }
 
 type addrState struct {
@@ -66,8 +71,8 @@ func (nl *netlinkTest) addLink(name string) {
 		state: "down",
 		addrs: set.New(),
 	}
-	nl.linksMutex.Unlock()
 	nl.nextIndex++
+	nl.linksMutex.Unlock()
 	nl.signalLink(name, 0)
 }
 
@@ -103,7 +108,6 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 	// If the link does exist, overwrite appropriately.
 	nl.linksMutex.Lock()
 	link, prs := nl.links[name]
-	nl.linksMutex.Unlock()
 	if prs {
 		msgType = syscall.RTM_NEWLINK
 		index = link.index
@@ -111,6 +115,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 			rawFlags = syscall.IFF_RUNNING
 		}
 	}
+	nl.linksMutex.Unlock()
 
 	// Build the update.
 	update := netlink.LinkUpdate{
@@ -203,8 +208,8 @@ func (nl *netlinkTest) LinkList() ([]netlink.Link, error) {
 func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
 	name := link.Attrs().Name
 	nl.linksMutex.Lock()
+	defer nl.linksMutex.Unlock()
 	model, prs := nl.links[name]
-	nl.linksMutex.Unlock()
 	addrs := []netlink.Addr{}
 	if prs {
 		model.addrs.Iter(func(item interface{}) error {
@@ -294,7 +299,6 @@ var _ = Describe("ifacemonitor", func() {
 		// trigger channel - both controlled by this code.
 		nl = &netlinkTest{
 			userSubscribed: make(chan int),
-			linksMutex:     &sync.Mutex{},
 		}
 		resyncC = make(chan time.Time)
 		im = ifacemonitor.NewWithStubs(nl, resyncC)
