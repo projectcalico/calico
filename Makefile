@@ -215,7 +215,7 @@ bin/calico-felix: $(GO_FILES) vendor/.up-to-date
 	@echo Building felix...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
-	    sh -c 'go build -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
+	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
                ( ldd bin/calico-felix 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
@@ -234,10 +234,21 @@ update-tools:
 go-fmt:
 	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs go fmt'
 
+check-licenses/dependency-licenses.txt: vendor/.up-to-date
+	$(DOCKER_GO_BUILD) sh -c 'licenses . > check-licenses/dependency-licenses.txt'
+
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
+
+bin/check-licenses: $(GO_FILES)
+	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
+
+.PHONY: check-licenses
+check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
+	@echo Checking dependency licenses
+	$(DOCKER_GO_BUILD) bin/check-licenses
 
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(GO_FILES)
@@ -294,6 +305,7 @@ clean:
 	       .glide \
 	       vendor \
 	       .go-pkg-cache \
+	       check-licenses/dependency-licenses.txt \
 	       release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
