@@ -17,9 +17,21 @@ package ipsets
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/set"
+	"github.com/prometheus/client_golang/prometheus"
 	"regexp"
 	"strings"
 )
+
+var (
+	gaugeNumIpsets = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_ipset_count",
+		Help: "Number of active IP sets.",
+	}, []string{"ip_version"})
+)
+
+func init() {
+	prometheus.MustRegister(gaugeNumIpsets)
+}
 
 // A Registry manages the life-cycles of the IP sets for a particular IP version.  All IPSet
 // objects should be created through a Registry so that the Registry is aware of the IPSet.
@@ -41,6 +53,8 @@ type Registry struct {
 
 	// Factory for command objects; shimmed for UT mocking.
 	newCmd cmdFactory
+
+	gaugeNumIpsets prometheus.Gauge
 }
 
 func NewRegistry(ipVersionConfig *IPVersionConfig) *Registry {
@@ -64,6 +78,8 @@ func NewRegistryWithShims(
 		pendingIPSetDeletions: set.New(),
 		existenceCache:        existenceCache,
 		newCmd:                cmdFactory,
+
+		gaugeNumIpsets: gaugeNumIpsets.WithLabelValues(string(ipVersionConfig.Family)),
 	}
 }
 
@@ -139,6 +155,8 @@ func (s *Registry) ApplyDeletions() {
 		log.Warn("An IP set delete operation failed, reloading existence cache.")
 		s.existenceCache.Reload()
 	}
+
+	s.gaugeNumIpsets.Set(float64(len(s.ipSetIDToActiveIPSet)))
 }
 
 func (s *Registry) deleteIPSet(setName string) error {

@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/prometheus/client_golang/prometheus"
+	"reflect"
 	"time"
 )
 
@@ -43,11 +44,26 @@ var (
 		api.ResyncInProgress: 2,
 		api.InSync:           3,
 	}
+	countUpdatesProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "felix_calc_graph_updates_processed",
+		Help: "Number of datastore updates processed by the calculation graph.",
+	}, []string{"type"})
+	countOutputEvents = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_calc_graph_output_events",
+		Help: "Number of events emitted by the calculation graph.",
+	})
+	histUpdateTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "felix_calc_graph_update_time_seconds",
+		Help: "Seconds to update calculation graph for each datastore OnUpdate call.",
+	})
 )
 
 func init() {
 	prometheus.MustRegister(dataplaneStatusGauge)
 	prometheus.MustRegister(resyncsStarted)
+	prometheus.MustRegister(countUpdatesProcessed)
+	prometheus.MustRegister(countOutputEvents)
+	prometheus.MustRegister(histUpdateTime)
 }
 
 type AsyncCalcGraph struct {
@@ -65,11 +81,11 @@ type AsyncCalcGraph struct {
 
 func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}) *AsyncCalcGraph {
 	eventBuffer := NewEventBuffer(conf)
-	dispatcher := NewCalculationGraph(eventBuffer, conf.FelixHostname)
+	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
 		inputEvents:  make(chan interface{}, 10),
 		outputEvents: outputEvents,
-		Dispatcher:   dispatcher,
+		Dispatcher:   disp,
 		eventBuffer:  eventBuffer,
 	}
 	eventBuffer.Callback = g.onEvent
@@ -99,7 +115,19 @@ func (acg *AsyncCalcGraph) loop() {
 			case []api.Update:
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
+				updStartTime := time.Now()
 				acg.Dispatcher.OnUpdates(update)
+				updEndTime := time.Now()
+				if updEndTime.After(updStartTime) {
+					// Avoid recording a negative delta in case the clock jumps.
+					histUpdateTime.Observe(updEndTime.Sub(updStartTime).Seconds())
+				}
+				// Record stats for the number of messages processed.
+				for _, upd := range update {
+					typeName := reflect.TypeOf(upd.Key).Name()
+					count := countUpdatesProcessed.WithLabelValues(typeName)
+					count.Inc()
+				}
 			case api.SyncStatus:
 				// Sync status changed, check if we're now in-sync.
 				log.WithField("status", update).Debug(
@@ -152,6 +180,7 @@ func (acg *AsyncCalcGraph) maybeFlush() {
 func (acg *AsyncCalcGraph) onEvent(event interface{}) {
 	log.Debug("Sending output event on channel")
 	acg.outputEvents <- event
+	countOutputEvents.Inc()
 	log.Debug("Sent output event on channel")
 }
 

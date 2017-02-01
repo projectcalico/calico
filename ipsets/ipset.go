@@ -19,6 +19,7 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/felix/set"
+	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"time"
 )
@@ -32,6 +33,27 @@ const (
 	IPSetTypeHashIP  IPSetType = "hash:ip"
 	IPSetTypeHashNet IPSetType = "hash:net"
 )
+
+var (
+	countNumIPSetCalls = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_ipset_calls",
+		Help: "Number of ipset commands executed.",
+	})
+	countNumIPSetErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_ipset_errors",
+		Help: "Number of ipset command failures.",
+	})
+	countNumIPSetLinesExecuted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_ipset_lines_executed",
+		Help: "Number of ipset operations executed.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(countNumIPSetCalls)
+	prometheus.MustRegister(countNumIPSetErrors)
+	prometheus.MustRegister(countNumIPSetLinesExecuted)
+}
 
 func (t IPSetType) IsValid() bool {
 	switch t {
@@ -237,10 +259,12 @@ func (s *IPSet) rewriteIPSet() error {
 
 func (s *IPSet) execIpsetRestore(stdin io.Reader) error {
 	// Execute the commands via the bulk "restore" sub-command.
+	countNumIPSetCalls.Inc()
 	cmd := s.newCmd("ipset", "restore")
 	cmd.SetStdin(stdin)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		countNumIPSetErrors.Inc()
 		log.WithError(err).WithField("output", string(output)).Warn(
 			"Failed to execute 'ipset restore'.")
 		return err
@@ -267,6 +291,7 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 		log.WithField("setID", s.SetID).Debug("Pre-creating main IP set")
 		fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
 			mainSetName, s.Type, s.IPVersionConfig.Family, s.MaxSize)
+		countNumIPSetLinesExecuted.Inc()
 	}
 	tempSetName := s.TempIPSetName()
 	if s.existenceCache.IPSetExists(tempSetName) {
@@ -274,6 +299,7 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 		// parameters.
 		log.WithField("setID", s.SetID).Debug("Temp IP set exists, deleting it before rewrite")
 		fmt.Fprintf(buf, "destroy %s\n", tempSetName)
+		countNumIPSetLinesExecuted.Inc()
 	}
 	// Create the temporary IP set with the current parameters.
 	fmt.Fprintf(buf, "create %s %s family %s maxelem %d\n",
@@ -282,12 +308,15 @@ func (s *IPSet) writeFullRewrite(buf stringWriter) {
 	s.desiredMembers.Iter(func(item interface{}) error {
 		member := item.(string)
 		fmt.Fprintf(buf, "add %s %s\n", tempSetName, member)
+		countNumIPSetLinesExecuted.Inc()
 		return nil
 	})
 	// Atomically swap the temporary set into place.
 	fmt.Fprintf(buf, "swap %s %s\n", mainSetName, tempSetName)
+	countNumIPSetLinesExecuted.Inc()
 	// Then remove the temporary set (which was the old main set).
 	fmt.Fprintf(buf, "destroy %s\n", tempSetName)
+	countNumIPSetLinesExecuted.Inc()
 	// ipset restore input ends with "COMMIT" (but only the swap instruction is guaranteed to be
 	// atomic).
 	buf.WriteString("COMMIT\n")
@@ -300,11 +329,13 @@ func (s *IPSet) writeDeltas(buf stringWriter) {
 	s.pendingDeletions.Iter(func(item interface{}) error {
 		member := item.(string)
 		fmt.Fprintf(buf, "del %s %s\n", mainSetName, member)
+		countNumIPSetLinesExecuted.Inc()
 		return nil
 	})
 	s.pendingAdds.Iter(func(item interface{}) error {
 		member := item.(string)
 		fmt.Fprintf(buf, "add %s %s\n", mainSetName, member)
+		countNumIPSetLinesExecuted.Inc()
 		return nil
 	})
 	buf.WriteString("COMMIT\n")

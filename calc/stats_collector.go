@@ -20,7 +20,29 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	gaugeClusNumHosts = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_hosts",
+		Help: "Total number of calico hosts in the cluster.",
+	})
+	gaugeClusNumHostEndpoints = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_host_endpoints",
+		Help: "Total number of host endpoints cluster-wide.",
+	})
+	gaugeClusNumWorkloadEndpoints = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_workload_endpoints",
+		Help: "Total number of workload endpoints cluster-wide.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(gaugeClusNumHosts)
+	prometheus.MustRegister(gaugeClusNumHostEndpoints)
+	prometheus.MustRegister(gaugeClusNumWorkloadEndpoints)
+}
 
 type StatsCollector struct {
 	keyCountByHost       map[string]int
@@ -122,6 +144,9 @@ func (s *StatsCollector) sendUpdate() {
 		NumHostEndpoints:     s.numHostEndpoints,
 		NumWorkloadEndpoints: s.numWorkloadEndpoints,
 	}
+	gaugeClusNumHosts.Set(float64(len(s.keyCountByHost)))
+	gaugeClusNumWorkloadEndpoints.Set(float64(s.numWorkloadEndpoints))
+	gaugeClusNumHostEndpoints.Set(float64(s.numHostEndpoints))
 	if s.inSync && s.lastUpdate != update {
 		if err := s.Callback(update); err != nil {
 			log.WithError(err).Warn("Failed to report stats")

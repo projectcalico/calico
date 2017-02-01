@@ -25,7 +25,24 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_active_local_selectors",
+		Help: "Number of active selectors on this host.",
+	})
+	gaugeNumActiveTags = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_active_local_tags",
+		Help: "Number of active tags on this host.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(gaugeNumActiveTags)
+	prometheus.MustRegister(gaugeNumActiveSelectors)
+}
 
 type ipSetUpdateCallbacks interface {
 	OnIPSetAdded(setID string)
@@ -112,15 +129,18 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 			memberCalc.MatchStopped(labelId.(model.Key), selId.(string))
 		},
 	)
+
 	ruleScanner.OnSelectorActive = func(sel selector.Selector) {
 		log.Infof("Selector %v now active", sel)
 		callbacks.OnIPSetAdded(sel.UniqueId())
 		activeSelectorIndex.UpdateSelector(sel.UniqueId(), sel)
+		gaugeNumActiveSelectors.Inc()
 	}
 	ruleScanner.OnSelectorInactive = func(sel selector.Selector) {
 		log.Infof("Selector %v now inactive", sel)
 		activeSelectorIndex.DeleteSelector(sel.UniqueId())
 		callbacks.OnIPSetRemoved(sel.UniqueId())
+		gaugeNumActiveSelectors.Dec()
 	}
 	activeSelectorIndex.RegisterWith(allUpdDispatcher)
 
@@ -139,11 +159,13 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 		log.Infof("Tag %v now active", tag)
 		callbacks.OnIPSetAdded(hash.MakeUniqueID("t", tag))
 		tagIndex.SetTagActive(tag)
+		gaugeNumActiveTags.Inc()
 	}
 	ruleScanner.OnTagInactive = func(tag string) {
 		log.Infof("Tag %v now inactive", tag)
 		tagIndex.SetTagInactive(tag)
 		callbacks.OnIPSetRemoved(hash.MakeUniqueID("t", tag))
+		gaugeNumActiveTags.Dec()
 	}
 	tagIndex.RegisterWith(allUpdDispatcher)
 

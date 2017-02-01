@@ -21,7 +21,24 @@ import (
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	gaugeNumActiveEndpoints = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_active_local_endpoints",
+		Help: "Number of active endpoints on this host.",
+	})
+	gaugeNumActivePolicies = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_active_local_policies",
+		Help: "Number of active policies on this host.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(gaugeNumActiveEndpoints)
+	prometheus.MustRegister(gaugeNumActivePolicies)
+}
 
 // PolicyResolver marries up the active policies with local endpoints and
 // calculates the complete, ordered set of policies that apply to each endpoint.
@@ -75,6 +92,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			delete(pr.endpoints, key)
 		}
 		pr.dirtyEndpoints.Add(key)
+		gaugeNumActiveEndpoints.Set(float64(len(pr.endpoints)))
 	case model.PolicyKey:
 		log.Debugf("Policy update: %v", key)
 		policiesDirty = pr.policySorter.OnUpdate(update)
@@ -82,6 +100,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 	}
 	pr.sortRequired = pr.sortRequired || policiesDirty
 	pr.maybeFlush()
+	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
 }
 
