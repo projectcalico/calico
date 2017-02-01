@@ -24,7 +24,7 @@ and compute functions running on the same node:
 
 #. Add to your DevStack local.conf file::
 
-    enable_plugin calico https://git.openstack.org/openstack/networking-calico
+    enable_plugin networking-calico https://git.openstack.org/openstack/networking-calico
 
 #. Run ``stack.sh``
 
