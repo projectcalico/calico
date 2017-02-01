@@ -75,6 +75,37 @@ VLANs, but after studying the PCI requirements documents, we believe
 that Calico does meet those requirements and that nothing in the
 documents *mandates* the use of VLANs.
 
+## How do I enable IPIP and NAT Outgoing on an IP Pool?
+
+1. Retrieve current IP Pool config
+
+   ```shell
+   $ calicoctl get ipPool -o yaml > pool.yaml
+   ```
+
+2. Modify IP Pool config
+
+   Modify the pool's spec to enable IP-IP and nat-outgoing. (See 
+   [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
+   for other settings that can be edited.)
+   
+   ```shell
+   - apiVersion: v1
+     kind: ipPool
+     metadata:
+       cidr: 192.168.0.0/16
+     spec:
+       ipip:
+   	  enabled: true
+       nat-outgoing: true
+   ```
+
+3. Load the modified file.
+
+   ```shell
+   $ calicoctl replace -f pool.yaml
+   ```
+
 ## "How does Calico maintain saved state?"
 
 State is saved in a few places in a Calico deployment, depending on
