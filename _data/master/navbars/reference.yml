@@ -93,7 +93,7 @@ toc:
   section:
     - title: Calico Over Ethernet Fabrics
       path: /reference/private-cloud/l2-interconnect-fabric
-    - title: Calico Over IP Fabrics 
+    - title: Calico Over IP Fabrics
       path: /reference/private-cloud/l3-interconnect-fabric
 - title: Architecture
   section:
@@ -107,6 +107,26 @@ toc:
   section:
   - title: RBAC for etcdv2
     path: /reference/advanced/etcd-rbac
+- title: "Calico's driver for OpenStack (networking-calico)"
+  section:
+  - title: networking-calico
+    path: /reference/networking-calico/
+  - title: Detailed Semantics
+    path: /reference/networking-calico/semantics
+  - title: Floating IPs
+    path: /reference/networking-calico/floating-ips
+  - title: Service IPs
+    path: /reference/networking-calico/service-ips
+  - title: DevStack
+    path: /reference/networking-calico/devstack
+  - title: Kuryr
+    path: /reference/networking-calico/kuryr
+  - title: Implementation notes
+    path: /reference/networking-calico/implementation-notes
+  - title: Host routes
+    path: /reference/networking-calico/host-routes
+  - title: DHCP agent
+    path: /reference/networking-calico/dhcp-agent
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute
