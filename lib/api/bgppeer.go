@@ -48,7 +48,7 @@ type BGPPeerMetadata struct {
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// The IP address of the peer.
-	PeerIP net.IP `json:"peerIP" validate:"omitempty,ip"`
+	PeerIP net.IP `json:"peerIP" validate:"omitempty"`
 }
 
 // BGPPeerSpec contains the specification for a BGPPeer resource.

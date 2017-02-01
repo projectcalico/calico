@@ -43,8 +43,10 @@ type Node struct {
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// BGP specific configuration
-	BGPIPv4     *net.IP
-	BGPIPv6     *net.IP
+	BGPIPv4Addr *net.IP
+	BGPIPv6Addr *net.IP
+	BGPIPv4Net  *net.IPNet
+	BGPIPv6Net  *net.IPNet
 	BGPASNumber *numorstring.ASNumber
 }
 

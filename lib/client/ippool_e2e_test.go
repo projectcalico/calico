@@ -43,6 +43,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -169,8 +170,8 @@ var _ = Describe("IPPool tests", func() {
 
 		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
 		Entry("Two fully populated IPPoolSpecs",
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -186,8 +187,8 @@ var _ = Describe("IPPool tests", func() {
 
 		// Test 2: Pass one partially populated IPPoolSpec and another fully populated IPPoolSpec and expect the series of operations to succeed.
 		Entry("One partially populated IPPoolSpec and another fully populated IPPoolSpec",
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -201,8 +202,8 @@ var _ = Describe("IPPool tests", func() {
 
 		// Test 3: Pass one fully populated IPPoolSpec and another empty IPPoolSpec and expect the series of operations to succeed.
 		Entry("One fully populated IPPoolSpec and another empty IPPoolSpec",
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -215,8 +216,8 @@ var _ = Describe("IPPool tests", func() {
 
 		// Test 4: Pass two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
 		Entry("Two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6)",
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("fe80::00/120")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -230,6 +231,38 @@ var _ = Describe("IPPool tests", func() {
 				},
 				NATOutgoing: false,
 				Disabled:    false,
-			}),
+			},
+		),
+
+		// Test 5: Test starting with IPIP (cross subnet mode) and moving to no IPIP
+		Entry("IPIP (cross subnet mode) and moving to no IPIP",
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
+			api.IPPoolSpec{
+				IPIP: &api.IPIPConfiguration{
+					Enabled: true,
+					Mode:    ipip.CrossSubnet,
+				},
+			},
+			api.IPPoolSpec{},
+		),
+
+		// Test 6: Test starting with IPIP (cross subnet mode) and moving to IPIP disabled (keeping IPIP mode)
+		Entry("IPIP (cross subnet mode) and moving to IPIP disabled (keeping IPIP mode)",
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
+			api.IPPoolSpec{
+				IPIP: &api.IPIPConfiguration{
+					Enabled: true,
+					Mode:    ipip.CrossSubnet,
+				},
+			},
+			api.IPPoolSpec{
+				IPIP: &api.IPIPConfiguration{
+					Enabled: false,
+					Mode:    ipip.CrossSubnet,
+				},
+			},
+		),
 	)
 })

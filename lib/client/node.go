@@ -168,8 +168,14 @@ func (h *nodes) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 
 	v := model.Node{}
 	if an.Spec.BGP != nil {
-		v.BGPIPv4 = an.Spec.BGP.IPv4Address
-		v.BGPIPv6 = an.Spec.BGP.IPv6Address
+		if an.Spec.BGP.IPv4Address != nil {
+			v.BGPIPv4Addr = &net.IP{an.Spec.BGP.IPv4Address.IP}
+			v.BGPIPv4Net = an.Spec.BGP.IPv4Address.Network()
+		}
+		if an.Spec.BGP.IPv6Address != nil {
+			v.BGPIPv6Addr = &net.IP{an.Spec.BGP.IPv6Address.IP}
+			v.BGPIPv6Net = an.Spec.BGP.IPv6Address.Network()
+		}
 		v.BGPASNumber = an.Spec.BGP.ASNumber
 	}
 
@@ -186,11 +192,37 @@ func (h *nodes) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error
 	apiNode := api.NewNode()
 	apiNode.Metadata.Name = bk.Hostname
 
-	if bv.BGPIPv4 != nil || bv.BGPIPv6 != nil {
+	if bv.BGPIPv4Addr != nil || bv.BGPIPv6Addr != nil {
 		apiNode.Spec.BGP = &api.NodeBGPSpec{
-			IPv4Address: bv.BGPIPv4,
-			IPv6Address: bv.BGPIPv6,
-			ASNumber:    bv.BGPASNumber,
+			ASNumber: bv.BGPASNumber,
+		}
+
+		// If the backend has an IPv4 address then fill in the IPv4Address
+		// field.  If the IP network does not exist assume a full mask.
+		if bv.BGPIPv4Addr != nil {
+			if bv.BGPIPv4Net != nil {
+				// Stored network is normalised, so copy across the
+				// IP separately.
+				apiNode.Spec.BGP.IPv4Address = bv.BGPIPv4Net
+				apiNode.Spec.BGP.IPv4Address.IP = bv.BGPIPv4Addr.IP
+			} else {
+				// No network is stored, assume a full masked network.
+				apiNode.Spec.BGP.IPv4Address = bv.BGPIPv4Addr.Network()
+			}
+		}
+
+		// If the backend has an IPv6 address then fill in the IPv6Address
+		// field.  If the IP network does not exist assume a full mask.
+		if bv.BGPIPv6Addr != nil {
+			if bv.BGPIPv6Net != nil {
+				// Stored network is normalised, so copy across the
+				// IP separately.
+				apiNode.Spec.BGP.IPv6Address = bv.BGPIPv6Net
+				apiNode.Spec.BGP.IPv6Address.IP = bv.BGPIPv6Addr.IP
+			} else {
+				// No network is stored, assume a full masked network.
+				apiNode.Spec.BGP.IPv6Address = bv.BGPIPv6Addr.Network()
+			}
 		}
 	}
 

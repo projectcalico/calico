@@ -16,16 +16,16 @@ package resources
 
 import (
 	"encoding/json"
-	log "github.com/Sirupsen/logrus"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	kapi "k8s.io/client-go/pkg/api"
 )
 
-// ThirdPartyToIPPool takes a Kubrnetes ThirdPartyResource representation
-// of a Calico IP Pool and returns the equivalen IPPool object.
+// ThirdPartyToIPPool takes a Kubernetes ThirdPartyResource representation
+// of a Calico IP Pool and returns the equivalent IPPool object.
 func ThirdPartyToIPPool(t *thirdparty.IpPool) *model.KVPair {
 	v := model.IPPool{}
 	err := json.Unmarshal([]byte(t.Spec.Value), &v)

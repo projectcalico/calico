@@ -41,8 +41,8 @@ import (
 )
 
 var _ = Describe("Node tests", func() {
-	ipv4 := testutils.MustParseIP("1.2.3.4")
-	ipv6 := testutils.MustParseIP("aa::bb:dd")
+	cidrv4 := testutils.MustParseCIDR("1.2.3.5/24")
+	cidrv6 := testutils.MustParseCIDR("aa::bb00:0001/104")
 	asn := numorstring.ASNumber(12345)
 
 	DescribeTable("Node e2e tests",
@@ -158,31 +158,32 @@ var _ = Describe("Node tests", func() {
 			Expect(len(nodeList.Items)).To(Equal(0))
 		},
 
-		// Test 1: One IPv4 and one IPv6 nodespecs.  One with ASNumber, one without.
+		// Test 1: One IPv4 and one IPv6 nodespecs (+ opposite versioned networks).
+		//         One with ASNumber, one without.
 		Entry("Two fully populated NodeSpecs",
 			api.NodeMetadata{Name: "node1"},
 			api.NodeMetadata{Name: "node2"},
 			api.NodeSpec{
 				BGP: &api.NodeBGPSpec{
-					IPv4Address: &ipv4,
+					IPv4Address: &cidrv4,
 				},
 			},
 			api.NodeSpec{
 				BGP: &api.NodeBGPSpec{
-					IPv6Address: &ipv6,
+					IPv6Address: &cidrv6,
 					ASNumber:    &asn,
 				},
 			}),
 
-		// Test 2: BGP IPv4 and 6, and no BGP.
+		// Test 2: One with BGP IPv4 and 6, and one with no BGP.
 		Entry("Two fully populated NodeSpecs",
 			api.NodeMetadata{Name: "node1"},
 			api.NodeMetadata{Name: "node2"},
 			api.NodeSpec{},
 			api.NodeSpec{
 				BGP: &api.NodeBGPSpec{
-					IPv4Address: &ipv4,
-					IPv6Address: &ipv6,
+					IPv4Address: &cidrv4,
+					IPv6Address: &cidrv6,
 					ASNumber:    &asn,
 				},
 			}),

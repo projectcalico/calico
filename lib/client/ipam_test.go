@@ -125,7 +125,7 @@ var _ = Describe("IPAM tests", func() {
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
-		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
+		pool1 := testutils.MustParseNetwork("10.0.0.0/24")
 		var block cnet.IPNet
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
@@ -183,7 +183,7 @@ var _ = Describe("IPAM tests", func() {
 		})
 
 		// Step-4: Create a new IP Pool.
-		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+		pool2 := testutils.MustParseNetwork("20.0.0.0/24")
 		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
 
 		// Step-5: AutoAssign 1 IP without specifying a pool - expect the assigned IP is from pool2.
@@ -241,8 +241,8 @@ var _ = Describe("IPAM tests", func() {
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
-		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
-		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+		pool1 := testutils.MustParseNetwork("10.0.0.0/24")
+		pool2 := testutils.MustParseNetwork("20.0.0.0/24")
 		var block1, block2 cnet.IPNet
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
@@ -341,8 +341,8 @@ var _ = Describe("IPAM tests", func() {
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
-		pool1 := testutils.MustParseCIDR("10.0.0.0/24")
-		pool2 := testutils.MustParseCIDR("20.0.0.0/24")
+		pool1 := testutils.MustParseNetwork("10.0.0.0/24")
+		pool2 := testutils.MustParseNetwork("20.0.0.0/24")
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
@@ -485,7 +485,7 @@ var _ = Describe("IPAM tests", func() {
 
 	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
 		func(args testArgsClaimAff) {
-			inIPNet := testutils.MustParseCIDR(args.inNet)
+			inIPNet := testutils.MustParseNetwork(args.inNet)
 			c, _ := testutils.NewClient("")
 
 			// Wipe clean etcd, create a new client, and pools when cleanEnv flag is true.
@@ -609,7 +609,7 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 // testIPAMAutoAssign takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
 // then it calls AutoAssign (function under test) and returns the number of returned IPv4 and IPv6 addresses and returned error.
 func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string, usePool string) (int, int, error) {
-	fromPool := testutils.MustParseCIDR(usePool)
+	fromPool := testutils.MustParseNetwork(usePool)
 	args := client.AutoAssignArgs{
 		Num4:      inv4,
 		Num6:      inv6,

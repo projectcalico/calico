@@ -126,9 +126,13 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 		return nil, err
 	}
 
+	// IP networks are stored in the datastore in separate IPv4 and IPv6
+	// fields.  We normalise the network to ensure the IP is correctly
+	// masked.
 	ipv4Nets := []net.IPNet{}
 	ipv6Nets := []net.IPNet{}
 	for _, n := range ah.Spec.IPNetworks {
+		n = *(n.Network())
 		if n.Version() == 4 {
 			ipv4Nets = append(ipv4Nets, n)
 		} else {

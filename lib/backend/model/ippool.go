@@ -23,6 +23,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -93,6 +94,7 @@ func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 type IPPool struct {
 	CIDR          net.IPNet `json:"cidr"`
 	IPIPInterface string    `json:"ipip"`
+	IPIPMode      ipip.Mode `json:"ipip_mode"`
 	Masquerade    bool      `json:"masquerade"`
 	IPAM          bool      `json:"ipam"`
 	Disabled      bool      `json:"disabled"`

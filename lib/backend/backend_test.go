@@ -41,10 +41,10 @@ var _ = Describe("Backend tests", func() {
 
 		block = model.KVPair{
 			Key: model.BlockKey{
-				CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
+				CIDR: testutils.MustParseNetwork("10.0.0.0/26"),
 			},
 			Value: model.AllocationBlock{
-				CIDR: testutils.MustParseCIDR("10.0.0.0/26"),
+				CIDR: testutils.MustParseNetwork("10.0.0.0/26"),
 			},
 		}
 
@@ -77,7 +77,7 @@ var _ = Describe("Backend tests", func() {
 
 		It("updates a kv pair", func() {
 			block.Value = model.AllocationBlock{
-				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := etcdClient.Update(&block)
@@ -108,7 +108,7 @@ var _ = Describe("Backend tests", func() {
 
 		It("updates a kv pair", func() {
 			block.Value = model.AllocationBlock{
-				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := etcdClient.Apply(&block)
@@ -122,7 +122,7 @@ var _ = Describe("Backend tests", func() {
 
 		It("creates a kv pair", func() {
 			block.Key = model.BlockKey{
-				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := etcdClient.Apply(&block)
@@ -136,7 +136,7 @@ var _ = Describe("Backend tests", func() {
 
 		It("sets revision field", func() {
 			block.Value = model.AllocationBlock{
-				CIDR: testutils.MustParseCIDR("192.168.0.0/26"),
+				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := etcdClient.Apply(&block)

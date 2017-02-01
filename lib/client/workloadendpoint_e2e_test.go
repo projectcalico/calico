@@ -49,10 +49,10 @@ import (
 )
 
 var _ = Describe("WorkloadEndpoint tests", func() {
-	cidr1 := testutils.MustParseCIDR("10.0.0.0/24")
-	cidr2 := testutils.MustParseCIDR("20.0.0.0/24")
-	cidr3 := testutils.MustParseCIDR("192.168.0.0/24")
-	cidr4 := testutils.MustParseCIDR("172.56.0.0/24")
+	cidr1 := testutils.MustParseNetwork("10.0.0.0/24")
+	cidr2 := testutils.MustParseNetwork("20.0.0.0/24")
+	cidr3 := testutils.MustParseNetwork("192.168.0.0/24")
+	cidr4 := testutils.MustParseNetwork("172.56.0.0/24")
 	mac1, _ := net.ParseMAC("01:23:45:67:89:ab")
 	mac2, _ := net.ParseMAC("CA:FE:00:01:02:03")
 	ipv41 := testutils.MustParseIP("10.0.0.0")

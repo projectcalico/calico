@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 )
 
 // PoolInterface has methods to work with Pool resources.
@@ -150,10 +151,14 @@ func (h *ipPools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, err
 
 	// Only valid interface for now is tunl0.
 	var ipipInterface string
-	if ap.Spec.IPIP != nil && ap.Spec.IPIP.Enabled {
-		ipipInterface = "tunl0"
-	} else {
-		ipipInterface = ""
+	var ipipMode ipip.Mode
+	if ap.Spec.IPIP != nil {
+		if ap.Spec.IPIP.Enabled {
+			ipipInterface = "tunl0"
+		} else {
+			ipipInterface = ""
+		}
+		ipipMode = ap.Spec.IPIP.Mode
 	}
 
 	d := model.KVPair{
@@ -161,6 +166,7 @@ func (h *ipPools) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, err
 		Value: &model.IPPool{
 			CIDR:          ap.Metadata.CIDR,
 			IPIPInterface: ipipInterface,
+			IPIPMode:      ipipMode,
 			Masquerade:    ap.Spec.NATOutgoing,
 			IPAM:          !ap.Spec.Disabled,
 			Disabled:      ap.Spec.Disabled,
@@ -181,9 +187,12 @@ func (h *ipPools) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, err
 	apiPool.Spec.NATOutgoing = backendPool.Masquerade
 	apiPool.Spec.Disabled = backendPool.Disabled
 
-	// If an IPIP interface is specified, then IPIP is enabled.
-	if backendPool.IPIPInterface != "" {
-		apiPool.Spec.IPIP = &api.IPIPConfiguration{Enabled: true}
+	// If any IPIP configuration is present then include the IPIP spec..
+	if backendPool.IPIPInterface != "" || backendPool.IPIPMode != ipip.Undefined {
+		apiPool.Spec.IPIP = &api.IPIPConfiguration{
+			Enabled: backendPool.IPIPInterface != "",
+			Mode:    backendPool.IPIPMode,
+		}
 	}
 
 	return apiPool, nil

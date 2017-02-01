@@ -35,29 +35,61 @@ func (i *IPNet) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	if _, ipnet, err := net.ParseCIDR(s); err != nil {
-		return err
-	} else {
-		i.IP = ipnet.IP
+
+	// First attempt to parse as a CIDR and then as an IP address (assuming
+	// full mask).  When parsing as a CIDR we preserve the actual IP address
+	// and *not* the masked IP.
+	if ip, ipnet, err := ParseCIDR(s); err == nil {
+		i.IP = ip.IP
 		i.Mask = ipnet.Mask
 		return nil
 	}
+
+	ip := &IP{}
+	if err := ip.UnmarshalText([]byte(s)); err == nil {
+		n := ip.Network()
+		i.IP = n.IP
+		i.Mask = n.Mask
+		return nil
+	} else {
+		return err
+	}
 }
 
-// Version returns the IP version for an IPNet
+// Version returns the IP version for an IPNet, or 0 if not a valid IP net.
 func (i *IPNet) Version() int {
-	if i.IP.To4() == nil {
+	if i.IP.To4() != nil {
+		return 4
+	} else if len(i.IP) == net.IPv6len {
 		return 6
 	}
-	return 4
+	return 0
+}
+
+// Network returns the masked IP network.
+func (i *IPNet) Network() *IPNet {
+	_, n, _ := ParseCIDR(i.String())
+	return n
 }
 
 func ParseCIDR(c string) (*IP, *IPNet, error) {
 	netIP, netIPNet, e := net.ParseCIDR(c)
-	if netIPNet == nil {
+	if netIPNet == nil || e != nil {
 		return nil, nil, e
 	}
-	return &IP{netIP}, &IPNet{*netIPNet}, e
+	ip := &IP{netIP}
+	ipnet := &IPNet{*netIPNet}
+
+	// The base golang net library always uses a 4-byte IPv4 address in an
+	// IPv4 IPNet, so for uniformity in the returned types, make sure the
+	// IP address is also 4-bytes - this allows the user to safely assume
+	// all IP addresses returned by this function use the same encoding
+	// mechanism (not strictly required but better for testing and debugging).
+	if ip4 := ip.IP.To4(); ip4 != nil {
+		ip.IP = ip4
+	}
+
+	return ip, ipnet, nil
 }
 
 // String returns a friendly name for the network.  The standard net package

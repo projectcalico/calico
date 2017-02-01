@@ -374,11 +374,24 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "ip_addr_v4"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
-			nv.BGPIPv4 = &net.IP{}
-			err = nv.BGPIPv4.UnmarshalText([]byte(strval))
+			nv.BGPIPv4Addr = &net.IP{}
+			err = nv.BGPIPv4Addr.UnmarshalText([]byte(strval))
 			if err != nil {
 				log.WithError(err).Warning("Error unmarshalling IPv4")
-				nv.BGPIPv4 = nil
+				nv.BGPIPv4Addr = nil
+			}
+		}
+	} else if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		return err
+	}
+
+	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "network_v4"}); err == nil {
+		strval = component.Value.(string)
+		if strval != "" {
+			_, nv.BGPIPv4Net, err = net.ParseCIDR(strval)
+			if err != nil {
+				log.WithError(err).Warning("Error unmarshalling IPv4Net")
+				nv.BGPIPv4Net = nil
 			}
 		}
 	} else if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -388,11 +401,24 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "ip_addr_v6"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
-			nv.BGPIPv6 = &net.IP{}
-			err = nv.BGPIPv6.UnmarshalText([]byte(strval))
+			nv.BGPIPv6Addr = &net.IP{}
+			err = nv.BGPIPv6Addr.UnmarshalText([]byte(strval))
 			if err != nil {
 				log.WithError(err).Warning("Error unmarshalling IPv6")
-				nv.BGPIPv6 = nil
+				nv.BGPIPv6Addr = nil
+			}
+		}
+	} else if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		return err
+	}
+
+	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "network_v6"}); err == nil {
+		strval = component.Value.(string)
+		if strval != "" {
+			_, nv.BGPIPv6Net, err = net.ParseCIDR(strval)
+			if err != nil {
+				log.WithError(err).Warning("Error unmarshalling IPv6Net")
+				nv.BGPIPv6Net = nil
 			}
 		}
 	} else if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -484,12 +510,12 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 	// case should be a blank string).  Felix on the other hand deals
 	// with values not existing.
 	ipv4Str := ""
-	if n.BGPIPv4 != nil {
-		ipv4Str = n.BGPIPv4.String()
+	if n.BGPIPv4Addr != nil {
+		ipv4Str = n.BGPIPv4Addr.String()
 	}
 	ipv6Str := ""
-	if n.BGPIPv6 != nil {
-		ipv6Str = n.BGPIPv6.String()
+	if n.BGPIPv6Addr != nil {
+		ipv6Str = n.BGPIPv6Addr.String()
 	}
 
 	// Add the BGP IPv4 and IPv6 values - these are always present.
@@ -514,10 +540,10 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 	// address and the host ASN.  If either config is not specified, set
 	// the value to be nil to indicate to our default processing to delete
 	// the entry rather than set it.
-	if n.BGPIPv4 != nil {
+	if n.BGPIPv4Addr != nil {
 		optional = append(optional, &model.KVPair{
 			Key:   model.HostIPKey{nk.Hostname},
-			Value: n.BGPIPv4,
+			Value: n.BGPIPv4Addr,
 		})
 	} else {
 		optional = append(optional, &model.KVPair{
@@ -538,6 +564,38 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 			Key: model.HostBGPConfigKey{
 				Hostname: nk.Hostname,
 				Name:     "as_num",
+			},
+		})
+	}
+	if n.BGPIPv4Net != nil {
+		optional = append(optional, &model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v4",
+			},
+			Value: n.BGPIPv4Net.String(),
+		})
+	} else {
+		optional = append(optional, &model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v4",
+			},
+		})
+	}
+	if n.BGPIPv6Net != nil {
+		optional = append(optional, &model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v6",
+			},
+			Value: n.BGPIPv6Net.String(),
+		})
+	} else {
+		optional = append(optional, &model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v6",
 			},
 		})
 	}
@@ -574,6 +632,18 @@ func toNodeDeleteComponents(d *model.KVPair) (primary *model.KVPair, optional []
 			Key: model.HostBGPConfigKey{
 				Hostname: nk.Hostname,
 				Name:     "as_num",
+			},
+		},
+		&model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v4",
+			},
+		},
+		&model.KVPair{
+			Key: model.HostBGPConfigKey{
+				Hostname: nk.Hostname,
+				Name:     "network_v6",
 			},
 		},
 	}

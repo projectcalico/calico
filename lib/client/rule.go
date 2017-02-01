@@ -17,6 +17,7 @@ package client
 import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // ruleActionAPIToBackend converts the rule action field value from the API
@@ -67,7 +68,7 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 		SrcSelector: ar.Source.Selector,
 		SrcPorts:    ar.Source.Ports,
 		DstTag:      ar.Destination.Tag,
-		DstNet:      ar.Destination.Net,
+		DstNet:      normalizeIPNet(ar.Destination.Net),
 		DstSelector: ar.Destination.Selector,
 		DstPorts:    ar.Destination.Ports,
 
@@ -76,10 +77,19 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 		NotSrcSelector: ar.Source.NotSelector,
 		NotSrcPorts:    ar.Source.NotPorts,
 		NotDstTag:      ar.Destination.NotTag,
-		NotDstNet:      ar.Destination.NotNet,
+		NotDstNet:      normalizeIPNet(ar.Destination.NotNet),
 		NotDstSelector: ar.Destination.NotSelector,
 		NotDstPorts:    ar.Destination.NotPorts,
 	}
+}
+
+// normalizeIPNet converts an IPNet to a network by ensuring the IP address
+// is correctly masked.
+func normalizeIPNet(n *net.IPNet) *net.IPNet {
+	if n == nil {
+		return nil
+	}
+	return n.Network()
 }
 
 // ruleBackendToAPI convert a Backend Rule structure to an API Rule structure.

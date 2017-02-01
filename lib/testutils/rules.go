@@ -28,10 +28,10 @@ var numProtocol1 = numorstring.ProtocolFromInt(240)
 var icmpType1 = 100
 var icmpCode1 = 200
 
-var cidr1 = MustParseCIDR("10.0.0.1/24")
-var cidr2 = MustParseCIDR("20.0.0.1/24")
-var cidrv61 = MustParseCIDR("abcd:5555::/120")
-var cidrv62 = MustParseCIDR("abcd:2345::/120")
+var cidr1 = MustParseNetwork("10.0.0.1/24")
+var cidr2 = MustParseNetwork("20.0.0.1/24")
+var cidrv61 = MustParseNetwork("abcd:5555::/120")
+var cidrv62 = MustParseNetwork("abcd:2345::/120")
 
 var icmp1 = api.ICMPFields{
 	Type: &icmpType1,

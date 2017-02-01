@@ -56,7 +56,7 @@ type WorkloadEndpointSpec struct {
 	// allowed to leave this interface if they come from an address in one of these subnets.
 	//
 	// Currently only /32 for IPv4 and /128 for IPv6 networks are supported.
-	IPNetworks []net.IPNet `json:"ipNetworks,omitempty" validate:"omitempty,dive,cidr"`
+	IPNetworks []net.IPNet `json:"ipNetworks,omitempty" validate:"omitempty"`
 
 	// IPNATs is a list of 1:1 NAT mappings to apply to the endpoint. Inbound connections
 	// to the external IP will be forwarded to the internal IP. Connections initiated from the
@@ -66,10 +66,10 @@ type WorkloadEndpointSpec struct {
 	IPNATs []IPNAT `json:"ipNATs,omitempty" validate:"omitempty,dive"`
 
 	// IPv4Gateway is the gateway IPv4 address for traffic from the workload.
-	IPv4Gateway *net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty,ipv4"`
+	IPv4Gateway *net.IP `json:"ipv4Gateway,omitempty" validate:"omitempty"`
 
 	// IPv6Gateway is the gateway IPv6 address for traffic from the workload.
-	IPv6Gateway *net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty,ipv6"`
+	IPv6Gateway *net.IP `json:"ipv6Gateway,omitempty" validate:"omitempty"`
 
 	// A list of security Profile resources that apply to this endpoint. Each profile is
 	// applied in the order that they appear in this list.  Profile rules are applied
@@ -87,10 +87,10 @@ type WorkloadEndpointSpec struct {
 type IPNAT struct {
 	// The internal IP address which must be associated with the owning endpoint via the
 	// configured IPNetworks for the endpoint.
-	InternalIP net.IP `json:"internalIP" validate:"ip"`
+	InternalIP net.IP `json:"internalIP"`
 
 	// The external IP address.
-	ExternalIP net.IP `json:"externalIP" validate:"ip"`
+	ExternalIP net.IP `json:"externalIP"`
 }
 
 // String returns a friendly form of an IPNAT.

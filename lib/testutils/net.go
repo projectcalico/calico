@@ -19,12 +19,27 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-func MustParseCIDR(c string) net.IPNet {
+// MustParseNetwork parses the string into a net.IPNet.  The IP address in the
+// IPNet is masked.
+func MustParseNetwork(c string) net.IPNet {
 	_, cidr, err := gonet.ParseCIDR(c)
 	if err != nil {
 		panic(err)
 	}
 	return net.IPNet{*cidr}
+}
+
+// MustParseCIDR parses the string into a net.IPNet.  The IP address in the
+// IPNet is not masked.
+func MustParseCIDR(c string) net.IPNet {
+	ip, cidr, err := gonet.ParseCIDR(c)
+	if err != nil {
+		panic(err)
+	}
+	n := net.IPNet{}
+	n.IP = ip
+	n.Mask = cidr.Mask
+	return n
 }
 
 func MustParseIP(i string) net.IP {

@@ -240,13 +240,23 @@ func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.
 		}
 	}
 
+	if w.IPv4Gateway != nil && w.IPv4Gateway.Version() != 4 {
+		structLevel.ReportError(reflect.ValueOf(w.IPv4Gateway),
+			"IPv4Gateway", "", reason("invalid IPv4 gateway address specified"))
+	}
+
+	if w.IPv6Gateway != nil && w.IPv6Gateway.Version() != 6 {
+		structLevel.ReportError(reflect.ValueOf(w.IPv6Gateway),
+			"IPv6Gateway", "", reason("invalid IPv6 gateway address specified"))
+	}
+
 	// If NATs have been specified, then they should each be within the configured networks of
 	// the endpoint.
 	if len(w.IPNATs) > 0 {
-		// Check each NAT to ensure it is within the configured networks.  If any
-		// are not then exit without further checks.
 		valid := false
 		for _, nat := range w.IPNATs {
+			// Check each NAT to ensure it is within the configured networks.  If any
+			// are not then exit without further checks.
 			valid = false
 			for _, nw := range w.IPNetworks {
 				if nw.Contains(nat.InternalIP.IP) {
@@ -330,8 +340,20 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel) {
 	ns := structLevel.CurrentStruct.Interface().(api.NodeSpec)
 
-	if ns.BGP != nil && ns.BGP.IPv4Address == nil && ns.BGP.IPv6Address == nil {
-		structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
-			"BGP.IPv4Address", "", reason("no BGP IP address specified"))
+	if ns.BGP != nil {
+		if ns.BGP.IPv4Address == nil && ns.BGP.IPv6Address == nil {
+			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
+				"BGP.IPv4Address", "", reason("no BGP IP address and subnet specified"))
+		}
+
+		if ns.BGP.IPv4Address != nil && ns.BGP.IPv4Address.Version() != 4 {
+			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
+				"BGP.IPv4Address", "", reason("invalid IPv4 address and subnet specified"))
+		}
+
+		if ns.BGP.IPv6Address != nil && ns.BGP.IPv6Address.Version() != 6 {
+			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv6Address),
+				"BGP.IPv6Address", "", reason("invalid IPv6 address and subnet specified"))
+		}
 	}
 }

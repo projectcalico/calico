@@ -59,7 +59,7 @@ type HostEndpointSpec struct {
 	// 	endpoints, the ExpectedIPs field is used for that purpose. (If only the interface
 	// 	name is specified, Calico does not learn the IPs of the interface for use in match
 	// 	criteria.)
-	ExpectedIPs []net.IP `json:"expectedIPs,omitempty" validate:"omitempty,dive,ip"`
+	ExpectedIPs []net.IP `json:"expectedIPs,omitempty" validate:"omitempty"`
 
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied

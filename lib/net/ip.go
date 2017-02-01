@@ -42,10 +42,27 @@ func (i *IP) UnmarshalJSON(b []byte) error {
 	return i.UnmarshalText([]byte(s))
 }
 
-// Version returns the IP version for an IP
+// Version returns the IP version for an IP, or 0 if the IP is not valid.
 func (i IP) Version() int {
-	if i.To4() == nil {
+	if i.To4() != nil {
+		return 4
+	} else if len(i.IP) == net.IPv6len {
 		return 6
 	}
-	return 4
+	return 0
+}
+
+// Network returns the IP address as a fully masked IPNet type.
+func (i *IP) Network() *IPNet {
+	// Unmarshaling an IPv4 address returns a 16-byte format of the
+	// address, so convert to 4-byte format to match the mask.
+	n := &IPNet{}
+	if i.Version() == 4 {
+		n.IP = i.IP.To4()
+		n.Mask = net.CIDRMask(net.IPv4len*8, net.IPv4len*8)
+	} else {
+		n.IP = i.IP
+		n.Mask = net.CIDRMask(net.IPv6len*8, net.IPv6len*8)
+	}
+	return n
 }

@@ -42,15 +42,15 @@ func init() {
 	ipv4_2 := testutils.MustParseIP("100.200.0.0")
 	ipv6_1 := testutils.MustParseIP("aabb:aabb::ffff")
 	ipv6_2 := testutils.MustParseIP("aabb::abcd")
-	netv4_1 := testutils.MustParseCIDR("1.2.3.4/32")
-	netv4_2 := testutils.MustParseCIDR("1.2.0.0/32")
-	netv4_3 := testutils.MustParseCIDR("1.2.3.0/26")
-	netv4_4 := testutils.MustParseCIDR("1.2.3.4/10")
-	netv4_5 := testutils.MustParseCIDR("1.2.3.4/27")
-	netv6_1 := testutils.MustParseCIDR("aabb:aabb::ffff/128")
-	netv6_2 := testutils.MustParseCIDR("aabb:aabb::/128")
-	netv6_3 := testutils.MustParseCIDR("aabb:aabb::ffff/122")
-	netv6_4 := testutils.MustParseCIDR("aabb:aabb::ffff/10")
+	netv4_1 := testutils.MustParseNetwork("1.2.3.4/32")
+	netv4_2 := testutils.MustParseNetwork("1.2.0.0/32")
+	netv4_3 := testutils.MustParseNetwork("1.2.3.0/26")
+	netv4_4 := testutils.MustParseNetwork("1.2.3.4/10")
+	netv4_5 := testutils.MustParseNetwork("1.2.3.4/27")
+	netv6_1 := testutils.MustParseNetwork("aabb:aabb::ffff/128")
+	netv6_2 := testutils.MustParseNetwork("aabb:aabb::/128")
+	netv6_3 := testutils.MustParseNetwork("aabb:aabb::ffff/122")
+	netv6_4 := testutils.MustParseNetwork("aabb:aabb::ffff/10")
 
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
@@ -422,10 +422,12 @@ func init() {
 			}, false),
 
 		// (API) NodeSpec
-		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &ipv4_1}}, true),
-		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &ipv6_1}}, true),
+		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &netv4_1}}, true),
+		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &netv6_1}}, true),
 		Entry("should accept node with no BGP", api.NodeSpec{}, true),
 		Entry("should reject node with BGP but no IPs", api.NodeSpec{BGP: &api.NodeBGPSpec{}}, false),
+		Entry("should reject node with IPv6 address in IPv4 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &netv6_1}}, false),
+		Entry("should reject node with IPv4 address in IPv6 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &netv4_1}}, false),
 	)
 }
 
