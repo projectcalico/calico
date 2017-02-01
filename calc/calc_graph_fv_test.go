@@ -944,8 +944,10 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 						}
 						toValidator.OnStatusUpdated(api.InSync)
 
-						// Give the graph some time to flush its output.
-						time.Sleep(1 * time.Second)
+						// Wait for the graph to flush.  We've seen this
+						// take >1s on a heavily-loaded test server so we
+						// give it a long timeout.
+						time.Sleep(10 * time.Second)
 						done <- true
 					}()
 
