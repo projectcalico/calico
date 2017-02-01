@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2014-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2014-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,6 +116,10 @@ class TestWorkloadEndpointId(unittest.TestCase):
                                              "workload", "notanendpoint")
         self.assertFalse(ep_id == bad_endpoint_ep_id)
         self.assertTrue(ep_id != bad_endpoint_ep_id)
+
+    def test_str(self):
+        self.assertEqual(str(WloadEndpointId("a", "b", "c", "d")),
+                         "WloadEndpointId('a','b','c','d')")
 
 
 class TestHostEndpointId(unittest.TestCase):

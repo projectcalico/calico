@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -224,6 +224,12 @@ class WloadEndpointId(EndpointId):
                          "workload", self.orchestrator, self.workload,
                          "endpoint", self.endpoint])
 
+    def __str__(self):
+        return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,
+                                                             self.orchestrator,
+                                                             self.workload,
+                                                             self.endpoint))
+
     def __repr__(self):
         return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,
                                                              self.orchestrator,
@@ -293,6 +299,7 @@ class ResolvedHostEndpointId(HostEndpointId):
         return self.__class__.__name__ + ("(%r,%r,%r)" % (self.host,
                                                           self.endpoint,
                                                           self.iface_name))
+
 
 class TieredPolicyId(object):
     __slots__ = ["tier", "policy_id"]
