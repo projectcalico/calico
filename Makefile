@@ -230,9 +230,11 @@ update-tools:
 	go get -u github.com/onsi/ginkgo/ginkgo
 
 # Run go fmt on all our go files.
-.PHONY: go-fmt
-go-fmt:
-	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs go fmt'
+.PHONY: go-fmt goimports
+go-fmt goimports:
+	$(DOCKER_GO_BUILD) sh -c 'glide nv -x | \
+	                          grep -v -e "^\\.$$" | \
+	                          xargs goimports -w -local github.com/projectcalico/ *.go'
 
 check-licenses/dependency-licenses.txt: vendor/.up-to-date
 	$(DOCKER_GO_BUILD) sh -c 'licenses . > check-licenses/dependency-licenses.txt'

@@ -17,13 +17,15 @@ package iptables
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/set"
-	"github.com/prometheus/client_golang/prometheus"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/projectcalico/felix/set"
 )
 
 const (

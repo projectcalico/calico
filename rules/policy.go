@@ -16,11 +16,13 @@ package rules
 
 import (
 	"errors"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/hashutils"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
-	"strings"
 )
 
 // ruleRenderer defined in rules_defs.go.

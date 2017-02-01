@@ -16,10 +16,11 @@ package jitter
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"time"
 )
 
 var _ = Describe("Real 20ms + 10ms Ticker", func() {

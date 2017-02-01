@@ -15,10 +15,12 @@
 package dispatcher
 
 import (
+	"reflect"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"reflect"
 )
 
 type UpdateHandler func(update api.Update) (filterOut bool)

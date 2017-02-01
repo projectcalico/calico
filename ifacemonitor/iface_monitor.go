@@ -15,11 +15,13 @@
 package ifacemonitor
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/set"
-	"github.com/vishvananda/netlink"
 	"syscall"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/felix/set"
 )
 
 type netlinkStub interface {

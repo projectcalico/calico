@@ -17,16 +17,18 @@ package calc_test
 import (
 	. "github.com/projectcalico/felix/calc"
 
+	"reflect"
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
-	"reflect"
-	"strings"
 )
 
 var (

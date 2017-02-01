@@ -15,12 +15,14 @@
 package rules
 
 import (
+	"net"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
-	"net"
-	"strings"
 )
 
 const (

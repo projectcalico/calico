@@ -16,11 +16,12 @@ package calc_test
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
-	"reflect"
 )
 
 // A state represents a particular state of the datastore and the expected

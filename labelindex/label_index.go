@@ -16,6 +16,7 @@ package labelindex
 
 import (
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 

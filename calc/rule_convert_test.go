@@ -15,13 +15,15 @@
 package calc
 
 import (
+	net2 "net"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	net2 "net"
 )
 
 var ipv0 = 0

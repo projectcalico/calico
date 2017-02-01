@@ -19,13 +19,15 @@ import (
 
 	"encoding/json"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/buildinfo"
-	"github.com/projectcalico/felix/calc"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/projectcalico/felix/buildinfo"
+	"github.com/projectcalico/felix/calc"
 )
 
 const (

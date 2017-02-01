@@ -16,6 +16,7 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/multidict"

@@ -15,11 +15,13 @@
 package intdataplane
 
 import (
+	"reflect"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/rules"
-	"reflect"
 )
 
 // A floating IP is an IP that can be used to reach a particular workload endpoint, but that the

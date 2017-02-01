@@ -16,9 +16,11 @@ package iptables
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/proto"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/projectcalico/felix/proto"
 )
 
 type MatchCriteria []string

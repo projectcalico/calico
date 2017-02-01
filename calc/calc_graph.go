@@ -16,6 +16,8 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/labelindex"
@@ -25,7 +27,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/selector"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (

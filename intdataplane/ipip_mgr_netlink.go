@@ -15,8 +15,9 @@
 package intdataplane
 
 import (
-	"github.com/vishvananda/netlink"
 	"os/exec"
+
+	"github.com/vishvananda/netlink"
 )
 
 // ipipDataplane is a shim interface for mocking netlink and os/exec in the IPIP manager.

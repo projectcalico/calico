@@ -18,9 +18,14 @@ import (
 	. "github.com/projectcalico/felix/calc"
 
 	"fmt"
+	"reflect"
+	"strings"
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
@@ -28,9 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"reflect"
-	"strings"
-	"time"
 )
 
 // Canned hostnames.

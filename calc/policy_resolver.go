@@ -16,12 +16,13 @@ package calc
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/multidict"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (

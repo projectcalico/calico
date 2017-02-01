@@ -15,14 +15,16 @@
 package calc
 
 import (
+	"reflect"
+	"time"
+
 	log "github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/prometheus/client_golang/prometheus"
-	"reflect"
-	"time"
 )
 
 const (

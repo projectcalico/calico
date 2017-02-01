@@ -15,9 +15,10 @@
 package jitter
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"math/rand"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 // Ticker tries to emit events on channel C at minDuration intervals plus up to maxJitter.

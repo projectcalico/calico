@@ -17,10 +17,11 @@ package config_test
 import (
 	. "github.com/projectcalico/felix/config"
 
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
 	"net"
 	"reflect"
+
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
 )
 
 var _ = DescribeTable("Config parsing",

@@ -15,7 +15,10 @@
 package calc
 
 import (
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/multidict"
@@ -23,7 +26,6 @@ import (
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"strings"
 )
 
 type EventHandler func(message interface{})

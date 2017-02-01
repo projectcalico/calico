@@ -15,14 +15,16 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"os"
 
+	log "github.com/Sirupsen/logrus"
+
 	"bufio"
-	"github.com/projectcalico/felix/logutils"
-	"github.com/projectcalico/felix/set"
 	"regexp"
 	"strings"
+
+	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/felix/set"
 )
 
 var (

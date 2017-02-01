@@ -18,9 +18,10 @@ import (
 	. "github.com/projectcalico/felix/conntrack"
 
 	"errors"
+	"net"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"net"
 )
 
 var _ = Describe("Conntrack", func() {

@@ -17,8 +17,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/kardianos/osext"
 	"net"
 	"net/url"
 	"os"
@@ -27,6 +25,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/kardianos/osext"
 )
 
 const (

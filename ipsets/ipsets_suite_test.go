@@ -18,10 +18,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"testing"
+
 	"github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
-	"testing"
 )
 
 func init() {

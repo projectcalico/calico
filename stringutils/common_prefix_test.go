@@ -17,10 +17,11 @@ package stringutils_test
 import (
 	. "github.com/projectcalico/felix/stringutils"
 
+	"sort"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"sort"
 )
 
 var _ = DescribeTable("CommonPrefix tests",

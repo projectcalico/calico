@@ -15,12 +15,14 @@
 package usagerep
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/buildinfo"
-	"github.com/projectcalico/felix/calc"
 	"net/url"
 	"time"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/felix/buildinfo"
+	"github.com/projectcalico/felix/calc"
 )
 
 var _ = Describe("Usagerep", func() {

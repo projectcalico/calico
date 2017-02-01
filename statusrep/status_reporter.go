@@ -15,13 +15,15 @@
 package statusrep
 
 import (
+	"time"
+
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/jitter"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	"time"
 )
 
 type EndpointStatusReporter struct {

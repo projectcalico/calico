@@ -18,12 +18,15 @@ import (
 	. "github.com/projectcalico/felix/iptables"
 
 	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/rules"
 
-	log "github.com/Sirupsen/logrus"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var _ = Describe("Table with an empty dataplane", func() {

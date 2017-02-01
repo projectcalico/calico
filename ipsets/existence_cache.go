@@ -16,9 +16,11 @@ package ipsets
 
 import (
 	"bytes"
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/set"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/projectcalico/felix/set"
 )
 
 type ExistenceCache struct {

@@ -15,10 +15,11 @@
 package conntrack
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"net"
 	"os/exec"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var conntrackDirections = []string{

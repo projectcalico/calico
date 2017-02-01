@@ -16,12 +16,14 @@ package ipsets_test
 
 import (
 	"fmt"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	. "github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/set"
-	"time"
 )
 
 const (

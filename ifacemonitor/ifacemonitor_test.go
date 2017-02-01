@@ -21,9 +21,10 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/set"
-	"github.com/vishvananda/netlink"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

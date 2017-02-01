@@ -15,10 +15,12 @@
 package intdataplane
 
 import (
+	"net"
+
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/set"
-	"net"
 )
 
 type mockIPSets struct {

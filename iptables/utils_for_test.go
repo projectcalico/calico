@@ -18,15 +18,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	. "github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/set"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/felix/iptables"
+	"github.com/projectcalico/felix/set"
 )
 
 // This file contains shared test infrastructure for testing the iptables package.

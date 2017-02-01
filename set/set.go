@@ -16,8 +16,9 @@ package set
 
 import (
 	"errors"
-	log "github.com/Sirupsen/logrus"
 	"reflect"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 type Set interface {

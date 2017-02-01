@@ -15,9 +15,11 @@
 package calc_test
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	net2 "net"
+
+	log "github.com/Sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 func mustParseMac(m string) *net.MAC {

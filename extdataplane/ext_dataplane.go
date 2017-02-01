@@ -19,13 +19,15 @@ package extdataplane
 import (
 	"bytes"
 	"encoding/binary"
-	log "github.com/Sirupsen/logrus"
-	pb "github.com/gogo/protobuf/proto"
-	_ "github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/proto"
 	"io"
 	"os"
 	"os/exec"
+
+	log "github.com/Sirupsen/logrus"
+	pb "github.com/gogo/protobuf/proto"
+
+	_ "github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/proto"
 )
 
 // StartExtDataplaneDriver starts the given driver as a child process and returns a

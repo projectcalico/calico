@@ -18,10 +18,11 @@ import (
 	. "github.com/projectcalico/felix/logutils"
 
 	"bytes"
+	"io"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"io"
 )
 
 var _ = Describe("Logutils", func() {

@@ -17,14 +17,16 @@ package calc_test
 import (
 	. "github.com/projectcalico/felix/calc"
 
+	"reflect"
+
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"reflect"
 )
 
 var testIP = mustParseIP("10.0.0.1")

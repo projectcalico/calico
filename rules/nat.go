@@ -15,8 +15,9 @@
 package rules
 
 import (
-	"github.com/projectcalico/felix/iptables"
 	"sort"
+
+	"github.com/projectcalico/felix/iptables"
 )
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {

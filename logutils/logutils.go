@@ -17,10 +17,6 @@ package logutils
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
-	"github.com/mipearson/rfw"
-	"github.com/projectcalico/felix/config"
 	"io"
 	"log/syslog"
 	"os"
@@ -29,6 +25,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	log "github.com/Sirupsen/logrus"
+	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
+	"github.com/mipearson/rfw"
+
+	"github.com/projectcalico/felix/config"
 )
 
 // logrusToSyslogLevel maps logrus.Level to the matching syslog level used by

@@ -17,6 +17,7 @@ package intdataplane
 import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/iptables"
 )
 

@@ -18,11 +18,13 @@ import (
 	. "github.com/projectcalico/felix/rules"
 
 	"fmt"
+	"net"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/ipsets"
 	. "github.com/projectcalico/felix/iptables"
-	"net"
 )
 
 var _ = Describe("Static", func() {

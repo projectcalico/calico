@@ -22,9 +22,11 @@ package ip
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"net"
+
+	log "github.com/Sirupsen/logrus"
+
+	calinet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // Addr represents either an IPv4 or IPv6 IP address.

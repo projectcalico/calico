@@ -16,9 +16,12 @@ package intdataplane
 
 import (
 	"errors"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -27,7 +30,6 @@ import (
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/felix/testutils"
-	"strings"
 )
 
 var wlDispatchEmpty = []*iptables.Chain{

@@ -15,10 +15,11 @@
 package config
 
 import (
-	log "github.com/Sirupsen/logrus"
-	"github.com/go-ini/ini"
 	"io/ioutil"
 	"os"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/go-ini/ini"
 )
 
 func LoadConfigFile(filename string) (map[string]string, error) {

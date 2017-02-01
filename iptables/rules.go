@@ -18,8 +18,9 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
