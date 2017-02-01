@@ -252,6 +252,18 @@ check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
 	@echo Checking dependency licenses
 	$(DOCKER_GO_BUILD) bin/check-licenses
 
+.PHONY: go-meta-linter
+go-meta-linter: vendor/.up-to-date
+	$(DOCKER_GO_BUILD) gometalinter --deadline=300s \
+	                                --disable-all \
+	                                --enable=goimports \
+	                                --enable=staticcheck \
+	                                --vendor ./...
+
+.PHONY: static-checks
+static-checks:
+	$(MAKE) go-meta-linter check-licenses
+
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(GO_FILES)
 	@echo Running Go UTs without coverage.

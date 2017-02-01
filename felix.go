@@ -338,7 +338,7 @@ func servePrometheusMetrics(port int) {
 		err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
-		time.Sleep(1)
+		time.Sleep(1 * time.Second)
 	}
 }
 

@@ -126,6 +126,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 	datamodelInSync := false
 	resyncRequested := false
 
+loop:
 	for {
 		updatesAllowed := false
 		select {
@@ -133,7 +134,7 @@ func (esr *EndpointStatusReporter) loopHandlingEndpointStatusUpdates() {
 			log.Info("Stopping endpoint status reporter")
 			esr.resyncTicker.Stop()
 			esr.rateLimitTicker.Stop()
-			break
+			break loop
 		case <-esr.resyncTickerC:
 			log.Debug("Endpoint status resync tick: scheduling cleanup")
 			resyncRequested = true
