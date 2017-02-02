@@ -28,7 +28,7 @@ The key semantic difference between those approaches is that:
 The use of floating IPs is already well known, so we won't labour how to use
 those here.  For some additional information on how Calico supports floating
 IPs, see [Floating
-IPs]({{site.baseurl}}/{{page.version}}/reference/networking-calico/floating-ips).
+IPs]({{site.baseurl}}/{{page.version}}/usage/openstack/floating-ips).
 
 The use and maintainance of additional fixed IPs, however, is not so well
 known, so in the following transcripts we demonstrate this approach for

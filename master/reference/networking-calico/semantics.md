@@ -70,7 +70,7 @@ tenant networks that *are* attached through a router to a provider network.
 One reason for the latter case is to use floating IPs with Calico, because in
 current Neutron the target of a floating IP has to be an instance attached to a
 tenant network.  For more on this, see [Floating
-IPs]({{site.baseurl}}/{{page.version}}/reference/networking-calico/floating-ips).
+IPs]({{site.baseurl}}/{{page.version}}/usage/openstack/floating-ips).
 
 ## Flat IP addressing
 

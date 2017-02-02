@@ -113,16 +113,8 @@ toc:
     path: /reference/networking-calico/
   - title: Detailed Semantics
     path: /reference/networking-calico/semantics
-  - title: Floating IPs
-    path: /reference/networking-calico/floating-ips
-  - title: Service IPs
-    path: /reference/networking-calico/service-ips
-  - title: Kuryr
-    path: /reference/networking-calico/kuryr
   - title: Implementation notes
     path: /reference/networking-calico/implementation-notes
-  - title: Host routes
-    path: /reference/networking-calico/host-routes
   - title: DHCP agent
     path: /reference/networking-calico/dhcp-agent
 - title: Repo Structure

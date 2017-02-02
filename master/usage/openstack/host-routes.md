@@ -1,5 +1,5 @@
 ---
-title: Calico and Neutron host routes
+title: Host routes
 ---
 
 Neutron allows "host routes" to be configured on a subnet, with each host route
