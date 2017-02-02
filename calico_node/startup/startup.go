@@ -366,7 +366,17 @@ func configureASNumber(node *api.Node) {
 // configureIPPools ensures that default IP pools are created (unless explicitly
 // requested otherwise).
 func configureIPPools(client *client.Client) {
+	// Read in environment variables for use here and later.
+	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
+	ipv6Pool := os.Getenv("CALICO_IPV6POOL_CIDR")
+	ipipEnabled := strings.ToLower(os.Getenv("CALICO_IPIP_ENABLED")) == "true"
+
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
+		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
+			fatal("Invalid configuration with NO_DEFAULT_POOLS defined and CALICO_IPV4POOL_CIDR or CALICO_IPV6POOL_CIDR defined.")
+			terminate()
+		}
+
 		log.Info("Skipping IP pool configuration")
 		return
 	}
@@ -390,14 +400,34 @@ func configureIPPools(client *client.Client) {
 		}
 	}
 
+	// Read IPV4 CIDR from env if set and parse then check it for errors
+	if ipv4Pool == "" {
+		ipv4Pool = DEFAULT_IPV4_POOL_CIDR
+	}
+	_, ipv4Cidr, err := net.ParseCIDR(ipv4Pool)
+	if err != nil {
+		fatal("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
+		terminate()
+	}
+
+	// Read IPV6 CIDR from env if set and parse then check it for errors
+	if ipv6Pool == "" {
+		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
+	}
+	_, ipv6Cidr, err := net.ParseCIDR(ipv6Pool)
+	if err != nil {
+		fatal("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
+		terminate()
+	}
+
 	// Ensure there are pools created for each IP version.
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
-		createIPPool(client, DEFAULT_IPV4_POOL_CIDR)
+		createIPPool(client, ipv4Cidr, ipipEnabled)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
-		createIPPool(client, DEFAULT_IPV6_POOL_CIDR)
+		createIPPool(client, ipv6Cidr, ipipEnabled)
 	}
 }
 
@@ -420,19 +450,19 @@ func ipv6Supported() bool {
 	return supported
 }
 
-// createIPPool creates an IP pool using the specified CIDR string.  This
+// createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(client *client.Client, cs string) {
-	_, cidr, _ := net.ParseCIDR(cs)
+func createIPPool(client *client.Client, cidr *net.IPNet, ipip bool) {
 	version := cidr.Version()
 
-	log.Info("Ensure default IPv%d pool is created", version)
+	log.Info("Ensure default IPv%d pool is created. IPIP enabled: %t", version, ipip)
 	pool := &api.IPPool{
 		Metadata: api.IPPoolMetadata{
 			CIDR: *cidr,
 		},
 		Spec: api.IPPoolSpec{
 			NATOutgoing: true,
+			IPIP:        &api.IPIPConfiguration{Enabled: ipip},
 		},
 	}
 
@@ -444,7 +474,8 @@ func createIPPool(client *client.Client, cs string) {
 			terminate()
 		}
 	} else {
-		message("Created default IPv%d pool (%s) with NAT outgoing enabled", version, cidr)
+		message("Created default IPv%d pool (%s) with NAT outgoing enabled. IPIP enabled: %t",
+			version, cidr, ipip)
 	}
 }
 

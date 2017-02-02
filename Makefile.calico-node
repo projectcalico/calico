@@ -324,11 +324,11 @@ run-etcd-host:
 	--listen-client-urls "http://0.0.0.0:2379"
 
 ###############################################################################
-# calico_node UTs
+# calico_node FVs
 ###############################################################################
-.PHONY: node-ut
-## Run the Unit Tests locally
-node-ut:
+.PHONY: node-fv
+## Run the Functional Verification tests locally, must have local etcd running
+node-fv:
 	# Run tests in random order find tests recursively (-r).
 	ginkgo -cover -r --skipPackage vendor calico_node/*
 
@@ -348,7 +348,8 @@ node-ut:
 
 PHONY: node-test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-node-test-containerized:
+node-test-containerized: vendor run-etcd-host
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-ut'
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	--net=host \
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
