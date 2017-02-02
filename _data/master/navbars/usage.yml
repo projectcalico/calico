@@ -19,6 +19,8 @@ toc:
   path: /usage/external-connectivity
 - title: Calico for OpenStack
   section:
+  - title: Detailed Semantics
+    path: /usage/openstack/semantics
   - title: Floating IPs
     path: /usage/openstack/floating-ips
   - title: Service IPs

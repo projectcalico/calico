@@ -107,10 +107,6 @@ toc:
   section:
   - title: RBAC for etcdv2
     path: /reference/advanced/etcd-rbac
-- title: "Calico's driver for OpenStack (networking-calico)"
-  section:
-  - title: Detailed Semantics
-    path: /reference/networking-calico/semantics
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute
