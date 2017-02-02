@@ -109,14 +109,8 @@ toc:
     path: /reference/advanced/etcd-rbac
 - title: "Calico's driver for OpenStack (networking-calico)"
   section:
-  - title: networking-calico
-    path: /reference/networking-calico/
   - title: Detailed Semantics
     path: /reference/networking-calico/semantics
-  - title: Implementation notes
-    path: /reference/networking-calico/implementation-notes
-  - title: DHCP agent
-    path: /reference/networking-calico/dhcp-agent
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute
