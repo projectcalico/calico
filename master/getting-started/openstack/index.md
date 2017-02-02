@@ -40,5 +40,5 @@ project](http://docs.openstack.org/infra/manual/creators.html#decide-status-of-y
 From an OpenStack point of view, networking-calico is just one of many possible
 Neutron drivers that provide connectivity between instances (VMs) as specified
 by the Neutron API.  The [Usage
-section]({{site.baseurl}}/{{page.version}}/usage) gives more details about the
+section]({{site.baseurl}}/{{page.version}}/usage) gives more detail about the
 parts of the Neutron API that the networking-calico provides.
