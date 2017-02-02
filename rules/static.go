@@ -88,9 +88,19 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	}
 
 	// Apply host endpoint policy.
-	inputRules = append(inputRules, Rule{
-		Action: GotoAction{Target: ChainDispatchFromHostEndpoint},
-	})
+	inputRules = append(inputRules,
+		Rule{
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+		},
+		Rule{
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
+		},
+		Rule{
+			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Action:  AcceptAction{},
+			Comment: "Host endpoint policy accepted packet.",
+		},
+	)
 
 	return &Chain{
 		Name:  ChainFilterInput,
@@ -292,10 +302,18 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	// allows Calico to police traffic that is flowing through a NAT gateway or router.
 	rules = append(rules,
 		Rule{
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+		},
+		Rule{
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		Rule{
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+		},
+		Rule{
+			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Action:  AcceptAction{},
+			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
 
@@ -348,9 +366,19 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	// host endpoint.
 
 	// Apply host endpoint policy.
-	rules = append(rules, Rule{
-		Action: GotoAction{Target: ChainDispatchToHostEndpoint},
-	})
+	rules = append(rules,
+		Rule{
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+		},
+		Rule{
+			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
+		},
+		Rule{
+			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Action:  AcceptAction{},
+			Comment: "Host endpoint policy accepted packet.",
+		},
+	)
 
 	return &Chain{
 		Name:  ChainFilterOutput,
@@ -467,7 +495,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// For safety, clear all our mark bits before we start.  (We could be in append mode and
 	// another process' rules could have left the mark bit set.)
 	rules = append(rules,
-		Rule{Action: ClearMarkAction{Mark: r.allMarkBits()}},
+		Rule{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
 	)
 
 	// Set a mark on the packet if it's from a workload interface.
@@ -509,7 +537,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	}
 }
 
-func (r *DefaultRuleRenderer) allMarkBits() uint32 {
+func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {
 	return r.IptablesMarkFromWorkload |
 		r.IptablesMarkAccept |
 		r.IptablesMarkNextTier
@@ -521,7 +549,7 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
 		Rules: []Rule{
 			// For safety, clear all our mark bits before we start.  (We could be in
 			// append mode and another process' rules could have left the mark bit set.)
-			{Action: ClearMarkAction{Mark: r.allMarkBits()}},
+			{Action: ClearMarkAction{Mark: r.allCalicoMarkBits()}},
 			// Then, jump to the untracked policy chains.
 			{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 			// Then, if the packet was marked as allowed, accept it.  Packets also
