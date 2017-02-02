@@ -27,8 +27,7 @@ You can use DevStack to install a single node Calico/Kuryr system, with a
 Please follow general Kuryr instructions for creating a Docker network that
 uses Kuryr as its backend, and for launching containers on that network.  Then
 if you look at the IP routing table and iptables, you will see Calico routes to
-the containers, as described in [Implementation
-notes]({{site.baseurl}}/{{page.version}}/reference/networking-calico/implementation-notes).
+the containers.
 
 Calico for containers without Kuryr
 -----------------------------------
