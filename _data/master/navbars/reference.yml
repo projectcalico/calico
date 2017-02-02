@@ -117,8 +117,6 @@ toc:
     path: /reference/networking-calico/floating-ips
   - title: Service IPs
     path: /reference/networking-calico/service-ips
-  - title: DevStack
-    path: /reference/networking-calico/devstack
   - title: Kuryr
     path: /reference/networking-calico/kuryr
   - title: Implementation notes

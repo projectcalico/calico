@@ -111,6 +111,8 @@ toc:
       path: /getting-started/openstack/installation/juju
     - title: Fuel
       path: /getting-started/openstack/installation/fuel
+    - title: DevStack
+      path: /getting-started/openstack/installation/devstack
     - title: Chef
       path: /getting-started/openstack/installation/chef
   - title: Upgrade
