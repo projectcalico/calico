@@ -1,5 +1,5 @@
 ---
-title: Calico and Kuryr
+title: Kuryr
 ---
 
 networking-calico works with Kuryr; this means using Neutron, with the Calico
