@@ -53,7 +53,7 @@ func init() {
 }
 
 type Config struct {
-	DisableIPv6          bool
+	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
 
@@ -63,6 +63,8 @@ type Config struct {
 	IptablesInsertMode      string
 
 	RulesConfig rules.Config
+
+	StatusReportingInterval time.Duration
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -183,7 +185,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
-	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, !config.DisableIPv6)
+	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
 	dp.RegisterManager(newIPSetsManager(ipSetRegV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(rawTableV4, filterTableV4, ruleRenderer, 4))
@@ -202,7 +204,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.ipipManager = newIPIPManager(ipSetRegV4, config.MaxIPSetSize)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
-	if !config.DisableIPv6 {
+	if config.IPv6Enabled {
 		natTableV6 := iptables.NewTable(
 			"nat",
 			6,
@@ -524,9 +526,14 @@ func (d *InternalDataplane) apply() {
 
 func (d *InternalDataplane) loopReportingStatus() {
 	log.Info("Started internal status report thread")
+	if d.config.StatusReportingInterval <= 0 {
+		log.Info("Process status reports disabled")
+		return
+	}
 	start := time.Now()
+	// Wait before first report so that we don't check in if we're in a tight cyclic restart.
+	time.Sleep(10 * time.Second)
 	for {
-		time.Sleep(10 * time.Second)
 		now := time.Now()
 		uptimeNanos := float64(now.Sub(start))
 		uptimeSecs := uptimeNanos / 1000000000
@@ -534,6 +541,7 @@ func (d *InternalDataplane) loopReportingStatus() {
 			IsoTimestamp: now.UTC().Format(time.RFC3339),
 			Uptime:       uptimeSecs,
 		}
+		time.Sleep(d.config.StatusReportingInterval)
 	}
 }
 
