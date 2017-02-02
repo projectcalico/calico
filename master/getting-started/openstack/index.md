@@ -40,12 +40,12 @@ project](http://docs.openstack.org/infra/manual/creators.html#decide-status-of-y
 From an OpenStack point of view, networking-calico is just one of many possible
 Neutron drivers that provide connectivity between instances (VMs) as specified
 by the Neutron API.  However there are some parts of the Neutron API that
-networking-calico interprets differently, or does not implement at all.
-Documentation for readers who are already familiar with OpenStack and Neutron,
-and hence mostly interested in what is special or different about the
+networking-calico interprets differently, or does not implement at all.  UPDATE
+NEEDED: Documentation for readers who are already familiar with OpenStack and
+Neutron, and hence mostly interested in what is special or different about the
 networking-calico driver, can be found at
 [http://docs.openstack.org/developer/networking-calico/](http://docs.openstack.org/developer/networking-calico/).
 
-The documentation here covers some of the ways of installing Calico in an
-OpenStack deployment, plus introductory information on how to see that Calico
-is working in your cluster.
+UPDATE NEEDED: The documentation here covers some of the ways of installing
+Calico in an OpenStack deployment, plus introductory information on how to see
+that Calico is working in your cluster.
