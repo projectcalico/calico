@@ -52,13 +52,6 @@ var _ = DescribeTable("Config parsing",
 		"https://127.0.0.1:1234/, https://host:2345",
 		[]string{"https://127.0.0.1:1234/", "https://host:2345/"}),
 
-	Entry("StartupCleanupDelay 12", "StartupCleanupDelay", "12", int(12)),
-	Entry("StartupCleanupDelay 0", "StartupCleanupDelay", "0", int(0)),
-	Entry("PeriodicResyncInterval 1500", "PeriodicResyncInterval", "1500", int(1500)),
-	Entry("PeriodicResyncInterval 0", "PeriodicResyncInterval", "0", int(0)),
-	Entry("HostInterfacePollInterval", "HostInterfacePollInterval", "11", int(11)),
-	Entry("HostInterfacePollInterval", "HostInterfacePollInterval", "0", int(0)),
-
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
 

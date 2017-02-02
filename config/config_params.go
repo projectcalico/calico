@@ -106,10 +106,6 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
-	StartupCleanupDelay       int `config:"int;30"`
-	PeriodicResyncInterval    int `config:"int;3600"`
-	HostInterfacePollInterval int `config:"int;10"`
-
 	IptablesRefreshInterval int `config:"int;60"`
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
@@ -122,8 +118,7 @@ type Config struct {
 	DropActionOverride          string `config:"oneof(DROP,ACCEPT,LOG-and-DROP,LOG-and-ACCEPT);DROP;non-zero,die-on-fail"`
 	LogPrefix                   string `config:"string;calico-drop"`
 
-	LogFilePath           string `config:"file;/var/log/calico/felix.log;die-on-fail"`
-	EtcdDriverLogFilePath string `config:"file;/var/log/calico/felix-etcd.log"`
+	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
 	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
@@ -143,9 +138,8 @@ type Config struct {
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xff000000;non-zero,die-on-fail"`
 
-	PrometheusMetricsEnabled             bool `config:"bool;false"`
-	PrometheusMetricsPort                int  `config:"int(0,65535);9091"`
-	DataplaneDriverPrometheusMetricsPort int  `config:"int(0,65535);9092"`
+	PrometheusMetricsEnabled bool `config:"bool;false"`
+	PrometheusMetricsPort    int  `config:"int(0,65535);9091"`
 
 	FailsafeInboundHostPorts  []uint16 `config:"port-list;22;die-on-fail"`
 	FailsafeOutboundHostPorts []uint16 `config:"port-list;2379,2380,4001,7001;die-on-fail"`
