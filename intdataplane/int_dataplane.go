@@ -154,6 +154,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptables.TableOptions{
 			HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 			ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
+			InsertMode:               config.IptablesInsertMode,
 		},
 	)
 	rawTableV4 := iptables.NewTable(
@@ -162,6 +163,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		rules.RuleHashPrefix,
 		iptables.TableOptions{
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			InsertMode:            config.IptablesInsertMode,
 		})
 	filterTableV4 := iptables.NewTable(
 		"filter",
@@ -169,6 +171,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		rules.RuleHashPrefix,
 		iptables.TableOptions{
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			InsertMode:            config.IptablesInsertMode,
 		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
@@ -207,6 +210,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			iptables.TableOptions{
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
+				InsertMode:               config.IptablesInsertMode,
 			},
 		)
 		rawTableV6 := iptables.NewTable(
@@ -215,6 +219,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.RuleHashPrefix,
 			iptables.TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				InsertMode:            config.IptablesInsertMode,
 			},
 		)
 		filterTableV6 := iptables.NewTable(
@@ -223,6 +228,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.RuleHashPrefix,
 			iptables.TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				InsertMode:            config.IptablesInsertMode,
 			},
 		)
 
