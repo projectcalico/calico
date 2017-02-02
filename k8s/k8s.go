@@ -103,9 +103,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 		}
 
-		// Only used by K8s so if its null then we're not doing k8s stuff
-		var labels map[string]string
-		var annot map[string]string
+		labels := make(map[string]string)
+		annot := make(map[string]string)
 
 		// Only attempt to fetch the labels and annotations from Kubernetes
 		// if the policy type has been set to "k8s". This allows users to
@@ -116,38 +115,59 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 
 			labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
 			if err != nil {
-				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return nil, err
 			}
 			logger.WithField("labels", labels).Debug("Fetched K8s labels")
 			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
 
-			v4pools := annot["ipam.cni.projectcalico.org/ipv4pools"]
-			v6pools := annot["ipam.cni.projectcalico.org/ipv6pools"]
+			// Check for calico IPAM specific annotations and set them if needed.
+			if conf.IPAM.Type == "calico-ipam" {
 
-			if len(v4pools) != 0 || len(v6pools) != 0 {
-				var stdinData map[string]interface{}
-				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-					return nil, err
-				}
-				stdinData["ipam"].(map[string]interface{})["ipv4pools"] = v4pools
-				stdinData["ipam"].(map[string]interface{})["ipv6pools"] = v6pools
+				v4pools := annot["cni.projectcalico.org/ipv4pools"]
+				v6pools := annot["cni.projectcalico.org/ipv6pools"]
 
-				if len(v4pools) > 0 {
-					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv4pools to %q", v4pools)
+				if len(v4pools) != 0 || len(v6pools) != 0 {
+					var stdinData map[string]interface{}
+					if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+						return nil, err
+					}
+					var v4PoolSlice, v6PoolSlice []string
+
+					if len(v4pools) > 0 {
+						if err := json.Unmarshal([]byte(v4pools), &v4PoolSlice); err != nil {
+							logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
+							return nil, err
+						}
+
+						if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+							logger.Fatal("Error asserting stdinData type")
+							os.Exit(0)
+						}
+						stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
+						logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
+					}
+					if len(v6pools) > 0 {
+						if err := json.Unmarshal([]byte(v6pools), &v6PoolSlice); err != nil {
+							logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
+							return nil, err
+						}
+
+						if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+							logger.Fatal("Error asserting stdinData type")
+							os.Exit(0)
+						}
+						stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
+						logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
+					}
+
+					newData, err := json.Marshal(stdinData)
+					if err != nil {
+						logger.WithField("stdinData", stdinData).Error("Error Marshaling data")
+						return nil, err
+					}
+					args.StdinData = newData
+					logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 				}
-				if len(v6pools) > 0 {
-					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv6pools to %q", v6pools)
-				}
-				newData, err := json.Marshal(stdinData)
-				if err != nil {
-					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-					return nil, err
-				}
-				args.StdinData = newData
-				logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 			}
 		}
 
@@ -165,7 +185,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Node = hostname
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
-		endpoint.Metadata.Labels = labels // Only when policy type == k8s
+		endpoint.Metadata.Labels = labels
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)

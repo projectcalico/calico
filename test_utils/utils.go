@@ -70,6 +70,8 @@ func WipeK8sPods() {
 	}
 }
 
+// RunIPAMPlugin sets ENV vars required then calls the IPAM plugin
+// specified in the config and returns the result and exitCode.
 func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {

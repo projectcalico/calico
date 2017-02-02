@@ -208,7 +208,7 @@ func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
 	}
 }
 
-// Set up logging for both Calico and libcalico usng the provided log level,
+// Set up logging for both Calico and libcalico using the provided log level,
 func ConfigureLogging(logLevel string) {
 	if strings.EqualFold(logLevel, "debug") {
 		log.SetLevel(log.DebugLevel)

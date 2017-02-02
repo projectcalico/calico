@@ -35,8 +35,8 @@ var _ = Describe("Calico IPAM Tests", func() {
 						Expect(result.IP6.IP.Mask.String()).Should(Equal("ffffffffffffffffffffffffffffffff"))
 					}
 
-					// I can't find any testable side effects for this
-					_, _, _ = RunIPAMPlugin(netconf, "DEL", "")
+					_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "")
+					Expect(exitCode).Should(Equal(0))
 				},
 				Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
 			{
