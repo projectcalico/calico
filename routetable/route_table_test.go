@@ -71,7 +71,7 @@ var _ = Describe("RouteTable", func() {
 
 	Describe("with some interfaces", func() {
 		var cali1, cali2, cali3, eth0 *mockLink
-		var gatewayRoute, cali1Route, cali3Route netlink.Route
+		var gatewayRoute, cali1Route, cali1Route2, cali3Route netlink.Route
 		BeforeEach(func() {
 			eth0 = dataplane.addIface(0, "eth0", true, true)
 			cali1 = dataplane.addIface(1, "cali1", true, true)
@@ -179,6 +179,49 @@ var _ = Describe("RouteTable", func() {
 						fmt.Sprintf("Wrong number of routes %v: %v",
 							len(dataplane.routeKeyToRoute),
 							dataplane.routeKeyToRoute))
+				})
+
+				Describe("after an external route addition", func() {
+					JustBeforeEach(func() {
+						cali1Route2 = netlink.Route{
+							LinkIndex: cali1.attrs.Index,
+							Dst:       mustParseCIDR("10.0.0.22/32"),
+							Type:      syscall.RTN_UNICAST,
+							Protocol:  syscall.RTPROT_BOOT,
+							Scope:     netlink.SCOPE_LINK,
+						}
+						dataplane.addMockRoute(&cali1Route2)
+						rt.Apply()
+					})
+
+					It("shouldn't spot the update", func() {
+						Expect(dataplane.routeKeyToRoute).To(HaveLen(5))
+						Expect(dataplane.routeKeyToRoute).To(ContainElement(cali1Route2))
+					})
+					It("after a QueueResync() should remove the route", func() {
+						rt.QueueResync()
+						rt.Apply()
+						Expect(dataplane.routeKeyToRoute).To(HaveLen(4))
+						Expect(dataplane.routeKeyToRoute).NotTo(ContainElement(cali1Route2))
+					})
+				})
+
+				Describe("after an external route remove", func() {
+					JustBeforeEach(func() {
+						dataplane.removeMockRoute(&cali1Route)
+						rt.Apply()
+					})
+
+					It("shouldn't spot the update", func() {
+						Expect(dataplane.routeKeyToRoute).To(HaveLen(3))
+						Expect(dataplane.routeKeyToRoute).NotTo(ContainElement(cali1Route))
+					})
+					It("after a QueueResync() should remove the route", func() {
+						rt.QueueResync()
+						rt.Apply()
+						Expect(dataplane.routeKeyToRoute).To(HaveLen(4))
+						Expect(dataplane.routeKeyToRoute).To(ContainElement(cali1Route))
+					})
 				})
 			})
 		}
@@ -387,6 +430,11 @@ func (d *mockDataplane) RouteList(link netlink.Link, family int) ([]netlink.Rout
 func (d *mockDataplane) addMockRoute(route *netlink.Route) {
 	key := keyForRoute(route)
 	d.routeKeyToRoute[key] = *route
+}
+
+func (d *mockDataplane) removeMockRoute(route *netlink.Route) {
+	key := keyForRoute(route)
+	delete(d.routeKeyToRoute, key)
 }
 
 func (d *mockDataplane) RouteAdd(route *netlink.Route) error {

@@ -119,9 +119,9 @@ type InternalDataplane struct {
 
 	routeTables []*routetable.RouteTable
 
-	dataplaneNeedsSync bool
-	refreshIptables    bool
-	cleanupPending     bool
+	dataplaneNeedsSync    bool
+	forceDataplaneRefresh bool
+	cleanupPending        bool
 
 	config Config
 }
@@ -434,8 +434,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			}
 			d.dataplaneNeedsSync = true
 		case <-refreshC:
-			log.Debug("Refreshing iptables dataplane state")
-			d.refreshIptables = true
+			log.Debug("Refreshing dataplane state")
+			d.forceDataplaneRefresh = true
 			d.dataplaneNeedsSync = true
 		case <-retryTicker.C:
 		}
@@ -482,11 +482,15 @@ func (d *InternalDataplane) apply() {
 		w.ApplyUpdates()
 	}
 
-	if d.refreshIptables {
+	if d.forceDataplaneRefresh {
+		for _, r := range d.routeTables {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
 		for _, t := range d.allIptablesTables {
 			t.InvalidateDataplaneCache()
 		}
-		d.refreshIptables = false
+		d.forceDataplaneRefresh = false
 	}
 	// Update iptables, this should sever any references to now-unused IP sets.
 	for _, t := range d.allIptablesTables {

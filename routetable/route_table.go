@@ -122,6 +122,11 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 	r.dirtyIfaces.Add(ifaceName)
 }
 
+func (r *RouteTable) QueueResync() {
+	r.logCxt.Info("Queueing a resync.")
+	r.inSync = false
+}
+
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
 		links, err := r.dataplane.LinkList()
