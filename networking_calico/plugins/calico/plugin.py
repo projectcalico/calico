@@ -55,9 +55,9 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
 
         return old_floatingip, new_floatingip
 
-    def _create_floatingip(self, context, floatingip,
-                           initial_status=constants.FLOATINGIP_STATUS_ACTIVE):
-        new_floatingip = super(CalicoPlugin, self)._create_floatingip(
+    def create_floatingip(self, context, floatingip,
+                          initial_status=constants.FLOATINGIP_STATUS_ACTIVE):
+        new_floatingip = super(CalicoPlugin, self).create_floatingip(
             context,
             floatingip,
             initial_status=initial_status
