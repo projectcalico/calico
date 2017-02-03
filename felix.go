@@ -226,6 +226,7 @@ configRetry:
 			IptablesRefreshInterval: time.Duration(configParams.IptablesRefreshInterval) * time.Second,
 			IptablesInsertMode:      configParams.ChainInsertMode,
 			MaxIPSetSize:            configParams.MaxIpsetSize,
+			IgnoreLooseRPF:          configParams.IgnoreLooseRPF,
 			IPv6Enabled:             configParams.Ipv6Support,
 			StatusReportingInterval: time.Duration(configParams.ReportingIntervalSecs) *
 				time.Second,
