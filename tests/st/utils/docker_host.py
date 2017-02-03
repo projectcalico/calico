@@ -217,10 +217,16 @@ class DockerHost(object):
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
         """
-        args = ['node', 'run', '--node-image=%s' % NODE_CONTAINER_NAME]
-        if self.ip:
+        args = ['node', 'run']
+        if "--node-image" not in options:
+            args.append('--node-image=%s' % NODE_CONTAINER_NAME)
+
+        # Add the IP addresses if required and we aren't explicitly specifying
+        # them in the options.  The --ip and  --ip6 options can be specified
+        # using "=" or space-separated parms.
+        if self.ip and "--ip=" not in options and "--ip " not in options:
             args.append('--ip=%s' % self.ip)
-        if self.ip6:
+        if self.ip6 and "--ip6=" not in options and "--ip6 " not in options:
             args.append('--ip6=%s' % self.ip6)
         args.append(options)
 

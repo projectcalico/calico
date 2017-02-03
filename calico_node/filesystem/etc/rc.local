@@ -74,7 +74,7 @@ esac
 # If running libnetwork plugin in a separate container, CALICO_LIBNETWORK_ENABLED would be false.
 # CALICO_LIBNETWORK_ENABLED is "false" by default. It can be set by passing `--libnetwork` flag while starting the calico/node via calicoctl
 if [ "$CALICO_LIBNETWORK_ENABLED" == "true" ]; then
-	echo "CALICO_LIBNETWORK_ENABLED is true - start libnetwork service"
+	echo "Starting libnetwork service"
 	cp -a /etc/service/available/libnetwork  /etc/service/enabled/
 fi
 
