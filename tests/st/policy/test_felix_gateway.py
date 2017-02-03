@@ -17,6 +17,7 @@ import logging
 import subprocess
 import yaml
 from nose_parameterized import parameterized
+from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost
@@ -155,6 +156,7 @@ class TestFelixOnGateway(TestBase):
 
         log_and_run("docker rm -f cali-st-ext-nginx || true")
 
+    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_ingress_policy_can_block_through_traffic(self):
         self.add_policy({
             'apiVersion': 'v1',
@@ -324,6 +326,7 @@ class TestFelixOnGateway(TestBase):
         ('allow', 'deny'),
         ('deny', 'allow')
     ])
+    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_conflicting_ingress_and_egress_policy(self, in_action, out_action):
         # If there is policy on the ingress and egress interface then both should
         # get applied and 'deny' should win.
