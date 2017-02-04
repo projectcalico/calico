@@ -156,7 +156,6 @@ class TestFelixOnGateway(TestBase):
 
         log_and_run("docker rm -f cali-st-ext-nginx || true")
 
-    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_ingress_policy_can_block_through_traffic(self):
         self.add_policy({
             'apiVersion': 'v1',
@@ -203,6 +202,7 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
         retry_until_success(self.assert_host_can_curl_ext, 3)
 
+    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_egress_policy_can_block_through_traffic(self):
         self.add_policy({
             'apiVersion': 'v1',
