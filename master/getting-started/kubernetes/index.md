@@ -67,14 +67,16 @@ what can be done with the Kubernetes NetworkPolicy API like egress and CIDR base
 
 ## Third Party Integrations
 
-A number of popular Kubernetes installers use Calico to provide networking and/or network policy.  
+A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
 Here are a few, listed alphabetically.
 
 - [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
 - [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
 - [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
 - [Kargo](https://github.com/kubernetes-incubator/kargo)
+- [Kops](https://github.com/kubernetes/kops)
 - [StackPointCloud](https://stackpoint.io)
+- [Gravitational Telekube](http://gravitational.com/blog/gravitational-tigera-partnership/)
 
 ## Troubleshooting
 
