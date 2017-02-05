@@ -124,7 +124,7 @@ func (c *EtcdClient) EnsureInitialized() error {
 	return nil
 }
 
-// EnsureCalicoNodeInitialized() performs additional initialization required
+// EnsureCalicoNodeInitialized performs additional initialization required
 // by the calico/node components [startup/ipip-allocation/confd].  This is a
 // temporary requirement until the calico/node components are updated to not
 // require special etcd setup, or until the global and per-node config is
@@ -134,19 +134,21 @@ func (c *EtcdClient) EnsureCalicoNodeInitialized(node string) error {
 	// The confd agent used for BIRD configuration monitors certain
 	// directories and doesn't handle the non-existence of these directories
 	// very well, so create the required directories.
-	if err := c.ensureDirectory("/calico/v1/ipam/v4/pool"); err != nil {
-		return err
-	} else if err = c.ensureDirectory("/calico/v1/ipam/v6/pool"); err != nil {
-		return err
-	} else if err = c.ensureDirectory("/calico/bgp/v1/global/custom_filters/v4"); err != nil {
-		return err
-	} else if err = c.ensureDirectory("/calico/bgp/v1/global/custom_filters/v6"); err != nil {
-		return err
-	} else if err := c.ensureDirectory("/calico/ipam/v2/host/" + node + "/ipv4/block"); err != nil {
-		return err
-	} else if err = c.ensureDirectory("/calico/ipam/v2/host/" + node + "/ipv6/block"); err != nil {
-		return err
+	dirs := []string{
+		"/calico/v1/ipam/v4/pool",
+		"/calico/v1/ipam/v6/pool",
+		"/calico/bgp/v1/global/custom_filters/v4",
+		"/calico/bgp/v1/global/custom_filters/v6",
+		"/calico/ipam/v2/host/" + node + "/ipv4/block",
+		"/calico/ipam/v2/host/" + node + "/ipv6/block",
 	}
+
+	for _, d := range dirs {
+		if err := c.ensureDirectory(d); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -218,8 +220,10 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	log.Debugf("Get Key: %s", key)
-	if r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts); err != nil {
+	r, err := c.etcdKeysAPI.Get(context.Background(), key, etcdGetOpts)
+	if err != nil {
 		// Convert the error to our non datastore specific types
 		err = convertEtcdError(err, k)
 
@@ -233,11 +237,14 @@ func (c *EtcdClient) Get(k model.Key) (*model.KVPair, error) {
 		}
 
 		return nil, err
-	} else if v, err := model.ParseValue(k, []byte(r.Node.Value)); err != nil {
-		return nil, err
-	} else {
-		return &model.KVPair{Key: k, Value: v, Revision: r.Node.ModifiedIndex}, nil
 	}
+
+	v, err := model.ParseValue(k, []byte(r.Node.Value))
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.KVPair{Key: k, Value: v, Revision: r.Node.ModifiedIndex}, nil
 }
 
 // List entries in the datastore.  This may return an empty list of there are
@@ -262,7 +269,8 @@ func (c *EtcdClient) defaultList(l model.ListInterface) ([]*model.KVPair, error)
 	// IDs, and then filter the results.
 	key := model.ListOptionsToDefaultPathRoot(l)
 	log.Debugf("List Key: %s", key)
-	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListOpts); err != nil {
+	results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListOpts)
+	if err != nil {
 		// If the root key does not exist - that's fine, return no list entries.
 		err = convertEtcdError(err, nil)
 		switch err.(type) {
@@ -271,15 +279,16 @@ func (c *EtcdClient) defaultList(l model.ListInterface) ([]*model.KVPair, error)
 		default:
 			return nil, err
 		}
-	} else {
-		list := filterEtcdList(results.Node, l)
-
-		switch t := l.(type) {
-		case model.ProfileListOptions:
-			return t.ListConvert(list), nil
-		}
-		return list, nil
 	}
+
+	list := filterEtcdList(results.Node, l)
+
+	switch t := l.(type) {
+	case model.ProfileListOptions:
+		return t.ListConvert(list), nil
+	}
+
+	return list, nil
 }
 
 // Set an existing entry in the datastore.  This ignores whether an entry already
@@ -406,9 +415,9 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 		hmk := model.HostMetadataKey{
 			Hostname: l.Hostname,
 		}
-		if kv, err := c.Get(hmk); err == nil {
-			return []*model.KVPair{kv}, nil
-		} else {
+
+		kv, err := c.Get(hmk)
+		if err != nil {
 			err = convertEtcdError(err, nil)
 			switch err.(type) {
 			case errors.ErrorResourceDoesNotExist:
@@ -417,13 +426,16 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 				return nil, err
 			}
 		}
+
+		return []*model.KVPair{kv}, nil
 	}
 
 	// No hostname specified, so enumerate the directories directly under
 	// the host tree, return no entries if the host directory does not exist.
 	log.Debug("Listing all host metadatas")
 	key := "/calico/v1/host"
-	if results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListChildrenOpts); err != nil {
+	results, err := c.etcdKeysAPI.Get(context.Background(), key, etcdListChildrenOpts)
+	if err != nil {
 		// If the root key does not exist - that's fine, return no list entries.
 		log.WithError(err).Info("Error enumerating host directories")
 		err = convertEtcdError(err, nil)
@@ -433,23 +445,23 @@ func (c *EtcdClient) listHostMetadata(l model.HostMetadataListOptions) ([]*model
 		default:
 			return nil, err
 		}
-	} else {
-		// TODO:  Since the host metadata is currently empty, we don't need
-		// to perform an additional get here, but in the future when the metadata
-		// may contain fields, we would need to perform a get.
-		log.Debug("Parse host directories.")
-		kvs := []*model.KVPair{}
-		for _, n := range results.Node.Nodes {
-			k := l.KeyFromDefaultPath(n.Key + "/metadata")
-			if k != nil {
-				kvs = append(kvs, &model.KVPair{
-					Key:   k,
-					Value: &model.HostMetadata{},
-				})
-			}
-		}
-		return kvs, nil
 	}
+
+	// TODO:  Since the host metadata is currently empty, we don't need
+	// to perform an additional get here, but in the future when the metadata
+	// may contain fields, we would need to perform a get.
+	log.Debug("Parse host directories.")
+	kvs := []*model.KVPair{}
+	for _, n := range results.Node.Nodes {
+		k := l.KeyFromDefaultPath(n.Key + "/metadata")
+		if k != nil {
+			kvs = append(kvs, &model.KVPair{
+				Key:   k,
+				Value: &model.HostMetadata{},
+			})
+		}
+	}
+	return kvs, nil
 }
 
 // ensureDirectory makes sure the specified directory exists in etcd.
