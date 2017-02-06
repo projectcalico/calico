@@ -53,9 +53,15 @@ if [ -w "/host/opt/cni/bin/" ]; then
 	cp /opt/cni/bin/calico /host/opt/cni/bin/
 	cp /opt/cni/bin/calico-ipam /host/opt/cni/bin/
 	# Copy over the 3rd party CNI binaries, but do not clobber if they exist
-	cp -n /opt/cni/bin/flannel /host/opt/cni/bin/
-	cp -n /opt/cni/bin/loopback /host/opt/cni/bin/
-	cp -n /opt/cni/bin/host-local /host/opt/cni/bin/
+	if [ ! -f /host/opt/cni/bin/flannel ]; then
+	    cp /opt/cni/bin/flannel /host/opt/cni/bin/
+	fi
+	if [ ! -f /host/opt/cni/bin/loopback ]; then
+	    cp /opt/cni/bin/loopback /host/opt/cni/bin/
+	fi
+	if [ ! -f /host/opt/cni/bin/host-local ]; then
+	    cp /opt/cni/bin/host-local /host/opt/cni/bin/
+	fi
 	echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
 	echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
 fi
@@ -66,9 +72,15 @@ if [ -w "/host/secondary-bin-dir/" ]; then
 	cp /opt/cni/bin/calico /host/secondary-bin-dir/
 	cp /opt/cni/bin/calico-ipam /host/secondary-bin-dir/
 	# Copy over the 3rd party CNI binaries, but do not clobber if they exist
-	cp -n /opt/cni/bin/flannel /host/secondary-bin-dir/
-	cp -n /opt/cni/bin/loopback /host/secondary-bin-dir/
-	cp -n /opt/cni/bin/host-local /host/secondary-bin-dir/
+	if [ ! -f /host/secondary-bin-dir/flannel ]; then
+	    cp /opt/cni/bin/flannel /host/secondary-bin-dir/
+	fi
+	if [ ! -f /host/secondary-bin-dir/loopback ]; then
+	    cp /opt/cni/bin/loopback /host/secondary-bin-dir/
+	fi
+	if [ ! -f /host/secondary-bin-dir/host-local ]; then
+	    cp /opt/cni/bin/host-local /host/secondary-bin-dir/
+	fi
 	echo "Wrote Calico CNI binaries to /host/secondary-bin-dir/"
 	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"
 fi
