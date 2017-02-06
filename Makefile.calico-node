@@ -57,7 +57,7 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
-	docker save --output $@ quay.io/$(NODE_CONTAINER_NAME):latest
+	docker save --output $@ $(NODE_CONTAINER_NAME)
 
 # Build ACI (the APPC image file format) of calico/node.
 # Requires docker2aci installed on host: https://github.com/appc/docker2aci
@@ -67,7 +67,6 @@ calico-node-latest.aci: calico-node.tar
 # Build calico/node docker image - explicitly depend on the container binaries.
 $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
 	docker build -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
-	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
 	touch $@
 
 # Get felix binaries
@@ -256,6 +255,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
+                   -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
@@ -283,6 +283,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
+                   -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
 	           -e ETCD_SCHEME=https \
 	           -e ETCD_CA_CERT_FILE=$(SOURCE_DIR)/certs/ca.pem \
 	           -e ETCD_CERT_FILE=$(SOURCE_DIR)/certs/client.pem \

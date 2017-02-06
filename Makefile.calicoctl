@@ -63,7 +63,6 @@ vendor: glide.yaml
 # build calico_ctl image
 $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
-	docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):latest
 	touch $@
 
 ## Build calicoctl
