@@ -147,7 +147,10 @@ EOF
 		} | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
 	    fi
 
-	    ${DOCKER_RUN_RM} calico-build/centos7 rpm/build-rpms
+		  for elversion in 7 6; do
+		    ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
+		      calico-build/centos${elversion} rpm/build-rpms
+		  done
 	    ;;
 
 	* )
