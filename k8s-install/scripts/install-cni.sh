@@ -5,8 +5,8 @@
 # - Expects the host CNI network config path to be mounted at /host/etc/cni/net.d.
 # - Expects the desired CNI config in the CNI_NETWORK_CONFIG env variable.
 
-# Ensure all variables are defined.
-set -u
+# Ensure all variables are defined and that we fail fast.
+set -u -e
 
 # The directory on the host where CNI networks are installed. Defaults to 
 # /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
@@ -24,9 +24,12 @@ rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
 rm -f /host/etc/cni/net.d/calico-tls/*
 
 # Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
-echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
-mkdir -p /host/etc/cni/net.d/calico-tls
-cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+if [ -e "${SECRETS_MOUNT_DIR}" ];
+then
+	echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
+	mkdir -p /host/etc/cni/net.d/calico-tls
+	cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+fi
 
 # If the TLS assets actually exist, update the variables to populate into the
 # CNI network config.  Otherwise, we'll just fill that in with blanks.
@@ -71,9 +74,9 @@ if [ -w "/host/secondary-bin-dir/" ]; then
 fi
 
 # If specified, overwrite the network configuration file.
-if [ -z "${CNI_NETWORK_CONFIG}" ]; then
+if [ "${CNI_NETWORK_CONFIG:-}" != "" ]; then
 cat >calico.conf.tmp <<EOF
-${CNI_NETWORK_CONFIG}
+${CNI_NETWORK_CONFIG:-}
 EOF
 fi
 
