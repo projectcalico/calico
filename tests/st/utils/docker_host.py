@@ -31,6 +31,7 @@ CHECKOUT_DIR = os.getenv("HOST_CHECKOUT_DIR", "")
 if CHECKOUT_DIR == "":
     CHECKOUT_DIR = os.getcwd()
 
+NODE_CONTAINER_NAME = os.getenv("NODE_CONTAINER_NAME", "calico/node:latest")
 
 class DockerHost(object):
     """
@@ -216,7 +217,7 @@ class DockerHost(object):
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
         """
-        args = ['node', 'run']
+        args = ['node', 'run', '--node-image=%s' % NODE_CONTAINER_NAME]
         if self.ip:
             args.append('--ip=%s' % self.ip)
         if self.ip6:
@@ -264,9 +265,9 @@ class DockerHost(object):
                      "-e ETCD_AUTHORITY=%s -e ETCD_SCHEME=%s %s "
                      "-v /var/log/calico:/var/log/calico "
                      "-v /var/run/calico:/var/run/calico "
-                     "calico/node:latest" % (hostname_args,
-                                             self.ip,
-                                             etcd_auth, ETCD_SCHEME, ssl_args))
+                     "%s" % (hostname_args, self.ip, etcd_auth, ETCD_SCHEME,
+                             ssl_args, NODE_CONTAINER_NAME)
+                     )
 
     def remove_workloads(self):
         """
