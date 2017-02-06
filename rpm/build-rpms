@@ -54,4 +54,5 @@ cd rpmbuild
 rpmbuild --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
 
 rm -rf /code/dist/rpms/${EL_VERSION}
+mkdir -p /code/dist/rpms
 cp -r /tmp/rpmbuild /code/dist/rpms/${EL_VERSION}
