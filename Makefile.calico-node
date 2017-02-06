@@ -57,7 +57,7 @@ calico_test.created: $(TEST_CONTAINER_FILES)
 calico/node: $(NODE_CONTAINER_CREATED)    ## Create the calico/node image
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
-	docker save --output $@ quay.io/$(NODE_CONTAINER_NAME):latest
+	docker save --output $@ $(NODE_CONTAINER_NAME)
 
 # Build ACI (the APPC image file format) of calico/node.
 # Requires docker2aci installed on host: https://github.com/appc/docker2aci
@@ -67,7 +67,6 @@ calico-node-latest.aci: calico-node.tar
 # Build calico/node docker image - explicitly depend on the container binaries.
 $(NODE_CONTAINER_CREATED): $(NODE_CONTAINER_DIR)/Dockerfile $(NODE_CONTAINER_FILES) $(addprefix $(NODE_CONTAINER_BIN_DIR)/,$(NODE_CONTAINER_BINARIES))
 	docker build -t $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_DIR)
-	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):latest
 	touch $@
 
 # Get felix binaries
