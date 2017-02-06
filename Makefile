@@ -79,7 +79,7 @@ help:
 all: deb rpm calico/felix
 test: ut
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.1
+GO_BUILD_CONTAINER?=calico/go-build:v0.2
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -296,6 +296,13 @@ cover-report: combined.coverprofile
 	                           sed 's=github.com/projectcalico/felix/==' | \
 	                           column -t | \
 	                           grep -v '100\.0%'"
+
+.PHONY: upload-to-coveralls
+upload-to-coveralls: combined.coverprofile
+ifndef COVERALLS_REPO_TOKEN
+	$(error COVERALLS_REPO_TOKEN is undefined - run using make upload-to-coveralls COVERALLS_REPO_TOKEN=abcd)
+endif
+	$(DOCKER_GO_BUILD) goveralls -repotoken=$(COVERALLS_REPO_TOKEN) -coverprofile=combined.coverprofile
 
 bin/calico-felix.transfer-url: bin/calico-felix
 	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
