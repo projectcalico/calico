@@ -55,7 +55,7 @@ done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.1/calicoctl
+wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.2/calicoctl
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -94,7 +94,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
-  calico/node:v1.0.1
+  calico/node:v1.0.2
 ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10
@@ -113,8 +113,8 @@ The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ip
 Download the binaries and make sure they're executable
 
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.5/calico-ipam
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico
+wget -N -P /opt/cni/bin https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 

@@ -34,17 +34,11 @@ The Etcd, Felix and BIRD pieces are the same as in other Calico integrations,
 and so independent of OpenStack.  The Calico Neutron driver and DHCP agent are
 specific to OpenStack, and are provided by the
 [networking-calico](http://git.openstack.org/cgit/openstack/networking-calico/)
-project.  networking-calico is a Neutron stadium project.
+project.  networking-calico is an [unofficial OpenStack
+project](http://docs.openstack.org/infra/manual/creators.html#decide-status-of-your-project).
 
 From an OpenStack point of view, networking-calico is just one of many possible
 Neutron drivers that provide connectivity between instances (VMs) as specified
-by the Neutron API.  However there are some parts of the Neutron API that
-networking-calico interprets differently, or does not implement at all.
-Documentation for readers who are already familiar with OpenStack and Neutron,
-and hence mostly interested in what is special or different about the
-networking-calico driver, can be found at
-[http://docs.openstack.org/developer/networking-calico/](http://docs.openstack.org/developer/networking-calico/).
-
-The documentation here covers some of the ways of installing Calico in an
-OpenStack deployment, plus introductory information on how to see that Calico
-is working in your cluster.
+by the Neutron API.  The [Usage
+section]({{site.baseurl}}/{{page.version}}/usage) gives more detail about the
+parts of the Neutron API that the networking-calico provides.

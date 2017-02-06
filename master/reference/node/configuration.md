@@ -20,6 +20,9 @@ The `calico/node` container is primarily configured through environment variable
 | CALICO_LIBNETWORK_ENABLED | Enables running the docker-libnetwork plugin directly in the calico/node container. | boolean | true |
 | CALICO_LIBNETWORK_IFPREFIX | Interface prefix to use for the network interface within the Docker containers that have been networked by the Calico driver. | string | cali |
 | CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use| gobgp, bird, none | bird |
+| CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. | IPv4 CIDR | 192.168.0.0/16 | |
+| CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. | IPv6 CIDR | fd80:24e2:f998:72d6::/64 | |
+| CALICO_IPIP_ENABLED  | Enable IPIP on any IP Pools created at start up. | string | false | |
 | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional, defaults to http://127.0.0.1:2379) | http://etcd1:2379 | |
 | ETCD_KEY_FILE     | Path to the etcd key file (optional)       | /etc/calico/key.pem | |
 | ETCD_CERT_FILE    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem | |

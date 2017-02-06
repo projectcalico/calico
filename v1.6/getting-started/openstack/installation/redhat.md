@@ -53,8 +53,8 @@ following table.
 
 | OpenStack release | Calico version | Repository     |
 |-------------------+----------------+----------------|
-| Mitaka            |            1.4 | rpm/calico-1.4 |
-| Liberty           |            1.4 | rpm/calico-1.4 |
+| Mitaka            |            1.4 | rpm/calico-1.6 |
+| Liberty           |            1.4 | rpm/calico-1.6 |
 | (deprecated) Kilo |            1.3 | rpm_kilo       |
 | (deprecated) Juno |            1.3 | rpm_juno       |
 
@@ -75,11 +75,11 @@ release.  For example, for Mitaka:
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm/calico-1.4/
+    baseurl=http://binaries.projectcalico.org/rpm/calico-1.6/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/calico-1.4/key
+    gpgkey=http://binaries.projectcalico.org/rpm/calico-1.6/key
     priority=97
     EOF
 ```

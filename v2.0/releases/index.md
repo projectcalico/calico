@@ -7,6 +7,30 @@ The following table shows component versioning for Calico  **{{ page.version }}*
 Use the version selector at the top-right of this page to view a different release.
 
 
+## v2.0.2 - Release Notes
+
+This is a bug fix release.  A summary of the major fixes:
+
+- Various fixes to the Kubernetes datastore driver.
+- Fix leaked IPs in Calico CNI plugin when using host-local IPAM with usePodCidr.
+
+View release notes for the following components below for more information:
+
+| Component                     | Version                                                                                    |
+|-------------------------------|--------------------------------------------------------------------------------------------|
+| felix                         | [2.0.3](https://github.com/projectcalico/felix/releases/tag/2.0.3)                         |
+| calicoctl                     | [v1.0.2](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.2)                   |
+| calico/node                   | [v1.0.2](https://github.com/projectcalico/calicoctl/releases/tag/v1.0.2)                   |
+| calico/cni                    | [v1.5.6](https://github.com/projectcalico/cni-plugin/releases/tag/v1.5.6)                  |
+| libcalico                     | [v0.19.0](https://github.com/projectcalico/libcalico/releases/tag/v0.19.0)                 |
+| libcalico-go                  | [v1.0.2](https://github.com/projectcalico/libcalico-go/releases/tag/v1.0.2)                |
+| calico-bird                   | [v0.2.0](https://github.com/projectcalico/calico-bird/releases/tag/v0.2.0)                 |
+| calico-bgp-daemon             | [v0.1.1](https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.1.1)           |
+| libnetwork-plugin             | [v1.0.0](https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.0.0)           |
+| calico/kube-policy-controller | [v0.5.2](https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.2)                  |
+| networking-calico             | [889cfff](http://git.openstack.org/cgit/openstack/networking-calico/tree/?id=889cfff)      |
+
+
 ## v2.0.1 - Release Notes
 
 This is a bug fix release.  A summary of the major fixes:

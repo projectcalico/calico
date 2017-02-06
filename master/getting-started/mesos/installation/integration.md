@@ -30,8 +30,8 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 
    ```
    vagrant@calico-01:~$ docker ps
-   CONTAINER ID        IMAGE                COMMAND             CREATED              STATUS              PORTS               NAMES
-   408bd2b9ba53        calico/node:latest   "start_runit"       About an hour ago    Up About an hour                        calico-node
+   CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
+   408bd2b9ba53        quay.io/calico/node:latest   "start_runit"       3 seconds ago       Up 2 seconds                            calico-node
    ```
 
    Furthermore, check that the `calico/node` container is functioning properly

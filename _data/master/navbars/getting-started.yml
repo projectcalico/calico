@@ -95,6 +95,7 @@ toc:
       path: /getting-started/docker/tutorials/advanced-policy
     - title: IPAM
       path: /getting-started/docker/tutorials/ipam
+
 - title: OpenStack
   section:
   - title: Overview
@@ -111,6 +112,8 @@ toc:
       path: /getting-started/openstack/installation/juju
     - title: Fuel
       path: /getting-started/openstack/installation/fuel
+    - title: DevStack
+      path: /getting-started/openstack/installation/devstack
     - title: Chef
       path: /getting-started/openstack/installation/chef
   - title: Upgrade
@@ -147,5 +150,5 @@ toc:
     path: /getting-started/bare-metal/bare-metal
   - title: Installation
     section:
-    - title: Alternative Felix Install with PyInstaller Bundle
-      path: /getting-started/bare-metal/pyi-bare-metal-install
+    - title: Installing Felix as a static binary
+      path: /getting-started/bare-metal/bare-metal-install
