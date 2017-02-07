@@ -21,9 +21,11 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	. "github.com/projectcalico/cni-plugin/test_utils"
+	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
 )
 
@@ -40,6 +42,9 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Describe("Run Calico CNI plugin in K8s mode", func() {
+		utils.ConfigureLogging("info")
+		logger := utils.CreateContextLogger("k8s_tests")
+
 		Context("using host-local IPAM", func() {
 
 			//TODO - set the netconfig
@@ -53,11 +58,10 @@ var _ = Describe("CalicoCni", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 				"kubernetes": {
-					        "k8s_api_root": "http://127.0.0.1:8080"
-									    
+				  "k8s_api_root": "http://127.0.0.1:8080"
 				},
 				"policy": {"type": "k8s"},
-	"log_level":"info"
+				"log_level":"info"
 			}`, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
@@ -70,8 +74,11 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
+
 				name := fmt.Sprintf("run%d", rand.Uint32())
 				interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+
+				// Create a K8s pod w/o any special params
 				_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
 					ObjectMeta: v1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{Containers: []v1.Container{{
@@ -83,6 +90,7 @@ var _ = Describe("CalicoCni", func() {
 					panic(err)
 				}
 				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name)
+
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -167,7 +175,64 @@ var _ = Describe("CalicoCni", func() {
 				_, err = netlink.LinkByName("cali" + containerID)
 				Expect(err).Should(HaveOccurred())
 				Expect(err.Error()).Should(Equal("Link not found"))
+			})
 
+			Context("using calico-ipam with ipPools annotation", func() {
+				It("successfully assigns an IP address from the annotated ipPool", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "name": "net2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {
+			    	 "type": "calico-ipam"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, os.Getenv("ETCD_IP"))
+
+					// Create a new ipPool.
+					ipPool := "172.16.0.0/16"
+					c, _ := testutils.NewClient("")
+					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
+					_, ipPoolCIDR, err := net.ParseCIDR(ipPool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in an IP pool.
+					name := fmt.Sprintf("run%d-pool", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipv4pools": "[\"172.16.0.0/16\"]",
+							},
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, _, _, _, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name)
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+				})
 			})
 		})
 	})
