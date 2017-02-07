@@ -56,8 +56,13 @@ type addrState struct {
 	addrs     set.Set
 }
 
+type linkUpdate struct {
+	name  string
+	state ifacemonitor.State
+}
+
 type mockDataplane struct {
-	linkC chan string
+	linkC chan linkUpdate
 	addrC chan addrState
 }
 
@@ -75,6 +80,15 @@ func (nl *netlinkTest) addLink(name string) {
 	nl.nextIndex++
 	nl.linksMutex.Unlock()
 	nl.signalLink(name, 0)
+}
+
+func (nl *netlinkTest) renameLink(oldName, newName string) {
+	nl.linksMutex.Lock()
+	link := nl.links[oldName]
+	delete(nl.links, oldName)
+	nl.links[newName] = link
+	nl.linksMutex.Unlock()
+	nl.signalLink(newName, 0)
 }
 
 func (nl *netlinkTest) changeLinkState(name string, state string) {
@@ -241,18 +255,26 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
 	log.Info("linkStateCallback: ifaceName=", ifaceName)
 	log.Info("linkStateCallback: ifaceState=", ifaceState)
-	dp.linkC <- ifaceName
+	dp.linkC <- linkUpdate{
+		name:  ifaceName,
+		state: ifaceState,
+	}
 	log.Info("mock dataplane reported link callback")
 }
 
-func (dp *mockDataplane) expectLinkStateCb(ifaceName string) {
-	cbIface := <-dp.linkC
-	Expect(cbIface).To(Equal(ifaceName))
+func (dp *mockDataplane) expectLinkStateCb(ifaceName string, state ifacemonitor.State) {
+	upd := <-dp.linkC
+	Expect(upd).To(Equal(linkUpdate{
+		name:  ifaceName,
+		state: state,
+	}))
 }
 
 func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
-	log.Info("addrStateCallback: ifaceName=", ifaceName)
-	log.Info("addrStateCallback: addrs=", addrs)
+	log.WithFields(log.Fields{
+		"ifaceName": ifaceName,
+		"addrs":     addrs,
+	}).Info("Address state updated")
 	dp.addrC <- addrState{ifaceName: ifaceName, addrs: addrs}
 	log.Info("mock dataplane reported address callback")
 }
@@ -277,7 +299,7 @@ func (dp *mockDataplane) expectAddrStateCb(ifaceName string, addr string, presen
 			log.Debug("Expected nil addrs, didn't get it")
 			continue
 		}
-		if (addr != "") && (!present) && cbIface.addrs.Contains(addr) {
+		if (addr != "") && (!present) && cbIface.addrs != nil && cbIface.addrs.Contains(addr) {
 			log.Debug("Expected addr to be missing, but it's there")
 			continue
 		}
@@ -313,7 +335,7 @@ var _ = Describe("ifacemonitor", func() {
 		// expectAddrStateCb takes care to check that we eventually get the callback that we
 		// expect.
 		dp = &mockDataplane{
-			linkC: make(chan string, 1),
+			linkC: make(chan linkUpdate, 1),
 			addrC: make(chan addrState, 2),
 		}
 		im.Callback = dp.linkStateCallback
@@ -342,7 +364,7 @@ var _ = Describe("ifacemonitor", func() {
 		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
 		// is no address callback.
 		nl.changeLinkState("eth0", "up")
-		dp.expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
 
 		// Add an address.
 		nl.addAddr("eth0", "172.19.34.1/27")
@@ -361,11 +383,11 @@ var _ = Describe("ifacemonitor", func() {
 
 		// Set link down.
 		nl.changeLinkState("eth0", "down")
-		dp.expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
 
 		// Set link up again.
 		nl.changeLinkState("eth0", "up")
-		dp.expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
 
 		// Trigger a resync, then immediately delete the link.  What happens is that the
 		// test code deletes its state for eth0 before the monitor's resync() calls
@@ -373,8 +395,42 @@ var _ = Describe("ifacemonitor", func() {
 		// makes link and address callbacks accordingly.
 		resyncC <- time.Time{}
 		nl.delLink("eth0")
-		dp.expectLinkStateCb("eth0")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
 		dp.expectAddrStateCb("eth0", "", false)
+
+		// Trigger another resync.  Nothing is expected.  We ensure that the resync
+		// processing completes, before exiting from this test, by sending a further resync
+		// trigger.  (This would block if the interface monitor's main loop was not yet
+		// ready to read it.)
+		resyncC <- time.Time{}
+		resyncC <- time.Time{}
+	})
+
+	It("should handle an interface rename", func() {
+		// Add a link and an address.  No link callback expected because the link is not up
+		// yet.  But we do get an address callback because those are independent of link
+		// state.  (Note that if the monitor's initial resync runs slowly enough, it might
+		// see the new link and addr as part of that resync - whereas normally what happens
+		// is that the resync completes as a no-op first, and the addLink causes a
+		// notification afterwards.  But either way we expect to get the same callbacks to
+		// the dataplane, so we don't need to distinguish between these two possibilities.
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectAddrStateCb("eth0", "", true)
+		nl.addAddr("eth0", "10.0.240.10/24")
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+
+		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
+		// is no address callback.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
+
+		// Rename the interface, address and old name should be signalled as gone.
+		nl.renameLink("eth0", "eth1")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
+		dp.expectAddrStateCb("eth0", "10.0.240.10", false)
+		dp.expectLinkStateCb("eth1", ifacemonitor.StateUp)
+		dp.expectAddrStateCb("eth1", "10.0.240.10", true)
 
 		// Trigger another resync.  Nothing is expected.  We ensure that the resync
 		// processing completes, before exiting from this test, by sending a further resync

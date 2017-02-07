@@ -191,12 +191,33 @@ func (m *InterfaceMonitor) storeAndNotifyLink(ifaceExists bool, link netlink.Lin
 	log.WithFields(log.Fields{
 		"ifaceExists": ifaceExists,
 		"link":        link,
-	}).Debug("storeAndNotifyLink")
+	}).Debug("storeAndNotifyLink called")
+
+	attrs := link.Attrs()
+	ifIndex := attrs.Index
+	oldName := m.ifaceName[ifIndex]
+	newName := attrs.Name
+	if oldName != "" && oldName != newName {
+		log.WithFields(log.Fields{
+			"oldName": oldName,
+			"newName": newName,
+		}).Info("Interface renamed, simulating deletion of old copy.")
+		m.storeAndNotifyLinkInner(false, oldName, link)
+	}
+
+	m.storeAndNotifyLinkInner(ifaceExists, newName, link)
+}
+
+func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName string, link netlink.Link) {
+	log.WithFields(log.Fields{
+		"ifaceExists": ifaceExists,
+		"ifaceName":   ifaceName,
+		"link":        link,
+	}).Debug("storeAndNotifyLinkInner called")
 
 	// Store or remove mapping between this interface's index and name.
 	attrs := link.Attrs()
 	ifIndex := attrs.Index
-	ifaceName := attrs.Name
 	if ifaceExists {
 		m.ifaceName[ifIndex] = ifaceName
 	} else {
