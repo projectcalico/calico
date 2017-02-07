@@ -234,6 +234,81 @@ var _ = Describe("CalicoCni", func() {
 					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
 				})
 			})
+
+			Context("using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
+				It("should successfully assigns the annotated IP address", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "name": "net2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {},
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, os.Getenv("ETCD_IP"))
+
+					assignIP := net.IPv4(10, 0, 0, 1).To4()
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in an IP address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\"]",
+							},
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name)
+					Expect(err).NotTo(HaveOccurred())
+					mac := contVeth.Attrs().HardwareAddr
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+					Expect(podIP).Should(Equal(assignIP))
+
+					interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+
+					// The endpoint is created
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:         hostname,
+						Name:         "eth0",
+						Workload:     fmt.Sprintf("test.%s", name),
+						Orchestrator: "k8s",
+						Labels:       map[string]string{"calico/k8s_ns": "test"},
+					}))
+					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+						InterfaceName: interfaceName,
+						IPNetworks: []cnet.IPNet{cnet.IPNet{net.IPNet{
+							IP:   assignIP,
+							Mask: net.CIDRMask(32, 32),
+						}}},
+						MAC:      &cnet.MAC{HardwareAddr: mac},
+						Profiles: []string{"k8s_ns.test"},
+					}))
+				})
+			})
 		})
 	})
 })
