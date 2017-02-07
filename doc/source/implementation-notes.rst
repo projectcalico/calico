@@ -65,15 +65,3 @@ ns-XXX's IP address, instead of allocating a unique IP address from Neutron.
 
 Patches to allow this behavior were merged into Dnsmasq before its 2.73
 release, and into Neutron before its Liberty release.
-
-networking-calico
------------------
-
-The openstack/networking-calico project, part of the Neutron 'stadium',
-contains Calico's Neutron-specific code, comprising:
-
-- an ML2 mechanism driver, or a core plugin, for the Neutron server
-
-- a modified DHCP agent
-
-- a Devstack plugin.

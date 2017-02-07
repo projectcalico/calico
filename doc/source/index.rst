@@ -6,8 +6,10 @@
 networking-calico
 =================
 
-networking-calico is the Neutron 'stadium' sub-project that provides 'Calico'
-connectivity and security in an OpenStack/Neutron cloud.
+networking-calico is the Calico sub-project that provides 'Calico' connectivity
+and security in an OpenStack/Neutron cloud.  It provides the extra pieces that
+are needed to integrate Calico into OpenStack, namely a Neutron server driver
+or plugin, and a modified DHCP agent.
 
 Calico (http://www.projectcalico.org/) uses IP routing to provide
 connectivity - in the form of a flat IP network - between the workloads in a
@@ -37,20 +39,14 @@ Specifically:
   provider networks, or be tenant networks that are connected through a Neutron
   router to an external network.
 
-For more detail please see :ref:`semantics`.
+Documentation for installing and using networking-calico can be found at
+http://docs.projectcalico.org/master.  Here we maintain docs that may be of
+interest about networking-calico's design and implementation.
 
 .. toctree::
    :maxdepth: 2
 
-   readme
-   contributing
-   semantics
-   floating-ips
-   service-ips
-   devstack
-   kuryr
    implementation-notes
-   host-routes
    dhcp-agent
 
 Indices and tables

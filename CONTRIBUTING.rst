@@ -1,6 +1,7 @@
-networking-calico is part of OpenStack.  If you are planning or making a
-contribution to networking-calico - for which thank you! - there is some
-generic OpenStack guidance that you should be familiar with, and also some
+networking-calico is an unofficial OpenStack project that uses OpenStack
+processes and infrastructure for its development.  If you are planning or
+making a contribution to networking-calico - for which thank you! - there is
+some generic OpenStack guidance that you should be familiar with, and also some
 recommended practices that are specific to networking-calico.
 
 Guidance for all OpenStack projects
@@ -24,14 +25,9 @@ Pull requests submitted through GitHub will be ignored.
 Specific guidance for networking-calico
 ---------------------------------------
 
-Bugs should be filed on Launchpad, not GitHub:
+Please file bugs on Launchpad:
 
    https://bugs.launchpad.net/networking-calico
-
-When you submit a patch through Gerrit, and it passes the first set of Jenkins
-checks (unit tests and PEP8), please add a comment saying 'check experimental'.
-Then your patch will be further checked in a single node DevStack + Tempest
-test; the results should appear in Gerrit within about an hour.
 
 If you are proposing a significant change to the networking-calico code, please
 raise and discuss it first with other Calico developers and community

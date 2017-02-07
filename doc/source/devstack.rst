@@ -1,1 +1,0 @@
-.. include:: ../../devstack/README.rst
