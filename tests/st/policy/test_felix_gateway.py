@@ -202,7 +202,6 @@ class TestFelixOnGateway(TestBase):
         self.add_gateway_internal_iface()
         retry_until_success(self.assert_host_can_curl_ext, 3)
 
-    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_egress_policy_can_block_through_traffic(self):
         self.add_policy({
             'apiVersion': 'v1',
@@ -326,7 +325,6 @@ class TestFelixOnGateway(TestBase):
         ('allow', 'deny'),
         ('deny', 'allow')
     ])
-    @skip("See https://github.com/projectcalico/calicoctl/issues/1492")
     def test_conflicting_ingress_and_egress_policy(self, in_action, out_action):
         # If there is policy on the ingress and egress interface then both should
         # get applied and 'deny' should win.
