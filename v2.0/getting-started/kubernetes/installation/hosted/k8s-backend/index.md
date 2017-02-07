@@ -37,16 +37,18 @@ Below are a few examples for how to get started.
 
 ### Using Kubernetes' addon-manager
 
-Kubernetes' [addon-manager](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/addon-manager)
-can be used for deploying Calico alongside with other cluster addons. It takes
-YAML manifests from the `/etc/kubernetes/addons` directory and ensures they
-exist in the cluster. The following lines need to be run on the master of
+The Kubernetes [addon-manager](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/addon-manager)
+can be used for deploying Calico alongside with other cluster addons. Monitors
+`/etc/kubernetes/addons` for manifests and ensures they
+are applied to the cluster. The following lines need to be run on the master of
 Kubernetes cluster with addon-manager installed:
 
 ```
-curl -sL -o /etc/kubernetes/addons/calico-configmap.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-configmap.yaml
-curl -sL -o /etc/kubernetes/addons/calico-daemonset.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend-addon-manager/calico-daemonset.yaml
+curl -sL -o /etc/kubernetes/addons/calico-configmap.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/addon-manager/calico-configmap.yaml
+curl -sL -o /etc/kubernetes/addons/calico-daemonset.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/addon-manager/calico-daemonset.yaml
 ```
+
+### Examples
 
 #### Example: kubeadm + flannel
 
