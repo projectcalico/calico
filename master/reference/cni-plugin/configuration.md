@@ -76,6 +76,12 @@ When using Calico IPAM, the following flags determine what IP addresses should b
 
 A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
 
+The list of possible IPv4 and IPv6 pools can also be specified via the following properties:
+* `ipv4_pools`: An array of CIDR strings (e.g. `{ "10.0.0.1/24", "20.0.0.1/16"}`
+* `ipv6_pools`: An array of CIDR strings
+
+If any of the specified pools do not already exist then an error will be generated.
+
 ## Kubernetes specific
 
 When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
