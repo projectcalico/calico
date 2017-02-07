@@ -229,17 +229,23 @@ Description:
 		envs["IP6"] = ipv6
 	}
 
-	// Create a map of read only bindings.
-	vols := map[string]string{
-		logDir:            "/var/log/calico",
-		"/var/run/calico": "/var/run/calico",
-		"/lib/modules":    "/lib/modules",
+	// Create a struct for volumes to mount.
+	type vol struct {
+		hostPath      string
+		containerPath string
+	}
+
+	// vols is a slice of read only volume bindings.
+	vols := []vol{
+		{hostPath: logDir, containerPath: "/var/log/calico"},
+		{hostPath: "/var/run/calico", containerPath: "/var/run/calico"},
+		{hostPath: "/lib/modules", containerPath: "/lib/modules"},
 	}
 
 	if !disableDockerNw {
 		log.Info("Include docker networking volume mounts")
-		vols["/run/docker/plugins"] = "/run/docker/plugins"
-		vols["/var/run/docker.sock"] = "/var/run/docker.sock"
+		vols = append(vols, vol{hostPath: "/run/docker/plugins", containerPath: "/run/docker/plugins"},
+			vol{hostPath: "/var/run/docker.sock", containerPath: "/var/run/docker.sock"})
 	}
 
 	if etcdcfg.EtcdEndpoints == "" {
@@ -253,13 +259,14 @@ Description:
 	}
 	if etcdcfg.EtcdCACertFile != "" {
 		envs["ETCD_CA_CERT_FILE"] = ETCD_CA_CERT_NODE_FILE
-		vols[etcdcfg.EtcdCACertFile] = ETCD_CA_CERT_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdCACertFile, containerPath: ETCD_CA_CERT_NODE_FILE})
+
 	}
 	if etcdcfg.EtcdKeyFile != "" && etcdcfg.EtcdCertFile != "" {
 		envs["ETCD_KEY_FILE"] = ETCD_KEY_NODE_FILE
-		vols[etcdcfg.EtcdKeyFile] = ETCD_KEY_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdKeyFile, containerPath: ETCD_KEY_NODE_FILE})
 		envs["ETCD_CERT_FILE"] = ETCD_CERT_NODE_FILE
-		vols[etcdcfg.EtcdCertFile] = ETCD_CERT_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdCertFile, containerPath: ETCD_CERT_NODE_FILE})
 	}
 
 	// Create the Docker command to execute (or display).  Start with the
@@ -282,8 +289,8 @@ Description:
 	}
 
 	// Add the volume mounts.
-	for k, v := range vols {
-		cmd = append(cmd, "-v", fmt.Sprintf("%s:%s", k, v))
+	for _, v := range vols {
+		cmd = append(cmd, "-v", fmt.Sprintf("%s:%s", v.hostPath, v.containerPath))
 	}
 
 	// Add the container image name
