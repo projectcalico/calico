@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.4.0
+
+- Python 3 support
+- Revert "DHCP agent: don't directly connect different subnets"
+- Update DevStack plugin:
+  - so that it can be used in OpenStack CI
+  - to get Calico agent from PPA instead of building from source (which allows
+    using Calico 2.0)
+  - for Xenial
+- Get OpenStack CI DevStack/Tempest scenario test passing
+- Use neutron-lib imports where possible instead of neutron
+- Documentation improvements:
+  - on Calico semantics
+  - on floating IP support
+  - on service IPs
+  - correct enable_plugin call in DevStack README
+  - then move all user-facing docs to http://docs.projectcalico.org/master/ (as
+    networking-calico docs have now stopped being published to
+    docs.openstack.org)
+- Support and document using Calico with Kuryr
+- Update requirements to match OpenStack global requirements
+- Refactoring to organize imports and clarify compatibility code
+- Show team and repo badges on README
+- Handle recent removal of NeutronManager.get_plugin()
+- Monkey-patch eventlet before importing urllib3
+- Intercept floating IP creation (as well as update) so that floating IPs are
+  effective immediately after creation on the Neutron API
+
 ## 1.3.1
 
 - Allow Calico with OpenStack to coexist with other orchestrators using Calico.
