@@ -17,8 +17,6 @@ package iptables_test
 import (
 	. "github.com/projectcalico/felix/iptables"
 
-	"fmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -46,8 +44,22 @@ var _ = Describe("Table with an empty dataplane", func() {
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
 				SleepOverride:         dataplane.sleep,
+				NowOverride:           dataplane.now,
 			},
 		)
+	})
+
+	It("should load the dataplane state on first Apply()", func() {
+		Expect(dataplane.CmdNames).To(BeEmpty())
+		table.Apply()
+		// Should only load, since there's nothing to so.
+		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables-save",
+		}))
+	})
+
+	It("should have a refresh scheduled at start-of-day", func() {
+		Expect(table.Apply()).To(Equal(50 * time.Millisecond))
 	})
 
 	It("Should defer updates until Apply is called", func() {
@@ -57,9 +69,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table.UpdateChains([]*Chain{
 			{Name: "cali-foobar", Rules: []Rule{{Action: AcceptAction{}}}},
 		})
-		Expect(len(dataplane.Cmds)).To(BeZero())
+		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
-		Expect(len(dataplane.Cmds)).NotTo(BeZero())
+		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables-save",
+			"iptables-restore",
+		}))
 	})
 
 	It("should ignore delete of non-existent chain", func() {
@@ -104,15 +119,15 @@ var _ = Describe("Table with an empty dataplane", func() {
 			table.SetRuleInsertions("FORWARD", []Rule{
 				{Action: DropAction{}},
 			})
-			dataplane.Cmds = nil
+			dataplane.ResetCmds()
 			table.Apply()
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
 				"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
 				"INPUT":   {},
 				"OUTPUT":  {},
 			}))
-			Expect(len(dataplane.Cmds)).To(BeZero(),
-				fmt.Sprintf("Unexpected commands: %v", dataplane.Cmds))
+			// Should do a save but then figure out that there's nothing to do
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
 		})
 
 		Describe("after inserting a rule then updating the insertions", func() {
@@ -147,15 +162,47 @@ var _ = Describe("Table with an empty dataplane", func() {
 					"OUTPUT":  {},
 				}
 			})
-			It("should put it back on the next refresh", func() {
-				table.InvalidateDataplaneCache()
-				table.Apply()
+			expectDataplaneFixed := func() {
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {`-m comment --comment "cali:hecdSCslEjdBPBPo" --jump DROP`},
 					"INPUT":   {},
 					"OUTPUT":  {},
 				}))
+			}
+			expectDataplaneUntouched := func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			}
+			It("should put it back on the next explicit refresh", func() {
+				table.InvalidateDataplaneCache("test")
+				table.Apply()
+				expectDataplaneFixed()
 			})
+			shouldNotBeFixedAfter := func(delay time.Duration) func() {
+				return func() {
+					dataplane.AdvanceTimeBy(delay)
+					table.Apply()
+					expectDataplaneUntouched()
+				}
+			}
+			shouldBeFixedAfter := func(delay time.Duration) func() {
+				return func() {
+					dataplane.AdvanceTimeBy(delay)
+					table.Apply()
+					expectDataplaneFixed()
+				}
+			}
+			It("should defer recheck of the dataplane until after first recheck time",
+				shouldNotBeFixedAfter(49*time.Millisecond))
+			It("should recheck the dataplane if time has advanced far enough",
+				shouldBeFixedAfter(50*time.Millisecond))
+			It("should recheck the dataplane even if one of the recheck steps was missed",
+				shouldBeFixedAfter(500*time.Millisecond))
+			It("should recheck the dataplane even if one of the recheck steps was missed",
+				shouldBeFixedAfter(2000*time.Millisecond))
 		})
 		Describe("after another process replaces the insertion (non-empty chain)", func() {
 			BeforeEach(func() {
@@ -170,7 +217,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				}
 			})
 			It("should put it back on the next refresh", func() {
-				table.InvalidateDataplaneCache()
+				table.InvalidateDataplaneCache("test")
 				table.Apply()
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {
@@ -230,10 +277,9 @@ var _ = Describe("Table with an empty dataplane", func() {
 				}))
 			})
 			It("shouldn't get written more than once", func() {
-				dataplane.Cmds = nil
+				dataplane.ResetCmds()
 				table.Apply()
-				Expect(len(dataplane.Cmds)).To(BeZero(),
-					fmt.Sprintf("Unexpected commands: %v", dataplane.Cmds))
+				Expect(dataplane.CmdNames).To(BeEmpty())
 			})
 			It("should squash idempotent updates", func() {
 				table.UpdateChains([]*Chain{
@@ -243,10 +289,10 @@ var _ = Describe("Table with an empty dataplane", func() {
 						{Action: AcceptAction{}},
 					}},
 				})
-				dataplane.Cmds = nil
+				dataplane.ResetCmds()
 				table.Apply()
-				Expect(len(dataplane.Cmds)).To(BeZero(),
-					fmt.Sprintf("Unexpected commands: %v", dataplane.Cmds))
+				// Should do a save but then figure out that there's nothing to do
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
 			})
 		})
 		Describe("then extending the chain", func() {
@@ -346,6 +392,148 @@ var _ = Describe("Table with an empty dataplane", func() {
 			})
 		})
 	})
+})
+
+var _ = Describe("Tests of post-update recheck behaviour with refresh timer", func() {
+	describePostUpdateCheckTests(true)
+})
+var _ = Describe("Tests of post-update recheck behaviour with no refresh timer", func() {
+	describePostUpdateCheckTests(false)
+})
+
+func describePostUpdateCheckTests(enableRefresh bool) {
+	var dataplane *mockDataplane
+	var table *Table
+	var requestedDelay time.Duration
+
+	BeforeEach(func() {
+		dataplane = newMockDataplane("filter", map[string][]string{
+			"FORWARD": {},
+			"INPUT":   {},
+			"OUTPUT":  {},
+		})
+		options := TableOptions{
+			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			NewCmdOverride:        dataplane.newCmd,
+			SleepOverride:         dataplane.sleep,
+			NowOverride:           dataplane.now,
+		}
+		if enableRefresh {
+			options.RefreshInterval = 30 * time.Second
+		}
+		table = NewTable(
+			"filter",
+			4,
+			rules.RuleHashPrefix,
+			options,
+		)
+		table.SetRuleInsertions("FORWARD", []Rule{
+			{Action: DropAction{}},
+		})
+		table.Apply()
+	})
+
+	resetAndAdvance := func(amount time.Duration) func() {
+		return func() {
+			dataplane.ResetCmds()
+			dataplane.AdvanceTimeBy(amount)
+			requestedDelay = table.Apply()
+		}
+	}
+	assertRecheck := func() {
+		Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+	}
+	assertDelayMillis := func(delay int64) func() {
+		return func() {
+			Expect(requestedDelay).To(Equal(time.Duration(delay) * time.Millisecond))
+		}
+	}
+	assertNoCheck := func() {
+		Expect(dataplane.CmdNames).To(BeEmpty())
+	}
+
+	Describe("after advancing time 49ms", func() {
+		BeforeEach(resetAndAdvance(49 * time.Millisecond))
+		It("should not recheck", assertNoCheck)
+		It("should request correct delay", assertDelayMillis(1))
+
+		Describe("after advancing time to 50ms", func() {
+			BeforeEach(resetAndAdvance(1 * time.Millisecond))
+			It("should recheck", assertRecheck)
+			It("should request correct delay", assertDelayMillis(50))
+
+			Describe("after advancing time to 51ms", func() {
+				BeforeEach(resetAndAdvance(1 * time.Millisecond))
+				It("should not recheck", assertNoCheck)
+				It("should request correct delay", assertDelayMillis(49))
+
+				Describe("after advancing time to 100ms", func() {
+					BeforeEach(resetAndAdvance(49 * time.Millisecond))
+					It("should recheck", assertRecheck)
+					It("should request correct delay", assertDelayMillis(100))
+				})
+			})
+		})
+		Describe("after advancing time to 999ms", func() {
+			BeforeEach(resetAndAdvance(950 * time.Millisecond))
+			It("should recheck", assertRecheck)
+			It("should request correct delay", assertDelayMillis(601)) // i.e. at 1.6s
+
+			if enableRefresh {
+				Describe("after advancing time 60s", func() {
+					BeforeEach(resetAndAdvance(60 * time.Second))
+					It("should recheck", assertRecheck)
+
+					// Now waiting for the next refresh interval.
+					It("should request correct delay", assertDelayMillis(30000))
+				})
+				Describe("after advancing time by an hour", func() {
+					BeforeEach(resetAndAdvance(time.Hour))
+					It("should recheck", assertRecheck)
+
+					// Now waiting for the next refresh interval.
+					It("should request correct delay", assertDelayMillis(30000))
+
+					Describe("after advancing time by an hour", func() {
+						BeforeEach(resetAndAdvance(time.Hour))
+						It("should recheck", assertRecheck)
+
+						// Now waiting for the next refresh interval.
+						It("should request correct delay", assertDelayMillis(30000))
+					})
+				})
+			} else {
+				Describe("after advancing time 60s", func() {
+					BeforeEach(resetAndAdvance(60 * time.Second))
+					It("should recheck", assertRecheck)
+
+					// Refresh disabled, it just keeps increasing
+					It("should request correct delay", assertDelayMillis(41401))
+				})
+				Describe("after advancing time by an hour", func() {
+					BeforeEach(resetAndAdvance(time.Hour))
+					// Last recheck due to the post-write check.
+					It("should recheck", assertRecheck)
+
+					// Then, it should give up.
+					It("should request correct delay", assertDelayMillis(0))
+
+					Describe("after advancing time by an hour", func() {
+						BeforeEach(resetAndAdvance(time.Hour))
+						It("should not recheck", assertNoCheck)
+						It("should request correct delay", assertDelayMillis(0))
+					})
+				})
+			}
+		})
+	})
+}
+
+var _ = Describe("Table with a dirty datatplane in append mode", func() {
+	describeDirtyDataplaneTests(true)
+})
+var _ = Describe("Table with a dirty datatplane in insert mode", func() {
+	describeDirtyDataplaneTests(false)
 })
 
 func describeDirtyDataplaneTests(appendMode bool) {
@@ -555,14 +743,20 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				dataplane.FailAllSaves = true
 			})
 			It("it should panic", func() {
-				Expect(table.Apply).To(Panic())
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
 			}, 1)
 			It("it should do exponential backoff", func() {
-				Expect(table.Apply).To(Panic())
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(Equal((100 + 200 + 400) * time.Millisecond))
 			}, 1)
 			It("it should retry 3 times", func() {
-				Expect(table.Apply).To(Panic())
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
 				Expect(len(dataplane.Cmds)).To(Equal(4))
 			}, 1)
 		})
@@ -592,10 +786,14 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				dataplane.FailAllRestores = true
 			})
 			It("it should panic", func() {
-				Expect(table.Apply).To(Panic())
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
 			}, 1)
 			It("it should do exponential backoff", func() {
-				Expect(table.Apply).To(Panic())
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(Equal(
 					(1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512) * time.Millisecond))
 			}, 1)
@@ -654,7 +852,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				// state.
 				dataplane.Chains = initialChains()
 				// Explicitly invalidate the cache to simulate a timer refresh.
-				table.InvalidateDataplaneCache()
+				table.InvalidateDataplaneCache("test")
 			})
 			It("should get to correct state", func() {
 				// Next Apply() should fix it.
@@ -723,6 +921,3 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		})
 	})
 }
-
-var _ = Describe("Table with a dirty datatplane in append mode", func() { describeDirtyDataplaneTests(true) })
-var _ = Describe("Table with a dirty datatplane in insert mode", func() { describeDirtyDataplaneTests(false) })

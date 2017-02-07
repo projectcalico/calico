@@ -130,6 +130,9 @@ type InternalDataplane struct {
 	forceDataplaneRefresh bool
 	cleanupPending        bool
 
+	reschedTimer *time.Timer
+	reschedC     <-chan time.Time
+
 	config Config
 }
 
@@ -162,6 +165,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 			ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
 			InsertMode:               config.IptablesInsertMode,
+			RefreshInterval:          config.IptablesRefreshInterval,
 		},
 	)
 	rawTableV4 := iptables.NewTable(
@@ -171,6 +175,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptables.TableOptions{
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 			InsertMode:            config.IptablesInsertMode,
+			RefreshInterval:       config.IptablesRefreshInterval,
 		})
 	filterTableV4 := iptables.NewTable(
 		"filter",
@@ -179,6 +184,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptables.TableOptions{
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 			InsertMode:            config.IptablesInsertMode,
+			RefreshInterval:       config.IptablesRefreshInterval,
 		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
@@ -218,6 +224,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
 				InsertMode:               config.IptablesInsertMode,
+				RefreshInterval:          config.IptablesRefreshInterval,
 			},
 		)
 		rawTableV6 := iptables.NewTable(
@@ -227,6 +234,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			iptables.TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				InsertMode:            config.IptablesInsertMode,
+				RefreshInterval:       config.IptablesRefreshInterval,
 			},
 		)
 		filterTableV6 := iptables.NewTable(
@@ -236,6 +244,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			iptables.TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				InsertMode:            config.IptablesInsertMode,
+				RefreshInterval:       config.IptablesRefreshInterval,
 			},
 		)
 
@@ -445,6 +454,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			log.Debug("Refreshing dataplane state")
 			d.forceDataplaneRefresh = true
 			d.dataplaneNeedsSync = true
+		case <-d.reschedC:
+			log.Debug("Reschedule kick received")
+			d.dataplaneNeedsSync = true
+			// nil out the channel to record that the timer is now inactive.
+			d.reschedC = nil
 		case <-retryTicker.C:
 		}
 
@@ -558,14 +572,15 @@ func (d *InternalDataplane) apply() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
-		for _, t := range d.allIptablesTables {
-			t.InvalidateDataplaneCache()
-		}
 		d.forceDataplaneRefresh = false
 	}
 	// Update iptables, this should sever any references to now-unused IP sets.
+	var reschedDelay time.Duration
 	for _, t := range d.allIptablesTables {
-		t.Apply()
+		tableReschedAfter := t.Apply()
+		if tableReschedAfter != 0 && (reschedDelay == 0 || tableReschedAfter < reschedDelay) {
+			reschedDelay = tableReschedAfter
+		}
 	}
 
 	// Update the routing table.
@@ -590,6 +605,31 @@ func (d *InternalDataplane) apply() {
 			w.AttemptCleanup()
 		}
 		d.cleanupPending = false
+	}
+
+	// Set up any needed rescheduling kick.
+	if d.reschedC != nil {
+		// We have an active rescheduling timer, stop it so we can restart it with a
+		// different timeout below if it is still needed.
+		// This snippet comes from the docs for Timer.Stop().
+		if !d.reschedTimer.Stop() {
+			// Timer had already popped, drain its channel.
+			<-d.reschedC
+		}
+		// Nil out our copy of the channel to record that the timer is inactive.
+		d.reschedC = nil
+	}
+	if reschedDelay != 0 {
+		// We need to reschedule.
+		log.WithField("delay", reschedDelay).Debug("Asked to reschedule.")
+		if d.reschedTimer == nil {
+			// First time, create the timer.
+			d.reschedTimer = time.NewTimer(reschedDelay)
+		} else {
+			// Have an existing timer, reset it.
+			d.reschedTimer.Reset(reschedDelay)
+		}
+		d.reschedC = d.reschedTimer.C
 	}
 }
 
