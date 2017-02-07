@@ -71,16 +71,23 @@ The following deprecated options are also supported
 
 When using Calico IPAM, the following flags determine what IP addresses should be assigned. NOTE: These flags are strings and not boolean values.
 
-* `assign_ipv4` (default `"true"`)
-* `assign_ipv6` (default `"false"`)
+* `assign_ipv4` (default: `"true"`)
+* `assign_ipv6` (default: `"false"`)
 
 A specific IP address can be chosen by using [`CNI_ARGS`](https://github.com/appc/cni/blob/master/SPEC.md#parameters) and setting `IP` to the desired value.
 
-The list of possible IPv4 and IPv6 pools can also be specified via the following properties:
-* `ipv4_pools`: An array of CIDR strings (e.g. `{ "10.0.0.1/24", "20.0.0.1/16"}`
-* `ipv6_pools`: An array of CIDR strings
+By default, Calico IPAM will assign IP addresses from all the available IP Pools.
 
-If any of the specified pools do not already exist then an error will be generated.
+Optionally, the list of possible IPv4 and IPv6 pools can also be specified via the following properties:
+
+* `ipv4_pools`: An array of CIDR strings (e.g. `"ipv4_pools": ["10.0.0.0/24", "20.0.0.0/16"]`)
+* `ipv6_pools`: An array of CIDR strings (e.g. `"ipv6_pools": ["2001:db8::1/120"]`)
+
+> **NOTE**
+>
+> `ipv6_pools` will be respected only when `assign_ipv6` is set to "true"
+
+Any IP Pools specified in the CNI config must have already been created. It is an error to specify IP Pools in the config that do not exist.
 
 ## Kubernetes specific
 
