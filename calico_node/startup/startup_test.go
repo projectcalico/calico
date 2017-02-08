@@ -17,6 +17,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -238,5 +239,44 @@ var _ = Describe("FV tests against a real etcd", func() {
 		It("should have terminated", func() {
 			Expect(exitCode).To(Equal(1))
 		})
+	})
+
+	Describe("Test we properly wait for the etcd datastore", func() {
+		// Erase etcd clean.
+		testutils.CleanEtcd()
+
+		// Create a new client.
+		client, err := testutils.NewClient("")
+		if err != nil {
+			log.Println("Error creating client:", err)
+		}
+
+		// Wait for a connection.
+		done := make(chan bool)
+		go func() {
+			// Wait for a connection.
+			waitForConnection(client)
+
+			// Once connected, indicate that we connected on the channel.
+			done <- true
+		}()
+
+		// Wait for a done signal to indicate that we've connected to the datastore.
+		// If we don't receive one in 5 seconds, then fail.
+		c := 0
+		for {
+			select {
+			case <-done:
+				// Finished.  Success!
+				log.Println("Connected to datastore")
+				return
+			default:
+				c++
+				time.Sleep(1 * time.Second)
+				if c > 5 {
+					log.Fatal("Timed out waiting for datastore after 5 seconds")
+				}
+			}
+		}
 	})
 })
