@@ -153,9 +153,9 @@ func waitForConnection(c *client.Client) {
 	message("Checking datastore connection")
 	for {
 		// Query some arbitrary configuration to see if the connection
-		// is working.  Getting a specific node is a good option, even
-		// if the node does not exist.
-		_, err := c.Nodes().Get(api.NodeMetadata{Name: "foo"})
+		// is working.  Getting a specific profile is a good option, even
+		// if the profile does not exist.
+		_, err := c.Profiles().Get(api.ProfileMetadata{Name: "foo"})
 
 		// We only care about a couple of error cases, all others would
 		// suggest the datastore is accessible.
@@ -169,6 +169,9 @@ func waitForConnection(c *client.Client) {
 				continue
 			}
 		}
+
+		// We've connected to the datastore - break out of the loop.
+		break
 	}
 	message("Datastore connection verified")
 }
