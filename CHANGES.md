@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1
+
+- Revert setup.py >=1.8 constraint for pbr
+
 ## 1.4.0
 
 - Python 3 support

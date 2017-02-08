@@ -1,3 +1,17 @@
+networking-calico (1:1.4.1-xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 8753838).
+    - Revert setup.py >=1.8 constraint for pbr
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 08 Feb 2017 13:30:50 +0000
+
+networking-calico (1:1.4.1-trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 8753838).
+    - Revert setup.py >=1.8 constraint for pbr
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 08 Feb 2017 13:30:50 +0000
+
 networking-calico (1:1.4.0-xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit a395f91).

@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.4.0
+Version:        1.4.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Feb 08 2017 Neil Jerram <neil@tigera.io> 1:1.4.1-1
+  - networking-calico version 1.4.1 release
+    - Revert setup.py >=1.8 constraint for pbr
+
 * Tue Feb 07 2017 Neil Jerram <neil@tigera.io> 1:1.4.0-1
   - networking-calico version 1.4.0 release
     - Python 3 support
