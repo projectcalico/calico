@@ -101,7 +101,7 @@ Options:
                              Use the first valid IP address on the first
                              enumerated interface (common known exceptions are
                              filtered out, e.g. the docker bridge).  It is not
-                             receommended to use this if you have multiple
+                             recommended to use this if you have multiple
                              external interfaces on your host.
                            > can-reach=<IP OR DOMAINNAME>
                              Use the interface determined by your host routing
