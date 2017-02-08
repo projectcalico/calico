@@ -1,5 +1,5 @@
-hash: 25692a7bdbf477b39121f60bb05e29729897ea0b2aa339ba46a75b6d8b956050
-updated: 2017-01-31T15:45:35.159850797Z
+hash: 545ac76b6869ffdcf32cac4480e4370e0f7c857fbd68bcaeea07d49f75c95de0
+updated: 2017-02-07T14:26:01.823711355Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 7d6280fa8253c327ed6acdeb8942fff2e3031f62
+  version: 739accc242e0bdc963d0fc13785989e323fc3793
   subpackages:
   - client
   - pkg/fileutil
@@ -99,7 +99,7 @@ imports:
 - name: github.com/kardianos/osext
   version: c2c54e542fb797ad986b31721e1baedf214ca413
 - name: github.com/kelseyhightower/envconfig
-  version: a2b45697040a8149fbf8792e012b5823da91550a
+  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -143,7 +143,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 645bc68c9830a90d9e72fb750497a8c03c0d0ca1
+  version: 83090c92db7fde08538caea98d766464f94aadd0
   subpackages:
   - lib
   - lib/api
@@ -160,6 +160,7 @@ imports:
   - lib/errors
   - lib/hash
   - lib/hwm
+  - lib/ipip
   - lib/net
   - lib/numorstring
   - lib/scope
@@ -192,7 +193,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 61e43dc76f7ee59a82bdf3d71033dc12bea4c77d
+  version: c078b1e43f58d563c74cebe63c85789e76ddb627
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -202,7 +203,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: ebdfb7402004b397e6573c71132160d8e23cc12a
+  version: dbc72376c86301bb873c332830857e73c9f701e3
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -230,7 +231,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: d75a52659825e75fff6158388dddc6a5b04f9ba5
+  version: 7a6e5648d140666db5d920909e082ca00a87ba2c
   subpackages:
   - unix
 - name: golang.org/x/text
