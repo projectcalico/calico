@@ -103,10 +103,10 @@ Options:
                              filtered out, e.g. the docker bridge).  It is not
                              receommended to use this if you have multiple
                              external interfaces on your host.
-                           > can-reach=<IP OR HOSTNAME>
+                           > can-reach=<IP OR DOMAINNAME>
                              Use the interface determined by your host routing
                              tables that will be used to reach the supplied
-                             destination IP or hostname.
+                             destination IP or domain name.
                            > interface=<IFACE NAME REGEX>
                              Use the first valid IP address found on interfaces
                              named as per the supplied interface name regex.
