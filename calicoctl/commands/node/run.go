@@ -17,6 +17,7 @@ package node
 import (
 	"bufio"
 	"fmt"
+	gonet "net"
 	"os"
 	"os/exec"
 	"strings"
@@ -32,12 +33,16 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 const (
-	ETCD_KEY_NODE_FILE     = "/etc/calico/certs/key.pem"
-	ETCD_CERT_NODE_FILE    = "/etc/calico/certs/cert.crt"
-	ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
+	ETCD_KEY_NODE_FILE          = "/etc/calico/certs/key.pem"
+	ETCD_CERT_NODE_FILE         = "/etc/calico/certs/cert.crt"
+	ETCD_CA_CERT_NODE_FILE      = "/etc/calico/certs/ca_cert.crt"
+	AUTODETECT_METHOD_FIRST     = "first-found"
+	AUTODETECT_METHOD_CAN_REACH = "can-reach="
+	AUTODETECT_METHOD_INTERFACE = "interface="
 )
 
 var (
@@ -54,6 +59,8 @@ func Run(args []string) {
 	doc := fmt.Sprintf(`Usage:
   calicoctl node run [--ip=<IP>] [--ip6=<IP6>] [--as=<AS_NUM>]
                      [--name=<NAME>]
+                     [--ip-autodetection-method=<IP_AUTODETECTION_METHOD>]
+                     [--ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>]
                      [--log-dir=<LOG_DIR>]
                      [--node-image=<DOCKER_IMAGE_NAME>]
                      [--backend=(bird|gobgp|none)]
@@ -84,7 +91,31 @@ Options:
                            If omitted, it will use the value configured on the
                            node resource.  If there is no configured value
                            and the --ip6 option is omitted, the node will not
-                           route IPv6.
+                           route IPv6.  Use a value of 'autodetect' to force
+                           autodetection of the IP each time the node starts.
+     --ip-autodetection-method=<IP_AUTODETECTION_METHOD>
+                           Specify the autodetection method for detecting the
+                           local IPv4 routing address for this node.  The valid
+                           options are:
+                           > first-found
+                             Use the first valid IP address on the first
+                             enumerated interface (common known exceptions are
+                             filtered out, e.g. the docker bridge).  It is not
+                             receommended to use this if you have multiple
+                             external interfaces on your host.
+                           > can-reach=<IP OR HOSTNAME>
+                             Use the interface determined by your host routing
+                             tables that will be used to reach the supplied
+                             destination IP or hostname.
+                           > interface=<IFACE NAME REGEX>
+                             Use the first valid IP address found on interfaces
+                             named as per the supplied interface name regex.
+                           [default: first-found]
+     --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
+                           Specify the autodetection method for detecting the
+                           local IPv6 routing address for this node.  See
+                           ip-autodetection-method flag for valid options.
+                           [default: first-found]
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
@@ -131,6 +162,8 @@ Description:
 	// Extract all the parameters.
 	ipv4 := argutils.ArgStringOrBlank(arguments, "--ip")
 	ipv6 := argutils.ArgStringOrBlank(arguments, "--ip6")
+	ipv4ADMethod := argutils.ArgStringOrBlank(arguments, "--ip-autodetection-method")
+	ipv6ADMethod := argutils.ArgStringOrBlank(arguments, "--ip6-autodetection-method")
 	logDir := argutils.ArgStringOrBlank(arguments, "--log-dir")
 	asNumber := argutils.ArgStringOrBlank(arguments, "--as")
 	img := argutils.ArgStringOrBlank(arguments, "--node-image")
@@ -151,7 +184,7 @@ Description:
 			os.Exit(1)
 		}
 	}
-	if ipv6 != "" {
+	if ipv6 != "" && ipv6 != "autodetect" {
 		ip := argutils.ValidateIP(ipv6)
 		if ip.Version() != 6 {
 			fmt.Println("Error executing command: --ip6 is wrong IP version")
@@ -168,6 +201,10 @@ Description:
 		fmt.Printf("Error executing command: unknown backend '%s'\n", backend)
 		os.Exit(1)
 	}
+
+	// Validate the IP autodetection methods if specified.
+	validateIpAutodetectionMethod(ipv4ADMethod, 4)
+	validateIpAutodetectionMethod(ipv6ADMethod, 6)
 
 	// Use the hostname if a name is not specified.  We should always
 	// pass in a fixed value to the node container so that if the user
@@ -205,6 +242,8 @@ Description:
 		"CALICO_NETWORKING_BACKEND": backend,
 		"NO_DEFAULT_POOLS":          noPoolsString,
 		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
+		"IP_AUTODETECT_METHOD":      ipv4ADMethod,
+		"IP6_AUTODETECT_METHOD":     ipv6ADMethod,
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
@@ -347,7 +386,7 @@ Description:
 	}
 
 	// Create the command to follow the docker logs for the calico/node
-	fmt.Println("Container started, checking progress logs.")
+	fmt.Print("Container started, checking progress logs.\n\n")
 	logCmd := exec.Command("docker", "logs", "--follow", "calico-node")
 
 	// Get the stdout pipe
@@ -384,16 +423,18 @@ Description:
 		}
 	}
 
-	// If we didn't successfully start then notify the user.
-	if outScanner.Err() != nil {
-		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
-	} else if !started {
-		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
-	}
-
 	// Kill the process if it is still running.
 	logCmd.Process.Kill()
 	logCmd.Wait()
+
+	// If we didn't successfully start then notify the user.
+	if outScanner.Err() != nil {
+		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
+		os.Exit(1)
+	} else if !started {
+		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
+		os.Exit(1)
+	}
 }
 
 // runningInContainer returns whether we are running calicoctl within a container.
@@ -445,4 +486,43 @@ func setNFConntrackMax() {
 	if err != nil {
 		fmt.Println("WARNING: Could not set nf_contrack_max. This may have an impact at scale.")
 	}
+}
+
+// Validate the IP autodection method string.
+func validateIpAutodetectionMethod(method string, version int) {
+	if method == AUTODETECT_METHOD_FIRST {
+		// Auto-detection method is "first-found", no additional validation
+		// required.
+		return
+	} else if strings.HasPrefix(method, AUTODETECT_METHOD_CAN_REACH) {
+		// Auto-detection method is "can-reach", validate that the address
+		// resolves to at least one IP address of the required version.
+		addrStr := strings.TrimPrefix(method, AUTODETECT_METHOD_CAN_REACH)
+		ips, err := gonet.LookupIP(addrStr)
+		if err != nil {
+			fmt.Printf("Error executing command: cannot resolve address specified for IP autodetection: %s\n", addrStr)
+			os.Exit(1)
+		}
+
+		for _, ip := range ips {
+			cip := net.IP{ip}
+			if cip.Version() == version {
+				return
+			}
+		}
+		fmt.Printf("Error executing command: address for IP autodetection does not resolve to an IPv%d address: %s\n", version, addrStr)
+		os.Exit(1)
+	} else if strings.HasPrefix(method, AUTODETECT_METHOD_INTERFACE) {
+		// Auto-detection method is "interface", validate that the interface
+		// regex is a valid golang regex.
+		ifStr := strings.TrimPrefix(method, AUTODETECT_METHOD_INTERFACE)
+		if _, err := regexp.Compile(ifStr); err != nil {
+			fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifStr)
+			os.Exit(1)
+		}
+		return
+	}
+
+	fmt.Printf("Error executing command: invalid IP autodetection method: %s\n", method)
+	os.Exit(1)
 }

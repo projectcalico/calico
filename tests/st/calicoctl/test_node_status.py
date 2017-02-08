@@ -23,7 +23,6 @@ Most of the status output is checked by the BGP tests, so this module just
 contains a simple return code check.
 """
 
-
 class TestNodeStatus(TestBase):
     def test_node_status(self):
         """

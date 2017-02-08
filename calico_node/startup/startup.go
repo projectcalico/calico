@@ -32,8 +32,11 @@ import (
 )
 
 const (
-	DEFAULT_IPV4_POOL_CIDR = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR = "fd80:24e2:f998:72d6::/64"
+	DEFAULT_IPV4_POOL_CIDR      = "192.168.0.0/16"
+	DEFAULT_IPV6_POOL_CIDR      = "fd80:24e2:f998:72d6::/64"
+	AUTODETECT_METHOD_FIRST     = "first-found"
+	AUTODETECT_METHOD_CAN_REACH = "can-reach="
+	AUTODETECT_METHOD_INTERFACE = "interface="
 )
 
 // For testing purposes we define an exit function that we can override.
@@ -238,15 +241,23 @@ func configureIPsAndSubnets(node *api.Node) {
 	ipv4Env := os.Getenv("IP")
 	if ipv4Env == "autodetect" || (ipv4Env == "" && node.Spec.BGP.IPv4Address == nil) {
 		adm := os.Getenv("IP_AUTODETECT_METHOD")
-		node.Spec.BGP.IPv4Address = autoDetectCIDR(adm, 4)
-
-		// We must have an IPv4 address configured for BGP to run.
-		if node.Spec.BGP.IPv4Address == nil {
+		cidr := autoDetectCIDR(adm, 4)
+		if cidr != nil {
+			// We autodetected an IPv4 address so update the value in the node.
+			node.Spec.BGP.IPv4Address = cidr
+		} else if node.Spec.BGP.IPv4Address == nil {
+			// No IPv4 address is configured, but we always require one, so exit.
 			fatal("Couldn't autodetect a management IPv4 address:")
-			message("  -  provide an IP address by configuring one in the node resource, or")
-			message("  -  provide an IP address using the IP environment, or")
+			message("  -  provide an IPv4 address by configuring one in the node resource, or")
+			message("  -  provide an IPv4 address using the IP environment, or")
 			message("  -  if auto-detecting, use a different autodetection method.")
 			terminate()
+		} else {
+			// No IPv4 autodetected, but a previous one was configured.
+			// Tell the user we are leaving the value unchanged.  We
+			// will validate that the IP matches one on the interface.
+			warning("Autodetection of IPv4 address failed, keeping existing value: %s", node.Spec.BGP.IPv4Address.String())
+			validateIP(node.Spec.BGP.IPv4Address)
 		}
 	} else {
 		if ipv4Env != "" {
@@ -258,7 +269,25 @@ func configureIPsAndSubnets(node *api.Node) {
 	ipv6Env := os.Getenv("IP6")
 	if ipv6Env == "autodetect" {
 		adm := os.Getenv("IP6_AUTODETECT_METHOD")
-		node.Spec.BGP.IPv6Address = autoDetectCIDR(adm, 6)
+		cidr := autoDetectCIDR(adm, 6)
+		if cidr != nil {
+			// We autodetected an IPv6 address so update the value in the node.
+			node.Spec.BGP.IPv6Address = cidr
+		} else if node.Spec.BGP.IPv6Address == nil {
+			// No IPv6 address is configured, but we have requested one, so exit.
+			fatal("Couldn't autodetect a management IPv6 address:")
+			message("  -  provide an IPv6 address by configuring one in the node resource, or")
+			message("  -  provide an IPv6 address using the IP6 environment, or")
+			message("  -  use a different autodetection method, or")
+			message("  -  don't request autodetection of an IPv6 address.")
+			terminate()
+		} else {
+			// No IPv6 autodetected, but a previous one was configured.
+			// Tell the user we are leaving the value unchanged.  We
+			// will validate that the IP matches one on the interface.
+			warning("Autodetection of IPv6 address failed, keeping existing value: %s", node.Spec.BGP.IPv6Address.String())
+			validateIP(node.Spec.BGP.IPv4Address)
+		}
 	} else {
 		if ipv6Env != "" {
 			node.Spec.BGP.IPv6Address = parseIPEnvironment("IP6", ipv6Env, 6)
@@ -315,33 +344,73 @@ func validateIP(ip *net.IP) {
 
 // autoDetectCIDR auto-detects the IP and Network using the requested
 // detection method.
-func autoDetectCIDR(detectionMethod string, version int) *net.IP {
-	incl := []string{}
-	excl := []string{"^docker.*", "^cbr.*", "dummy.*",
-		"virbr.*", "lxcbr.*", "veth.*", "lo",
-		"cali.*", "tunl.*", "flannel.*"}
+func autoDetectCIDR(method string, version int) *net.IP {
+	if method == "" || method == AUTODETECT_METHOD_FIRST {
+		// Autodetect the IP by enumerating all interfaces (excluding
+		// known internal interfaces).
+		return autoDetectCIDRFirstFound(version)
+	} else if strings.HasPrefix(method, AUTODETECT_METHOD_INTERFACE) {
+		// Autodetect the IP from the specified interface.
+		ifStr := strings.TrimPrefix(method, AUTODETECT_METHOD_INTERFACE)
+		return autoDetectCIDRByInterface(ifStr, version)
+	} else if strings.HasPrefix(method, AUTODETECT_METHOD_CAN_REACH) {
+		// Autodetect the IP by connecting a UDP socket to a supplied address.
+		destStr := strings.TrimPrefix(method, AUTODETECT_METHOD_CAN_REACH)
+		return autoDetectCIDRByReach(destStr, version)
+	}
 
-	// At the moment, we don't support anything other than the default
-	// (blank) auto-detection method.
-	if detectionMethod != "" {
-		fatal("IP detection method is not supported: %s", detectionMethod)
-		terminate()
+	// The autodetection method is not recognised and is required.  Exit.
+	fatal("Invalid IP autodection method: %s", method)
+	terminate()
+	return nil
+}
+
+// autoDetectCIDRFirstFound auto-detects the first valid Network it finds across
+// all interfaces (excluding common known internal interface names).
+func autoDetectCIDRFirstFound(version int) *net.IP {
+
+	incl := []string{}
+	excl := []string{
+		"docker.*", "cbr.*", "dummy.*",
+		"virbr.*", "lxcbr.*", "veth.*", "lo",
+		"cali.*", "tunl.*", "flannel.*",
 	}
 
 	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, version)
 	if err != nil {
-		message("Unable to auto-detect any valid IPv%d addresses: %s", version, err)
-		return nil
-	}
-
-	if cidr == nil {
-		message("Unable to auto-detect an IPv%d address", version)
+		warning("Unable to auto-detect an IPv%d address: %s", version, err)
 		return nil
 	}
 
 	message("Using autodetected IPv%d address on interface %s: %s", version, iface.Name, cidr.String())
 
 	return &net.IP{cidr.IP}
+}
+
+// autoDetectCIDRByInterface auto-detects the first valid Network on the interfaces
+// matching the supplied interface regex.
+func autoDetectCIDRByInterface(ifaceRegex string, version int) *net.IP {
+	iface, cidr, err := autodetection.FilteredEnumeration([]string{ifaceRegex}, nil, version)
+	if err != nil {
+		warning("Unable to auto-detect an IPv%d address using interface regex %s: %s", version, ifaceRegex, err)
+		return nil
+	}
+
+	message("Using autodetected IPv%d address %s on matching interface %s", version, cidr.String(), iface.Name)
+
+	return &net.IP{cidr.IP}
+}
+
+// autoDetectCIDRByReach auto-detects the IP and Network by setting up a UDP
+// connection to a "reach" address.
+func autoDetectCIDRByReach(dest string, version int) *net.IP {
+	if cidr, err := autodetection.ReachDestination(dest, version); err != nil {
+		warning("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dest, err)
+		return nil
+	} else {
+		message("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
+		return &net.IP{cidr.IP}
+	}
 }
 
 // configureASNumber configures the Node resource with the AS number specified
@@ -354,14 +423,14 @@ func configureASNumber(node *api.Node) {
 			fatal("The AS number specified in the environment (AS=%s) is not valid: %s", asStr, err)
 			terminate()
 		} else {
-			message("Using AS number specified in environment: AS=%s", asNum)
+			message("Using AS number specified in environment (AS=%s)", asNum)
 			node.Spec.BGP.ASNumber = &asNum
 		}
 	} else {
 		if node.Spec.BGP.ASNumber == nil {
 			message("No AS number configured on node resource, using global value")
 		} else {
-			message("Using AS number configured in node resource: %s", node.Spec.BGP.ASNumber)
+			message("Using AS number %s configured in node resource", node.Spec.BGP.ASNumber)
 		}
 	}
 }
