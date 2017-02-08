@@ -123,7 +123,7 @@ func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 }
 
 func (r *RouteTable) QueueResync() {
-	r.logCxt.Info("Queueing a resync.")
+	r.logCxt.Info("Queueing a resync of routing table.")
 	r.inSync = false
 }
 
@@ -168,7 +168,7 @@ func (r *RouteTable) Apply() error {
 				retries--
 				continue
 			}
-			logCxt.Info("Synchronised routes on interface")
+			logCxt.Debug("Synchronised routes on interface")
 			break
 		}
 		if retries == 0 {
