@@ -25,6 +25,7 @@ Usage:
                      [--init-system]
                      [--disable-docker-networking]
                      [--docker-networking-ifprefix=<IFPREFIX>]
+                     [--enable-docker-networking-labeling]
 
 Options:
   -h --help                Show this screen.
@@ -72,6 +73,10 @@ Options:
                            within the Docker containers that have been networked
                            by the Calico driver.
                            [default: cali]
+     --enable-docker-networking-labeling
+                           Enables adding labels to Docker containers that can
+                           be used in policies. Setting this flag also disables
+                           the default network profiles.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
