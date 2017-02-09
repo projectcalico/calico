@@ -413,7 +413,7 @@ func (t *Table) RemoveChainByName(name string) {
 
 func (t *Table) loadDataplaneState() {
 	// Load the hashes from the dataplane.
-	t.logCxt.Info("Scanning for out-of-sync iptables chains")
+	t.logCxt.Info("Loading current iptables state and checking it is correct.")
 	t.lastReadTime = t.timeNow()
 	dataplaneHashes := t.getHashesFromDataplane()
 
@@ -455,7 +455,7 @@ func (t *Table) loadDataplaneState() {
 	}
 
 	// Now scan for chains that shouldn't be there and mark for deletion.
-	t.logCxt.Info("Scanning for unexpected iptables chains")
+	t.logCxt.Debug("Scanning for unexpected iptables chains")
 	for chainName, dataplaneHashes := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
 		if t.dirtyChains.Contains(chainName) || t.dirtyInserts.Contains(chainName) {
@@ -487,7 +487,7 @@ func (t *Table) loadDataplaneState() {
 		t.dirtyChains.Add(chainName)
 	}
 
-	t.logCxt.Info("Done scanning, in sync with dataplane")
+	t.logCxt.Debug("Finished loading iptables state")
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.inSyncWithDataPlane = true
 }
