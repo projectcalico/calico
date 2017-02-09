@@ -88,7 +88,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if ipamArgs.IP != nil {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
-		// The hostname will be defaulted to the actual hostname if cong.Hostname is empty
+		// The hostname will be defaulted to the actual hostname if conf.Hostname is empty
 		assignArgs := client.AssignIPArgs{IP: cnet.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: conf.Hostname}
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := calicoClient.IPAM().AssignIP(assignArgs)
@@ -96,9 +96,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		ipV4Network := net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
-		r.IP4 = &types.IPConfig{IP: ipV4Network}
-		logger.WithField("result.IP4", r.IP4).Info("Result IPv4")
+		var ipNetwork net.IPNet
+
+		if ipamArgs.IP.To4() == nil {
+			// It's an IPv6 address.
+			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(128, 128)}
+			r.IP6 = &types.IPConfig{IP: ipNetwork}
+			logger.WithField("result.IP6", r.IP6).Info("Result IPv6")
+		} else {
+			// It's an IPv4 address.
+			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
+			r.IP4 = &types.IPConfig{IP: ipNetwork}
+			logger.WithField("result.IP4", r.IP4).Info("Result IPv4")
+		}
 	} else {
 		// Default to assigning an IPv4 address
 		num4 := 1
