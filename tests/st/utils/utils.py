@@ -22,6 +22,7 @@ from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
 from time import sleep
 
+import termios
 import yaml
 from netaddr import IPNetwork, IPAddress
 from exceptions import CommandExecError
@@ -80,23 +81,37 @@ def get_ip(v6=False):
     return ip
 
 
-def log_and_run(command, raise_exception_on_failure=True):
+# Some of the commands we execute like to mess with the TTY configuration, which can break the
+# output formatting. As a wrokaround, save off the terminal settings and restore them after
+# each command.
+_term_settings = termios.tcgetattr(sys.stdin.fileno())
 
+
+def log_and_run(command, raise_exception_on_failure=True):
     def log_output(results):
+        if results is None:
+            logger.info("  # <no output>")
+
         lines = results.split("\n")
         for line in lines:
-            logger.info("  # %s", line)
+            logger.info("  # %s", line.rstrip())
 
     try:
-        logger.info(command)
-        results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        logger.info("%s", command)
+        try:
+            results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        finally:
+            # Restore terminal settings in case the command we ran manipulated them.  Note:
+            # under concurrent access, this is still not a perfect solution since another thread's
+            # child process may break the settings again before we log below.
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _term_settings)
         log_output(results)
         return results
     except CalledProcessError as e:
         # Wrap the original exception with one that gives a better error
         # message (including command output).
         logger.info("  # Return code: %s", e.returncode)
-        log_output(e.output.rstrip())
+        log_output(e.output)
         if raise_exception_on_failure:
             raise CommandExecError(e)
 
@@ -230,9 +245,10 @@ def assert_number_endpoints(host, expected):
             actual += 1
 
     if int(actual) != int(expected):
-        msg = "Incorrect number of endpoints: \n" \
-              "Expected: %s; Actual: %s" % (expected, actual)
-        raise AssertionError(msg)
+        raise AssertionError(
+            "Incorrect number of endpoints on host %s: \n"
+            "Expected: %s; Actual: %s" % (hostname, expected, actual)
+        )
 
 
 @debug_failures
