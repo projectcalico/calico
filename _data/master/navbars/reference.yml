@@ -81,6 +81,12 @@ toc:
   section:
   - title: Configuration
     path: /reference/node/configuration
+- title: felix
+  section:
+  - title: Configuration
+    path: /reference/felix/configuration
+  - title: Prometheus Statistics
+    path: /reference/felix/prometheus
 - title: Calico CNI Plugins
   path: /reference/cni-plugin/configuration
 - title: Calico Policy Controller
