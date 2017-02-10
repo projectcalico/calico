@@ -26,6 +26,7 @@ These guides let you get a cluster set up quickly, and walk you through using Ca
 ## Requirements
 
 - The kube-proxy must be started in `iptables` proxy mode.  This is the default as of Kubernetes v1.2.0.
+- The kube-proxy must be started without the `--masquerade-all` flag, which conflicts with Calico policy.
 
 ## Troubleshooting
 - [Troubleshooting]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/troubleshooting)

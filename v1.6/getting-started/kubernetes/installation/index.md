@@ -12,6 +12,8 @@ for annotation-based policy can still be found in [an older release](https://git
 
 ## Requirements
 - An existing Kubernetes cluster running Kubernetes >= v1.1.  To use NetworkPolicy, Kubernetes >= v1.3.0 is required.
+- The kube-proxy must be started in `iptables` proxy mode.  This is the default as of Kubernetes v1.2.0.
+- The kube-proxy must be started without the `--masquerade-all` flag, which conflicts with Calico policy.
 - An `etcd` cluster accessible by all nodes in the Kubernetes cluster
   - Calico can share the etcd cluster used by Kubernetes, but it's recommended
   that a separate cluster is set up.
