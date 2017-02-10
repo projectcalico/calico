@@ -1,15 +1,15 @@
 ---
-title: Etcdless Hosted Install 
+title: Etcdless Hosted Install
 ---
 
-This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  Note that this feature is
-still experimental and currently comes with a number of limitations, namely:
+This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  Note that this feature
+currently comes with a number of limitations, namely:
 
 - Calico without etcd performs policy enforcement only and does not yet support Calico BGP networking.
 - Calico without etcd does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - Calico without etcd does not yet support the full set of `calicoctl` commands.
 
-## Requirements 
+## Requirements
 
 The provided manifest configures Calico to use host-local IPAM in conjunction with the Kubernetes assigned
 pod CIDRs for each node.
@@ -36,10 +36,10 @@ Below are a few examples for how to get started.
 
 This example explains how to install Calico on kubeadm with flannel for routing.
 
-Follow the [official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).  For 
+Follow the [official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).  For
 steps that require it, follow the instructions for installing flannel as the pod network.
 
-To initialize the master run 
+To initialize the master run
 
 ```
 kubeadm init --pod-network-cidr=10.244.0.0/16
@@ -57,7 +57,7 @@ Then continue following the guide, following the instructions for installing fla
 
 This example explains how to install Calico for NetworkPolicy on GCE using kube-up.
 
-See the [GCE documentation](http://kubernetes.io/docs/getting-started-guides/gce/#prerequisites) for 
+See the [GCE documentation](http://kubernetes.io/docs/getting-started-guides/gce/#prerequisites) for
 a list of requirements before starting.
 
 ##### 1) Start a Kubernetes cluster
