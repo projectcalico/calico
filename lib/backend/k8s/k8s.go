@@ -55,6 +55,7 @@ type KubeClient struct {
 
 	// Clients for interacting with Calico resources.
 	ipPoolClient api.Client
+	nodeClient api.Client
 }
 
 type KubeConfig struct {
@@ -122,6 +123,7 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 
 	// Create the Calico sub-clients.
 	kubeClient.ipPoolClient = resources.NewIPPools(cs, tprClient)
+	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClient)
 
 	return kubeClient, nil
 }
@@ -281,6 +283,8 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 		return c.createGlobalConfig(d)
 	case model.IPPoolKey:
 		return c.ipPoolClient.Create(d)
+	case model.NodeKey:
+		return c.nodeClient.Create(d)
 	default:
 		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -298,6 +302,8 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 		return c.updateGlobalConfig(d)
 	case model.IPPoolKey:
 		return c.ipPoolClient.Update(d)
+	case model.NodeKey:
+		return c.nodeClient.Update(d)
 	default:
 		// If the resource isn't supported, then this is a no-op.
 		log.Infof("'Update' for %+v is no-op", d.Key)
@@ -315,6 +321,8 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return c.applyGlobalConfig(d)
 	case model.IPPoolKey:
 		return c.ipPoolClient.Apply(d)
+	case model.NodeKey:
+		return c.nodeClient.Apply(d)
 	default:
 		log.Infof("'Apply' for %s is no-op", d.Key)
 		return d, nil
@@ -328,6 +336,8 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 		return c.deleteGlobalConfig(d)
 	case model.IPPoolKey:
 		return c.ipPoolClient.Delete(d)
+	case model.NodeKey:
+		return c.nodeClient.Delete(d)
 	default:
 		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
 		return nil
@@ -352,6 +362,8 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 		return c.getReadyStatus(k.(model.ReadyFlagKey))
 	case model.IPPoolKey:
 		return c.ipPoolClient.Get(k.(model.IPPoolKey))
+	case model.NodeKey:
+		return c.nodeClient.Get(k.(model.NodeKey))
 	default:
 		return nil, errors.ErrorOperationNotSupported{
 			Identifier: k,
@@ -377,6 +389,8 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listHostConfig(l.(model.HostConfigListOptions))
 	case model.IPPoolListOptions:
 		return c.ipPoolClient.List(l.(model.IPPoolListOptions))
+	case model.NodeListOptions:
+		return c.nodeClient.List(l.(model.NodeListOptions))
 	default:
 		return []*model.KVPair{}, nil
 	}

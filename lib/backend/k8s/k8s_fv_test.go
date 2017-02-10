@@ -496,4 +496,49 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	It("Should support getting, deleting, and listing Nodes", func() {
+		nodeHostname := ""
+		var kvp model.KVPair
+		By("Listing all Nodes", func() {
+			nodes, err := c.List(model.NodeListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			// Get the hostname so we can make a Get call
+			kvp = *nodes[0]
+			nodeHostname = kvp.Key.(model.NodeKey).Hostname
+		})
+
+		By("Getting a specific nodeHostname", func() {
+			n, err := c.Get(model.NodeKey{Hostname: nodeHostname})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check to see we have the right Node
+			Expect(nodeHostname).To(Equal(n.Key.(model.NodeKey).Hostname))
+		})
+
+		By("Creating a new Node", func() {
+			_, err := c.Create(&kvp)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Getting non-existent Node", func() {
+			_, err := c.Get(model.NodeKey{Hostname: "Fake"})
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Deleting a Node", func() {
+			err := c.Delete(&kvp)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Applying changes to a node", func() {
+			_, err := c.Apply(&kvp)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating a Node", func() {
+			_, err := c.Update(&kvp)
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
