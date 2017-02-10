@@ -1,5 +1,5 @@
-hash: 545ac76b6869ffdcf32cac4480e4370e0f7c857fbd68bcaeea07d49f75c95de0
-updated: 2017-02-07T14:26:01.823711355Z
+hash: 00937468162565d3fd9622fb112d381727237d31b90395dd0907efb1e99a6026
+updated: 2017-02-10T18:06:17.425025303Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 739accc242e0bdc963d0fc13785989e323fc3793
+  version: 47cb8a012ad0ddd8505bb573066ca1d27b1c46c3
   subpackages:
   - client
   - pkg/fileutil
@@ -83,7 +83,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -97,7 +97,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kardianos/osext
-  version: c2c54e542fb797ad986b31721e1baedf214ca413
+  version: 9b883c5eb462dd5cb1b0a7a104fe86bc6b9bd391
 - name: github.com/kelseyhightower/envconfig
   version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/mailru/easyjson
@@ -203,7 +203,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: dbc72376c86301bb873c332830857e73c9f701e3
+  version: c19091b1c6fb954a80f9f67abed2e2d780bb485b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -231,7 +231,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 7a6e5648d140666db5d920909e082ca00a87ba2c
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
