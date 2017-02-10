@@ -32,7 +32,7 @@ class Workload(object):
     software.
     """
 
-    def __init__(self, host, name, image="busybox", network="bridge", ip=None):
+    def __init__(self, host, name, image="busybox", network="bridge", ip=None, labels=[]):
         """
         Create the workload and detect its IPs.
 
@@ -47,13 +47,18 @@ class Workload(object):
         :param network: The DockerNetwork to connect to.  Set to None to use
         default Docker networking.
         :param ip: The ip address to assign to the container.
+        :param labels: List of labels '<var>=<value>' to add to workload.
         """
         self.host = host
         self.name = name
 
+        lbl_args = ""
+        for label in labels:
+            lbl_args += " --label %s" % (label)
+
         ip_option = ("--ip %s" % ip) if ip else ""
-        command = "docker run -tid --name %s --net %s %s %s" % \
-                  (name, network, ip_option, image)
+        command = "docker run -tid --name %s --net %s %s %s %s" % \
+                  (name, network, lbl_args, ip_option, image)
         docker_run_wl = partial(host.execute, command)
         retry_until_success(docker_run_wl)
         self.ip = host.execute(

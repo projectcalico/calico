@@ -349,3 +349,39 @@ def get_host_ips(version=4, exclude=None):
                     ip_addrs.append(IPAddress(address))
 
     return ip_addrs
+
+def curl_etcd(path, options=None, recursive=True, ip=None):
+    """
+    Perform a curl to etcd, returning JSON decoded response.
+    :param path:  The key path to query
+    :param options:  Additional options to include in the curl
+    :param recursive:  Whether we want recursive query or not
+    :return:  The JSON decoded response.
+    """
+    if options is None:
+        options = []
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        rc = check_output(
+            "curl --cacert %s --cert %s --key %s "
+            "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
+            % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
+               path, str(recursive).lower(), " ".join(options)),
+            shell=True)
+    else:
+        rc = check_output(
+            "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
+            % (ip, path, str(recursive).lower(), " ".join(options)),
+            shell=True)
+
+    return json.loads(rc.strip())
+
+def wipe_etcd(ip):
+    # Delete /calico if it exists. This ensures each test has an empty data
+    # store at start of day.
+    curl_etcd("calico", options=["-XDELETE"], ip=ip)
+
+    # Disable Usage Reporting to usage.projectcalico.org
+    # We want to avoid polluting analytics data with unit test noise
+    curl_etcd("calico/v1/config/UsageReportingEnabled",
+                   options=["-XPUT -d value=False"], ip=ip)

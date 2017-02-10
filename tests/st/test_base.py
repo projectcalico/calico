@@ -23,7 +23,8 @@ import yaml
 from deepdiff import DeepDiff
 
 from tests.st.utils.utils import (get_ip, ETCD_SCHEME, ETCD_CA, ETCD_CERT,
-                                  ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL)
+                                  ETCD_KEY, debug_failures, ETCD_HOSTNAME_SSL,
+                                  wipe_etcd)
 
 HOST_IPV6 = get_ip(v6=True)
 HOST_IPV4 = get_ip()
@@ -49,14 +50,7 @@ class TestBase(TestCase):
         """
         self.ip = HOST_IPV4
 
-        # Delete /calico if it exists. This ensures each test has an empty data
-        # store at start of day.
-        self.curl_etcd("calico", options=["-XDELETE"])
-
-        # Disable Usage Reporting to usage.projectcalico.org
-        # We want to avoid polluting analytics data with unit test noise
-        self.curl_etcd("calico/v1/config/UsageReportingEnabled",
-                       options=["-XPUT -d value=False"])
+        self.wipe_etcd()
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
@@ -216,6 +210,9 @@ class TestBase(TestCase):
         assert False not in results, ("Connectivity check error!\r\n"
                                       "Results:\r\n %s\r\n" % diagstring)
 
+    def wipe_etcd(self):
+        wipe_etcd(self.ip)
+
     def curl_etcd(self, path, options=None, recursive=True):
         """
         Perform a curl to etcd, returning JSON decoded response.
@@ -224,23 +221,7 @@ class TestBase(TestCase):
         :param recursive:  Whether we want recursive query or not
         :return:  The JSON decoded response.
         """
-        if options is None:
-            options = []
-        if ETCD_SCHEME == "https":
-            # Etcd is running with SSL/TLS, require key/certificates
-            rc = subprocess.check_output(
-                "curl --cacert %s --cert %s --key %s "
-                "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
-                % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
-                   path, str(recursive).lower(), " ".join(options)),
-                shell=True)
-        else:
-            rc = subprocess.check_output(
-                "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
-                % (self.ip, path, str(recursive).lower(), " ".join(options)),
-                shell=True)
-
-        return json.loads(rc.strip())
+        curl_etcd(path, options, recursive, self.ip)
 
     def check_data_in_datastore(self, host, data, resource, yaml_format=True):
         if yaml_format:

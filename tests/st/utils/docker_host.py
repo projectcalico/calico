@@ -15,6 +15,7 @@ import logging
 import json
 import os
 import uuid
+import yaml
 from functools import partial
 from subprocess import CalledProcessError, Popen, PIPE
 
@@ -405,11 +406,11 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network="bridge", ip=None):
+    def create_workload(self, name, image="busybox", network="bridge", ip=None, labels=[]):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network, ip=ip)
+        workload = Workload(self, name, image=image, network=network, ip=ip, labels=labels)
         self.workloads.add(workload)
         return workload
 
@@ -495,3 +496,34 @@ class DockerHost(object):
                           indent=2,
                           separators=(',', ': '))
         self.writefile(filename, text)
+
+    def add_resource(self, resource_data):
+        """
+        Add resource specified in resource_data object.
+        :param resource_data: object representing json data for the resource
+        to add
+        """
+        self._apply_resources(resource_data)
+
+    def delete_all_resource(self, resource):
+        """
+        Delete all resources of the specified type.
+        :param resource: string, resource type to delete
+        """
+        # Grab all objects of a resource type
+        objects = yaml.load(self.calicoctl("get %s -o yaml" % resource))
+        # and delete them (if there are any)
+        if len(objects) > 0:
+            self._delete_data(objects)
+
+    def _delete_data(self, data):
+        logger.debug("Deleting data with calicoctl: %s", data)
+        self._exec_calicoctl("delete", data)
+
+    def _apply_resources(self, resources):
+        self._exec_calicoctl("apply", resources)
+
+    def _exec_calicoctl(self, action, data):
+        # use calicoctl with data
+        self.writejson("new_data", data)
+        self.calicoctl("%s -f new_data" % action)
