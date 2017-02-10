@@ -153,9 +153,9 @@ func waitForConnection(c *client.Client) {
 	message("Checking datastore connection")
 	for {
 		// Query some arbitrary configuration to see if the connection
-		// is working.  Getting a specific profile is a good option, even
-		// if the profile does not exist.
-		_, err := c.Profiles().Get(api.ProfileMetadata{Name: "foo"})
+		// is working.  Getting a specific config is a good option, even
+		// if the config does not exist.
+		_, _, err := c.Config().GetFelixConfig("foo", "")
 
 		// We only care about a couple of error cases, all others would
 		// suggest the datastore is accessible.
