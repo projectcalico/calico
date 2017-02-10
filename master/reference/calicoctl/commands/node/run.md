@@ -135,8 +135,8 @@ Calico node started successfully
 The node resource includes IPv4 and IPv6 routing IP addresses that should
 match those on one of the host interfaces.  These IP addresses may be 
 configured in advance by configuring the node resource prior to starting the
-calico/node service, or alternatively the addresses may either be explicitly 
-specified, or autodetected through options on the `calicoctl run` command.
+calico/node service, alternatively, the addresses may either be explicitly 
+specified or autodetected through options on the `calicoctl run` command.
 
 There are different autodetection methods available and you should use the one
 best suited to your deployment.  If you are able to explicitly specify the IP 
@@ -148,23 +148,24 @@ configured in the node resource, and no address was specified on the CLI, then
 we will attempt to autodetect an IPv4 address.  An IPv6 address, however, will 
 only be autodetected when explicitly requested.
 
-To force autodetection of an IPv4 address use the option `--ip=autodetect`.  To
-force autodetection of an IPv6 address use the option `--ip6=autodetect`. 
+To force autodetection of an IPv4 address, use the option `--ip=autodetect`.  To
+force autodetection of an IPv6 address, use the option `--ip6=autodetect`. 
 
 To set the autodetection method for IPv4, use the `--ip-autodetection-method` option.
 To set the autodetection method for IPv6, use the `--ip6-autodetection-method` option.
 
->  Note, if you are starting the calico/node container directly (and not using the
->  `calicoctl run` helper command), the options are passed in an environment 
->  variables.  These are described in the [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)).
+> **Note**
+> If you are starting the calico/node container directly (and not using the
+> `calicoctl run` helper command), the options are passed in an environment 
+> variables.  These are described in the [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)).
 
 **first-found**
 
 The `first-found` option enumerates all interface IP addresses and returns the
-first valid IP address (best guess based on IP version and type of address) on 
+first valid IP address (based on IP version and type of address) on 
 the first valid interface.  Certain known "local" interfaces
-are omitted, such  as the docker bridge.  Note that order that interfaces are 
-listed is system dependent.
+are omitted, such  as the docker bridge.  The order that both the interfaces
+and the IP addresses are listed is system dependent.
 
 This is the default detection method. However, since this method only makes a
 very simplified guess, it is recommended to either configure the node with a 
@@ -195,8 +196,8 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=www.
 
 The `interface` method uses the supplied interface regular expression (golang
 syntax) to enumerate matching interfaces and to return the first IP address on
-the first matching interface.  Note that order that interfaces are listed is
-system dependent.
+the first matching interface.  The order that both the interfaces
+and the IP addresses are listed is system dependent.
 
 e.g.
 ```
