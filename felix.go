@@ -180,11 +180,11 @@ configRetry:
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal dataplane driver.")
 		markAccept := configParams.NextIptablesMark()
-		markNextTier := configParams.NextIptablesMark()
+		markPass := configParams.NextIptablesMark()
 		markWorkload := configParams.NextIptablesMark()
 		log.WithFields(log.Fields{
 			"acceptMark":   markAccept,
-			"nextMark":     markNextTier,
+			"passMark":     markPass,
 			"workloadMark": markWorkload,
 		}).Info("Calculated iptables mark bits")
 		dpConfig := intdataplane.Config{
@@ -209,7 +209,7 @@ configRetry:
 				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
 
 				IptablesMarkAccept:       markAccept,
-				IptablesMarkNextTier:     markNextTier,
+				IptablesMarkPass:         markPass,
 				IptablesMarkFromWorkload: markWorkload,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,

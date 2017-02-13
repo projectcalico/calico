@@ -375,7 +375,15 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
 				delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			}
-			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(&id, workload)
+			var policyNames []string
+			if len(workload.Tiers) > 0 {
+				policyNames = workload.Tiers[0].Policies
+			}
+			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
+				workload.Name,
+				policyNames,
+				workload.ProfileIds,
+			)
 			m.filterTable.UpdateChains(chains)
 			m.activeWlIDToChains[id] = chains
 
@@ -591,7 +599,15 @@ func (m *endpointManager) resolveHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the filter chain, for normal traffic.
-		filtChains := m.ruleRenderer.HostEndpointToFilterChains(ifaceName, hostEp)
+		var policyNames []string
+		if len(hostEp.Tiers) > 0 {
+			policyNames = hostEp.Tiers[0].Policies
+		}
+		filtChains := m.ruleRenderer.HostEndpointToFilterChains(
+			ifaceName,
+			policyNames,
+			hostEp.ProfileIds,
+		)
 		if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
 			m.filterTable.UpdateChains(filtChains)
 		}
@@ -605,7 +621,14 @@ func (m *endpointManager) resolveHostEndpoints() {
 		hostEp := m.rawHostEndpoints[id]
 
 		// Update the raw chain, for untracked traffic.
-		rawChains := m.ruleRenderer.HostEndpointToRawChains(ifaceName, hostEp)
+		var policyNames []string
+		if len(hostEp.UntrackedTiers) > 0 {
+			policyNames = hostEp.UntrackedTiers[0].Policies
+		}
+		rawChains := m.ruleRenderer.HostEndpointToRawChains(
+			ifaceName,
+			policyNames,
+		)
 		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {
 			m.rawTable.UpdateChains(rawChains)
 		}

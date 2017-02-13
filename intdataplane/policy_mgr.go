@@ -66,8 +66,8 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
-		inName := rules.ProfileChainName(rules.PolicyInboundPfx, msg.Id)
-		outName := rules.ProfileChainName(rules.PolicyOutboundPfx, msg.Id)
+		inName := rules.ProfileChainName(rules.ProfileInboundPfx, msg.Id)
+		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, msg.Id)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
 	}

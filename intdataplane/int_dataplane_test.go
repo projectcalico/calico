@@ -52,8 +52,8 @@ var _ = Describe("Constructor test", func() {
 				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
 				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
 
-				IptablesMarkAccept:   0x1000000,
-				IptablesMarkNextTier: 0x2000000,
+				IptablesMarkAccept: 0x1000000,
+				IptablesMarkPass:   0x2000000,
 
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,

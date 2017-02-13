@@ -57,8 +57,10 @@ const (
 	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
 
-	PolicyInboundPfx  = ChainNamePrefix + "pi-"
-	PolicyOutboundPfx = ChainNamePrefix + "po-"
+	PolicyInboundPfx   PolicyChainNamePrefix  = ChainNamePrefix + "pi-"
+	PolicyOutboundPfx  PolicyChainNamePrefix  = ChainNamePrefix + "po-"
+	ProfileInboundPfx  ProfileChainNamePrefix = ChainNamePrefix + "pri-"
+	ProfileOutboundPfx ProfileChainNamePrefix = ChainNamePrefix + "pro-"
 
 	ChainWorkloadToHost       = ChainNamePrefix + "wl-to-host"
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
@@ -87,6 +89,10 @@ const (
 	HistoricInsertedNATRuleRegex = `-A POSTROUTING .* felix-masq-ipam-pools .*|` +
 		`-A POSTROUTING -o tunl0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE`
 )
+
+// Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
+type PolicyChainNamePrefix string
+type ProfileChainNamePrefix string
 
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
@@ -122,11 +128,22 @@ type RuleRenderer interface {
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
-	WorkloadEndpointToIptablesChains(epID *proto.WorkloadEndpointID, endpoint *proto.WorkloadEndpoint) []*iptables.Chain
+	WorkloadEndpointToIptablesChains(
+		ifaceName string,
+		policies []string,
+		profileIDs []string,
+	) []*iptables.Chain
 
 	HostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
-	HostEndpointToFilterChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
-	HostEndpointToRawChains(ifaceName string, endpoint *proto.HostEndpoint) []*iptables.Chain
+	HostEndpointToFilterChains(
+		ifaceName string,
+		policyNames []string,
+		profileIDs []string,
+	) []*iptables.Chain
+	HostEndpointToRawChains(
+		ifaceName string,
+		untrackedPolicyNames []string,
+	) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
@@ -163,7 +180,7 @@ type Config struct {
 	WorkloadIfacePrefixes []string
 
 	IptablesMarkAccept       uint32
-	IptablesMarkNextTier     uint32
+	IptablesMarkPass         uint32
 	IptablesMarkFromWorkload uint32
 
 	OpenStackMetadataIP          net.IP

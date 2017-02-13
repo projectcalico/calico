@@ -41,11 +41,11 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, p
 
 func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) []*iptables.Chain {
 	inbound := iptables.Chain{
-		Name:  ProfileChainName(PolicyInboundPfx, profileID),
+		Name:  ProfileChainName(ProfileInboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion),
 	}
 	outbound := iptables.Chain{
-		Name:  ProfileChainName(PolicyOutboundPfx, profileID),
+		Name:  ProfileChainName(ProfileOutboundPfx, profileID),
 		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules, ipVersion),
 	}
 	return []*iptables.Chain{&inbound, &outbound}
@@ -157,10 +157,10 @@ func (r *DefaultRuleRenderer) CalculateActions(match iptables.MatchCriteria, pRu
 		// further processing.
 		mark = r.IptablesMarkAccept
 		actions = append(actions, iptables.ReturnAction{})
-	case "next-tier":
-		// Next tier needs to set the next-tier mark, and then return to the calling chain
-		// for further processing.
-		mark = r.IptablesMarkNextTier
+	case "next-tier", "pass":
+		// pass (called next-tier in the API for historical reasons) needs to set the pass
+		// mark, and then return to the calling chain for further processing.
+		mark = r.IptablesMarkPass
 		actions = append(actions, iptables.ReturnAction{})
 	case "deny":
 		// Deny maps to DROP.  We defer to DropActions() to allow for "sandbox" mode.
@@ -408,17 +408,17 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	return match, nil
 }
 
-func PolicyChainName(prefix string, polID *proto.PolicyID) string {
+func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string {
 	return hashutils.GetLengthLimitedID(
-		prefix,
-		polID.Tier+"/"+polID.Name,
+		string(prefix),
+		polID.Name,
 		iptables.MaxChainNameLength,
 	)
 }
 
-func ProfileChainName(prefix string, profID *proto.ProfileID) string {
+func ProfileChainName(prefix ProfileChainNamePrefix, profID *proto.ProfileID) string {
 	return hashutils.GetLengthLimitedID(
-		prefix,
+		string(prefix),
 		profID.Name,
 		iptables.MaxChainNameLength,
 	)

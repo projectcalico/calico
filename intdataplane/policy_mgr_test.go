@@ -45,7 +45,7 @@ var _ = Describe("Policy manager", func() {
 	Describe("after a policy update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
 				Policy: &proto.Policy{
 					InboundRules: []*proto.Rule{
 						{Action: "deny"},
@@ -60,15 +60,15 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the in and out chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
 			}})
 		})
 
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
 				})
 			})
 
@@ -81,7 +81,7 @@ var _ = Describe("Policy manager", func() {
 	Describe("after an untracked policy update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
 				Policy: &proto.Policy{
 					InboundRules: []*proto.Rule{
 						{Action: "deny"},
@@ -97,21 +97,21 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the raw chains", func() {
 			rawTable.checkChains([][]*iptables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
 			}})
 		})
 		It("should install to the filter chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
 			}})
 		})
 
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
 				})
 			})
 
@@ -142,8 +142,8 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the in and out chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "cali-pi-prof1"},
-				{Name: "cali-po-prof1"},
+				{Name: "cali-pri-prof1"},
+				{Name: "cali-pro-prof1"},
 			}})
 		})
 
@@ -173,8 +173,8 @@ func (r *mockPolRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, polic
 	}
 }
 func (r *mockPolRenderer) ProfileToIptablesChains(profID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain {
-	inName := rules.ProfileChainName(rules.PolicyInboundPfx, profID)
-	outName := rules.ProfileChainName(rules.PolicyOutboundPfx, profID)
+	inName := rules.ProfileChainName(rules.ProfileInboundPfx, profID)
+	outName := rules.ProfileChainName(rules.ProfileOutboundPfx, profID)
 	return []*iptables.Chain{
 		{Name: inName},
 		{Name: outName},

@@ -26,12 +26,12 @@ import (
 
 var _ = Describe("NAT", func() {
 	var rrConfigNormal = Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkNextTier: 0x10,
+		IPIPEnabled:        true,
+		IPIPTunnelAddress:  nil,
+		IPSetConfigV4:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept: 0x8,
+		IptablesMarkPass:   0x10,
 	}
 
 	var renderer RuleRenderer

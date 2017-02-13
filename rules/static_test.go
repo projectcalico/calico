@@ -42,7 +42,7 @@ var _ = Describe("Static", func() {
 				FailsafeInboundHostPorts:  []uint16{22, 1022},
 				FailsafeOutboundHostPorts: []uint16{23, 1023},
 				IptablesMarkAccept:        0x10,
-				IptablesMarkNextTier:      0x20,
+				IptablesMarkPass:          0x20,
 				IptablesMarkFromWorkload:  0x40,
 			}
 		})
@@ -300,7 +300,7 @@ var _ = Describe("Static", func() {
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
 				IptablesMarkAccept:           0x10,
-				IptablesMarkNextTier:         0x20,
+				IptablesMarkPass:             0x20,
 				IptablesMarkFromWorkload:     0x40,
 			}
 		})
@@ -398,7 +398,7 @@ var _ = Describe("Static", func() {
 				IPIPTunnelAddress:        net.ParseIP("10.0.0.1"),
 				IPSetConfigV4:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
 				IptablesMarkAccept:       0x10,
-				IptablesMarkNextTier:     0x20,
+				IptablesMarkPass:         0x20,
 				IptablesMarkFromWorkload: 0x40,
 			}
 		})
@@ -510,7 +510,7 @@ var _ = Describe("Static", func() {
 				WorkloadIfacePrefixes:    []string{"cali", "tap"},
 				ActionOnDrop:             "ACCEPT",
 				IptablesMarkAccept:       0x10,
-				IptablesMarkNextTier:     0x20,
+				IptablesMarkPass:         0x20,
 				IptablesMarkFromWorkload: 0x40,
 			}
 		})
@@ -685,7 +685,7 @@ var _ = Describe("DropRules", func() {
 				WorkloadIfacePrefixes:    []string{"cali", "tap"},
 				ActionOnDrop:             "LOG-and-DROP",
 				IptablesMarkAccept:       0x10,
-				IptablesMarkNextTier:     0x20,
+				IptablesMarkPass:         0x20,
 				IptablesMarkFromWorkload: 0x40,
 			}
 		})
