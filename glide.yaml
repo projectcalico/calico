@@ -1,0 +1,58 @@
+package: github.com/kelseyhightower/confd
+import:
+- package: github.com/BurntSushi/toml
+  version: 056c9bc7be7190eaa7715723883caffa5f8fa3e4
+  repo: https://github.com/BurntSushi/toml/
+- package: github.com/hashicorp/consul
+  version: 0949790a2fef577e2468a8542137b1102de87d55
+  repo: https://github.com/hashicorp/consul/
+  subpackages:
+  - api
+- package: github.com/awslabs/aws-sdk-go
+  version: 29717a72a2fc649e790ce97dc2c4d96e32950844
+  repo: https://github.com/awslabs/aws-sdk-go/
+  vcs: git
+  subpackages:
+  - aws
+  - aws/credentials
+  - service/dynamodb
+- package: github.com/vaughan0/go-ini
+  version: a98ad7ee00ec53921f08832bc06ecf7fd600e6a1
+  repo: https://github.com/vaughan0/go-ini/
+- package: github.com/Sirupsen/logrus
+  vcs: git
+  version: 092eda23b5d2ccf95fe7dfc70354493eb273487a
+  repo: https://github.com/Sirupsen/logrus/
+- package: github.com/coreos/go-etcd
+  version: 73a8ef737e8ea002281a28b4cb92a1de121ad4c6
+  repo: https://github.com/coreos/go-etcd/
+  subpackages:
+  - etcd
+- package: github.com/garyburd/redigo
+  version: 3e4727f0ef5938d3a846cdb57e560dba4419e854
+  repo: https://github.com/garyburd/redigo/
+  subpackages:
+  - redis
+- package: github.com/samuel/go-zookeeper
+  version: d0e0d8e11f318e000a8cc434616d69e329edc374
+  repo: https://github.com/samuel/go-zookeeper/
+  subpackages:
+  - zk
+- package: github.com/kelseyhightower/memkv
+  version: 32a4556de2a1aab8ea4c8600f5ea24db3fbd8908
+  repo: https://github.com/kelseyhightower/memkv/
+- package: github.com/projectcalico/libcalico-go
+  version: node-testing
+  repo: git@github.com:heschlie/libcalico-go.git
+  subpackages:
+  - lib/backend/k8s/thirdparty
+- package: k8s.io/client-go
+  subpackages:
+  - kubernetes
+  - pkg/api
+  - pkg/api/v1
+  - pkg/runtime
+  - pkg/runtime/schema
+  - pkg/runtime/serializer
+  - rest
+  - tools/clientcmd

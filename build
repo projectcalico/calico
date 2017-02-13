@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 echo "Building confd..."
-gb build all
+go build -o bin/confd
