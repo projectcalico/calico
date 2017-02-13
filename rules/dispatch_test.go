@@ -94,14 +94,14 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-from-wl-dispatch",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "califw-cali1234"),
+					inboundGotoRule("cali1234", "cali-fw-cali1234"),
 					expDropRule,
 				},
 			},
 			{
 				Name: "cali-to-wl-dispatch",
 				Rules: []iptables.Rule{
-					outboundGotoRule("cali1234", "calitw-cali1234"),
+					outboundGotoRule("cali1234", "cali-tw-cali1234"),
 					expDropRule,
 				},
 			},
@@ -110,23 +110,23 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-from-wl-dispatch-2",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali2333", "califw-cali2333"),
-					inboundGotoRule("cali2444", "califw-cali2444"),
+					inboundGotoRule("cali2333", "cali-fw-cali2333"),
+					inboundGotoRule("cali2444", "cali-fw-cali2444"),
 					expDropRule,
 				},
 			},
 			{
 				Name: "cali-to-wl-dispatch-2",
 				Rules: []iptables.Rule{
-					outboundGotoRule("cali2333", "calitw-cali2333"),
-					outboundGotoRule("cali2444", "calitw-cali2444"),
+					outboundGotoRule("cali2333", "cali-tw-cali2333"),
+					outboundGotoRule("cali2444", "cali-tw-cali2444"),
 					expDropRule,
 				},
 			},
 			{
 				Name: "cali-from-wl-dispatch",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "califw-cali1234"),
+					inboundGotoRule("cali1234", "cali-fw-cali1234"),
 					inboundGotoRule("cali2+", "cali-from-wl-dispatch-2"),
 					expDropRule,
 				},
@@ -134,7 +134,7 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-to-wl-dispatch",
 				Rules: []iptables.Rule{
-					outboundGotoRule("cali1234", "calitw-cali1234"),
+					outboundGotoRule("cali1234", "cali-tw-cali1234"),
 					outboundGotoRule("cali2+", "cali-to-wl-dispatch-2"),
 					expDropRule,
 				},
@@ -146,34 +146,34 @@ var _ = Describe("Dispatch chains", func() {
 				{
 					Name: "cali-from-wl-dispatch-1",
 					Rules: []iptables.Rule{
-						inboundGotoRule("cali11", "califw-cali11"),
-						inboundGotoRule("cali12", "califw-cali12"),
-						inboundGotoRule("cali13", "califw-cali13"),
+						inboundGotoRule("cali11", "cali-fw-cali11"),
+						inboundGotoRule("cali12", "cali-fw-cali12"),
+						inboundGotoRule("cali13", "cali-fw-cali13"),
 						expDropRule,
 					},
 				},
 				{
 					Name: "cali-to-wl-dispatch-1",
 					Rules: []iptables.Rule{
-						outboundGotoRule("cali11", "calitw-cali11"),
-						outboundGotoRule("cali12", "calitw-cali12"),
-						outboundGotoRule("cali13", "calitw-cali13"),
+						outboundGotoRule("cali11", "cali-tw-cali11"),
+						outboundGotoRule("cali12", "cali-tw-cali12"),
+						outboundGotoRule("cali13", "cali-tw-cali13"),
 						expDropRule,
 					},
 				},
 				{
 					Name: "cali-from-wl-dispatch-2",
 					Rules: []iptables.Rule{
-						inboundGotoRule("cali21", "califw-cali21"),
-						inboundGotoRule("cali22", "califw-cali22"),
+						inboundGotoRule("cali21", "cali-fw-cali21"),
+						inboundGotoRule("cali22", "cali-fw-cali22"),
 						expDropRule,
 					},
 				},
 				{
 					Name: "cali-to-wl-dispatch-2",
 					Rules: []iptables.Rule{
-						outboundGotoRule("cali21", "calitw-cali21"),
-						outboundGotoRule("cali22", "calitw-cali22"),
+						outboundGotoRule("cali21", "cali-tw-cali21"),
+						outboundGotoRule("cali22", "cali-tw-cali22"),
 						expDropRule,
 					},
 				},
@@ -202,14 +202,14 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-from-wl-dispatch",
 				Rules: []iptables.Rule{
-					inboundGotoRule("cali1234", "califw-cali1234"),
+					inboundGotoRule("cali1234", "cali-fw-cali1234"),
 					expDropRule,
 				},
 			},
 			{
 				Name: "cali-to-wl-dispatch",
 				Rules: []iptables.Rule{
-					outboundGotoRule("cali1234", "calitw-cali1234"),
+					outboundGotoRule("cali1234", "cali-tw-cali1234"),
 					expDropRule,
 				},
 			},
@@ -242,13 +242,13 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-from-host-endpoint",
 				Rules: []iptables.Rule{
-					inboundGotoRule("eth1234", "califh-eth1234"),
+					inboundGotoRule("eth1234", "cali-fh-eth1234"),
 				},
 			},
 			{
 				Name: "cali-to-host-endpoint",
 				Rules: []iptables.Rule{
-					outboundGotoRule("eth1234", "calith-eth1234"),
+					outboundGotoRule("eth1234", "cali-th-eth1234"),
 				},
 			},
 		}),
@@ -256,28 +256,28 @@ var _ = Describe("Dispatch chains", func() {
 			{
 				Name: "cali-from-host-endpoint-2",
 				Rules: []iptables.Rule{
-					inboundGotoRule("eth2333", "califh-eth2333"),
-					inboundGotoRule("eth2444", "califh-eth2444"),
+					inboundGotoRule("eth2333", "cali-fh-eth2333"),
+					inboundGotoRule("eth2444", "cali-fh-eth2444"),
 				},
 			},
 			{
 				Name: "cali-to-host-endpoint-2",
 				Rules: []iptables.Rule{
-					outboundGotoRule("eth2333", "calith-eth2333"),
-					outboundGotoRule("eth2444", "calith-eth2444"),
+					outboundGotoRule("eth2333", "cali-th-eth2333"),
+					outboundGotoRule("eth2444", "cali-th-eth2444"),
 				},
 			},
 			{
 				Name: "cali-from-host-endpoint",
 				Rules: []iptables.Rule{
-					inboundGotoRule("eth1234", "califh-eth1234"),
+					inboundGotoRule("eth1234", "cali-fh-eth1234"),
 					inboundGotoRule("eth2+", "cali-from-host-endpoint-2"),
 				},
 			},
 			{
 				Name: "cali-to-host-endpoint",
 				Rules: []iptables.Rule{
-					outboundGotoRule("eth1234", "calith-eth1234"),
+					outboundGotoRule("eth1234", "cali-th-eth1234"),
 					outboundGotoRule("eth2+", "cali-to-host-endpoint-2"),
 				},
 			},
@@ -288,31 +288,31 @@ var _ = Describe("Dispatch chains", func() {
 				{
 					Name: "cali-from-host-endpoint-1",
 					Rules: []iptables.Rule{
-						inboundGotoRule("eth11", "califh-eth11"),
-						inboundGotoRule("eth12", "califh-eth12"),
-						inboundGotoRule("eth13", "califh-eth13"),
+						inboundGotoRule("eth11", "cali-fh-eth11"),
+						inboundGotoRule("eth12", "cali-fh-eth12"),
+						inboundGotoRule("eth13", "cali-fh-eth13"),
 					},
 				},
 				{
 					Name: "cali-to-host-endpoint-1",
 					Rules: []iptables.Rule{
-						outboundGotoRule("eth11", "calith-eth11"),
-						outboundGotoRule("eth12", "calith-eth12"),
-						outboundGotoRule("eth13", "calith-eth13"),
+						outboundGotoRule("eth11", "cali-th-eth11"),
+						outboundGotoRule("eth12", "cali-th-eth12"),
+						outboundGotoRule("eth13", "cali-th-eth13"),
 					},
 				},
 				{
 					Name: "cali-from-host-endpoint-2",
 					Rules: []iptables.Rule{
-						inboundGotoRule("eth21", "califh-eth21"),
-						inboundGotoRule("eth22", "califh-eth22"),
+						inboundGotoRule("eth21", "cali-fh-eth21"),
+						inboundGotoRule("eth22", "cali-fh-eth22"),
 					},
 				},
 				{
 					Name: "cali-to-host-endpoint-2",
 					Rules: []iptables.Rule{
-						outboundGotoRule("eth21", "calith-eth21"),
-						outboundGotoRule("eth22", "calith-eth22"),
+						outboundGotoRule("eth21", "cali-th-eth21"),
+						outboundGotoRule("eth22", "cali-th-eth22"),
 					},
 				},
 				{
