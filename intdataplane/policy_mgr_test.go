@@ -60,8 +60,8 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the in and out chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "calipi-tier1/pol1"},
-				{Name: "calipo-tier1/pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 
@@ -97,14 +97,14 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the raw chains", func() {
 			rawTable.checkChains([][]*iptables.Chain{{
-				{Name: "calipi-tier1/pol1"},
-				{Name: "calipo-tier1/pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 		It("should install to the filter chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "calipi-tier1/pol1"},
-				{Name: "calipo-tier1/pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 
@@ -142,8 +142,8 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the in and out chain", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
-				{Name: "calipi-prof1"},
-				{Name: "calipo-prof1"},
+				{Name: "cali-pi-prof1"},
+				{Name: "cali-po-prof1"},
 			}})
 		})
 

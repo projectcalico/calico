@@ -46,7 +46,7 @@ var _ = Describe("Endpoints", func() {
 		}
 		Expect(renderer.WorkloadEndpointToIptablesChains(nil, &minimalEndpoint)).To(Equal([]*Chain{
 			{
-				Name: "calitw-cali1234",
+				Name: "cali-tw-cali1234",
 				Rules: []Rule{
 					{Action: ClearMarkAction{Mark: 0x8}},
 					{Action: DropAction{},
@@ -54,7 +54,7 @@ var _ = Describe("Endpoints", func() {
 				},
 			},
 			{
-				Name: "califw-cali1234",
+				Name: "cali-fw-cali1234",
 				Rules: []Rule{
 					{Action: ClearMarkAction{Mark: 0x8}},
 					{Action: DropAction{},
@@ -75,19 +75,19 @@ var _ = Describe("Endpoints", func() {
 		}
 		Expect(renderer.WorkloadEndpointToIptablesChains(nil, &endpoint)).To(Equal([]*Chain{
 			{
-				Name: "calitw-cali1234",
+				Name: "cali-tw-cali1234",
 				Rules: []Rule{
 					{Action: ClearMarkAction{Mark: 0x8}},
 
 					{Comment: "Start of tier tier1",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier1/a"}},
+						Action: JumpAction{Target: "cali-pi-tier1/a"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier1/b"}},
+						Action: JumpAction{Target: "cali-pi-tier1/b"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -98,12 +98,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier2",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier2/c"}},
+						Action: JumpAction{Target: "cali-pi-tier2/c"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier2/d"}},
+						Action: JumpAction{Target: "cali-pi-tier2/d"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -111,11 +111,11 @@ var _ = Describe("Endpoints", func() {
 						Action:  DropAction{},
 						Comment: "Drop if no policies passed packet"},
 
-					{Action: JumpAction{Target: "calipi-prof1"}},
+					{Action: JumpAction{Target: "cali-pi-prof1"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "calipi-prof2"}},
+					{Action: JumpAction{Target: "cali-pi-prof2"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
@@ -125,19 +125,19 @@ var _ = Describe("Endpoints", func() {
 				},
 			},
 			{
-				Name: "califw-cali1234",
+				Name: "cali-fw-cali1234",
 				Rules: []Rule{
 					{Action: ClearMarkAction{Mark: 0x8}},
 
 					{Comment: "Start of tier tier1",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier1/a"}},
+						Action: JumpAction{Target: "cali-po-tier1/a"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier1/b"}},
+						Action: JumpAction{Target: "cali-po-tier1/b"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -148,12 +148,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier2",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier2/c"}},
+						Action: JumpAction{Target: "cali-po-tier2/c"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier2/d"}},
+						Action: JumpAction{Target: "cali-po-tier2/d"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -161,11 +161,11 @@ var _ = Describe("Endpoints", func() {
 						Action:  DropAction{},
 						Comment: "Drop if no policies passed packet"},
 
-					{Action: JumpAction{Target: "calipo-prof1"}},
+					{Action: JumpAction{Target: "cali-po-prof1"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "calipo-prof2"}},
+					{Action: JumpAction{Target: "cali-po-prof2"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
@@ -191,7 +191,7 @@ var _ = Describe("Endpoints", func() {
 		}
 		Expect(renderer.HostEndpointToFilterChains("eth0", &endpoint)).To(Equal([]*Chain{
 			{
-				Name: "calith-eth0",
+				Name: "cali-th-eth0",
 				Rules: []Rule{
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-out"}},
@@ -201,12 +201,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier1",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier1/a"}},
+						Action: JumpAction{Target: "cali-po-tier1/a"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier1/b"}},
+						Action: JumpAction{Target: "cali-po-tier1/b"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -214,11 +214,11 @@ var _ = Describe("Endpoints", func() {
 						Action:  DropAction{},
 						Comment: "Drop if no policies passed packet"},
 
-					{Action: JumpAction{Target: "calipo-prof1"}},
+					{Action: JumpAction{Target: "cali-po-prof1"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "calipo-prof2"}},
+					{Action: JumpAction{Target: "cali-po-prof2"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
@@ -228,7 +228,7 @@ var _ = Describe("Endpoints", func() {
 				},
 			},
 			{
-				Name: "califh-eth0",
+				Name: "cali-fh-eth0",
 				Rules: []Rule{
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-in"}},
@@ -238,12 +238,12 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier1",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier1/a"}},
+						Action: JumpAction{Target: "cali-pi-tier1/a"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier1/b"}},
+						Action: JumpAction{Target: "cali-pi-tier1/b"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if policy accepted"},
@@ -251,11 +251,11 @@ var _ = Describe("Endpoints", func() {
 						Action:  DropAction{},
 						Comment: "Drop if no policies passed packet"},
 
-					{Action: JumpAction{Target: "calipi-prof1"}},
+					{Action: JumpAction{Target: "cali-pi-prof1"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
-					{Action: JumpAction{Target: "calipi-prof2"}},
+					{Action: JumpAction{Target: "cali-pi-prof2"}},
 					{Match: Match().MarkSet(0x8),
 						Action:  ReturnAction{},
 						Comment: "Return if profile accepted"},
@@ -281,7 +281,7 @@ var _ = Describe("Endpoints", func() {
 		}
 		Expect(renderer.HostEndpointToRawChains("eth0", &endpoint)).To(Equal([]*Chain{
 			{
-				Name: "calith-eth0",
+				Name: "cali-th-eth0",
 				Rules: []Rule{
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-out"}},
@@ -291,7 +291,7 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier2",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipo-tier2/c"}},
+						Action: JumpAction{Target: "cali-po-tier2/c"}},
 					// Extra NOTRACK action before returning in raw table.
 					{Match: Match().MarkSet(0x8),
 						Action: NoTrackAction{}},
@@ -303,7 +303,7 @@ var _ = Describe("Endpoints", func() {
 				},
 			},
 			{
-				Name: "califh-eth0",
+				Name: "cali-fh-eth0",
 				Rules: []Rule{
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-in"}},
@@ -313,7 +313,7 @@ var _ = Describe("Endpoints", func() {
 					{Comment: "Start of tier tier2",
 						Action: ClearMarkAction{Mark: 0x10}},
 					{Match: Match().MarkClear(0x10),
-						Action: JumpAction{Target: "calipi-tier2/c"}},
+						Action: JumpAction{Target: "cali-pi-tier2/c"}},
 					// Extra NOTRACK action before returning in raw table.
 					{Match: Match().MarkSet(0x8),
 						Action: NoTrackAction{}},

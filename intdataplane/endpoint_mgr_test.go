@@ -131,7 +131,7 @@ func chainsForIfaces(ifaceTierNames []string, host bool, raw bool) []*iptables.C
 				// For untracked policy, we expect a tier with a policy in it.
 				outRules = append(outRules, iptables.Rule{
 					Match:  iptables.Match().MarkClear(16),
-					Action: iptables.JumpAction{Target: "calipo-" + tierName + "/a"},
+					Action: iptables.JumpAction{Target: "cali-po-" + tierName + "/a"},
 				})
 				outRules = append(outRules, iptables.Rule{
 					Match:  iptables.Match().MarkSet(8),
@@ -183,7 +183,7 @@ func chainsForIfaces(ifaceTierNames []string, host bool, raw bool) []*iptables.C
 				// For untracked policy, we expect a tier with a policy in it.
 				inRules = append(inRules, iptables.Rule{
 					Match:  iptables.Match().MarkClear(16),
-					Action: iptables.JumpAction{Target: "calipi-" + tierName + "/a"},
+					Action: iptables.JumpAction{Target: "cali-pi-" + tierName + "/a"},
 				})
 				inRules = append(inRules, iptables.Rule{
 					Match:  iptables.Match().MarkSet(8),
@@ -214,24 +214,24 @@ func chainsForIfaces(ifaceTierNames []string, host bool, raw bool) []*iptables.C
 		}
 		chains = append(chains,
 			&iptables.Chain{
-				Name:  "calit" + hostOrWlLetter + "-" + ifaceName,
+				Name:  "cali-t" + hostOrWlLetter + "-" + ifaceName,
 				Rules: outRules,
 			},
 			&iptables.Chain{
-				Name:  "calif" + hostOrWlLetter + "-" + ifaceName,
+				Name:  "cali-f" + hostOrWlLetter + "-" + ifaceName,
 				Rules: inRules,
 			},
 		)
 		dispatchOut = append(dispatchOut,
 			iptables.Rule{
 				Match:  iptables.Match().OutInterface(ifaceName),
-				Action: iptables.GotoAction{Target: "calit" + hostOrWlLetter + "-" + ifaceName},
+				Action: iptables.GotoAction{Target: "cali-t" + hostOrWlLetter + "-" + ifaceName},
 			},
 		)
 		dispatchIn = append(dispatchIn,
 			iptables.Rule{
 				Match:  iptables.Match().InInterface(ifaceName),
-				Action: iptables.GotoAction{Target: "calif" + hostOrWlLetter + "-" + ifaceName},
+				Action: iptables.GotoAction{Target: "cali-f" + hostOrWlLetter + "-" + ifaceName},
 			},
 		)
 	}

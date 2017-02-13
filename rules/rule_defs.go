@@ -26,41 +26,46 @@ import (
 )
 
 const (
-	ChainNamePrefix = "cali"
+	// ChainNamePrefix is a prefix used for all our iptables chain names.  We include a '-' at
+	// the end to reduce clashes with other apps.  Our OpenStack DHCP agent uses prefix
+	// 'calico-dhcp-', for example.
+	ChainNamePrefix = "cali-"
+	// IPSetNamePrefix: similarly for IP sets, we use the following prefix; the IP sets layer
+	// adds its own "-" so it isn't included here.
 	IPSetNamePrefix = "cali"
 
-	ChainFilterInput   = ChainNamePrefix + "-INPUT"
-	ChainFilterForward = ChainNamePrefix + "-FORWARD"
-	ChainFilterOutput  = ChainNamePrefix + "-OUTPUT"
+	ChainFilterInput   = ChainNamePrefix + "INPUT"
+	ChainFilterForward = ChainNamePrefix + "FORWARD"
+	ChainFilterOutput  = ChainNamePrefix + "OUTPUT"
 
-	ChainRawPrerouting = ChainNamePrefix + "-PREROUTING"
-	ChainRawOutput     = ChainNamePrefix + "-OUTPUT"
+	ChainRawPrerouting = ChainNamePrefix + "PREROUTING"
+	ChainRawOutput     = ChainNamePrefix + "OUTPUT"
 
-	ChainFailsafeIn  = ChainNamePrefix + "-failsafe-in"
-	ChainFailsafeOut = ChainNamePrefix + "-failsafe-out"
+	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
+	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"
 
-	ChainNATPrerouting  = ChainNamePrefix + "-PREROUTING"
-	ChainNATPostrouting = ChainNamePrefix + "-POSTROUTING"
-	ChainNATOutput      = ChainNamePrefix + "-OUTPUT"
-	ChainNATOutgoing    = ChainNamePrefix + "-nat-outgoing"
+	ChainNATPrerouting  = ChainNamePrefix + "PREROUTING"
+	ChainNATPostrouting = ChainNamePrefix + "POSTROUTING"
+	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
+	ChainNATOutgoing    = ChainNamePrefix + "nat-outgoing"
 
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostIPs = "all-hosts"
 
-	ChainFIPDnat = ChainNamePrefix + "-fip-dnat"
-	ChainFIPSnat = ChainNamePrefix + "-fip-snat"
+	ChainFIPDnat = ChainNamePrefix + "fip-dnat"
+	ChainFIPSnat = ChainNamePrefix + "fip-snat"
 
 	PolicyInboundPfx  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx = ChainNamePrefix + "po-"
 
-	ChainWorkloadToHost       = ChainNamePrefix + "-wl-to-host"
-	ChainFromWorkloadDispatch = ChainNamePrefix + "-from-wl-dispatch"
-	ChainToWorkloadDispatch   = ChainNamePrefix + "-to-wl-dispatch"
+	ChainWorkloadToHost       = ChainNamePrefix + "wl-to-host"
+	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
+	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
 
-	ChainDispatchToHostEndpoint   = ChainNamePrefix + "-to-host-endpoint"
-	ChainDispatchFromHostEndpoint = ChainNamePrefix + "-from-host-endpoint"
+	ChainDispatchToHostEndpoint   = ChainNamePrefix + "to-host-endpoint"
+	ChainDispatchFromHostEndpoint = ChainNamePrefix + "from-host-endpoint"
 
 	WorkloadToEndpointPfx   = ChainNamePrefix + "tw-"
 	WorkloadFromEndpointPfx = ChainNamePrefix + "fw-"
@@ -86,7 +91,23 @@ const (
 var (
 	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
 	// track of the old names lets us clean them up.
-	AllHistoricChainNamePrefixes = []string{"felix-", "cali"}
+	AllHistoricChainNamePrefixes = []string{
+		// Current.
+		"cali-",
+
+		// Early RCs of Felix 2.1 used "cali" as the prefix for some chains rather than
+		// "cali-".  This led to name clashes with the DHCP agent, which uses "calico-" as
+		// its prefix.  We need to explicitly list these exceptions.
+		"califw-",
+		"calitw-",
+		"califh-",
+		"calith-",
+		"calipi-",
+		"calipo-",
+
+		// Pre Felix v2.1.
+		"felix-",
+	}
 	// AllHistoricIPSetNamePrefixes, similarly contains all the prefixes we've ever used for IP
 	// sets.
 	AllHistoricIPSetNamePrefixes = []string{"felix-", "cali"}
