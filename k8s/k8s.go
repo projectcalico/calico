@@ -172,23 +172,38 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		}
 
 		ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
+		ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
-		// Call IPAM plugin if ipAddrsNoIpam annotation is not present.
-		if ipAddrsNoIpam == "" {
-			// Run the IPAM plugin
+		// switch based on which annotations are passed or not passed.
+		switch {
+		case ipAddrs == "" && ipAddrsNoIpam == "":
+			// Call IPAM plugin if ipAddrsNoIpam or ipAddrs annotation is not present.
 			logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
 			result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
 			if err != nil {
 				return nil, err
 			}
 			logger.Debugf("IPAM plugin returned: %+v", result)
-		} else {
+		case ipAddrs != "" && ipAddrsNoIpam != "":
+			// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
+			e := fmt.Errorf("Can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
+			logger.Error(e)
+			return nil, e
+		case ipAddrsNoIpam != "":
 			// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
 			result, err = overrideIPAMResult(ipAddrsNoIpam, logger)
 			if err != nil {
 				return nil, err
 			}
 			logger.Debugf("Bypassing IPAM to set the result to: %+v", result)
+		case ipAddrs != "":
+			// When ipAddrs annotation is set, we call out to the configured IPAM plugin
+			// requesting the specific IP addresses included in the annotation.
+			result, err = ipAddrsResult(ipAddrs, conf, args, logger)
+			if err != nil {
+				return nil, err
+			}
+			logger.Debugf("IPAM result set to: %+v", result)
 		}
 
 		// Create the endpoint object and configure it.
@@ -250,25 +265,153 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	return result, nil
 }
 
-// overrideIPAMResult generates types.Result like the one produced by IPAM plugin,
-// but sets IP field manually since IPAM is bypassed with this annotation.
+// ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
+// each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*types.Result, error) {
-	var ips []string
+func ipAddrsResult(ipAddrs string, conf utils.NetConf, args *skel.CmdArgs, logger *log.Entry) (*types.Result, error) {
 
-	err := json.Unmarshal([]byte(ipAddrsNoIpam), &ips)
+	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
+	ips, err := parseIPAddrs(ipAddrs, logger)
 	if err != nil {
-		logger.WithField("annotation", ipAddrsNoIpam).Error("Failed to parse ipAddrsNoIpam as json")
-		return nil, fmt.Errorf("Failed to parse ipAddrsNoIpam: %s", err)
+		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"cni.projectcalico.org/ipAddrs\": %s", ipAddrs, err)
+	}
+
+	// annotation value can't be empty.
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("Annotation \"cni.projectcalico.org/ipAddrs\" specified but empty")
 	}
 
 	result := types.Result{}
 
+	// Go through all the IPs passed in as annotation value and call IPAM plugin
+	// for each, and populate the result variable with IP4 and/or IP6 IPs returned
+	// from the IPAM plugin. We also make sure there is only one IPv4 and/or one IPv6
+	// passed in, since CNI spec only supports one of each right now.
+	for _, ip := range ips {
+		ipAddr := net.ParseIP(ip)
+		if ipAddr == nil {
+			logger.WithField("IP", ip).Error("Invalid IP format")
+			return nil, fmt.Errorf("Invalid IP format: %s", ip)
+		}
+
+		// It's an IPv6 address if ip.To4 is nil.
+		if ipAddr.To4() == nil {
+			// CNI spec only allows one IPv4 and one IPv6 at the moment.
+			// So if we see more than one of IPv4 or IPv6 then we throw an error.
+			// If/when CNI spec supports more than one IP, we can loosen this requirement.
+			if result.IP6 != nil {
+				e := fmt.Errorf("Can not have more than one IPv6 address in ipAddrs annotation")
+				logger.Error(e)
+				return nil, e
+			}
+
+			// Call callIPAMWithIP with the ip address.
+			r, err := callIPAMWithIP(ipAddr, conf, args, logger)
+			if err != nil {
+				return nil, fmt.Errorf("Error getting IP from IPAM: %s", err)
+			}
+
+			// Set the IP6 part of the result from the type.Result returned by the IPAM plugin.
+			result.IP6 = r.IP6
+			logger.Debugf("Adding IPv6: %s to result", ipAddr.String())
+		} else {
+			// It's an IPv4 address.
+			if result.IP4 != nil {
+				e := fmt.Errorf("Can not have more than one IPv4 address in ipAddrs annotation")
+				logger.Error(e)
+				return nil, e
+			}
+
+			// Call callIPAMWithIP with the ip address.
+			r, err := callIPAMWithIP(ipAddr, conf, args, logger)
+			if err != nil {
+				return nil, fmt.Errorf("Error getting IP from IPAM: %s", err)
+			}
+
+			// Set the IP4 part of the result from the type.Result returned by the IPAM plugin.
+			result.IP4 = r.IP4
+			logger.Debugf("Adding IPv4: %s to result", ipAddr.String())
+		}
+	}
+
+	return &result, nil
+}
+
+// callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
+// to get types.Result and then it unsets the IP field from CNI_ARGS ENV var,
+// so it doesn't pollute the subsequent requests.
+func callIPAMWithIP(ip net.IP, conf utils.NetConf, args *skel.CmdArgs, logger *log.Entry) (*types.Result, error) {
+
+	// Save the original value of the CNI_ARGS ENV var for backup.
+	originalArgs := os.Getenv("CNI_ARGS")
+	logger.Debugf("Original CNI_ARGS=%s", originalArgs)
+
+	ipamArgs := struct {
+		types.CommonArgs
+		IP net.IP `json:"ip,omitempty"`
+	}{}
+
+	if err := types.LoadArgs(args.Args, &ipamArgs); err != nil {
+		return nil, err
+	}
+
+	if ipamArgs.IP != nil {
+		logger.Errorf("'IP' variable already set in CNI_ARGS environment variable.")
+	}
+
+	// Request the provided IP address using the IP CNI_ARG.
+	// See: https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#cni_args for more info.
+	newArgs := originalArgs + ";IP=" + ip.String()
+	logger.Debugf("New CNI_ARGS=%s", newArgs)
+
+	// Set CNI_ARGS to the new value.
+	err := os.Setenv("CNI_ARGS", newArgs)
+	if err != nil {
+		return nil, fmt.Errorf("Error setting CNI_ARGS environment variable: %v", err)
+	}
+
+	// Run the IPAM plugin.
+	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
+	r, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	if err != nil {
+		// Restore the CNI_ARGS ENV var to it's original value,
+		// so the subsequent calls don't get polluted by the old IP value.
+		if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
+			logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
+		}
+		return nil, err
+	}
+	logger.Debugf("IPAM plugin returned: %+v", r)
+
+	// Restore the CNI_ARGS ENV var to it's original value,
+	// so the subsequent calls don't get polluted by the old IP value.
+	if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
+		// Need to clean up IP allocation if this step doesn't succeed.
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
+		return nil, err
+	}
+
+	return r, nil
+}
+
+// overrideIPAMResult generates types.Result like the one produced by IPAM plugin,
+// but sets IP field manually since IPAM is bypassed with this annotation.
+// Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
+func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*types.Result, error) {
+
+	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrsNoIpam\":%s", ipAddrsNoIpam)
+	ips, err := parseIPAddrs(ipAddrsNoIpam, logger)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"cni.projectcalico.org/ipAddrsNoIpam\": %s", ipAddrsNoIpam, err)
+	}
+
 	// annotation value can't be empty.
 	if len(ips) == 0 {
-		logger.WithField("annotation", "cni.projectcalico.org/ipAddrsNoIpam").Error("No IPs specified")
-		return nil, fmt.Errorf("No IPs specified with annotation \"cni.projectcalico.org/ipAddrsNoIpam\"")
+		return nil, fmt.Errorf("Annotation \"cni.projectcalico.org/ipAddrsNoIpam\" specified but empty")
 	}
+
+	result := types.Result{}
 
 	// Go through all the IPs passed in as annotation value and populate
 	// the result variable with IP4 and/or IP6 IPs.
@@ -283,12 +426,13 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*types.Result,
 
 		// It's an IPv6 address if ip.To4 is nil.
 		if ipAddr.To4() == nil {
-			// We only allow one IPv4 and one IPv6 at the moment.
+			// CNI spec only allows one IPv4 and one IPv6 at the moment.
 			// So if we see more than one of IPv4 or IPv6 then we throw an error.
 			// If/when CNI spec supports more than one IP, we can loosen this requirement.
 			if result.IP6 != nil {
-				logger.Error("Can not have more than one IPv6 address in ipAddrsNoIpam annotation")
-				return nil, fmt.Errorf("Can not have more than one IPv6 address in ipAddrsNoIpam annotation")
+				e := fmt.Errorf("Can not have more than one IPv6 address in ipAddrsNoIpam annotation")
+				logger.Error(e)
+				return nil, e
 			}
 			result.IP6 = &types.IPConfig{
 				IP: net.IPNet{
@@ -300,8 +444,9 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*types.Result,
 		} else {
 			// It's an IPv4 address.
 			if result.IP4 != nil {
-				logger.Error("Can not have more than one IPv4 address in ipAddrsNoIpam annotation")
-				return nil, fmt.Errorf("Can not have more than one IPv4 address in ipAddrsNoIpam annotation")
+				e := fmt.Errorf("Can not have more than one IPv4 address in ipAddrsNoIpam annotation")
+				logger.Error(e)
+				return nil, e
 			}
 			result.IP4 = &types.IPConfig{
 				IP: net.IPNet{
@@ -314,6 +459,22 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*types.Result,
 	}
 
 	return &result, nil
+}
+
+// parseIPAddrs is a utility function that parses string of IPs in json format that are
+// passed in as a string and returns a slice of string with IPs.
+// It also makes sure the slice isn't empty.
+func parseIPAddrs(ipAddrsStr string, logger *log.Entry) ([]string, error) {
+	var ips []string
+
+	err := json.Unmarshal([]byte(ipAddrsStr), &ips)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse '%s' as JSON: %s", ipAddrsStr, err)
+	}
+
+	logger.Debugf("IPs parsed: %v", ips)
+
+	return ips, nil
 }
 
 func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset, error) {
