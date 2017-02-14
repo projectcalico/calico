@@ -80,6 +80,14 @@ func main() {
 			terminate()
 		}
 		log.Info("Kubernetes is initialized as a Calico datastore")
+
+		// We also need to configure IP Pools.  Do this explicitly here for now since the
+		// node configuration below is not yet supported, but once
+		// the full set of operations is supported in the kubernetes datastore driver
+		// we can remove this special case.
+		configureIPPools(client)
+
+		// Write out the startup environment file.
 		writeStartupEnv(nodeName, nil, nil)
 		return
 	}
@@ -205,6 +213,7 @@ func writeStartupEnv(nodeName string, ip, ip6 *net.IPNet) {
 		terminate()
 	}
 }
+
 // getNode returns the current node configuration.  If this node has not yet
 // been created, it returns a blank node resource.
 func getNode(client *client.Client, nodeName string) *api.Node {
@@ -536,7 +545,7 @@ func ipv6Supported() bool {
 func createIPPool(client *client.Client, cidr *net.IPNet, ipip bool) {
 	version := cidr.Version()
 
-	log.Info("Ensure default IPv%d pool is created. IPIP enabled: %t", version, ipip)
+	log.Infof("Ensure default IPv%d pool is created. IPIP enabled: %t", version, ipip)
 	pool := &api.IPPool{
 		Metadata: api.IPPoolMetadata{
 			CIDR: *cidr,
