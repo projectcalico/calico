@@ -114,7 +114,7 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 
 	tprClient, err := buildTPRClient(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to build TPR client: %s", err)
 	}
 	kubeClient := &KubeClient{
 		clientSet: cs,
@@ -133,7 +133,7 @@ func (c *KubeClient) EnsureInitialized() error {
 	log.Info("Ensuring ThirdPartyResources exist")
 	err := c.ensureThirdPartyResources()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to ensure ThirdPartyResources exist: %s", err)
 	}
 	log.Info("ThirdPartyResources exist")
 
@@ -141,7 +141,7 @@ func (c *KubeClient) EnsureInitialized() error {
 	log.Info("Ensuring ClusterType is set")
 	err = c.waitForClusterType()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to ensure ClusterType is set: %s", err)
 	}
 	log.Info("ClusterType is set")
 	return nil
@@ -223,6 +223,7 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 		}
 		value = existingValue
 	}
+	log.WithField("value", value).Debug("Setting ClusterType")
 	_, err = c.Apply(&model.KVPair{
 		Key:   k,
 		Value: value,
@@ -278,6 +279,7 @@ func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'Create' for %+v", d)
 	switch d.Key.(type) {
 	case model.GlobalConfigKey:
 		return c.createGlobalConfig(d)
@@ -297,6 +299,7 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
 func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'Update' for %+v", d)
 	switch d.Key.(type) {
 	case model.GlobalConfigKey:
 		return c.updateGlobalConfig(d)
@@ -306,7 +309,7 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 		return c.nodeClient.Update(d)
 	default:
 		// If the resource isn't supported, then this is a no-op.
-		log.Infof("'Update' for %+v is no-op", d.Key)
+		log.Debugf("'Update' for %+v is no-op", d.Key)
 		return d, nil
 	}
 }
@@ -314,6 +317,7 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.
 func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'Apply' for %+v", d)
 	switch d.Key.(type) {
 	case model.WorkloadEndpointKey:
 		return c.applyWorkloadEndpoint(d)
@@ -324,13 +328,14 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
 	default:
-		log.Infof("'Apply' for %s is no-op", d.Key)
+		log.Debugf("'Apply' for %s is no-op", d.Key)
 		return d, nil
 	}
 }
 
 // Delete an entry in the datastore. This is a no-op when using the k8s backend.
 func (c *KubeClient) Delete(d *model.KVPair) error {
+	log.Debugf("Performing 'Delete' for %+v", d)
 	switch d.Key.(type) {
 	case model.GlobalConfigKey:
 		return c.deleteGlobalConfig(d)
@@ -339,7 +344,7 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 	case model.NodeKey:
 		return c.nodeClient.Delete(d)
 	default:
-		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
+		log.Warn("Attempt to 'Delete' using kubernetes datastore driver is not supported.")
 		return nil
 	}
 }
@@ -428,11 +433,11 @@ func (c *KubeClient) listProfiles(l model.ProfileListOptions) ([]*model.KVPair, 
 // getProfile gets the Profile from the k8s API based on existing Namespaces.
 func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 	if k.Name == "" {
-		return nil, goerrors.New("Missing profile name")
+		return nil, fmt.Errorf("Profile key missing name: %+v", k)
 	}
 	namespaceName, err := c.converter.parseProfileName(k.Name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse Profile name: %s", err)
 	}
 	namespace, err := c.clientSet.Namespaces().Get(namespaceName, metav1.GetOptions{})
 	if err != nil {
@@ -444,6 +449,8 @@ func (c *KubeClient) getProfile(k model.ProfileKey) (*model.KVPair, error) {
 
 // applyWorkloadEndpoint patches the existing Pod to include an IP address, if
 // one has been set on the workload endpoint.
+// TODO: This is only required as a workaround for an upstream k8s issue.  Once fixed,
+// this should be a no-op. See https://github.com/kubernetes/kubernetes/issues/39113
 func (c *KubeClient) applyWorkloadEndpoint(k *model.KVPair) (*model.KVPair, error) {
 	ips := k.Value.(*model.WorkloadEndpoint).IPv4Nets
 	if len(ips) > 0 {

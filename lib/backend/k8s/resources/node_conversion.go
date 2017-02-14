@@ -15,7 +15,7 @@
 package resources
 
 import (
-	"errors"
+	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -38,7 +38,7 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 	ip := net.ParseIP(nodeIP)
 	log.Debugf("Node IP is %s", ip)
 	if ip == nil {
-		return nil, errors.New("Invalid IP received from k8s for Node")
+		return nil, fmt.Errorf("Failed to parse IP '%s' received from k8s for Node", nodeIP)
 	}
 	asn := numorstring.ASNumber(64512)
 	return &model.KVPair{
