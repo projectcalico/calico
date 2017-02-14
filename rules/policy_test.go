@@ -184,12 +184,12 @@ var ruleTestData = []TableEntry{
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	var rrConfigNormal = Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkNextTier: 0x10,
+		IPIPEnabled:        true,
+		IPIPTunnelAddress:  nil,
+		IPSetConfigV4:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept: 0x8,
+		IptablesMarkPass:   0x10,
 	}
 
 	DescribeTable(
@@ -216,20 +216,23 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"next-tier rules should be correctly rendered",
+		"pass rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
-			renderer := NewRenderer(rrConfigNormal)
-			in.Action = "next-tier"
-			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
-			// For next-tier, should be one match rule that sets the mark, then one
-			// that reads the mark and returns.
-			Expect(len(rules)).To(Equal(2))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x10}))
-			Expect(rules[1]).To(Equal(iptables.Rule{
-				Match:  iptables.Match().MarkSet(0x10),
-				Action: iptables.ReturnAction{},
-			}))
+			for _, action := range []string{"next-tier", "pass"} {
+				By("Rendering for action " + action)
+				renderer := NewRenderer(rrConfigNormal)
+				in.Action = action
+				rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+				// For pass, should be one match rule that sets the mark, then one
+				// that reads the mark and returns.
+				Expect(len(rules)).To(Equal(2))
+				Expect(rules[0].Match.Render()).To(Equal(expMatch))
+				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x10}))
+				Expect(rules[1]).To(Equal(iptables.Rule{
+					Match:  iptables.Match().MarkSet(0x10),
+					Action: iptables.ReturnAction{},
+				}))
+			}
 		},
 		ruleTestData...,
 	)

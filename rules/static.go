@@ -540,7 +540,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {
 	return r.IptablesMarkFromWorkload |
 		r.IptablesMarkAccept |
-		r.IptablesMarkNextTier
+		r.IptablesMarkPass
 }
 
 func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
