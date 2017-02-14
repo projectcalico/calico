@@ -1,8 +1,21 @@
 ---
-title: Simple Policy
+title: Security using Calico Profiles
 ---
 
-The following guide walks through a simple policy demo.
+## Background
+
+With Calico as a Docker network plugin, Calico uses an identically named
+[profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+to represent each Docker network.  This profile is applied to each container
+in that network and the profile is used by Calico to configure access policy
+for that container.  The Calico network plugin will automatically create the
+associated profile if it does not exist when the container is attached to the
+network.  By default, the profile contains rules that allow full egress traffic
+but allow ingress traffic only from containers within the same network and no
+other source.  Custom policy for a network can be configured by creating in
+advance, or editing, the profile associated with the Docker network.
+
+## Tutorial
 
 To run through the worked example in this tutorial you will need to set up two hosts
 with calico installed.
@@ -90,4 +103,4 @@ To see the list of networks, use:
 ## Further Reading
 
 For details on configuring more advanced policy, see
-[Advanced Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy).
+[Security using Calico Profiles and Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles-and-policy).

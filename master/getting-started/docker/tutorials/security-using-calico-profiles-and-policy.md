@@ -1,5 +1,5 @@
 ---
-title: Advanced Policy
+title: Security using Calico Profiles and Policy
 ---
 
 ## Background
@@ -319,3 +319,8 @@ Obviously, the example of allowing full access between everything on the "backup
 network is probably a little too permissive, so you can lock down the access within
 the backup network by modifying the global policy selected by the `backup = true`
 label.
+
+## Further Reading
+
+For details on configuring advanced policy using container labels, see
+[Security using Docker Labels and Calico Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy).

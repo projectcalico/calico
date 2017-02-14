@@ -89,10 +89,12 @@ toc:
       path: /getting-started/docker/installation/vagrant-ubuntu/
   - title: Tutorials
     section:
-    - title: Simple Policy
-      path: /getting-started/docker/tutorials/simple-policy
-    - title: Advanced Policy
-      path: /getting-started/docker/tutorials/advanced-policy
+    - title: Security using Calico Profiles
+      path: /getting-started/docker/tutorials/security-using-calico-profiles
+    - title: Security using Calico Profiles and Policy
+      path: /getting-started/docker/tutorials/security-using-calico-profiles-and-policy
+    - title: Security using Docker Labels and Calico Policy
+      path: /getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy
     - title: IPAM
       path: /getting-started/docker/tutorials/ipam
 

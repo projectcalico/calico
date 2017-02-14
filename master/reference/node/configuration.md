@@ -19,6 +19,8 @@ The `calico/node` container is primarily configured through environment variable
 | AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (managed through `calicoctl config set/get asnumber`). | int | global AS number |
 | DATASTORE_TYPE | Type of datastore. | kubernetes, etcdv2 | etcdv2 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. | boolean | false |
+| CALICO_LIBNETWORK_CREATE_PROFILES | Enables creating a Calico profile resource for each Docker network.  When disabled, no profiles will be processed even if manually created. | boolean | true |
+| CALICO_LIBNETWORK_LABEL_ENDPOINTS | Enables copying a subset of the Docker container labels for use as Calico labels on workloadendpoints. | boolean | false |
 | CALICO_LIBNETWORK_ENABLED | Enables running the docker-libnetwork plugin directly in the calico/node container. | boolean | true |
 | CALICO_LIBNETWORK_IFPREFIX | Interface prefix to use for the network interface within the Docker containers that have been networked by the Calico driver. | string | cali |
 | CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use| gobgp, bird, none | bird |

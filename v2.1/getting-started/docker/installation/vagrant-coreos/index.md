@@ -82,7 +82,9 @@ You should see output like this on each node
 
 ## Next Steps
 
-Now that you have a basic two node CoreOS Container Linux cluster setup, see the [simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
+Now that you have a basic two node CoreOS Container Linux cluster setup, see
+[Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
+for a simple security walkthrough.
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html

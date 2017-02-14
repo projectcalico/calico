@@ -32,14 +32,25 @@ you need to install and use Calico.
 
 ## Tutorials
 
-#### [Simple Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy)
+#### [Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
 
 The above guide demonstrates Calico connectivity cross host, and how to limit
-that connectivity using simple Calico policy.
+that connectivity using simple Calico profiles.  One profile is created for
+each network and the connectivity is defined as policy on each profile.
 
-#### [Advanced Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy)
+#### [Security using Calico Profiles and Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles-and-policy)
 
 The above guide digs deeper into advanced policy configurations for workloads.
+There is stil one profile created for each network but now the profiles define
+labels that are inherited by each container added to the network.  The policy uses
+the labels in selectors to configure connectivity.
+
+#### [Security using Docker Labels and Calico Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy)
+
+The above guide demonstrates Calico connectivity between containers without using
+Profiles at all.  Instead, Calico Policies are defined which apply to
+containers depending on the labels assigned to them at runtime.  This allows
+policy adjustment at the container level rather than at the network level.
 
 #### [IPAM]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/ipam)
 
