@@ -89,7 +89,7 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name)
+				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name, "")
 
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
@@ -225,7 +225,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					_, _, _, _, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name)
+					_, _, _, _, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
@@ -276,7 +276,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					_, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name)
+					_, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -363,7 +363,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					_, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name)
+					_, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -394,6 +394,89 @@ var _ = Describe("CalicoCni", func() {
 						MAC:      &cnet.MAC{HardwareAddr: mac},
 						Profiles: []string{"k8s_ns.test"},
 					}))
+				})
+			})
+
+			Context("Using host-local IPAM: request an IP then release it, and then request it again", func() {
+				It("Should successfully assign IP both times and successfully release it in the middle", func() {
+					netconfHostLocalIPAM := fmt.Sprintf(`
+				  {
+					"name": "net5",
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "ipam": {
+					    "type": "host-local",
+						"subnet": "usePodCidr"
+					  },
+				   "kubernetes": {
+				     "k8s_api_root": "http://127.0.0.1:8080"
+			    	},
+			   	  "policy": {"type": "k8s"},
+				  "log_level":"info"
+					}`, os.Getenv("ETCD_IP"))
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Create a K8s Node object with PodCIDR and name equal to hostname.
+					_, err = clientset.Nodes().Create(&v1.Node{
+						ObjectMeta: v1.ObjectMeta{Name: hostname},
+						Spec: v1.NodeSpec{
+							PodCIDR: "10.0.0.0/24",
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					By("Creating a pod with a specific IP address")
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{Name: name},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					requestedIP := "10.0.0.42"
+					expectedIP := net.IPv4(10, 0, 0, 42).To4()
+
+					_, netnspath, session, _, contAddresses, _, err := CreateContainer(netconfHostLocalIPAM, name, requestedIP)
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					Expect(podIP).Should(Equal(expectedIP))
+
+					By("Deleting the pod we created earlier")
+					session, err = DeleteContainer(netconfHostLocalIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					By("Creating a second pod with the same IP address as the first pod")
+					name2 := fmt.Sprintf("run2%d", rand.Uint32())
+					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{Name: name2},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name2),
+							Image: "ignore",
+						}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					_, netnspath, session, _, contAddresses, _, err = CreateContainer(netconfHostLocalIPAM, name2, requestedIP)
+					Expect(err).NotTo(HaveOccurred())
+
+					pod2IP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					Expect(pod2IP).Should(Equal(expectedIP))
 				})
 			})
 		})
