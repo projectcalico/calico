@@ -15,10 +15,11 @@
 
 import copy
 import re
+import sys
+import time
 
 from neutron.agent.linux import dhcp
 from oslo_log import log as logging
-
 
 LOG = logging.getLogger(__name__)
 
@@ -76,3 +77,23 @@ class CalicoDeviceManager(dhcp.DeviceManager):
 
     def _cleanup_stale_devices(self, network, dhcp_port):
         pass
+
+    def fill_dhcp_udp_checksums(self, *args, **kwargs):
+        retries = 10
+        while retries > 0:
+            try:
+                super(CalicoDeviceManager, self).fill_dhcp_udp_checksums(
+                    *args, **kwargs)
+            except RuntimeError:
+                # fill_dhcp_udp_checksums() can fail transiently if iptables
+                # is modified concurrently, especially with an aggressive
+                # iptables writer such as Felix running.
+                LOG.exception("Failed to insert checksum rule, may retry...")
+                time.sleep(0.1)
+                retries -= 1
+            else:
+                LOG.debug("Inserted DHCP checksum rule.")
+                break
+        else:
+            LOG.error("Failed to insert DHCP checksum rule. Exiting...")
+            sys.exit(1)
