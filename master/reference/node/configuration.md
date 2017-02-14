@@ -30,6 +30,8 @@ The `calico/node` container is primarily configured through environment variable
 | ETCD_CERT_FILE    | Path to the etcd client cert (optional)    | /etc/calico/cert.pem | |
 | ETCD_CA_CERT_FILE | Path to the etcd CA file (optional)        | /etc/calico/ca.pem | |
 
+In addition to the above, `calico/node` also supports [the standard Felix configuration environment variables](../felix/configuration).
+
 
 ### IP Autodetection methods
 
@@ -37,13 +39,13 @@ The following describe the available IP autodetection methods.
 
 #### first-found
 The `first-found` option enumerates all interface IP addresses and returns the
-first valid IP address (based on IP version and type of address) on 
+first valid IP address (based on IP version and type of address) on
 the first valid interface.  Certain known "local" interfaces
 are omitted, such  as the docker bridge.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
 This is the default detection method. However, since this method only makes a
-very simplified guess, it is recommended to either configure the node with a 
+very simplified guess, it is recommended to either configure the node with a
 specific IP address, or to use one of the other detection methods.
 
 e.g.
@@ -53,7 +55,7 @@ IP6_AUTODETECT_METHOD=first-found
 ```
 
 #### can-reach=DESTINATION
-The `can-reach` method uses your local routing to determine which IP address 
+The `can-reach` method uses your local routing to determine which IP address
 will be used to reach the supplied destination.  Both IP addresses and domain
 names may be used.
 

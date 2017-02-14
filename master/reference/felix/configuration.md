@@ -1,27 +1,6 @@
 ---
-title: Configuring Calico
+title: Configuring Felix
 ---
-
-This page describes the configuration options for Calico's per-host agent,
-Felix along with other system configuration parameters that you may wish
-to set.
-
-## System configuration
-
-A common problem on Linux systems is running out of space in the
-conntrack table, which can cause poor iptables performance. This can
-happen if you run a lot of workloads on a given host, or if your
-workloads create a lot of TCP connections or bidirectional UDP streams.
-
-To avoid this becoming a problem, we recommend increasing the conntrack
-table size. To do so, run the following commands:
-
-    sysctl -w net.netfilter.nf_conntrack_max=1000000
-    echo "net.netfilter.nf_conntrack_max=1000000" >> /etc/sysctl.conf
-
-## Felix configuration
-
-The core Calico component is Felix. (Please see [this document]({{site.baseurl}}/{{page.version}}/reference/architecture) for more on  the Calico architecture.)
 
 Configuration for Felix is read from one of four possible locations, in
 order, as follows.
@@ -36,19 +15,13 @@ The value of any configuration parameter is the value read from the
 locations, most configuration parameters have defaults, and it should be
 rare to have to explicitly set them.
 
-In OpenStack, we recommend putting all configuration into configuration
-files, since the etcd database is transient (and may be recreated by the
-OpenStack plugin in certain error cases). However, in a Docker
-environment the use of environment variables or etcd is often more
-convenient.
-
 The full list of parameters which can be set is as follows.
 
+#### Global configuration
 
-| Setting                                 | Setting (Felix environment variable)    | Default                              | Meaning                                 |
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
 |-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
-| **Global felix configuration**          |                                         |                                      |  |
-| DataplaneDriver                         | FELIX_DATAPLANEDRIVER                   | etcdv2                               | One of "etcdv2" or "kubernetes".  The datastore that Felix should read endpoints and policy information from.  |
+| DatastoreDriver                         | FELIX_DATASTOREDRIVER                   | etcdv2                               | One of "etcdv2" or "kubernetes".  The datastore that Felix should read endpoints and policy information from.  |
 | FelixHostname                           | FELIX_FELIXHOSTNAME                     | socket.gethostname()                 | The hostname Felix reports to the plugin. Should be used if the hostname Felix autodetects is incorrect or does not match what the plugin will expect.  |
 | LogFilePath                             | FELIX_LOGFILEPATH                       | /var/log/calico/felix.log            | The full path to the felix log. Set to "none" to disable file logging.  |
 | LogSeveritySys                          | FELIX_LOGSEVERITYSYS                    | ERROR                                | The log severity above which logs are sent to the syslog. Valid values are DEBUG, INFO, WARNING, ERROR and CRITICAL, or NONE for no logging to syslog (all values case insensitive).  |
@@ -61,26 +34,49 @@ The full list of parameters which can be set is as follows.
 | FailsafeInboundHostPorts                | FELIX_FAILSAFEINBOUNDHOSTPORTS          | 22                                   | Comma-delimited list of TCP ports that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. The default value allows ssh access.  |
 | FailsafeOutboundHostPorts               | FELIX_FAILSAFEOUTBOUNDHOSTPORTS         | 2379,2380,4001,7001                  | Comma-delimited list of TCP ports that Felix will allow outgoing from traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration. The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd.  |
 | ReportingIntervalSecs                   | FELIX_REPORTINGINTERVALSECS             | 30                                   | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments.  |
-| ReportingTTLSecs                        | FELIX_REPORTINGTTLSECS                  | 90                                   | Time-to-live setting for process-wide status reports.                                                          | 
-| **etcdv2 datastore**                    |                                         |                                      |  |
+| ReportingTTLSecs                        | FELIX_REPORTINGTTLSECS                  | 90                                   | Time-to-live setting for process-wide status reports. |
+
+#### etcdv2 datastore configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
 | EtcdEndpoints                           | FELIX_ETCDENDPOINTS                     | "EtcdScheme://EtcdAddr"              | Comma-delimited list of etcd endpoints to connect to; for example "http://etcd1:2379,http://etcd2:2379".  |
 | _Deprecated_ EtcdAddr                   | FELIX_ETCDADDR                          | 127.0.0.1:2379                       | The location (IP / hostname and port) of the etcd node or proxy that Felix should connect to.  |
 | _Deprecated_ EtcdScheme                 | FELIX_ETCDSCHEME                        | http                                 | The protocol type (http or https) of the etcd node or proxy that Felix connects to.  |
 | EtcdKeyFile                             | FELIX_ETCDKEYFILE                       | None                                 | The full path to the etcd public key file, as described in usingtlswithetcd  |
 | EtcdCertFile                            | FELIX_ETCDCERTFILE                      | None                                 | The full path to the etcd certificate file, as described in usingtlswithetcd  |
 | EtcdCaFile                              | FELIX_ETCDCAFILE                        | "/etc/ssl/certs/ca-certificates.crt" | The full path to the etcd Certificate Authority certificate file, as described in usingtlswithetcd. The default value is the standard location of the system trust store. To disable authentication of the server by Felix, set the value to "none".  |
-| **Kubernetes datastore**                |                                         |                                      |  |
-| N/A                                     | N/A                                     |                                      | The Kubernetes datastore driver reads its configuration from Kubernetes-provided environmnet variables.  |
-| **iptables dataplane configuration**    |                                         |                                      |  |
+
+#### Kubernetes datastore configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
+| N/A                                     | N/A                                     |                                      | The Kubernetes datastore driver reads its configuration from Kubernetes-provided environment variables.  |
+
+
+#### iptables dataplane configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
 | DefaultEndpointToHostAction             | FELIX_DEFAULTENDPOINTTOHOSTACTION       | DROP                                 | By default Calico blocks traffic from endpoints to the host itself by using an iptables DROP action. If you want to allow some or all traffic from endpoint to host then set this parameter to "RETURN" (which causes the rest of the iptables INPUT chain to be processed)   or "ACCEPT" (which immediately accepts packets).  |
 | IptablesMarkMask                        | FELIX_IPTABLESMARKMASK                  | 0xff000000                           | Mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.  |
 | IptablesRefreshInterval                 | FELIX_IPTABLESREFRESHINTERVAL           | 60                                   | Period, in seconds, at which felix re-applies all iptables state to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable iptables refresh.  |
 | ChainInsertMode                         | FELIX_CHAININSERTMODE                   | insert                               | One of "insert" or "append".  Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom.  "insert" is the safe default since it prevents Calico's rules from being bypassed.  If you switch to "append" mode, be sure that the other rules in the chains signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.  |
 | LogPrefix                               | FELIX_LOGPREFIX                         | calico-drop                          | The log prefix that Felix uses when rendering DROP rules.  |
 | MaxIpsetSize                            | FELIX_MAXIPSETSIZE                      | 1048576                              | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag.  |
-| **OpenStack-only configuration**        |                                         |                                      |  |
+
+#### OpenStack specific configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
 | MetadataAddr                            | FELIX_METADATAADDR                      | 127.0.0.1                            | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, thiscorresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of 'None'  (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  |
 | MetadataPort                            | FELIX_METADATAPORT                      | 8775                                 | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed.  |
+
+#### Bare metal specific configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
+| InterfacePrefix                         | FELIX_INTERFACEPREFIX                   | cali                                 | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. |
 
 Environment variables
 ---------------------
@@ -102,6 +98,12 @@ using the `-c` or `--config-file` options on the command line. If the
 file exists, then it is read (ignoring section names) and all parameters
 are set from it.
 
+In OpenStack, we recommend putting all configuration into configuration
+files, since the etcd database is transient (and may be recreated by the
+OpenStack plugin in certain error cases). However, in a Docker
+environment the use of environment variables or etcd is often more
+convenient.
+
 ### etcd configuration
 
 > **NOTE**
@@ -112,7 +114,7 @@ are set from it.
 >     configuration can be read.
 >
 
-when using the etcd datastore driver, etcd configuration is read from 
+when using the etcd datastore driver, etcd configuration is read from
 etcd from two places.
 
 1.  For a host of FelixHostname value `HOSTNAME` and a parameter named
@@ -121,65 +123,3 @@ etcd from two places.
     `/calico/v1/config/NAME`.
 
 Note that the names are case sensitive.
-
-## OpenStack environment configuration
-
-When running Calico with OpenStack, you also need to configure various
-OpenStack components, as follows.
-
-### Nova (/etc/nova/nova.conf)
-
-Calico uses the Nova metadata service to provide metadata to VMs,
-without any proxying by Neutron. To make that work:
-
--   An instance of the Nova metadata API must run on every compute node.
--   `/etc/nova/nova.conf` must not set `service_neutron_metadata_proxy`
-    or `service_metadata_proxy` to `True`. (The default `False` value is
-    correct for a Calico cluster.)
-
-### Neutron server (/etc/neutron/neutron.conf)
-
-In `/etc/neutron/neutron.conf` you need the following settings to
-configure the Neutron service.
-
-| Setting            | Value                                | Meaning              |
-|--------------------|--------------------------------------|----------------------|
-| core_plugin        | neutron.plugins.ml2.plugin.ML2Plugin | Use ML2 plugin       |
-|--------------------|--------------------------------------|----------------------|
-
-With OpenStack releases earlier than Liberty you will also need:
-
-| Setting                 | Value                    | Meaning                    |
-|-------------------------|--------------------------|----------------------------|
-| dhcp_agents_per_network | 9999                     | Allow unlimited DHCP agents per network |
-
-Optionally -- depending on how you want the Calico mechanism driver to
-connect to the Etcd cluster -- you can also set the following options in
-the `[calico]` section of `/etc/neutron/neutron.conf`.
-
-| Setting   | Default Value | Meaning                                   |
-|-----------|---------------|-------------------------------------------|
-| etcd_host | localhost     | The hostname or IP of the etcd node/proxy |
-| etcd_port | 4001          | The port to use for the etcd node/proxy   |
-
-### ML2 (.../ml2_conf.ini)
-
-In `/etc/neutron/plugins/ml2/ml2_conf.ini` you need the following
-settings to configure the ML2 plugin.
-
-| Setting              | Value       | Meaning                           |
-|----------------------|-------------|-----------------------------------|
-| mechanism_drivers    | calico      | Use Calico                        |
-| type_drivers         | local, flat | Allow 'local' and 'flat' networks |
-| tenant_network_types | local, flat | Allow 'local' and 'flat' networks |
-
-DHCP agent (.../dhcp_agent.ini)
---------------------------------
-
-With OpenStack releases earlier than Liberty, in
-`/etc/neutron/dhcp_agent.ini` you need the following setting to
-configure the Neutron DHCP agent.
-
-| Setting          | Value                 | Meaning                                                                                              |
-|------------------|-----------------------|------------------------------------------------------------------------------------------------------|
-| interface_driver | RoutedInterfaceDriver | Use Calico's modified DHCP agent support for TAP interfaces that are routed instead of being bridged |

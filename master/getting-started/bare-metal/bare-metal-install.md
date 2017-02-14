@@ -36,9 +36,9 @@ Felix has the following pre-requisites:
     check the version, run `ipset --version`.
 -   The conntrack, iptables and ipsets kernel modules must be available
     (or compiled-in).
--   An [etcd](https://github.com/coreos/etcd/releases/) cluster that 
-    supports the etcdv2 protocol.  We recommend running the latest 
-    stable release of etcd v3.x. To check the version, run 
+-   An [etcd](https://github.com/coreos/etcd/releases/) cluster that
+    supports the etcdv2 protocol.  We recommend running the latest
+    stable release of etcd v3.x. To check the version, run
     `etcd --version`
 
 > **NOTE**
@@ -50,7 +50,7 @@ Felix has the following pre-requisites:
 
 ## Download and install the binary
 
-The calico-felix binary is distributed via the 
+The calico-felix binary is distributed via the
 [Github releases page](https://github.com/projectcalico/felix/releases).
 Download the calico-felix attachment to your system, then make it executable
 and move it to a location on your path, for example:
@@ -111,7 +111,7 @@ Or, for upstart:
 Optionally, you can create a file at `/etc/calico/felix.cfg` to
 configure Felix. The configuration file as well as other options for
 configuring felix (including environment variables) are described in
-[this]({{site.baseurl}}/{{page.version}}/usage/configuration) document.
+[this]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) document.
 
 If etcd is not running on the local machine, it's essential to configure
 the `EtcdAddr` or `EtcdEndpoints` setting to tell Felix how to reach
@@ -119,7 +119,7 @@ etcd.
 
 Felix tries to detect whether IPv6 is available on your platform but
 the detection can fail on older (or more unusual) systems.  If Felix
-exits soon after startup with `ipset` or `iptables` errors try 
+exits soon after startup with `ipset` or `iptables` errors try
 setting the `Ipv6Support` setting to `false`.
 
 ## Start Felix

@@ -17,11 +17,13 @@ Calico does not support setting IPs or policing MAC addresses for host
 interfaces, it assumes that the interfaces are configured by the
 underlying network fabric.
 
-Calico distinguishes workload endpoints from host endpoints by a
-configurable prefix controlled by the `InterfacePrefix` configuration
-value, (see: [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration)). 
-Interfaces that start with a value listed in `InterfacePrefix` are assumed to be 
-workload interfaces. Others are treated as host interfaces.
+Calico distinguishes workload endpoints from host endpoints by a configurable
+prefix.  Unless you happen to have host interfaces whose name matches the
+default for that prefix (`cali`), you won't need to change it.  In case you do,
+see the `InterfacePrefix` configuration value at [Configuring
+Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).
+Interfaces that start with a value listed in `InterfacePrefix` are assumed to
+be workload interfaces.  Others are treated as host interfaces.
 
 Calico blocks all traffic to/from workload interfaces by default;
 allowing traffic only if the interface is known and policy is in place.
@@ -107,7 +109,7 @@ There are several ways to install Felix.
         yum install calico-felix
 
 -   if you are running another distribution, follow the instructions in
-    [this document](bare-metal-install) to use the calico-felix binary 
+    [this document](bare-metal-install) to use the calico-felix binary
     directly.
 
 -   if you want to run under docker, you can use `calicoctl node run` to start
@@ -376,9 +378,10 @@ By default, Calico keeps port 22 inbound open on *all* host endpoints,
 which allows access to ssh; as well as outbound communication to ports
 2379, 2380, 4001 and 7001, which allows access to etcd's default ports.
 
-The lists of failsafe ports can be configured via the configuration
-parameters described in [Calico Configuration]({{site.baseurl}}/{{page.version}}/usage/configuration).
-They can be disabled by setting each configuration value to an empty string.
+The lists of failsafe ports can be configured via the configuration parameters
+described in [Configuring
+Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).  They
+can be disabled by setting each configuration value to an empty string.
 
 > **WARNING**
 >
