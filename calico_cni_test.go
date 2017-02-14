@@ -60,7 +60,7 @@ var _ = Describe("CalicoCni", func() {
 			}`, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, "")
+				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 

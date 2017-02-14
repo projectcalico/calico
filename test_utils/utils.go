@@ -116,7 +116,7 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, in
 	return result, error, exitCode
 }
 
-func CreateContainer(netconf string, k8sName string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+func CreateContainer(netconf string, k8sName string, ip string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
 	targetNs, err := ns.NewNS()
 	if err != nil {
 		return "", "", nil, nil, nil, nil, err
@@ -143,6 +143,11 @@ func CreateContainer(netconf string, k8sName string) (container_id, netnspath st
 	var k8s_env = ""
 	if k8sName != "" {
 		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", k8sName)
+
+		// Append IP=<ip> to CNI_ARGS only if it's not an empty string.
+		if ip != "" {
+			k8s_env = fmt.Sprintf("%s;IP=%s\"", strings.TrimRight(k8s_env, "\""), ip)
+		}
 	}
 	cni_env := fmt.Sprintf("CNI_COMMAND=ADD CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
 
