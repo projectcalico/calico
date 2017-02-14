@@ -59,7 +59,8 @@ docker stop calico-node
 Pair the printed command with your favorite init system to ensure Calico is
 always running on each host.
 
-See [additional information on binding to an init system ]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service).
+See [additional information on binding to an init system
+]({{site.baseurl}}/{{page.version}}/usage/configuration/as-service).
 
 ## Next Steps
 

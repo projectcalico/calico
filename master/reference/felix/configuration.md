@@ -72,6 +72,12 @@ The full list of parameters which can be set is as follows.
 | MetadataAddr                            | FELIX_METADATAADDR                      | 127.0.0.1                            | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, thiscorresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of 'None'  (case insensitive) means that Felix should not set up any NAT rule for the metadata path.  |
 | MetadataPort                            | FELIX_METADATAPORT                      | 8775                                 | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed.  |
 
+#### Bare metal specific configuration
+
+| Setting                                 | Environment variable                    | Default                              | Meaning                                 |
+|-----------------------------------------|-----------------------------------------|--------------------------------------|-----------------------------------------|
+| InterfacePrefix                         | FELIX_INTERFACEPREFIX                   | cali                                 | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces.  Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the 'cali' value, and our OpenStack integration sets the 'tap' value. |
+
 Environment variables
 ---------------------
 
