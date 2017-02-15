@@ -348,16 +348,17 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 
 	// Build CalicoAPIConfig from the environment.  This means that any XxxYyy field in
 	// CalicoAPIConfigSpec can be set by a corresponding XXX_YYY or CALICO_XXX_YYY environment
-	// variable, and that the datastore type _must_ be set by a DATASTORE_TYPE or
+	// variable, and that the datastore type can be set by a DATASTORE_TYPE or
 	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv2 case which is handled specially
 	// above.)
-	//
-	// To be clear: Yes, this means that Felix use of a datastore other than 'etcdv2' has to be
-	// configured _both_ by FELIX_DATASTORETYPE=<that-type> _and_ by DATASTORE_TYPE=<that-type>
-	// or CALICO_DATASTORE_TYPE=<that-type>.
 	cfg, err := client.LoadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
+	}
+	// If that didn't set the datastore type (in which case the field will have been set to its
+	// default 'etcdv2' value), copy it from the Felix config.
+	if cfg.Spec.DatastoreType == "etcdv2" {
+		cfg.Spec.DatastoreType = api.DatastoreType(config.DatastoreType)
 	}
 	return *cfg
 }
