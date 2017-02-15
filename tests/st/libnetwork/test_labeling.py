@@ -81,9 +81,7 @@ class TestLibnetworkLabeling(TestBase):
         cls.hosts.append(cls.host2)
 
         for host in cls.hosts:
-            start_calico_node(host,
-                              ["CALICO_LIBNETWORK_LABEL_ENDPOINTS=true",
-                               "CALICO_LIBNETWORK_CREATE_PROFILES=false"])
+            host.start_calico_node(options='--use-docker-networking-container-labels')
 
         cls.network1 = cls.host1.create_network("network1")
         cls.network2 = cls.host1.create_network("network2")
@@ -177,25 +175,3 @@ class TestLibnetworkLabeling(TestBase):
                            self.workload4_nw2_foo_bar],
             ip_pass_list=[],
             ip_fail_list=[self.workload3_nw1_foo_bing.ip]), 2)
-
-
-# Needed until it is possible to set the CALICO_LIBNETWORK_LABEL_ENDPOINTS,
-# CALICO_LIBNETWORK_CREATE_PROFILES through another means (flag planned to
-# be added to calicoctl node run).
-def start_calico_node(host, env_vars=[]):
-    additional_envs = ""
-    for env in env_vars:
-        additional_envs += "-e %s " % (env)
-
-    host.execute(
-            "docker run --net=host --privileged --name=calico-node -d \
-             --restart=always -e CALICO_LIBNETWORK_ENABLED=true %s -e IP=%s \
-             -e ETCD_SCHEME=http -e ETCD_ENDPOINTS= -e NODENAME=%s \
-             -e CALICO_NETWORKING_BACKEND=bird -e NO_DEFAULT_POOLS= \
-             -e CALICO_LIBNETWORK_IFPREFIX=cali -e ETCD_AUTHORITY=%s:2379 \
-             -v /var/log/calico:/var/log/calico \
-             -v /var/run/calico:/var/run/calico \
-             -v /lib/modules:/lib/modules \
-             -v /run/docker/plugins:/run/docker/plugins \
-             -v /var/run/docker.sock:/var/run/docker.sock calico/node" %
-            (additional_envs, host.ip, host.get_hostname(), get_ip()))

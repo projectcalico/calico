@@ -70,6 +70,7 @@ func Run(args []string) {
                      [--init-system]
                      [--disable-docker-networking]
                      [--docker-networking-ifprefix=<IFPREFIX>]
+                     [--use-docker-networking-container-labels]
 
 Options:
   -h --help                Show this screen.
@@ -141,6 +142,13 @@ Options:
                            within the Docker containers that have been networked
                            by the Calico driver.
                            [default: cali]
+     --use-docker-networking-container-labels
+                           Extract the Calico-namespaced Docker container labels
+                           (org.projectcalico.label.*) and apply them to the
+                           container endpoints for use with Calico policy.
+                           When this option is enabled traffic must be
+                           explicitly allowed by configuring Calico policies
+                           and Calico profiles are disabled.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -175,6 +183,7 @@ Description:
 	disableDockerNw := argutils.ArgBoolOrFalse(arguments, "--disable-docker-networking")
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
 	ifprefix := argutils.ArgStringOrBlank(arguments, "--docker-networking-ifprefix")
+	useDockerContainerLabels := argutils.ArgBoolOrFalse(arguments, "--use-docker-networking-container-labels")
 
 	// Validate parameters.
 	if ipv4 != "" && ipv4 != "autodetect" {
@@ -238,17 +247,24 @@ Description:
 
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
-		"NODENAME":                  name,
-		"CALICO_NETWORKING_BACKEND": backend,
-		"NO_DEFAULT_POOLS":          noPoolsString,
-		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
-		"IP_AUTODETECT_METHOD":      ipv4ADMethod,
-		"IP6_AUTODETECT_METHOD":     ipv6ADMethod,
+		"NODENAME":                          name,
+		"CALICO_NETWORKING_BACKEND":         backend,
+		"NO_DEFAULT_POOLS":                  noPoolsString,
+		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
+		"IP_AUTODETECT_METHOD":              ipv4ADMethod,
+		"IP6_AUTODETECT_METHOD":             ipv6ADMethod,
+		"CALICO_LIBNETWORK_CREATE_PROFILES": fmt.Sprint(!useDockerContainerLabels),
+		"CALICO_LIBNETWORK_LABEL_ENDPOINTS": fmt.Sprint(useDockerContainerLabels),
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
 	if !ifprefixMatch.MatchString(ifprefix) {
 		fmt.Printf("Error executing command: invalid interface prefix '%s'\n", ifprefix)
+		os.Exit(1)
+	}
+
+	if disableDockerNw && useDockerContainerLabels {
+		fmt.Printf("Error executing command: invalid to disable Docker Networking and enable Container labels\n")
 		os.Exit(1)
 	}
 
