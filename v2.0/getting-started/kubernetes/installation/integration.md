@@ -159,7 +159,7 @@ tar -zxvf cni-v0.3.0.tgz
 sudo cp loopback /opt/cni/bin/
 ```
 
-## Intalling the Calico network policy controller
+## Installing the Calico network policy controller
 
 The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the
 Kubernetes API for Pod, Namespace, and NetworkPolicy events and configuring Calico in response. It runs as
