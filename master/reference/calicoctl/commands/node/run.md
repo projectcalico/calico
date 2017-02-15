@@ -133,45 +133,46 @@ Calico node started successfully
 #### IP Autodetection method examples
 
 The node resource includes IPv4 and IPv6 routing IP addresses that should
-match those on one of the host interfaces.  These IP addresses may be 
+match those on one of the host interfaces.  These IP addresses may be
 configured in advance by configuring the node resource prior to starting the
-calico/node service, alternatively, the addresses may either be explicitly 
+calico/node service, alternatively, the addresses may either be explicitly
 specified or autodetected through options on the `calicoctl run` command.
 
 There are different autodetection methods available and you should use the one
-best suited to your deployment.  If you are able to explicitly specify the IP 
+best suited to your deployment.  If you are able to explicitly specify the IP
 addresses, that is always preferred over autodetection. This section describes
 the available methods for autodetecting the hosts IP addresses.
 
 An IPv4 address is always required, and so if no address was previously
 configured in the node resource, and no address was specified on the CLI, then
-we will attempt to autodetect an IPv4 address.  An IPv6 address, however, will 
+we will attempt to autodetect an IPv4 address.  An IPv6 address, however, will
 only be autodetected when explicitly requested.
 
 To force autodetection of an IPv4 address, use the option `--ip=autodetect`.  To
-force autodetection of an IPv6 address, use the option `--ip6=autodetect`. 
+force autodetection of an IPv6 address, use the option `--ip6=autodetect`.
 
 To set the autodetection method for IPv4, use the `--ip-autodetection-method` option.
 To set the autodetection method for IPv6, use the `--ip6-autodetection-method` option.
 
 > **Note**
 > If you are starting the calico/node container directly (and not using the
-> `calicoctl run` helper command), the options are passed in an environment 
+> `calicoctl run` helper command), the options are passed in an environment
 > variables.  These are described in the [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)).
 
 **first-found**
 
 The `first-found` option enumerates all interface IP addresses and returns the
-first valid IP address (based on IP version and type of address) on 
+first valid IP address (based on IP version and type of address) on
 the first valid interface.  Certain known "local" interfaces
 are omitted, such  as the docker bridge.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
 This is the default detection method. However, since this method only makes a
-very simplified guess, it is recommended to either configure the node with a 
+very simplified guess, it is recommended to either configure the node with a
 specific IP address, or to use one of the other detection methods.
 
 e.g.
+
 ```
 # First-found auto detection method explicitly specified
 sudo calicoctl node run --ip autodetect --ip-autodetection-method first-found
@@ -179,11 +180,12 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method first-found
 
 **can-reach=DESTINATION**
 
-The `can-reach` method uses your local routing to determine which IP address 
+The `can-reach` method uses your local routing to determine which IP address
 will be used to reach the supplied destination.  Both IP addresses and domain
 names may be used.
 
 e.g.
+
 ```
 # IP detection using a can-reach IP address
 sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=8.8.8.8
@@ -200,6 +202,7 @@ the first matching interface.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
 e.g.
+
 ```
 # IP detection on interface eth0
 sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth0
@@ -296,4 +299,3 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.
 -  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) for details on the Calico selector-based policy model
 -  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) for details on configuring `calicoctl` to access
    the Calico datastore.
-

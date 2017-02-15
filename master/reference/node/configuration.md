@@ -38,6 +38,7 @@ In addition to the above, `calico/node` also supports [the standard Felix config
 The following describe the available IP autodetection methods.
 
 #### first-found
+
 The `first-found` option enumerates all interface IP addresses and returns the
 first valid IP address (based on IP version and type of address) on
 the first valid interface.  Certain known "local" interfaces
@@ -49,17 +50,20 @@ very simplified guess, it is recommended to either configure the node with a
 specific IP address, or to use one of the other detection methods.
 
 e.g.
+
 ```
 IP_AUTODETECT_METHOD=first-found
 IP6_AUTODETECT_METHOD=first-found
 ```
 
 #### can-reach=DESTINATION
+
 The `can-reach` method uses your local routing to determine which IP address
 will be used to reach the supplied destination.  Both IP addresses and domain
 names may be used.
 
 e.g.
+
 ```
 # Using IP addresses
 IP_AUTODETECT_METHOD=can-reach=8.8.8.8
@@ -71,12 +75,14 @@ IP6_AUTODETECT_METHOD=can-reach=www.google.com
 ```
 
 #### interface=INTERFACE-REGEX
+
 The `interface` method uses the supplied interface regular expression (golang
 syntax) to enumerate matching interfaces and to return the first IP address on
 the first matching interface.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
 e.g.
+
 ```
 # Valid IP address on interface eth0, eth1, eth2 etc.
 IP_AUTODETECT_METHOD=interface=eth.*
