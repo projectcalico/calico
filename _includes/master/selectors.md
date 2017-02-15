@@ -10,6 +10,6 @@ primitive expressions can be combined using the logical operator `&&`.
 | has(k)              | Matches any endpoint with label 'k', independent of value.
 | !has(k)             | Matches any endpoint that does not have label 'k'
 | k in { 'v1', 'v2' } | Matches any endpoint with label 'k' and value in the given set
-| k not in { 'v1', 'v2' } | Matches any endpoint with label 'k' and value _not_ in the given set
+| k not in { 'v1', 'v2' } | Matches any endpoint without label 'k' or any with label 'k' and value _not_ in the given set
 
 
