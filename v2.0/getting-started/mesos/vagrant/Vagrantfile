@@ -1,10 +1,10 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 # Size of the cluster created by Vagrant
-num_instances = 3
+num_instances = 2
 
 # VM Basename
-instance_name_prefix="calico-mesos"
+instance_name_prefix="calico"
 
 # Version of mesos to install from official mesos repo
 mesos_version = "1.0.0"
@@ -24,6 +24,15 @@ calico_node_ver = "v1.0.2"
 
 # Script to write out the Calico environment file.
 $write_calico_env=<<SCRIPT
+cat <<EOF > /etc/sysconfig/calico
+ETCD_ENDPOINTS=http://${1}:2379
+ETCD_CA_FILE=""
+ETCD_CERT_FILE=""
+ETCD_KEY_FILE=""
+EOF
+SCRIPT
+
+$write_marathon_env=<<SCRIPT
 cat <<EOF > /etc/sysconfig/calico
 ETCD_ENDPOINTS=http://${1}:2379
 ETCD_CA_FILE=""
@@ -62,7 +71,6 @@ SCRIPT
 
 Vagrant.configure("2") do |config|
   config.vm.box = 'centos/7'
-  config.ssh.insert_key = false
 
   # The vagrant centos:7 box has a bug where it automatically tries to sync /home/vagrant/sync using rsync, so disable it:
   # https://github.com/mitchellh/vagrant/issues/6154#issuecomment-135949010
@@ -73,22 +81,6 @@ Vagrant.configure("2") do |config|
     # in CoreOS, so tell Vagrant that so it can be smarter.
     vbox.functional_vboxsf = false
     vbox.check_guest_additions = false
-    vbox.memory = 2048
-    vbox.cpus = 2
-  end
-
-  config.vm.provider :vsphere do |vsphere, override|
-    # The following section sets login credentials for the vagrant-vsphere
-    # plugin to allow use of this Vagrant script in vSphere.
-    # This is not recommended for demo purposes, only internal testing.
-    override.vm.box_url = 'file://dummy.box'
-    vsphere.host =                  ENV['VSPHERE_HOSTNAME']
-    vsphere.compute_resource_name = ENV['VSPHERE_COMPUTE_RESOURCE_NAME']
-    vsphere.template_name =         ENV['VSPHERE_TEMPLATE_NAME']
-    vsphere.user =                  ENV['VSPHERE_USER']
-    vsphere.password =              ENV['VSPHERE_PASSWORD']
-    vsphere.insecure=true
-    vsphere.customization_spec_name = 'vagrant-vsphere'
   end
 
   master_ip = "172.24.197.101"
@@ -112,14 +104,14 @@ Vagrant.configure("2") do |config|
 
       # Add official Mesos Repos and install Mesos.
       host.vm.provision :shell, inline: "sudo rpm -Uvh http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-3.noarch.rpm"
-      host.vm.provision :shell, inline: "yum -y install --enablerepo=mesosphere-unstable mesos-#{mesos_version}"
+      host.vm.provision :shell, inline: "yum -y install mesos-#{mesos_version}"
 
       # Write out the Calico environment file.
       host.vm.provision :shell, inline: $write_calico_env, args: "#{master_ip}"
 
       # Master
       if i == 1
-        host.vm.provision :shell, inline: "yum -y install mesosphere-zookeeper etcd"
+        host.vm.provision :shell, inline: "yum -y install mesosphere-zookeeper etcd marathon"
 
         # Zookeeper
         host.vm.provision :shell, inline: "systemctl start zookeeper"
@@ -130,8 +122,6 @@ Vagrant.configure("2") do |config|
         host.vm.provision :shell, inline: "systemctl start mesos-master"
 
         # Marathon
-        host.vm.provision "file", source: "units/marathon.service", destination: "/tmp/marathon.service"
-        host.vm.provision :shell, inline: "mv /tmp/marathon.service /usr/lib/systemd/system/marathon.service"
         host.vm.provision :shell, inline: "systemctl start marathon"
 
         # etcd
@@ -158,14 +148,12 @@ Vagrant.configure("2") do |config|
 
       # Provision with docker, and download the calico-node docker image
       host.vm.provision :docker, images: [
-	        "calico/node:#{calico_node_ver}",
+	        "quay.io/calico/node:#{calico_node_ver}",
       ]
 
       # Configure docker to use etcd on master as its datastore
-      host.vm.provision :shell, inline: "mkdir -p /usr/lib/systemd/system/docker.service.d"
-      host.vm.provision "file", source: "units/docker.service.d/docker.conf", destination: "/tmp/docker.conf"
-      host.vm.provision :shell, inline: "mv /tmp/docker.conf /usr/lib/systemd/system/docker.service.d/docker.conf"
-      host.vm.provision :shell, inline: "systemctl daemon-reload"
+      host.vm.provision :shell, inline: "mkdir -p /etc/docker/"
+      host.vm.provision :shell, inline: %Q(echo '{\"cluster-store\":\"etcd://#{master_ip}\:2379"}' > /etc/docker/daemon.json)
       host.vm.provision :shell, inline: "systemctl restart docker.service"
 
       # Install calicoctl
@@ -180,21 +168,21 @@ Vagrant.configure("2") do |config|
       if i == 1
         # Master specific stuff.
         # Setup marathon-lb
-        host.vm.provision :docker, images: ["robbrockbank/marathon-lb:ip-per-task"]
+        host.vm.provision :docker, images: ["mesosphere/marathon-lb:v1.4.3"]
         host.vm.provision "file", source: "units/marathon-lb.service", destination: "/tmp/marathon-lb.service"
         host.vm.provision :shell, inline: "sh -c 'echo MARATHON_IP=#{master_ip} > /etc/sysconfig/marathon-lb'"
         host.vm.provision :shell, inline: "mv /tmp/marathon-lb.service /usr/lib/systemd/system/marathon-lb.service"
         host.vm.provision :shell, inline: "systemctl start marathon-lb"
-      else
-        # Configure and start mesos-slave
-        host.vm.provision :shell, inline: "sh -c 'echo zk://#{master_ip}:2181/mesos > /etc/mesos/zk'"
-        # NOTE: Saving the IP below is used for demo purposes to workaround DNS hostname
-        # resolution when visiting the Mesos Master UI agent sandboxes.
-        host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/ip'"
-        host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/hostname'"
-        host.vm.provision :shell, inline: "sh -c 'echo mesos,docker > /etc/mesos-slave/containerizers'"
-        host.vm.provision :shell, inline: "systemctl start mesos-slave.service"
       end
+
+      # Configure and start mesos-slave
+      host.vm.provision :shell, inline: "sh -c 'echo zk://#{master_ip}:2181/mesos > /etc/mesos/zk'"
+      # NOTE: Saving the IP below is used for demo purposes to workaround DNS hostname
+      # resolution when visiting the Mesos Master UI agent sandboxes.
+      host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/ip'"
+      host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/hostname'"
+      host.vm.provision :shell, inline: "sh -c 'echo mesos,docker > /etc/mesos-slave/containerizers'"
+      host.vm.provision :shell, inline: "systemctl start mesos-slave.service"
     end
   end
 end
