@@ -44,6 +44,12 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 			return err
 		}
 
+		// Explicitly set the veth to UP state, because netlink doesn't always do that on all the platforms with net.FlagUp.
+		// veth won't get a link local address unless it's set to UP state.
+		if err = netlink.LinkSetUp(hostVeth); err != nil {
+			return fmt.Errorf("failed to set %q up: %v", hostVethName, err)
+		}
+
 		contVeth, err := netlink.LinkByName(contVethName)
 		if err != nil {
 			err = fmt.Errorf("failed to lookup %q: %v", contVethName, err)
@@ -83,27 +89,20 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 			// No need to add a dummy next hop route as the host veth device will already have an IPv6
 			// link local address that can be used as a next hop.
 			// Just fetch the address of the host end of the veth and use it as the next hop.
-			var hostIPv6Addr net.IP
-			if err := hostNS.Do(func(_ ns.NetNS) error {
-				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
-				if err != nil {
-					logger.Errorf("Error listing IPv6 addresses: %s", err)
-					return err
-				}
-
-				if len(addresses) < 1 {
-					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
-					// support IPv6. Since a IPv6 address has been allocated that can't be used,
-					// return an error.
-					return fmt.Errorf("Failed to get IPv6 addresses for container veth")
-				}
-
-				hostIPv6Addr = addresses[0].IP
-				return nil
-			}); err != nil {
-				logger.Errorf("Error getting IPv6 address: %s", err)
+			addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
+			if err != nil {
+				logger.Errorf("Error listing IPv6 addresses: %s", err)
 				return err
 			}
+
+			if len(addresses) < 1 {
+				// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+				// support IPv6. Since a IPv6 address has been allocated that can't be used,
+				// return an error.
+				return fmt.Errorf("Failed to get IPv6 addresses for host side of the veth pair")
+			}
+
+			hostIPv6Addr := addresses[0].IP
 
 			_, defNet, _ := net.ParseCIDR("::/0")
 			if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
