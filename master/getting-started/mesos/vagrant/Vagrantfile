@@ -1,3 +1,6 @@
+---
+layout: null
+---
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 # Size of the cluster created by Vagrant
@@ -13,14 +16,14 @@ mesos_version = "1.0.0"
 mesos_dns_url = "https://github.com/mesosphere/mesos-dns/releases/download/v0.5.0/mesos-dns-v0.5.0-linux-amd64"
 
 # The calicoctl download URL.
-calicoctl_url = "http://www.projectcalico.org/builds/calicoctl"
+calicoctl_url = "{% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}"
 
 # The version of the calico docker images to install.  This is used to pre-load
 # the calico/node image which slows down the install process, but speeds up the tutorial.
 #
 # This version should match the version required by calicoctl installed from
 # calicoctl_url.
-calico_node_ver = "latest"
+calico_node_ver = "{% assign component = (site.data.versions[page.version].first.components | where:"name","calico/node" | first) %}{{ component.version}}"
 
 # Script to write out the Calico environment file.
 $write_calico_env=<<SCRIPT

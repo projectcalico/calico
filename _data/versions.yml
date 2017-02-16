@@ -1,0 +1,34 @@
+master:
+- title: master
+  note: ""
+  components:
+  - name: felix
+    version: master
+    url: ""
+  - name: calicoctl
+    version: master
+    url: "http://www.projectcalico.org/builds/calicoctl"
+  - name: calico/node
+    version: master
+    url: ""
+  - name: calico/cni
+    version: master
+    url: ""
+  - name: libcalico-go
+    version: master
+    url: ""
+  - name: calico-bird
+    version: master
+    url: ""
+  - name: calico-bgp-daemon
+    version: master
+    url: ""
+  - name: libnetwork-plugin
+    version: master
+    url: ""
+  - name: calico/kube-policy-controller
+    version: master
+    url: ""
+  - name: networking-calico
+    version: master
+    url: ""

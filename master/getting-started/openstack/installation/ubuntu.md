@@ -42,7 +42,7 @@ found at <http://docs.openstack.org>.
 Configure APT to use the Calico PPA:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/calico-2.0
+    $ sudo apt-add-repository ppa:project-calico/calico-{{ site.data.versions[page.version].first.title | slice: 1, site.data.versions[page.version].first.title.size }}
 ```
 
 With Kilo, Calico also needs patched versions of Nova and Neutron that are

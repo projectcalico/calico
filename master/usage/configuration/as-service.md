@@ -91,7 +91,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -v /run/docker/plugins:/run/docker/plugins \
  -v /lib/modules:/lib/modules \
  -v /var/run/calico:/var/run/calico \
- quay.io/calico/node:latest
+ quay.io/calico/node:{% assign component = (site.data.versions[page.version].first.components | where:"name","calico/node" | first) %}{{ component.version}}
 
 ExecStop=-/usr/bin/docker stop calico-node
 

@@ -61,7 +61,7 @@ these steps, described in more detail below:
 
 Download the calicoctl binary onto your host.
 
-	wget http://www.projectcalico.org/builds/calicoctl
+	wget {% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any
@@ -87,7 +87,7 @@ There are several ways to install Felix.
 
 -   if you are running Ubuntu 14.04 or 16.04, you can install from our PPA:
 
-        sudo apt-add-repository ppa:project-calico/calico-2.0
+        sudo apt-add-repository ppa:project-calico/calico-{{ site.data.versions[page.version].first.title | slice: 1, site.data.versions[page.version].first.title.size }}
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix
@@ -98,11 +98,11 @@ There are several ways to install Felix.
         cat > /etc/yum.repos.d/calico.repo <<EOF
         [calico]
         name=Calico Repository
-        baseurl=http://binaries.projectcalico.org/rpm/calico-2.0/
+        baseurl=http://binaries.projectcalico.org/rpm/calico-{{ site.data.versions[page.version].first.title | slice: 1, site.data.versions[page.version].first.title.size }}/
         enabled=1
         skip_if_unavailable=0
         gpgcheck=1
-        gpgkey=http://binaries.projectcalico.org/rpm/calico-2.0/key
+        gpgkey=http://binaries.projectcalico.org/rpm/calico-{{ site.data.versions[page.version].first.title | slice: 1, site.data.versions[page.version].first.title.size }}/key
         priority=97
         EOF
 

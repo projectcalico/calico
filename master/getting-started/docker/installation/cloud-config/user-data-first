@@ -1,3 +1,6 @@
+---
+layout: null
+---
 #cloud-config
 
 coreos:
@@ -64,5 +67,5 @@ write_files:
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+    wget -O /opt/bin/calicoctl {% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}
     chmod +x /opt/bin/calicoctl

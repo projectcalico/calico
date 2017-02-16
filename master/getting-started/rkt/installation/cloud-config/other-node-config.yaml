@@ -1,3 +1,6 @@
+---
+layout: null
+---
 #cloud-config
 ---
 coreos:
@@ -25,7 +28,7 @@ coreos:
         ExecStartPre=/usr/bin/mkdir -p /etc/rkt/net.d
         ExecStartPre=/usr/bin/mkdir -p /var/run/calico
         ExecStartPre=/usr/bin/mkdir -p /var/log/calico
-        ExecStartPre=/usr/bin/wget -N -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+        ExecStartPre=/usr/bin/wget -N -O /opt/bin/calicoctl {% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}
         ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico
         ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico-ipam
         ExecStartPre=/usr/bin/chmod a+w -R /etc/rkt/net.d
@@ -33,7 +36,7 @@ coreos:
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico-ipam
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
         ExecStartPre=/usr/bin/rkt --insecure-options=image fetch docker://busybox
-        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:latest
+        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:{% assign component = (site.data.versions[page.version].first.components | where:"name","calico/node" | first) %}{{ component.version}}
         ExecStart=/usr/bin/true
         RemainAfterExit=yes
         Type=oneshot

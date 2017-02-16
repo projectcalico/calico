@@ -22,7 +22,7 @@ can check that it's running using `sudo rkt list`.
 ```shell
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  quay.io/calico/node:latest  running 10 seconds ago  10 seconds ago
+b52bba11  node  quay.io/calico/node:{% assign component = (site.data.versions[page.version].first.components | where:"name","calico/node" | first) %}{{ component.version}}  running 10 seconds ago  10 seconds ago
 ```
 
 ## 2. Create the networks
@@ -93,7 +93,7 @@ Use `rkt list` to see the IP.
 $ sudo rkt list
 UUID      APP      IMAGE NAME                                   STATE   CREATED         STARTED         NETWORKS
 6876aae5  busybox  registry-1.docker.io/library/busybox:latest  running 11 seconds ago  11 seconds ago  network1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
-b52bba11  node     quay.io/calico/node:latest                   running 2 minutes ago   2 minutes ago
+b52bba11  node     quay.io/calico/node:{% assign component = (site.data.versions[page.version].first.components | where:"name","calico/node" | first) %}{{ component.version}}                   running 2 minutes ago   2 minutes ago
 ```
 
 We now have a `busybox` container running on the network `network1` with an IP
