@@ -160,13 +160,12 @@ aws ec2 authorize-security-group-ingress --group-id $SECURITY_GROUP_ID \
 
 Create the Kubernetes master and at least one Kubernetes nodes by passing in appropriate `cloud-config` files.
 
-To get the necessary 'cloud-config' files, clone the project:
+Download the necessary 'cloud-config' files
 
-    git clone https://github.com/projectcalico/calico.git
-
-Then, change into the directory for this guide.
-
-    cd calico/{{page.version}}/getting-started/kubernetes/installation
+    mkdir cloud-config; cd cloud-config
+    curl -O {{site.url}}{{page.dir | replace: 'installation', 'cloud-config' }}master-config.yaml
+    curl -O {{site.url}}{{page.dir | replace: 'installation', 'cloud-config' }}node-config.yaml
+    cd ..
 
 Find your CoreOS Container Linux stable HVM image for your region and store it as an environment variable.  You can find the
 full list of available images on [the CoreOS website](https://coreos.com/os/docs/latest/booting-on-ec2.html).

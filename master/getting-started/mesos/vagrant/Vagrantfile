@@ -137,7 +137,7 @@ Vagrant.configure("2") do |config|
         host.vm.provision :shell, inline: "curl -o /usr/bin/mesos-dns -L #{mesos_dns_url}", :privileged => true
         host.vm.provision :shell, inline: "chmod +x /usr/bin/mesos-dns"
         host.vm.provision :shell, inline: $write_mesos_dns_config, args: "#{master_ip}"
-        host.vm.provision "file", source: "units/mesos-dns.service", destination: "/tmp/mesos-dns.service"
+        host.vm.provision "file", source: "mesos-dns.service", destination: "/tmp/mesos-dns.service"
         host.vm.provision :shell, inline: "mv /tmp/mesos-dns.service /usr/lib/systemd/system/mesos-dns.service"
         host.vm.provision :shell, inline: "systemctl start mesos-dns"
       end
@@ -164,7 +164,7 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, inline: "chmod +x /usr/bin/calicoctl"
 
       # Install the Calico service files and start the Calico services.
-      host.vm.provision "file", source: "units/calico.service", destination: "/tmp/calico.service"
+      host.vm.provision "file", source: "calico.service", destination: "/tmp/calico.service"
       host.vm.provision :shell, inline: "mv /tmp/calico.service /usr/lib/systemd/system/calico.service"
       host.vm.provision :shell, inline: "systemctl start calico"
 
@@ -172,7 +172,7 @@ Vagrant.configure("2") do |config|
         # Master specific stuff.
         # Setup marathon-lb
         host.vm.provision :docker, images: ["mesosphere/marathon-lb:v1.4.3"]
-        host.vm.provision "file", source: "units/marathon-lb.service", destination: "/tmp/marathon-lb.service"
+        host.vm.provision "file", source: "marathon-lb.service", destination: "/tmp/marathon-lb.service"
         host.vm.provision :shell, inline: "sh -c 'echo MARATHON_IP=#{master_ip} > /etc/sysconfig/marathon-lb'"
         host.vm.provision :shell, inline: "mv /tmp/marathon-lb.service /usr/lib/systemd/system/marathon-lb.service"
         host.vm.provision :shell, inline: "systemctl start marathon-lb"

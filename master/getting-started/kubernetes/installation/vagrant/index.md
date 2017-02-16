@@ -10,17 +10,15 @@ These instructions allow you to set up a Kubernetes cluster with Calico networki
 
 * [VirtualBox][virtualbox] 5.0.0 or greater.
 * [Vagrant][vagrant] 1.7.4 or greater.
-* [Git][git]
+* [Curl][curl]
 
-### 1.2 Clone the project
+### 1.2 Download the source files
 
-    git clone https://github.com/projectcalico/calico.git
+    curl -O {{site.url}}{{page.dir}}Vagrantfile
+    curl -O {{site.url}}{{page.dir}}master-config.yaml
+    curl -O {{site.url}}{{page.dir}}node-config.yaml
 
 ### 1.3 Startup and SSH
-
-Change into the directory for this guide:
-
-    cd calico/{{page.version}}/getting-started/kubernetes/installation/vagrant
 
 Run
 
@@ -108,4 +106,4 @@ We recommend you try using [Calico for Kubernetes NetworkPolicy]({{site.baseurl}
 [cni-plugin]: https://github.com/projectcalico/cni-plugin
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
-[git]: http://git-scm.com/
+[curl]: https://curl.haxx.se/

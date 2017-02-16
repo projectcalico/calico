@@ -56,15 +56,12 @@ You can verify the rule with this command:
 gcloud compute firewall-rules list
 ```
 
-### 1.3 Clone this project
+### 1.3 Download the required files
 
-Clone the project
-
-    git clone https://github.com/projectcalico/calico.git
-
-And change into the directory for this guide.
-
-    cd calico/{{page.version}}/getting-started/kubernetes/installation
+    mkdir cloud-config; cd cloud-config
+    curl -O {{site.url}}{{page.dir | replace: 'installation', 'cloud-config' }}master-config.yaml
+    curl -O {{site.url}}{{page.dir | replace: 'installation', 'cloud-config' }}node-config.yaml
+    cd ..
 
 ## 2. Deploy the VMs
 

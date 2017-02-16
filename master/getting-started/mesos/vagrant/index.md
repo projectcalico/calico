@@ -9,18 +9,19 @@ This guide requires a host machine with:
 
  * [VirtualBox][virtualbox] to host the virtual machines.
  * [Vagrant][vagrant] to install and configure the machines in Virtual Box.
- * [Git][git]
+ * [Curl][curl]
 
-## 2. Download Demo Files
+### 1.2 Download the source files
 
-```shell
-git clone https://github.com/projectcalico/calico.git
-```
+    mkdir demo; cd demo
+    curl -O {{site.url}}{{page.dir}}Vagrantfile
+    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}calico.service
+    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}marathon-lb.service
+    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}mesos-dns.service
 
 ## 3. Startup
 
 ```shell
-cd calico/{{page.version}}/getting-started/mesos/vagrant/
 vagrant up
 ```
 
@@ -58,4 +59,4 @@ to learn how to launch your own Calico-networked tasks.
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/
-[git]: https://www.git-scm.com/
+[curl]: https://curl.haxx.se/

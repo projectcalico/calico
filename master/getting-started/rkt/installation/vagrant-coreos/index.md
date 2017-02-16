@@ -17,19 +17,16 @@ You will need to install the following software:
 
 * [VirtualBox][virtualbox] 5.0.0 or greater.
 * [Vagrant][vagrant] 1.8.5 or greater.
-* [Git][git]
+* [Curl][curl]
 
-### 2. Clone this project
+### 2 Download the source files
 
-Clone the calico project into a suitable location on your local host.
-
-    git clone https://github.com/projectcalico/calico.git
+    mkdir demo; cd demo
+    curl -O {{site.url}}{{page.dir}}Vagrantfile
+    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}first-node-config.yaml
+    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}other-node-config.yaml
 
 ### 3. Startup and SSH
-
-Change into the directory for this guide:
-
-    cd calico/{{page.version}}/getting-started/rkt/installation/vagrant-coreos
 
 To start the cluster, run:
 
@@ -112,4 +109,4 @@ to run through examples of managing Calico policy with your rkt containers.
 
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
-[git]: http://git-scm.com/
+[curl]: https://curl.haxx.se/
