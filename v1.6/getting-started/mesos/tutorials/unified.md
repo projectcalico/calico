@@ -123,8 +123,8 @@ spec:
   egress:
   - action: allow
     protocol: tcp
-    selector: app == 'database'
     destination:
+      selector: app == 'database'
       ports:
       - 6379
 ```
