@@ -430,6 +430,26 @@ func (t *Table) loadDataplaneState() {
 		dpHashes := dataplaneHashes[chainName]
 		if !t.ourChainsRegexp.MatchString(chainName) {
 			// Not one of our chains so it may be one that we're inserting rules into.
+			insertedRules := t.chainToInsertedRules[chainName]
+			if len(insertedRules) == 0 {
+				// This chain shouldn't have any inserts, make sure that's the
+				// case.  This case also covers the case where a chain was removed,
+				// making dpHashes nil.
+				dataplaneHasInserts := false
+				for _, hash := range dpHashes {
+					if hash != "" {
+						dataplaneHasInserts = true
+						break
+					}
+				}
+				if dataplaneHasInserts {
+					logCxt.WithField("actualRuleIDs", dpHashes).Warn(
+						"Chain had unexpected inserts, marking for resync")
+					t.dirtyInserts.Add(chainName)
+				}
+				continue
+			}
+
 			// Re-calculate the expected rule insertions based on the current length
 			// of the chain (since other processes may have inserted/removed rules
 			// from the chain, throwing off the numbers).
@@ -451,7 +471,6 @@ func (t *Table) loadDataplaneState() {
 				t.dirtyChains.Add(chainName)
 			}
 		}
-
 	}
 
 	// Now scan for chains that shouldn't be there and mark for deletion.
