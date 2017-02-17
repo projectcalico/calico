@@ -48,12 +48,15 @@ var (
 		Name: "felix_int_dataplane_apply_time_seconds",
 		Help: "Time in seconds that it took to apply a dataplane update.",
 	})
+
+	processStartTime time.Time
 )
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
 	prometheus.MustRegister(histApplyTime)
 	prometheus.MustRegister(countMessages)
+	processStartTime = time.Now()
 }
 
 type Config struct {
@@ -421,6 +424,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	}
 
 	datastoreInSync := false
+	doneFirstApply := false
 	for {
 		select {
 		case msg := <-d.toDataplane:
@@ -431,7 +435,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			}
 			switch msg.(type) {
 			case *proto.InSync:
-				log.Info("Datastore in sync, flushing the dataplane for the first time...")
+				log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
+					"Datastore in sync, flushing the dataplane for the first time...")
 				datastoreInSync = true
 			}
 			d.dataplaneNeedsSync = true
@@ -463,15 +468,23 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}
 
 		if datastoreInSync && d.dataplaneNeedsSync {
+			log.Info("Applying updates to dataplane.")
 			applyStart := time.Now()
 			d.apply()
-			applyEnd := time.Now()
-			if applyEnd.After(applyStart) {
+			applyTime := time.Since(applyStart)
+			if applyTime > 0 {
 				// Avoid a negative interval in case the clock jumps.
-				histApplyTime.Observe(applyEnd.Sub(applyStart).Seconds())
+				histApplyTime.Observe(applyTime.Seconds())
 			}
 			if d.dataplaneNeedsSync {
 				countDataplaneSyncErrors.Inc()
+			}
+			log.WithField("msecToApply", applyTime.Seconds()*1000.0).Info(
+				"Finished applying updates to dataplane.")
+			if !doneFirstApply {
+				log.WithField("secsSinceStart", time.Since(processStartTime).Seconds()).Info(
+					"Completed first update to dataplane.")
+				doneFirstApply = true
 			}
 		}
 	}
