@@ -15,9 +15,9 @@ This guide requires a host machine with:
 
     mkdir demo; cd demo
     curl -O {{site.url}}{{page.dir}}Vagrantfile
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}calico.service
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}marathon-lb.service
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant', 'units' }}mesos-dns.service
+    curl -O {{site.url}}{{page.dir}}calico.service
+    curl -O {{site.url}}{{page.dir}}marathon-lb.service
+    curl -O {{site.url}}{{page.dir}}mesos-dns.service
 
 ## 3. Startup
 

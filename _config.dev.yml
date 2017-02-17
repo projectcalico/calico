@@ -1,1 +1,3 @@
+# We don't need this .dev file when we move to Jekyll 3.3 which has this fix - https://github.com/jekyll/jekyll/pull/5431
+# But there isn't a 3.3 docker image - https://github.com/jekyll/docker/issues/143
 url: http://localhost:4000

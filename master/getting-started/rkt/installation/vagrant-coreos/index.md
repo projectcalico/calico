@@ -23,8 +23,8 @@ You will need to install the following software:
 
     mkdir demo; cd demo
     curl -O {{site.url}}{{page.dir}}Vagrantfile
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}first-node-config.yaml
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}other-node-config.yaml
+    curl -O {{site.url}}{{page.dir}}first-node-config.yaml
+    curl -O {{site.url}}{{page.dir}}other-node-config.yaml
 
 ### 3. Startup and SSH
 

@@ -17,8 +17,8 @@ Calico networking using Vagrant.
 
     mkdir demo; cd demo
     curl -O {{site.url}}{{page.dir}}Vagrantfile
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}user-data-first
-    curl -O {{site.url}}{{page.dir | replace: 'vagrant-coreos', 'cloud-config' }}user-data-others
+    curl -O {{site.url}}{{page.dir }}user-data-first
+    curl -O {{site.url}}{{page.dir }}user-data-others
 
 ### 1.4 Startup and SSH
 
