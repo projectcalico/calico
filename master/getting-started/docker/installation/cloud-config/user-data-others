@@ -62,5 +62,5 @@ write_files:
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl {% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}
+    wget -O /opt/bin/calicoctl {% include version.url component="calicoctl" %}
     chmod +x /opt/bin/calicoctl

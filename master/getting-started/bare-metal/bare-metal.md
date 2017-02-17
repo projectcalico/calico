@@ -61,7 +61,7 @@ these steps, described in more detail below:
 
 Download the calicoctl binary onto your host.
 
-	wget {% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.url}}
+	wget {% include version.url component="calicoctl" %}
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any

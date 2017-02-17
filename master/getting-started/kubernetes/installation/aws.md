@@ -291,7 +291,7 @@ To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
 ssh -i ~/mykey.pem core@$MASTER_DNS
 
 # Enable outgoing NAT and ipip on the Calico pool.
-docker run -i --rm --net=host quay.io/calico/ctl:{% assign component = (site.data.versions[page.version].first.components | where:"name","calicoctl" | first) %}{{ component.version}} apply -f -<<EOF
+docker run -i --rm --net=host quay.io/calico/ctl:{% include version component="calicoctl" %} apply -f -<<EOF
 apiVersion: v1
 kind: ipPool
 metadata:
