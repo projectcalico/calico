@@ -15,7 +15,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -269,24 +268,46 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, dpConnector.ToDataplane)
 
 	if configParams.UsageReportingEnabled {
-		// Usage reporting enabled, add stats collector to graph and
-		// start the usage reporting thread.
-		statsChan := make(chan calc.StatsUpdate, 1)
+		// Usage reporting enabled, add stats collector to graph.  When it detects an update
+		// to the stats, it makes a callback, which we use to send an update on a channel.
+		// We use a buffered channel here to avoid blocking the calculation graph.
+		statsChanIn := make(chan calc.StatsUpdate, 1)
 		statsCollector := calc.NewStatsCollector(func(stats calc.StatsUpdate) error {
-			select {
-			case statsChan <- stats:
-				return nil
-			default:
-				return errors.New("Stats channel blocked")
-			}
+			statsChanIn <- stats
+			return nil
 		})
 		statsCollector.RegisterWith(asyncCalcGraph.Dispatcher)
+
+		// Rather than sending the updates directly to the usage reporting thread, we
+		// decouple with an extra goroutine.  This prevents blocking the calculation graph
+		// goroutine if the usage reporting goroutine is blocked on IO, for example.
+		// Using a buffered channel wouldn't work here because the usage reporting
+		// goroutine can block for a long time on IO so we could build up a long queue.
+		statsChanOut := make(chan calc.StatsUpdate)
+		go func() {
+			var statsChanOutOrNil chan calc.StatsUpdate
+			var stats calc.StatsUpdate
+			for {
+				select {
+				case stats = <-statsChanIn:
+					// Got a stats update, activate the output channel.
+					log.WithField("stats", stats).Debug("Buffer: stats update received")
+					statsChanOutOrNil = statsChanOut
+				case statsChanOutOrNil <- stats:
+					// Passed on the update, deactivate the output channel until
+					// the next update.
+					log.WithField("stats", stats).Debug("Buffer: stats update sent")
+					statsChanOutOrNil = nil
+				}
+			}
+		}()
+
 		go usagerep.PeriodicallyReportUsage(
 			24*time.Hour,
 			configParams.FelixHostname,
 			configParams.ClusterGUID,
 			configParams.ClusterType,
-			statsChan,
+			statsChanOut,
 		)
 	}
 
