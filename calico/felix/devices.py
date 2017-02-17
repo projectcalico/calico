@@ -148,7 +148,8 @@ def list_ips_by_iface(ip_type):
     ips_by_iface = defaultdict(set)
     iface_name = None
     for line in data.splitlines():
-        m = re.match(r"^\d+: ([^:]+):", line)
+        # Skip the subinterface part of the interface name (e.g. vlan1@eth1 -> vlan1).
+        m = re.match(r"^\d+: ([^:@]+)[:@]", line)
         if m:
             iface_name = m.group(1)
         else:
