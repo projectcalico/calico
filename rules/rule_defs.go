@@ -130,6 +130,7 @@ type RuleRenderer interface {
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
+		adminUp bool,
 		policies []string,
 		profileIDs []string,
 	) []*iptables.Chain

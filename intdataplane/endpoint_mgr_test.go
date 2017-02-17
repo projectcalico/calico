@@ -949,7 +949,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
-									State:      "up",
+									State:      "active",
 									Mac:        "01:02:03:04:05:06",
 									Name:       "cali12345-ab",
 									ProfileIds: []string{},
@@ -1074,6 +1074,54 @@ func endpointManagerTests(ipVersion uint8) func() {
 							}
 						})
 					})
+				})
+			})
+
+			Context("with an inactiveworkload endpoint", func() {
+				wlEPID1 := proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     "pod-11",
+					EndpointId:     "endpoint-id-11",
+				}
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID1,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:      "inactive",
+							Mac:        "01:02:03:04:05:06",
+							Name:       "cali12345-ab",
+							ProfileIds: []string{},
+							Tiers:      []*proto.TierInfo{},
+							Ipv4Nets:   []string{"10.0.240.2/24"},
+							Ipv6Nets:   []string{"2001:db8:2::2/128"},
+						},
+					})
+					epMgr.CompleteDeferredWork()
+				})
+
+				It("should have expected chains", func() {
+					Expect(filterTable.currentChains["cali-tw-cali12345-ab"]).To(Equal(
+						&iptables.Chain{
+							Name: "cali-tw-cali12345-ab",
+							Rules: []iptables.Rule{{
+								Action:  iptables.DropAction{},
+								Comment: "Endpoint admin disabled",
+							}},
+						},
+					))
+					Expect(filterTable.currentChains["cali-fw-cali12345-ab"]).To(Equal(
+						&iptables.Chain{
+							Name: "cali-fw-cali12345-ab",
+							Rules: []iptables.Rule{{
+								Action:  iptables.DropAction{},
+								Comment: "Endpoint admin disabled",
+							}},
+						},
+					))
+				})
+
+				It("should remove routes", func() {
+					routeTable.checkRoutes("cali12345-ab", nil)
 				})
 			})
 		})

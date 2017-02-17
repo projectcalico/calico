@@ -40,7 +40,7 @@ var _ = Describe("Endpoints", func() {
 	})
 
 	It("should render a minimal workload endpoint", func() {
-		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", nil, nil)).To(Equal([]*Chain{
+		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", true, nil, nil)).To(Equal([]*Chain{
 			{
 				Name: "cali-tw-cali1234",
 				Rules: []Rule{
@@ -60,9 +60,29 @@ var _ = Describe("Endpoints", func() {
 		}))
 	})
 
+	It("should render a disabled workload endpoint", func() {
+		Expect(renderer.WorkloadEndpointToIptablesChains("cali1234", false, nil, nil)).To(Equal([]*Chain{
+			{
+				Name: "cali-tw-cali1234",
+				Rules: []Rule{
+					{Action: DropAction{},
+						Comment: "Endpoint admin disabled"},
+				},
+			},
+			{
+				Name: "cali-fw-cali1234",
+				Rules: []Rule{
+					{Action: DropAction{},
+						Comment: "Endpoint admin disabled"},
+				},
+			},
+		}))
+	})
+
 	It("should render a fully-loaded workload endpoint", func() {
 		Expect(renderer.WorkloadEndpointToIptablesChains(
 			"cali1234",
+			true,
 			[]string{"a", "b"},
 			[]string{"prof1", "prof2"},
 		)).To(Equal([]*Chain{
