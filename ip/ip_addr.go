@@ -51,7 +51,7 @@ func (a V4Addr) AsNetIP() net.IP {
 }
 
 func (a V4Addr) AsCalicoNetIP() calinet.IP {
-	return calinet.IP{a.AsNetIP()}
+	return calinet.IP{IP: a.AsNetIP()}
 }
 
 func (a V4Addr) String() string {
@@ -69,7 +69,7 @@ func (a V6Addr) AsNetIP() net.IP {
 }
 
 func (a V6Addr) AsCalicoNetIP() calinet.IP {
-	return calinet.IP{a.AsNetIP()}
+	return calinet.IP{IP: a.AsNetIP()}
 }
 
 func (a V6Addr) String() string {

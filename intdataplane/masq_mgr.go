@@ -38,7 +38,7 @@ import (
 // pool is excluded.
 type masqManager struct {
 	ipVersion    uint8
-	ipsetReg     ipsetsRegistry
+	ipsetReg     ipsetsDataplane
 	natTable     iptablesTable
 	activePools  map[string]*proto.IPAMPool
 	masqPools    set.Set
@@ -49,7 +49,7 @@ type masqManager struct {
 }
 
 func newMasqManager(
-	ipSetReg ipsetsRegistry,
+	ipSetReg ipsetsDataplane,
 	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,

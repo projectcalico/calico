@@ -111,7 +111,7 @@ type InternalDataplane struct {
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
-	ipSetRegistries      []*ipsets.Registry
+	ipSetRegistries      []*ipsets.IPSets
 
 	ipipManager *ipipManager
 
@@ -190,7 +190,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			RefreshInterval:       config.IptablesRefreshInterval,
 		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
-	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
+	ipSetRegV4 := ipsets.NewIPSets(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
 	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
@@ -252,7 +252,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
-		ipSetRegV6 := ipsets.NewRegistry(ipSetsConfigV6)
+		ipSetRegV6 := ipsets.NewIPSets(ipSetsConfigV6)
 		dp.ipSetRegistries = append(dp.ipSetRegistries, ipSetRegV6)
 		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
 		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
@@ -612,13 +612,6 @@ func (d *InternalDataplane) apply() {
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
-
-	if d.cleanupPending {
-		for _, w := range d.ipSetRegistries {
-			w.AttemptCleanup()
-		}
-		d.cleanupPending = false
-	}
 
 	// Set up any needed rescheduling kick.
 	if d.reschedC != nil {

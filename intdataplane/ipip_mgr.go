@@ -32,7 +32,7 @@ import (
 //
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
-	ipsetReg ipsetsRegistry
+	ipsetReg ipsetsDataplane
 
 	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -47,14 +47,14 @@ type ipipManager struct {
 }
 
 func newIPIPManager(
-	ipSetReg *ipsets.Registry,
+	ipSetReg ipsetsDataplane,
 	maxIPSetSize int,
 ) *ipipManager {
 	return newIPIPManagerWithShim(ipSetReg, maxIPSetSize, realIPIPNetlink{})
 }
 
 func newIPIPManagerWithShim(
-	ipSetReg ipsetsRegistry,
+	ipSetReg ipsetsDataplane,
 	maxIPSetSize int,
 	dataplane ipipDataplane,
 ) *ipipManager {
@@ -222,8 +222,8 @@ func (m *ipipManager) CompleteDeferredWork() error {
 	return nil
 }
 
-// ipsetsRegistry is a shim interface for mocking the IPSet Registry.
-type ipsetsRegistry interface {
+// ipsetsDataplane is a shim interface for mocking the IPSets object.
+type ipsetsDataplane interface {
 	AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string)
 	AddMembers(setID string, newMembers []string)
 	RemoveMembers(setID string, removedMembers []string)
