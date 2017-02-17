@@ -1,3 +1,6 @@
+---
+layout: null
+---
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
 apiVersion: v1
@@ -101,7 +104,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:latest
+          image: quay.io/calico/node:{% include version component="calico/node" %}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -162,7 +165,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:latest
+          image: quay.io/calico/cni:{% include version component="calico/cni" %}
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
@@ -237,7 +240,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-policy-controller
-          image: quay.io/calico/kube-policy-controller:latest
+          image: quay.io/calico/kube-policy-controller:{% include version component="calico/kube-policy-controller" %}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -308,7 +311,7 @@ spec:
       containers:
         # Writes basic configuration to datastore.
         - name: configure-calico
-          image: quay.io/calico/ctl:latest
+          image: quay.io/calico/ctl:{% include version component="calicoctl" %}
           args:
           - apply
           - -f

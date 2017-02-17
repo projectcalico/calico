@@ -11,17 +11,19 @@ Calico networking using Vagrant.
 
 * [VirtualBox][virtualbox] 5.1.8 or greater.
 * [Vagrant][vagrant] 1.8.5 or greater.
-* [Git][git]
+* [Curl][curl]
 
-### 1.2 Clone this project
+### 1.2 Download the source files
 
-    git clone https://github.com/projectcalico/calico.git
+    mkdir demo; cd demo
+    curl -O {{site.url}}{{page.dir}}Vagrantfile
+    curl -O {{site.url}}{{page.dir }}user-data-first
+    curl -O {{site.url}}{{page.dir }}user-data-others
 
 ### 1.4 Startup and SSH
 
 Run the following:
 
-    cd calico/{{page.version}}/getting-started/docker/installation/vagrant-coreos
     vagrant up
 
 To connect to your servers
@@ -85,4 +87,4 @@ Now that you have a basic two node CoreOS Container Linux cluster setup, see the
 [virtualbox]: https://www.virtualbox.org/
 [vagrant]: https://www.vagrantup.com/downloads.html
 [using-coreos]: http://coreos.com/using-coreos/
-[git]: http://git-scm.com/
+[curl]: https://curl.haxx.se/

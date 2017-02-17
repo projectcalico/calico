@@ -1,5 +1,16 @@
 # Release Process
 
+We have a goal of simultaneously serving multiple versions of the docs. This
+means that there are multiple versions of the docs existing next to each other 
+in the docs repo. This differs from what is normal, where only a single version
+exists in the repo at a time and a git tag is created to reference old versions.
+
+The versions that exist together are major or minor versions (e.g. v1.1, v1.2 
+and v2.0). There only exists a single patch version (or pre-release
+alphas, betas and release candidates) for each major/minor version. When
+we do a new patch release, the updates are made in-place.
+
+
 ## Preparing for a release
 
 1. Ensure master docs are passing semaphore tests.
@@ -8,18 +19,18 @@
 
 ## Creating the release
 
-1. Run `python release-scripts/do_release.py`, which will walk through creation of the necessary
-release directories, and will replace references to nightly artifacts with release ones.
+### When doing a major/minor release ONLY
 
+These steps are for creating a new major/minor release, with the expectation that a release candidate will be created, published and tested before the final release is announced.
+
+1. Run release-scripts/do_release.py to copy master directory to the new version directory
 2. Fix calico-cni binary links which are not updated by the release script (see [#147](https://github.com/projectcalico/calico/issues/147)).
 To locate all offending CNI links, run the following:
    ```
    grep -r calico-cni\/releases vX.Y
    ```
 
-3. Modify the new `vX.Y/releases/index.md` with the relevant versioning information
-for this release. Ensure you change the header from `master` on that page as well.
-
+3. Add the new version to `_data/versions.yaml`
 4. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
 
    ```
@@ -30,14 +41,17 @@ for this release. Ensure you change the header from `master` on that page as wel
        version: vX.Y
    ```
 
-5. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html`. (This step should be replaced by automation ASAP.)
+5. Test the changes locally then open a pull request, make sure it passes CI, then merge.
 
-6. Modify the redirect in `/index.html` to point to your new release.
+### Promoting a release candidate to a final release
+1. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file. This step should NOT be performed until testing of the release is complete.
 
-7. Commit the changes made in steps 2-6.
+2. Modify the redirect in `/index.html` to point to your new release.. 
+ 
+3. Test the changes locally then open a pull request, make sure it passes CI, then merge.
 
-8. QA the release. An easy way to do this is render the site locally.
-You may also want to push this as a branch on a fork and publish your own github-pages
-site for others to view under a different URL.
+### Performing a "patch" release
+Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).
 
-9. Open a pull request, make sure it passes CI, then merge.
+1. Add the new version to `_data/versions.yaml`
+2. Test the changes locally then open a pull request, make sure it passes CI, then merge.

@@ -1,7 +1,7 @@
 # jekyll 3.4 has some permissions issue on semaphore, so stick with 3.2 for now.
 
 serve:
-	docker run --rm -p 4000:4000 -v $$PWD:/srv/jekyll jekyll/jekyll:3.2 jekyll serve --incremental
+	docker run --rm -p 4000:4000 -v $$PWD:/srv/jekyll jekyll/jekyll:3.2 jekyll serve --incremental -c _config.yml,_config.dev.yml
 
 .PHONY: build
 _site build:

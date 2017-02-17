@@ -1,12 +1,20 @@
+---
+layout: null
+---
 #cloud-config
 
 coreos:
   update:
     reboot-strategy: 'off'
+  etcd2:
+    advertise-client-urls: http://$private_ipv4:2379
+    listen-client-urls: http://0.0.0.0:2379
   fleet:
     public-ip: $public_ipv4
-    etcd_servers: http://172.17.8.101:2379
+    etcd_servers: http://$private_ipv4:2379
   units:
+  - name: etcd2.service
+    command: start
   - name: fleet.service
     command: start
   - name: download-reqs.service
@@ -35,7 +43,7 @@ coreos:
       MountFlags=slave
       LimitNOFILE=1048576
       LimitNPROC=1048576
-      ExecStart=/usr/bin/docker daemon --cluster-store=etcd://172.17.8.101:2379 --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
+      ExecStart=/usr/bin/docker daemon --cluster-store=etcd://$private_ipv4:2379 --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
       RestartSec=10
       Restart=always
 
@@ -52,12 +60,12 @@ write_files:
     mkdir -p /opt/bin
     rm /home/core/.bashrc
     echo 'PATH=$PATH:/opt/bin' > /home/core/.bashrc
-    echo 'export ETCD_ENDPOINTS="http://172.17.8.101:2379"' >> /home/core/.bashrc
+    echo 'export ETCD_ENDPOINTS="http://$private_ipv4:2379"' >> /home/core/.bashrc
     echo 'Defaults env_keep +="ETCD_ENDPOINTS"' >>/etc/sudoers.d/etcd
 - path: /home/core/get_calicoctl.sh
   permissions: 777
   owner: root
   content: |
     #!/usr/bin/bash -e
-    wget -O /opt/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+    wget -O /opt/bin/calicoctl {% include version.url component="calicoctl" %}
     chmod +x /opt/bin/calicoctl

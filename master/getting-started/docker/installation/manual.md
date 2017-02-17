@@ -9,7 +9,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 1. Download the calicoctl binary:
 
    ```
-   sudo wget -O /usr/local/bin/calicoctl http://www.projectcalico.org/builds/calicoctl
+   sudo wget -O /usr/local/bin/calicoctl {% include version.url component="calicoctl" %}
    sudo chmod +x calicoctl
    ```
 
@@ -25,7 +25,7 @@ Check that `calico/node` is now running:
 ```
 vagrant@calico-01:~$ docker ps
 CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
-408bd2b9ba53        quay.io/calico/node:latest   "start_runit"       About an hour ago   Up About an hour                        calico-node
+408bd2b9ba53        quay.io/calico/node:{% include version component="calico/node" %}   "start_runit"       About an hour ago   Up About an hour                        calico-node
 ```
 
 Furthermore, check that the `calico/node` container is functioning properly
