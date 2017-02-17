@@ -921,3 +921,55 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		})
 	})
 }
+
+var _ = Describe("Table with inserts and a non-Calico chain", func() {
+	var dataplane *mockDataplane
+	var table *Table
+	BeforeEach(func() {
+		dataplane = newMockDataplane("filter", map[string][]string{
+			"FORWARD":    {},
+			"non-calico": {"-m comment \"foo\""},
+		})
+		table = NewTable(
+			"filter",
+			6,
+			rules.RuleHashPrefix,
+			TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				NewCmdOverride:        dataplane.newCmd,
+				SleepOverride:         dataplane.sleep,
+				NowOverride:           dataplane.now,
+			},
+		)
+		table.SetRuleInsertions("FORWARD", []Rule{
+			{Action: DropAction{}},
+		})
+		table.Apply()
+	})
+
+	It("should do the insertion", func() {
+		Expect(dataplane.Chains).To(Equal(map[string][]string{
+			"FORWARD":    {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
+			"non-calico": {"-m comment \"foo\""},
+		}))
+	})
+
+	Describe("after removing the other chain", func() {
+		BeforeEach(func() {
+			dataplane.Chains = map[string][]string{
+				"FORWARD": {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
+			}
+			dataplane.ResetCmds()
+			table.Apply()
+		})
+
+		It("should ignore the deletion", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
+			}))
+		})
+		It("should make no changes to the dataplane", func() {
+			Expect(dataplane.CmdNames).To(BeEmpty())
+		})
+	})
+})
