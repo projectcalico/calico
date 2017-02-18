@@ -19,6 +19,7 @@ import functools
 import json
 import logging
 import re
+import six
 from socket import timeout as SocketTimeout
 import time
 from types import StringTypes
@@ -126,7 +127,7 @@ class EtcdClientOwner(object):
         :param etcd_ca: Required if using HTTPS, path to the CA cert.
         """
         super(EtcdClientOwner, self).__init__()
-        if isinstance(etcd_addrs, basestring):
+        if isinstance(etcd_addrs, six.string_types):
             # For back-compatibility, allow a single authority string to be
             # supplied instead of a list.
             _log.debug("Single etcd address: %s, wrapping in list.",
