@@ -24,6 +24,7 @@ import (
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
+	adminUp bool,
 	policies []string,
 	profileIDs []string,
 ) []*Chain {
@@ -40,6 +41,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 		"", // No fail-safe chains for workloads.
 		"", // No fail-safe chains for workloads.
 		chainTypeTracked,
+		adminUp,
 	)
 }
 
@@ -62,6 +64,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		ChainFailsafeOut,
 		ChainFailsafeIn,
 		chainTypeTracked,
+		true, // Host endpoints are always admin up.
 	)
 }
 
@@ -83,6 +86,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 		ChainFailsafeOut,
 		ChainFailsafeIn,
 		chainTypeUntracked, // Render "untracked" version of chain for the raw table.
+		true,               // Host endpoints are always admin up.
 	)
 }
 
@@ -106,9 +110,27 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 	toFailsafeChain string,
 	fromFailsafeChain string,
 	chainType endpointChainType,
+	adminUp bool,
 ) []*Chain {
 	toRules := []Rule{}
 	fromRules := []Rule{}
+	toChainName := EndpointChainName(toEndpointPrefix, name)
+	fromChainName := EndpointChainName(fromEndpointPrefix, name)
+
+	if !adminUp {
+		// Endpoint is admin-down, drop all traffic to/from it.
+		toRules = append(toRules, r.DropRules(Match(), "Endpoint admin disabled")...)
+		fromRules = append(fromRules, r.DropRules(Match(), "Endpoint admin disabled")...)
+		toEndpointChain := Chain{
+			Name:  toChainName,
+			Rules: toRules,
+		}
+		fromEndpointChain := Chain{
+			Name:  fromChainName,
+			Rules: fromRules,
+		}
+		return []*Chain{&toEndpointChain, &fromEndpointChain}
+	}
 
 	// First set up failsafes.
 	if toFailsafeChain != "" {
@@ -256,11 +278,11 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 	}
 
 	toEndpointChain := Chain{
-		Name:  EndpointChainName(toEndpointPrefix, name),
+		Name:  toChainName,
 		Rules: toRules,
 	}
 	fromEndpointChain := Chain{
-		Name:  EndpointChainName(fromEndpointPrefix, name),
+		Name:  fromChainName,
 		Rules: fromRules,
 	}
 	return []*Chain{&toEndpointChain, &fromEndpointChain}

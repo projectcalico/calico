@@ -379,8 +379,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			if len(workload.Tiers) > 0 {
 				policyNames = workload.Tiers[0].Policies
 			}
+			adminUp := workload.State == "active"
 			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
 				workload.Name,
+				adminUp,
 				policyNames,
 				workload.ProfileIds,
 			)
@@ -421,12 +423,17 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 						"Failed to parse endpoint's MAC address")
 				}
 			}
-			routeTargets := make([]routetable.Target, len(ipStrings))
-			for i, s := range ipStrings {
-				routeTargets[i] = routetable.Target{
-					CIDR:    ip.MustParseCIDR(s),
-					DestMAC: mac,
+			var routeTargets []routetable.Target
+			if adminUp {
+				logCxt.Debug("Endpoint up, adding routes")
+				for _, s := range ipStrings {
+					routeTargets = append(routeTargets, routetable.Target{
+						CIDR:    ip.MustParseCIDR(s),
+						DestMAC: mac,
+					})
 				}
+			} else {
+				logCxt.Debug("Endpoint down, removing routes")
 			}
 			m.routeTable.SetRoutes(workload.Name, routeTargets)
 			m.wlIfaceNamesToReconfigure.Add(workload.Name)
