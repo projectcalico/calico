@@ -57,6 +57,9 @@ var (
 	histUpdateTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_calc_graph_update_time_seconds",
 		Help: "Seconds to update calculation graph for each datastore OnUpdate call.",
+		Buckets: []float64{
+			0.001, 0.010, 0.100, 1.0,
+		},
 	})
 )
 
