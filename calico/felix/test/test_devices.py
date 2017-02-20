@@ -344,6 +344,9 @@ class TestDevices(unittest.TestCase):
             "    inet 10.0.3.1/24 brd 10.0.3.255 scope global lxcbr0\n"
             "       valid_lft forever preferred_lft forever\n"
             "    inet 10.0.3.2/24 brd 10.0.3.255 scope global lxcbr0\n"
+            "       valid_lft forever preferred_lft forever\n"
+            "7: vlan1@eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000\n"
+            "    inet 192.168.99.3/24 brd 192.168.99.255 scope global eth1\n"
             "       valid_lft forever preferred_lft forever\n",
             ""
         )
@@ -359,9 +362,10 @@ class TestDevices(unittest.TestCase):
                 "eth1": {IPAddress("172.16.171.5")},
                 "docker0": {IPAddress("172.17.0.1")},
                 "lxcbr0": {IPAddress("10.0.3.1"), IPAddress("10.0.3.2")},
+                "vlan1": {IPAddress("192.168.99.3")},
             }
         )
-        
+
     def test_list_ips_by_iface_v6_mainline(self):
         retval = futils.CommandOutput(
             "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 \n"
