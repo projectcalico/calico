@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        1.4.1
+Version:        1.4.2
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Feb 20 2017 Neil Jerram <neil@tigera.io> 1:1.4.2-1
+  - networking-calico version 1.4.2 release
+    - Retry fill_dhcp_udp_checksums() on failure
+    - For the DevStack plugin, get latest Felix code from Calico 'master' PPA
+    - Stop testing with Python 3.4 as well as Python 3.5
+    - Replace basestring with six.string_types
+
 * Wed Feb 08 2017 Neil Jerram <neil@tigera.io> 1:1.4.1-1
   - networking-calico version 1.4.1 release
     - Revert setup.py >=1.8 constraint for pbr

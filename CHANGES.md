@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.2
+
+- Retry fill_dhcp_udp_checksums() on failure
+- For the DevStack plugin, get latest Felix code from Calico 'master' PPA
+- Stop testing with Python 3.4 as well as Python 3.5
+- Replace basestring with six.string_types
+
 ## 1.4.1
 
 - Revert setup.py >=1.8 constraint for pbr

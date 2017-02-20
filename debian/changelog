@@ -1,3 +1,23 @@
+networking-calico (1:1.4.2~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 21f416f).
+    - Retry fill_dhcp_udp_checksums() on failure
+    - For the DevStack plugin, get latest Felix code from Calico 'master' PPA
+    - Stop testing with Python 3.4 as well as Python 3.5
+    - Replace basestring with six.string_types
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 20 Feb 2017 10:17:10 +0000
+
+networking-calico (1:1.4.2~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 21f416f).
+    - Retry fill_dhcp_udp_checksums() on failure
+    - For the DevStack plugin, get latest Felix code from Calico 'master' PPA
+    - Stop testing with Python 3.4 as well as Python 3.5
+    - Replace basestring with six.string_types
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 20 Feb 2017 10:17:10 +0000
+
 networking-calico (1:1.4.1-xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit 8753838).
