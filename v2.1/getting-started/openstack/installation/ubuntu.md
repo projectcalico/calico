@@ -39,10 +39,12 @@ found at <http://docs.openstack.org>.
 
 ### Configuring APT software sources
 
+{% include ppa_repo_name %}
+
 Configure APT to use the Calico PPA:
 
 ```shell
-    $ sudo add-apt-repository ppa:project-calico/calico-{{ page.version }}
+    $ sudo add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
 ```
 
 With Kilo, Calico also needs patched versions of Nova and Neutron that are

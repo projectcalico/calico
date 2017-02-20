@@ -86,11 +86,13 @@ To create a production cluster, you should follow the guidance in the
 
 ## Installing Felix
 
+{% include ppa_repo_name %}
+
 There are several ways to install Felix.
 
 -   if you are running Ubuntu 14.04 or 16.04, you can install from our PPA:
 
-        sudo add-apt-repository ppa:project-calico/calico-{{ page.version }}
+        sudo add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix
@@ -101,11 +103,11 @@ There are several ways to install Felix.
         cat > /etc/yum.repos.d/calico.repo <<EOF
         [calico]
         name=Calico Repository
-        baseurl=http://binaries.projectcalico.org/rpm/calico-{{ page.version }}/
+        baseurl=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
         enabled=1
         skip_if_unavailable=0
         gpgcheck=1
-        gpgkey=http://binaries.projectcalico.org/rpm/calico-{{ page.version }}/key
+        gpgkey=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
         priority=97
         EOF
 

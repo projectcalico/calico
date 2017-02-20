@@ -1,0 +1,5 @@
+{% if page.version == 'master' %}
+{% assign ppa_repo_name = "master" %}
+{% else %}
+{% assign ppa_repo_name = page.version | replace_first: "v" | prepend: "calico-" %}
+{% endif %}

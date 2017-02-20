@@ -48,6 +48,8 @@ networking. Instructions for installing OpenStack on RHEL can be found
 
 ### Configure YUM repositories
 
+{% include ppa_repo_name %}
+
 Add the EPEL repository -- see <https://fedoraproject.org/wiki/EPEL>.
 You may have already added this to install OpenStack.
 
@@ -57,11 +59,11 @@ Configure the Calico repository:
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
-    baseurl=http://binaries.projectcalico.org/rpm/calico-{{ page.version }}/
+    baseurl=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/
     enabled=1
     skip_if_unavailable=0
     gpgcheck=1
-    gpgkey=http://binaries.projectcalico.org/rpm/calico-{{ page.version }}/key
+    gpgkey=http://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
     priority=97
     EOF
 ```
