@@ -41,6 +41,7 @@ var (
 	actionRegex        = regexp.MustCompile("^(allow|deny|log|pass)$")
 	backendActionRegex = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
 	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
+	ipipModeRegex      = regexp.MustCompile("^(always|cross-subnet|)$")
 	reasonString       = "Reason: "
 )
 
@@ -87,6 +88,7 @@ func init() {
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validatePoolMetadata, api.IPPoolMetadata{})
+	registerStructValidator(validateIPIPConfiguration, api.IPIPConfiguration{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
@@ -297,6 +299,18 @@ func validatePoolMetadata(v *validator.Validate, structLevel *validator.StructLe
 		if bits-ones < 6 {
 			structLevel.ReportError(reflect.ValueOf(pool.CIDR),
 				"CIDR", "", reason("IP pool is too small"))
+		}
+	}
+}
+
+func validateIPIPConfiguration(v *validator.Validate, structLevel *validator.StructLevel) {
+	ipip := structLevel.CurrentStruct.Interface().(api.IPIPConfiguration)
+
+	log.Debugf("Validate IPIP: Enabled %b, Mode: %s", ipip.Enabled, ipip.Mode)
+	if ipip.Enabled {
+		if !ipipModeRegex.MatchString(string(ipip.Mode)) {
+			structLevel.ReportError(reflect.ValueOf(ipip.Mode),
+				"Mode", "", reason("When IPIP Enabled, Mode should be always, <empty string>, or cross-subnet"))
 		}
 	}
 }

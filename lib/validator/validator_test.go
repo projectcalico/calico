@@ -268,6 +268,15 @@ func init() {
 		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPoolMetadata{CIDR: netv4_5}, false),
 		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPoolMetadata{CIDR: netv6_1}, false),
 
+		// (API) IPIPConfiguration
+		Entry("should accept IPIP disabled", api.IPIPConfiguration{Enabled: false}, true),
+		Entry("should accept IPIP disabled with mode badVal", api.IPIPConfiguration{Enabled: false, Mode: "badVal"}, true),
+		Entry("should accept IPIP enabled with no mode", api.IPIPConfiguration{Enabled: true}, true),
+		Entry("should reject IPIP enabled with mode off", api.IPIPConfiguration{Enabled: true, Mode: "off"}, false),
+		Entry("should reject IPIP enabled with mode badVal", api.IPIPConfiguration{Enabled: true, Mode: "badVal"}, false),
+		Entry("should accept IPIP enabled with mode always", api.IPIPConfiguration{Enabled: true, Mode: "always"}, true),
+		Entry("should accept IPIP enabled with mode cross-subnet", api.IPIPConfiguration{Enabled: true, Mode: "cross-subnet"}, true),
+
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
 		Entry("should accept ICMP with type with min value", api.ICMPFields{Type: &V0}, true),
