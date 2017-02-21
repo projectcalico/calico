@@ -79,7 +79,7 @@ There are several ways to install Felix.
 -   if you are running Ubuntu 14.04, then you can install a version from
     our PPA:
 
-        sudo apt-add-repository ppa:project-calico/calico-<version>
+        sudo add-apt-repository ppa:project-calico/calico-<version>
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix
@@ -177,15 +177,15 @@ example of how you might do that; the commands:
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](#failsafe-rules).
 
-> **NOTE** 
+> **NOTE**
 >
 > Packets that reach the end of the list of rules fall-through to the next policy (sorted by the order field).
 >
-> :   The selector in the policy, `all()`, will match *all* endpoints, 
->     including any workload endpoints. If you have workload endpoints as 
->     well as host endpoints then you may wish to use a more restrictive 
->     selector. For example, you could label management interfaces with 
->     label `endpoint_type = management` and then use selector 
+> :   The selector in the policy, `all()`, will match *all* endpoints,
+>     including any workload endpoints. If you have workload endpoints as
+>     well as host endpoints then you may wish to use a more restrictive
+>     selector. For example, you could label management interfaces with
+>     label `endpoint_type = management` and then use selector
 >     `endpoint_type == "management"`
 >
 > :   If you are using Calico for networking workloads, you should add
@@ -240,7 +240,7 @@ the following data:
 
 Where `<list of profile IDs>` is an optional list of security profiles
 to apply to the endpoint and labels contains a set of arbitrary
-key/value pairs that can be used in selector expressions. 
+key/value pairs that can be used in selector expressions.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
@@ -272,7 +272,7 @@ place, then you should see traffic being dropped on the interface.
 > **NOTE**
 >
 > :   By default, Calico has a failsafe in place that whitelists certain
->     traffic such as ssh. See below for more details on 
+>     traffic such as ssh. See below for more details on
 >     disabling/configuring the failsafe rules.
 >
 
@@ -294,8 +294,8 @@ address must be specified.
 
 ## Creating more security policy
 
-The Calico team recommend using selector-based security policy with 
-bare-metal workloads. This allows ordered policy to be applied to 
+The Calico team recommend using selector-based security policy with
+bare-metal workloads. This allows ordered policy to be applied to
 endpoints that match particular label selectors.
 
 +For example, you could add a second policy for webserver access:
