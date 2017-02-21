@@ -42,14 +42,14 @@ found at <http://docs.openstack.org>.
 Configure APT to use the Calico PPA:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/calico-{{ page.version }}
+    $ sudo add-apt-repository ppa:project-calico/calico-{{ page.version }}
 ```
 
 With Kilo, Calico also needs patched versions of Nova and Neutron that are
 provided by our 'kilo' PPA.  So if you are using Kilo:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/kilo
+    $ sudo add-apt-repository ppa:project-calico/kilo
 ```
 
 and also edit `/etc/apt/preferences` to add the following lines, whose effect

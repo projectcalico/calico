@@ -86,7 +86,7 @@ There are several ways to install Felix.
 -   if you are running Ubuntu 14.04, then you can install a version from
     our PPA:
 
-        sudo apt-add-repository ppa:project-calico/calico-<version>
+        sudo add-apt-repository ppa:project-calico/calico-<version>
         sudo apt-get update
         sudo apt-get upgrade
         sudo apt-get install calico-felix

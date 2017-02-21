@@ -51,7 +51,7 @@ For your chosen combination, you need to configure APT to use the corresponding
 PPA(s).  For example, for Calico 1.4 with Liberty or later:
 
 ```shell
-    $ sudo apt-add-repository ppa:project-calico/calico-1.6
+    $ sudo add-apt-repository ppa:project-calico/calico-1.6
 ```
 
 Before OpenStack Liberty, Calico needed patched versions of Nova and Neutron.
