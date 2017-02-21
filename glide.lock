@@ -1,5 +1,5 @@
-hash: f1f87127fb6c11c0304ce897f7566152b715475cfef184ccb5578db33bd4bffc
-updated: 2017-02-10T20:47:46.473191297Z
+hash: 2b2fd3000e0f157c2a1a16e2953803b8b1f8a0268cfd6db04d29e03f1adf4b67
+updated: 2017-02-23T23:27:45.250762981Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,7 +11,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 9b72c8ba1ba484802e155c9f6f0ddc21e9c256ce
+  version: d2716fc5ae7909a3b9651e31cfb0eba22b4920c3
   subpackages:
   - client
   - pkg/fileutil
@@ -117,7 +117,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/magiconair/properties
   version: b3b15ef068fd0b17ddf408a23669f20811d194d2
 - name: github.com/mailru/easyjson
@@ -184,7 +184,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 83090c92db7fde08538caea98d766464f94aadd0
+  version: 55a56092f4d59d97b3b69894e6b188115fe14d22
   subpackages:
   - lib/api
   - lib/api/unversioned
