@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -245,6 +245,7 @@ func sendSnapshotNode(node *client.Node, snapshotUpdates chan<- interface{}, res
 // so that the merge goroutine can trigger a new resync via snapshot.
 func (syn *etcdSyncer) watchEtcd(watcherUpdateC chan<- interface{}) {
 	log.Info("etcd watch thread started.")
+	var timeOfLastError time.Time
 	// Each trip around the outer loop establishes the current etcd index
 	// of the cluster, triggers a new snapshot read from that index (via
 	// message to the merge goroutine) and starts watching from that index.
@@ -278,6 +279,13 @@ func (syn *etcdSyncer) watchEtcd(watcherUpdateC chan<- interface{}) {
 			// Wait for the next event from the watcher.
 			resp, err := watcher.Next(context.Background())
 			if err != nil {
+				// Prevent a tight loop if etcd is repeatedly failing.
+				if time.Since(timeOfLastError) < 1*time.Second {
+					log.Warning("May be tight looping, throttling retries.")
+					time.Sleep(1 * time.Second)
+				}
+				timeOfLastError = time.Now()
+
 				if !retryableWatcherError(err) {
 					// Break out of the loop to trigger a new resync.
 					log.WithError(err).Warning("Lost sync with etcd, restarting watcher.")
