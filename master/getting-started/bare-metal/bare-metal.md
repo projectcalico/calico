@@ -38,6 +38,9 @@ to/from other interfaces is left alone.
 > case, the host endpoint policy would need to be very broad to allow all
 > traffic destined for any possible workload.
 >
+> Since version 2.1.0, Calico applies host endpoint policy to traffic that is
+> being forwarded between host interfaces.
+>
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 
 ## Overview
