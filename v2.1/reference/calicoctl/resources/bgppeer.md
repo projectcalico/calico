@@ -15,7 +15,7 @@ aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bg
 
 ```yaml
 apiVersion: v1
-kind: bgppeer
+kind: bgpPeer
 metadata:
   scope: node
   node: rack1-host1
