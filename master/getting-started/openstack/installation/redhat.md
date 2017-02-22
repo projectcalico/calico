@@ -5,6 +5,19 @@ title: Red Hat Enterprise Linux 7 Packaged Install Instructions
 For this version of Calico, with OpenStack on RHEL 7 or CentOS 7, we recommend
 using OpenStack Liberty or later.
 
+> **NOTE**
+>
+> On RHEL/CentOS 7.3, with Mitaka or earlier, there is a Nova
+> [bug](https://bugs.launchpad.net/nova/+bug/1649527) that breaks Calico
+> operation.  You can avoid this bug by:
+>
+> - using Newton or later (recommended)
+>
+> - or using RHEL/CentOS 7.2, instead of 7.3
+>
+> - or manually [patching](https://review.openstack.org/#/c/425637/) your Nova
+>   install on each compute node.
+
 These instructions will take you through a first-time install of Calico.  If
 you are upgrading an existing system, please see the [Calico on OpenStack
 upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
