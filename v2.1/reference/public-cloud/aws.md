@@ -168,7 +168,7 @@ is restarted.  Use a value of `autodetect` for the IP address in the `--ip` opti
 on `calicoctl node run` or the `IP` environment if you are starting the container
 directly.
 
-In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECT_METHOD`
+In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECTION_METHOD`
 environment can be used to specify the method used to auto detect the host address 
 and subnet.  See [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)

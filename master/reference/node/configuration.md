@@ -14,8 +14,8 @@ The `calico/node` container is primarily configured through environment variable
 | HOSTNAME [Deprecated] | The Hostname of this host. This is used as a unique identifier for the node. This value is overridden by NODENAME. When omitted, if NODENAME has not been specified, this value defaults to the actual hostname of this host. | string | |
 | IP | The IPv4 address to assign this host. When specified, the address is saved in the [node resource configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for this host, overriding any previously configured value. When omitted, if an address **has** been saved in the node resource, then that value will be used. When omitted, if an address **has not** yet been configured in the node resource, the node will auto-detect an IPv4 address and configure the node resource with that address. This autodetection can be forced (even if a value has already been set in the node resource) by setting IP to "autodetect". Doing so will overwrite any value configured in the node resource. | ip address | |
 | IP6 | The IPv6 address for Calico will bind to. When specified, the address is saved in the  [node resource configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for this host, overriding any previously configured value. When omitted, if an address has not yet been configured in the node resource, IPv6 routing is not enabled. When omitted, if an IPv6 address has been previously configured in the node resource, IPv6 is enabled using the already configured address. | ipv6 address | |
-| IP_AUTODETECT_METHOD| The method to use to autodetect the IPv4 address for this host. This is only used when the IPv4 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. | string | first-found |
-| IP6_AUTODETECT_METHOD| The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. | string | first-found |
+| IP_AUTODETECTION_METHOD| The method to use to autodetect the IPv4 address for this host. This is only used when the IPv4 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. | string | first-found |
+| IP6_AUTODETECTION_METHOD| The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. | string | first-found |
 | AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (managed through `calicoctl config set/get asnumber`). | int | global AS number |
 | DATASTORE_TYPE | Type of datastore. | kubernetes, etcdv2 | etcdv2 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. | boolean | false |
@@ -52,8 +52,8 @@ specific IP address, or to use one of the other detection methods.
 e.g.
 
 ```
-IP_AUTODETECT_METHOD=first-found
-IP6_AUTODETECT_METHOD=first-found
+IP_AUTODETECTION_METHOD=first-found
+IP6_AUTODETECTION_METHOD=first-found
 ```
 
 #### can-reach=DESTINATION
@@ -66,12 +66,12 @@ e.g.
 
 ```
 # Using IP addresses
-IP_AUTODETECT_METHOD=can-reach=8.8.8.8
-IP6_AUTODETECT_METHOD=can-reach=2001:4860:4860::8888
+IP_AUTODETECTION_METHOD=can-reach=8.8.8.8
+IP6_AUTODETECTION_METHOD=can-reach=2001:4860:4860::8888
 
 # Using domain names
-IP_AUTODETECT_METHOD=can-reach=www.google.com
-IP6_AUTODETECT_METHOD=can-reach=www.google.com
+IP_AUTODETECTION_METHOD=can-reach=www.google.com
+IP6_AUTODETECTION_METHOD=can-reach=www.google.com
 ```
 
 #### interface=INTERFACE-REGEX
@@ -85,6 +85,6 @@ e.g.
 
 ```
 # Valid IP address on interface eth0, eth1, eth2 etc.
-IP_AUTODETECT_METHOD=interface=eth.*
-IP6_AUTODETECT_METHOD=interface=eth.*
+IP_AUTODETECTION_METHOD=interface=eth.*
+IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
