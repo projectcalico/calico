@@ -8,6 +8,7 @@ currently comes with a number of limitations, namely:
 - Calico without etcd performs policy enforcement only and does not yet support Calico BGP networking.
 - Calico without etcd does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - Calico without etcd does not yet support the full set of `calicoctl` commands.
+- Calico without etcd does not yet support the full set of calico/node options (such as IP autodiscovery).
 
 ## Requirements
 
