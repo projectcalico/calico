@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/set"
-	calinet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var (
@@ -268,7 +267,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	for _, route := range oldRoutes {
 		var dest ip.CIDR
 		if route.Dst != nil {
-			dest = ip.CIDRFromIPNet(calinet.IPNet{*route.Dst})
+			dest = ip.CIDRFromIPNet(route.Dst)
 		}
 		if !expectedCIDRs.Contains(dest) {
 			logCxt := logCxt.WithField("dest", dest)
