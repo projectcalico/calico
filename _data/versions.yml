@@ -32,6 +32,7 @@ master:
   - name: networking-calico
     version: master
     url: ""
+
 v2.1:
 - title: v2.1.0-rc5
   note: |
