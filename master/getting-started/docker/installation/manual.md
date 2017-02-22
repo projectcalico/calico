@@ -64,5 +64,5 @@ See [additional information on binding to an init system
 
 ## Next Steps
 
-With `calico/node` running, you are ready to start using Calico by following the
-[simple policy walkthrough]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/simple-policy).
+With `calico/node` running, you are ready to start using Calico by following
+[Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles).

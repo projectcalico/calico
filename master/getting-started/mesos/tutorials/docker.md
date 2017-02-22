@@ -39,7 +39,8 @@ within the network, and no  communication from other networks.  However,
 Calico allows richly configurable policy, which can be managed using the `calicoctl`
 command line tool.
 
-Please refer to the [Configuring Policy guide]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/advanced-policy)
+Please refer to
+[Security using Calico Profiles and Policy]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles-and-policy)
 in the Docker section for details on configuring advanced policy when using
 Calico with Docker networks.
 

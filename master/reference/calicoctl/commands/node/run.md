@@ -27,6 +27,7 @@ Usage:
                      [--init-system]
                      [--disable-docker-networking]
                      [--docker-networking-ifprefix=<IFPREFIX>]
+                     [--use-docker-networking-container-labels]
 
 Options:
   -h --help                Show this screen.
@@ -98,6 +99,13 @@ Options:
                            within the Docker containers that have been networked
                            by the Calico driver.
                            [default: cali]
+     --use-docker-networking-container-labels
+                           Extract the Calico-namespaced Docker container labels
+                           (org.projectcalico.label.*) and apply them to the
+                           container endpoints for use with Calico policy.
+                           This option is only valid when using Calico Docker
+                           networking, and when enabled traffic must be
+                           explicitly allowed by configuring Calico policies.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -282,6 +290,13 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.
                          within the Docker containers that have been networked
                          by the Calico driver.
                          [default: cali]
+   --use-docker-networking-container-labels
+                         Extract the Calico-namespaced Docker container labels
+                         (org.projectcalico.label.*) and apply them to the
+                         container endpoints for use with Calico policy.
+                         This option is only valid when using Calico Docker
+                         networking, and when enabled traffic must be
+                         explicitly allowed by configuring Calico policies.
 ```
 
 ### General options
