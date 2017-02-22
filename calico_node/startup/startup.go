@@ -32,11 +32,11 @@ import (
 )
 
 const (
-	DEFAULT_IPV4_POOL_CIDR      = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR      = "fd80:24e2:f998:72d6::/64"
-	AUTODETECT_METHOD_FIRST     = "first-found"
-	AUTODETECT_METHOD_CAN_REACH = "can-reach="
-	AUTODETECT_METHOD_INTERFACE = "interface="
+	DEFAULT_IPV4_POOL_CIDR         = "192.168.0.0/16"
+	DEFAULT_IPV6_POOL_CIDR         = "fd80:24e2:f998:72d6::/64"
+	AUTODETECTION_METHOD_FIRST     = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE = "interface="
 )
 
 // For testing purposes we define an exit function that we can override.
@@ -253,7 +253,7 @@ func configureIPsAndSubnets(node *api.Node) {
 	// value and possibly fix up missing subnet configuration.
 	ipv4Env := os.Getenv("IP")
 	if ipv4Env == "autodetect" || (ipv4Env == "" && node.Spec.BGP.IPv4Address == nil) {
-		adm := os.Getenv("IP_AUTODETECT_METHOD")
+		adm := os.Getenv("IP_AUTODETECTION_METHOD")
 		cidr := autoDetectCIDR(adm, 4)
 		if cidr != nil {
 			// We autodetected an IPv4 address so update the value in the node.
@@ -281,7 +281,7 @@ func configureIPsAndSubnets(node *api.Node) {
 
 	ipv6Env := os.Getenv("IP6")
 	if ipv6Env == "autodetect" {
-		adm := os.Getenv("IP6_AUTODETECT_METHOD")
+		adm := os.Getenv("IP6_AUTODETECTION_METHOD")
 		cidr := autoDetectCIDR(adm, 6)
 		if cidr != nil {
 			// We autodetected an IPv6 address so update the value in the node.
@@ -364,17 +364,17 @@ func validateIP(ipn *net.IPNet) {
 // autoDetectCIDR auto-detects the IP and Network using the requested
 // detection method.
 func autoDetectCIDR(method string, version int) *net.IPNet {
-	if method == "" || method == AUTODETECT_METHOD_FIRST {
+	if method == "" || method == AUTODETECTION_METHOD_FIRST {
 		// Autodetect the IP by enumerating all interfaces (excluding
 		// known internal interfaces).
 		return autoDetectCIDRFirstFound(version)
-	} else if strings.HasPrefix(method, AUTODETECT_METHOD_INTERFACE) {
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
 		// Autodetect the IP from the specified interface.
-		ifStr := strings.TrimPrefix(method, AUTODETECT_METHOD_INTERFACE)
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
 		return autoDetectCIDRByInterface(ifStr, version)
-	} else if strings.HasPrefix(method, AUTODETECT_METHOD_CAN_REACH) {
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
 		// Autodetect the IP by connecting a UDP socket to a supplied address.
-		destStr := strings.TrimPrefix(method, AUTODETECT_METHOD_CAN_REACH)
+		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
 		return autoDetectCIDRByReach(destStr, version)
 	}
 

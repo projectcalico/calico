@@ -37,12 +37,12 @@ import (
 )
 
 const (
-	ETCD_KEY_NODE_FILE          = "/etc/calico/certs/key.pem"
-	ETCD_CERT_NODE_FILE         = "/etc/calico/certs/cert.crt"
-	ETCD_CA_CERT_NODE_FILE      = "/etc/calico/certs/ca_cert.crt"
-	AUTODETECT_METHOD_FIRST     = "first-found"
-	AUTODETECT_METHOD_CAN_REACH = "can-reach="
-	AUTODETECT_METHOD_INTERFACE = "interface="
+	ETCD_KEY_NODE_FILE             = "/etc/calico/certs/key.pem"
+	ETCD_CERT_NODE_FILE            = "/etc/calico/certs/cert.crt"
+	ETCD_CA_CERT_NODE_FILE         = "/etc/calico/certs/ca_cert.crt"
+	AUTODETECTION_METHOD_FIRST     = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE = "interface="
 )
 
 var (
@@ -251,8 +251,8 @@ Description:
 		"CALICO_NETWORKING_BACKEND":         backend,
 		"NO_DEFAULT_POOLS":                  noPoolsString,
 		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
-		"IP_AUTODETECT_METHOD":              ipv4ADMethod,
-		"IP6_AUTODETECT_METHOD":             ipv6ADMethod,
+		"IP_AUTODETECTION_METHOD":           ipv4ADMethod,
+		"IP6_AUTODETECTION_METHOD":          ipv6ADMethod,
 		"CALICO_LIBNETWORK_CREATE_PROFILES": fmt.Sprint(!useDockerContainerLabels),
 		"CALICO_LIBNETWORK_LABEL_ENDPOINTS": fmt.Sprint(useDockerContainerLabels),
 	}
@@ -506,14 +506,14 @@ func setNFConntrackMax() {
 
 // Validate the IP autodection method string.
 func validateIpAutodetectionMethod(method string, version int) {
-	if method == AUTODETECT_METHOD_FIRST {
+	if method == AUTODETECTION_METHOD_FIRST {
 		// Auto-detection method is "first-found", no additional validation
 		// required.
 		return
-	} else if strings.HasPrefix(method, AUTODETECT_METHOD_CAN_REACH) {
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
 		// Auto-detection method is "can-reach", validate that the address
 		// resolves to at least one IP address of the required version.
-		addrStr := strings.TrimPrefix(method, AUTODETECT_METHOD_CAN_REACH)
+		addrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
 		ips, err := gonet.LookupIP(addrStr)
 		if err != nil {
 			fmt.Printf("Error executing command: cannot resolve address specified for IP autodetection: %s\n", addrStr)
@@ -528,10 +528,10 @@ func validateIpAutodetectionMethod(method string, version int) {
 		}
 		fmt.Printf("Error executing command: address for IP autodetection does not resolve to an IPv%d address: %s\n", version, addrStr)
 		os.Exit(1)
-	} else if strings.HasPrefix(method, AUTODETECT_METHOD_INTERFACE) {
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
 		// Auto-detection method is "interface", validate that the interface
 		// regex is a valid golang regex.
-		ifStr := strings.TrimPrefix(method, AUTODETECT_METHOD_INTERFACE)
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
 		if _, err := regexp.Compile(ifStr); err != nil {
 			fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifStr)
 			os.Exit(1)
