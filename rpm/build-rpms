@@ -53,6 +53,13 @@ tar -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
 cd rpmbuild
 rpmbuild --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
 
-rm -rf /code/dist/rpms/${EL_VERSION}
-mkdir -p /code/dist/rpms
-cp -r /tmp/rpmbuild /code/dist/rpms/${EL_VERSION}
+case "$EL_VERSION" in
+  "el7")
+    rm -rf /code/dist/rpms
+    cp -r /tmp/rpmbuild /code/dist/rpms
+    ;;
+  "el6")
+    rm -rf /code/dist/rpms/el6-rpms
+    cp -r /tmp/rpmbuild /code/dist/el6-rpms
+    ;;
+esac
