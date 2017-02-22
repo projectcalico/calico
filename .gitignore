@@ -29,3 +29,4 @@ release
 vendor
 calicoctl_build_container.created
 nosetests.xml
+testfile.yaml

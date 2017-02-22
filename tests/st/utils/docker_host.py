@@ -188,7 +188,7 @@ class DockerHost(object):
             raise Exception("Command %s returned non-zero exit code %s" %
                             (command, status))
 
-    def calicoctl(self, command):
+    def calicoctl(self, command, version=None):
         """
         Convenience function for abstracting away calling the calicoctl
         command.
@@ -197,10 +197,16 @@ class DockerHost(object):
         return code.
 
         :param command:  The calicoctl command line parms as a single string.
+        :param version:  The calicoctl version to use (this is appended to the
+                         executable name.  It is assumed the Makefile will ensure
+                         the required versions are downloaded.
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
-        calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+        if not version:
+            calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+        else:
+            calicoctl = "/code/dist/calicoctl-" + version
 
         if ETCD_SCHEME == "https":
             etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
