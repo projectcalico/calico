@@ -30,8 +30,8 @@ var (
 //
 // All resource and resource lists embed a TypeMetadata as an anonymous field.
 type TypeMetadata struct {
-	Kind       string `json:"kind" validate:"required"`
-	APIVersion string `json:"apiVersion" validate:"required"`
+	Kind       string `json:"kind"`
+	APIVersion string `json:"apiVersion"`
 }
 
 func (md TypeMetadata) GetTypeMetadata() TypeMetadata {

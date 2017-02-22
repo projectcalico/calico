@@ -55,7 +55,7 @@ type KubeClient struct {
 
 	// Clients for interacting with Calico resources.
 	ipPoolClient api.Client
-	nodeClient api.Client
+	nodeClient   api.Client
 }
 
 type KubeConfig struct {

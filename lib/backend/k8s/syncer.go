@@ -53,7 +53,7 @@ type kubeSyncer struct {
 
 // Holds resource version information.
 type resourceVersions struct {
-	nodeVersion	     string
+	nodeVersion          string
 	podVersion           string
 	namespaceVersion     string
 	networkPolicyVersion string

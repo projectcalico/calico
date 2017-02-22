@@ -49,10 +49,10 @@ import (
 )
 
 var _ = Describe("WorkloadEndpoint tests", func() {
-	cidr1 := testutils.MustParseNetwork("10.0.0.0/24")
-	cidr2 := testutils.MustParseNetwork("20.0.0.0/24")
-	cidr3 := testutils.MustParseNetwork("192.168.0.0/24")
-	cidr4 := testutils.MustParseNetwork("172.56.0.0/24")
+	cidr1 := testutils.MustParseNetwork("10.0.0.0/32")
+	cidr2 := testutils.MustParseNetwork("20.0.0.0/32")
+	cidr3 := testutils.MustParseNetwork("192.168.0.0/32")
+	cidr4 := testutils.MustParseNetwork("172.56.0.0/32")
 	mac1, _ := net.ParseMAC("01:23:45:67:89:ab")
 	mac2, _ := net.ParseMAC("CA:FE:00:01:02:03")
 	ipv41 := testutils.MustParseIP("10.0.0.0")
@@ -254,6 +254,7 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 				IPNATs: []api.IPNAT{
 					{
 						InternalIP: testutils.MustParseIP("10.0.0.0"),
+						ExternalIP: testutils.MustParseIP("192.168.0.0"),
 					},
 				},
 				InterfaceName: "eth1",
@@ -276,7 +277,7 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 			}),
 
 		// Test 3: Pass one fully populated WorkloadEndpointSpec and another empty WorkloadEndpointSpec and expect the series of operations to succeed.
-		Entry("One fully populated WorkloadEndpointSpec and another empty WorkloadEndpointSpec",
+		Entry("One fully populated WorkloadEndpointSpec and a (nearly) empty WorkloadEndpointSpec",
 			api.WorkloadEndpointMetadata{
 				Name:         "host1",
 				Workload:     "workload1",
@@ -310,7 +311,9 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 				InterfaceName: "eth0",
 				MAC:           &cnet.MAC{mac1},
 			},
-			api.WorkloadEndpointSpec{}),
+			api.WorkloadEndpointSpec{
+				InterfaceName: "eth1",
+			}),
 	)
 
 })

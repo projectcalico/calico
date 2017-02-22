@@ -17,7 +17,6 @@ package validator
 import (
 	"reflect"
 	"regexp"
-
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -87,8 +86,8 @@ func init() {
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
-	registerStructValidator(validatePoolMetadata, api.IPPoolMetadata{})
 	registerStructValidator(validateIPIPConfiguration, api.IPIPConfiguration{})
+	registerStructValidator(validatePool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
@@ -288,16 +287,28 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	}
 }
 
-func validatePoolMetadata(v *validator.Validate, structLevel *validator.StructLevel) {
-	pool := structLevel.CurrentStruct.Interface().(api.IPPoolMetadata)
+func validatePool(v *validator.Validate, structLevel *validator.StructLevel) {
+	pool := structLevel.CurrentStruct.Interface().(api.IPPool)
 
-	// The Calico IPAM places restrictions on the minimum IP pool size, check that the
-	// pool is at least the minimum size.
-	if pool.CIDR.IP != nil {
-		ones, bits := pool.CIDR.Mask.Size()
-		log.Debugf("Pool CIDR: %s, num bits: %d", pool.CIDR, bits-ones)
+	// Metadata values may be nil when doing a list operation, so skip
+	// validation if not assigned.
+	if pool.Metadata.CIDR.IP == nil {
+		return
+	}
+
+	// IPIP cannot be enabled for IPv6.
+	if pool.Metadata.CIDR.Version() == 6 && pool.Spec.IPIP != nil && pool.Spec.IPIP.Enabled {
+		structLevel.ReportError(reflect.ValueOf(pool.Spec.IPIP.Enabled),
+			"IPIP.Enabled", "", reason("IPIP is not supported on an IPv6 IP pool"))
+	}
+
+	// The Calico IPAM places restrictions on the minimum IP pool size.  If
+	// the pool is enabled, check that the pool is at least the minimum size.
+	if !pool.Spec.Disabled {
+		ones, bits := pool.Metadata.CIDR.Mask.Size()
+		log.Debugf("Pool CIDR: %s, num bits: %d", pool.Metadata.CIDR, bits-ones)
 		if bits-ones < 6 {
-			structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
 				"CIDR", "", reason("IP pool is too small"))
 		}
 	}

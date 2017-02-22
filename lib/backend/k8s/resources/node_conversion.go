@@ -16,11 +16,12 @@ package resources
 
 import (
 	"errors"
+
+	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/Sirupsen/logrus"
 )
 
 func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
@@ -47,8 +48,8 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 		Value: &model.Node{
 			FelixIPv4:   ip,
 			Labels:      node.Labels,
-			BGPIPv4Addr:     ip,
-			BGPIPv6Addr:     &net.IP{},
+			BGPIPv4Addr: ip,
+			BGPIPv6Addr: &net.IP{},
 			BGPASNumber: &asn,
 		},
 		Revision: node.ObjectMeta.ResourceVersion,
