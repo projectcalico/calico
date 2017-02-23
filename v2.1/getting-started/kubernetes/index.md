@@ -28,7 +28,7 @@ this guide if you're integrating Calico with your own configuration management t
 
 ## Quick Start Guides
 
-The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a
+The following guides walk through launching a CoreOS based Kubernetes cluster on Vagrant, using a
 Calico self-hosted installation.
 
 #### [Vagrant and Container Linux by CoreOS ]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
