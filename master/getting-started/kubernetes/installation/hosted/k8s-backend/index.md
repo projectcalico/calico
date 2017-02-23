@@ -2,13 +2,14 @@
 title: Etcdless Hosted Install
 ---
 
-This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  Note that this feature
+This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
+This mode uses the Kubernetes API as the datastore.  Note that this feature
 currently comes with a number of limitations, namely:
 
-- Calico without etcd performs policy enforcement only and does not yet support Calico BGP networking.
-- Calico without etcd does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
-- Calico without etcd does not yet support the full set of `calicoctl` commands.
-- Calico without etcd does not yet support the full set of calico/node options (such as IP autodiscovery).
+- it supports policy enforcement only and does not yet support Calico BGP networking.
+- it does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
+- it does not yet support the full set of `calicoctl` commands.
+- it does not yet support the full set of calico/node options (such as IP autodiscovery).
 
 ## Requirements
 

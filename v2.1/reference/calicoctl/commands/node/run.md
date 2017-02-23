@@ -117,7 +117,7 @@ Description:
 
 ### Kubernetes as the datastore
 
-If you are using Kubernetes as the Calico datastore, BGP routing is *currently* 
+When Calico is configured to use the Kubernetes API as the datastore, BGP routing is *currently* 
 not supported.  Many of the command line options related to BGP routing will
 have no effect.  These include:
 -  `--ip`, `--ip6`, `--ip-autodetection-method`, `--ip6-autodetection-method`
