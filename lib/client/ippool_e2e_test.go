@@ -233,7 +233,7 @@ var _ = Describe("IPPool tests", func() {
 		// Test 5: Test starting with IPIP (cross subnet mode) and moving to no IPIP
 		Entry("IPIP (cross subnet mode) and moving to no IPIP",
 			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.10.10.0/24")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
