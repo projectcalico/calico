@@ -259,7 +259,7 @@ var _ = Describe("Node tests", func() {
 			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
 		})
 
-		// Step-1: Test data validation occurs on delete.
+		// Step-3: Test data validation occurs on delete.
 		It("should invoke validation failure", func() {
 			By("Deleting a node with an invalid name")
 			err = c.Nodes().Delete(api.NodeMetadata{Name: "abc/def"})

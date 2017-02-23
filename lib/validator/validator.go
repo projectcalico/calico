@@ -42,6 +42,8 @@ var (
 	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
 	ipipModeRegex      = regexp.MustCompile("^(always|cross-subnet|)$")
 	reasonString       = "Reason: "
+	poolSmallIPv4      = "IP pool size is too small (min /26) for use with Calico IPAM"
+	poolSmallIPv6      = "IP pool size is too small (min /122) for use with Calico IPAM"
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -313,8 +315,13 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 			ones, bits := pool.Metadata.CIDR.Mask.Size()
 			log.Debugf("Pool CIDR: %s, num bits: %d", pool.Metadata.CIDR, bits-ones)
 			if bits-ones < 6 {
-				structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-					"CIDR", "", reason("IP pool CIDR is too small to an IPAM enabled pool"))
+				if pool.Metadata.CIDR.Version() == 4 {
+					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+						"CIDR", "", reason(poolSmallIPv4))
+				} else {
+					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+						"CIDR", "", reason(poolSmallIPv6))
+				}
 			}
 		}
 	}

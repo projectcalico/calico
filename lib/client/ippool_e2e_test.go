@@ -270,7 +270,7 @@ var _ = Describe("IPPool tests", func() {
 
 		// Step-1: Test data validation occurs on create.
 		It("should invoke validation failure", func() {
-			By("Creating a pool with small CIDR")
+			By("Creating a pool with small CIDR (< /26)")
 			_, err = c.IPPools().Create(&api.IPPool{
 				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.10.10.0/30")},
 				Spec:     api.IPPoolSpec{},
@@ -282,7 +282,7 @@ var _ = Describe("IPPool tests", func() {
 
 		// Step-2: Test data validation occurs on apply.
 		It("should invoke validation failure", func() {
-			By("Applying a pool with small CIDR")
+			By("Applying a pool with small CIDR (< /122)")
 			_, err = c.IPPools().Apply(&api.IPPool{
 				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("aa:bb::cc/125")},
 				Spec:     api.IPPoolSpec{},
@@ -300,7 +300,7 @@ var _ = Describe("IPPool tests", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Updating the pool using invalid settings")
+			By("Updating the pool using invalid settings (IPIP on IPv6 pool)")
 			_, err = c.IPPools().Update(&api.IPPool{
 				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("aa:bb::cc/120")},
 				Spec:     api.IPPoolSpec{IPIP: &api.IPIPConfiguration{Enabled: true}},

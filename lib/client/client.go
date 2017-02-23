@@ -258,7 +258,7 @@ func (c *Client) apply(apiObject unversioned.Resource, helper conversionHelper) 
 // Untyped get interface for deleting a single API object.  This is called from the typed
 // interface.
 func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversionHelper) error {
-	// Validate the supplied indices.
+	// Validate the supplied Metadata.
 	if err := validator.Validate(metadata); err != nil {
 		return err
 	}
@@ -275,7 +275,7 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 // Untyped get interface for getting a single API object.  This is called from the typed
 // interface.  The result is
 func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHelper) (unversioned.Resource, error) {
-	// Validate the supplied indices.
+	// Validate the supplied Metadata.
 	if err := validator.Validate(metadata); err != nil {
 		return nil, err
 	}
@@ -294,7 +294,7 @@ func (c *Client) get(metadata unversioned.ResourceMetadata, helper conversionHel
 // Untyped get interface for getting a list of API objects.  This is called from the typed
 // interface.  This updates the Items slice in the supplied List resource object.
 func (c *Client) list(metadata unversioned.ResourceMetadata, helper conversionHelper, listp interface{}) error {
-	// Validate the supplied indices.
+	// Validate the supplied Metadata.
 	if err := validator.Validate(metadata); err != nil {
 		return err
 	}
