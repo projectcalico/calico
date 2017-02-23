@@ -88,8 +88,8 @@ spec:
             # The Calico IPv4 pool to use.  This should match `--cluster-cidr`
             - name: CALICO_IPV4POOL_CIDR
               value: "10.244.0.0/16"
-            # Set the hostname based on the k8s node name.
-            - name: HOSTNAME
+            # Set based on the k8s node name.
+            - name: NODENAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
