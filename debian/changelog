@@ -1,3 +1,21 @@
+felix (1.4.9-1~xenial) xenial; urgency=low
+
+  * felix release (from Git commit 70dcd51).
+    - Restore Felix version to be a dev version.
+    - Fix name of package used when looking up metadata.
+    - Disregard subinterface part of interface names
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 23 Feb 2017 09:42:36 +0000
+
+felix (1.4.9-1~trusty) trusty; urgency=low
+
+  * felix release (from Git commit 70dcd51).
+    - Restore Felix version to be a dev version.
+    - Fix name of package used when looking up metadata.
+    - Disregard subinterface part of interface names
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 23 Feb 2017 09:42:36 +0000
+
 felix (1.4.7-1~xenial) xenial; urgency=low
 
   * felix release (from Git commit 4ff3ed8).

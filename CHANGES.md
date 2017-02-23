@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.9
+
+- Restore Felix version to be a dev version.
+- Fix name of package used when looking up metadata.
+- Disregard subinterface part of interface names
+
 ## 1.4.7
 
 - Add support for policing forwarded traffic via host endpoints.

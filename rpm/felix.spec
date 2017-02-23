@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        1.4.7
+Version:        1.4.9
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -148,6 +148,12 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Feb 23 2017 Neil Jerram <neil@tigera.io> 1.4.9-1
+  - felix version 1.4.9-1 release
+    - Restore Felix version to be a dev version.
+    - Fix name of package used when looking up metadata.
+    - Disregard subinterface part of interface names
+
 * Thu Jan 12 2017 Shaun Crampton <shaun@tigera.io> 1.4.7-1
   - felix version 1.4.7-1 release
     - Add support for policing forwarded traffic via host endpoints.
