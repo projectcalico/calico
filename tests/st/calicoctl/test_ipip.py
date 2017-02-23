@@ -137,13 +137,13 @@ class TestIPIP(TestBase):
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
             # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore. 
-            self.pool_action(host, "apply", ipv4_pool, True, True)
+            self.pool_action(host, "apply", ipv4_pool, True, disabled=True)
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
 
             # Re-enable the IP pool and make sure the tunl IP is assigned from that IP pool again.
-            self.pool_action(host, "apply", ipv4_pool, True, False)
+            self.pool_action(host, "apply", ipv4_pool, True)
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
-            
+
             # Test that removing pool removes the tunl IP.
             self.pool_action(host, "delete", ipv4_pool, True)
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
