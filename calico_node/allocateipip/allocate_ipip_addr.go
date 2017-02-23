@@ -130,7 +130,8 @@ func getIPIPEnabledPoolCIDRs(c *client.Client) []net.IPNet {
 
 	var cidrs []net.IPNet
 	for _, ipPool := range ipPoolList.Items {
-		if ipPool.Spec.IPIP != nil && ipPool.Spec.IPIP.Enabled {
+		// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
+		if ipPool.Spec.IPIP != nil && ipPool.Spec.IPIP.Enabled && !ipPool.Spec.Disabled && ipPool.Metadata.CIDR.Version() == 4 {
 			cidrs = append(cidrs, ipPool.Metadata.CIDR)
 		}
 	}

@@ -136,6 +136,14 @@ class TestIPIP(TestBase):
             host.start_calico_node()
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
+            # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore. 
+            self.pool_action(host, "apply", ipv4_pool, True, disabled=True)
+            self.assert_tunl_ip(host, ipv4_pool, expect=False)
+
+            # Re-enable the IP pool and make sure the tunl IP is assigned from that IP pool again.
+            self.pool_action(host, "apply", ipv4_pool, True)
+            self.assert_tunl_ip(host, ipv4_pool, expect=True)
+
             # Test that removing pool removes the tunl IP.
             self.pool_action(host, "delete", ipv4_pool, True)
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
@@ -151,7 +159,7 @@ class TestIPIP(TestBase):
             self.pool_action(host, "delete", ipv4_pool, True)
             self.assert_tunl_ip(host, new_ipv4_pool)
 
-    def pool_action(self, host, action, cidr, ipip, ipip_mode="", calicoctl_version=None):
+    def pool_action(self, host, action, cidr, ipip, disabled=False, ipip_mode="", calicoctl_version=None):
         """
         Perform an ipPool action.
         """
@@ -164,7 +172,8 @@ class TestIPIP(TestBase):
             'spec': {
                 'ipip': {
                     'enabled': ipip
-                }
+                },
+                'disabled': disabled
             }
         }
 

@@ -3,5 +3,5 @@ Otherwise, confd notices the file hasn't changed and won't
 run our python update script.
  
 {{range ls "/pool"}}{{$data := json (getv (printf "/pool/%s" .))}}
-  {{if $data.ipip}}{{$data.cidr}}{{end}}
+  {{if $data.ipip}}{{if not $data.disabled}}{{$data.cidr}}{{end}}{{end}}
 {{end}}
