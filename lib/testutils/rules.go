@@ -46,7 +46,7 @@ var InRule1 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag1",
 		Net:      &cidr1,
-		Selector: "selector1",
+		Selector: "label1 == 'value1'",
 	},
 }
 
@@ -58,7 +58,7 @@ var InRule2 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag2",
 		Net:      &cidrv61,
-		Selector: "selector2",
+		Selector: "has(label2)",
 	},
 }
 
@@ -70,7 +70,7 @@ var EgressRule1 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag3",
 		Net:      &cidr2,
-		Selector: "selector3",
+		Selector: "all()",
 	},
 }
 
@@ -82,6 +82,6 @@ var EgressRule2 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag4",
 		Net:      &cidrv62,
-		Selector: "selector4",
+		Selector: "label2 == '1234'",
 	},
 }

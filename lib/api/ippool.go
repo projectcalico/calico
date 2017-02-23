@@ -63,7 +63,7 @@ type IPIPConfiguration struct {
 	// addresses within this pool.  A mode of "cross-subnet" will only use IPIP
 	// tunneling when the destination node is on a different subnet to the
 	// originating node.  The default value (if not specified) is "always".
-	Mode ipip.Mode `json:"mode,omitempty"`
+	Mode ipip.Mode `json:"mode,omitempty" validate:"ipipmode"`
 }
 
 // NewIPPool creates a new (zeroed) Pool struct with the TypeMetadata initialised to the current

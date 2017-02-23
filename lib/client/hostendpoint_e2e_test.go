@@ -224,7 +224,7 @@ var _ = Describe("HostEndpoint tests", func() {
 			}),
 
 		// Test 3: Pass one fully populated HostEndpointSpec and another empty HostEndpointSpec and expect the series of operations to succeed.
-		Entry("One fully populated HostEndpointSpec and another empty HostEndpointSpec",
+		Entry("One fully populated HostEndpointSpec and another (almost) empty HostEndpointSpec",
 			api.HostEndpointMetadata{
 				Name: "host1",
 				Node: "node1",
@@ -244,7 +244,9 @@ var _ = Describe("HostEndpoint tests", func() {
 				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("10.0.0.0"), testutils.MustParseIP("20.0.0.0")},
 				Profiles:      []string{"profile1", "profile2"},
 			},
-			api.HostEndpointSpec{}),
+			api.HostEndpointSpec{
+				InterfaceName: "eth0",
+			}),
 
 		// Test 4: Pass two fully populated HostEndpointSpecs with two HostEndpointMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
 		Entry("Two fully populated HostEndpointSpecs with two HostEndpointMetadata (one IPv4 and another IPv6)",

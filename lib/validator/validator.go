@@ -17,7 +17,6 @@ package validator
 import (
 	"reflect"
 	"regexp"
-
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -43,6 +42,8 @@ var (
 	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
 	ipipModeRegex      = regexp.MustCompile("^(always|cross-subnet|)$")
 	reasonString       = "Reason: "
+	poolSmallIPv4      = "IP pool size is too small (min /26) for use with Calico IPAM"
+	poolSmallIPv6      = "IP pool size is too small (min /122) for use with Calico IPAM"
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -80,6 +81,7 @@ func init() {
 	registerFieldValidator("labels", validateLabels)
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
+	registerFieldValidator("ipipmode", validateIPIPMode)
 
 	// Register struct validators.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
@@ -87,8 +89,7 @@ func init() {
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
-	registerStructValidator(validatePoolMetadata, api.IPPoolMetadata{})
-	registerStructValidator(validateIPIPConfiguration, api.IPIPConfiguration{})
+	registerStructValidator(validateIPPool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
@@ -146,6 +147,12 @@ func validateIPVersion(v *validator.Validate, topStruct reflect.Value, currentSt
 	ver := field.Int()
 	log.Debugf("Validate ip version: %d", ver)
 	return ver == 4 || ver == 6
+}
+
+func validateIPIPMode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate name: %s", s)
+	return ipipModeRegex.MatchString(s)
 }
 
 func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
@@ -288,31 +295,37 @@ func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.Stru
 	}
 }
 
-func validatePoolMetadata(v *validator.Validate, structLevel *validator.StructLevel) {
-	pool := structLevel.CurrentStruct.Interface().(api.IPPoolMetadata)
+func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
+	pool := structLevel.CurrentStruct.Interface().(api.IPPool)
 
-	// The Calico IPAM places restrictions on the minimum IP pool size, check that the
-	// pool is at least the minimum size.
-	if pool.CIDR.IP != nil {
-		ones, bits := pool.CIDR.Mask.Size()
-		log.Debugf("Pool CIDR: %s, num bits: %d", pool.CIDR, bits-ones)
-		if bits-ones < 6 {
-			structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-				"CIDR", "", reason("IP pool is too small"))
+	// Validation of the data occurs before checking whether Metadata
+	// fields are complete, so need to check whether CIDR is assigned before
+	// performing cross-checks.  If CIDR is not assigned this will be
+	// picked up during Metadata->Key conversion.
+	if pool.Metadata.CIDR.IP != nil {
+		// IPIP cannot be enabled for IPv6.
+		if pool.Metadata.CIDR.Version() == 6 && pool.Spec.IPIP != nil && pool.Spec.IPIP.Enabled {
+			structLevel.ReportError(reflect.ValueOf(pool.Spec.IPIP.Enabled),
+				"IPIP.Enabled", "", reason("IPIP is not supported on an IPv6 IP pool"))
+		}
+
+		// The Calico IPAM places restrictions on the minimum IP pool size.  If
+		// the pool is enabled, check that the pool is at least the minimum size.
+		if !pool.Spec.Disabled {
+			ones, bits := pool.Metadata.CIDR.Mask.Size()
+			log.Debugf("Pool CIDR: %s, num bits: %d", pool.Metadata.CIDR, bits-ones)
+			if bits-ones < 6 {
+				if pool.Metadata.CIDR.Version() == 4 {
+					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+						"CIDR", "", reason(poolSmallIPv4))
+				} else {
+					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+						"CIDR", "", reason(poolSmallIPv6))
+				}
+			}
 		}
 	}
-}
 
-func validateIPIPConfiguration(v *validator.Validate, structLevel *validator.StructLevel) {
-	ipip := structLevel.CurrentStruct.Interface().(api.IPIPConfiguration)
-
-	log.Debugf("Validate IPIP: Enabled %b, Mode: %s", ipip.Enabled, ipip.Mode)
-	if ipip.Enabled {
-		if !ipipModeRegex.MatchString(string(ipip.Mode)) {
-			structLevel.ReportError(reflect.ValueOf(ipip.Mode),
-				"Mode", "", reason("When IPIP Enabled, Mode should be always, <empty string>, or cross-subnet"))
-		}
-	}
 }
 
 func validateICMPFields(v *validator.Validate, structLevel *validator.StructLevel) {

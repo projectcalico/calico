@@ -52,14 +52,14 @@ var policySpec1 = api.PolicySpec{
 	Order:        &order1,
 	IngressRules: []api.Rule{testutils.InRule1, testutils.InRule2},
 	EgressRules:  []api.Rule{testutils.EgressRule1, testutils.EgressRule2},
-	Selector:     "policy1-selector",
+	Selector:     "thing == 'value'",
 }
 
 var policySpec2 = api.PolicySpec{
 	Order:        &order2,
 	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
 	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
-	Selector:     "policy2-selector",
+	Selector:     "thing2 == 'value2'",
 	DoNotTrack:   true,
 }
 
@@ -206,7 +206,7 @@ var _ = Describe("Policy tests", func() {
 			api.PolicyMetadata{Name: "policy1"},
 			api.PolicyMetadata{Name: "policy2"},
 			api.PolicySpec{
-				Selector: "policy1-selector",
+				Selector: "has(myLabel888)",
 			},
 			policySpec2,
 		),

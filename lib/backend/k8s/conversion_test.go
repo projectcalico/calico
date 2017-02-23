@@ -21,12 +21,12 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/intstr"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -682,29 +682,27 @@ var _ = Describe("Test Node conversion", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
 			ObjectMeta: k8sapi.ObjectMeta{
-				Name: "TestNode",
-				Labels: l,
+				Name:            "TestNode",
+				Labels:          l,
 				ResourceVersion: "1234",
 			},
 			Spec: k8sapi.NodeSpec{},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
 					k8sapi.NodeAddress{
-						Type: k8sapi.NodeInternalIP,
+						Type:    k8sapi.NodeInternalIP,
 						Address: "172.17.17.10",
 					},
 					k8sapi.NodeAddress{
-						Type: k8sapi.NodeExternalIP,
+						Type:    k8sapi.NodeExternalIP,
 						Address: "192.168.1.100",
 					},
 					k8sapi.NodeAddress{
-						Type: k8sapi.NodeHostName,
+						Type:    k8sapi.NodeHostName,
 						Address: "172-17-17-10",
 					},
 				},
-
 			},
-
 		}
 
 		n, err := resources.K8sNodeToCalico(&node)
@@ -728,19 +726,17 @@ var _ = Describe("Test Node conversion", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
 			ObjectMeta: k8sapi.ObjectMeta{
-				Name: "TestNode",
-				Labels: l,
+				Name:            "TestNode",
+				Labels:          l,
 				ResourceVersion: "1234",
 			},
 			Spec: k8sapi.NodeSpec{},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{k8sapi.NodeAddress{
-					Type: k8sapi.NodeInternalIP,
+					Type:    k8sapi.NodeInternalIP,
 					Address: "1720.17.17.10",
 				}},
-
 			},
-
 		}
 
 		_, err := resources.K8sNodeToCalico(&node)
@@ -751,13 +747,12 @@ var _ = Describe("Test Node conversion", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
 			ObjectMeta: k8sapi.ObjectMeta{
-				Name: "TestNode",
-				Labels: l,
+				Name:            "TestNode",
+				Labels:          l,
 				ResourceVersion: "1234",
 			},
-			Spec: k8sapi.NodeSpec{},
+			Spec:   k8sapi.NodeSpec{},
 			Status: k8sapi.NodeStatus{},
-
 		}
 
 		_, err := resources.K8sNodeToCalico(&node)
@@ -768,19 +763,17 @@ var _ = Describe("Test Node conversion", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
 			ObjectMeta: k8sapi.ObjectMeta{
-				Name: "TestNode",
-				Labels: l,
+				Name:            "TestNode",
+				Labels:          l,
 				ResourceVersion: "1234",
 			},
 			Spec: k8sapi.NodeSpec{},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{k8sapi.NodeAddress{
-					Type: k8sapi.NodeExternalIP,
+					Type:    k8sapi.NodeExternalIP,
 					Address: "172.17.17.10",
 				}},
-
 			},
-
 		}
 
 		_, err := resources.K8sNodeToCalico(&node)

@@ -18,7 +18,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
- 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	"k8s.io/client-go/kubernetes"
@@ -34,31 +34,31 @@ func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
 }
 
 // Implements the api.Client interface for Nodes.
-type nodeClient struct{
+type nodeClient struct {
 	clientSet *kubernetes.Clientset
 }
 
-func (c *nodeClient) Create(kvp *model.KVPair) (*model.KVPair, error){
+func (c *nodeClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 	log.Warn("Operation Create is not supported on Node type")
 	return nil, errors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
-		Operation: "Create",
+		Operation:  "Create",
 	}
 }
 
-func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error){
+func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 	log.Warn("Operation Update is not supported on Node type")
 	return nil, errors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
-		Operation: "Update",
+		Operation:  "Update",
 	}
 }
 
-func (c *nodeClient) Apply(kvp *model.KVPair) (*model.KVPair, error){
+func (c *nodeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	log.Warn("Operation Apply is not supported on Node type")
 	return nil, errors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
-		Operation: "Apply",
+		Operation:  "Apply",
 	}
 }
 
@@ -66,11 +66,11 @@ func (c *nodeClient) Delete(kvp *model.KVPair) error {
 	log.Warn("Operation Delete is not supported on Node type")
 	return errors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
-		Operation: "Delete",
+		Operation:  "Delete",
 	}
 }
 
-func (c *nodeClient) Get(key model.Key) (*model.KVPair, error){
+func (c *nodeClient) Get(key model.Key) (*model.KVPair, error) {
 	log.Debug("Received Get request on Node type")
 	node, err := c.clientSet.Nodes().Get(key.(model.NodeKey).Hostname, metav1.GetOptions{})
 	if err != nil {
@@ -85,7 +85,7 @@ func (c *nodeClient) Get(key model.Key) (*model.KVPair, error){
 	return kvp, nil
 }
 
-func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error){
+func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 	log.Debug("Received List request on Node type")
 	nodes, err := c.clientSet.Nodes().List(kapiv1.ListOptions{})
 	if err != nil {
@@ -105,7 +105,7 @@ func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error){
 	return kvps, nil
 }
 
-func (c *nodeClient) EnsureInitialized() error{
+func (c *nodeClient) EnsureInitialized() error {
 	return nil
 }
 
@@ -117,6 +117,6 @@ func (c *nodeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return nodeFakeSyncer{}
 }
 
-type nodeFakeSyncer struct {}
+type nodeFakeSyncer struct{}
 
 func (f nodeFakeSyncer) Start() {}

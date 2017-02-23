@@ -30,12 +30,14 @@ package client_test
 import (
 	"errors"
 	"log"
+	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
@@ -235,4 +237,34 @@ var _ = Describe("Node tests", func() {
 		})
 	})
 
+	Describe("Checking delete/get/list operations perform data validation", func() {
+		testutils.CleanEtcd()
+		c, _ := testutils.NewClient("")
+		var err error
+		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})
+
+		// Step-1: Test data validation occurs on get.
+		It("should invoke validation failure", func() {
+			By("Getting a node with an invalid name")
+			_, err = c.Nodes().Get(api.NodeMetadata{Name: "abc/def"})
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+		})
+
+		// Step-2: Test data validation occurs on list.
+		It("should invoke validation failure", func() {
+			By("Listing a node with an invalid name")
+			_, err = c.Nodes().List(api.NodeMetadata{Name: "abc/def"})
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+		})
+
+		// Step-3: Test data validation occurs on delete.
+		It("should invoke validation failure", func() {
+			By("Deleting a node with an invalid name")
+			err = c.Nodes().Delete(api.NodeMetadata{Name: "abc/def"})
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+		})
+	})
 })
