@@ -8,7 +8,7 @@ License:        Apache-2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
-Source35:       calico-felix.conf
+Source35:       calico-felix.init
 Source45:       calico-felix.service
 BuildArch:      x86_64
 
@@ -37,21 +37,28 @@ This package provides common files.
 %package -n calico-felix
 Group:          Applications/Engineering
 Summary:        Project Calico virtual networking for cloud data centers
+%if 0%{?el7}
 Requires:       calico-common, conntrack-tools, ipset, iptables, iptables-utils, net-tools, iproute, which
+%else
+Requires:       calico-common, conntrack-tools, ipset, iptables, net-tools, iproute, which
+%endif
 
 
 %description -n calico-felix
 This package provides the Felix component.
 
 %post -n calico-felix
-%if 0%{?el7}
 if [ $1 -eq 1 ] ; then
     # Initial installation
+%if 0%{?el7}
     /usr/bin/systemctl daemon-reload
     /usr/bin/systemctl enable calico-felix
     /usr/bin/systemctl start calico-felix
-fi
+%else
+    /sbin/chkconfig -add calico-felix >/dev/null 2>&1 || :
+    /etc/init.d/calico-felix start >/dev/null 2>&1 || :
 %endif
+fi
 
 %preun -n calico-felix
 if [ $1 -eq 0 ] ; then
@@ -60,7 +67,8 @@ if [ $1 -eq 0 ] ; then
     /usr/bin/systemctl disable calico-felix
     /usr/bin/systemctl stop calico-felix
 %else
-    /sbin/initctl stop calico-felix >/dev/null 2>&1 || :
+    /etc/init.d/calico-felix stop >/dev/null 2>&1 || :
+    /sbin/chkconfig -del calico-felix >/dev/null 2>&1 || :
 %endif
 fi
 
@@ -70,17 +78,14 @@ if [ $1 -ge 1 ] ; then
 %if 0%{?el7}
     /usr/bin/systemctl condrestart calico-felix >/dev/null 2>&1 || :
 %else
-    /sbin/initctl restart calico-felix >/dev/null 2>&1 || :
+    /etc/init.d/calico-felix condrestart >/dev/null 2>&1 || :
 %endif
 fi
-
 
 %prep
 %setup -q
 
-
 %build
-
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -93,12 +98,12 @@ install -d -m 755 %{buildroot}%{_sysconfdir}
 %if 0%{?el7}
     install -d -m 755 %{buildroot}%{_unitdir}
 %else
-    install -d -m 755 %{buildroot}%{_sysconfdir}/init
+    install -d -m 755 %{buildroot}%{_sysconfdir}/init.d
 %endif
 
-# For EL6, install upstart jobs
+# For EL6, install init script
 %if 0%{?el6}
-    install -p -m 755 %{SOURCE35} %{buildroot}%{_sysconfdir}/init/calico-felix.conf
+    install -p -m 755 %{SOURCE35} %{buildroot}%{_sysconfdir}/init.d/calico-felix
 %endif
 
 # For EL7, install systemd service files
@@ -139,7 +144,7 @@ rm -rf $RPM_BUILD_ROOT
 %if 0%{?el7}
     %{_unitdir}/calico-felix.service
 %else
-    %{_sysconfdir}/init/calico-felix.conf
+    %{_sysconfdir}/init.d/calico-felix
 %endif
 %{_sysconfdir}/logrotate.d/calico-felix
 %doc
@@ -187,7 +192,7 @@ rm -rf $RPM_BUILD_ROOT
 * Wed Dec 07 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc4
   - Felix 2.0.0-rc4 (from Git commit 706bb9c).
     Felix version 2.0.0-rc4
-    
+
     - Record Deb/RPM packaging for Felix 2.0.0-rc3
     - If an interface is down, make sure we remove its routes.
     - Make rule generation tolerate missing IP version for ICMP.
@@ -198,7 +203,7 @@ rm -rf $RPM_BUILD_ROOT
 * Mon Dec 05 2016 Neil Jerram <neil@tigera.io> 2.0.0-0.1.rc3
   - Felix 2.0.0-rc3 (from Git commit 6bdd086).
     Felix version 2.0.0-rc3
-    
+
     - Add 5 minutes to initial usage reporting delay
     - Record Felix 2.0.0-rc2 packaging
     - Clean up some minor release process niggles

@@ -3,6 +3,11 @@
 set -x
 set -e
 
+if [ -z "${EL_VERSION}" ]; then
+  echo "EL_VERSION variable should be set"
+  exit 1
+fi
+
 repo=/code/
 pkg=felix
 
@@ -44,9 +49,17 @@ cp -r etc \
 cd /tmp
 tar -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
 
-# Build.
+# Build, and fix centos7 putting always '.centos7' in the rpm-name
 cd rpmbuild
-rpmbuild --define '_topdir '`pwd` -ba SPECS/${spec}
+rpmbuild --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
 
-rm -rf /code/dist/rpms
-cp -r /tmp/rpmbuild /code/dist/rpms
+case "$EL_VERSION" in
+  "el7")
+    rm -rf /code/dist/rpms
+    cp -r /tmp/rpmbuild /code/dist/rpms
+    ;;
+  "el6")
+    rm -rf /code/dist/rpms/el6-rpms
+    cp -r /tmp/rpmbuild /code/dist/el6-rpms
+    ;;
+esac

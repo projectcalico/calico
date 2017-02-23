@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+#       /etc/rc.d/init.d/calico-felix
+#
+# chkconfig: 2345 08 92
+# description: Starts and stops calico-felix
+#
+### BEGIN INIT INFO
+# Provides: calico-felix
+# Required-Start:
+# Required-Stop:
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: start and stop calico-felix
+# Description: start and stop calico-felix
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+DAEMON=/usr/bin/calico-felix
+PIDFILE=/var/run/calico/calico-felix.pid
+
+start() {
+        echo -n "Starting calico-felix: "
+        mkdir -p /var/run/calico
+        daemon --pidfile=$PIDFILE " { $DAEMON > /dev/null 2>&1 & } ; echo \$! >| $PIDFILE "
+        retval=$?
+        touch /var/lock/subsys/calico-felix
+        return $retval
+}
+
+stop() {
+        echo -n "Shutting down calico-felix: "
+        killproc -p $PIDFILE $NAME
+        rm -f /var/lock/subsys/calico-felix
+        return $retval
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status -p $PIDFILE $NAME
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        kill -HUP $PIDFILE
+        ;;
+    condrestart)
+        [ -f /var/lock/subsys/calico-felix ] && restart || :
+        ;;
+    *)
+        echo "Usage: calico-felix {start|stop|status|reload|restart}"
+        exit 1
+        ;;
+esac
+exit $?

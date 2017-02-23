@@ -33,7 +33,8 @@
 #                           |                   docker build
 #                           v                         |
 #            +----------------------------+           |
-#            |  RPM packages for Centos7  |           v
+#            |  RPM packages for Centos7  |           |
+#            |  RPM packages for Centos6  |           v
 #            | Debian packages for Xenial |    +--------------+
 #            | Debian packages for Trusty |    | calico/felix |
 #            +----------------------------+    +--------------+
@@ -123,6 +124,16 @@ calico-build/centos7:
 	  -f centos7-build.Dockerfile \
 	  -t calico-build/centos7 .
 
+# Construct a docker image for building Centos 6 RPMs.
+.PHONY: calico-build/centos6
+calico-build/centos6:
+	cd docker-build-images && \
+	  docker build \
+	  --build-arg=UID=$(MY_UID) \
+	  --build-arg=GID=$(MY_GID) \
+	  -f centos6-build.Dockerfile \
+	  -t calico-build/centos6 .
+
 # Build the calico/felix docker image, which contains only Felix.
 .PHONY: calico/felix
 calico/felix: bin/calico-felix
@@ -171,6 +182,7 @@ ifeq ($(GIT_COMMIT),<unknown>)
 	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
 endif
 	$(MAKE) calico-build/centos7
+	$(MAKE) calico-build/centos6
 	utils/make-packages.sh rpm
 
 .PHONY: protobuf
