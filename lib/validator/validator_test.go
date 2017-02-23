@@ -287,7 +287,7 @@ func init() {
 
 		// (API) IPIPConfiguration
 		Entry("should accept IPIP disabled", api.IPIPConfiguration{Enabled: false}, true),
-		Entry("should accept IPIP disabled with mode badVal", api.IPIPConfiguration{Enabled: false, Mode: "badVal"}, true),
+		Entry("should reject IPIP disabled with mode badVal", api.IPIPConfiguration{Enabled: false, Mode: "badVal"}, false),
 		Entry("should accept IPIP enabled with no mode", api.IPIPConfiguration{Enabled: true}, true),
 		Entry("should reject IPIP enabled with mode off", api.IPIPConfiguration{Enabled: true, Mode: "off"}, false),
 		Entry("should reject IPIP enabled with mode badVal", api.IPIPConfiguration{Enabled: true, Mode: "badVal"}, false),

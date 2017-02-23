@@ -79,6 +79,7 @@ func init() {
 	registerFieldValidator("labels", validateLabels)
 	registerFieldValidator("scopeglobalornode", validateScopeGlobalOrNode)
 	registerFieldValidator("ipversion", validateIPVersion)
+	registerFieldValidator("ipipmode", validateIPIPMode)
 
 	// Register struct validators.
 	registerStructValidator(validateProtocol, numorstring.Protocol{})
@@ -86,7 +87,6 @@ func init() {
 	registerStructValidator(validateIPNAT, api.IPNAT{})
 	registerStructValidator(validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validateHostEndpointSpec, api.HostEndpointSpec{})
-	registerStructValidator(validateIPIPConfiguration, api.IPIPConfiguration{})
 	registerStructValidator(validateIPPool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
@@ -145,6 +145,12 @@ func validateIPVersion(v *validator.Validate, topStruct reflect.Value, currentSt
 	ver := field.Int()
 	log.Debugf("Validate ip version: %d", ver)
 	return ver == 4 || ver == 6
+}
+
+func validateIPIPMode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate name: %s", s)
+	return ipipModeRegex.MatchString(s)
 }
 
 func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
@@ -308,23 +314,11 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 			log.Debugf("Pool CIDR: %s, num bits: %d", pool.Metadata.CIDR, bits-ones)
 			if bits-ones < 6 {
 				structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-					"CIDR", "", reason("IP pool is too small"))
+					"CIDR", "", reason("IP pool CIDR is too small to an IPAM enabled pool"))
 			}
 		}
 	}
 
-}
-
-func validateIPIPConfiguration(v *validator.Validate, structLevel *validator.StructLevel) {
-	ipip := structLevel.CurrentStruct.Interface().(api.IPIPConfiguration)
-
-	log.Debugf("Validate IPIP: Enabled %b, Mode: %s", ipip.Enabled, ipip.Mode)
-	if ipip.Enabled {
-		if !ipipModeRegex.MatchString(string(ipip.Mode)) {
-			structLevel.ReportError(reflect.ValueOf(ipip.Mode),
-				"Mode", "", reason("When IPIP Enabled, Mode should be always, <empty string>, or cross-subnet"))
-		}
-	}
 }
 
 func validateICMPFields(v *validator.Validate, structLevel *validator.StructLevel) {
