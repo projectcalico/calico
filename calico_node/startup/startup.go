@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -459,7 +460,6 @@ func configureIPPools(client *client.Client) {
 	// Read in environment variables for use here and later.
 	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
 	ipv6Pool := os.Getenv("CALICO_IPV6POOL_CIDR")
-	ipipEnabled := strings.ToLower(os.Getenv("CALICO_IPIP_ENABLED")) == "true"
 
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
 		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
@@ -471,11 +471,14 @@ func configureIPPools(client *client.Client) {
 		return
 	}
 
+	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
+
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(api.IPPoolMetadata{})
 	if err != nil {
 		fatal("Unable to fetch IP pool list: %s", err)
 		terminate()
+		return // not really needed but allows testing to function
 	}
 
 	// Check for IPv4 and IPv6 pools.
@@ -495,9 +498,10 @@ func configureIPPools(client *client.Client) {
 		ipv4Pool = DEFAULT_IPV4_POOL_CIDR
 	}
 	_, ipv4Cidr, err := net.ParseCIDR(ipv4Pool)
-	if err != nil {
+	if err != nil || ipv4Cidr.Version() != 4 {
 		fatal("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
 		terminate()
+		return // not really needed but allows testing to function
 	}
 
 	// Read IPV6 CIDR from env if set and parse then check it for errors
@@ -505,19 +509,20 @@ func configureIPPools(client *client.Client) {
 		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
 	}
 	_, ipv6Cidr, err := net.ParseCIDR(ipv6Pool)
-	if err != nil {
+	if err != nil || ipv6Cidr.Version() != 6 {
 		fatal("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
 		terminate()
+		return // not really needed but allows testing to function
 	}
 
 	// Ensure there are pools created for each IP version.
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
-		createIPPool(client, ipv4Cidr, ipipEnabled)
+		createIPPool(client, ipv4Cidr, ipv4IpipModeEnvVar)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
-		createIPPool(client, ipv6Cidr, ipipEnabled)
+		createIPPool(client, ipv6Cidr, string(ipip.Undefined))
 	}
 }
 
@@ -542,19 +547,34 @@ func ipv6Supported() bool {
 
 // createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(client *client.Client, cidr *net.IPNet, ipip bool) {
+func createIPPool(client *client.Client, cidr *net.IPNet, ipipModeName string) {
 	version := cidr.Version()
+	ipipMode := ipip.Mode(ipipModeName)
 
-	log.Infof("Ensure default IPv%d pool is created. IPIP enabled: %t", version, ipip)
+	// off is not an actual valid value so switch it to an empty string
+	if ipipModeName == "off" {
+		ipipMode = ipip.Undefined
+	}
+
 	pool := &api.IPPool{
 		Metadata: api.IPPoolMetadata{
 			CIDR: *cidr,
 		},
 		Spec: api.IPPoolSpec{
 			NATOutgoing: true,
-			IPIP:        &api.IPIPConfiguration{Enabled: ipip},
+			IPIP: &api.IPIPConfiguration{
+				Enabled: ipipMode != ipip.Undefined,
+				Mode:    ipipMode,
+			},
 		},
 	}
+
+	// Use off when logging for disabled instead of blank
+	if ipipMode == ipip.Undefined {
+		ipipModeName = "off"
+	}
+
+	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s", version, ipipModeName)
 
 	// Create the pool.  There is a small chance that another node may
 	// beat us to it, so handle the fact that the pool already exists.
@@ -564,8 +584,8 @@ func createIPPool(client *client.Client, cidr *net.IPNet, ipip bool) {
 			terminate()
 		}
 	} else {
-		message("Created default IPv%d pool (%s) with NAT outgoing enabled. IPIP enabled: %t",
-			version, cidr, ipip)
+		message("Created default IPv%d pool (%s) with NAT outgoing enabled. IPIP mode: %s",
+			version, cidr, ipipModeName)
 	}
 }
 
