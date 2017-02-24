@@ -1,11 +1,11 @@
 # Handle old CALICO_NETWORKING environment by converting to the new config.
 if [ -n "$CALICO_NETWORKING" ]; then
-    echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
-    if [ "$CALICO_NETWORKING" == "false" ]; then
-        export CALICO_NETWORKING_BACKEND=none
-    else
-        export CALICO_NETWORKING_BACKEND=bird
-    fi
+	echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
+	if [ "$CALICO_NETWORKING" == "false" ]; then
+		export CALICO_NETWORKING_BACKEND=none
+	else
+		export CALICO_NETWORKING_BACKEND=bird
+	fi
 fi
 
 # Run the startup initialisation script.  These ensure the node is correctly
@@ -34,16 +34,16 @@ if [ -z "$CALICO_DISABLE_FELIX" ]; then
 fi
 
 case "$CALICO_NETWORKING_BACKEND" in
-    "none" )
+	"none" )
 	# If running in policy only mode, we don't need to run BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is none - no BGP daemon running"
 	;;
-    "gobgp" )
+	"gobgp" )
 	# Run calico-bgp-daemon instead of BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
 	cp -a /etc/service/available/calico-bgp-daemon /etc/service/enabled/
 	;;
-    * )
+	* )
 	# Run BIRD / Confd.
 	#
 	# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
@@ -57,18 +57,23 @@ case "$CALICO_NETWORKING_BACKEND" in
 
 	# Run confd twice.  Our confd TOML files are also generated from confd, so
 	# running twice ensures our starting configuration is correct.
-	# Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
-	ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
+	if [ "$DATASTORE_TYPE" = "kubernetes" ]; then
+		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-1.log 2>&1 || true
+		confd -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug -keep-stage-file >/felix-startup-2.log 2>&1 || true
+	else
+		# Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
+		ETCD_NODE=${ETCD_ENDPOINTS:=${ETCD_SCHEME:=http}://${ETCD_AUTHORITY}}
 
-	# confd needs a "-node" arguments for each etcd endpoint.
-	ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
+		# confd needs a "-node" arguments for each etcd endpoint.
+		ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
 
-	confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
-	      -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-	      -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
-	confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
-	      -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
-	      -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
+		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
+			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
+			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
+		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
+			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
+			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
+	fi
 
 	# Enable the confd and bird services
 	cp -a /etc/service/available/bird  /etc/service/enabled/
