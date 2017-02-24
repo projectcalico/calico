@@ -253,7 +253,9 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	startTime := time.Now()
 	cmd.Start()
+	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
 	s.existingIPSetNames.Clear()
 	scanner := bufio.NewScanner(out)
 	ipSetName := ""
@@ -458,7 +460,9 @@ func (s *IPSets) tryUpdates() error {
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	// TODO(smc) Do something with the output.
+	startTime := time.Now()
 	cmd.Start()
+	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
 
 	// Ask each dirty IP set to write its updates to the stream.
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {

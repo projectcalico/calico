@@ -46,6 +46,10 @@ var (
 		Name: "felix_ipset_lines_executed",
 		Help: "Number of ipset operations executed.",
 	})
+	summaryExecStart = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_exec_time_micros",
+		Help: "Summary of time taken to fork/exec child processes",
+	})
 )
 
 func init() {
@@ -54,6 +58,7 @@ func init() {
 	prometheus.MustRegister(countNumIPSetCalls)
 	prometheus.MustRegister(countNumIPSetErrors)
 	prometheus.MustRegister(countNumIPSetLinesExecuted)
+	prometheus.MustRegister(summaryExecStart)
 }
 
 const MaxIPSetNameLength = 31
