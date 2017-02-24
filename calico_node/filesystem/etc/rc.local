@@ -27,8 +27,11 @@ mkdir /etc/service/enabled
 # dirs contained in Docker image. This is due to bug in Docker with graphdriver
 # overlay on CentOS 7.X kernels (https://github.com/docker/docker/issues/15314)
 
-# Felix is always enabled
-cp -a /etc/service/available/felix /etc/service/enabled/
+# Allow felix to be disabled, for example, if the user is running Felix
+# outside the container.
+if [ -z "$CALICO_DISABLE_FELIX" ]; then
+  cp -a /etc/service/available/felix /etc/service/enabled/
+fi
 
 case "$CALICO_NETWORKING_BACKEND" in
     "none" )
