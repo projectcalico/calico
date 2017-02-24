@@ -12,7 +12,7 @@ using the Calico APIs directly.
 Use the navigation bar on the left to view information on Calico for Kubernetes,
 or continue reading for recommended guides to get started.
 
-## Installation Guides
+## Installing Calico for Kubernetes
 
 There are two main ways to install Calico on Kubernetes.
 
@@ -44,7 +44,7 @@ This guide covers launching a Kubernetes cluster on AWS with Calico.
 
 This guide covers launching a Kubernetes cluster on GCE with Calico.
 
-## Tutorials
+## Using Calico with Kubernetes
 
 The following tutorials walk through policy configurations for Calico in Kubernetes.
 

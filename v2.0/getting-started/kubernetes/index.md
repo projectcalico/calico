@@ -2,17 +2,17 @@
 title: Calico for Kubernetes
 ---
 
-Calico enables first-class networking and network policy in Kubernetes clusters across the cloud.  Calico works 
-everywhere - on all major public cloud providers and private clouds as well. 
+Calico enables first-class networking and network policy in Kubernetes clusters across the cloud.  Calico works
+everywhere - on all major public cloud providers and private clouds as well.
 
 Calico supports the Kubernetes [NetworkPolicy API](http://kubernetes.io/docs/user-guide/networkpolicies/),
-and can also be used to implement even [more fine-grained policy](tutorials/advanced-policy) 
+and can also be used to implement even [more fine-grained policy](tutorials/advanced-policy)
 using the Calico APIs directly.
 
 Use the navigation bar on the left to view information on Calico for Kubernetes,
 or continue reading for recommended guides to get started.
 
-## Installation Guides
+## Installing Calico for Kubernetes
 
 There are two main ways to install Calico on Kubernetes.
 
@@ -28,8 +28,8 @@ this guide if you're integrating Calico with your own configuration management t
 
 ## Quick Start Guides
 
-The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a 
-Calico self-hosted installation. 
+The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a
+Calico self-hosted installation.
 
 #### [Vagrant and Container Linux by CoreOS ]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
 
@@ -44,7 +44,7 @@ This guide covers launching a Kubernetes cluster on AWS with Calico.
 
 This guide covers launching a Kubernetes cluster on GCE with Calico.
 
-## Tutorials
+## Using Calico with Kubernetes
 
 The following tutorials walk through policy configurations for Calico in Kubernetes.
 
@@ -62,12 +62,12 @@ connections as policy is implemented.
 
 #### [Advanced Policy Demo](tutorials/advanced-policy)
 
-The advanced policy demo walks through using Calico to provide policy features beyond 
+The advanced policy demo walks through using Calico to provide policy features beyond
 what can be done with the Kubernetes NetworkPolicy API like egress and CIDR based policy.
 
 ## Third Party Integrations
 
-A number of popular Kubernetes installers use Calico to provide networking and/or network policy.  
+A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
 Here are a few, listed alphabetically.
 
 - [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
