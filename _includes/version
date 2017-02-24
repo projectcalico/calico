@@ -1,1 +1,0 @@
-{% assign component = (site.data.versions[page.version].first.components | where:"name", include.component | first) %}{{ component.version}}

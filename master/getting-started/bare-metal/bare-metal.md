@@ -64,7 +64,7 @@ these steps, described in more detail below:
 
 Download the calicoctl binary onto your host.
 
-	wget {% include version.url component="calicoctl" %}
+	wget {{site.data.versions[page.version].first.components.calicoctl.download_url}}
 	chmod +x calicoctl
 
 This binary should be placed in your `$PATH` so it can be run from any

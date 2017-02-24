@@ -12,7 +12,7 @@ Use the version selector at the top-right of this page to view a different relea
 {{ release.note }}
 
 | Component              | Version |
-|------------------------|---------|{% for component in release.components %}
-| {{ component.name }}   | [{{ component.version }}]({{ component.url }}) |{% endfor %}
+|------------------------|---------|{% for component_name in release.components %}
+| {{ component_name[0] }}   | [{{ component_name[1].version }}]({{ component_name[1].url }}) |{% endfor %}
 
 {% endfor %}
