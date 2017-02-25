@@ -17,7 +17,7 @@ You can easily create a cluster compatible with this manifest by following [the 
 To install this Calico and a single node etcd, run the following command:
 
 ```
-kubectl apply -f http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/calico.yaml
 ```
 
 You can download the addon manfiest [here](calico.yaml)
