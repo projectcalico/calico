@@ -141,7 +141,7 @@ spec:
   hostNetwork: true
   containers:
   - name: calicoctl
-    image: quay.io/calico/ctl:{% include version component="calicoctl" %}
+    image: quay.io/calico/ctl:{{site.data.versions[page.version].first.components.calicoctl.version}}
     command: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
     env:
     - name: ETCD_ENDPOINTS

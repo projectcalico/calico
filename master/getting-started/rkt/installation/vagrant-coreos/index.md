@@ -88,7 +88,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --mount=volume=logs,target=/var/log/calico \
   --set-env=IP=autodetect \
   --net=host \
-  quay.io/calico/node:{% include version component="calico/node" %} &
+  quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}} &
 ```
 
 This will create a calico/node rkt container.
@@ -98,7 +98,7 @@ You can check that it's running using `sudo rkt list`.
 ```shell
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  quay.io/calico/node:{% include version component="calico/node" %}  running 10 seconds ago  10 seconds ago
+b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}  running 10 seconds ago  10 seconds ago
 ```
 
 ## Try out Calico networking

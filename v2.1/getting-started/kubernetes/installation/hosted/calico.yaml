@@ -104,7 +104,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:{% include version component="calico/node" %}
+          image: quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -165,7 +165,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:{% include version component="calico/cni" %}
+          image: quay.io/calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
@@ -240,7 +240,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-policy-controller
-          image: quay.io/calico/kube-policy-controller:{% include version component="calico/kube-policy-controller" %}
+          image: quay.io/calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -311,7 +311,7 @@ spec:
       containers:
         # Writes basic configuration to datastore.
         - name: configure-calico
-          image: quay.io/calico/ctl:{% include version component="calicoctl" %}
+          image: quay.io/calico/ctl:{{site.data.versions[page.version].first.components.calicoctl.version}}
           args:
           - apply
           - -f

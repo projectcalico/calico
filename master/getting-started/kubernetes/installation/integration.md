@@ -55,7 +55,7 @@ done using the `calicoctl` utility.
 
 ```
 # Download and install `calicoctl`
-wget {% include version.url component="calicoctl" %}
+wget {{site.data.versions[page.version].first.components.calicoctl.download_url}}
 sudo chmod +x calicoctl
 
 # Run the calico/node container
@@ -94,7 +94,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
-  quay.io/calico/node:{% include version component="calico/node" %}
+  quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
 ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10

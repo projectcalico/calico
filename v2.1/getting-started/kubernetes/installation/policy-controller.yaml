@@ -27,7 +27,7 @@ spec:
       containers:
         - name: calico-policy-controller
           # Make sure to pin this to your desired version.
-          image: quay.io/calico/kube-policy-controller:{% include version component="calico/kube-policy-controller" %}
+          image: quay.io/calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
           env:
             # Configure the policy controller with the location of
             # your etcd cluster.
