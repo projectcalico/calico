@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -49,6 +48,9 @@ type IPSets struct {
 	// Factory for command objects; shimmed for UT mocking.
 	newCmd cmdFactory
 
+	// Shim for time.Sleep()
+	sleep func(time.Duration)
+
 	gaugeNumIpsets prometheus.Gauge
 
 	logCxt *log.Entry
@@ -58,6 +60,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		newRealCmd,
+		time.Sleep,
 	)
 }
 
@@ -65,6 +68,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
 func NewIPSetsWithShims(
 	ipVersionConfig *IPVersionConfig,
 	cmdFactory cmdFactory,
+	sleep func(time.Duration),
 ) *IPSets {
 	familyStr := string(ipVersionConfig.Family)
 	return &IPSets{
@@ -76,6 +80,7 @@ func NewIPSetsWithShims(
 		dirtyIPSetIDs:         set.New(),
 		pendingIPSetDeletions: set.New(),
 		newCmd:                cmdFactory,
+		sleep:                 sleep,
 		existingIPSetNames:    set.New(),
 		resyncRequired:        true,
 
@@ -87,8 +92,20 @@ func NewIPSetsWithShims(
 	}
 }
 
+// AddOrReplaceIPSet queues up the creation (or replacement) of an IP set.  After the next call
+// to ApplyUpdates(), the IP sets will be replaced with the new contents and the set's metadata
+// will be updated as appropriate.
 func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) {
+	// We need to convert members to a canonical representation (which may be, for example,
+	// an ip.Addr instead of a string) so that we can compare them with members that we read
+	// back from the dataplane.  This also filters out IPs of the incorrect IP version.
+	s.logCxt.WithFields(log.Fields{
+		"setID":   setMetadata.SetID,
+		"setType": setMetadata.Type,
+	}).Info("Queueing IP set for creation")
 	canonMembers := s.filterAndCanonicaliseMembers(setMetadata.Type, members)
+
+	// Create the IP set struct and store it off.
 	setID := setMetadata.SetID
 	ipSet := &ipSet{
 		IPSetMetadata:    setMetadata,
@@ -100,13 +117,19 @@ func (s *IPSets) AddOrReplaceIPSet(setMetadata IPSetMetadata, members []string) 
 	}
 	s.ipSetIDToIPSet[setID] = ipSet
 	s.mainIPSetNameToIPSet[s.IPVersionConfig.NameForMainIPSet(setID)] = ipSet
+
+	// Mark IP set dirty so ApplyUpdates() will rewrite it.
 	s.dirtyIPSetIDs.Add(setID)
+
+	// The IP set may have been previously queued for deletion, undo that.
 	s.pendingIPSetDeletions.Discard(ipSet.MainIPSetName)
 	s.pendingIPSetDeletions.Discard(ipSet.TempIPSetName)
 }
 
+// RemoveIPSet queues up the removal of an IP set, it need not be empty.  The IP sets will be
+// removed on the next call to ApplyDeletions().
 func (s *IPSets) RemoveIPSet(setID string) {
-	s.logCxt.WithField("setID", setID).Info("Removing IP set")
+	s.logCxt.WithField("setID", setID).Info("Queueing IP set for removal")
 	delete(s.ipSetIDToIPSet, setID)
 	mainIPSetName := s.IPVersionConfig.NameForMainIPSet(setID)
 	tempIPSetName := s.IPVersionConfig.NameForTempIPSet(setID)
@@ -116,6 +139,8 @@ func (s *IPSets) RemoveIPSet(setID string) {
 	s.pendingIPSetDeletions.Add(tempIPSetName)
 }
 
+// AddMembers adds the given members to the IP set.  Filters out members that are of the incorrect
+// IP version.
 func (s *IPSets) AddMembers(setID string, newMembers []string) {
 	ipSet := s.ipSetIDToIPSet[setID]
 	setType := ipSet.Type
@@ -148,16 +173,14 @@ func (s *IPSets) AddMembers(setID string, newMembers []string) {
 	s.dirtyIPSetIDs.Add(setID)
 }
 
-func (s *IPSets) QueueResync() {
-	s.logCxt.Info("Forcing a resync with the dataplane on next update.")
-	s.resyncRequired = true
-}
-
+// RemoveMembers queues up removal of the given members from an IP set.  Members of the wrong IP
+// version are ignored.
 func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	ipSet := s.ipSetIDToIPSet[setID]
 	setType := ipSet.Type
 	canonMembers := s.filterAndCanonicaliseMembers(setType, removedMembers)
 	if canonMembers.Len() == 0 {
+		log.Debug("After filtering, found no members to remove")
 		return
 	}
 	s.logCxt.WithFields(log.Fields{
@@ -185,6 +208,12 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	s.dirtyIPSetIDs.Add(setID)
 }
 
+// QueueResync forces a resync with the dataplane on the next ApplyUpdates() call.
+func (s *IPSets) QueueResync() {
+	s.logCxt.Info("Asked to resync with the dataplane on next update.")
+	s.resyncRequired = true
+}
+
 func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []string) set.Set {
 	filtered := set.New()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
@@ -200,8 +229,12 @@ func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []str
 
 func (s *IPSets) ApplyUpdates() {
 	success := false
-	lastNumProblems := -1
-	for attempts := 0; attempts < 3; attempts++ {
+	retryDelay := 1 * time.Millisecond
+	backOff := func() {
+		s.sleep(retryDelay)
+		retryDelay *= 2
+	}
+	for attempts := 0; attempts < 10; attempts++ {
 		if s.resyncRequired {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
@@ -209,15 +242,13 @@ func (s *IPSets) ApplyUpdates() {
 			numProblems, err := s.tryResync()
 			if err != nil {
 				s.logCxt.WithError(err).Error("Failed to resync with dataplane")
+				backOff()
 				continue
 			}
-			if lastNumProblems >= 0 && numProblems < lastNumProblems {
-				// Number of problems is going down, allow more retries.
-				s.logCxt.WithField("numInconsistencies", numProblems).Info(
-					"IP sets converging, allowing more retries.")
-				attempts--
+			if numProblems > 0 {
+				s.logCxt.WithField("numProblems", numProblems).Info(
+					"Found inconsistencies in dataplane")
 			}
-			lastNumProblems = numProblems
 			s.resyncRequired = false
 		}
 
@@ -225,10 +256,12 @@ func (s *IPSets) ApplyUpdates() {
 			s.logCxt.WithError(err).Error("Failed to update IP sets.")
 			s.resyncRequired = true
 			countNumIPSetErrors.Inc()
+			backOff()
 			continue
 		}
 
 		success = true
+		break
 	}
 	if !success {
 		s.dumpIPSetsToLog()
@@ -237,7 +270,10 @@ func (s *IPSets) ApplyUpdates() {
 	gaugeNumTotalIpsets.Set(float64(s.existingIPSetNames.Len()))
 }
 
+// tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
+// IP sets in the dataplane and queues up update to any IP sets that are out-of-sync.
 func (s *IPSets) tryResync() (numProblems int, err error) {
+	// Log the time spet as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
 		log.WithFields(log.Fields{
@@ -246,17 +282,50 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		}).Info("Finished resync")
 	}()
 
-	cmd := exec.Command("ipset", "list")
+	// Start an 'ipset list' child process, which will emit output of the following form:
+	//
+	// 	Name: test-100
+	//	Type: hash:ip
+	//	Revision: 4
+	//	Header: family inet hashsize 1024 maxelem 65536
+	//	Size in memory: 224
+	//	References: 0
+	//	Members:
+	//	10.0.0.2
+	//	10.0.0.1
+	//
+	//	Name: test-1
+	//	Type: hash:ip
+	//	Revision: 4
+	//	Header: family inet hashsize 1024 maxelem 65536
+	//	Size in memory: 224
+	//	References: 0
+	//	Members:
+	//	10.0.0.1
+	//	10.0.0.2
+	//
+	// As we stream through the data, we extract the name of the IP set and its members. We
+	// use the IP set's metadata to convert each member to its canonical form for comparison.
+	cmd := s.newCmd("ipset", "list")
+	// Grab stdout as a pipe so we can stream through the (potentially very large) output.
 	out, err := cmd.StdoutPipe()
 	if err != nil {
+		log.WithError(err).Error("Failed to get pipe for 'ipset list'")
 		return
 	}
+	// Capture error output into a buffer.
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	startTime := time.Now()
-	cmd.Start()
-	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
+	cmd.SetStderr(&stderr)
+	execStartTime := time.Now()
+	err = cmd.Start()
+	if err != nil {
+		log.WithError(err).Error("Failed to start 'ipset list'")
+		return
+	}
+	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
+	// Clear the set of known IP sets names, we'll fill it back in as we scan.
 	s.existingIPSetNames.Clear()
+	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
 	ipSetName := ""
 	for scanner.Scan() {
@@ -264,14 +333,36 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		if strings.HasPrefix(line, "Name:") {
 			ipSetName = strings.Split(line, " ")[1]
 			s.existingIPSetNames.Add(ipSetName)
+			s.logCxt.WithField("setName", ipSetName).Debug("Parsing IP set.")
 		}
 		if strings.HasPrefix(line, "Members:") {
+			// Start of a Members entry, following this, there'll be one member per
+			// line then EOF or a blank line.
+
+			// Look up to see if this is one of our IP sets.
 			ipSet := s.mainIPSetNameToIPSet[ipSetName]
 			logCxt := log.WithField("setName", ipSetName)
-			if ipSet != nil {
-				logCxt = log.WithField("setID", ipSet.SetID)
+			if ipSet == nil || ipSet.members == nil {
+				// Either this is not one of our IP sets, or it's one that we're
+				// about to rewrite.  Either way, we don't care about its members
+				// so simply scan past them.
+				logCxt.Debug("Skipping IP set, either not ours or about to rewrite")
+				for scanner.Scan() {
+					line := scanner.Bytes()
+					if len(line) == 0 {
+						// End of members
+						ipSetName = ""
+						break
+					}
+				}
+				ipSetName = ""
+				continue
 			}
-			dpMembers := set.New()
+
+			// One of our IP sets and we're not planning to rewrite it; we need to
+			// load its members and compare them.
+			logCxt = log.WithField("setID", ipSet.SetID)
+			dataplaneMembers := set.New()
 			for scanner.Scan() {
 				line := scanner.Text()
 				if line == "" {
@@ -279,24 +370,16 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 					ipSetName = ""
 					break
 				}
-				if ipSet != nil && ipSet.members != nil {
-					// IP set is in delta-update mode; collect the members we
-					// see in the dataplane.
-					canonMember := ipSet.Type.CanonicaliseMember(line)
-					dpMembers.Add(canonMember)
-					logCxt.WithFields(log.Fields{
-						"member": line,
-						"canon":  canonMember,
-					}).Debug("Found member in dataplane")
-				}
+				canonMember := ipSet.Type.CanonicaliseMember(line)
+				dataplaneMembers.Add(canonMember)
+				logCxt.WithFields(log.Fields{
+					"member": line,
+					"canon":  canonMember,
+				}).Debug("Found member in dataplane")
 			}
 			if scanner.Err() != nil {
-				err = scanner.Err()
-				return
-			}
-			if ipSet == nil || ipSet.members == nil {
-				// Either the ipSet is unknown, or we're about to rewrite it anyway.
-				continue
+				logCxt.WithError(err).Error("Failed to read members from 'ipset list'.")
+				break
 			}
 
 			// If we get here, we've read all the members of the IP set.  Compare them
@@ -304,16 +387,15 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 			numMissing := 0
 			ipSet.members.Iter(func(item interface{}) error {
 				m := item.(ipSetMember)
-				if dpMembers.Contains(m) {
-					// Mainline case, member is in memory and in the dataplane.
-					dpMembers.Discard(m)
+				if dataplaneMembers.Contains(m) {
+					// Mainline (correct) case, member is in memory and in the
+					// dataplane.
+					dataplaneMembers.Discard(m)
 					return nil
 				}
 
-				logCxt := logCxt.WithFields(log.Fields{
-					"member": m.String(),
-				})
-
+				logCxt := logCxt.WithField("member", m.String())
+				numProblems++
 				if ipSet.pendingDeletions.Contains(m) {
 					// We were trying to delete this item anyway, record that
 					// it's already gone.  We commonly hit this case when we're
@@ -335,26 +417,26 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 					logCxt.Debug("Found another member missing")
 				}
 				numMissing++
-				numProblems++
 				s.dirtyIPSetIDs.Add(ipSet.SetID)
 				ipSet.pendingAdds.Add(m)
 				return set.RemoveItem
 			})
 			if numMissing > 0 {
 				logCxt.WithField("numMissing", numMissing).Warn(
-					"Resync found members missing from dataplane.	")
+					"Resync found members missing from dataplane.")
 			}
-			// We removed the members we were expecting above so dpMembers now contains
-			// only unexpected members.
+
+			// Now look for any members which are in the dataplane but are not expected.
+			// We removed the members we were expecting above so dataplaneMembers now
+			// contains only unexpected members.
 			numExtras := 0
-			dpMembers.Iter(func(item interface{}) error {
+			dataplaneMembers.Iter(func(item interface{}) error {
 				m := item.(ipSetMember)
-				logCxt := logCxt.WithFields(log.Fields{
-					"member": m.String(),
-				})
+				logCxt := logCxt.WithField("member", m.String())
 
 				// Record that this member really is in the dataplane.
 				ipSet.members.Add(m)
+				numProblems++
 
 				if ipSet.pendingAdds.Contains(m) {
 					// We were trying to add this item anyway, record that
@@ -376,7 +458,6 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 					logCxt.Debug("Found another extra member.")
 				}
 				numExtras++
-				numProblems++
 				s.dirtyIPSetIDs.Add(ipSet.SetID)
 				ipSet.pendingDeletions.Add(m)
 				return nil
@@ -387,7 +468,7 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 			}
 		}
 	}
-	out.Close()
+	closeErr := out.Close()
 	err = cmd.Wait()
 	logCxt := s.logCxt.WithField("stderr", stderr.String())
 	if scanner.Err() != nil {
@@ -399,13 +480,17 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 		logCxt.WithError(err).Error("Bad return code from 'ipset list'.")
 		return
 	}
+	if closeErr != nil {
+		err = closeErr
+		logCxt.WithError(err).Error("Failed to close stdout from 'ipset list'.")
+		return
+	}
 
 	// Scan for IP sets that need to be cleaned up.  Create a whitelist containing the IP sets
 	// that we expect to be there.
 	expectedIPSets := set.New()
 	for _, ipSet := range s.ipSetIDToIPSet {
 		expectedIPSets.Add(ipSet.MainIPSetName)
-		expectedIPSets.Add(ipSet.TempIPSetName)
 		s.logCxt.WithFields(log.Fields{
 			"ID":       ipSet.SetID,
 			"mainName": ipSet.MainIPSetName,
@@ -441,6 +526,9 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	return
 }
 
+// tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
+// 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
+// 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
 func (s *IPSets) tryUpdates() error {
 	if s.dirtyIPSetIDs.Len() == 0 {
 		s.logCxt.Debug("No dirty IP sets.")
@@ -449,62 +537,61 @@ func (s *IPSets) tryUpdates() error {
 
 	// Set up an ipset restore session.
 	countNumIPSetCalls.Inc()
-	cmd := exec.Command("ipset", "restore")
-	rawStdin, err := cmd.StdinPipe()
+	cmd := s.newCmd("ipset", "restore")
+	// Get the pipe for stdin and wrap it in a buffered writer.  This gives a small performance
+	// improvement.
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to create pipe for ipset restore.")
 		return err
 	}
-	stdin := bufio.NewWriterSize(rawStdin, 65536)
+	// Channel stdout/err to buffers so we can include them in the log on failure.
 	var stdout, stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Stdout = &stdout
-	// TODO(smc) Do something with the output.
+	cmd.SetStderr(&stderr)
+	cmd.SetStdout(&stdout)
+
+	// Actually start the child process.
 	startTime := time.Now()
-	cmd.Start()
+	err = cmd.Start()
+	if err != nil {
+		s.logCxt.WithError(err).Error("Failed to start ipset restore.")
+		return err
+	}
 	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
 
 	// Ask each dirty IP set to write its updates to the stream.
+	var writeErr error
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
 		ipSet := s.ipSetIDToIPSet[item.(string)]
-		err = s.writeUpdates(ipSet, stdin)
-		if err != nil {
+		writeErr = s.writeUpdates(ipSet, stdin)
+		if writeErr != nil {
 			return set.StopIteration
 		}
 		return nil
 	})
-	if err == nil {
-		// No error so far, finish off the input.
-		_, err = stdin.Write([]byte("COMMIT\n"))
-	}
-
-	// Close the pipe, or the command will wait for more input.
-	if err == nil {
-		err = stdin.Flush()
-	}
-	closeErr := rawStdin.Close()
-	if err == nil {
-		err = closeErr
-	}
-
-	rcErr := cmd.Wait()
-	logCxt := s.logCxt.WithFields(log.Fields{
-		"stdout": stdout.String(),
-		"stderr": stderr.String(),
-		"rc":     rcErr,
-	})
-
-	if err != nil {
-		logCxt.WithError(err).Error("Failed to write to ipset restore")
+	// Finish off the input, then flush and close the input, or the command won't terminate.
+	// We need to close and wait whether we hit a write error or not so we defer the error
+	// handling.
+	_, commitErr := stdin.Write([]byte("COMMIT\n"))
+	flushErr := stdin.Flush()
+	closeErr := stdin.Close()
+	processErr := cmd.Wait()
+	if err = firstNonNilErr(writeErr, commitErr, flushErr, closeErr, processErr); err != nil {
+		log.WithFields(log.Fields{
+			"writeErr":   writeErr,
+			"commitErr":  commitErr,
+			"flushErr":   flushErr,
+			"closeErr":   closeErr,
+			"processErr": processErr,
+			"stdout":     stdout.String(),
+			"stderr":     stderr.String(),
+		}).Error("Failed to complete ipset restore, IP sets may be out-of-sync.")
 		return err
-	}
-	if rcErr != nil {
-		logCxt.Error("Bad ipset restore return code")
-		return rcErr
 	}
 
 	// If we get here, the writes were successful, reset the IP sets delta tracking now the
-	// dataplane should be in sync.
+	// dataplane should be in sync.  If we bail out above, then the resync logic will kick in
+	// and figure out how much of our update succeeded.
 	s.dirtyIPSetIDs.Iter(func(item interface{}) error {
 		ipSet := s.ipSetIDToIPSet[item.(string)]
 		if ipSet.pendingReplace != nil {
@@ -557,16 +644,13 @@ func (s *IPSets) writeUpdates(ipSet *ipSet, w io.Writer) error {
 		}
 		logCxt.Info("Calculating deltas to IP set")
 		return s.writeDeltas(ipSet, w)
-	} else {
-		// In full-rewrite mode.
-		// - pendingReplace is non-nil
-		// - membersInDataplane nil
-		// - pendingAdds/Deletions empty.
-		logCxt.Info("Doing full IP set rewrite")
-		return s.writeFullRewrite(ipSet, w)
 	}
-
-	return nil
+	// In full-rewrite mode.
+	// - pendingReplace is non-nil
+	// - membersInDataplane nil
+	// - pendingAdds/Deletions empty.
+	logCxt.Info("Doing full IP set rewrite")
+	return s.writeFullRewrite(ipSet, w)
 }
 
 // writeFullRewrite calculates the ipset restore input required to do a full, atomic, idempotent
@@ -664,8 +748,8 @@ func (s *IPSets) ApplyDeletions() {
 	s.pendingIPSetDeletions.Iter(func(item interface{}) error {
 		setName := item.(string)
 		logCxt := s.logCxt.WithField("setName", setName)
-		logCxt.Info("Deleting IP set (if it exists)")
 		if s.existingIPSetNames.Contains(setName) {
+			logCxt.Info("Deleting IP set.")
 			if err := s.deleteIPSet(setName); err != nil {
 				logCxt.WithError(err).Warning("Failed to delete IP set.")
 			}
@@ -694,10 +778,20 @@ func (s *IPSets) deleteIPSet(setName string) error {
 }
 
 func (s *IPSets) dumpIPSetsToLog() {
-	cmd := exec.Command("ipset", "save")
+	cmd := s.newCmd("ipset", "list")
 	output, err := cmd.Output()
 	if err != nil {
-		s.logCxt.WithError(err).Panic("Failed to read IP sets")
+		s.logCxt.WithError(err).Error("Failed to read IP sets")
+		return
 	}
-	s.logCxt.WithField("output", string(output)).Debug("Current state of IP sets")
+	s.logCxt.WithField("output", string(output)).Info("Current state of IP sets")
+}
+
+func firstNonNilErr(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

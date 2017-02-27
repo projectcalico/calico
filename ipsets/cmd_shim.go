@@ -15,12 +15,31 @@
 package ipsets
 
 import (
+	"bufio"
 	"io"
 	"os/exec"
 )
 
+type WriteFlusher interface {
+	io.Writer
+	Flush() error
+}
+
+type WriteCloserFlusher interface {
+	io.WriteCloser
+	Flush() error
+}
+
 type CmdIface interface {
+	StdinPipe() (WriteCloserFlusher, error)
+	StdoutPipe() (io.ReadCloser, error)
+
 	SetStdin(io.Reader)
+	SetStdout(io.Writer)
+	SetStderr(io.Writer)
+
+	Start() error
+	Wait() error
 	Output() ([]byte, error)
 	CombinedOutput() ([]byte, error)
 }
@@ -34,8 +53,57 @@ func newRealCmd(name string, arg ...string) CmdIface {
 
 type cmdAdapter exec.Cmd
 
+func (c *cmdAdapter) StdinPipe() (WriteCloserFlusher, error) {
+	pipe, err := (*exec.Cmd)(c).StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	buf := bufio.NewWriter(pipe)
+	return &BufferedCloser{
+		BufWriter: buf,
+		Closer:    pipe,
+	}, nil
+}
+
+type BufferedCloser struct {
+	BufWriter WriteFlusher
+	Closer    io.Closer
+}
+
+func (b *BufferedCloser) Write(p []byte) (n int, err error) {
+	return b.BufWriter.Write(p)
+}
+
+func (b *BufferedCloser) Flush() error {
+	return b.BufWriter.Flush()
+}
+
+func (b *BufferedCloser) Close() error {
+	return b.Closer.Close()
+}
+
+func (c *cmdAdapter) StdoutPipe() (io.ReadCloser, error) {
+	return (*exec.Cmd)(c).StdoutPipe()
+}
+
 func (c *cmdAdapter) SetStdin(r io.Reader) {
 	c.Stdin = r
+}
+
+func (c *cmdAdapter) SetStdout(r io.Writer) {
+	c.Stdout = r
+}
+
+func (c *cmdAdapter) SetStderr(r io.Writer) {
+	c.Stderr = r
+}
+
+func (c *cmdAdapter) Start() error {
+	return (*exec.Cmd)(c).Start()
+}
+
+func (c *cmdAdapter) Wait() error {
+	return (*exec.Cmd)(c).Wait()
 }
 
 func (c *cmdAdapter) Output() ([]byte, error) {
