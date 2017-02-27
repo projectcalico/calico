@@ -1,5 +1,6 @@
 ---
 title: Advanced Policy
+redirect_from: latest/getting-started/docker/tutorials/advanced-policy
 ---
 
 ## Background

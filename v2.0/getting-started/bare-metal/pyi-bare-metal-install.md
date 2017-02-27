@@ -1,5 +1,6 @@
 ---
 title: Alternative Felix Install with PyInstaller Bundle
+redirect_from: latest/getting-started/bare-metal/pyi-bare-metal-install
 ---
 
 These instructions will take you through a first-time install of

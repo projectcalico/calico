@@ -1,5 +1,6 @@
 ---
 title: BGP Configuration
+redirect_from: latest/usage/configuration/bgp
 ---
 
 This document describes the commands available in `calicoctl` for managing BGP.

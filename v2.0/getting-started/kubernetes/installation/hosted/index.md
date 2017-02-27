@@ -1,5 +1,6 @@
 ---
 title: Calico Kubernetes Hosted Install
+redirect_from: latest/getting-started/kubernetes/installation/hosted/index
 ---
 
 Calico can be installed on a Kubernetes cluster with a single command.  

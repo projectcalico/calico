@@ -1,5 +1,6 @@
 ---
 title: Networking Mesos Tasks with Calico-CNI
+redirect_from: latest/getting-started/mesos/tutorials/unified
 ---
 
 ## Prerequisites
