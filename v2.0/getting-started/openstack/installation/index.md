@@ -1,5 +1,6 @@
 ---
 title: Calico with OpenStack
+redirect_from: latest/getting-started/openstack/installation/index
 ---
 
 There are many ways to try out Calico with OpenStack, because OpenStack

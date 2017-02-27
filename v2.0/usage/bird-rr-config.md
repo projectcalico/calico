@@ -1,5 +1,6 @@
 ---
 title: 'Configuring BIRD as a BGP Route Reflector'
+redirect_from: latest/usage/bird-rr-config
 ---
 
 These instructions will take you through installing BIRD as a BGP route

@@ -1,5 +1,6 @@
 ---
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
+redirect_from: latest/getting-started/openstack/installation/redhat
 ---
 
 These instructions will take you through a first-time install of Calico.

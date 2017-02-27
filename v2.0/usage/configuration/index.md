@@ -1,5 +1,6 @@
 ---
 title: Configuring Calico
+redirect_from: latest/usage/configuration/index
 ---
 
 This page describes the configuration options for Calico's per-host agent,
