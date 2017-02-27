@@ -79,3 +79,15 @@ func CreateNewIPPool(c client.Client, poolSubnet string, ipip, natOut, ipam bool
 	}
 
 }
+
+// CleanIPPools removes all IP pool configuration from the datastore.
+func CleanIPPools(c *client.Client) {
+	// Delete IP Pools from the datastore
+	pools, err := c.IPPools().List(api.IPPoolMetadata{})
+	if err != nil {
+		panic(err)
+	}
+	for _, pool := range pools.Items {
+		c.IPPools().Delete(pool.Metadata)
+	}
+}

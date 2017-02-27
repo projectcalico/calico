@@ -44,28 +44,29 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = Describe("IPPool tests", func() {
+var _ = testutils.E2eDescribe("IPPool e2e tests", testutils.ClientEtcdV2|testutils.ClientK8s, func(apiConfig api.CalicoAPIConfig) {
 
 	DescribeTable("IPPool e2e tests",
 		func(meta1, meta2 api.IPPoolMetadata, spec1, spec2 api.IPPoolSpec) {
 
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
-			// Create a new client.
-			c, err := testutils.NewClient("")
+			// Create a new client and clean the datastore
+			c, err := client.New(apiConfig)
 			if err != nil {
 				log.Println("Error creating client:", err)
 			}
+			testutils.CleanIPPools(c)
+
 			By("Updating the pool before it is created")
 			_, outError := c.IPPools().Update(&api.IPPool{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
+			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: IPPool(cidr=10.0.0.0/24)").Error()))
 
 			By("Create, Apply, Get and compare")
@@ -135,6 +136,7 @@ var _ = Describe("IPPool tests", func() {
 
 			// Assert they are equal and no errors.
 			Expect(outError1).NotTo(HaveOccurred())
+			Expect(len(poolList.Items)).To(Equal(1))
 			Expect(poolList.Items[0].Spec).To(Equal(outPool1.Spec))
 
 			By("Delete, Get and assert error")
@@ -263,8 +265,9 @@ var _ = Describe("IPPool tests", func() {
 	)
 
 	Describe("Checking operations perform data validation", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c, _ := client.New(apiConfig)
+		testutils.CleanIPPools(c)
+
 		var err error
 		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})
 
