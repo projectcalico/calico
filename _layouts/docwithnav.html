@@ -54,6 +54,12 @@ function redirect(version) {
 			For now, we'll just print the current version -->
 	<div style="float: right;">
 		<h5>Viewing Version: <b>{{ page.version }}</b></h5>
+		<form method="get" action="{{site.baseurl}}/search/">
+			<div style="background: white;">
+			   <input id="searchString" name="searchString" placeholder="Search..." type="text">
+			   <input class="btn" id="searchButton" name="googleSearchName" type="submit" value="Search">
+			</div>
+		</form>
 		<span>View other release:</span>
 		<span class="dropdown">
 			<select onchange="redirect(this.value)">
