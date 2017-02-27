@@ -4,6 +4,9 @@
 # Make our URLs look nice. We're not a blog with dated posts, we just want the title.
 permalink:     /:title.html
 
+gems:
+  - jekyll-redirect-from
+
 exclude:
   - release-scripts
   - LICENSE
@@ -12,7 +15,7 @@ exclude:
   - RELEASING.md
 
 # Markdown Processors
-# TODO - we're not entirly sure what these are for
+# TODO - we're not entirely sure what these are for
 kramdown:
   html_to_native: true
   syntax_highlighter: rouge
