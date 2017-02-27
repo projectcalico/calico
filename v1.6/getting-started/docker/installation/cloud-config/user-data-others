@@ -27,18 +27,30 @@ coreos:
     content: |-
       [Unit]
       Description=Docker Application Container Engine
-      After=docker.socket early-docker.target network.target download-reqs.service
-      Requires=docker.socket early-docker.target download-reqs.service
-
+      Documentation=http://docs.docker.com
+      After=containerd.service docker.socket early-docker.target network.target download-reqs.service
+      Requires=containerd.service docker.socket early-docker.target download-reqs.service
+      
       [Service]
-      Environment=TMPDIR=/var/tmp
-      MountFlags=slave
+      Type=notify
+      
+      # the default is not to use systemd for cgroups because the delegate issues still
+      # exists and systemd currently does not support the cgroup feature set required
+      # for containers run by docker
+      ExecStart=/usr/lib/coreos/dockerd --cluster-store=etcd://172.17.8.101:2379 --host=fd:// --containerd=/var/run/docker/libcontainerd/docker-containerd.sock $DOCKER_OPTS $DOCKER_CGROUPS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
+      ExecReload=/bin/kill -s HUP $MAINPID
       LimitNOFILE=1048576
-      LimitNPROC=1048576
-      ExecStart=/usr/bin/docker daemon --cluster-store=etcd://172.17.8.101:2379 --host=fd:// $DOCKER_OPTS $DOCKER_OPT_BIP $DOCKER_OPT_MTU $DOCKER_OPT_IPMASQ
-      RestartSec=10
-      Restart=always
-
+      # Having non-zero Limit*s causes performance problems due to accounting overhead
+      # in the kernel. We recommend using cgroups to do container-local accounting.
+      LimitNPROC=infinity
+      LimitCORE=infinity
+      # Uncomment TasksMax if your systemd version supports it.
+      # Only systemd 226 and above support this version.
+      TasksMax=infinity
+      TimeoutStartSec=0
+      # set delegate yes so that systemd does not reset the cgroups of docker containers
+      Delegate=yes
+      
       [Install]
       WantedBy=multi-user.target
 write_files:
