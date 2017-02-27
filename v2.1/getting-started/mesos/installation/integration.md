@@ -42,7 +42,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    ```
 
 4. Download the Calico CNI plugin to the
-   [`$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos](prerequisites#cni-isolator-enabled-for-mesos-agents).
+   [`$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos](prerequisites).
    You may skip this step if you do not plan on using the Unified Containerizer.
 
    ```shell
