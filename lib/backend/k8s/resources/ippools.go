@@ -114,18 +114,32 @@ func (c *client) Get(key model.Key) (*model.KVPair, error) {
 
 func (c *client) List(list model.ListInterface) ([]*model.KVPair, error) {
 	kvps := []*model.KVPair{}
-	tprs := thirdparty.IpPoolList{}
 	l := list.(model.IPPoolListOptions)
 
-	// Build the request.
-	req := c.tprClient.Get().Resource("ippools").Namespace("kube-system")
+	// If the CIDR is specified, the Get() will return a single resource
+	// rather than a list - in this case just use our Get processing to
+	// return the data.
 	if l.CIDR.IP != nil {
-		k := model.IPPoolKey{CIDR: l.CIDR}
-		req.Name(tprName(k))
+		log.Info("Performing IP pool List with name")
+		if kvp, err := c.Get(model.IPPoolKey{CIDR: l.CIDR}); err == nil {
+			kvps = append(kvps, kvp)
+		} else {
+			if !kerrors.IsNotFound(err) {
+				return nil, K8sErrorToCalico(err, l)
+			}
+		}
+		return kvps, nil
 	}
 
+	// Since are not performing an exact Get, Kubernetes will return a list
+	// of resources.
+	tprs := thirdparty.IpPoolList{}
+
 	// Perform the request.
-	err := req.Do().Into(&tprs)
+	err := c.tprClient.Get().
+		Resource("ippools").
+		Namespace("kube-system").
+		Do().Into(&tprs)
 	if err != nil {
 		// Don't return errors for "not found".  This just
 		// means there are no IPPools, and we should return
