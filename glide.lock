@@ -1,5 +1,5 @@
-hash: 2b2fd3000e0f157c2a1a16e2953803b8b1f8a0268cfd6db04d29e03f1adf4b67
-updated: 2017-02-23T23:27:45.250762981Z
+hash: 42560bc98c1fa4f647cb68bb6d523eab6ae7757639fe6fa80c2c2c92b2b0deba
+updated: 2017-02-28T15:24:10.651564715-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -11,10 +11,9 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: d2716fc5ae7909a3b9651e31cfb0eba22b4920c3
+  version: 17ae440991da3bdb2df4309936dd2074f66ec394
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
@@ -32,12 +31,6 @@ imports:
   version: 568e959cd89871e61434c1143528d9162da89ef2
   subpackages:
   - semver
-- name: github.com/coreos/go-systemd
-  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
-  subpackages:
-  - daemon
-  - journal
-  - util
 - name: github.com/coreos/pkg
   version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
@@ -92,7 +85,7 @@ imports:
 - name: github.com/google/gofuzz
   version: bbcb9da2d746f8bdbd6a936686a0a6067ada0ec5
 - name: github.com/hashicorp/hcl
-  version: 372e8ddaa16fd67e371e9323807d056b799360af
+  version: 630949a3c5fa3c613328e1b8256052cbc2327c9b
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -107,7 +100,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 8c25f0104eba8c0060e44a489f9d549e7d6a7a4d
+  version: c83c742b49f2a22ab997081c19ea0fb44f2bb8fc
   subpackages:
   - client/v2
   - models
@@ -117,7 +110,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/magiconair/properties
   version: b3b15ef068fd0b17ddf408a23669f20811d194d2
 - name: github.com/mailru/easyjson
@@ -172,9 +165,9 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/pelletier/go-buffruneio
-  version: df1e16fde7fc330a0ca68167c23bf7ed6ac31d6d
+  version: c37440a7cf42ac63b919c752ca73a85067e05992
 - name: github.com/pelletier/go-toml
-  version: d1fa2118c12c44e4f5004da216d1efad10cb4924
+  version: 361678322880708ac144df8575e6f01144ba1404
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -184,7 +177,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 55a56092f4d59d97b3b69894e6b188115fe14d22
+  version: 8de5b8d6e6f0a44208f033e208a2dec986abedb8
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -216,19 +209,19 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: c078b1e43f58d563c74cebe63c85789e76ddb627
+  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
 - name: github.com/spf13/afero
-  version: 72b31426848c6ef12a7a8e216708cb0d1530f074
+  version: 9be650865eab0c12963d8753212f4f9c66cdcf12
   subpackages:
   - mem
 - name: github.com/spf13/cast
-  version: d1139bab1c07d5ad390a65e7305876b3c1a8370b
+  version: f820543c3592e283e311a60d2a600a664e39f6f7
 - name: github.com/spf13/jwalterweatherman
   version: fa7ca7e836cf3a8bb4ebf799f472c12d7e903d66
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/spf13/viper
-  version: 5ed0fc31f7f453625df314d8e66b9791e8d13003
+  version: 7538d73b4eb9511d85a9f1dfef202eeb8ac260f4
 - name: github.com/termie/go-shutil
   version: bcacb06fecaeec8dc42af03c87c6949f4a05c74c
 - name: github.com/ugorji/go
@@ -236,11 +229,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: c19091b1c6fb954a80f9f67abed2e2d780bb485b
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 2c9454e4fc6e2edc1a1c84e64ed3d6e662fb6991
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -266,7 +259,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 21f2569f6feb83b68a25c98c1b20eca5d4e1e6ae
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -436,7 +429,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: e85f63af4302dc0e4277c6008ecf803f1d80e4f0
+  version: c463cd2a8578290d4be7a25cba69de81cf35785e
   subpackages:
   - format
   - internal/assertion
