@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 
 	"k8s.io/client-go/kubernetes"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
 	log "github.com/Sirupsen/logrus"
@@ -366,7 +367,7 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 }
 
 func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, map[string]string, error) {
-	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
+	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME), metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -388,7 +389,7 @@ func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, hostname strin
 		nodeName = conf.Kubernetes.NodeName
 	}
 
-	node, err := client.Nodes().Get(nodeName)
+	node, err := client.Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
