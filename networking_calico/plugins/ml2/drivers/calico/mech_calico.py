@@ -36,7 +36,11 @@ from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
 from neutron.common import topics
 from neutron import context as ctx
-from neutron.db import l3_db
+try:
+    from neutron.db.models.l3 import FloatingIP
+except ImportError:
+    # Ocata and earlier.
+    from neutron.db.l3_db import FloatingIP
 from neutron.db import models_v2
 from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
@@ -1441,7 +1445,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             {'int_ip': ip['fixed_ip_address'],
              'ext_ip': ip['floating_ip_address']}
             for ip in context.session.query(
-                l3_db.FloatingIP
+                FloatingIP
             ).filter_by(
                 fixed_port_id=port['id']
             )
