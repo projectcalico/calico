@@ -26,15 +26,10 @@ Calico manifests ensure the necessary components are installed and run on each n
 This method walks through the necessary manual steps to integrate Calico with your own deployment scripts and tools.  Follow
 this guide if you're integrating Calico with your own configuration management tools.
 
-## Quick Start Guides
+## Guides
 
 The following guides walk through launching a CoreOS based Kubernetes cluster on various providers, using a
 Calico self-hosted installation.
-
-#### [Vagrant and Container Linux by CoreOS ]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
-
-This guide uses Vagrant and VirtualBox to locally run a Kubernetes
-cluster with Calico.
 
 #### [AWS]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/aws)
 
@@ -43,6 +38,11 @@ This guide covers launching a Kubernetes cluster on AWS with Calico.
 #### [GCE]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/gce)
 
 This guide covers launching a Kubernetes cluster on GCE with Calico.
+
+#### [Vagrant and Container Linux by CoreOS ]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/vagrant/)
+
+This guide uses Vagrant and VirtualBox to locally run a Kubernetes
+cluster with Calico.
 
 ## Using Calico with Kubernetes
 

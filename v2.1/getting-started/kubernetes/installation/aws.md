@@ -9,7 +9,7 @@ Make sure you've read the [Calico AWS reference guide][aws-reference] for detail
 
 #### Popular guides and tools
 
-**[Heptio AWS quickstart][heptio]** uses kubeadm and CloudFormation to build Kubernetes clusters on AWS using Calico
+**[Heptio AWS Quickstart][heptio]** uses kubeadm and CloudFormation to build Kubernetes clusters on AWS using Calico
 for networking and network policy enforcement.
 
 
@@ -25,7 +25,7 @@ container-linux based Kubernetes clusters on AWS.
 If the out-of-the-box solutions listed above don't meet your requirements, you can install Calico for Kubernetes
 on AWS using one of our [self-hosted manifests][self-hosted], or by [integrating Calico with your own configuration management][integration-guide].
 
-[heptio]: https://github.com/heptio/aws-quickstart/
+[heptio]: https://s3.amazonaws.com/quickstart-reference/heptio/latest/doc/heptio-kubernetes-on-the-aws-cloud.pdf
 [kops]: https://github.com/kubernetes/kops/blob/master/docs/networking.md#calico-example-for-cni-and-network-policy
 [kube-aws]: https://github.com/coreos/kube-aws/#getting-started
 
