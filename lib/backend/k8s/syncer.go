@@ -143,7 +143,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 		// If we need to resync, do so.
 		if needsResync {
 			// Set status to ResyncInProgress.
-			log.Warnf("Resync required - latest versions: %+v", latestVersions)
+			log.Debugf("Resync required - latest versions: %+v", latestVersions)
 			syn.callbacks.OnStatusUpdated(api.ResyncInProgress)
 
 			// Get snapshot from datastore.
@@ -156,7 +156,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			// Send the snapshot through.
 			syn.sendUpdates(snap)
 
-			log.Warnf("Snapshot complete - start watch from %+v", latestVersions)
+			log.Debugf("Snapshot complete - start watch from %+v", latestVersions)
 			syn.callbacks.OnStatusUpdated(api.InSync)
 
 			// Create the Kubernetes API watchers.
@@ -237,6 +237,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 		// Don't start watches if we're in oneshot mode.
 		if syn.OneShot {
+			log.Info("OneShot mode, do not start watches")
 			return
 		}
 
@@ -246,7 +247,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming Namespace watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out into the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 
@@ -259,7 +260,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming Pod watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out into the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 
@@ -274,7 +275,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming NetworkPolicy watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out into the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 
@@ -286,7 +287,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming GlobalConfig watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out into the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 
@@ -298,7 +299,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming IPPool watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out into the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 			// Event is OK - parse it and send it over the channel.
@@ -309,7 +310,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Incoming Node watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {
 				// We need to resync.  Break out of the sync loop.
-				log.Warn("Event triggered resync: %+v", event)
+				log.Warnf("Event triggered resync: %+v", event)
 				continue
 			}
 
@@ -438,6 +439,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 		}
 
 		// Sync GlobalConfig.
+		log.Info("Syncing GlobalConfig")
 		confList, err := syn.kc.listGlobalConfig(model.GlobalConfigListOptions{})
 		if err != nil {
 			log.Warnf("Error querying GlobalConfig during snapshot, retrying: %s", err)
@@ -452,6 +454,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 		}
 
 		// Sync IP Pools.
+		log.Info("Syncing IP Pools")
 		poolList, err := syn.kc.List(model.IPPoolListOptions{})
 		if err != nil {
 			log.Warnf("Error querying IP Pools during snapshot, retrying: %s", err)
@@ -465,7 +468,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 			keys[p.Key.String()] = true
 		}
 
-		log.Info("Syncing nodes")
+		log.Info("Syncing Nodes")
 		noList, err := syn.kc.clientSet.Nodes().List(opts)
 		if err != nil {
 			log.Warnf("Error syncing Nodes, retrying: %s", err)
@@ -581,7 +584,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		return nil
 	}
 
-	// Convert the received Namespace into a KVPair.
+	// Convert the received Pod into a KVPair.
 	kvp, err := syn.kc.converter.podToWorkloadEndpoint(pod)
 	if err != nil {
 		// If we fail to parse, then ignore this update and emit a log.
@@ -596,7 +599,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		log.Debugf("Delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		kvp.Value = nil
 
-		// Remove it from the cache, if it is there.
+		// Remove it from the label cache, if it is there.
 		workload := kvp.Key.(model.WorkloadEndpointKey).WorkloadID
 		delete(syn.labelCache, workload)
 	default:
