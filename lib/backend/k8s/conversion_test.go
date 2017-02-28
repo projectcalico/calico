@@ -709,8 +709,11 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				Labels:          l,
 				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					"projectcalico.org/IPv4Address": "172.17.17.10/24",
+					"projectcalico.org/ASNumber": "2546",
+				},
 			},
-			Spec: k8sapi.NodeSpec{},
 			Status: k8sapi.NodeStatus{
 				Addresses: []k8sapi.NodeAddress{
 					k8sapi.NodeAddress{
@@ -727,23 +730,26 @@ var _ = Describe("Test Node conversion", func() {
 					},
 				},
 			},
+			Spec: k8sapi.NodeSpec{},
 		}
 
 		n, err := resources.K8sNodeToCalico(&node)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Ensure we got the correct values
-		felixAddress := n.Value.(*model.Node).FelixIPv4
-		bgpAddress := n.Value.(*model.Node).BGPIPv4Addr
-		bgpAddressV6 := n.Value.(*model.Node).BGPIPv6Addr
+		// Ensure we got the correct values.
+		felixAddress := *n.Value.(*model.Node).FelixIPv4
+		bgpAddress := *n.Value.(*model.Node).BGPIPv4Addr
+		bgpNet := *n.Value.(*model.Node).BGPIPv4Net
 		labels := n.Value.(*model.Node).Labels
+		asn := n.Value.(*model.Node).BGPASNumber
 
-		ip := net.ParseIP("172.17.17.10")
+		ip, ipNet, _ := net.ParseCIDR("172.17.17.10/24")
 
-		Expect(felixAddress).To(Equal(ip))
-		Expect(bgpAddress).To(Equal(ip))
-		Expect(*bgpAddressV6).To(Equal(net.IP{}))
+		Expect(felixAddress).To(Equal(*ip))
+		Expect(bgpAddress).To(Equal(*ip))
+		Expect(bgpNet).To(Equal(*ipNet))
 		Expect(labels).To(Equal(l))
+		Expect(asn.String()).To(Equal("2546"))
 	})
 
 	It("should error on an invalid IP", func() {
@@ -753,51 +759,9 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				Labels:          l,
 				ResourceVersion: "1234",
+				Annotations: map[string]string{"projectcalico.org/IPv4Address": "172.984.12.5/24"},
 			},
 			Spec: k8sapi.NodeSpec{},
-			Status: k8sapi.NodeStatus{
-				Addresses: []k8sapi.NodeAddress{k8sapi.NodeAddress{
-					Type:    k8sapi.NodeInternalIP,
-					Address: "1720.17.17.10",
-				}},
-			},
-		}
-
-		_, err := resources.K8sNodeToCalico(&node)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should error on missing NodeInternalIP", func() {
-		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
-		node := k8sapi.Node{
-			ObjectMeta: k8sapi.ObjectMeta{
-				Name:            "TestNode",
-				Labels:          l,
-				ResourceVersion: "1234",
-			},
-			Spec:   k8sapi.NodeSpec{},
-			Status: k8sapi.NodeStatus{},
-		}
-
-		_, err := resources.K8sNodeToCalico(&node)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("should error when only NodeExternalIP is provided", func() {
-		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
-		node := k8sapi.Node{
-			ObjectMeta: k8sapi.ObjectMeta{
-				Name:            "TestNode",
-				Labels:          l,
-				ResourceVersion: "1234",
-			},
-			Spec: k8sapi.NodeSpec{},
-			Status: k8sapi.NodeStatus{
-				Addresses: []k8sapi.NodeAddress{k8sapi.NodeAddress{
-					Type:    k8sapi.NodeExternalIP,
-					Address: "172.17.17.10",
-				}},
-			},
 		}
 
 		_, err := resources.K8sNodeToCalico(&node)

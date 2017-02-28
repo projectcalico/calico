@@ -102,6 +102,12 @@ func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
 			return d, nil
 		}
 	case model.NodeKey:
+		// Quick fix for k8s Node call.  The k8s Node.Update call requires a complete model.Node object,
+		// therefore we do not need to break down the node object.
+		node, err := c.client.Update(d); if err == nil {
+		         return node, nil
+		}
+
 		p, o := toNodeComponents(d)
 		if p, err = c.client.Update(p); err != nil {
 			return nil, err
@@ -144,6 +150,12 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 			return d, nil
 		}
 	case model.NodeKey:
+		// Quick fix for k8s Node call.  The k8s Node.Apply call requires a complete model.Node object,
+		// therefore we do not need to break down the node object.  The etcd API will raise an error
+		// if we try to hand it the composite object, hence we then try to apply the separate components.
+		node, err := c.client.Apply(d); if err == nil {
+			return node, nil
+		}
 		p, o := toNodeComponents(d)
 		if p, err = c.client.Apply(p); err != nil {
 			return nil, err
@@ -266,6 +278,12 @@ func (c *ModelAdaptor) getBlock(k model.Key) (*model.KVPair, error) {
 func (c *ModelAdaptor) getNode(nk model.NodeKey) (*model.KVPair, error) {
 	var err error
 
+	// Quick fix for k8s Node call.  The k8s Node.Get call returns a complete model.Node object, therefore we do
+	// not need to find each piece individually.
+	node, err := c.client.Get(nk); if err == nil {
+		return node, nil
+	}
+
 	// Fill in the Metadata specific part of the node configuration.  At the
 	// moment, there is nothing to fill in.
 	if _, err = c.client.Get(model.HostMetadataKey{nk.Hostname}); err != nil {
@@ -296,6 +314,15 @@ func validateBlockValue(kvp *model.KVPair) error {
 // because of the way we do our list queries - we'll enumerate all endpoints on
 // host as well!
 func (c *ModelAdaptor) listNodes(l model.NodeListOptions) ([]*model.KVPair, error) {
+	// The k8s List returns the complete list and values we're interested in, so we make a
+	// call and check if the list has anything in it, returning if it does.
+	nodes, err := c.client.List(l)
+	if err != nil {
+		return nil, err
+	} else if len(nodes) > 0 {
+		return nodes, nil
+	}
+	
 	hml := model.HostMetadataListOptions{Hostname: l.Hostname}
 	hmr, err := c.client.List(hml)
 	if err != nil {
