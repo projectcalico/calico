@@ -24,14 +24,14 @@ import (
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
 // dataplane layer.
 type ipSetsManager struct {
-	ipsetReg ipsetsDataplane
-	maxSize  int
+	ipsetsDataplane ipsetsDataplane
+	maxSize         int
 }
 
 func newIPSetsManager(ipsets ipsetsDataplane, maxIPSetSize int) *ipSetsManager {
 	return &ipSetsManager{
-		ipsetReg: ipsets,
-		maxSize:  maxIPSetSize,
+		ipsetsDataplane: ipsets,
+		maxSize:         maxIPSetSize,
 	}
 }
 
@@ -40,8 +40,8 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set delta update")
-		m.ipsetReg.AddMembers(msg.Id, msg.AddedMembers)
-		m.ipsetReg.RemoveMembers(msg.Id, msg.RemovedMembers)
+		m.ipsetsDataplane.AddMembers(msg.Id, msg.AddedMembers)
+		m.ipsetsDataplane.RemoveMembers(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
 		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		metadata := ipsets.IPSetMetadata{
@@ -49,10 +49,10 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 			SetID:   msg.Id,
 			MaxSize: m.maxSize,
 		}
-		m.ipsetReg.AddOrReplaceIPSet(metadata, msg.Members)
+		m.ipsetsDataplane.AddOrReplaceIPSet(metadata, msg.Members)
 	case *proto.IPSetRemove:
 		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
-		m.ipsetReg.RemoveIPSet(msg.Id)
+		m.ipsetsDataplane.RemoveIPSet(msg.Id)
 	}
 }
 

@@ -143,12 +143,18 @@ type ipSet struct {
 
 	// pendingReplace is either nil to indicate that there is no pending replace or a set
 	// containing all the entries that we want to write.
-	pendingReplace   set.Set
-	pendingAdds      set.Set
+	pendingReplace set.Set
+	// pendingAdds contains members that are queued up to add to the IP set.  If pendingReplace
+	// is non-nil then pendingAdds is empty (and we add members directly to pendingReplace
+	// instead).
+	pendingAdds set.Set
+	// pendingDeletions contains members that are queued up for deletion.  If pendingReplace
+	// is non-nil then pendingDeletions is empty (and we delete members directly from
+	// pendingReplace instead).
 	pendingDeletions set.Set
 }
 
-// IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by other
+// IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by
 // this and other components to calculate IP set names from IP set IDs, for example.
 type IPVersionConfig struct {
 	Family                IPFamily
@@ -178,6 +184,9 @@ func NewIPVersionConfig(
 		versionedPrefixes = append(versionedPrefixes, prefix+version)
 	}
 	versionedPrefixes = append(versionedPrefixes, extraUnversionedIPSets...)
+	for i, pfx := range versionedPrefixes {
+		versionedPrefixes[i] = regexp.QuoteMeta(pfx)
+	}
 	ourNamesPattern := "^(" + strings.Join(versionedPrefixes, "|") + ")"
 	log.WithField("regexp", ourNamesPattern).Debug("Calculated IP set name regexp.")
 	ourNamesRegexp := regexp.MustCompile(ourNamesPattern)
@@ -204,7 +213,7 @@ func (c IPVersionConfig) NameForTempIPSet(setID string) string {
 // NameForMainIPSet converts the given IP set ID (example: "qMt7iLlGDhvLnCjM0l9nzxbabcd"), to
 // a name for use in the dataplane.  The return value will have the configured prefix and is
 // guaranteed to be short enough to use as an ipset name (example:
-// "cali6ts:qMt7iLlGDhvLnCjM0l9nzxb").
+// "cali6-s:qMt7iLlGDhvLnCjM0l9nzxb").
 func (c IPVersionConfig) NameForMainIPSet(setID string) string {
 	// Since IP set IDs are chosen with a secure hash already, we can simply truncate them
 	/// to length to get maximum entropy.

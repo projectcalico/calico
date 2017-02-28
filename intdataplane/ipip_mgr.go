@@ -32,7 +32,7 @@ import (
 //
 // ipipManager also takes care of the configuration of the IPIP tunnel device.
 type ipipManager struct {
-	ipsetReg ipsetsDataplane
+	ipsetsDataplane ipsetsDataplane
 
 	// activeHostnameToIP maps hostname to string IP address.  We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -47,19 +47,19 @@ type ipipManager struct {
 }
 
 func newIPIPManager(
-	ipSetReg ipsetsDataplane,
+	ipsetsDataplane ipsetsDataplane,
 	maxIPSetSize int,
 ) *ipipManager {
-	return newIPIPManagerWithShim(ipSetReg, maxIPSetSize, realIPIPNetlink{})
+	return newIPIPManagerWithShim(ipsetsDataplane, maxIPSetSize, realIPIPNetlink{})
 }
 
 func newIPIPManagerWithShim(
-	ipSetReg ipsetsDataplane,
+	ipsetsDataplane ipsetsDataplane,
 	maxIPSetSize int,
 	dataplane ipipDataplane,
 ) *ipipManager {
 	ipipMgr := &ipipManager{
-		ipsetReg:           ipSetReg,
+		ipsetsDataplane:    ipsetsDataplane,
 		activeHostnameToIP: map[string]string{},
 		dataplane:          dataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -216,7 +216,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		for _, ip := range m.activeHostnameToIP {
 			members = append(members, ip)
 		}
-		m.ipsetReg.AddOrReplaceIPSet(m.ipSetMetadata, members)
+		m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 		m.ipSetInSync = true
 	}
 	return nil
