@@ -45,21 +45,22 @@ the following configuration parameters:
 
 ### Configuring the Pod IP range
 
-Calico IPAM assigns IP addresses from
-[IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool). The
-[standard](hosted) and [kubeadm](kubeadm/) manifests include an `ippool.yaml` file which
-configures the default IP pool used by Calico.
+Calico IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
-To change the default IP range used for pods, modify the `cidr` section of the IP pool.
+To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR` section of the calico.yaml manifest.  For more
+information, see the [calico/node configuration reference]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
-> **NOTE**
->
-> The etcdless Calico manifest does not include an IP pool configuration, as IP allocation is done based on
-the Kubernetes node.PodCIDR field, not Calico IP pools.
+### Configuring IP-in-IP
 
-> **NOTE**
->
-> The kubeadm Calico manifest also configures ipip encapsulation on the pool by default.
+By default, the self-hosted manifests enable IP-in-IP encapsulation across subnets.  Many users may
+want to disable IP-in-IP encapsulation, for example if:
+
+- Their cluster is [running in a properly configured AWS VPC]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws).
+- All their Kubernetes nodes are connected to the same L2 network.
+- They intend to use BGP peering to make their underlying infrastructure aware of Pod IP addresses.
+
+To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the manifest.  For more
+information, see the [calico/node configuration reference]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
 ### Etcd Configuration
 

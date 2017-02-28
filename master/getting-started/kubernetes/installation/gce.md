@@ -130,27 +130,6 @@ NAME          STATUS                     AGE
 
 {% include {{page.version}}/install-k8s-addons.md %}
 
-## 5. Configure the Calico IP pool
-
-To enable connectivity to the internet for our Pods, we'll use `calicoctl`:
-
-```
-# Log into the master instance.
-gcloud compute ssh kubernetes-master
-
-# Enable outgoing NAT and ipip on the Calico pool.
-docker run -i --rm --net=host quay.io/calico/ctl:{{site.data.versions[page.version].first.components.calicoctl.version}} apply -f -<<EOF
-apiVersion: v1
-kind: ipPool
-metadata:
-  cidr: 192.168.0.0/16
-spec:
-  ipip:
-    enabled: true
-  nat-outgoing: true
-EOF
-```
-
 ## Next Steps
 
 You should now have a fully functioning Kubernetes cluster using Calico for networking.  You're ready to use your cluster.
