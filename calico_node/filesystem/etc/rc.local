@@ -85,12 +85,12 @@ if [ "$CALICO_LIBNETWORK_ENABLED" == "true" ]; then
 fi
 
 if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
-	rm -r /etc/service/enabled/bird/log
-	rm -r /etc/service/enabled/bird6/log
-	rm -r /etc/service/enabled/confd/log
-	rm -r /etc/service/enabled/felix/log
-	rm -r /etc/service/enabled/libnetwork/log
-	rm -r /etc/service/enabled/calico-bgp-daemon/log
+	rm -rf /etc/service/enabled/bird/log
+	rm -rf /etc/service/enabled/bird6/log
+	rm -rf /etc/service/enabled/confd/log
+	rm -rf /etc/service/enabled/felix/log
+	rm -rf /etc/service/enabled/libnetwork/log
+	rm -rf /etc/service/enabled/calico-bgp-daemon/log
 fi
 
 echo "Calico node started successfully"
