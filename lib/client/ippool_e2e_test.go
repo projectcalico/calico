@@ -50,7 +50,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = testutils.E2eDescribe("IPPool e2e tests", testutils.ClientEtcdV2|testutils.ClientK8s, func(apiConfig api.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreEtcdV2 |testutils.DatastoreK8s, func(apiConfig api.CalicoAPIConfig) {
 
 	DescribeTable("IPPool e2e tests",
 		func(meta1, meta2 api.IPPoolMetadata, spec1, spec2 api.IPPoolSpec) {

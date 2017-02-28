@@ -116,9 +116,9 @@ func (c *client) List(list model.ListInterface) ([]*model.KVPair, error) {
 	kvps := []*model.KVPair{}
 	l := list.(model.IPPoolListOptions)
 
-	// If the CIDR is specified, the Get() will return a single resource
-	// rather than a list - in this case just use our Get processing to
-	// return the data.
+	// If the CIDR is specified, k8s will return a single resource
+	// rather than a list, so handle this case separately, using our
+	// Get method to return the single result.
 	if l.CIDR.IP != nil {
 		log.Info("Performing IP pool List with name")
 		if kvp, err := c.Get(model.IPPoolKey{CIDR: l.CIDR}); err == nil {

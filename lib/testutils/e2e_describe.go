@@ -11,20 +11,21 @@ import (
 )
 
 const (
-	ClientEtcdV2 = 1 << iota
-	ClientK8s
+	DatastoreEtcdV2 = 1 << iota
+	DatastoreK8s
 )
 
-// E2eDescribe is a replacement for ginkgo.Describe which invoke Describe
-// multiple times for one or more different backend clients - passing in the
+// E2eDatastoreDescribe is a replacement for ginkgo.Describe which invokes Describe
+// multiple times for one or more different datastore drivers - passing in the
 // Calico API configuration as a parameter to the test function.  This allows
-// easy construction of end-to-end tests covering multiple different backends.
+// easy construction of end-to-end tests covering multiple different datastore
+// drivers.
 //
-// The *clients* parameter is a bit-wise OR of the required client/backend
-// types that will be tested.
-func E2eDescribe(description string, clients int, body func(config api.CalicoAPIConfig)) bool {
+// The *datastores* parameter is a bit-wise OR of the required datastore drivers
+// that will be tested.
+func E2eDatastoreDescribe(description string, datastores int, body func(config api.CalicoAPIConfig)) bool {
 
-	if clients&ClientEtcdV2 != 0 {
+	if datastores & DatastoreEtcdV2 != 0 {
 		Describe(fmt.Sprintf("%s (etcdv2 backend)", description),
 			func() {
 				body(api.CalicoAPIConfig{
@@ -38,7 +39,7 @@ func E2eDescribe(description string, clients int, body func(config api.CalicoAPI
 			})
 	}
 
-	if clients&ClientK8s != 0 {
+	if datastores & DatastoreK8s != 0 {
 		Describe(fmt.Sprintf("%s (kubernetes backend)", description),
 			func() {
 				body(api.CalicoAPIConfig{
