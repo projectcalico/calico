@@ -2,8 +2,11 @@
 title: BGP Configuration
 ---
 
-This document describes the commands available in `calicoctl` for managing BGP.
-It covers configuration of:
+This document describes the commands available in `calicoctl` for managing BGP.  It
+is intended primarily for users who are running on private cloud
+and would like to peer Calico with their underlying infrastructure.
+
+This document covers configuration of:
 
 -  Global default node AS Number
 -  The full node-to-node mesh

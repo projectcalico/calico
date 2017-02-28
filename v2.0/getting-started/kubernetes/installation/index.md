@@ -28,3 +28,16 @@ own orchestration mechanisms (e.g ansible, chef, bash, etc)
 
 Follow the [integration guide](integration) if you're using a Kubernetes version < v1.4.0, or if you would like
 to integrate Calico into your own installation or deployment scripts.
+
+## Third Party Integrations
+
+A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
+Here are a few, listed alphabetically.
+
+- [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
+- [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
+- [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
+- [Gravitational Telekube](http://gravitational.com/blog/gravitational-tigera-partnership/)
+- [Kargo](https://github.com/kubernetes-incubator/kargo)
+- [Kops](https://github.com/kubernetes/kops)
+- [StackPointCloud](https://stackpoint.io)
