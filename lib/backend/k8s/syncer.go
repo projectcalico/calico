@@ -584,7 +584,9 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 	// Convert the received Namespace into a KVPair.
 	kvp, err := syn.kc.converter.podToWorkloadEndpoint(pod)
 	if err != nil {
-		log.Panicf("%s", err)
+		// If we fail to parse, then ignore this update and emit a log.
+		log.WithField("error", err).Error("Failed to parse Pod event")
+		return nil
 	}
 
 	// We behave differently based on the event type.

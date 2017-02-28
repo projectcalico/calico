@@ -193,6 +193,23 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
 		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
 	})
+
+	It("should not Parse a Pod with no NodeName", func() {
+		pod := k8sapi.Pod{
+			ObjectMeta: k8sapi.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+			},
+			Spec: k8sapi.PodSpec{},
+			Status: k8sapi.PodStatus{
+				PodIP: "192.168.0.1",
+			},
+		}
+
+		_, err := c.podToWorkloadEndpoint(&pod)
+		Expect(err).To(HaveOccurred())
+	})
+
 })
 
 var _ = Describe("Test NetworkPolicy conversion", func() {

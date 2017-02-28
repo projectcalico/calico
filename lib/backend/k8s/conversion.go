@@ -219,6 +219,12 @@ func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		ipNets = []cnet.IPNet{*ipNet}
 	}
 
+	// Check to see if the Pod has a Node.
+	if len(pod.Spec.NodeName) == 0 {
+		log.Warnf("%s - NodeName is empty. Spec: %+v Status: %+v", pod.Name, pod.Spec, pod.Status)
+		return nil, fmt.Errorf("Pod '%s' is missing a NodeName", pod.Name)
+	}
+
 	// Generate the interface name and MAC based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.
 	interfaceName := VethNameForWorkload(workload)
