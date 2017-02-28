@@ -147,6 +147,8 @@ type Config struct {
 	ClusterGUID           string `config:"string;baddecaf"`
 	ClusterType           string `config:"string;"`
 
+	DebugMemoryProfilePath string `config:"file;;"`
+
 	// State tracking.
 
 	// nameToSource tracks where we loaded each config param from.
