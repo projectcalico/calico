@@ -79,6 +79,8 @@ Start the Calico service on *both* hosts
 ```shell
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 \
+  --set-env=IP=autodetect \
+  --set-env=IP_AUTODETECTION_METHOD=can-reach=172.18.18.101 \
   --insecure-options=image \
   --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false \
   --mount=volume=birdctl,target=/var/run/calico \
@@ -86,7 +88,6 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --mount=volume=mods,target=/lib/modules \
   --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
   --mount=volume=logs,target=/var/log/calico \
-  --set-env=IP=autodetect \
   --net=host \
   quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}} &
 ```
