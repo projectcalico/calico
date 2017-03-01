@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
 )
@@ -22,14 +24,14 @@ import (
 // ipSetsManager simply passes through IP set updates from the datastore to the ipsets.IPSets
 // dataplane layer.
 type ipSetsManager struct {
-	ipsetReg ipsetsRegistry
-	maxSize  int
+	ipsetsDataplane ipsetsDataplane
+	maxSize         int
 }
 
-func newIPSetsManager(ipsets ipsetsRegistry, maxIPSetSize int) *ipSetsManager {
+func newIPSetsManager(ipsets ipsetsDataplane, maxIPSetSize int) *ipSetsManager {
 	return &ipSetsManager{
-		ipsetReg: ipsets,
-		maxSize:  maxIPSetSize,
+		ipsetsDataplane: ipsets,
+		maxSize:         maxIPSetSize,
 	}
 }
 
@@ -37,17 +39,20 @@ func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetDeltaUpdate:
-		m.ipsetReg.AddMembers(msg.Id, msg.AddedMembers)
-		m.ipsetReg.RemoveMembers(msg.Id, msg.RemovedMembers)
+		log.WithField("ipSetId", msg.Id).Debug("IP set delta update")
+		m.ipsetsDataplane.AddMembers(msg.Id, msg.AddedMembers)
+		m.ipsetsDataplane.RemoveMembers(msg.Id, msg.RemovedMembers)
 	case *proto.IPSetUpdate:
+		log.WithField("ipSetId", msg.Id).Debug("IP set update")
 		metadata := ipsets.IPSetMetadata{
 			Type:    ipsets.IPSetTypeHashIP,
 			SetID:   msg.Id,
 			MaxSize: m.maxSize,
 		}
-		m.ipsetReg.AddOrReplaceIPSet(metadata, msg.Members)
+		m.ipsetsDataplane.AddOrReplaceIPSet(metadata, msg.Members)
 	case *proto.IPSetRemove:
-		m.ipsetReg.RemoveIPSet(msg.Id)
+		log.WithField("ipSetId", msg.Id).Debug("IP set remove")
+		m.ipsetsDataplane.RemoveIPSet(msg.Id)
 	}
 }
 

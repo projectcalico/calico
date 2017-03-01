@@ -37,19 +37,19 @@ import (
 // to trigger NAT of outgoing packets from NAT-enabled pools.  Traffic to any Calico-owned
 // pool is excluded.
 type masqManager struct {
-	ipVersion    uint8
-	ipsetReg     ipsetsRegistry
-	natTable     iptablesTable
-	activePools  map[string]*proto.IPAMPool
-	masqPools    set.Set
-	dirty        bool
-	ruleRenderer rules.RuleRenderer
+	ipVersion       uint8
+	ipsetsDataplane ipsetsDataplane
+	natTable        iptablesTable
+	activePools     map[string]*proto.IPAMPool
+	masqPools       set.Set
+	dirty           bool
+	ruleRenderer    rules.RuleRenderer
 
 	logCxt *log.Entry
 }
 
 func newMasqManager(
-	ipSetReg ipsetsRegistry,
+	ipsetsDataplane ipsetsDataplane,
 	natTable iptablesTable,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,
@@ -58,26 +58,26 @@ func newMasqManager(
 	// Make sure our IP sets exist.  We set the contents to empty here
 	// but the IPSets object will defer writing the IP sets until we're
 	// in sync, by which point we'll have added all our CIDRs into the sets.
-	ipSetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
 		SetID:   rules.IPSetIDNATOutgoingAllPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
-	ipSetReg.AddOrReplaceIPSet(ipsets.IPSetMetadata{
+	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
 		SetID:   rules.IPSetIDNATOutgoingMasqPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 
 	return &masqManager{
-		ipVersion:    ipVersion,
-		ipsetReg:     ipSetReg,
-		natTable:     natTable,
-		activePools:  map[string]*proto.IPAMPool{},
-		masqPools:    set.New(),
-		dirty:        true,
-		ruleRenderer: ruleRenderer,
-		logCxt:       log.WithField("ipVersion", ipVersion),
+		ipVersion:       ipVersion,
+		ipsetsDataplane: ipsetsDataplane,
+		natTable:        natTable,
+		activePools:     map[string]*proto.IPAMPool{},
+		masqPools:       set.New(),
+		dirty:           true,
+		ruleRenderer:    ruleRenderer,
+		logCxt:          log.WithField("ipVersion", ipVersion),
 	}
 }
 
@@ -104,10 +104,10 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
-		d.ipsetReg.RemoveMembers(rules.IPSetIDNATOutgoingAllPools, []string{oldPool.Cidr})
+		d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingAllPools, []string{oldPool.Cidr})
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			d.ipsetReg.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
+			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
 		}
 		delete(d.activePools, poolID)
 		d.masqPools.Discard(poolID)
@@ -123,10 +123,10 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 
 		// Update the IP sets.
 		logCxt.Debug("Adding IPAM pool to IP sets.")
-		d.ipsetReg.AddMembers(rules.IPSetIDNATOutgoingAllPools, []string{newPool.Cidr})
+		d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingAllPools, []string{newPool.Cidr})
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			d.ipsetReg.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
+			d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
 			d.masqPools.Add(poolID)
 		}
 		d.activePools[poolID] = newPool

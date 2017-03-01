@@ -111,7 +111,7 @@ type InternalDataplane struct {
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
-	ipSetRegistries      []*ipsets.Registry
+	ipSets               []*ipsets.IPSets
 
 	ipipManager *ipipManager
 
@@ -190,18 +190,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			RefreshInterval:       config.IptablesRefreshInterval,
 		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
-	ipSetRegV4 := ipsets.NewRegistry(ipSetsConfigV4)
+	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
 	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
-	dp.ipSetRegistries = append(dp.ipSetRegistries, ipSetRegV4)
+	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
-	dp.RegisterManager(newIPSetsManager(ipSetRegV4, config.MaxIPSetSize))
+	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(rawTableV4, filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		rawTableV4,
@@ -212,10 +212,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
-	dp.RegisterManager(newMasqManager(ipSetRegV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
 		// Add a manger to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetRegV4, config.MaxIPSetSize)
+		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize)
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
 	if config.IPv6Enabled {
@@ -252,8 +252,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
-		ipSetRegV6 := ipsets.NewRegistry(ipSetsConfigV6)
-		dp.ipSetRegistries = append(dp.ipSetRegistries, ipSetRegV6)
+		ipSetsV6 := ipsets.NewIPSets(ipSetsConfigV6)
+		dp.ipSets = append(dp.ipSets, ipSetsV6)
 		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
 		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
@@ -261,7 +261,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetRegV6, config.MaxIPSetSize))
+		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(rawTableV6, filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
@@ -272,7 +272,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
-		dp.RegisterManager(newMasqManager(ipSetRegV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
+		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
 
 	for _, t := range dp.iptablesNATTables {
@@ -574,19 +574,25 @@ func (d *InternalDataplane) apply() {
 		}
 	}
 
-	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
-	// iptables.
-	for _, w := range d.ipSetRegistries {
-		w.ApplyUpdates()
-	}
-
 	if d.forceDataplaneRefresh {
+		// Refresh timer popped, ask the dataplane to resync as part of its update.
 		for _, r := range d.routeTables {
+			// Queue a resync on the next Apply().
+			r.QueueResync()
+		}
+		for _, r := range d.ipSets {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
 		d.forceDataplaneRefresh = false
 	}
+
+	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
+	// iptables.
+	for _, w := range d.ipSets {
+		w.ApplyUpdates()
+	}
+
 	// Update iptables, this should sever any references to now-unused IP sets.
 	var reschedDelay time.Duration
 	for _, t := range d.allIptablesTables {
@@ -606,19 +612,12 @@ func (d *InternalDataplane) apply() {
 	}
 
 	// Now clean up any left-over IP sets.
-	for _, w := range d.ipSetRegistries {
+	for _, w := range d.ipSets {
 		w.ApplyDeletions()
 	}
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
-
-	if d.cleanupPending {
-		for _, w := range d.ipSetRegistries {
-			w.AttemptCleanup()
-		}
-		d.cleanupPending = false
-	}
 
 	// Set up any needed rescheduling kick.
 	if d.reschedC != nil {
