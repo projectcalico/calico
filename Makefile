@@ -201,7 +201,9 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # want to use the vendor target to install the versions from glide.lock.
 .PHONY: update-vendor
 update-vendor:
+	mkdir -p $$HOME/.glide
 	$(DOCKER_GO_BUILD) glide up --strip-vendor
+	touch vendor/.up-to-date
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
