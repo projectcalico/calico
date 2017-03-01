@@ -1,5 +1,5 @@
-hash: 00937468162565d3fd9622fb112d381727237d31b90395dd0907efb1e99a6026
-updated: 2017-02-10T18:06:17.425025303Z
+hash: cd02b79ca83441a1f9a525b6e5e9f773af15071bc1e11890b7e826919fd23b1d
+updated: 2017-03-01T13:46:09.220570067Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,10 +13,9 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 47cb8a012ad0ddd8505bb573066ca1d27b1c46c3
+  version: 17ae440991da3bdb2df4309936dd2074f66ec394
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
@@ -34,12 +33,6 @@ imports:
   version: 568e959cd89871e61434c1143528d9162da89ef2
   subpackages:
   - semver
-- name: github.com/coreos/go-systemd
-  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
-  subpackages:
-  - daemon
-  - journal
-  - util
 - name: github.com/coreos/pkg
   version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
   subpackages:
@@ -66,7 +59,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: e3c2d47c61e5333f9aa2974695dd94396eb69c75
+  version: 74bdc99692c3408cb103221e38675ce8fda0a718
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -83,7 +76,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  version: 69b215d01a5606c843240eab4937eab3acee6530
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -143,7 +136,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 83090c92db7fde08538caea98d766464f94aadd0
+  version: 8de5b8d6e6f0a44208f033e208a2dec986abedb8
   subpackages:
   - lib
   - lib/api
@@ -175,17 +168,19 @@ imports:
   - prometheus
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: dd2f054febf4a6c00f2343686efb775948a8bff4
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: 1878d9fbb537119d24b21ca07effd591627cd160
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  subpackages:
+  - xfs
 - name: github.com/PuerkitoBio/purell
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
@@ -193,7 +188,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: c078b1e43f58d563c74cebe63c85789e76ddb627
+  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -203,11 +198,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: c19091b1c6fb954a80f9f67abed2e2d780bb485b
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 2c9454e4fc6e2edc1a1c84e64ed3d6e662fb6991
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -231,7 +226,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 76cc09b634294339fa19ec41b5f2a0b3932cea8b
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -388,7 +383,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: e85f63af4302dc0e4277c6008ecf803f1d80e4f0
+  version: c463cd2a8578290d4be7a25cba69de81cf35785e
   subpackages:
   - format
   - internal/assertion
