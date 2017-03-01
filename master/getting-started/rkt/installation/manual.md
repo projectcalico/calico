@@ -128,8 +128,8 @@ for config discovery.  You may change the location and override the rkt configur
 if desired.
 
 ```bash
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico
-wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico-ipam
+wget -N -P /etc/rkt/net.d {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
+wget -N -P /etc/rkt/net.d {{site.data.versions[page.version].first.components["calico/cni"].download_calico_ipam_url}}
 chmod +x /etc/rkt/net.d/calico /etc/rkt/net.d/calico-ipam
 ```
 

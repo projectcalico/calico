@@ -33,8 +33,8 @@ coreos:
         ExecStartPre=/usr/bin/mkdir -p /var/run/calico
         ExecStartPre=/usr/bin/mkdir -p /var/log/calico
         ExecStartPre=/usr/bin/wget -N -O /opt/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
-        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico
-        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d https://github.com/projectcalico/cni-plugin/releases/download/v1.5.5/calico-ipam
+        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
+        ExecStartPre=/usr/bin/wget -N -P /etc/rkt/net.d {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url_ipam}}
         ExecStartPre=/usr/bin/chmod a+w -R /etc/rkt/net.d
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico-ipam
