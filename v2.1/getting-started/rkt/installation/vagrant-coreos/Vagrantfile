@@ -5,10 +5,7 @@ num_instances=2
 instance_name_prefix="calico"
 
 # Official CoreOS channel from which updates should be downloaded
-# Using the alpha channel because the rkt version shipped with stable doesn't have a rkt stop command,
-# and does not honor the config path during container detach (which means we'd leak IP addresses when
-# it can't locate the IPAM module.
-update_channel='alpha'
+update_channel='stable'
 
 Vagrant.configure("2") do |config|
   # always use Vagrants insecure key
