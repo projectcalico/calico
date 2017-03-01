@@ -81,9 +81,8 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 	if len(givenPools) != 0 {
 		for _, pool := range givenPools {
 			// Validate the given pool is actually configured and matches the version.
-			if !rw.isConfiguredPool(pool) {
-				estr := fmt.Sprintf("The given pool (%s) does not exist", pool.String())
-				return nil, goerrors.New(estr)
+			if err := rw.checkPoolAvailability(pool); err != nil {
+				return nil, err
 			} else if version.Number != pool.Version() {
 				estr := fmt.Sprintf("The given pool (%s) does not match IP version %d", pool.String(), version.Number)
 				return nil, goerrors.New(estr)
@@ -292,17 +291,20 @@ func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
 	return false
 }
 
-// isConfiguredPool returns true if the given IPNet is a configured
-// Calico pool, and false otherwise.
-func (rw blockReaderWriter) isConfiguredPool(cidr cnet.IPNet) bool {
+// checkPoolAvailability returns nil if the given IPNet is a configured
+// Calico IP pool, and a specific error otherwise.
+func (rw blockReaderWriter) checkPoolAvailability(cidr cnet.IPNet) error {
 	allPools, _ := rw.client.IPPools().List(api.IPPoolMetadata{})
 	for _, p := range allPools.Items {
 		// Compare any enabled pools.
-		if !p.Spec.Disabled && reflect.DeepEqual(p.Metadata.CIDR, cidr) {
-			return true
+		if reflect.DeepEqual(p.Metadata.CIDR, cidr) {
+			if p.Spec.Disabled {
+				return goerrors.New(fmt.Sprintf("The given pool (%s) is disabled.", cidr.String()))
+			}
+			return nil
 		}
 	}
-	return false
+	return goerrors.New(fmt.Sprintf("The given pool (%s) does not exist", cidr.String()))
 }
 
 // Generator to get list of block CIDRs which
