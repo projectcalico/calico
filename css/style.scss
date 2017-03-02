@@ -1,6 +1,8 @@
 ---
 ---
+@import "../css/variables";
 @import "../_sass/bootstrap/bootstrap";
+
 @import "../css/sidebar";
 
 // By default bootstrap doesn't apply many styles to table elements
@@ -33,4 +35,10 @@ h2,h3,h4,h5,h6 {
 
 pre code {
   white-space: pre;
+}
+
+#toplevel-nav {
+  -webkit-box-shadow: 0px 0px 8px 1px #666;
+  -moz-box-shadow: 0px 0px 8px 1px #666;
+  box-shadow: 0px 0px 8px 1px #666;
 }

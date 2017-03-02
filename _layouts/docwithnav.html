@@ -69,22 +69,28 @@ The code is a little roundabout for a few reasons:
   </script>
 
 <section>
-    <nav class="navbar navbar-inverse navbar-static-top">
+    <nav id="toplevel-nav" class="navbar navbar-default navbar-static-top">
       <div class="container">
         <div class="navbar-header">
+          <!-- Hamburger menu for mobile -->
           <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#tigera-navbar" aria-expanded="false" aria-controls="tigera-navbar">
             <span class="sr-only">Toggle navigation</span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="https://projectcalico.org/">Project Calico</a>
+          <!-- Left brand image -->
+          <a class="navbar-brand" href="https://projectcalico.org/">
+            <img alt="Brand" src="{{site.baseurl}}/images/brand.png">
+          </a>
         </div>
         <div id="tigera-navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
-            <li class="active"><a href="#">Documentation</a></li>
-            <li><a href="https://projectcalico.org/contact">Support</a></li>
+            <li><a href="#">Home</a></li>
+            <li class="active"><a href="#"><span>Docs</span></a></li>
+            <li><a href="#">Community</a></li>
             <li><a href="https://projectcalico.org/blog">Blog</a></li>
+            <li><a href="https://projectcalico.org/contact">Support</a></li>
           </ul>
           <form class="navbar-form visible-xs">
             <ul class="nav navbar-nav navbar-right">
@@ -108,11 +114,13 @@ The code is a little roundabout for a few reasons:
            </li>
          </ul>
         </div><!--/.nav-collapse -->
-        <div id="navbar" class="navbar-collapse collapse">
+      </div>
+        <div id="navbar" class="navbar-inverse navbar-collapse collapse">
+          <div class="container">
           <ul class="nav navbar-nav">
             {% for navbar in navbars %}
               <li{% if this_pages_navbar == navbar %} class="active"{% endif %}>
-                <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">{{ navbar.bigheader }}</a>
+                <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}"><span>{{ navbar.bigheader }}</span></a>
               </li>
             {% endfor %}
             <li class="dropdown">
