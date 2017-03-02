@@ -95,8 +95,16 @@ DATE:=$(shell date -u +'%FT%T%z')
 # depend on these, clean removes them.
 GENERATED_GO_FILES:=proto/felixbackend.pb.go
 
-# All go files.
-GO_FILES:=$(shell find . -type f -name '*.go') $(GENERATED_GO_FILES)
+# Directories that aren't part of the main Felix program,
+# e.g. standalone test programs.
+K8SFV_DIR:=k8sfv
+NON_FELIX_DIRS:=$(K8SFV_DIR)
+
+# All Felix go files.
+FELIX_GO_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_GO_FILES)
+
+# Files for the Felix+k8s backend test program.
+K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -name '*.go' -print)
 
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
@@ -141,6 +149,63 @@ calico/felix: bin/calico-felix
 	mkdir -p docker-image/bin
 	cp bin/calico-felix docker-image/bin/
 	docker build -t calico/felix docker-image
+
+# Targets for Felix testing with the k8s backend and a k8s API server,
+# with k8s model resources being injected by a separate test client.
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+K8S_VERSION=1.5.3
+FELIX_K8S=felix-k8s
+.PHONY: k8s-fv-test run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
+k8s-fv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
+	@-docker rm -f $(FELIX_K8S)
+	sleep 1
+	docker run --detach --privileged --name=$(FELIX_K8S) \
+	-e FELIX_LOGSEVERITYSCREEN=info \
+	-e FELIX_DATASTORETYPE=kubernetes \
+	-e FELIX_PROMETHEUSMETRICSENABLED=true \
+	-e K8S_API_ENDPOINT=https://$(LOCAL_IP_ENV):6443 \
+	-e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+	-v $${PWD}:/testcode \
+	-p 9091:9091 \
+	calico/felix \
+	/bin/sh -c "for n in 1 2; do calico-felix; done"
+	sleep 1
+	docker exec $(FELIX_K8S) /testcode/k8sfv/k8sfv.test -ginkgo.v https://$(LOCAL_IP_ENV):6443
+
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
+	docker run --detach --net=host \
+	  --name calico-k8s-apiserver \
+	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+		  --service-cluster-ip-range=10.101.0.0/16 -v=10
+
+stop-k8s-apiserver: stop-etcd
+	@-docker rm -f calico-k8s-apiserver
+	sleep 2
+
+run-etcd: stop-etcd
+	docker run --detach \
+	-p 2379:2379 \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+stop-etcd:
+	@-docker rm -f calico-etcd
+
+.PHONY: run-prometheus run-grafana
+run-prometheus:
+	docker run --detach --rm --name prometheus -p 9090:9090 \
+	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
+	-v $${PWD}/$(K8SFV_DIR)/prometheus/data:/prometheus \
+	prom/prometheus \
+	-config.file=/etc/prometheus.yml \
+	-storage.local.path=/prometheus
+
+run-grafana:
+	docker run --detach --rm --name grafana --net=host \
+	grafana/grafana
 
 # Pre-configured docker run command that runs as this user with the repo
 # checked out to /code, uses the --rm flag to avoid leaving the container
@@ -225,13 +290,20 @@ LDFLAGS:=-ldflags "\
         -X github.com/projectcalico/felix/buildinfo.GitRevision=$(GIT_COMMIT) \
         -B 0x$(BUILD_ID)"
 
-bin/calico-felix: $(GO_FILES) vendor/.up-to-date
+bin/calico-felix: $(FELIX_GO_FILES) vendor/.up-to-date
 	@echo Building felix...
 	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix" && \
                ( ldd bin/calico-felix 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
+
+k8sfv/k8sfv.test: $(K8SFV_GO_FILES)
+	@echo Building $@...
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'ginkgo build k8sfv && \
+               ( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" || \
+	             ( echo "Error: $@ was not statically linked"; false ) )'
 
 dist/calico-felix/calico-felix: bin/calico-felix
 	mkdir -p dist/calico-felix/
@@ -254,11 +326,11 @@ check-licenses/dependency-licenses.txt: vendor/.up-to-date
 	$(DOCKER_GO_BUILD) sh -c 'licenses . > check-licenses/dependency-licenses.txt'
 
 .PHONY: ut
-ut combined.coverprofile: vendor/.up-to-date $(GO_FILES)
+ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
 
-bin/check-licenses: $(GO_FILES)
+bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
 
 .PHONY: check-licenses
@@ -279,12 +351,12 @@ static-checks:
 	$(MAKE) go-meta-linter check-licenses
 
 .PHONY: ut-no-cover
-ut-no-cover: vendor/.up-to-date $(GO_FILES)
+ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
 	$(DOCKER_GO_BUILD) ginkgo -r
 
 .PHONY: ut-watch
-ut-watch: vendor/.up-to-date $(GO_FILES)
+ut-watch: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r
 
