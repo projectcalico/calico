@@ -3,6 +3,11 @@
 @import "../_sass/bootstrap/bootstrap";
 @import "../css/sidebar";
 
+// By default bootstrap doesn't apply many styles to table elements
+// unless they have class .table and .table-bordered
+// These lines here extend the table so it automatically gets those
+// stylings and look like real tables without having to add
+// that class to everything.
 table {
   @extend .table;
   @extend .table-bordered;
