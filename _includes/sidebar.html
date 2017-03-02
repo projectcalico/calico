@@ -1,7 +1,7 @@
 
 {% for item in include.sidebar %}
   {% if item.section %}
-    {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' }}{% endcapture %}
+    {% capture titleized %}{{include.prefix}}-{{ item.title | downcase | replace: ' ','' | replace: ':','', | replace: '/','' | replace: '(', '-' | replace: ')', '' }}{% endcapture %}
     <div>
       <div class="link">
         <span class="glyphicon glyphicon-chevron-right navbar-arrow"></span>
