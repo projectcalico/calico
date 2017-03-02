@@ -246,8 +246,8 @@ var profileLabelsTag1 = map[string]string{
 	"tag-1": "foobar",
 }
 
-var tag1LabelID = TagIPSetID("tag-1")
-var tag2LabelID = TagIPSetID("tag-2")
+var tag1LabelID = ipSetIDForTag("tag-1")
+var tag2LabelID = ipSetIDForTag("tag-2")
 
 // Pre-defined datastore states.  Each State object wraps up the complete state
 // of the datastore as well as the expected state of the dataplane.  The state
