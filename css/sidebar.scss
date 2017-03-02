@@ -12,7 +12,7 @@
   }
 
   // Move hyperlinks left 12px to leave space for glyphicon
-  div.link a { // that is not an immediate child of sidebar
+  div.link a {
     position: relative;
     left: 15px;
   }
