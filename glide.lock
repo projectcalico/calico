@@ -1,5 +1,5 @@
 hash: 2f2ea57a89c3a1144113ca791083f3e534a1457b294a8c62c05f8bc7c4168a49
-updated: 2017-03-16T10:02:36.405239332Z
+updated: 2017-03-16T15:28:59.933831636Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -12,6 +12,11 @@ imports:
   - quantile
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
+- name: github.com/containernetworking/cni
+  version: c235b448d4de3d5093c68d23d2623b2bbf6e3a52
+  subpackages:
+  - pkg/ns
+  - pkg/types
 - name: github.com/coreos/etcd
   version: d78b03fb27374c370d82973a94dda9f59647e750
   subpackages:
@@ -34,9 +39,8 @@ imports:
   subpackages:
   - semver
 - name: github.com/coreos/pkg
-  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
-  - capnslog
   - health
   - httputil
   - timeutil
@@ -88,7 +92,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/jonboulle/clockwork
-  version: 2eee05ed794112d45db504eb05aa693efd2b8b09
+  version: 72f9bd7c4e0c2a40055ab3d0f09654f730cce982
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kardianos/osext
@@ -195,9 +199,9 @@ imports:
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
-  version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
+  version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
-  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  version: f1f1a805ed361a0e078bb537e4ea78cd37dcf065
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
@@ -207,13 +211,11 @@ imports:
 - name: github.com/vishvananda/netns
   version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 1f22c0103821b9390939b6776727195525381532
   subpackages:
-  - bcrypt
-  - blowfish
   - ssh/terminal
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
   subpackages:
   - context
   - context/ctxhttp
