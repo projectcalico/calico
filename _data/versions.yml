@@ -74,8 +74,8 @@ v2.1:
       version: v0.5.2
       url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.2
     networking-calico:
-      version: 1.4.1
-      url: http://git.openstack.org/cgit/openstack/networking-calico/tree/?id=84d48fbfb
+      version: 1.4.2
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 
 - title: v2.1.0-rc5
   note: |
@@ -113,4 +113,4 @@ v2.1:
       url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.2
     networking-calico:
       version: 1.4.1
-      url: http://git.openstack.org/cgit/openstack/networking-calico/tree/?id=84d48fbfb
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.1
