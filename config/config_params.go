@@ -310,15 +310,11 @@ func (config *Config) EndpointReportingDelay() time.Duration {
 }
 
 func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
-	if config.DatastoreType == "kubernetes" {
-		// Create a new Client.  The client will be configured
-		// based on the provided environment.
-		cfg, err := client.LoadClientConfig("")
-		if err != nil {
-			log.WithError(err).Panic("Failed to create empty config")
-		}
-		return *cfg
-	} else {
+	// Special case for etcdv2 datastore, where we want to honour established Felix-specific
+	// config mechanisms.
+	if config.DatastoreType == "etcdv2" {
+		// Build a CalicoAPIConfig with the etcd fields filled in from Felix-specific
+		// config.
 		var etcdEndpoints string
 		if len(config.EtcdEndpoints) == 0 {
 			etcdEndpoints = config.EtcdScheme + "://" + config.EtcdAddr
@@ -338,6 +334,22 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 			},
 		}
 	}
+
+	// Build CalicoAPIConfig from the environment.  This means that any XxxYyy field in
+	// CalicoAPIConfigSpec can be set by a corresponding XXX_YYY or CALICO_XXX_YYY environment
+	// variable, and that the datastore type can be set by a DATASTORE_TYPE or
+	// CALICO_DATASTORE_TYPE variable.  (Except in the etcdv2 case which is handled specially
+	// above.)
+	cfg, err := client.LoadClientConfigFromEnvironment()
+	if err != nil {
+		log.WithError(err).Panic("Failed to create datastore config")
+	}
+	// If that didn't set the datastore type (in which case the field will have been set to its
+	// default 'etcdv2' value), copy it from the Felix config.
+	if cfg.Spec.DatastoreType == "etcdv2" {
+		cfg.Spec.DatastoreType = api.DatastoreType(config.DatastoreType)
+	}
+	return *cfg
 }
 
 // Validate() performs cross-field validation.
