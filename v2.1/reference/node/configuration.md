@@ -40,7 +40,20 @@ In addition to the above, `calico/node` also supports [the standard Felix config
 
 ### IP Autodetection methods
 
-The following describe the available IP autodetection methods.
+When Calico is used for routing, each node must be configured with the IPv4
+address (and IPv6 address if using IPv6) that would be used to route between
+nodes. To eliminate node specific IP address configuration, the calico/node
+container can be configured to autodetect these IP addresses. In many systems,
+there might be multiple physical interfaces on a host, or possibly multiple IP
+addresses configured on a physical interface. In these cases, there are
+multiple addresses to choose from and so autodetection of the correct address
+can be tricky.
+
+The IP autodetection methods are provided to improve the selection of the
+correct address, by limiting the selection based on suitable criteria for your
+deployment.
+
+The following sections describe the available IP autodetection methods.
 
 #### first-found
 
