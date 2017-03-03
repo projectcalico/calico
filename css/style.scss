@@ -1,0 +1,44 @@
+---
+---
+@import "../css/variables";
+@import "../_sass/bootstrap/bootstrap";
+
+@import "../css/sidebar";
+
+// By default bootstrap doesn't apply many styles to table elements
+// unless they have class .table and .table-bordered
+// These lines here extend the table so it automatically gets those
+// stylings and look like real tables without having to add
+// that class to everything.
+table {
+  @extend .table;
+  @extend .table-bordered;
+}
+
+// Default blockquotes are too big in Bootstrap.
+// Shrink them down
+blockquote {
+  font-size: inherit;
+}
+
+// Set height to prevent weird bug where sidebar is clipped at bottom.
+html {
+  height: 100%;
+}
+body {
+  height: 100%;
+}
+
+h2,h3,h4,h5,h6 {
+  margin-top: 30px;
+}
+
+pre code {
+  white-space: pre;
+}
+
+#toplevel-nav {
+  -webkit-box-shadow: 0px 0px 8px 1px #666;
+  -moz-box-shadow: 0px 0px 8px 1px #666;
+  box-shadow: 0px 0px 8px 1px #666;
+}
