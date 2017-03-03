@@ -11,9 +11,9 @@ clean:
 
 
 htmlproofer: clean _site
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore /v1.5/,/v1.6/ --assume-extension --check-html --empty-alt-ignore
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --file-ignore /v1.5/,/v1.6/ --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
+	-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 	# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
-	-docker run -ti -e JEKYLL_UID=`id -u` --rm -v $$PWD/_site:/_site/ quay.io/calico/htmlproofer /_site --assume-extension --check-html --empty-alt-ignore
 
 strip_redirects:
 	find -name '*.md' -o -name '*.html' -exec sed -i'' '/redirect_from:/d' '{}' \;
@@ -34,4 +34,3 @@ endif
 
 	# Check the redirect_from lines and strip the .md from the URL
 	find $(VERSION) -name '*.md' -o -name '*.html' -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
-
