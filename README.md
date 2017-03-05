@@ -1,5 +1,7 @@
 # Project Calico Documentation
 
+[![Build Status](https://semaphoreci.com/api/v1/calico/docs/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/docs)
+
 This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos.  
 
 <blockquote>
