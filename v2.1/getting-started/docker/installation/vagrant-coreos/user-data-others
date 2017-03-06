@@ -31,8 +31,8 @@ coreos:
       [Unit]
       Description=Docker Application Container Engine
       Documentation=http://docs.docker.com
-      After=containerd.service docker.socket early-docker.target network.target download-reqs.service
-      Requires=containerd.service docker.socket early-docker.target download-reqs.service
+      After=containerd.service docker.socket network.target download-reqs.service
+      Requires=containerd.service docker.socket download-reqs.service
       
       [Service]
       Type=notify
