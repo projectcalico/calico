@@ -80,7 +80,7 @@ You should see output like this on each node
 ## Next Steps
 
 Now that you have a basic two node Ubuntu cluster setup, see
-[Security using Calcio Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
+[Security using Calico Profiles]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/security-using-calico-profiles)
 
 [libnetwork]: https://github.com/docker/libnetwork
 [experimental-channel]: https://github.com/docker/docker/tree/master/experimental
