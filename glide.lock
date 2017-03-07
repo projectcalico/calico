@@ -1,5 +1,5 @@
-hash: 2a26cc5aa99bcb07893e216443e5b898e0082318adf3e2f87da736457904f13a
-updated: 2017-03-08T18:14:30.857330778Z
+hash: 65b293efa5db47c7c0712b08602c0509c9eca792af25fcd446e41f3fe01b8041
+updated: 2017-03-07T15:47:35.376972945Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 7f43fdde7485de5be2922024bb0aed1b14803b20
+  version: 3eb2fdbd9934bd2cee6928d2185ceac87b848a4c
   subpackages:
   - client
   - pkg/pathutil
@@ -136,7 +136,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5fb02394d07d5335f9df9a825e3707d5452a69f3
+  version: 3428e33dd83712164f8b46b576c91098f7cf9b36
+  repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
   - lib/api
@@ -226,7 +227,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 99f16d856c9836c42d24e7ab64ea72916925fa97
+  version: e48874b42435b4347fc52bdee0424a52abc974d7
   subpackages:
   - unix
 - name: golang.org/x/text
