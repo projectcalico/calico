@@ -31,6 +31,14 @@ However, for host endpoints, Calico is more lenient; it only polices
 traffic to/from interfaces that it's been explicitly told about. Traffic
 to/from other interfaces is left alone.
 
+As of Calico v2.1.0, Calico applies host endpoint security policy both to traffic 
+that is terminated locally, and to traffic that is forwarded between host 
+endpoints.  Previously, policy was only applied to traffic that was terminated 
+locally.  The change allows Calico to be used to secure a NAT gateway or router.
+Calico supports selector-based policy as normal when running on a gateway or router
+allowing for rich, dynamic security policy based on the labels attached to your 
+workloads.
+
 > **NOTE**
 >
 > If you have a host with workloads on it then traffic that is forwarded to
@@ -38,9 +46,12 @@ to/from other interfaces is left alone.
 > case, the host endpoint policy would need to be very broad to allow all
 > traffic destined for any possible workload.
 >
+> Since version 2.1.0, Calico applies host endpoint policy to traffic that is
+> being forwarded between host interfaces.
+> 
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 
-## Overview
+## Installation overview
 
 To make use of Calico's host endpoint support, you will need to follow
 these steps, described in more detail below:
