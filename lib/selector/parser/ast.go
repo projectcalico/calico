@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,23 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/hash"
 )
 
+type Labels interface {
+	Get(labelName string) (value string, present bool)
+}
+
+type MapAsLabels map[string]string
+
+func (l MapAsLabels) Get(labelName string) (value string, present bool) {
+	value, present = l[labelName]
+	return
+}
+
 type Selector interface {
+	// Evaluate evaluates the selector against the given labels expressed as a concrete map.
 	Evaluate(labels map[string]string) bool
+	// EvaluateLabels evaluates the selector against the given labels expressed as an interface.
+	// This allows for labels that are calculated on the fly.
+	EvaluateLabels(labels Labels) bool
 	String() string
 	UniqueId() string
 }
@@ -34,6 +49,10 @@ type selectorRoot struct {
 }
 
 func (sel selectorRoot) Evaluate(labels map[string]string) bool {
+	return sel.EvaluateLabels(MapAsLabels(labels))
+}
+
+func (sel selectorRoot) EvaluateLabels(labels Labels) bool {
 	return sel.root.Evaluate(labels)
 }
 
@@ -57,7 +76,7 @@ func (sel selectorRoot) UniqueId() string {
 var _ Selector = (*selectorRoot)(nil)
 
 type node interface {
-	Evaluate(labels map[string]string) bool
+	Evaluate(labels Labels) bool
 	collectFragments(fragments []string) []string
 }
 
@@ -66,8 +85,8 @@ type LabelEqValueNode struct {
 	Value     string
 }
 
-func (node LabelEqValueNode) Evaluate(labels map[string]string) bool {
-	if val, ok := labels[node.LabelName]; ok {
+func (node LabelEqValueNode) Evaluate(labels Labels) bool {
+	if val, ok := labels.Get(node.LabelName); ok {
 		return val == node.Value
 	} else {
 		return false
@@ -89,8 +108,8 @@ type LabelInSetNode struct {
 	Value     StringSet
 }
 
-func (node LabelInSetNode) Evaluate(labels map[string]string) bool {
-	if val, ok := labels[node.LabelName]; ok {
+func (node LabelInSetNode) Evaluate(labels Labels) bool {
+	if val, ok := labels.Get(node.LabelName); ok {
 		return node.Value.Contains(val)
 	} else {
 		return false
@@ -106,8 +125,8 @@ type LabelNotInSetNode struct {
 	Value     StringSet
 }
 
-func (node LabelNotInSetNode) Evaluate(labels map[string]string) bool {
-	if val, ok := labels[node.LabelName]; ok {
+func (node LabelNotInSetNode) Evaluate(labels Labels) bool {
+	if val, ok := labels.Get(node.LabelName); ok {
 		return !node.Value.Contains(val)
 	} else {
 		return true
@@ -146,8 +165,8 @@ type LabelNeValueNode struct {
 	Value     string
 }
 
-func (node LabelNeValueNode) Evaluate(labels map[string]string) bool {
-	if val, ok := labels[node.LabelName]; ok {
+func (node LabelNeValueNode) Evaluate(labels Labels) bool {
+	if val, ok := labels.Get(node.LabelName); ok {
 		return val != node.Value
 	} else {
 		return true
@@ -168,8 +187,8 @@ type HasNode struct {
 	LabelName string
 }
 
-func (node HasNode) Evaluate(labels map[string]string) bool {
-	if _, ok := labels[node.LabelName]; ok {
+func (node HasNode) Evaluate(labels Labels) bool {
+	if _, ok := labels.Get(node.LabelName); ok {
 		return true
 	} else {
 		return false
@@ -184,7 +203,7 @@ type NotNode struct {
 	Operand node
 }
 
-func (node NotNode) Evaluate(labels map[string]string) bool {
+func (node NotNode) Evaluate(labels Labels) bool {
 	return !node.Operand.Evaluate(labels)
 }
 
@@ -197,7 +216,7 @@ type AndNode struct {
 	Operands []node
 }
 
-func (node AndNode) Evaluate(labels map[string]string) bool {
+func (node AndNode) Evaluate(labels Labels) bool {
 	for _, operand := range node.Operands {
 		if !operand.Evaluate(labels) {
 			return false
@@ -221,7 +240,7 @@ type OrNode struct {
 	Operands []node
 }
 
-func (node OrNode) Evaluate(labels map[string]string) bool {
+func (node OrNode) Evaluate(labels Labels) bool {
 	for _, operand := range node.Operands {
 		if operand.Evaluate(labels) {
 			return true
@@ -244,7 +263,7 @@ func (node OrNode) collectFragments(fragments []string) []string {
 type AllNode struct {
 }
 
-func (node AllNode) Evaluate(labels map[string]string) bool {
+func (node AllNode) Evaluate(labels Labels) bool {
 	return true
 }
 
