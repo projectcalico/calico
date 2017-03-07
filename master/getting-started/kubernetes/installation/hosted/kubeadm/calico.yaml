@@ -12,9 +12,8 @@ data:
   # defined below.
   etcd_endpoints: "http://10.96.232.136:6666"
 
-  # True enables BGP networking, false tells Calico to enforce
-  # policy only, using native networking.
-  enable_bgp: "true"
+  # Configure the Calico backend to use.
+  calico_backend: "bird"
 
   # The CNI network configuration to install on each node.
   cni_network_config: |-
@@ -143,11 +142,11 @@ spec:
                   name: calico-config
                   key: etcd_endpoints
             # Enable BGP.  Disable to enforce policy only.
-            - name: CALICO_NETWORKING
+            - name: CALICO_NETWORKING_BACKEND
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
-                  key: enable_bgp
+                  key: calico_backend
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
