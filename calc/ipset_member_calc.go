@@ -43,7 +43,7 @@ type IPAddRemoveCallbacks interface {
 type MemberCalculator struct {
 	keyToIPs              map[model.Key][]ip.Addr
 	keyToMatchingIPSetIDs multidict.IfaceToString
-	ipSetIDToIPToKey      map[string]multidict.IfaceToIface
+	ipSetIDToIPToKey      map[string]map[ip.Addr][]model.Key
 
 	callbacks IPAddRemoveCallbacks
 }
@@ -52,7 +52,7 @@ func NewMemberCalculator() *MemberCalculator {
 	calc := &MemberCalculator{
 		keyToIPs:              make(map[model.Key][]ip.Addr),
 		keyToMatchingIPSetIDs: multidict.NewIfaceToString(),
-		ipSetIDToIPToKey:      make(map[string]multidict.IfaceToIface),
+		ipSetIDToIPToKey:      make(map[string]map[ip.Addr][]model.Key),
 	}
 	return calc
 }
@@ -166,29 +166,46 @@ func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key model.Key, ips
 	log.Debugf("IP set %v now matches IPs %v via %v", ipSetID, ips, key)
 	ipToKeys, ok := calc.ipSetIDToIPToKey[ipSetID]
 	if !ok {
-		ipToKeys = multidict.NewIfaceToIface()
+		ipToKeys = make(map[ip.Addr][]model.Key, len(ips))
 		calc.ipSetIDToIPToKey[ipSetID] = ipToKeys
 	}
 
-	for _, ip := range ips {
-		if !ipToKeys.ContainsKey(ip) {
-			log.Debugf("New IP in IP set %v: %v", ipSetID, ip)
-			calc.callbacks.OnIPAdded(ipSetID, ip)
+ipLoop:
+	for _, theIP := range ips {
+		keys := ipToKeys[theIP]
+		if keys == nil {
+			log.Debugf("New IP in IP set %v: %v", ipSetID, theIP)
+			calc.callbacks.OnIPAdded(ipSetID, theIP)
+		} else {
+			// Skip the append if the key is already present.
+			for _, k := range keys {
+				if key == k {
+					continue ipLoop
+				}
+			}
 		}
-		ipToKeys.Put(ip, key)
+		ipToKeys[theIP] = append(keys, key)
 	}
 }
 
 func (calc *MemberCalculator) removeMatchFromIndex(ipSetID string, key model.Key, ips []ip.Addr) {
 	log.Debugf("IP set %v no longer matches IPs %v via %v", ipSetID, ips, key)
 	ipToKeys := calc.ipSetIDToIPToKey[ipSetID]
-	for _, ip := range ips {
-		ipToKeys.Discard(ip, key)
-		if !ipToKeys.ContainsKey(ip) {
-			log.Debugf("IP no longer in IP set %v: %v", ipSetID, ip)
-			calc.callbacks.OnIPRemoved(ipSetID, ip)
-			if ipToKeys.Len() == 0 {
-				delete(calc.ipSetIDToIPToKey, ipSetID)
+	for _, theIP := range ips {
+		keys := ipToKeys[theIP]
+		for i, k := range keys {
+			if key == k {
+				// found it,
+				if len(keys) == 1 {
+					// It was the only entry, clean it up.
+					delete(ipToKeys, theIP)
+					calc.callbacks.OnIPRemoved(ipSetID, theIP)
+				} else {
+					keys[i] = keys[len(keys)-1]
+					keys = keys[:len(keys)-1]
+					ipToKeys[theIP] = keys
+				}
+				break
 			}
 		}
 	}
