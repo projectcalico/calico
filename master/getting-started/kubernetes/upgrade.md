@@ -14,6 +14,13 @@ unscheduleable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubec
 before upgrading the node, and then make the node scheduleable after the upgrade is
 complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/kubectl_uncordon/).
 
+> **NOTE**
+>
+> When upgrading to etcd v3, as long as the cluster is migrated with the
+`etcdctl migrate` command, the v2 data will remain untouched and the etcd v3
+server will continue to speak the v2 protocol so the upgrade should have no
+impact on Calico.
+
 ## Upgrading a Hosted Installation of Calico
 
 This section covers upgrading a [self-hosted]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted) Calico installation.
