@@ -167,6 +167,14 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	// a mutable map by mistake.
 	rawDataCopy := make(map[string]string)
 	for k, v := range rawData {
+		if v == "" {
+			log.WithFields(log.Fields{
+				"name":   k,
+				"source": source,
+			}).Info("Ignoring empty configuration parameter. Use value 'none' if " +
+				"your intention is to explicitly disable the default value.")
+			continue
+		}
 		rawDataCopy[k] = v
 	}
 	config.sourceToRawConfig[source] = rawDataCopy
@@ -258,6 +266,10 @@ func (config *Config) resolve() (changed bool, err error) {
 				name, rawValue, source)
 			var value interface{}
 			if strings.ToLower(rawValue) == "none" {
+				// Special case: we allow a value of "none" to force the value to
+				// the zero value for a field.  The zero value often differs from
+				// the default value.  Typically, the zero value means "turn off
+				// the feature".
 				if metadata.NonZero {
 					err = errors.New("Non-zero field cannot be set to none")
 					log.Errorf(
