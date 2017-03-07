@@ -198,7 +198,7 @@ func (config *Config) OpenstackActive() bool {
 			return true
 		}
 	}
-	log.Debug("No evidence this is an OpenStack deployment; diabling OpenStack special-cases")
+	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
 	return false
 }
 
