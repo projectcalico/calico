@@ -10,7 +10,8 @@ exec 1>&2
 
 changed_files=$(git diff --cached --name-only)
 changed_go_files=$(git diff --cached --name-only | grep -E '.go$' || true)
-all_go_files=$(find -name '*.go' | grep -v /vendor/)
+
+all_go_files=$(find . -name '*.go' | grep -v /vendor/)
 
 copyright_check_failed=false
 copyright_owner="Tigera, Inc"

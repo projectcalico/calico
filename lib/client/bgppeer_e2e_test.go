@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,19 +46,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = Describe("BGPPeer tests", func() {
+var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("BGPPeer e2e tests",
 		func(meta1, meta2 api.BGPPeerMetadata, spec1, spec2 api.BGPPeerSpec) {
-
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
-			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
+			c := testutils.CreateCleanClient(config)
 			By("Updating the BGPPeer before it is created")
 			_, outError := c.BGPPeers().Update(&api.BGPPeer{Metadata: meta1, Spec: spec1})
 

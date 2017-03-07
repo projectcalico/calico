@@ -2,9 +2,17 @@
 
 set -e
 
+if [ -z $SKIP ]
+then
+    SKIP="vendor"
+else
+    SKIP="vendor,$SKIP"
+fi
+
 # Run tests in random order find tests recursively (-r).
-echo $WHAT
-ginkgo -cover -r --skipPackage vendor $WHAT
+echo WHAT: $WHAT
+echo SKIP: $SKIP
+ginkgo -cover -r --skipPackage $SKIP $WHAT
 
 echo
 echo '+==============+'

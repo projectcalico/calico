@@ -28,13 +28,13 @@ ut: vendor
 
 .PHONY: test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-test-containerized: vendor run-kubernetes-master 
+test-containerized: vendor run-etcd run-kubernetes-master
 	-mkdir -p .go-pkg-cache
 	docker run --rm --privileged --net=host \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
     -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
-    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && make WHAT=$(WHAT) ut'
+    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && make WHAT=$(WHAT) SKIP=$(SKIP) ut'
 
 ## Run etcd as a container
 run-etcd: stop-etcd
@@ -44,7 +44,7 @@ run-etcd: stop-etcd
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-run-kubernetes-master: stop-kubernetes-master run-etcd
+run-kubernetes-master: stop-kubernetes-master
 	# Run the kubelet which will launch the master components in a pod.
 	docker run \
                  -v /:/rootfs:ro \
