@@ -55,6 +55,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 )
 
 // itemData holds the data that we know about a particular item (i.e. a workload or host endpoint).
@@ -65,7 +66,7 @@ type itemData struct {
 	parents []*parentData
 }
 
-// Get implements the Labels interface for itemData.  Combines the item's own labels with that
+// Get implements the Labels interface for itemData.  Combines the item's own labels with those
 // of its parents on the fly.
 func (itemData *itemData) Get(labelName string) (value string, present bool) {
 	if value, present = itemData.labels[labelName]; present {
@@ -95,22 +96,37 @@ type parentData struct {
 	itemIDs set.Set
 }
 
-type InheritIndex struct {
-	index Index
+type MatchCallback func(selId, labelId interface{})
 
+type InheritIndex struct {
 	itemDataByID         map[interface{}]*itemData
 	parentDataByParentID map[string]*parentData
+	selectorsById        map[interface{}]selector.Selector
+
+	// Current matches.
+	selIdsByLabelId map[interface{}]set.Set
+	labelIdsBySelId map[interface{}]set.Set
+
+	// Callback functions
+	OnMatchStarted MatchCallback
+	OnMatchStopped MatchCallback
 
 	dirtyItemIDs set.Set
 }
 
 func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex {
-	index := NewIndex(onMatchStarted, onMatchStopped)
+	itemData := map[interface{}]*itemData{}
 	inheritIDx := InheritIndex{
-		index: index,
-
-		itemDataByID:         map[interface{}]*itemData{},
+		itemDataByID:         itemData,
 		parentDataByParentID: map[string]*parentData{},
+		selectorsById:        map[interface{}]selector.Selector{},
+
+		selIdsByLabelId: map[interface{}]set.Set{},
+		labelIdsBySelId: map[interface{}]set.Set{},
+
+		// Callback functions
+		OnMatchStarted: onMatchStarted,
+		OnMatchStopped: onMatchStopped,
 
 		dirtyItemIDs: set.New(),
 	}
@@ -172,11 +188,25 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 }
 
 func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
-	idx.index.UpdateSelector(id, sel)
+	log.Infof("Updating selector %v", id)
+	if sel == nil {
+		log.WithField("id", id).Panic("Selector should not be nil")
+	}
+	idx.scanAllLabels(id, sel)
+	idx.selectorsById[id] = sel
 }
 
 func (idx *InheritIndex) DeleteSelector(id interface{}) {
-	idx.index.DeleteSelector(id)
+	log.Infof("Deleting selector %v", id)
+	matchSet := idx.labelIdsBySelId[id]
+	if matchSet != nil {
+		matchSet.Iter(func(labelId interface{}) error {
+			// This modifies the set we're iterating over, but that's safe in Go.
+			idx.deleteMatch(id, labelId)
+			return nil
+		})
+	}
+	delete(idx.selectorsById, id)
 }
 
 func (idx *InheritIndex) UpdateLabels(id interface{}, labels map[string]string, parentIDs []string) {
@@ -323,17 +353,100 @@ func (idx *InheritIndex) flushChildren(parentID string) {
 func (idx *InheritIndex) flushUpdates() {
 	idx.dirtyItemIDs.Iter(func(itemID interface{}) error {
 		log.Debugf("Flushing %#v", itemID)
-		itemData, ok := idx.itemDataByID[itemID]
+		_, ok := idx.itemDataByID[itemID]
 		if !ok {
 			// Item deleted.
 			log.Debugf("Flushing delete of item %v", itemID)
-			idx.index.DeleteLabels(itemID)
+			matchSet := idx.selIdsByLabelId[itemID]
+			if matchSet != nil {
+				matchSet.Iter(func(selId interface{}) error {
+					// This modifies the set we're iterating over, but that's safe in Go.
+					idx.deleteMatch(selId, itemID)
+					return nil
+				})
+			}
 		} else {
 			// Item updated/created, re-evaluate labels.
 			log.Debugf("Flushing update of item %v", itemID)
-
-			idx.index.UpdateLabels(itemID, itemData)
+			idx.scanAllSelectors(itemID)
 		}
 		return set.RemoveItem
 	})
+}
+
+func (idx *InheritIndex) scanAllLabels(selId interface{}, sel selector.Selector) {
+	log.Debugf("Scanning all (%v) labels against selector %v",
+		len(idx.itemDataByID), selId)
+	for labelId, labels := range idx.itemDataByID {
+		idx.updateMatches(selId, sel, labelId, labels)
+	}
+}
+
+func (idx *InheritIndex) scanAllSelectors(labelId interface{}) {
+	log.Debugf("Scanning all (%v) selectors against labels %v",
+		len(idx.selectorsById), labelId)
+	labels := idx.itemDataByID[labelId]
+	for selId, sel := range idx.selectorsById {
+		idx.updateMatches(selId, sel, labelId, labels)
+	}
+}
+
+func (idx *InheritIndex) updateMatches(
+	selId interface{},
+	sel selector.Selector,
+	labelId interface{},
+	labels parser.Labels,
+) {
+	nowMatches := sel.EvaluateLabels(labels)
+	if nowMatches {
+		idx.storeMatch(selId, labelId)
+	} else {
+		idx.deleteMatch(selId, labelId)
+	}
+}
+
+func (idx *InheritIndex) storeMatch(selId, labelId interface{}) {
+	labelIds := idx.labelIdsBySelId[selId]
+	if labelIds == nil {
+		labelIds = set.New()
+		idx.labelIdsBySelId[selId] = labelIds
+	}
+	previouslyMatched := labelIds.Contains(labelId)
+	if !previouslyMatched {
+		log.Debugf("Selector %v now matches labels %v", selId, labelId)
+		labelIds.Add(labelId)
+
+		selIDs, ok := idx.selIdsByLabelId[labelId]
+		if !ok {
+			selIDs = set.New()
+			idx.selIdsByLabelId[labelId] = selIDs
+		}
+		selIDs.Add(selId)
+
+		idx.OnMatchStarted(selId, labelId)
+	}
+}
+
+func (idx *InheritIndex) deleteMatch(selId, labelId interface{}) {
+	labelIds := idx.labelIdsBySelId[selId]
+	if labelIds == nil {
+		return
+	}
+	previouslyMatched := labelIds.Contains(labelId)
+	if previouslyMatched {
+		log.Debugf("Selector %v no longer matches labels %v",
+			selId, labelId)
+
+		labelIds.Discard(labelId)
+		if labelIds.Len() == 0 {
+			delete(idx.labelIdsBySelId, selId)
+		}
+
+		idx.selIdsByLabelId[labelId].Discard(selId)
+		if idx.selIdsByLabelId[labelId].Len() == 0 {
+			delete(idx.selIdsByLabelId, labelId)
+		}
+
+		idx.OnMatchStopped(selId, labelId)
+	}
 }
