@@ -27,11 +27,9 @@ import (
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}) {
 		config := New()
-		oldVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
 		config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
 		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
-		Expect(oldVal).NotTo(Equal(newVal))
 		Expect(newVal).To(Equal(expected))
 	},
 
@@ -40,6 +38,7 @@ var _ = DescribeTable("Config parsing",
 	Entry("FelixHostname as IP", "FelixHostname", "1.2.3.4", "1.2.3.4"),
 
 	Entry("EtcdAddr IP", "EtcdAddr", "10.0.0.1:1234", "10.0.0.1:1234"),
+	Entry("EtcdAddr Empty", "EtcdAddr", "", "127.0.0.1:2379"),
 	Entry("EtcdAddr host", "EtcdAddr", "host:1234", "host:1234"),
 	Entry("EtcdScheme", "EtcdScheme", "https", "https"),
 
@@ -116,10 +115,10 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("FailsafeInboundHostPorts", "FailsafeInboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
 	Entry("FailsafeOutboundHostPorts", "FailsafeOutboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
-	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "none", []uint16(nil)),
-	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "none", []uint16(nil)),
-	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "", []uint16(nil)),
-	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "", []uint16(nil)),
+	Entry("FailsafeInboundHostPorts none", "FailsafeInboundHostPorts", "none", []uint16(nil)),
+	Entry("FailsafeOutboundHostPorts none", "FailsafeOutboundHostPorts", "none", []uint16(nil)),
+	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "", []uint16{22}),
+	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "", []uint16{2379, 2380, 4001, 7001}),
 )
 
 var _ = DescribeTable("Mark bit calculation tests",
