@@ -16,7 +16,6 @@ package rules
 
 import (
 	"net"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -159,7 +158,6 @@ type RuleRenderer interface {
 type DefaultRuleRenderer struct {
 	Config
 
-	dropActions        []iptables.Action
 	inputAcceptActions []iptables.Action
 }
 
@@ -191,8 +189,7 @@ type Config struct {
 	IPIPEnabled       bool
 	IPIPTunnelAddress net.IP
 
-	DropLogPrefix        string
-	ActionOnDrop         string
+	IptablesLogPrefix    string
 	EndpointToHostAction string
 
 	FailsafeInboundHostPorts  []uint16
@@ -201,31 +198,13 @@ type Config struct {
 
 func NewRenderer(config Config) RuleRenderer {
 	log.WithField("config", config).Info("Creating rule renderer.")
-	// Convert configured actions to rule slices.  First, what should we actually do when we'd
-	// normally drop a packet?  For sandbox mode, we support allowing the packet instead, or
-	// logging it.
-	var dropActions []iptables.Action
-	if strings.HasPrefix(config.ActionOnDrop, "LOG-") {
-		log.Warn("Action on drop includes LOG.  All dropped packets will be logged.")
-		logPrefix := "calico-drop"
-		if config.DropLogPrefix != "" {
-			logPrefix = config.DropLogPrefix
-		}
-		dropActions = append(dropActions, iptables.LogAction{Prefix: logPrefix})
-	}
-	if strings.HasSuffix(config.ActionOnDrop, "ACCEPT") {
-		log.Warn("Action on drop set to ACCEPT.  Calico security is disabled!")
-		dropActions = append(dropActions, iptables.AcceptAction{})
-	} else {
-		dropActions = append(dropActions, iptables.DropAction{})
-	}
-
-	// Second, what should we do with packets that come from workloads to the host itself.
+	// Convert configured actions to rule slices.
+	// First, what should we do with packets that come from workloads to the host itself.
 	var inputAcceptActions []iptables.Action
 	switch config.EndpointToHostAction {
 	case "DROP":
 		log.Info("Workload to host packets will be dropped.")
-		inputAcceptActions = dropActions
+		inputAcceptActions = []iptables.Action{iptables.DropAction{}}
 	case "ACCEPT":
 		log.Info("Workload to host packets will be accepted.")
 		inputAcceptActions = []iptables.Action{iptables.AcceptAction{}}
@@ -236,7 +215,6 @@ func NewRenderer(config Config) RuleRenderer {
 
 	return &DefaultRuleRenderer{
 		Config:             config,
-		dropActions:        dropActions,
 		inputAcceptActions: inputAcceptActions,
 	}
 }

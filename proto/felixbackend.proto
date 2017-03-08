@@ -189,7 +189,10 @@ message Rule {
   repeated string not_src_ip_set_ids = 109;
   repeated string not_dst_ip_set_ids = 110;
 
-  string log_prefix = 200;
+  // Changed to config option.
+  reserved 200;
+  reserved "log_prefix";
+  
   // An opaque ID/hash for the rule.
   string rule_id = 201;
 }

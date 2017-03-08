@@ -65,8 +65,6 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	NotSrcIPSetIDs: []string{"srcID3", "srcID4"},
 	NotDstIPSetIDs: []string{"dstID3", "dstID4"},
-
-	LogPrefix: "foobar",
 }
 
 var fullyLoadedProtoRule = proto.Rule{
@@ -106,8 +104,6 @@ var fullyLoadedProtoRule = proto.Rule{
 
 	NotSrcIpSetIds: []string{"srcID3", "srcID4"},
 	NotDstIpSetIds: []string{"dstID3", "dstID4"},
-
-	LogPrefix: "foobar",
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
