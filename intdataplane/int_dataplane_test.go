@@ -58,7 +58,6 @@ var _ = Describe("Constructor test", func() {
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
-				ActionOnDrop:         configParams.DropActionOverride,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 			},
 			IPIPMTU: configParams.IpInIpMtu,

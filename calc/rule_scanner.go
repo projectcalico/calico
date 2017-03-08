@@ -224,8 +224,6 @@ type ParsedRule struct {
 	NotICMPCode    *int
 	NotSrcIPSetIDs []string
 	NotDstIPSetIDs []string
-
-	LogPrefix string
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []tagOrSel, err error) {
@@ -259,8 +257,6 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 		NotICMPCode:    rule.NotICMPCode,
 		NotSrcIPSetIDs: tosSlice(notSrc).ToUIDs(),
 		NotDstIPSetIDs: tosSlice(notDst).ToUIDs(),
-
-		LogPrefix: rule.LogPrefix,
 	}
 
 	allTagOrSels = append(allTagOrSels, src...)

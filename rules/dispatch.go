@@ -181,10 +181,16 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				// since packets that reach the end of the child chain would
 				// return up past the root chain, appearing to be accepted.
 				logCxt.Debug("Adding drop rules at end of child chains.")
-				childFromEndpointRules = append(childFromEndpointRules,
-					r.DropRules(Match(), "Unknown interface")...)
-				childToEndpointRules = append(childToEndpointRules,
-					r.DropRules(Match(), "Unknown interface")...)
+				childFromEndpointRules = append(childFromEndpointRules, Rule{
+					Match:   Match(),
+					Action:  DropAction{},
+					Comment: "Unknown interface",
+				})
+				childToEndpointRules = append(childToEndpointRules, Rule{
+					Match:   Match(),
+					Action:  DropAction{},
+					Comment: "Unknown interface",
+				})
 			}
 			childFromEndpointChain := &Chain{
 				Name:  childFromChainName,
@@ -217,10 +223,16 @@ func (r *DefaultRuleRenderer) dispatchChains(
 
 	if dropAtEndOfChain {
 		log.Debug("Adding drop rules at end of root chains.")
-		rootFromEndpointRules = append(rootFromEndpointRules,
-			r.DropRules(Match(), "Unknown interface")...)
-		rootToEndpointRules = append(rootToEndpointRules,
-			r.DropRules(Match(), "Unknown interface")...)
+		rootFromEndpointRules = append(rootFromEndpointRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Unknown interface",
+		})
+		rootToEndpointRules = append(rootToEndpointRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Unknown interface",
+		})
 	}
 
 	fromEndpointDispatchChain := &Chain{

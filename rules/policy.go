@@ -140,17 +140,6 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 func (r *DefaultRuleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
 	actions = []iptables.Action{}
 
-	if pRule.LogPrefix != "" || pRule.Action == "log" {
-		// This rule should log (and possibly do something else too).
-		prefix := pRule.LogPrefix
-		if prefix == "" {
-			prefix = "calico-packet"
-		}
-		actions = append(actions, iptables.LogAction{
-			Prefix: prefix,
-		})
-	}
-
 	switch pRule.Action {
 	case "", "allow":
 		// Allow needs to set the accept mark, and then return to the calling chain for
@@ -163,10 +152,13 @@ func (r *DefaultRuleRenderer) CalculateActions(match iptables.MatchCriteria, pRu
 		mark = r.IptablesMarkPass
 		actions = append(actions, iptables.ReturnAction{})
 	case "deny":
-		// Deny maps to DROP.  We defer to DropActions() to allow for "sandbox" mode.
-		actions = append(actions, r.DropActions()...)
+		// Deny maps to DROP.
+		actions = append(actions, iptables.DropAction{})
 	case "log":
-		// Handled above.
+		// This rule should log.
+		actions = append(actions, iptables.LogAction{
+			Prefix: r.IptablesLogPrefix,
+		})
 	default:
 		log.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}

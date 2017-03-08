@@ -97,7 +97,6 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("dest net", model.Rule{DstNet: &cidr}, ParsedRule{DstNet: &cidr}),
 	Entry("source Ports", model.Rule{SrcPorts: ports}, ParsedRule{SrcPorts: ports}),
 	Entry("dest Ports", model.Rule{DstPorts: ports}, ParsedRule{DstPorts: ports}),
-	Entry("log prefix", model.Rule{LogPrefix: "foo"}, ParsedRule{LogPrefix: "foo"}),
 	Entry("!protocol", model.Rule{NotProtocol: &protocol}, ParsedRule{NotProtocol: &protocol}),
 	Entry("!source net", model.Rule{NotSrcNet: &cidr}, ParsedRule{NotSrcNet: &cidr}),
 	Entry("!dest net", model.Rule{NotDstNet: &cidr}, ParsedRule{NotDstNet: &cidr}),
@@ -137,7 +136,8 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 var _ = Describe("ParsedRule", func() {
 	It("should have correct fields relative to model.Rule", func() {
 		// We expect all the fields to have the same name, except for
-		// the selectors and tags, which differ.
+		// the selectors and tags, which differ, and LogPrefix, which
+		// is deprecated.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
 		prFields := set.New()
@@ -154,6 +154,7 @@ var _ = Describe("ParsedRule", func() {
 		for i := 0; i < numMRFields; i++ {
 			name := mrType.Field(i).Name
 			if strings.Index(name, "Tag") >= 0 ||
+				strings.Index(name, "LogPrefix") >= 0 ||
 				strings.Index(name, "Selector") >= 0 {
 				continue
 			}

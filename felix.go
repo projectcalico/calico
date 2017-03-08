@@ -214,8 +214,7 @@ configRetry:
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
-				DropLogPrefix:        configParams.LogPrefix,
-				ActionOnDrop:         configParams.DropActionOverride,
+				IptablesLogPrefix:    configParams.LogPrefix,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
