@@ -297,40 +297,50 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			err = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &k8sapi.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
-		Expect(err).NotTo(HaveOccurred())
+		By("creating a pod", func() {
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		// Wait up to 120s for pod to start running.
-		log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
-		for i := 0; i < 120; i++ {
+		By("waiting for the pod to start", func() {
+			// Wait up to 120s for pod to start running.
+			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
+			for i := 0; i < 120; i++ {
+				p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				if p.Status.Phase == k8sapi.PodRunning {
+					// Pod is running
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
 			p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			if p.Status.Phase == k8sapi.PodRunning {
-				// Pod is running
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
-		p, err := c.clientSet.Pods("default").Get(pod.ObjectMeta.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(p.Status.Phase).To(Equal(k8sapi.PodRunning))
-
-		// Perform List and ensure it shows up in the Calico API.
-		weps, err := c.List(model.WorkloadEndpointListOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(weps)).To(BeNumerically(">", 0))
-
-		// Perform List, including a workloadID
-		weps, err = c.List(model.WorkloadEndpointListOptions{
-			WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
+			Expect(p.Status.Phase).To(Equal(k8sapi.PodRunning))
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(weps)).To(Equal(1))
 
-		// Perform a Get and ensure no error in the Calico API.
-		wep, err := c.Get(model.WorkloadEndpointKey{WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name)})
-		Expect(err).NotTo(HaveOccurred())
-		_, err = c.Apply(wep)
-		Expect(err).NotTo(HaveOccurred())
+		By("performing a List() operation", func() {
+			// Perform List and ensure it shows up in the Calico API.
+			weps, err := c.List(model.WorkloadEndpointListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(weps)).To(BeNumerically(">", 0))
+		})
+
+		By("performing a List(workloadID=pod) operation", func() {
+			// Perform List, including a workloadID
+			weps, err := c.List(model.WorkloadEndpointListOptions{
+				WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(weps)).To(Equal(1))
+		})
+
+		By("performing a Get() operation", func() {
+			// Perform a Get and ensure no error in the Calico API.
+			wep, err := c.Get(model.WorkloadEndpointKey{WorkloadID: fmt.Sprintf("default.%s", pod.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.Apply(wep)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	// Add a defer to wait for all pods to clean up.
