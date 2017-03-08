@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,19 +24,21 @@ import (
 	"encoding/json"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	kapi "k8s.io/client-go/pkg/api"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/intstr"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var (
 	policyAnnotation = "net.beta.kubernetes.io/network-policy"
+	protoTCP         = kapiv1.ProtocolTCP
 )
 
 type namespacePolicy struct {
@@ -343,6 +345,11 @@ func (c converter) k8sIngressRuleToCalico(r extensions.NetworkPolicyIngressRule,
 		if p.Port != nil {
 			portval := intstr.FromString(p.Port.String())
 			port.Port = &portval
+
+			// TCP is the implicit default (as per the definition of NetworkPolicyPort).
+			// Make the default explicit here because our data-model always requires
+			// the protocol to be specified if we're doing a port match.
+			port.Protocol = &protoTCP
 		}
 		if p.Protocol != nil {
 			protval := kapiv1.Protocol(fmt.Sprintf("%s", *p.Protocol))
