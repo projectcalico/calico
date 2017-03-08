@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,8 @@ func init() {
 	netv6_3 := testutils.MustParseNetwork("aabb:aabb::ffff/122")
 	netv6_4 := testutils.MustParseNetwork("aabb:aabb::ffff/10")
 
+	protoTCP := numorstring.ProtocolFromString("tcp")
+
 	// Perform basic validation of different fields and structures to test simple valid/invalid
 	// scenarios.  This does not test precise error strings - but does cover a lot of the validation
 	// code paths.
@@ -87,6 +89,24 @@ func init() {
 		Entry("should accept IP version 4 (m)", model.Rule{IPVersion: &V4}, true),
 		Entry("should accept IP version 6 (m)", model.Rule{IPVersion: &V6}, true),
 		Entry("should reject IP version 0 (m)", model.Rule{IPVersion: &V0}, false),
+
+		// (Backend model) Ports.
+		Entry("should accept ports with tcp protocol (m)", model.Rule{
+			Protocol: &protoTCP,
+			SrcPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, true),
+		Entry("should reject src ports with no protocol (m)", model.Rule{
+			SrcPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, false),
+		Entry("should reject dst ports with no protocol (m)", model.Rule{
+			DstPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, false),
+		Entry("should reject !src ports with no protocol (m)", model.Rule{
+			NotSrcPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, false),
+		Entry("should reject !dst ports with no protocol (m)", model.Rule{
+			NotDstPorts: []numorstring.Port{numorstring.SinglePort(80)},
+		}, false),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "allow", IPVersion: &V4}, true),
@@ -350,6 +370,13 @@ func init() {
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, true),
+		Entry("should reject Rule with dest ports and no protocol",
+			api.Rule{
+				Action: "allow",
+				Destination: api.EntityRule{
+					Ports: []numorstring.Port{numorstring.SinglePort(1)},
+				},
+			}, false),
 		Entry("should reject Rule with invalid port (port 0)",
 			api.Rule{
 				Action:   "allow",

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"gopkg.in/go-playground/validator.v8"
 )
 
@@ -92,6 +93,7 @@ func init() {
 	registerStructValidator(validateIPPool, api.IPPool{})
 	registerStructValidator(validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validateRule, api.Rule{})
+	registerStructValidator(validateBackendRule, model.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
 }
 
@@ -360,6 +362,32 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
 				"Destination.NotPorts", "", reason("protocol does not support ports"))
+		}
+	}
+}
+
+func validateBackendRule(v *validator.Validate, structLevel *validator.StructLevel) {
+	rule := structLevel.CurrentStruct.Interface().(model.Rule)
+
+	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
+	// been specified.
+	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
+		if len(rule.SrcPorts) > 0 {
+			structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
+				"SrcPorts", "", reason("protocol does not support ports"))
+		}
+		if len(rule.NotSrcPorts) > 0 {
+			structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
+				"NotSrcPorts", "", reason("protocol does not support ports"))
+		}
+
+		if len(rule.DstPorts) > 0 {
+			structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
+				"DstPorts", "", reason("protocol does not support ports"))
+		}
+		if len(rule.NotDstPorts) > 0 {
+			structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
+				"NotDstPorts", "", reason("protocol does not support ports"))
 		}
 	}
 }
