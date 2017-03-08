@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,13 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/pkg/util/intstr"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = Describe("Test parsing strings", func() {
@@ -218,6 +219,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	c := converter{}
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
+		port80 := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name:      "testPolicy",
@@ -228,12 +230,12 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					MatchLabels: map[string]string{"label": "value"},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
-					extensions.NetworkPolicyIngressRule{
+					{
 						Ports: []extensions.NetworkPolicyPort{
-							extensions.NetworkPolicyPort{},
+							{Port: &port80},
 						},
 						From: []extensions.NetworkPolicyPeer{
-							extensions.NetworkPolicyPeer{
+							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
 										"k": "v",
@@ -256,9 +258,14 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
 		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
-		Expect(len(pol.Value.(*model.Policy).InboundRules)).To(Equal(1))
-		Expect(len(pol.Value.(*model.Policy).OutboundRules)).To(Equal(0))
-		Expect(pol.Value.(*model.Policy).InboundRules[0].SrcSelector).To(Equal("calico/k8s_ns == 'default' && k == 'v'"))
+		protoTCP := numorstring.ProtocolFromString("tcp")
+		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(model.Rule{
+			Action:      "allow",
+			Protocol:    &protoTCP, // Defaulted to TCP.
+			SrcSelector: "calico/k8s_ns == 'default' && k == 'v'",
+			DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
+		}))
+		Expect(pol.Value.(*model.Policy).OutboundRules).To(BeEmpty())
 	})
 
 	It("should parse a NetworkPolicy with no rules", func() {
