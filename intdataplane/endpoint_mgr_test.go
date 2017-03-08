@@ -932,10 +932,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 					It("should write /proc/sys entries", func() {
 						if ipVersion == 6 {
 							mockProcSys.checkState(map[string]string{
-								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp": "1",
+								"/proc/sys/net/ipv6/conf/cali12345-ab/proxy_ndp":  "1",
+								"/proc/sys/net/ipv6/conf/cali12345-ab/forwarding": "1",
 							})
 						} else {
 							mockProcSys.checkState(map[string]string{
+								"/proc/sys/net/ipv4/conf/cali12345-ab/forwarding":     "1",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/rp_filter":      "1",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/route_localnet": "1",
 								"/proc/sys/net/ipv4/conf/cali12345-ab/proxy_arp":      "1",
