@@ -1,5 +1,5 @@
-hash: cd02b79ca83441a1f9a525b6e5e9f773af15071bc1e11890b7e826919fd23b1d
-updated: 2017-03-01T13:46:09.220570067Z
+hash: 2a26cc5aa99bcb07893e216443e5b898e0082318adf3e2f87da736457904f13a
+updated: 2017-03-08T18:14:30.857330778Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
+  version: 7f43fdde7485de5be2922024bb0aed1b14803b20
   subpackages:
   - client
   - pkg/pathutil
@@ -76,7 +76,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 69b215d01a5606c843240eab4937eab3acee6530
+  version: c9c7427a2a70d2eb3bafa0ab2dc163e45f143317
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -106,7 +106,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: bb93381d543b0e5725244abe752214a110791d01
+  version: ab07225d112dc7a93c289ac5b2e12735c2c46035
   subpackages:
   - config
   - extensions/table
@@ -136,7 +136,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 8de5b8d6e6f0a44208f033e208a2dec986abedb8
+  version: 5fb02394d07d5335f9df9a825e3707d5452a69f3
   subpackages:
   - lib
   - lib/api
@@ -226,7 +226,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 76cc09b634294339fa19ec41b5f2a0b3932cea8b
+  version: 99f16d856c9836c42d24e7ab64ea72916925fa97
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -383,7 +383,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: c463cd2a8578290d4be7a25cba69de81cf35785e
+  version: 1de7ab2df9105aa5c15c4d7e14a8a514e3cb8d4b
   subpackages:
   - format
   - internal/assertion
