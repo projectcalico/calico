@@ -24,14 +24,8 @@ we do a new patch release, the updates are made in-place.
 These steps are for creating a new major/minor release, with the expectation that a release candidate will be created, published and tested before the final release is announced.
 
 1. Run release-scripts/do_release.py to copy master directory to the new version directory
-2. Fix calico-cni binary links which are not updated by the release script (see [#147](https://github.com/projectcalico/calico/issues/147)).
-To locate all offending CNI links, run the following:
-   ```
-   grep -r calico-cni\/releases vX.Y
-   ```
-
-3. Add the new version to `_data/versions.yaml`
-4. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
+2. Add the new version to `_data/versions.yaml`
+3. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
 
    ```
    -
@@ -41,7 +35,7 @@ To locate all offending CNI links, run the following:
        version: vX.Y
    ```
 
-5. Test the changes locally then open a pull request, make sure it passes CI, then merge.
+4. Test the changes locally then open a pull request, make sure it passes CI, then merge.
 
 6. Edit the [Calico Docs Custom Search Engine](cse.google.com/).
 
