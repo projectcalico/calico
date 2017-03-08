@@ -200,7 +200,7 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 	k := model.GlobalConfigKey{
 		Name: "ClusterType",
 	}
-	value := "kubernetes,k8sdatastoredriver"
+	value := "KDD"
 
 	// See if a cluster type has been set.  If so, append
 	// any existing values to it.
@@ -214,12 +214,8 @@ func (c *KubeClient) ensureClusterType() (bool, error) {
 	}
 	if ct != nil {
 		existingValue := ct.Value.(string)
-		if !strings.Contains(existingValue, "kubernetes") {
-			existingValue = fmt.Sprintf("%s,kubernetes", existingValue)
-		}
-
-		if !strings.Contains(existingValue, "k8sdatastoredriver") {
-			existingValue = fmt.Sprintf("%s,k8sdatastoredriver", existingValue)
+		if !strings.Contains(existingValue, "KDD") {
+			existingValue = fmt.Sprintf("%s,KDD", existingValue)
 		}
 		value = existingValue
 	}
