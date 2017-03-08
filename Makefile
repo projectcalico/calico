@@ -16,7 +16,7 @@ htmlproofer: clean _site
 	# Rerun htmlproofer across _all_ files, but ignore failure, allowing us to notice legacy docs issues without failing CI
 
 strip_redirects:
-	find -name '*.md' -o -name '*.html' -exec sed -i'' '/redirect_from:/d' '{}' \;
+	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
 
 
 add_redirects_for_latest: strip_redirects
@@ -27,10 +27,10 @@ endif
 	@test -d $(VERSION)
 
 	# Add the redirect line - look at .md files only and add "redirect_from: XYZ" on a new line after each "title:"
-	find $(VERSION) -name '*.md' -o -name '*.html' -exec sed -i 's#^title:.*#&\nredirect_from: {}#' '{}' \;
+	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^title:.*#&\nredirect_from: {}#' '{}' \;
 
 	# Check the redirect_from lines and update the version to be "latest"
-	find $(VERSION) -name '*.md' -o -name '*.html' -exec sed -i 's#^\(redirect_from: \)$(VERSION)#\1latest#' '{}' \;
+	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from: \)$(VERSION)#\1latest#' '{}' \;
 
 	# Check the redirect_from lines and strip the .md from the URL
-	find $(VERSION) -name '*.md' -o -name '*.html' -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
+	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;

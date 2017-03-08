@@ -52,9 +52,11 @@ These steps are for creating a new major/minor release, with the expectation tha
 ### Promoting a release candidate to a final release
 1. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file. This step should NOT be performed until testing of the release is complete.
 
-2. Modify the redirect in `/index.html` to point to your new release..
+2. Modify the redirect in `/index.html` to point to your new release.. 
+ 
+3. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects. 
 
-3. Test the changes locally then open a pull request, make sure it passes CI, then merge.
+4. Test the changes locally then open a pull request, make sure it passes CI, then merge.
 
 ### Performing a "patch" release
 Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).

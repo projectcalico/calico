@@ -1,5 +1,6 @@
 ---
 title: Customizing the Calico Universe Framework
+redirect_from: latest/getting-started/mesos/installation/dc-os/custom
 ---
 
 The the Calico Universe Framework includes customization options which support

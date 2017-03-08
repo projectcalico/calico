@@ -1,6 +1,5 @@
 ---
 title: 'Worked Examples: Using Calico-based OpenStack'
-redirect_from: latest/getting-started/openstack/tutorials
 ---
 
 Here are a few worked examples for common Calico on OpenStack deployment

@@ -1,6 +1,5 @@
 ---
 title: Calico Integrations
-redirect_from: latest/getting-started/index
 ---
 
 To get started using Calico, we recommend running through one or more of the

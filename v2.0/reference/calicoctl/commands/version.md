@@ -1,6 +1,5 @@
 ---
 title: calicoctl version
-redirect_from: latest/reference/calicoctl/commands/version
 ---
 
 This sections describes the `calicoctl version` command.
