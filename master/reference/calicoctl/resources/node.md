@@ -25,8 +25,8 @@ metadata:
 spec:
   bgp:
     asNumber: 64512
-    ipv4Address: 10.244.0.1
-    ipv6Address: 2001:db8:85a3::8a2e:370:7334
+    ipv4Address: 10.244.0.1/24
+    ipv6Address: 2001:db8:85a3::8a2e:370:7334/120
 ```
 
 ### Definition
@@ -48,5 +48,5 @@ spec:
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
 | asNumber    | The AS Number of your Calico node. | Optional.  If omitted the global value is used (see [calicoctl config]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/config) for details). | integer |
-| ipv4Address | The IPv4 address exported as the next-hop for the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | string |
-| ipv6Address | The IPv6 address exported as the next-hop for the Calico endpoints on the host | Optional.  At least one of the ipv4Address or ipv6Address should be supplied. | string |
+| ipv4Address | The IPv4 address and subnet exported as the next-hop for the Calico endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
+| ipv6Address | The IPv6 address and subnet exported as the next-hop for the Calico endpoints on the host | Optional.  | string |
