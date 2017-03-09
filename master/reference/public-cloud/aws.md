@@ -33,7 +33,7 @@ Keep reading for information on when IPIP is required in AWS.
 Since Calico assigns IP addresses outside the range used by AWS for EC2 instances, you must disable AWS src/dst
 checks on each EC2 instance in your cluster
 [as described in the AWS documentation](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck).  This
-allows Calico to route traffic within a single VPC subnet without using an overlay.
+allows Calico to route traffic natively within a single VPC subnet without using an overlay or any of the limited VPC routing table entries.
 
 #### Routing Traffic Across Different VPC Subnets / VPCs
 
@@ -46,18 +46,18 @@ See the [IP pool configuration reference]({{site.baseurl}}/{{page.version}}/refe
 for information on how to configure Calico IP pools.
 
 By default, Calico's IPIP encapsulation applies to all container-to-container traffic.  However,
-encapsulation is only required for container traffic that crosses a VPC subnet boundary.  For better 
-performance, you can configure Calico to perform IPIP encapsulation only across VPC subnet boundaries.  
+encapsulation is only required for container traffic that crosses a VPC subnet boundary.  For better
+performance, you can configure Calico to perform IPIP encapsulation only across VPC subnet boundaries.
 
 To enable the "cross-subnet" IPIP feature, configure your Calico IP pool resources
 to enable IPIP and set the mode to "cross-subnet".
 
-> This feature was introduced in Calico v2.1, if your deployment was created with 
-> an older version of Calico, or if you if you are unsure whether your deployment 
+> This feature was introduced in Calico v2.1, if your deployment was created with
+> an older version of Calico, or if you if you are unsure whether your deployment
 > is configured correctly, follow the steps in [Upgrading from pre-v2.1](#upgrading-from-pre-v21) before
 > enabling "cross-subnet" IPIP.
 
-The following `calicoctl` command will create or modify an IPv4 pool with 
+The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `cross-subnet`. Adjust the pool CIDR for your deployment.
 
 ```
@@ -82,7 +82,7 @@ AWS will perform outbound NAT on any traffic which has the source address of an 
 machine instance.  By enabling outgoing NAT on your Calico IP pool, Calico will
 NAT any outbound traffic from the containers hosted on the EC2 virtual machine instances.
 
-The following `calicoctl` command will create or modify an IPv4 pool with 
+The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `cross-subnet` and enables outgoing NAT.
 Adjust the pool CIDR for your deployment.
 
@@ -103,7 +103,7 @@ EOF
 ## Upgrading from pre-v2.1
 
 If you are planning to use cross-subnet IPIP, your deployment must be running with
-Calico v2.1 or higher.  See [releases page]({{site.baseurl}}/{{page.version}}/releases) 
+Calico v2.1 or higher.  See [releases page]({{site.baseurl}}/{{page.version}}/releases)
 for details on the component versions for each release.
 
 These instructions are primarily focussed around a non-orchestrated installation of
@@ -113,14 +113,14 @@ below may be partially applicable.
 
 #### Download calicoctl
 
-Ensure you have the latest version of `calicoctl` downloaded. See [releases page]({{site.baseurl}}/{{page.version}}/releases) 
+Ensure you have the latest version of `calicoctl` downloaded. See [releases page]({{site.baseurl}}/{{page.version}}/releases)
 for the appropriate link.
 
 The `calicoctl` should be downloaded to each node and to your management server (if you use one).
 
 #### Upgrade your calico/node containers
 
-Upgrade your `calico/node` container instances on each host. See [releases page]({{site.baseurl}}/{{page.version}}/releases) 
+Upgrade your `calico/node` container instances on each host. See [releases page]({{site.baseurl}}/{{page.version}}/releases)
 for details of the `calico/node` container version.
 
 Any calico/node instance that was running prior to v2.1 will have incorrect
@@ -134,25 +134,25 @@ Run `calicoctl get nodes --output=wide` to check the configuration.  e.g.
 
 ```
 $ calicoctl get nodes --output=wide
-NAME    ASN       IPV4           IPV6   
-node1   (64512)   10.0.2.15/24          
-node2   (64512)   10.0.2.10/32          
+NAME    ASN       IPV4           IPV6
+node1   (64512)   10.0.2.15/24
+node2   (64512)   10.0.2.10/32
 ```
 
 In this example, node1 has the correct subnet information whereas node2 needs
 to be fixed.
 
-The subnet configuration may be fixed in a few different ways depending on how 
+The subnet configuration may be fixed in a few different ways depending on how
 you have deployed your calico/node containers.  We'll discuss the options below.
 
 **Configure the IP and subnet through runtime args/environments**
 
-The IP address may be explicitly specified using the `--ip` option on 
+The IP address may be explicitly specified using the `--ip` option on
 `calicoctl node run` or the `IP` environment if you are starting the container
 directly.
 
 If you are currently specifying the IP address, you will need to update the
-parameter to include the network by specifying the IP and network in CIDR form (e.g. 
+parameter to include the network by specifying the IP and network in CIDR form (e.g.
 `10.0.2.10/24`).
 
 For example (if using calicoctl node run):
@@ -169,7 +169,7 @@ on `calicoctl node run` or the `IP` environment if you are starting the containe
 directly.
 
 In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECTION_METHOD`
-environment can be used to specify the method used to auto detect the host address 
+environment can be used to specify the method used to auto detect the host address
 and subnet.  See [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
 for details.

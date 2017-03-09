@@ -34,7 +34,7 @@ Keep reading for information on when IPIP is required in AWS.
 Since Calico assigns IP addresses outside the range used by AWS for EC2 instances, you must disable AWS src/dst
 checks on each EC2 instance in your cluster
 [as described in the AWS documentation](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_NAT_Instance.html#EIP_Disable_SrcDestCheck).  This
-allows Calico to route traffic within a single VPC subnet without using an overlay.
+allows Calico to route traffic natively within a single VPC subnet without using an overlay or any of the limited VPC routing table entries.
 
 #### Routing Traffic Across Different VPC Subnets / VPCs
 
