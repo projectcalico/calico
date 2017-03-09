@@ -53,20 +53,14 @@ var (
 		Name: "felix_int_dataplane_messages",
 		Help: "Number dataplane messages by type.",
 	}, []string{"type"})
-	histApplyTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+	summaryApplyTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_apply_time_seconds",
 		Help: "Time in seconds that it took to apply a dataplane update.",
-		Buckets: []float64{
-			0.02, 0.05, 0.1, 0.2, 0.5, 1.0,
-		},
 	})
-	histBatchSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+	summaryBatchSize = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_msg_batch_size",
 		Help: "Number of messages processed in each batch. Higher values indicate we're " +
 			"doing more batching to try to keep up.",
-		Buckets: []float64{
-			1, 2, 5, 10, 20, 50,
-		},
 	})
 	summaryIfaceBatchSize = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_iface_msg_batch_size",
@@ -84,9 +78,9 @@ var (
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
-	prometheus.MustRegister(histApplyTime)
+	prometheus.MustRegister(summaryApplyTime)
 	prometheus.MustRegister(countMessages)
-	prometheus.MustRegister(histBatchSize)
+	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
 	processStartTime = time.Now()
@@ -527,7 +521,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 			}
 			d.dataplaneNeedsSync = true
-			histBatchSize.Observe(float64(batchSize))
+			summaryBatchSize.Observe(float64(batchSize))
 		case ifaceUpdate := <-d.ifaceUpdates:
 			// Process the message we received, then opportunistically process any other
 			// pending messages.
@@ -594,7 +588,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				applyTime := time.Since(applyStart)
 				if applyTime > 0 {
 					// Avoid a negative interval in case the clock jumps.
-					histApplyTime.Observe(applyTime.Seconds())
+					summaryApplyTime.Observe(applyTime.Seconds())
 				}
 
 				if d.dataplaneNeedsSync {

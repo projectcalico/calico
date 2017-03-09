@@ -28,6 +28,8 @@ import (
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/set"
+	"github.com/prometheus/client_golang/prometheus"
+	"time"
 )
 
 var (
@@ -38,7 +40,20 @@ var (
 	IfaceDown       = errors.New("interface down")
 
 	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
+
+	listIfaceTime = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_list_seconds",
+		Help: "Time taken to list all the interfaces during a resync.",
+	})
+	perIfaceSyncTime = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_route_table_per_iface_sync_seconds",
+		Help: "Time taken to sync each interface",
+	})
 )
+
+func init() {
+	prometheus.MustRegister(listIfaceTime, perIfaceSyncTime)
+}
 
 type Target struct {
 	CIDR    ip.CIDR
@@ -128,6 +143,8 @@ func (r *RouteTable) QueueResync() {
 
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
+		listStartTime := time.Now()
+
 		links, err := r.dataplane.LinkList()
 		if err != nil {
 			r.logCxt.WithError(err).Error("Failed to list interfaces, retrying...")
@@ -148,6 +165,8 @@ func (r *RouteTable) Apply() error {
 			}
 		}
 		r.inSync = true
+
+		listIfaceTime.Observe(time.Since(listStartTime).Seconds())
 	}
 
 	r.dirtyIfaces.Iter(func(item interface{}) error {
@@ -189,6 +208,10 @@ func (r *RouteTable) Apply() error {
 }
 
 func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
+	startTime := time.Now()
+	defer func() {
+		perIfaceSyncTime.Observe(time.Since(startTime).Seconds())
+	}()
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")
 

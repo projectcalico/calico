@@ -54,12 +54,9 @@ var (
 		Name: "felix_calc_graph_output_events",
 		Help: "Number of events emitted by the calculation graph.",
 	})
-	histUpdateTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+	summaryUpdateTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_calc_graph_update_time_seconds",
 		Help: "Seconds to update calculation graph for each datastore OnUpdate call.",
-		Buckets: []float64{
-			0.001, 0.010, 0.100, 1.0,
-		},
 	})
 )
 
@@ -68,7 +65,7 @@ func init() {
 	prometheus.MustRegister(resyncsStarted)
 	prometheus.MustRegister(countUpdatesProcessed)
 	prometheus.MustRegister(countOutputEvents)
-	prometheus.MustRegister(histUpdateTime)
+	prometheus.MustRegister(summaryUpdateTime)
 }
 
 type AsyncCalcGraph struct {
@@ -125,7 +122,7 @@ func (acg *AsyncCalcGraph) loop() {
 				updEndTime := time.Now()
 				if updEndTime.After(updStartTime) {
 					// Avoid recording a negative delta in case the clock jumps.
-					histUpdateTime.Observe(updEndTime.Sub(updStartTime).Seconds())
+					summaryUpdateTime.Observe(updEndTime.Sub(updStartTime).Seconds())
 				}
 				// Record stats for the number of messages processed.
 				for _, upd := range update {
