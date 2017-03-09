@@ -70,12 +70,55 @@ Then simply inspect the results (`git status`, `git diff`, etc.) and commit.
 
 ## Navigation & Sidebar
 
-The docs (currently) are split into 4 sections:
+The docs (currently) are split into 4 main sections:
 
-- what
-- getting-started
-- using
-- reference
+- Introduction
+- Getting Started
+- Using
+- Reference
+
+### Introduction
+
+Landing page for new users covering Calico's purpose and high-level topics.
+
+### Getting Started
+
+This should be where new users go. It includes quick-start guides, some basic
+tutorials to show off Calico's capabilities, and links to more advanced topics
+once users are comfortable with the basics.
+
+Each orchestrator has a landing page that is targeted at people who are coming
+to see Calico for the first time. It's a transition from the "marketing" type
+material (why is Calico great) to some quick commands people can run to see it
+firsthand, and then funnels people off to the usage section for more details.
+
+### Usage
+
+These should all be docs that are a "verb". They should be task focused, each
+doc containing a goal and a set of steps you can follow to achieve it. They
+should not be detailed description of components or tabulated configuration
+information.
+
+Examples:
+
+- Configuring BGP Peers
+- Enabling IP-in-IP in AWS
+- Troubleshooting Calico
+- Using calicoctl in a Kubernetes deployment
+- Configuring Egress Policy in Kubernetes
+
+### Reference
+
+These docs are complete reference for Calico. If there's a configuration
+option you're looking for, it goes here in one of the per-component
+references. Not every option has a "how to" guide, but has enough description.
+
+Examples:
+
+- Fully tabulated configuration options per-component.
+- calicoctl help text.
+- Calico API schema reference (policy, ip pool, etcd)
+- High-level Calico architecture documentation. (?)
 
 #### How It Works
 
