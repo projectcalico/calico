@@ -72,8 +72,8 @@ func NewWithStubs(netlinkStub netlinkStub, resyncC <-chan time.Time) *InterfaceM
 func (m *InterfaceMonitor) MonitorInterfaces() {
 	log.Info("Interface monitoring thread started.")
 
-	updates := make(chan netlink.LinkUpdate)
-	addrUpdates := make(chan netlink.AddrUpdate)
+	updates := make(chan netlink.LinkUpdate, 10)
+	addrUpdates := make(chan netlink.AddrUpdate, 10)
 	if err := m.netlinkStub.Subscribe(updates, addrUpdates); err != nil {
 		log.WithError(err).Fatal("Failed to subscribe to netlink stub")
 	}

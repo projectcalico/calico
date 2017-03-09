@@ -67,6 +67,16 @@ var (
 			1, 2, 5, 10, 20, 50,
 		},
 	})
+	summaryIfaceBatchSize = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_int_dataplane_iface_msg_batch_size",
+		Help: "Number of interface state messages processed in each batch. Higher " +
+			"values indicate we're doing more batching to try to keep up.",
+	})
+	summaryAddrBatchSize = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_int_dataplane_addr_msg_batch_size",
+		Help: "Number of interface address messages processed in each batch. Higher " +
+			"values indicate we're doing more batching to try to keep up.",
+	})
 
 	processStartTime time.Time
 )
@@ -76,6 +86,8 @@ func init() {
 	prometheus.MustRegister(histApplyTime)
 	prometheus.MustRegister(countMessages)
 	prometheus.MustRegister(histBatchSize)
+	prometheus.MustRegister(summaryIfaceBatchSize)
+	prometheus.MustRegister(summaryAddrBatchSize)
 	processStartTime = time.Now()
 }
 
@@ -476,6 +488,23 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}
 	}
 
+	processIfaceUpdate := func(ifaceUpdate *ifaceUpdate) {
+		log.WithField("msg", ifaceUpdate).Info("Received interface update")
+		for _, mgr := range d.allManagers {
+			mgr.OnUpdate(ifaceUpdate)
+		}
+		for _, routeTable := range d.routeTables {
+			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+		}
+	}
+
+	processAddrsUpdate := func(ifaceAddrsUpdate *ifaceAddrsUpdate) {
+		log.WithField("msg", ifaceAddrsUpdate).Info("Received interface addresses update")
+		for _, mgr := range d.allManagers {
+			mgr.OnUpdate(ifaceAddrsUpdate)
+		}
+	}
+
 	for {
 		select {
 		case msg := <-d.toDataplane:
@@ -483,7 +512,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			// pending messages.
 			batchSize := 1
 			processMsgFromCalcGraph(msg)
-		msgLoop:
+		msgLoop1:
 			for i := 0; i < msgPeekLimit; i++ {
 				select {
 				case msg := <-d.toDataplane:
@@ -491,25 +520,44 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					batchSize++
 				default:
 					// Channel blocked so we must be caught up.
-					break msgLoop
+					break msgLoop1
 				}
 			}
 			d.dataplaneNeedsSync = true
 			histBatchSize.Observe(float64(batchSize))
 		case ifaceUpdate := <-d.ifaceUpdates:
-			log.WithField("msg", ifaceUpdate).Info("Received interface update")
-			for _, mgr := range d.allManagers {
-				mgr.OnUpdate(ifaceUpdate)
-			}
-			for _, routeTable := range d.routeTables {
-				routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+			// Process the message we received, then opportunistically process any other
+			// pending messages.
+			batchSize := 1
+			processIfaceUpdate(ifaceUpdate)
+		msgLoop2:
+			for i := 0; i < msgPeekLimit; i++ {
+				select {
+				case ifaceUpdate := <-d.ifaceUpdates:
+					processIfaceUpdate(ifaceUpdate)
+					batchSize++
+				default:
+					// Channel blocked so we must be caught up.
+					break msgLoop2
+				}
 			}
 			d.dataplaneNeedsSync = true
+			summaryIfaceBatchSize.Observe(float64(batchSize))
 		case ifaceAddrsUpdate := <-d.ifaceAddrUpdates:
-			log.WithField("msg", ifaceAddrsUpdate).Info("Received interface addresses update")
-			for _, mgr := range d.allManagers {
-				mgr.OnUpdate(ifaceAddrsUpdate)
+			batchSize := 1
+			processAddrsUpdate(ifaceAddrsUpdate)
+		msgLoop3:
+			for i := 0; i < msgPeekLimit; i++ {
+				select {
+				case ifaceAddrsUpdate := <-d.ifaceAddrUpdates:
+					processAddrsUpdate(ifaceAddrsUpdate)
+					batchSize++
+				default:
+					// Channel blocked so we must be caught up.
+					break msgLoop3
+				}
 			}
+			summaryAddrBatchSize.Observe(float64(batchSize))
 			d.dataplaneNeedsSync = true
 		case <-refreshC:
 			log.Debug("Refreshing dataplane state")
