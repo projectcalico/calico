@@ -190,6 +190,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		IPSetConfigV6:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
 		IptablesMarkAccept: 0x8,
 		IptablesMarkPass:   0x10,
+		IptablesLogPrefix:  "calico-packet",
 	}
 
 	DescribeTable(
@@ -238,35 +239,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"Allow rules with log prefix should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
-			renderer := NewRenderer(rrConfigNormal)
-			in.LogPrefix = "logme"
-			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
-			// For allow, should be one match rule that sets the mark, then one that reads the
-			// mark and returns.
-			Expect(len(rules)).To(Equal(3))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x8}))
-			Expect(rules[1]).To(Equal(iptables.Rule{
-				Match:  iptables.Match().MarkSet(0x8),
-				Action: iptables.LogAction{Prefix: "logme"},
-			}))
-			Expect(rules[2]).To(Equal(iptables.Rule{
-				Match:  iptables.Match().MarkSet(0x8),
-				Action: iptables.ReturnAction{},
-			}))
-
-			// Explicit allow should be treated the same as empty.
-			in.Action = "allow"
-			rules2 := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
-			Expect(rules2).To(Equal(rules))
-		},
-		ruleTestData...,
-	)
-
-	DescribeTable(
-		"Log rules should be correctly rendered in normal mode.",
+		"Log rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
@@ -276,9 +249,19 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
-			By("Rendering an explicit log prefix")
-			logRule.LogPrefix = "foobar"
-			rules = renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Log rules should be correctly rendered with non-default prefix",
+		func(ipVer int, in proto.Rule, expMatch string) {
+			rrConfigPrefix := rrConfigNormal
+			rrConfigPrefix.IptablesLogPrefix = "foobar"
+			renderer := NewRenderer(rrConfigPrefix)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -288,7 +271,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"Deny rules should be correctly rendered in normal mode.",
+		"Deny rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
@@ -298,63 +281,6 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.DropAction{}))
-		},
-		ruleTestData...,
-	)
-
-	DescribeTable(
-		"Deny rules should be correctly rendered in LOG-and-DROP mode",
-		func(ipVer int, in proto.Rule, expMatch string) {
-			rrConfigLogAndDrop := rrConfigNormal
-			rrConfigLogAndDrop.ActionOnDrop = "LOG-and-DROP"
-			renderer := NewRenderer(rrConfigLogAndDrop)
-			denyRule := in
-			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
-			// For LOG-and-DROP, should get two rules with the same match criteria;
-			// first should log, second should drop.
-			Expect(len(rules)).To(Equal(2))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-drop"}))
-			Expect(rules[1].Match.Render()).To(Equal(expMatch))
-			Expect(rules[1].Action).To(Equal(iptables.DropAction{}))
-		},
-		ruleTestData...,
-	)
-
-	DescribeTable(
-		"Deny rules should be correctly rendered in LOG-and-ACCEPT mode",
-		func(ipVer int, in proto.Rule, expMatch string) {
-			rrConfigLogAndAccept := rrConfigNormal
-			rrConfigLogAndAccept.ActionOnDrop = "LOG-and-ACCEPT"
-			renderer := NewRenderer(rrConfigLogAndAccept)
-			denyRule := in
-			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
-			// For LOG-and-DROP, should get two rules with the same match criteria;
-			// first should log, second should accept.
-			Expect(len(rules)).To(Equal(2))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-drop"}))
-			Expect(rules[1].Match.Render()).To(Equal(expMatch))
-			Expect(rules[1].Action).To(Equal(iptables.AcceptAction{}))
-		},
-		ruleTestData...,
-	)
-
-	DescribeTable(
-		"Deny rules should be correctly rendered in ACCEPT mode",
-		func(ipVer int, in proto.Rule, expMatch string) {
-			rrConfigLogAndAccept := rrConfigNormal
-			rrConfigLogAndAccept.ActionOnDrop = "ACCEPT"
-			renderer := NewRenderer(rrConfigLogAndAccept)
-			denyRule := in
-			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
-			// For ACCEPT, should get a single accept rule.
-			Expect(len(rules)).To(Equal(1))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.AcceptAction{}))
 		},
 		ruleTestData...,
 	)

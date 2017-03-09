@@ -15,8 +15,6 @@
 package rules
 
 import (
-	"strings"
-
 	log "github.com/Sirupsen/logrus"
 
 	. "github.com/projectcalico/felix/iptables"
@@ -64,12 +62,18 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		// name is not guaranteed to be known by the kernel.
 		match := Match().ProtocolNum(ProtoIPIP).
 			NotSourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostIPs))
-		inputRules = append(inputRules,
-			r.DropRules(match, "Drop IPIP packets from non-Calico hosts")...)
+		inputRules = append(inputRules, Rule{
+			Match:   match,
+			Action:  DropAction{},
+			Comment: "Drop IPIP packets from non-Calico hosts",
+		})
 	}
 
 	// Allow established connections via the conntrack table.
-	inputRules = append(inputRules, r.DropRules(Match().ConntrackState("INVALID"))...)
+	inputRules = append(inputRules, Rule{
+		Match:  Match().ConntrackState("INVALID"),
+		Action: DropAction{},
+	})
 	inputRules = append(inputRules,
 		Rule{
 			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
@@ -246,13 +250,14 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	// Ideally, we'd limit these rules to the interfaces that we're managing so that we
 	// co-exist better with the user's other rules. However, to do that we'd have to push
 	// them down into the per-endpoint chains, which would increase per-packet overhead.
-	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
-	rules = append(rules,
-		Rule{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
-		},
-	)
+	rules = append(rules, Rule{
+		Match:  Match().ConntrackState("INVALID"),
+		Action: DropAction{},
+	})
+	rules = append(rules, Rule{
+		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action: AcceptAction{},
+	})
 
 	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
@@ -338,13 +343,14 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	rules = append(rules, r.acceptUntrackedRules()...)
 
 	// conntrack rules.
-	rules = append(rules, r.DropRules(Match().ConntrackState("INVALID"))...)
-	rules = append(rules,
-		Rule{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
-		},
-	)
+	rules = append(rules, Rule{
+		Match:  Match().ConntrackState("INVALID"),
+		Action: DropAction{},
+	})
+	rules = append(rules, Rule{
+		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action: AcceptAction{},
+	})
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
@@ -514,10 +520,10 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// We only do this for IPv6 because the IPv4 RPF check is handled via a sysctl.
 		// In addition, the IPv4 check is complicated by the fact that we have special
 		// case handling for DHCP to the host, which would require an exclusion.
-		rules = append(rules, r.DropRules(
-			Match().MarkSet(r.IptablesMarkFromWorkload).
-				RPFCheckFailed(),
-		)...)
+		rules = append(rules, Rule{
+			Match:  Match().MarkSet(r.IptablesMarkFromWorkload).RPFCheckFailed(),
+			Action: DropAction{},
+		})
 	}
 
 	rules = append(rules,
@@ -559,22 +565,4 @@ func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {
 				Action: AcceptAction{}},
 		},
 	}
-}
-
-func (r DefaultRuleRenderer) DropRules(matchCriteria MatchCriteria, comments ...string) []Rule {
-	rules := []Rule{}
-
-	for _, action := range r.DropActions() {
-		rules = append(rules, Rule{
-			Match:   matchCriteria,
-			Action:  action,
-			Comment: strings.Join(comments, "; "),
-		})
-	}
-
-	return rules
-}
-
-func (r *DefaultRuleRenderer) DropActions() []Action {
-	return r.dropActions
 }

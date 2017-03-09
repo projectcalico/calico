@@ -61,17 +61,6 @@ var _ = DescribeTable("Config parsing",
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"ACCEPT", "ACCEPT"),
 
-	Entry("DropActionOverride", "DropActionOverride",
-		"ACCEPT", "ACCEPT"),
-	Entry("DropActionOverride norm", "DropActionOverride",
-		"accept", "ACCEPT"),
-	Entry("DropActionOverride LOG-and-ACCEPT", "DropActionOverride",
-		"LOG-and-ACCEPT", "LOG-and-ACCEPT"),
-	Entry("DropActionOverride log-and-accept", "DropActionOverride",
-		"log-and-accept", "LOG-and-ACCEPT"),
-	Entry("DropActionOverride log-and-drop", "DropActionOverride",
-		"log-and-drop", "LOG-and-DROP"),
-
 	Entry("LogFilePath", "LogFilePath", "/tmp/felix.log", "/tmp/felix.log"),
 
 	Entry("LogSeverityFile", "LogSeverityFile", "debug", "DEBUG"),

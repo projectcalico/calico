@@ -119,8 +119,16 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 
 	if !adminUp {
 		// Endpoint is admin-down, drop all traffic to/from it.
-		toRules = append(toRules, r.DropRules(Match(), "Endpoint admin disabled")...)
-		fromRules = append(fromRules, r.DropRules(Match(), "Endpoint admin disabled")...)
+		toRules = append(toRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Endpoint admin disabled",
+		})
+		fromRules = append(fromRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Endpoint admin disabled",
+		})
 		toEndpointChain := Chain{
 			Name:  toChainName,
 			Rules: toRules,
@@ -234,12 +242,16 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 			//
 			// For untracked rules, we don't do that because there may be tracked rules
 			// still to be applied to the packet in the filter table.
-			toRules = append(toRules, r.DropRules(
-				Match().MarkClear(r.IptablesMarkPass),
-				"Drop if no policies passed packet")...)
-			fromRules = append(fromRules, r.DropRules(
-				Match().MarkClear(r.IptablesMarkPass),
-				"Drop if no policies passed packet")...)
+			toRules = append(toRules, Rule{
+				Match:   Match().MarkClear(r.IptablesMarkPass),
+				Action:  DropAction{},
+				Comment: "Drop if no policies passed packet",
+			})
+			fromRules = append(fromRules, Rule{
+				Match:   Match().MarkClear(r.IptablesMarkPass),
+				Action:  DropAction{},
+				Comment: "Drop if no policies passed packet",
+			})
 		}
 	}
 
@@ -273,8 +285,16 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		//
 		// For untracked rules, we don't do that because there may be tracked rules
 		// still to be applied to the packet in the filter table.
-		toRules = append(toRules, r.DropRules(Match(), "Drop if no profiles matched")...)
-		fromRules = append(fromRules, r.DropRules(Match(), "Drop if no profiles matched")...)
+		toRules = append(toRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Drop if no profiles matched",
+		})
+		fromRules = append(fromRules, Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Drop if no profiles matched",
+		})
 	}
 
 	toEndpointChain := Chain{
