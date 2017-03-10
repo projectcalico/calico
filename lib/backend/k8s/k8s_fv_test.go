@@ -29,6 +29,7 @@ import (
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 // cb implements the callback interface required for the
@@ -500,6 +501,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	It("Should support getting, deleting, and listing Nodes", func() {
 		nodeHostname := ""
 		var kvp model.KVPair
+		ip, cidr, _ := cnet.ParseCIDR("192.168.0.101/24")
+
 		By("Listing all Nodes", func() {
 			nodes, err := c.List(model.NodeListOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -532,13 +535,58 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Applying changes to a node", func() {
-			_, err := c.Apply(&kvp)
+			newAsn := numorstring.ASNumber(23455)
+
+			testKvp := model.KVPair{
+				Key: model.NodeKey{
+					Hostname: kvp.Key.(model.NodeKey).Hostname,
+				},
+				Value: &model.Node{
+					BGPASNumber: &newAsn,
+					BGPIPv4Net: cidr,
+					BGPIPv4Addr: ip,
+				},
+			}
+			node, err := c.Apply(&testKvp)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*node.Value.(*model.Node).BGPASNumber).To(Equal(newAsn))
+
+			// Also check that Get() returns the changes
+			getNode, err := c.Get(kvp.Key.(model.NodeKey))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*getNode.Value.(*model.Node).BGPASNumber).To(Equal(newAsn))
+
+			// We do not support creating Nodes, we should see an error
+			// if the Node does not exist.
+			missingKvp := model.KVPair{
+				Key: model.NodeKey{
+					Hostname: "IDontExist",
+				},
+			}
+			_, err = c.Apply(&missingKvp)
+
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating a Node", func() {
-			_, err := c.Update(&kvp)
-			Expect(err).To(HaveOccurred())
+			testKvp := model.KVPair{
+				Key: model.NodeKey{
+					Hostname: kvp.Key.(model.NodeKey).Hostname,
+				},
+				Value: &model.Node{
+					BGPIPv4Net: cidr,
+					BGPIPv4Addr: ip,
+				},
+			}
+			node, err := c.Update(&testKvp)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(node.Value.(*model.Node).BGPASNumber).To(BeNil())
+
+			// Also check that Get() returns the changes
+			getNode, err := c.Get(kvp.Key.(model.NodeKey))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(getNode.Value.(*model.Node).BGPASNumber).To(BeNil())
 		})
 	})
 })

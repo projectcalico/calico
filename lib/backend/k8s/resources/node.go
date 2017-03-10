@@ -47,19 +47,44 @@ func (c *nodeClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 }
 
 func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Update is not supported on Node type")
-	return nil, errors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "Update",
+	// Get a current copy of the node to fill in fields we don't track.
+	oldNode, err := c.clientSet.Nodes().Get(kvp.Key.(model.NodeKey).Hostname, metav1.GetOptions{})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
+
+	node, err := mergeCalicoK8sNode(kvp.Value.(*model.Node), oldNode)
+	if err != nil {
+		return nil, err
+	}
+
+	newNode, err := c.clientSet.Nodes().Update(node)
+	if err != nil {
+		return nil, K8sErrorToCalico(err, kvp.Key)
+	}
+
+	newCalicoNode, err := K8sNodeToCalico(newNode)
+	if err != nil {
+		log.Errorf("Failed to parse returned Node after call to update %+v", newNode)
+		return nil, err
+	}
+
+	return newCalicoNode, nil
 }
 
 func (c *nodeClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Apply is not supported on Node type")
-	return nil, errors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "Apply",
+	node, err := c.Update(kvp)
+	if err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+			return nil, err
+		}
+		log.WithField("node", kvp.Key.(model.NodeKey).Hostname).Warn("Node does not exist")
+
+		// Create is not currently implemented, and probably will not be, but will throw an appropriate error
+		// for the user, along with the above warning.
+		return c.Create(kvp)
 	}
+	return node, nil
 }
 
 func (c *nodeClient) Delete(kvp *model.KVPair) error {

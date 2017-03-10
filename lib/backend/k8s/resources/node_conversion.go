@@ -15,43 +15,65 @@
 package resources
 
 import (
-	"fmt"
-
-	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
+	"fmt"
 )
 
+// K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.
 func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
-	// Get the internal IP of the node, should be 1-1 with calico node IP
-	nodeIP := ""
-	for _, address := range node.Status.Addresses {
-		if address.Type == kapiv1.NodeInternalIP {
-			nodeIP = address.Address
-			log.Debugf("Found NodeInternalIP %s", nodeIP)
-			break
-		}
-	}
-
-	ip := net.ParseIP(nodeIP)
-	log.Debugf("Node IP is %s", ip)
-	if ip == nil {
-		return nil, fmt.Errorf("Failed to parse IP '%s' received from k8s for Node", nodeIP)
-	}
-	asn := numorstring.ASNumber(64512)
-	return &model.KVPair{
+	kvp := model.KVPair{
 		Key: model.NodeKey{
 			Hostname: node.Name,
 		},
-		Value: &model.Node{
-			FelixIPv4:   ip,
-			Labels:      node.Labels,
-			BGPIPv4Addr: ip,
-			BGPIPv6Addr: &net.IP{},
-			BGPASNumber: &asn,
-		},
 		Revision: node.ObjectMeta.ResourceVersion,
-	}, nil
+	}
+
+	calicoNode := model.Node{}
+	calicoNode.Labels = node.Labels
+	annotations := node.ObjectMeta.Annotations
+	cidrString, ok := annotations["projectcalico.org/IPv4Address"]; if ok {
+		ip, cidr, err := net.ParseCIDR(cidrString)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse projectcalico.org/IPv4Address: %s", err)
+		}
+
+		calicoNode.FelixIPv4   = ip
+		calicoNode.BGPIPv4Addr = ip
+		calicoNode.BGPIPv4Net  = cidr
+	}
+
+	asnString, ok := annotations["projectcalico.org/ASNumber"]; if ok {
+		asn, err := numorstring.ASNumberFromString(asnString)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse projectcalico.org/ASNumber: %s", err)
+		}
+
+		calicoNode.BGPASNumber = &asn
+	}
+
+	kvp.Value = &calicoNode
+
+	return &kvp, nil
+}
+
+// mergeCalicoK8sNode takes a k8s node and a Calico node and push the values from the Calico
+// node into the k8s node.
+func mergeCalicoK8sNode(calicoNode *model.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
+	// In order to make sure we always end up with a CIDR that has the IP and not just network
+	// we assemble the CIDR from BGPIPv4Addr and BGPIPv4Net.
+	subnet, _ := calicoNode.BGPIPv4Net.Mask.Size()
+	ipCidr := fmt.Sprintf("%s/%d", calicoNode.BGPIPv4Addr.String(), subnet)
+	k8sNode.Annotations["projectcalico.org/IPv4Address"] = ipCidr
+
+	// Don't set the ASNumber if it is nil, and ensure it does not exist in k8s.
+	if calicoNode.BGPASNumber != nil {
+		k8sNode.Annotations["projectcalico.org/ASNumber"] = calicoNode.BGPASNumber.String()
+	} else {
+		delete(k8sNode.Annotations, "projectcalico.org/ASNumber")
+	}
+
+	return k8sNode, nil
 }
