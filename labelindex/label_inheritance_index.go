@@ -12,6 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The labelindex package provides the InheritIndex type, which emits events as the set of
+// items (currently WorkloadEndpoints/HostEndpoint) it has been told about start (or stop) matching
+// the label selectors (which are extracted from the active policy rules) it has been told about.
+//
+// Label inheritance
+//
+// As the name suggests, the InheritIndex supports the notion of label inheritance.  In our
+// data-model:
+//
+//     - endpoints have their own labels; these take priority over any inherited labels
+//     - endpoints also inherit labels from any explicitly-named profiles in their data
+//     - profiles have explicit labels
+//     - profiles also have (now deprecated) tags, which we now treat as implicit <tagName>=""
+//       labels; explicit profile labels take precidence over implicit tag labels.
+//
+// For example, suppose an endpoint had labels
+//
+//     {"a": "ep-a", "b": "ep-b"}
+//
+// and it explicitly referenced profile "profile-A", which had these labels and tags:
+//
+//     {"a": "prof-a", "c": "prof-c", "d": "prof-d"}
+//     ["a", "tag-x", "d"]
+//
+// then the resulting labels for the endpoint after considering inheritance would be:
+//
+//     {
+//         "a": "ep-a",    // Explicit endpoint label "wins" over profile labels/tags.
+//         "b": "ep-b",
+//         "c": "prof-c",  // Profile label gets inherited.
+//         "d": "prof-d",  // Profile label "wins" over profile tag with same name.
+//         "tag-x": "",    // Profile tag inherited as empty label.
+//     }
 package labelindex
 
 import (
@@ -24,13 +57,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
+// itemData holds the data that we know about a particular item (i.e. a workload or host endpoint).
+// In particular, it holds it current explicitly-assigned labels and a pointer to the parent data
+// for each of its parents.
 type itemData struct {
 	labels  map[string]string
 	parents []*parentData
 }
 
 // Get implements the Labels interface for itemData.  Combines the item's own labels with that
-// of its parent on the fly.
+// of its parents on the fly.
 func (itemData *itemData) Get(labelName string) (value string, present bool) {
 	if value, present = itemData.labels[labelName]; present {
 		return
@@ -49,6 +85,9 @@ func (itemData *itemData) Get(labelName string) (value string, present bool) {
 	return
 }
 
+// parentData holds the data that we know about each parent (i.e. each security profile).  Since,
+// profiles consist of multiple resources in our data-model, any of the fields may be nil if we
+// have partial information.
 type parentData struct {
 	id      string
 	labels  map[string]string
