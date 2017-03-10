@@ -93,6 +93,8 @@ type Config struct {
 	RulesConfig rules.Config
 
 	StatusReportingInterval time.Duration
+
+	PostInSyncCallback func()
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -562,6 +564,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				log.WithField("secsSinceStart", time.Since(processStartTime).Seconds()).Info(
 					"Completed first update to dataplane.")
 				doneFirstApply = true
+				if d.config.PostInSyncCallback != nil {
+					d.config.PostInSyncCallback()
+				}
 			}
 		}
 	}

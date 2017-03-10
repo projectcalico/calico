@@ -29,6 +29,9 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"runtime"
+	"runtime/pprof"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -49,11 +52,11 @@ import (
 const usage = `Felix, the Calico per-host daemon.
 
 Usage:
-  calico-felix [-c <config>]
+  calico-felix [options]
 
 Options:
-  -c --config-file=<config>  Config file to load [default: /etc/calico/felix.cfg].
-  --version                  Print the version and exit.
+  -c --config-file=<filename>  Config file to load [default: /etc/calico/felix.cfg].
+  --version                    Print the version and exit.
 `
 
 // main is the entry point to the calico-felix binary.
@@ -172,6 +175,18 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
+	// If asked to do so, dump a memory profile after the first sync.
+	var memProfFile *os.File
+	memProfFileName := configParams.DebugMemoryProfilePath
+	if memProfFileName != "" {
+		log.WithField("file", memProfFileName).Info("Asked to create a memory profile.")
+		memProfFile, err = os.Create(memProfFileName)
+		if err != nil {
+			log.WithError(err).Fatal("Could not create memory profile file")
+			memProfFile = nil
+		}
+	}
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dataplaneDriver
@@ -228,6 +243,20 @@ configRetry:
 			IPv6Enabled:             configParams.Ipv6Support,
 			StatusReportingInterval: time.Duration(configParams.ReportingIntervalSecs) *
 				time.Second,
+
+			PostInSyncCallback: func() {
+				if memProfFile != nil {
+					log.WithField("filename", memProfFileName).
+						Info("Writing memory profile...")
+					runtime.GC() // get up-to-date statistics
+					if err := pprof.WriteHeapProfile(memProfFile); err != nil {
+						log.Fatal("could not write memory profile: ", err)
+					}
+					memProfFile.Close()
+					log.WithField("filename", memProfFileName).
+						Info("Finished writing memory profile")
+				}
+			},
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
