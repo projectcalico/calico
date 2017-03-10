@@ -10,7 +10,9 @@
 // These lines here extend the table so it automatically gets those
 // stylings and look like real tables without having to add
 // that class to everything.
-table {
+// Restrict to just content-main as tables outside of content (for example gsc search table)
+// shouldn't need this styling.
+#content-main table {
   @extend .table;
   @extend .table-bordered;
 }
@@ -41,4 +43,16 @@ pre code {
   -webkit-box-shadow: 0px 0px 8px 1px #666;
   -moz-box-shadow: 0px 0px 8px 1px #666;
   box-shadow: 0px 0px 8px 1px #666;
+}
+
+// Fix conflicts between bootstrap theme and custom search theme.
+.reset-box-sizing, .reset-box-sizing *, .reset-box-sizing *:before, .reset-box-sizing *:after,  .gsc-inline-block {
+    -webkit-box-sizing: content-box;
+    -moz-box-sizing: content-box;
+    box-sizing: content-box;
+}
+
+input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gsc-search-button {
+    box-sizing: content-box;
+    line-height: normal;
 }

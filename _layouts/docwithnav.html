@@ -141,6 +141,17 @@ The code is a little roundabout for a few reasons:
           </p>
           <div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
             <div class="row">
+              <script>
+                (function() {
+                  var cx = '015028447179048192876:xjzskk7awwe';
+                  var gcse = document.createElement('script');
+                  gcse.type = 'text/javascript';
+                  gcse.async = true;
+                  gcse.src = 'https://cse.google.com/cse.js?cx=' + cx;
+                  var s = document.getElementsByTagName('script')[0];
+                  s.parentNode.insertBefore(gcse, s);
+                })();
+              </script>
               <gcse:search></gcse:search>
             </div>
             <div id="sidebar">{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}</div>
