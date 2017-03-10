@@ -1,5 +1,5 @@
 hash: a2a606221911856b912ba0abbc55521382a4b1cad07942cb13946b4f16a9f1ad
-updated: 2017-04-10T15:56:26.784382675Z
+updated: 2017-04-11T16:58:30.823493262Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 25acdbf41bb918b5b40274d9c62b6d272cb77626
+  version: 216a6347b2839c4ccc6a12298286fadf4014ed2c
   subpackages:
   - client
   - pkg/pathutil
@@ -196,8 +196,6 @@ imports:
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
   version: 10f801ebc38b33738c9d17d50860f484a0988ff5
-  subpackages:
-  - hooks/syslog
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go

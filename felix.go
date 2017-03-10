@@ -120,9 +120,10 @@ func main() {
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
 	}
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":   buildinfo.GitVersion,
-		"buildDate": buildinfo.BuildDate,
-		"gitCommit": buildinfo.GitRevision,
+		"version":    buildinfo.GitVersion,
+		"buildDate":  buildinfo.BuildDate,
+		"gitCommit":  buildinfo.GitRevision,
+		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
 	log.Infof("Command line arguments: %v", arguments)
@@ -477,7 +478,8 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		receivedSignal = true
 	case reason = <-failureReportChan:
 	}
-	log.WithField("reason", reason).Warn("Felix is shutting down")
+	logCxt := log.WithField("reason", reason)
+	logCxt.Warn("Felix is shutting down")
 
 	// Notify other components to stop.
 	for _, c := range stopSignalChans {
@@ -491,7 +493,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		// Driver may still be running, just in case the driver is
 		// unresponsive, start a thread to kill this process if we
 		// don't manage to kill the driver.
-		log.Info("Driver still running, trying to shut it down...")
+		logCxt.Info("Driver still running, trying to shut it down...")
 		giveUpOnSigTerm := make(chan bool)
 		go func() {
 			time.Sleep(4 * time.Second)
@@ -503,12 +505,12 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		driverCmd.Process.Signal(syscall.SIGTERM)
 		select {
 		case <-driverStoppedC:
-			log.Info("Driver shut down after SIGTERM")
+			logCxt.Info("Driver shut down after SIGTERM")
 		case <-giveUpOnSigTerm:
-			log.Error("Driver did not respond to SIGTERM, sending SIGKILL")
+			logCxt.Error("Driver did not respond to SIGTERM, sending SIGKILL")
 			driverCmd.Process.Kill()
 			<-driverStoppedC
-			log.Info("Driver shut down after SIGKILL")
+			logCxt.Info("Driver shut down after SIGKILL")
 		}
 	}
 
@@ -517,19 +519,16 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 		// a couple of seconds to ensure that we don't go into a tight
 		// restart loop (which would make the init daemon give up trying
 		// to restart us).
-		log.Info("Shutdown wasn't cause by signal, pausing to avoid tight restart loop")
+		logCxt.Info("Shutdown wasn't caused by signal, pausing to avoid tight restart loop")
 		go func() {
 			time.Sleep(2 * time.Second)
-			log.Info("Pause complete, exiting.")
-			syscall.Exit(1)
+			logCxt.Fatal("Exiting.")
 		}()
 		// But, if we get a signal while we're waiting quit immediately.
 		<-termSignalChan
 	}
 
-	// Then exit our process.
-	log.Info("Received signal, exiting immediately")
-	syscall.Exit(1)
+	logCxt.Fatal("Exiting immediately")
 }
 
 func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {

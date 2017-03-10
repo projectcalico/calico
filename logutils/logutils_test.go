@@ -15,14 +15,21 @@
 package logutils_test
 
 import (
-	. "github.com/projectcalico/felix/logutils"
-
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
+	"os"
+	"strings"
+	"sync"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/felix/logutils"
 )
 
 var _ = Describe("Logutils", func() {
@@ -64,3 +71,241 @@ var _ = Describe("Logutils", func() {
 		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
 	})
 })
+
+var _ = DescribeTable("Formatter",
+	func(entry log.Entry, expectedLog, expectedSyslog string) {
+		f := &Formatter{}
+		out, err := f.Format(&entry)
+		Expect(err).NotTo(HaveOccurred())
+		expectedLog = strings.Replace(expectedLog, "<PID>", fmt.Sprintf("%v", os.Getpid()), 1)
+		Expect(string(out)).To(Equal(expectedLog))
+		expectedSyslog = strings.Replace(expectedSyslog, "<PID>", fmt.Sprintf("%v", os.Getpid()), 1)
+		Expect(FormatForSyslog(&entry)).To(Equal(expectedSyslog))
+	},
+	Entry("Empty", log.Entry{},
+		"0001-01-01 00:00:00.000 [PANIC][<PID>] <nil> <nil>: \n",
+		"PANIC <nil> <nil>: \n"),
+	Entry("Basic",
+		log.Entry{
+			Level: log.InfoLevel,
+			Time:  theTime(),
+			Data: log.Fields{
+				"__file__": "foo.go",
+				"__line__": 123,
+			},
+			Message: "The answer is 42.",
+		},
+		"2017-03-15 11:22:33.123 [INFO][<PID>] foo.go 123: The answer is 42.\n",
+		"INFO foo.go 123: The answer is 42.\n",
+	),
+	Entry("With fields",
+		log.Entry{
+			Level: log.WarnLevel,
+			Time:  theTime(),
+			Data: log.Fields{
+				"__file__": "foo.go",
+				"__line__": 123,
+				"a":        10,
+				"b":        "foobar",
+				"c":        theTime(),
+				"err":      errors.New("an error"),
+			},
+			Message: "The answer is 42.",
+		},
+		"2017-03-15 11:22:33.123 [WARNING][<PID>] foo.go 123: The answer is 42. a=10 b=\"foobar\" c=2017-03-15 11:22:33.123 +0000 UTC err=an error\n",
+		"WARNING foo.go 123: The answer is 42. a=10 b=\"foobar\" c=2017-03-15 11:22:33.123 +0000 UTC err=an error\n"),
+)
+
+func theTime() time.Time {
+	theTime, err := time.Parse("2006-01-02 15:04:05.000", "2017-03-15 11:22:33.123")
+	if err != nil {
+		panic(err)
+	}
+	return theTime
+}
+
+var _ = Describe("StreamDestination", func() {
+	var s *StreamDestination
+	var pr *io.PipeReader
+	var pw *io.PipeWriter
+	var c chan<- QueuedLog
+	var mt *mockMonotime
+
+	BeforeEach(func() {
+		pr, pw = io.Pipe()
+		mt = &mockMonotime{
+			time: 100 * time.Hour,
+		}
+		s = NewStreamDestination(log.InfoLevel, pw, mt)
+		go s.LoopWritingLogs()
+		c = s.Channel()
+	})
+	AfterEach(func() {
+		close(c)
+	})
+
+	It("should write a log (no WaitGroup)", func() {
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("Message"))
+	})
+
+	It("should log dropped logs after time advances far enough", func() {
+		s.OnLogDropped()
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+		}
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message 2"),
+			SyslogMessage: "syslog message 2",
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("Message"))
+		n, err = pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("... dropped 1 logs in 1.002s ...\n"))
+		n, err = pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("Message 2"))
+	})
+
+	It("should trigger WaitGroup", func() {
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+			WaitGroup:     wg,
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		wg.Wait()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("Message"))
+	})
+})
+
+var _ = Describe("SyslogDestination", func() {
+	var s *SyslogDestination
+	var pr *io.PipeReader
+	var pw *io.PipeWriter
+	var c chan<- QueuedLog
+	var mt *mockMonotime
+
+	BeforeEach(func() {
+		pr, pw = io.Pipe()
+		mt = &mockMonotime{
+			time: 100 * time.Hour,
+		}
+		s = NewSyslogDestination(log.InfoLevel, (*mockSyslogWriter)(pw), mt)
+		go s.LoopWritingLogs()
+		c = s.Channel()
+	})
+	AfterEach(func() {
+		close(c)
+	})
+
+	It("should write a log (no WaitGroup)", func() {
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+	})
+
+	It("should log dropped logs after time advances far enough", func() {
+		s.OnLogDropped()
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+		}
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message 2",
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+		n, err = pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("WARNING ... dropped 1 logs in 1.002s ...\n"))
+		n, err = pr.Read(b)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("INFO syslog message 2"))
+	})
+
+	It("should trigger WaitGroup", func() {
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		c <- QueuedLog{
+			Level:         log.InfoLevel,
+			Message:       []byte("Message"),
+			SyslogMessage: "syslog message",
+			WaitGroup:     wg,
+		}
+		b := make([]byte, 1024)
+		n, err := pr.Read(b)
+		wg.Wait()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+	})
+})
+
+type mockSyslogWriter io.PipeWriter
+
+func (s *mockSyslogWriter) Debug(m string) error {
+	_, err := fmt.Fprintf((*io.PipeWriter)(s), "DEBUG %s", m)
+	return err
+}
+func (s *mockSyslogWriter) Info(m string) error {
+	_, err := fmt.Fprintf((*io.PipeWriter)(s), "INFO %s", m)
+	return err
+}
+func (s *mockSyslogWriter) Warning(m string) error {
+	_, err := fmt.Fprintf((*io.PipeWriter)(s), "WARNING %s", m)
+	return err
+}
+func (s *mockSyslogWriter) Err(m string) error {
+	_, err := fmt.Fprintf((*io.PipeWriter)(s), "ERROR %s", m)
+	return err
+}
+func (s *mockSyslogWriter) Crit(m string) error {
+	_, err := fmt.Fprintf((*io.PipeWriter)(s), "CRITICAL %s", m)
+	return err
+}
+
+type mockMonotime struct {
+	time time.Duration
+}
+
+func (m *mockMonotime) Now() time.Duration {
+	t := m.time
+	fmt.Fprintf(GinkgoWriter, "mockMonotime Now() = %v\n", t)
+	m.time += 501 * time.Millisecond
+	return t
+}
+
+func (m *mockMonotime) Since(t time.Duration) time.Duration {
+	since := m.Now() - t
+	fmt.Fprintf(GinkgoWriter, "mockMonotime Since() = %v\n", since)
+	return since
+}
