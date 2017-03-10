@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -671,32 +672,64 @@ func (d *InternalDataplane) apply() {
 
 	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
 	// iptables.
-	for _, w := range d.ipSets {
-		w.ApplyUpdates()
+	var ipSetsWG sync.WaitGroup
+	for _, ipSets := range d.ipSets {
+		ipSetsWG.Add(1)
+		go func(ipSets *ipsets.IPSets) {
+			ipSets.ApplyUpdates()
+			ipSetsWG.Done()
+		}(ipSets)
 	}
+
+	// Update the routing table in parallel with the other updates.  We'll wait for it to finish
+	// before we return.
+	var routesWG sync.WaitGroup
+	for _, r := range d.routeTables {
+		routesWG.Add(1)
+		go func(r *routetable.RouteTable) {
+			err := r.Apply()
+			if err != nil {
+				log.Warn("Failed to synchronize routing table, will retry...")
+				d.dataplaneNeedsSync = true
+			}
+			routesWG.Done()
+		}(r)
+	}
+
+	// Wait for the IP sets update to finish.  We can't update iptables until it has.
+	ipSetsWG.Wait()
 
 	// Update iptables, this should sever any references to now-unused IP sets.
+	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
+	var iptablesWG sync.WaitGroup
 	for _, t := range d.allIptablesTables {
-		tableReschedAfter := t.Apply()
-		if tableReschedAfter != 0 && (reschedDelay == 0 || tableReschedAfter < reschedDelay) {
-			reschedDelay = tableReschedAfter
-		}
-	}
+		iptablesWG.Add(1)
+		go func(t *iptables.Table) {
+			tableReschedAfter := t.Apply()
 
-	// Update the routing table.
-	for _, r := range d.routeTables {
-		err := r.Apply()
-		if err != nil {
-			log.Warn("Failed to synchronize routing table, will retry...")
-			d.dataplaneNeedsSync = true
-		}
+			reschedDelayMutex.Lock()
+			defer reschedDelayMutex.Unlock()
+			if tableReschedAfter != 0 && (reschedDelay == 0 || tableReschedAfter < reschedDelay) {
+				reschedDelay = tableReschedAfter
+			}
+			iptablesWG.Done()
+		}(t)
 	}
+	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
-	for _, w := range d.ipSets {
-		w.ApplyDeletions()
+	for _, ipSets := range d.ipSets {
+		ipSetsWG.Add(1)
+		go func(s *ipsets.IPSets) {
+			s.ApplyDeletions()
+			ipSetsWG.Done()
+		}(ipSets)
 	}
+	ipSetsWG.Wait()
+
+	// Wait for the route updates to finish.
+	routesWG.Wait()
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
