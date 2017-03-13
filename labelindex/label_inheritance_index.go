@@ -248,13 +248,26 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 		"newParents": newParents,
 		"id":         id,
 	}).Debug("Updating parents")
-	for _, parentData := range oldParents {
-		parentData.itemIDs.Discard(id)
-		if parentData.itemIDs.Len() == 0 {
-			parentData.itemIDs = nil
-		}
-		idx.discardParentIfEmpty(parentData.id)
+	// Calculate the current set of parent IDs so we can skip deletion of parents that are still
+	// present.  We need to do this to avoid removing a still-current parent via
+	// discardParentIfEmpty().
+	currentParentIDs := set.New()
+	for _, parentData := range newParents {
+		currentParentIDs.Add(parentData.id)
 	}
+
+	for _, parent := range oldParents {
+		if currentParentIDs.Contains(parent.id) {
+			// Make sure we don't delete current parents from the index.
+			continue
+		}
+		parent.itemIDs.Discard(id)
+		if parent.itemIDs.Len() == 0 {
+			parent.itemIDs = nil
+		}
+		idx.discardParentIfEmpty(parent.id)
+	}
+
 	for _, parent := range newParents {
 		if parent.itemIDs == nil {
 			parent.itemIDs = set.New()
@@ -270,18 +283,17 @@ func (idx *InheritIndex) UpdateParentLabels(parentID string, labels map[string]s
 }
 
 func (idx *InheritIndex) DeleteParentLabels(parentID string) {
-	parent := idx.getOrCreateParent(parentID)
+	parent := idx.parentDataByParentID[parentID]
+	if parent == nil {
+		return
+	}
 	parent.labels = nil
 	idx.discardParentIfEmpty(parentID)
 	idx.flushChildren(parentID)
 }
 
 func (idx *InheritIndex) UpdateParentTags(parentID string, tags []string) {
-	parent := idx.parentDataByParentID[parentID]
-	if parent == nil {
-		parent = &parentData{}
-		idx.parentDataByParentID[parentID] = parent
-	}
+	parent := idx.getOrCreateParent(parentID)
 	parent.tags = tags
 	idx.flushChildren(parentID)
 }
@@ -292,7 +304,6 @@ func (idx *InheritIndex) DeleteParentTags(parentID string) {
 		return
 	}
 	parentData.tags = nil
-	idx.parentDataByParentID[parentID] = parentData
 	idx.discardParentIfEmpty(parentID)
 	idx.flushChildren(parentID)
 }

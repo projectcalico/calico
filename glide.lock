@@ -1,5 +1,5 @@
-hash: 65b293efa5db47c7c0712b08602c0509c9eca792af25fcd446e41f3fe01b8041
-updated: 2017-03-07T15:47:35.376972945Z
+hash: 9145077e2bb5b29ce84ddebf90eef3c789231efb1a19b324fcd51b87f8b48899
+updated: 2017-03-13T10:22:09.643126143Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 3eb2fdbd9934bd2cee6928d2185ceac87b848a4c
+  version: 76aa7f69357420f1802d4d959ade999e63269942
   subpackages:
   - client
   - pkg/pathutil
@@ -59,7 +59,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 74bdc99692c3408cb103221e38675ce8fda0a718
+  version: 300e940a926eb277d3901b20bdfcc54928ad3642
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -69,7 +69,7 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 909568be09de550ed094403c2bf8a261b5bb730a
+  version: 100ba4e885062801d56799d78530b73b178a78f3
   subpackages:
   - proto
   - sortkeys
@@ -90,7 +90,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kardianos/osext
-  version: 9b883c5eb462dd5cb1b0a7a104fe86bc6b9bd391
+  version: 9d302b58e975387d0b4d9be876622c86cefe64be
 - name: github.com/kelseyhightower/envconfig
   version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/mailru/easyjson
@@ -136,8 +136,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3428e33dd83712164f8b46b576c91098f7cf9b36
-  repo: https://github.com/fasaxc/libcalico-go.git
+  version: 70c9896a09b3dd8b4a3398f6eade318e07d464b9
   subpackages:
   - lib
   - lib/api
@@ -189,7 +188,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
+  version: 1deb2db2a6fff8a35532079061b903c3a25eed52
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -227,7 +226,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: e48874b42435b4347fc52bdee0424a52abc974d7
+  version: 99f16d856c9836c42d24e7ab64ea72916925fa97
   subpackages:
   - unix
 - name: golang.org/x/text
