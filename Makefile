@@ -196,6 +196,7 @@ stop-etcd:
 
 .PHONY: run-prometheus run-grafana
 run-prometheus:
+	sed 's/__LOCAL_IP_ENV__/$(LOCAL_IP_ENV)/' < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
 	docker run --detach --rm --name prometheus -p 9090:9090 \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/data:/prometheus \
