@@ -23,14 +23,15 @@ definitions for each resource type are defined in the following package:
 	github.com/projectcalico/libcalico-go/lib/api
 
 The client has a number of methods that return interfaces for managing:
+    -  BGP Peer resources
 	-  Policy resources
 	-  IP Pool resources
 	-  Host endpoint resources
-	-  Workload resources
+	-  Workload endpoint resources
 	-  Profile resources
-	-  IP Address Management
+	-  IP Address Management (IPAM)
 
-See interface definitions for details about the set of management commands for each
+See [resource definitions](http://docs.projectcalico.org/latest/reference/calicoctl/resources/) for details about the set of management commands for each
 resource type.
 
 The resource management interfaces have a common set of commands to create, delete,
@@ -38,11 +39,10 @@ update and retrieve resource instances.  For example, an application using this
 client to manage host endpoint resources would create an instance of this client, create a
 new HostEndpoints interface and call the appropriate methods on that interface.  For example:
 
-	// ClientConfig defaults to access an etcd backend datastore at
-	// localhost:2379.  For alternative access details, set the appropriate
-	// fields in the ClientConfig structure.
-	config := api.ClientConfig{}
-	client := New(&config)
+	// NewFromEnv() creates a new client and defaults to access an etcd backend datastore at
+	// http://127.0.0.1:2379.  For alternative backend access details, set the appropriate
+	// ENV variables specified in the CalicoAPIConfigSpec structure.
+	client, err := client.NewFromEnv()
 
 	// Obtain the interface for managing host endpoint resources.
 	hostendpoints := client.HostEndpoints()

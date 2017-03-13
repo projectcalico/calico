@@ -43,9 +43,8 @@ type Client struct {
 	Backend bapi.Client
 }
 
-// New returns a connected Client.  This is the only mechanism by which to create a
-// Client.  The ClientConfig can either be created explicitly, or can be loaded from
-// a config file or environment variables using the LoadClientConfig() function.
+// New returns a connected Client. The ClientConfig can either be created explicitly,
+// or can be loaded from a config file or environment variables using the LoadClientConfig() function.
 func New(config api.CalicoAPIConfig) (*Client, error) {
 	var err error
 	cc := Client{}
@@ -53,6 +52,17 @@ func New(config api.CalicoAPIConfig) (*Client, error) {
 		return nil, err
 	}
 	return &cc, err
+}
+
+// NewFromEnv loads the config from ENV variables and returns a connected Client.
+func NewFromEnv() (*Client, error) {
+
+	config, err := LoadClientConfigFromEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
+	return New(*config)
 }
 
 // Nodes returns an interface for managing node resources.
