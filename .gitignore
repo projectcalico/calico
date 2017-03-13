@@ -47,4 +47,5 @@ htmlcov/
 /go/
 
 /k8sfv/prometheus/data
+/k8sfv/prometheus/prometheus.yml
 /k8sfv/k8sfv.test
