@@ -8,7 +8,7 @@ find . -name "*.coverprofile" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*.go' | \
-	      grep -vE '/vendor/|\./proto/|.glide' | \
+	      grep -vE '/vendor/|\./proto/|.glide|/k8sfv/' | \
 	      xargs -n 1 dirname | \
 	      sort | uniq | \
 	      tr '\n' ',' | \
@@ -21,7 +21,7 @@ test_pkgs=$(go list -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }
 test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"
 
-ginkgo -cover -covermode=count -coverpkg=${go_dirs} -r
+ginkgo -cover -covermode=count -coverpkg=${go_dirs} -r -skipPackage k8sfv
 gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
