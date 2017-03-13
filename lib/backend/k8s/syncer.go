@@ -159,6 +159,12 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Snapshot complete - start watch from %+v", latestVersions)
 			syn.callbacks.OnStatusUpdated(api.InSync)
 
+			// Don't start watches if we're in oneshot mode.
+			if syn.OneShot {
+				log.Info("OneShot mode, do not start watches")
+				return
+			}
+
 			// Create the Kubernetes API watchers.
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
 			nsWatch, err := syn.kc.clientSet.Namespaces().Watch(opts)
@@ -233,12 +239,6 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 			// Success - reset the flag.
 			needsResync = false
-		}
-
-		// Don't start watches if we're in oneshot mode.
-		if syn.OneShot {
-			log.Info("OneShot mode, do not start watches")
-			return
 		}
 
 		// Select on the various watch channels.
@@ -432,7 +432,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 
 			// Convert to a workload endpoint.
 			wep, err := syn.kc.converter.podToWorkloadEndpoint(&po)
-			if err == nil {
+			if err != nil {
 				log.WithError(err).Error("Failed to convert pod to workload endpoint")
 				continue
 			}

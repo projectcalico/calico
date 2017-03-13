@@ -16,6 +16,7 @@ package k8s
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -34,7 +35,12 @@ import (
 // cb implements the callback interface required for the
 // backend Syncer API.
 type cb struct {
-	status api.SyncStatus
+	// Stores the current state for comparison by the tests.
+	State map[string]api.Update
+	Lock  *sync.Mutex
+
+	status     api.SyncStatus
+	updateChan chan api.Update
 }
 
 func (c cb) OnStatusUpdated(status api.SyncStatus) {
@@ -71,10 +77,48 @@ func (c cb) OnUpdates(updates []api.Update) {
 		case api.UpdateTypeKVUnknown:
 			panic(fmt.Sprintf("[TEST] Syncer received unkown update: %+v", u))
 		}
+
+		// Send the update to a goroutine which will process it.
+		c.updateChan <- u
 	}
 }
 
-func CreateClientAndStartSyncer() *KubeClient {
+func (c cb) ProcessUpdates() {
+	for u := range c.updateChan {
+		// Store off the update so it can be checked by the test.
+		// Use a mutex for safe cross-goroutine reads/writes.
+		c.Lock.Lock()
+		if u.UpdateType == api.UpdateTypeKVUnknown {
+			// We should never get this!
+			log.Panic("Received Unknown update type")
+		} else if u.UpdateType == api.UpdateTypeKVDeleted {
+			// Deleted.
+			delete(c.State, u.Key.String())
+			log.Infof("[TEST] Delete update %s", u.Key.String())
+		} else {
+			// Add or modified.
+			c.State[u.Key.String()] = u
+			log.Infof("[TEST] Stored update %s", u.Key.String())
+		}
+		c.Lock.Unlock()
+	}
+}
+
+func (c cb) ExpectUpdate(kvps []model.KVPair) {
+	for _, kvp := range kvps {
+		log.Infof("[TEST] Expecting key: %s", kvp.Key)
+
+		// Get the update.
+		c.Lock.Lock()
+		update, ok := c.State[kvp.Key.String()]
+		c.Lock.Unlock()
+
+		log.Infof("[TEST] Key exists? %t: %+v", ok, update)
+		Expect(ok).To(Equal(true), fmt.Sprintf("Expected key to exist: %s", kvp.Key))
+	}
+}
+
+func CreateClientAndSyncer() (*KubeClient, *cb, api.Syncer) {
 	// First create the client.
 	cfg := KubeConfig{
 		K8sAPIEndpoint: "http://localhost:8080",
@@ -91,19 +135,26 @@ func CreateClientAndStartSyncer() *KubeClient {
 	}
 
 	// Start the syncer.
+	updateChan := make(chan api.Update)
 	callback := cb{
-		status: api.WaitForDatastore,
+		State:      map[string]api.Update{},
+		status:     api.WaitForDatastore,
+		Lock:       &sync.Mutex{},
+		updateChan: updateChan,
 	}
 	syncer := c.Syncer(callback)
-	syncer.Start()
-	return c
+	return c, &callback, syncer
 }
 
 var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	log.SetLevel(log.DebugLevel)
 
 	// Start the syncer.
-	c := CreateClientAndStartSyncer()
+	c, cb, syncer := CreateClientAndSyncer()
+	syncer.Start()
+
+	// Start processing updates.
+	go cb.ProcessUpdates()
 
 	It("should handle a Namespace with DefaultDeny", func() {
 		ns := k8sapi.Namespace{
@@ -139,6 +190,15 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
 		Expect(err).NotTo(HaveOccurred())
 
+		// Expect corresponding Profile updates over the syncer for this Namespace.
+		expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
+		expectedKeys := []model.KVPair{
+			{Key: model.ProfileRulesKey{model.ProfileKey{Name: expectedName}}},
+			{Key: model.ProfileTagsKey{model.ProfileKey{Name: expectedName}}},
+			{Key: model.ProfileLabelsKey{model.ProfileKey{Name: expectedName}}},
+		}
+		time.Sleep(1 * time.Second)
+		cb.ExpectUpdate(expectedKeys)
 	})
 
 	It("should handle a Namespace without DefaultDeny", func() {
@@ -341,6 +401,34 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			_, err = c.Apply(wep)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		// The expected KVPair keys that should exist as a result of creating this Pod.
+		expectedKeys := []model.KVPair{
+			{Key: model.WorkloadEndpointKey{
+				Hostname:       "127.0.0.1",
+				OrchestratorID: "k8s",
+				WorkloadID:     fmt.Sprintf("default.%s", pod.ObjectMeta.Name),
+				EndpointID:     "eth0",
+			}},
+		}
+
+		By("Expecting an update on the Syncer API", func() {
+			// Expect corresponding updates over the syncer for this Pod.
+			time.Sleep(1 * time.Second)
+			cb.ExpectUpdate(expectedKeys)
+		})
+
+		By("Expecting a Syncer snapshot to include the update", func() {
+			// Create a new syncer / callback pair so that it performs a snapshot.
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer()
+			go snapshotCallbacks.ProcessUpdates()
+			snapshotSyncer.Start()
+
+			// Wait a bit for the snapshot to finish.
+			time.Sleep(2 * time.Second)
+			snapshotCallbacks.ExpectUpdate(expectedKeys)
+		})
+
 	})
 
 	// Add a defer to wait for all pods to clean up.
