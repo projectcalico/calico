@@ -25,6 +25,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/gavv/monotime"
+
 	"github.com/projectcalico/felix/set"
 )
 
@@ -315,13 +317,13 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	// Capture error output into a buffer.
 	var stderr bytes.Buffer
 	cmd.SetStderr(&stderr)
-	execStartTime := time.Now()
+	execStartTime := monotime.Now()
 	err = cmd.Start()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to start 'ipset list'")
 		return
 	}
-	summaryExecStart.Observe(float64(time.Since(execStartTime).Nanoseconds()) / 1000.0)
+	summaryExecStart.Observe(float64(monotime.Since(execStartTime).Nanoseconds()) / 1000.0)
 	// Clear the set of known IP sets names, we'll fill it back in as we scan.
 	s.existingIPSetNames.Clear()
 	// Use a scanner to chunk the input into lines.
@@ -549,13 +551,13 @@ func (s *IPSets) tryUpdates() error {
 	cmd.SetStdout(&stdout)
 
 	// Actually start the child process.
-	startTime := time.Now()
+	startTime := monotime.Now()
 	err = cmd.Start()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to start ipset restore.")
 		return err
 	}
-	summaryExecStart.Observe(float64(time.Since(startTime).Nanoseconds()) / 1000.0)
+	summaryExecStart.Observe(float64(monotime.Since(startTime).Nanoseconds()) / 1000.0)
 
 	// Ask each dirty IP set to write its updates to the stream.
 	var writeErr error

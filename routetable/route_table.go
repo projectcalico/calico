@@ -24,12 +24,13 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/gavv/monotime"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/set"
-	"github.com/prometheus/client_golang/prometheus"
-	"time"
 )
 
 var (
@@ -143,7 +144,7 @@ func (r *RouteTable) QueueResync() {
 
 func (r *RouteTable) Apply() error {
 	if !r.inSync {
-		listStartTime := time.Now()
+		listStartTime := monotime.Now()
 
 		links, err := r.dataplane.LinkList()
 		if err != nil {
@@ -166,7 +167,7 @@ func (r *RouteTable) Apply() error {
 		}
 		r.inSync = true
 
-		listIfaceTime.Observe(time.Since(listStartTime).Seconds())
+		listIfaceTime.Observe(monotime.Since(listStartTime).Seconds())
 	}
 
 	r.dirtyIfaces.Iter(func(item interface{}) error {
@@ -208,9 +209,9 @@ func (r *RouteTable) Apply() error {
 }
 
 func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
-	startTime := time.Now()
+	startTime := monotime.Now()
 	defer func() {
-		perIfaceSyncTime.Observe(time.Since(startTime).Seconds())
+		perIfaceSyncTime.Observe(monotime.Since(startTime).Seconds())
 	}()
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")

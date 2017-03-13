@@ -21,6 +21,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/gavv/monotime"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
@@ -117,13 +119,10 @@ func (acg *AsyncCalcGraph) loop() {
 			case []api.Update:
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
-				updStartTime := time.Now()
+				updStartTime := monotime.Now()
 				acg.Dispatcher.OnUpdates(update)
-				updEndTime := time.Now()
-				if updEndTime.After(updStartTime) {
-					// Avoid recording a negative delta in case the clock jumps.
-					summaryUpdateTime.Observe(updEndTime.Sub(updStartTime).Seconds())
-				}
+				updEndTime := monotime.Now()
+				summaryUpdateTime.Observe((updEndTime - updStartTime).Seconds())
 				// Record stats for the number of messages processed.
 				for _, upd := range update {
 					typeName := reflect.TypeOf(upd.Key).Name()

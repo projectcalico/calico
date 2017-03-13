@@ -24,6 +24,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/felix/ifacemonitor"
@@ -73,7 +74,7 @@ var (
 			"values indicate we're doing more batching to try to keep up.",
 	})
 
-	processStartTime time.Time
+	processStartTime time.Duration
 )
 
 func init() {
@@ -83,7 +84,7 @@ func init() {
 	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
-	processStartTime = time.Now()
+	processStartTime = monotime.Now()
 }
 
 type Config struct {
@@ -479,7 +480,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		}
 		switch msg.(type) {
 		case *proto.InSync:
-			log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
+			log.WithField("timeSinceStart", monotime.Since(processStartTime)).Info(
 				"Datastore in sync, flushing the dataplane for the first time...")
 			datastoreInSync = true
 		}
@@ -579,17 +580,14 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					beingThrottled = false
 				}
 				log.Info("Applying dataplane updates")
-				applyStart := time.Now()
+				applyStart := monotime.Now()
 
 				// Actually apply the changes to the dataplane.
 				d.apply()
 
 				// Record stats.
-				applyTime := time.Since(applyStart)
-				if applyTime > 0 {
-					// Avoid a negative interval in case the clock jumps.
-					summaryApplyTime.Observe(applyTime.Seconds())
-				}
+				applyTime := monotime.Since(applyStart)
+				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
@@ -604,8 +602,9 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 			}
 			if !doneFirstApply {
-				log.WithField("secsSinceStart", time.Since(processStartTime).Seconds()).Info(
-					"Completed first update to dataplane.")
+				log.WithField(
+					"secsSinceStart", monotime.Since(processStartTime).Seconds(),
+				).Info("Completed first update to dataplane.")
 				doneFirstApply = true
 				if d.config.PostInSyncCallback != nil {
 					d.config.PostInSyncCallback()
@@ -808,15 +807,12 @@ func (d *InternalDataplane) loopReportingStatus() {
 		log.Info("Process status reports disabled")
 		return
 	}
-	start := time.Now()
 	// Wait before first report so that we don't check in if we're in a tight cyclic restart.
 	time.Sleep(10 * time.Second)
 	for {
-		now := time.Now()
-		uptimeNanos := float64(now.Sub(start))
-		uptimeSecs := uptimeNanos / 1000000000
+		uptimeSecs := monotime.Since(processStartTime).Seconds()
 		d.fromDataplane <- &proto.ProcessStatusUpdate{
-			IsoTimestamp: now.UTC().Format(time.RFC3339),
+			IsoTimestamp: time.Now().UTC().Format(time.RFC3339),
 			Uptime:       uptimeSecs,
 		}
 		time.Sleep(d.config.StatusReportingInterval)
