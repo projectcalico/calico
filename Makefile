@@ -194,19 +194,38 @@ run-etcd: stop-etcd
 stop-etcd:
 	@-docker rm -f calico-etcd
 
-.PHONY: run-prometheus run-grafana
-run-prometheus:
+.PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
+run-prometheus: stop-prometheus
 	sed 's/__LOCAL_IP_ENV__/$(LOCAL_IP_ENV)/' < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
-	docker run --detach --rm --name prometheus -p 9090:9090 \
+	docker run --detach --rm --name k8sfv-prometheus -p 9090:9090 \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/data:/prometheus \
 	prom/prometheus \
 	-config.file=/etc/prometheus.yml \
 	-storage.local.path=/prometheus
 
-run-grafana:
-	docker run --detach --rm --name grafana --net=host \
+stop-prometheus:
+	@-docker rm -f k8sfv-prometheus
+	sleep 2
+
+run-grafana: stop-grafana run-prometheus
+	docker run --detach --rm --name k8sfv-grafana --net=host \
 	grafana/grafana
+	# Wait for it to get going.
+	sleep 5
+	# Configure prometheus data source.
+	curl 'http://admin:admin@127.0.0.1:3000/api/datasources' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary '{"name":"my-prom","type":"prometheus","url":"http://localhost:9090","access":"direct","isDefault":true,"database":"mydb","user":"admin","password":"admin"}'
+	# Configure dashboard for observing the FV test.
+	{ \
+	  echo '{"dashboard":'; \
+	  cat $(K8SFV_DIR)/prometheus/k8s-scale-testing.json; \
+	  echo ', "overwrite": true, "inputs": '; \
+	  echo '[{"name": "DS_MY-PROM", "pluginId": "prometheus", "type": "datasource", "value": "my-prom"}]}'; \
+	} | curl 'http://admin:admin@127.0.0.1:3000/api/dashboards/import' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary @-
+
+stop-grafana:
+	@-docker rm -f k8sfv-grafana
+	sleep 2
 
 # Pre-configured docker run command that runs as this user with the repo
 # checked out to /code, uses the --rm flag to avoid leaving the container
