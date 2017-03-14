@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/selector/parser"
 )
 
 type update struct {
@@ -79,8 +80,8 @@ var _ = Describe("Index", func() {
 
 	Context("with empty index", func() {
 		It("should do nothing when adding labels", func() {
-			idx.UpdateLabels("foo", map[string]string{"a": "b"})
-			idx.UpdateLabels("bar", map[string]string{})
+			idx.UpdateLabels("foo", parser.MapAsLabels(map[string]string{"a": "b"}))
+			idx.UpdateLabels("bar", parser.MapAsLabels(map[string]string{}))
 			Expect(updates).To(BeEmpty())
 		})
 		It("should do nothing when adding selectors", func() {
@@ -93,7 +94,7 @@ var _ = Describe("Index", func() {
 	Context("with one set of labels added", func() {
 		BeforeEach(func() {
 			idx.UpdateLabels("l1",
-				map[string]string{"a": "b", "c": "d"})
+				parser.MapAsLabels(map[string]string{"a": "b", "c": "d"}))
 		})
 
 		It("should ignore non-matching selectors", func() {
@@ -155,22 +156,22 @@ var _ = Describe("Index", func() {
 		})
 
 		It("should ignore non-matching labels", func() {
-			idx.UpdateLabels("l1", map[string]string{"a": "b"})
+			idx.UpdateLabels("l1", parser.MapAsLabels(map[string]string{"a": "b"}))
 			Expect(updates).To(BeEmpty())
 		})
 		It("should fire correct events for match", func() {
 			By("firing for add")
-			idx.UpdateLabels("l1", map[string]string{"a": "a1"})
+			idx.UpdateLabels("l1", parser.MapAsLabels(map[string]string{"a": "a1"}))
 			Expect(updates).To(Equal([]update{update{
 				"start", "l1", "e1",
 			}}))
 			updates = updates[:0]
 			By("ignoring idempotent add")
-			idx.UpdateLabels("l1", map[string]string{"a": "a1"})
+			idx.UpdateLabels("l1", parser.MapAsLabels(map[string]string{"a": "a1"}))
 			Expect(updates).To(BeEmpty())
 			By("ignoring update to also-matching labels")
 			idx.UpdateLabels("l1",
-				map[string]string{"a": "a1", "b": "c"})
+				parser.MapAsLabels(map[string]string{"a": "a1", "b": "c"}))
 			Expect(updates).To(BeEmpty())
 			By("firing stop on delete")
 			idx.DeleteLabels("l1")
@@ -180,9 +181,9 @@ var _ = Describe("Index", func() {
 		})
 		It("should handle multiple matches", func() {
 			By("firing events for both")
-			idx.UpdateLabels("l1", map[string]string{"a": "a1"})
+			idx.UpdateLabels("l1", parser.MapAsLabels(map[string]string{"a": "a1"}))
 			idx.UpdateLabels("l2",
-				map[string]string{"a": "a1", "b": "b1"})
+				parser.MapAsLabels(map[string]string{"a": "a1", "b": "b1"}))
 			Expect(updates).To(Equal([]update{
 				update{"start", "l1", "e1"},
 				update{"start", "l2", "e1"},
@@ -190,7 +191,7 @@ var _ = Describe("Index", func() {
 			updates = updates[:0]
 
 			By("handling updates to non-matching labels")
-			idx.UpdateLabels("l1", map[string]string{"a": "a2"})
+			idx.UpdateLabels("l1", parser.MapAsLabels(map[string]string{"a": "a2"}))
 			Expect(updates).To(Equal([]update{
 				update{"stop", "l1", "e1"},
 			}))
