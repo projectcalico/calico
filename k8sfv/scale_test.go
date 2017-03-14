@@ -81,11 +81,13 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should handle a local endpoint", func() {
+			createNamespace(clientset, nsPrefix+"test", nil)
 			createPod(clientset, d, nsPrefix+"test", podSpec{})
 			time.Sleep(10 * time.Second)
 		})
 
 		It("should handle 10 local endpoints", func() {
+			createNamespace(clientset, nsPrefix+"test", nil)
 			for ii := 0; ii < 10; ii++ {
 				createPod(clientset, d, nsPrefix+"test", podSpec{})
 			}
@@ -93,6 +95,7 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should handle 100 local endpoints", func() {
+			createNamespace(clientset, nsPrefix+"test", nil)
 			for ii := 0; ii < 100; ii++ {
 				createPod(clientset, d, nsPrefix+"test", podSpec{})
 			}
