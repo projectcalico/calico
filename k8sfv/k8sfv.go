@@ -73,15 +73,16 @@ func initializeCalicoDeployment(k8sServerEndpoint string) {
 	}
 }
 
-func create1000Pods(clientset *kubernetes.Clientset) error {
+func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 
 	d := NewDeployment(49, true)
+	nsName := nsPrefix + "test"
 
 	// Create 1000 pods.
-	createNamespace(clientset, "test", nil)
+	createNamespace(clientset, nsName, nil)
 	log.Info("Creating pods:")
 	for i := 0; i < 1000; i++ {
-		createPod(clientset, d, "test", podSpec{})
+		createPod(clientset, d, nsName, podSpec{})
 	}
 	log.Info("Done")
 

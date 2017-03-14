@@ -15,12 +15,21 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 )
+
+var nsPrefixNum = 0
+
+func getNamespacePrefix() (nsPrefix string) {
+	nsPrefixNum++
+	nsPrefix = fmt.Sprintf("ns%d-", nsPrefixNum)
+	return
+}
 
 func createNamespace(clientset *kubernetes.Clientset, name string, labels map[string]string) {
 	ns_in := &v1.Namespace{

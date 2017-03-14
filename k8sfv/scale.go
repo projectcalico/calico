@@ -19,8 +19,6 @@ import (
 	"math/rand"
 	"strconv"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -39,7 +37,12 @@ func getMac() string {
 	)
 }
 
-func addEndpoints(clientset *kubernetes.Clientset, d deployment, numEndpoints int) {
+func addEndpoints(
+	clientset *kubernetes.Clientset,
+	nsPrefix string,
+	d deployment,
+	numEndpoints int,
+) {
 	//last_time = time.Now()
 	for i := 0; i < numEndpoints; i++ {
 		endpoint_id := fmt.Sprintf("endpoint_%d", i+1)
@@ -51,7 +54,7 @@ func addEndpoints(clientset *kubernetes.Clientset, d deployment, numEndpoints in
 			i%256,
 		)
 
-		nsName := fmt.Sprintf("prof-%03d", i%1000)
+		nsName := fmt.Sprintf("%s-%03d", nsPrefix, i%1000)
 		createPod(clientset, d, nsName, podSpec{
 			mac:      getMac(),
 			ipv4Addr: ip,
@@ -71,9 +74,9 @@ func addEndpoints(clientset *kubernetes.Clientset, d deployment, numEndpoints in
 	return
 }
 
-func addNamespaces(clientset *kubernetes.Clientset) {
+func addNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 	for ii := 0; ii < 1000; ii++ {
-		nsName := fmt.Sprintf("prof-%03d", ii%1000)
+		nsName := fmt.Sprintf("%s-%03d", nsPrefix, ii%1000)
 		createNamespace(clientset, nsName, nil)
 	}
 	return

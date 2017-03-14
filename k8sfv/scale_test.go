@@ -38,16 +38,18 @@ var _ = Context("with a k8s clientset", func() {
 
 	var (
 		clientset *kubernetes.Clientset
+		nsPrefix  string
 		d         deployment
 	)
 
 	BeforeEach(func() {
 		clientset = initialize(flag.Arg(0))
+		nsPrefix = getNamespacePrefix()
 	})
 
 	AfterEach(func() {
 		time.Sleep(20 * time.Second)
-		cleanupAll(clientset, "prof-")
+		cleanupAll(clientset, nsPrefix)
 	})
 
 	Context("with 1 remote node", func() {
@@ -57,16 +59,16 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should create 100k endpoints", func() {
-			addNamespaces(clientset)
-			addEndpoints(clientset, d, 100000)
+			addNamespaces(clientset, nsPrefix)
+			addEndpoints(clientset, nsPrefix, d, 100000)
 		})
 
 		It("should not leak memory", func() {
-			addNamespaces(clientset)
+			addNamespaces(clientset, nsPrefix)
 			for ii := 0; ii < 10; ii++ {
-				addEndpoints(clientset, d, 10000)
+				addEndpoints(clientset, nsPrefix, d, 10000)
 				time.Sleep(30 * time.Second)
-				cleanupAllPods(clientset, "prof-")
+				cleanupAllPods(clientset, nsPrefix)
 				time.Sleep(30 * time.Second)
 			}
 		})
@@ -79,20 +81,20 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should handle a local endpoint", func() {
-			createPod(clientset, d, "test", podSpec{})
+			createPod(clientset, d, nsPrefix+"test", podSpec{})
 			time.Sleep(3600 * time.Second)
 		})
 
 		It("should handle 10 local endpoints", func() {
 			for ii := 0; ii < 10; ii++ {
-				createPod(clientset, d, "test", podSpec{})
+				createPod(clientset, d, nsPrefix+"test", podSpec{})
 			}
 			time.Sleep(3600 * time.Second)
 		})
 
 		It("should handle 100 local endpoints", func() {
 			for ii := 0; ii < 100; ii++ {
-				createPod(clientset, d, "test", podSpec{})
+				createPod(clientset, d, nsPrefix+"test", podSpec{})
 				//time.Sleep(10 * time.Millisecond)
 			}
 			time.Sleep(3600 * time.Second)
@@ -100,7 +102,7 @@ var _ = Context("with a k8s clientset", func() {
 
 		It("should handle 1000 local endpoints", func() {
 			for ii := 0; ii < 1000; ii++ {
-				createPod(clientset, d, "test", podSpec{})
+				createPod(clientset, d, nsPrefix+"test", podSpec{})
 				time.Sleep(500 * time.Millisecond)
 			}
 			time.Sleep(3600 * time.Second)
@@ -114,14 +116,14 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should add and remove 1000 pods, of which about 100 on local node", func() {
-			createNamespace(clientset, "scale", nil)
+			createNamespace(clientset, nsPrefix+"scale", nil)
 			for cycle := 0; cycle < 10; cycle++ {
 				for ii := 0; ii < 1000; ii++ {
-					createPod(clientset, d, "scale", podSpec{})
+					createPod(clientset, d, nsPrefix+"scale", podSpec{})
 					time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
 				}
 				time.Sleep(5 * time.Second)
-				cleanupAllPods(clientset, "scale")
+				cleanupAllPods(clientset, nsPrefix)
 				time.Sleep(1 * time.Second)
 			}
 			time.Sleep(3600 * time.Second)
