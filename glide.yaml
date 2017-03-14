@@ -32,3 +32,4 @@ import:
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
+- package: github.com/gavv/monotime

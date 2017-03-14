@@ -21,6 +21,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/gavv/monotime"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
@@ -54,12 +56,9 @@ var (
 		Name: "felix_calc_graph_output_events",
 		Help: "Number of events emitted by the calculation graph.",
 	})
-	histUpdateTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+	summaryUpdateTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_calc_graph_update_time_seconds",
 		Help: "Seconds to update calculation graph for each datastore OnUpdate call.",
-		Buckets: []float64{
-			0.001, 0.010, 0.100, 1.0,
-		},
 	})
 )
 
@@ -68,7 +67,7 @@ func init() {
 	prometheus.MustRegister(resyncsStarted)
 	prometheus.MustRegister(countUpdatesProcessed)
 	prometheus.MustRegister(countOutputEvents)
-	prometheus.MustRegister(histUpdateTime)
+	prometheus.MustRegister(summaryUpdateTime)
 }
 
 type AsyncCalcGraph struct {
@@ -120,13 +119,10 @@ func (acg *AsyncCalcGraph) loop() {
 			case []api.Update:
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
-				updStartTime := time.Now()
+				updStartTime := monotime.Now()
 				acg.Dispatcher.OnUpdates(update)
-				updEndTime := time.Now()
-				if updEndTime.After(updStartTime) {
-					// Avoid recording a negative delta in case the clock jumps.
-					histUpdateTime.Observe(updEndTime.Sub(updStartTime).Seconds())
-				}
+				updEndTime := monotime.Now()
+				summaryUpdateTime.Observe((updEndTime - updStartTime).Seconds())
 				// Record stats for the number of messages processed.
 				for _, upd := range update {
 					typeName := reflect.TypeOf(upd.Key).Name()

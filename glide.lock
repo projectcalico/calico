@@ -1,5 +1,5 @@
-hash: 9145077e2bb5b29ce84ddebf90eef3c789231efb1a19b324fcd51b87f8b48899
-updated: 2017-03-13T10:22:09.643126143Z
+hash: 25c836fa323ae2eb87ab26a6b12064b5bda7cfd743b42020c40c759465d0ce5e
+updated: 2017-03-14T13:21:17.214096655Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 76aa7f69357420f1802d4d959ade999e63269942
+  version: 1a6be700d80073bb36f7cdf36e4834f8c7c7a3b8
   subpackages:
   - client
   - pkg/pathutil
@@ -56,10 +56,12 @@ imports:
   subpackages:
   - log
   - swagger
+- name: github.com/gavv/monotime
+  version: 47d58efa69556a936a3c15eb2ed42706d968ab01
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 300e940a926eb277d3901b20bdfcc54928ad3642
+  version: 98c45284d68a05a0e0a576de574bd975946ef9ad
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
