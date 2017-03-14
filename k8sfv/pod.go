@@ -187,6 +187,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 		panic(err)
 	}
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
+	podsDeleted := 0
 	admission := make(chan int, 10)
 	waiter := make(chan int, len(nsList.Items))
 	for _, ns := range nsList.Items {
@@ -198,7 +199,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 				if err != nil {
 					panic(err)
 				}
-				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Info("Pods present")
+				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug("Pods present")
 				for _, pod := range podList.Items {
 					err = clientset.Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
 					if err != nil {
@@ -206,6 +207,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 					}
 					removeLocalPodNetworking(&pod)
 				}
+				podsDeleted += len(podList.Items)
 			}
 			<-admission
 			waiter <- 1
@@ -214,7 +216,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	for _ = range nsList.Items {
 		<-waiter
 	}
-	log.Info("Cleaned up all pods")
+	log.WithField("podsDeleted", podsDeleted).Info("Cleaned up all pods")
 }
 
 var zeroGracePeriod int64 = 0
