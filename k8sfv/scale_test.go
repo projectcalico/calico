@@ -48,7 +48,7 @@ var _ = Context("with a k8s clientset", func() {
 	})
 
 	AfterEach(func() {
-		time.Sleep(20 * time.Second)
+		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
 
@@ -58,18 +58,18 @@ var _ = Context("with a k8s clientset", func() {
 			d = NewDeployment(1, false)
 		})
 
-		It("should create 100k endpoints", func() {
+		It("should create 10k endpoints", func() {
 			addNamespaces(clientset, nsPrefix)
-			addEndpoints(clientset, nsPrefix, d, 100000)
+			addEndpoints(clientset, nsPrefix, d, 10000)
 		})
 
 		It("should not leak memory", func() {
 			addNamespaces(clientset, nsPrefix)
 			for ii := 0; ii < 10; ii++ {
 				addEndpoints(clientset, nsPrefix, d, 10000)
-				time.Sleep(30 * time.Second)
+				time.Sleep(20 * time.Second)
 				cleanupAllPods(clientset, nsPrefix)
-				time.Sleep(30 * time.Second)
+				time.Sleep(20 * time.Second)
 			}
 		})
 	})
@@ -82,31 +82,23 @@ var _ = Context("with a k8s clientset", func() {
 
 		It("should handle a local endpoint", func() {
 			createPod(clientset, d, nsPrefix+"test", podSpec{})
-			time.Sleep(3600 * time.Second)
+			time.Sleep(10 * time.Second)
 		})
 
 		It("should handle 10 local endpoints", func() {
 			for ii := 0; ii < 10; ii++ {
 				createPod(clientset, d, nsPrefix+"test", podSpec{})
 			}
-			time.Sleep(3600 * time.Second)
+			time.Sleep(10 * time.Second)
 		})
 
 		It("should handle 100 local endpoints", func() {
 			for ii := 0; ii < 100; ii++ {
 				createPod(clientset, d, nsPrefix+"test", podSpec{})
-				//time.Sleep(10 * time.Millisecond)
 			}
-			time.Sleep(3600 * time.Second)
+			time.Sleep(10 * time.Second)
 		})
 
-		It("should handle 1000 local endpoints", func() {
-			for ii := 0; ii < 1000; ii++ {
-				createPod(clientset, d, nsPrefix+"test", podSpec{})
-				time.Sleep(500 * time.Millisecond)
-			}
-			time.Sleep(3600 * time.Second)
-		})
 	})
 
 	Context("with 1 local and 9 remote nodes", func() {
@@ -126,7 +118,7 @@ var _ = Context("with a k8s clientset", func() {
 				cleanupAllPods(clientset, nsPrefix)
 				time.Sleep(1 * time.Second)
 			}
-			time.Sleep(3600 * time.Second)
+			time.Sleep(20 * time.Second)
 		})
 	})
 })

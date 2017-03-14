@@ -60,7 +60,7 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 				panic(err)
 			}
 		} else {
-			log.WithField("name", ns.ObjectMeta.Name).Info("Namespace skipped")
+			log.WithField("name", ns.ObjectMeta.Name).Debug("Namespace skipped")
 		}
 	}
 	log.Info("Cleaned up all namespaces")

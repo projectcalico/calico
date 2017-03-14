@@ -44,7 +44,7 @@ var _ = Describe("calculation graph scale test", func() {
 	})
 
 	AfterEach(func() {
-		time.Sleep(20 * time.Second)
+		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
 })
