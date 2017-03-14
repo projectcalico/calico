@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var _ = Describe("calc-graph test", func() {
+var _ = Describe("calculation graph scale test", func() {
 
 	var (
 		clientset *kubernetes.Clientset
@@ -34,8 +34,8 @@ var _ = Describe("calc-graph test", func() {
 		clientset = initialize(flag.Arg(0))
 	})
 
-	It("should run test 1", func() {
-		Expect(calcGraph1(clientset)).To(BeNil())
+	It("should run label rotation test", func() {
+		Expect(rotateLabels(clientset)).To(BeNil())
 		nsPrefix = "ns-"
 	})
 
