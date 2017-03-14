@@ -20,14 +20,14 @@ import (
 	"k8s.io/client-go/pkg/apis/meta/v1"
 )
 
-func rotateLabels(clientset *kubernetes.Clientset) error {
+func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 	nsMaturity := map[string]string{}
 	maturities := []string{"production", "test", "staging", "experimental"}
 
 	// Create namespaces.
 	for _, area := range []string{"1", "2", "3", "4", "5"} {
 		for _, maturity := range maturities {
-			name := "ns-" + area + "-" + maturity
+			name := nsPrefix + area + "-" + maturity
 			createNamespace(
 				clientset,
 				name,

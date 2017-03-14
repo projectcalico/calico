@@ -32,16 +32,15 @@ var _ = Describe("calculation graph scale test", func() {
 
 	BeforeEach(func() {
 		clientset = initialize(flag.Arg(0))
+		nsPrefix = getNamespacePrefix()
 	})
 
 	It("should run label rotation test", func() {
-		Expect(rotateLabels(clientset)).To(BeNil())
-		nsPrefix = "ns-"
+		Expect(rotateLabels(clientset, nsPrefix)).To(BeNil())
 	})
 
 	It("should process 1000 pods", func() {
-		Expect(create1000Pods(clientset)).To(BeNil())
-		nsPrefix = "test"
+		Expect(create1000Pods(clientset, nsPrefix)).To(BeNil())
 	})
 
 	AfterEach(func() {
