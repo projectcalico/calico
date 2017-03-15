@@ -194,12 +194,18 @@ run-etcd: stop-etcd
 stop-etcd:
 	@-docker rm -f calico-etcd
 
+PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
+K8SFV_PROMETHEUS_DATA_DIR := $(PROMETHEUS_DATA_DIR)/k8sfv
+
+$(K8SFV_PROMETHEUS_DATA_DIR):
+	mkdir -p $@
+
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
-run-prometheus: stop-prometheus
+run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)
 	sed 's/__LOCAL_IP_ENV__/$(LOCAL_IP_ENV)/' < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
-	docker run --detach --rm --name k8sfv-prometheus -p 9090:9090 \
+	docker run --detach --name k8sfv-prometheus -p 9090:9090 \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
-	-v $${PWD}/$(K8SFV_DIR)/prometheus/data:/prometheus \
+	-v $(K8SFV_PROMETHEUS_DATA_DIR):/prometheus \
 	prom/prometheus \
 	-config.file=/etc/prometheus.yml \
 	-storage.local.path=/prometheus
