@@ -62,13 +62,13 @@ template bgp bgp_template {
 {{if (json (getv "/global/node_mesh")).enabled}}
 {{range $host := lsdir "/host"}}
 {{$onode_as_key := printf "/host/%s/as_num" .}}
-{{$onode_ip_key := printf "/host/%s/ip_addr_v4" .}}{{$onode_ip := getv $onode_ip_key}}
+{{$onode_ip_key := printf "/host/%s/ip_addr_v4" .}}{{if exists $onode_ip_key}}{{$onode_ip := getv $onode_ip_key}}
 {{$nums := split $onode_ip "."}}{{$id := join $nums "_"}}
 # For peer {{$onode_ip_key}}
 {{if eq $onode_ip ($node_ip) }}# Skipping ourselves ({{$node_ip}})
 {{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
-}{{end}}{{end}}
+}{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
 {{end}}
