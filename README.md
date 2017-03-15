@@ -94,10 +94,10 @@ firsthand, and then funnels people off to the usage section for more details.
 
 ### Usage
 
-These should all be docs that are a "verb". They should be task focused, each
-doc containing a goal and a set of steps you can follow to achieve it. They
-should not be detailed description of components or tabulated configuration
-information.
+These should all be docs that are a "verb" and task focused. Each doc should
+contain why you want to do this, a goal, and a set of steps you can follow to
+achieve it. They should not be detailed description of components or tabulated
+configuration information.
 
 Examples:
 
@@ -112,6 +112,7 @@ Examples:
 These docs are complete reference for Calico. If there's a configuration
 option you're looking for, it goes here in one of the per-component
 references. Not every option has a "how to" guide, but has enough description.
+The caveats and considerations when enabling options should be listed here.
 
 Examples:
 
