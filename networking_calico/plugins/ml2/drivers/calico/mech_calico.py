@@ -35,7 +35,11 @@ import eventlet
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
 from neutron.common import topics
-from neutron import context as ctx
+try:
+    from neutron_lib import context as ctx
+except ImportError:
+    # Neutron code prior to ca751a1486 (6th March 2017).
+    from neutron import context as ctx
 try:
     from neutron.db.models.l3 import FloatingIP
 except ImportError:
