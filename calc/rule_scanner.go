@@ -28,9 +28,17 @@ import (
 
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for tags and
 // selectors. It calculates the set of active tags and selectors and emits events when they become
-// active/inactive.  To avoid the occupancy overhead of doing two types of indexing, it maps tags
-// to selectors of the form "has(tag-name)"; those are broadly equivalent due to the inheritance
-// mechanism implemented in the labelindex.InheritIndex.
+// active/inactive.
+//
+// Previously, Felix tracked tags and selectors separately, with a separate tag and label index.
+// However, we found that had a high occupancy cost.  The current code uses a shared index and
+// maps tags onto labels, so a tag named tagName, becomes a label tagName="".  The RuleScanner
+// maps tags to label selectors of the form "has(tagName)", taking advantage of the mapping.
+// Such a selector is almost equivalent to having the tag; the only case where the behaviour would
+// differ is if the user was using the same name for a tag and a label and the label and tags
+// of the same name were applied to different endpoints.  Since tags are being deprecated, we can
+// live with that potential aliasing issue in return for a significant occupancy improvement at
+// high scale.
 //
 // The RuleScanner also emits events when rules are updated:  since the input rule
 // structs contain tags and selectors but downstream, we only care about IP sets, the
@@ -91,10 +99,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 	currentUIDToSel := make(map[string]selector.Selector)
 	parsedInbound := make([]*ParsedRule, len(inbound))
 	for ii, rule := range inbound {
-		parsed, allSels, err := ruleToParsedRule(&rule)
-		if err != nil {
-			log.Fatalf("Bad selector in %v: %v", key, err)
-		}
+		parsed, allSels := ruleToParsedRule(&rule)
 		parsedInbound[ii] = parsed
 		for _, sel := range allSels {
 			currentUIDToSel[sel.UniqueId()] = sel
@@ -102,10 +107,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 	}
 	parsedOutbound := make([]*ParsedRule, len(outbound))
 	for ii, rule := range outbound {
-		parsed, allSels, err := ruleToParsedRule(&rule)
-		if err != nil {
-			log.Fatalf("Bad selector in %v: %v", key, err)
-		}
+		parsed, allSels := ruleToParsedRule(&rule)
 		parsedOutbound[ii] = parsed
 		for _, sel := range allSels {
 			currentUIDToSel[sel.UniqueId()] = sel
@@ -211,11 +213,8 @@ type ParsedRule struct {
 	NotDstIPSetIDs []string
 }
 
-func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []selector.Selector, err error) {
-	src, dst, notSrc, notDst, err := extractTagsAndSelectors(rule)
-	if err != nil {
-		return
-	}
+func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []selector.Selector) {
+	src, dst, notSrc, notDst := extractTagsAndSelectors(rule)
 
 	parsedRule = &ParsedRule{
 		Action: rule.Action,
@@ -252,64 +251,48 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 	return
 }
 
-func extractTagsAndSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector, err error) {
-	var sel selector.Selector
-	if rule.SrcTag != "" {
-		sel, err = selFromTag(rule.SrcTag)
-		if err != nil {
-			return
+func extractTagsAndSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector) {
+	appendTagSelector := func(slice []selector.Selector, tagName string) []selector.Selector {
+		if tagName == "" {
+			return slice
 		}
-		src = append(src, sel)
-	}
-	if rule.DstTag != "" {
-		sel, err = selFromTag(rule.DstTag)
+		sel, err := selFromTag(tagName)
 		if err != nil {
-			return
+			// This shouldn't happen because the data should have been validated
+			// further back in the pipeline.
+			log.WithField("tag", tagName).Panic(
+				"Failed to convert tag to selector; but tag should have been " +
+					"validated already.")
 		}
-		dst = append(dst, sel)
+		return append(slice, sel)
 	}
-	if rule.NotSrcTag != "" {
-		sel, err = selFromTag(rule.NotSrcTag)
+
+	appendSelector := func(slice []selector.Selector, rawSelector string) []selector.Selector {
+		if rawSelector == "" {
+			return slice
+		}
+		sel, err := selector.Parse(rawSelector)
 		if err != nil {
-			return
+			// This shouldn't happen because the data should have been validated
+			// further back in the pipeline.
+			log.WithField("selector", rawSelector).Panic(
+				"Failed to parse selector that should have been validated already.")
 		}
-		notSrc = append(notSrc, sel)
+		return append(slice, sel)
 	}
-	if rule.NotDstTag != "" {
-		sel, err = selFromTag(rule.NotDstTag)
-		if err != nil {
-			return
-		}
-		notDst = append(notDst, sel)
-	}
-	if rule.SrcSelector != "" {
-		sel, err = selector.Parse(rule.SrcSelector)
-		if err != nil {
-			return
-		}
-		src = append(src, sel)
-	}
-	if rule.DstSelector != "" {
-		sel, err = selector.Parse(rule.DstSelector)
-		if err != nil {
-			return
-		}
-		dst = append(dst, sel)
-	}
-	if rule.NotSrcSelector != "" {
-		sel, err = selector.Parse(rule.NotSrcSelector)
-		if err != nil {
-			return
-		}
-		notSrc = append(notSrc, sel)
-	}
-	if rule.NotDstSelector != "" {
-		sel, err = selector.Parse(rule.NotDstSelector)
-		if err != nil {
-			return
-		}
-		notDst = append(notDst, sel)
-	}
+
+	src = appendTagSelector(src, rule.SrcTag)
+	src = appendSelector(src, rule.SrcSelector)
+
+	dst = appendTagSelector(dst, rule.DstTag)
+	dst = appendSelector(dst, rule.DstSelector)
+
+	notSrc = appendTagSelector(notSrc, rule.NotSrcTag)
+	notSrc = appendSelector(notSrc, rule.NotSrcSelector)
+
+	notDst = appendTagSelector(notDst, rule.NotDstTag)
+	notDst = appendSelector(notDst, rule.NotDstSelector)
+
 	return
 }
 
