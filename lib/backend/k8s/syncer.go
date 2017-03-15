@@ -100,9 +100,17 @@ func (syn *kubeSyncer) updateTracker(updates []api.Update) {
 		if upd.UpdateType == api.UpdateTypeKVDeleted {
 			log.Debugf("Delete from tracker: %+v", upd.KVPair.Key)
 			delete(syn.tracker, upd.KVPair.Key.String())
+			switch key := upd.KVPair.Key.(type) {
+			case model.WorkloadEndpointKey:
+				delete(syn.labelCache, key.WorkloadID)
+			}
 		} else {
 			log.Debugf("Update tracker: %+v: %+v", upd.KVPair.Key, upd.KVPair.Revision)
 			syn.tracker[upd.KVPair.Key.String()] = upd.KVPair.Key
+			switch key := upd.KVPair.Key.(type) {
+			case model.WorkloadEndpointKey:
+				syn.labelCache[key.WorkloadID] = upd.KVPair.Value.(*model.WorkloadEndpoint).Labels
+			}
 		}
 	}
 }
@@ -598,10 +606,6 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		// For deletes, we need to nil out the Value part of the KVPair.
 		log.Debugf("Delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		kvp.Value = nil
-
-		// Remove it from the label cache, if it is there.
-		workload := kvp.Key.(model.WorkloadEndpointKey).WorkloadID
-		delete(syn.labelCache, workload)
 	default:
 		// Adds and modifies are treated the same.  First, if the pod doesn't have an
 		// IP address, we ignore it until it does.
@@ -618,9 +622,6 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 			log.Debugf("Skipping pod event - labels didn't change: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 			return nil
 		}
-
-		// Labels have changed on a running pod - update the label cache.
-		syn.labelCache[workload] = labels
 	}
 
 	return kvp
