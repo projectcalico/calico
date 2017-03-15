@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
@@ -49,6 +50,7 @@ type localNetworking struct {
 }
 
 var localNetworkingMap = map[string]*localNetworking{}
+var localNetworkingMutex = sync.Mutex{}
 
 func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spec podSpec) {
 	name := spec.name
@@ -108,7 +110,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		// Create a veth pair.
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
-			PeerName:  "calipeertemp",
+			PeerName:  "p" + interfaceName[1:],
 		}
 		err = netlink.LinkAdd(veth)
 		panicIfError(err)
@@ -144,8 +146,12 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 func removeLocalPodNetworking(pod *v1.Pod) {
 	// Retrieve local networking details for this pod.
 	key := pod.ObjectMeta.Namespace + "." + pod.ObjectMeta.Name
-	ln := localNetworkingMap[key]
 
+	// Lock mutex, as we do pod cleanup from multiple goroutines.
+	localNetworkingMutex.Lock()
+	defer localNetworkingMutex.Unlock()
+
+	ln := localNetworkingMap[key]
 	if ln != nil {
 		log.WithField("key", key).Info("Cleanup local networking")
 
