@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,19 +57,12 @@ var profileSpec2 = api.ProfileSpec{
 }
 var tags2 = []string{"profile2-tag1", "profile2-tag2"}
 
-var _ = Describe("Profile tests", func() {
+var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("Profile e2e tests",
 		func(meta1, meta2 api.ProfileMetadata, spec1, spec2 api.ProfileSpec) {
+			c := testutils.CreateCleanClient(config)
 
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
-			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
 			By("Updating the profile before it is created")
 			_, outError := c.Profiles().Update(&api.Profile{Metadata: meta1, Spec: spec1})
 

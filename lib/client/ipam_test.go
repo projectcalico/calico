@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,20 +88,11 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
-
-// Setting BackendType to etcdv2 which is the only supported backend at the moment.
-var etcdType api.DatastoreType = "etcdv2"
-
-// Setting localhost as the etcd endpoint location since that's where `make run-etcd` runs it.
-var etcdConfig = etcd.EtcdConfig{
-	EtcdEndpoints: "http://127.0.0.1:2379",
-}
 
 type testArgsClaimAff struct {
 	inNet, host                 string
@@ -112,7 +103,7 @@ type testArgsClaimAff struct {
 	expError                    error
 }
 
-var _ = Describe("IPAM tests", func() {
+var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	// We're assigning one IP which should be from the only ipPool created at the time, second one
 	// should be from the same /26 block since they're both from the same host, then delete
@@ -120,8 +111,7 @@ var _ = Describe("IPAM tests", func() {
 	// assigned IP to be from the new ipPool that was created, this is to make sure the assigned IP
 	// doesn't come from the old affinedBlock even after the ipPool was deleted.
 	Describe("IPAM AutoAssign from the default pool then delete the pool and assign again", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
@@ -204,8 +194,7 @@ var _ = Describe("IPAM tests", func() {
 	})
 
 	Describe("IPAM AutoAssign from any pool", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		ic := setupIPAMClient(c, true)
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
@@ -236,8 +225,7 @@ var _ = Describe("IPAM tests", func() {
 	})
 
 	Describe("IPAM AutoAssign from different pools", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
@@ -336,8 +324,7 @@ var _ = Describe("IPAM tests", func() {
 	})
 
 	Describe("IPAM AutoAssign from different pools - multi", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		ic := setupIPAMClient(c, true)
 
 		host := "host-A"
@@ -388,7 +375,7 @@ var _ = Describe("IPAM tests", func() {
 
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pool []string, usePool string, inv4, inv6, expv4, expv6 int, expError error) {
-			outv4, outv6, outError := testIPAMAutoAssign(inv4, inv6, host, cleanEnv, pool, usePool)
+			outv4, outv6, outError := testIPAMAutoAssign(inv4, inv6, host, cleanEnv, pool, usePool, config)
 			Expect(outv4).To(Equal(expv4))
 			Expect(outv6).To(Equal(expv6))
 			if expError != nil {
@@ -421,7 +408,7 @@ var _ = Describe("IPAM tests", func() {
 
 	DescribeTable("AssignIP: requested IP vs returned error",
 		func(inIP net.IP, host string, cleanEnv bool, pool []string, expError error) {
-			outError := testIPAMAssignIP(inIP, host, pool, cleanEnv)
+			outError := testIPAMAssignIP(inIP, host, pool, cleanEnv, config)
 			if expError != nil {
 				Expect(outError).To(HaveOccurred())
 				Expect(outError).To(Equal(expError))
@@ -447,7 +434,7 @@ var _ = Describe("IPAM tests", func() {
 
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
-			unallocatedIPs, outError := testIPAMReleaseIPs(inIP, pool, cleanEnv, assignIP, autoAssignNumIPv4)
+			unallocatedIPs, outError := testIPAMReleaseIPs(inIP, pool, cleanEnv, assignIP, autoAssignNumIPv4, config)
 
 			// Expect returned slice of unallocatedIPs to be equal to expected expUnallocatedIPs.
 			Expect(unallocatedIPs).To(Equal(expUnallocatedIPs))
@@ -486,11 +473,11 @@ var _ = Describe("IPAM tests", func() {
 	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
 		func(args testArgsClaimAff) {
 			inIPNet := testutils.MustParseNetwork(args.inNet)
-			c, _ := testutils.NewClient("")
+			c := testutils.CreateClient(config)
 
 			// Wipe clean etcd, create a new client, and pools when cleanEnv flag is true.
 			if args.cleanEnv {
-				testutils.CleanEtcd()
+				testutils.CleanDatastore(config)
 				for _, v := range args.pool {
 					testutils.CreateNewIPPool(*c, v, false, false, true)
 				}
@@ -540,17 +527,16 @@ var _ = Describe("IPAM tests", func() {
 
 // testIPAMReleaseIPs takes an IP, slice of string with IP pools to setup, cleanEnv flag means  setup a new environment.
 // assignIP is if you want to assign a single IP before releasing an IP, and AutoAssign is to assign IPs in bulk before releasing any.
-func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int) ([]cnet.IP, error) {
+func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignIP net.IP, autoAssignNumIPv4 int, config api.CalicoAPIConfig) ([]cnet.IP, error) {
 
 	inIPs := []cnet.IP{cnet.IP{inIP}}
 	if cleanEnv {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		for _, v := range poolSubnet {
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	c, _ := testutils.NewClient("")
+	c := testutils.CreateClient(config)
 	ic := setupIPAMClient(c, cleanEnv)
 
 	if len(assignIP) != 0 {
@@ -584,19 +570,18 @@ func testIPAMReleaseIPs(inIP net.IP, poolSubnet []string, cleanEnv bool, assignI
 
 // testIPAMAssignIP takes an IPv4 or IPv6 IP with a hostname and pool name and calls AssignIP.
 // Set cleanEnv to true to wipe clean etcd and reset IPAM config.
-func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bool) error {
+func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bool, config api.CalicoAPIConfig) error {
 	args := client.AssignIPArgs{
 		IP:       cnet.IP{inIP},
 		Hostname: host,
 	}
 	if cleanEnv {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		for _, v := range poolSubnet {
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	c, _ := testutils.NewClient("")
+	c := testutils.CreateClient(config)
 	ic := setupIPAMClient(c, cleanEnv)
 	outErr := ic.AssignIP(args)
 
@@ -608,7 +593,7 @@ func testIPAMAssignIP(inIP net.IP, host string, poolSubnet []string, cleanEnv bo
 
 // testIPAMAutoAssign takes number of requested IPv4 and IPv6, and hostname, and setus up/cleans up client and etcd,
 // then it calls AutoAssign (function under test) and returns the number of returned IPv4 and IPv6 addresses and returned error.
-func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string, usePool string) (int, int, error) {
+func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet []string, usePool string, config api.CalicoAPIConfig) (int, int, error) {
 	fromPool := testutils.MustParseNetwork(usePool)
 	args := client.AutoAssignArgs{
 		Num4:      inv4,
@@ -618,13 +603,12 @@ func testIPAMAutoAssign(inv4, inv6 int, host string, cleanEnv bool, poolSubnet [
 	}
 
 	if cleanEnv {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		for _, v := range poolSubnet {
 			testutils.CreateNewIPPool(*c, v, false, false, true)
 		}
 	}
-	c, _ := testutils.NewClient("")
+	c := testutils.CreateClient(config)
 	ic := setupIPAMClient(c, cleanEnv)
 	v4, v6, outErr := ic.AutoAssign(args)
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ package client_test
 
 import (
 	"errors"
-	"log"
 	"reflect"
 
 	. "github.com/onsi/ginkgo"
@@ -42,25 +41,18 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = Describe("Node tests", func() {
+var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 	cidrv4 := testutils.MustParseCIDR("1.2.3.5/24")
 	cidrv6 := testutils.MustParseCIDR("aa::bb00:0001/104")
 	asn := numorstring.ASNumber(12345)
 
 	DescribeTable("Node e2e tests",
 		func(meta1, meta2 api.NodeMetadata, spec1, spec2 api.NodeSpec) {
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
-			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
+			c := testutils.CreateCleanClient(config)
 
 			// Updating non-existent node1 should return an error
 			By("Updating the node before it is created")
-			_, err = c.Nodes().Update(&api.Node{Metadata: meta1, Spec: spec1})
+			_, err := c.Nodes().Update(&api.Node{Metadata: meta1, Spec: spec1})
 			Expect(err.Error()).To(Equal(errors.New("resource does not exist: Node(name=node1)").Error()))
 
 			// Create a new node1 with meta1 and spec1.  This should not error.
@@ -78,7 +70,8 @@ var _ = Describe("Node tests", func() {
 			_, err = c.Nodes().Apply(&api.Node{Metadata: meta2, Spec: spec2})
 			Expect(err).NotTo(HaveOccurred())
 
-			testutils.DumpEtcd()
+			err = testutils.DumpDatastore(config)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Get node1.  This should not error, spec should match spec1.
 			By("Getting node1 and comparing with spec1")
@@ -192,8 +185,7 @@ var _ = Describe("Node tests", func() {
 	)
 
 	Describe("Checking global config is set only once", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		var guidOrig string
 		var guidNew string
 		var set bool
@@ -238,8 +230,7 @@ var _ = Describe("Node tests", func() {
 	})
 
 	Describe("Checking delete/get/list operations perform data validation", func() {
-		testutils.CleanEtcd()
-		c, _ := testutils.NewClient("")
+		c := testutils.CreateCleanClient(config)
 		var err error
 		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})
 

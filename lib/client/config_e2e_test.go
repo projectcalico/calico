@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,22 +22,19 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-var _ = Describe("with config option API tests", func() {
+var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils.DatastoreEtcdV2, func(calicoConfig api.CalicoAPIConfig) {
 
 	var config client.ConfigInterface
 
 	BeforeEach(func() {
-		// Erase etcd clean
-		testutils.CleanEtcd()
-
-		c, err := testutils.NewClient("")
-		Expect(err).NotTo(HaveOccurred())
+		c := testutils.CreateCleanClient(calicoConfig)
 		config = c.Config()
 	})
 

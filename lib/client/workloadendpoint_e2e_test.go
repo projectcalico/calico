@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var _ = Describe("WorkloadEndpoint tests", func() {
+var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 	cidr1 := testutils.MustParseNetwork("10.0.0.0/32")
 	cidr2 := testutils.MustParseNetwork("20.0.0.0/32")
 	cidr3 := testutils.MustParseNetwork("192.168.0.0/32")
@@ -60,15 +60,8 @@ var _ = Describe("WorkloadEndpoint tests", func() {
 
 	DescribeTable("WorkloadEndpoint e2e tests",
 		func(meta1, meta2 api.WorkloadEndpointMetadata, spec1, spec2 api.WorkloadEndpointSpec) {
+			c := testutils.CreateCleanClient(config)
 
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
-			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
 			By("Updating the WorkloadEndpoint before it is created")
 			_, outError := c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
 
