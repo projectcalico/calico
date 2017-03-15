@@ -129,7 +129,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Revision.(string)).To(Equal("1234"))
 	})
 
-	It("should parse a Pod without an IP to a WorkloadEndpoint", func() {
+	It("should fail to parse a Pod without an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name:      "podA",
@@ -148,21 +148,8 @@ var _ = Describe("Test Pod conversion", func() {
 			Status: k8sapi.PodStatus{},
 		}
 
-		wep, err := c.podToWorkloadEndpoint(&pod)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Assert key fields.
-		Expect(wep.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal("default.podA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).Hostname).To(Equal("nodeA"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal("eth0"))
-		Expect(wep.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal("k8s"))
-
-		// Assert value fields.
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv6Nets)).To(Equal(0))
-		Expect(len(wep.Value.(*model.WorkloadEndpoint).IPv4Nets)).To(Equal(0))
-		Expect(wep.Value.(*model.WorkloadEndpoint).State).To(Equal("active"))
-		expectedLabels := map[string]string{"labelA": "valueA", "labelB": "valueB", "calico/k8s_ns": "default"}
-		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(expectedLabels))
+		_, err := c.podToWorkloadEndpoint(&pod)
+		Expect(err).To(HaveOccurred())
 	})
 
 	It("should parse a Pod with no labels", func() {

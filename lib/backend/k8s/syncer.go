@@ -167,6 +167,12 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			log.Debugf("Snapshot complete - start watch from %+v", latestVersions)
 			syn.callbacks.OnStatusUpdated(api.InSync)
 
+			// Don't start watches if we're in oneshot mode.
+			if syn.OneShot {
+				log.Info("OneShot mode, do not start watches")
+				return
+			}
+
 			// Create the Kubernetes API watchers.
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
 			nsWatch, err := syn.kc.clientSet.Namespaces().Watch(opts)
@@ -241,12 +247,6 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 			// Success - reset the flag.
 			needsResync = false
-		}
-
-		// Don't start watches if we're in oneshot mode.
-		if syn.OneShot {
-			log.Info("OneShot mode, do not start watches")
-			return
 		}
 
 		// Select on the various watch channels.
@@ -432,18 +432,20 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 
 		versions.podVersion = poList.ListMeta.ResourceVersion
 		for _, po := range poList.Items {
-			// Ignore any updates for host networked pods.
-			if syn.kc.converter.isHostNetworked(&po) {
-				log.Debugf("Skipping host networked pod %s/%s", po.ObjectMeta.Namespace, po.ObjectMeta.Name)
+			// Ignore any updates for pods which are not ready / valid.
+			if !syn.kc.converter.isCalicoPod(&po) {
+				log.Debugf("Skipping pod %s/%s", po.ObjectMeta.Namespace, po.ObjectMeta.Name)
 				continue
 			}
 
 			// Convert to a workload endpoint.
-			wep, _ := syn.kc.converter.podToWorkloadEndpoint(&po)
-			if wep != nil {
-				snap = append(snap, *wep)
-				keys[wep.Key.String()] = true
+			wep, err := syn.kc.converter.podToWorkloadEndpoint(&po)
+			if err != nil {
+				log.WithError(err).Error("Failed to convert pod to workload endpoint")
+				continue
 			}
+			snap = append(snap, *wep)
+			keys[wep.Key.String()] = true
 		}
 
 		// Sync GlobalConfig.
@@ -586,9 +588,9 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		log.Panicf("Invalid pod event. Type: %s, Object: %+v", e.Type, e.Object)
 	}
 
-	// Ignore any updates for host networked pods.
-	if syn.kc.converter.isHostNetworked(pod) {
-		log.Debugf("Skipping host networked pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+	// Ignore updates for Pods that aren't ready / valid.
+	if !syn.kc.converter.isCalicoPod(pod) {
+		log.Debugf("Skipping pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		return nil
 	}
 
@@ -607,14 +609,7 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		log.Debugf("Delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		kvp.Value = nil
 	default:
-		// Adds and modifies are treated the same.  First, if the pod doesn't have an
-		// IP address, we ignore it until it does.
-		if !syn.kc.converter.hasIPAddress(pod) {
-			log.Debugf("Skipping pod with no IP: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
-			return nil
-		}
-
-		// If it does have an address, we only send if the labels have changed.
+		// Only send an update if the labels have changed.
 		workload := kvp.Key.(model.WorkloadEndpointKey).WorkloadID
 		labels := kvp.Value.(*model.WorkloadEndpoint).Labels
 		if reflect.DeepEqual(syn.labelCache[workload], labels) {

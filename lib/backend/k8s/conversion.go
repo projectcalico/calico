@@ -194,7 +194,21 @@ func (c converter) globalConfigToTPR(kvp *model.KVPair) thirdparty.GlobalConfig 
 // isCalicoPod returns true if the pod should be shown as a workloadEndpoint
 // in the Calico API and false otherwise.
 func (c converter) isCalicoPod(pod *kapiv1.Pod) bool {
-	return !c.isHostNetworked(pod) && c.hasIPAddress(pod)
+	if c.isHostNetworked(pod) {
+		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
+		return false
+	} else if !c.hasIPAddress(pod) {
+		log.WithField("pod", pod.Name).Debug("Pod does not have an IP address.")
+		return false
+	} else if !c.isScheduled(pod) {
+		log.WithField("pod", pod.Name).Debug("Pod is not scheduled.")
+		return false
+	}
+	return true
+}
+
+func (c converter) isScheduled(pod *kapiv1.Pod) bool {
+	return pod.Spec.NodeName != ""
 }
 
 func (c converter) isHostNetworked(pod *kapiv1.Pod) bool {
@@ -210,22 +224,18 @@ func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 	profile := fmt.Sprintf("ns.projectcalico.org/%s", pod.ObjectMeta.Namespace)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
-	// If the pod doesn't have an IP address yet, then it hasn't gone through CNI.
-	ipNets := []cnet.IPNet{}
-	if c.hasIPAddress(pod) {
-		// Parse the Pod's IP address.
-		_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
-		if err != nil {
-			return nil, err
-		}
-		ipNets = []cnet.IPNet{*ipNet}
+	// If the pod isn't ready, we can't parse it.
+	if !c.isCalicoPod(pod) {
+		return nil, fmt.Errorf("Pod is not ready / valid. pod=%s", pod.Name)
 	}
 
-	// Check to see if the Pod has a Node.
-	if len(pod.Spec.NodeName) == 0 {
-		log.Warnf("%s - NodeName is empty. Spec: %+v Status: %+v", pod.Name, pod.Spec, pod.Status)
-		return nil, fmt.Errorf("Pod '%s' is missing a NodeName", pod.Name)
+	// Parse the Pod's IP address.
+	_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
+	if err != nil {
+		log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
+		return nil, err
 	}
+	ipNets := []cnet.IPNet{*ipNet}
 
 	// Generate the interface name and MAC based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.
