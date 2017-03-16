@@ -152,31 +152,33 @@ calico/felix: bin/calico-felix
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.5.3
 FELIX_K8S=felix-k8s
 .PHONY: k8s-fv-test run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 k8s-fv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	@-docker rm -f $(FELIX_K8S)
 	sleep 1
+	K8S_IP=`$(GET_CONTAINER_IP) calico-k8s-apiserver` && \
 	docker run --detach --privileged --name=$(FELIX_K8S) \
 	-e FELIX_LOGSEVERITYSCREEN=info \
 	-e FELIX_DATASTORETYPE=kubernetes \
 	-e FELIX_PROMETHEUSMETRICSENABLED=true \
-	-e K8S_API_ENDPOINT=https://$(LOCAL_IP_ENV):6443 \
+	-e K8S_API_ENDPOINT=https://$${K8S_IP}:6443 \
 	-e K8S_INSECURE_SKIP_TLS_VERIFY=true \
 	-v $${PWD}:/testcode \
-	-p 9091:9091 \
 	calico/felix \
 	/bin/sh -c "for n in 1 2; do calico-felix; done"
 	sleep 1
-	docker exec $(FELIX_K8S) /testcode/k8sfv/k8sfv.test -ginkgo.v https://$(LOCAL_IP_ENV):6443
+	K8S_IP=`$(GET_CONTAINER_IP) calico-k8s-apiserver` && \
+	docker exec $(FELIX_K8S) /testcode/k8sfv/k8sfv.test -ginkgo.v https://$${K8S_IP}:6443
 
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	docker run --detach --net=host \
+	ETCD_IP=`$(GET_CONTAINER_IP) calico-etcd` && \
+	docker run --detach \
 	  --name calico-k8s-apiserver \
 	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
-		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+		  /hyperkube apiserver --etcd-servers=http://$${ETCD_IP}:2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 -v=10
 
 stop-k8s-apiserver: stop-etcd
@@ -185,10 +187,9 @@ stop-k8s-apiserver: stop-etcd
 
 run-etcd: stop-etcd
 	docker run --detach \
-	-p 2379:2379 \
 	--name calico-etcd quay.io/coreos/etcd \
 	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 stop-etcd:
@@ -202,8 +203,9 @@ $(K8SFV_PROMETHEUS_DATA_DIR):
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
 run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)
-	sed 's/__LOCAL_IP_ENV__/$(LOCAL_IP_ENV)/' < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
-	docker run --detach --name k8sfv-prometheus -p 9090:9090 \
+	FELIX_IP=`$(GET_CONTAINER_IP) $(FELIX_K8S)` && \
+	sed "s/__FELIX_IP__/$${FELIX_IP}/" < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
+	docker run --detach --name k8sfv-prometheus \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
 	-v $(K8SFV_PROMETHEUS_DATA_DIR):/prometheus \
 	prom/prometheus \
@@ -215,12 +217,13 @@ stop-prometheus:
 	sleep 2
 
 run-grafana: stop-grafana run-prometheus
-	docker run --detach --rm --name k8sfv-grafana --net=host \
+	docker run --detach --name k8sfv-grafana -p 3000:3000 \
 	grafana/grafana
 	# Wait for it to get going.
 	sleep 5
 	# Configure prometheus data source.
-	curl 'http://admin:admin@127.0.0.1:3000/api/datasources' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary '{"name":"my-prom","type":"prometheus","url":"http://localhost:9090","access":"direct","isDefault":true,"database":"mydb","user":"admin","password":"admin"}'
+	PROMETHEUS_IP=`$(GET_CONTAINER_IP) k8sfv-prometheus` && \
+	curl 'http://admin:admin@127.0.0.1:3000/api/datasources' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary "{\"name\":\"my-prom\",\"type\":\"prometheus\",\"url\":\"http://$${PROMETHEUS_IP}:9090\",\"access\":\"direct\",\"isDefault\":true,\"database\":\"mydb\",\"user\":\"admin\",\"password\":\"admin\"}"
 	# Configure dashboard for observing the FV test.
 	{ \
 	  echo '{"dashboard":'; \
