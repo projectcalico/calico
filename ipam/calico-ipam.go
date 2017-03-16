@@ -27,6 +27,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -193,6 +194,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger.Info("Releasing address using workloadID")
 	if err := calicoClient.IPAM().ReleaseByHandle(workloadID); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+			logger.WithField("workloadId", workloadID).Warn("Asked to release address but it doesn't exist. Ignoring")
+			return nil
+		}
 		return err
 	}
 

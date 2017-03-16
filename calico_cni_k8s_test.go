@@ -153,9 +153,8 @@ var _ = Describe("CalicoCni", func() {
 						Type:      syscall.RTN_UNICAST,
 					})))
 
-				session, err = DeleteContainer(netconf, netnspath, name)
+				_, err = DeleteContainer(netconf, netnspath, name)
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
 
 				// Make sure there are no endpoints anymore
 				endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
@@ -446,7 +445,7 @@ var _ = Describe("CalicoCni", func() {
 					requestedIP := "10.0.0.42"
 					expectedIP := net.IPv4(10, 0, 0, 42).To4()
 
-					_, netnspath, session, _, contAddresses, _, err := CreateContainer(netconfHostLocalIPAM, name, requestedIP)
+					_, netnspath, _, _, contAddresses, _, err := CreateContainer(netconfHostLocalIPAM, name, requestedIP)
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
@@ -454,9 +453,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(podIP).Should(Equal(expectedIP))
 
 					By("Deleting the pod we created earlier")
-					session, err = DeleteContainer(netconfHostLocalIPAM, netnspath, name)
+					_, err = DeleteContainer(netconfHostLocalIPAM, netnspath, name)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
 
 					By("Creating a second pod with the same IP address as the first pod")
 					name2 := fmt.Sprintf("run2%d", rand.Uint32())
@@ -471,7 +469,7 @@ var _ = Describe("CalicoCni", func() {
 					})
 					Expect(err).NotTo(HaveOccurred())
 
-					_, netnspath, session, _, contAddresses, _, err = CreateContainer(netconfHostLocalIPAM, name2, requestedIP)
+					_, netnspath, _, _, contAddresses, _, err = CreateContainer(netconfHostLocalIPAM, name2, requestedIP)
 					Expect(err).NotTo(HaveOccurred())
 
 					pod2IP := contAddresses[0].IP

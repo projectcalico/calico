@@ -128,9 +128,8 @@ var _ = Describe("CalicoCni", func() {
 						Type:      syscall.RTN_UNICAST,
 					})))
 
-				session, err = DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
 
 				// Make sure there are no endpoints anymore
 				endpoints, err = calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
@@ -190,9 +189,8 @@ var _ = Describe("CalicoCni", func() {
 					Orchestrator: "cni",
 				}))
 
-				session, err = DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
 			})
 		})
 	})
@@ -233,9 +231,8 @@ var _ = Describe("CalicoCni", func() {
 					Orchestrator: "cni",
 				}))
 
-				session, err = DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
 			})
 		})
 	})
@@ -255,9 +252,9 @@ var _ = Describe("CalicoCni", func() {
 		Context("when it was never called for SetUP", func() {
 			Context("and a namespace does exist", func() {
 				It("exits with 'success' error code", func() {
-					_, netnspath, err := CreateContainerNamespace()
+					_, _, netnspath, err := CreateContainerNamespace()
 					Expect(err).ShouldNot(HaveOccurred())
-					exitCode, err := CmdDel(netconf, netnspath, "")
+					exitCode, err := DeleteContainer(netconf, netnspath, "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(exitCode).To(Equal(0))
 				})
@@ -265,7 +262,7 @@ var _ = Describe("CalicoCni", func() {
 
 			Context("and no namespace exists", func() {
 				It("exits with 'success' error code", func() {
-					exitCode, err := CmdDel(netconf, "/not/a/real/path1234567890", "")
+					exitCode, err := DeleteContainer(netconf, "/not/a/real/path1234567890", "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(exitCode).To(Equal(0))
 				})
