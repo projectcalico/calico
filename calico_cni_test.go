@@ -239,4 +239,37 @@ var _ = Describe("CalicoCni", func() {
 			})
 		})
 	})
+
+	Describe("DEL", func() {
+		netconf := fmt.Sprintf(`
+		{
+			"name": "net1",
+			"type": "calico",
+			"etcd_endpoints": "http://%s:2379",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "10.0.0.0/8"
+			}
+		}`, os.Getenv("ETCD_IP"))
+
+		Context("when it was never called for SetUP", func() {
+			Context("and a namespace does exist", func() {
+				It("exits with 'success' error code", func() {
+					_, netnspath, err := CreateContainerNamespace()
+					Expect(err).ShouldNot(HaveOccurred())
+					exitCode, err := CmdDel(netconf, netnspath, "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).To(Equal(0))
+				})
+			})
+
+			Context("and no namespace exists", func() {
+				It("exits with 'success' error code", func() {
+					exitCode, err := CmdDel(netconf, "/not/a/real/path1234567890", "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(exitCode).To(Equal(0))
+				})
+			})
+		})
+	})
 })

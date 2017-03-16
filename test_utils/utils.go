@@ -116,6 +116,27 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, in
 	return result, error, exitCode
 }
 
+func CreateContainerNamespace() (containerId, netnspath string, err error) {
+	containerNs, err := ns.NewNS()
+	if err != nil {
+		return "", "", err
+	}
+
+	netnspath = containerNs.Path()
+	netnsname := path.Base(netnspath)
+	containerId = netnsname[:10]
+
+	err = containerNs.Do(func(_ ns.NetNS) error {
+		lo, err := netlink.LinkByName("lo")
+		if err != nil {
+			return err
+		}
+		return netlink.LinkSetUp(lo)
+	})
+
+	return
+}
+
 func CreateContainer(netconf string, k8sName string, ip string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
 	targetNs, err := ns.NewNS()
 	if err != nil {
@@ -184,6 +205,40 @@ func CreateContainer(netconf string, k8sName string, ip string) (container_id, n
 
 		return nil
 	})
+	return
+}
+
+// Executes the Calico CNI plugin and return the error code of the command.
+func CmdDel(netconf, netnspath, name string) (exitCode int, err error) {
+	netnsname := path.Base(netnspath)
+	container_id := netnsname[:10]
+	var k8s_env = ""
+	if name != "" {
+		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", name)
+	}
+
+	// Set up the env for running the CNI plugin
+	cni_env := fmt.Sprintf("CNI_COMMAND=DEL CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
+
+	// Run the CNI plugin passing in the supplied netconf
+	subProcess := exec.Command("bash", "-c", fmt.Sprintf("%s dist/%s", cni_env, os.Getenv("PLUGIN")), netconf)
+	stdin, err := subProcess.StdinPipe()
+	if err != nil {
+		return
+	}
+	io.WriteString(stdin, netconf)
+	io.WriteString(stdin, "\n")
+	stdin.Close()
+
+	session, err := gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
+	if err != nil {
+		return
+	}
+
+	// Wait should supposedly induce a test failure if it times out?
+	session.Wait(5)
+
+	exitCode = session.ExitCode()
 	return
 }
 
