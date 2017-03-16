@@ -7,8 +7,8 @@ this auto-detection is enough and you will not need to change the value picked b
 However, there are some scenarios where the default autodetection may not choose the right
 address.  For example:
 
--  Your host has multiple external interfaces
--  Your host may have multiple IP addresses assigned to each interface
+-  Your host has multiple external interfaces.
+-  Your host may have multiple IP addresses assigned to each interface.
 -  You want to change the subnet configuration of each Node to use Calico's
    [cross-subnet IPIP]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip) feature.
 -  You have changed the IP of your host.

@@ -21,9 +21,10 @@ details.
 ### Configuring IP-in-IP for all inter-workload traffic
 
 With the IP-in-IP `mode` set to `always`, Calico will route using IP-in-IP for
-all inter-workload traffic to workloads in the configured pool.
+all traffic originating from a Calico enabled host to all Calico networked containers 
+and VMs within the IP Pool.
 
-The following `calicoctl` example will create or modify an IPv4 pool with 
+The following `calicoctl` command will create or modify an IPv4 pool with 
 CIDR 192.168.0.0/16 to use IP-in-IP with mode `always`:
 
 ```
@@ -36,23 +37,23 @@ spec:
   ipip:
     enabled: true
     mode: always
+  nat-outgoing: true
 EOF
 ```
 
 > Note that the default value for `mode` is `always`, and therefore may be omitted
-> from the request, but is shown above for clarity.
+> from the request.  It is included above for clarity.
 
 ### Configuring cross-subnet IP-in-IP
 
-If IP-in-IP encapsulation is required for L3-hops, but not required within
-the L2 subnet, then set the IP-in-IP mode to `cross-subnet`.  With this mode, Calico
-will route using IP-in-IP encapsulation for inter-workload traffic to workloads in 
-the configured pool *only* if the  destination host is in a different subnet to the 
-originating host.
+IP-in-IP encapsulation can also be performed selectively, only for traffic crossing 
+subnet boundaries.  This provides better performance in AWS multi-AZ deployments, 
+and in general when deploying on networks where pools of nodes with L2 connectivity 
+are connected via a router.
 
-This avoids unneccessary encapsulation within the same subnet.
+To enable this feature, using an IP-in-IP `mode` of `cross-subnet`.
 
-The following `calicoctl` example will create or modify an IPv4 pool with 
+The following `calicoctl` command will create or modify an IPv4 pool with 
 CIDR 192.168.0.0/16 to use IP-in-IP with mode `cross-subnet`:
 
 
@@ -66,6 +67,7 @@ spec:
   ipip:
     enabled: true
     mode: cross-subnet
+  nat-outgoing: true
 EOF
 ```
 
@@ -109,4 +111,4 @@ to be fixed.
 
 The subnet configuration may be fixed in a few different ways depending on how 
 you have deployed your calico/node containers.  This is discussed in the
-[Configuring a node guide]({{site.baseurl}}/{{page.version}}/usage/configuration/node).
+[Configuring a Node IP Address and Subnet guide]({{site.baseurl}}/{{page.version}}/usage/configuration/node).
