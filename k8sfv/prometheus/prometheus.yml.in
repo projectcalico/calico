@@ -25,4 +25,4 @@ scrape_configs:
     scrape_interval: 5s
 
     static_configs:
-      - targets: ['__LOCAL_IP_ENV__:9091']
+      - targets: ['__FELIX_IP__:9091']
