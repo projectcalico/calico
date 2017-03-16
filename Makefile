@@ -218,19 +218,16 @@ stop-prometheus:
 
 run-grafana: stop-grafana run-prometheus
 	docker run --detach --name k8sfv-grafana -p 3000:3000 \
-	grafana/grafana
+	-v $${PWD}/$(K8SFV_DIR)/grafana:/etc/grafana \
+	-v $${PWD}/$(K8SFV_DIR)/grafana-dashboards:/etc/grafana-dashboards \
+	grafana/grafana --config /etc/grafana/grafana.ini
 	# Wait for it to get going.
 	sleep 5
 	# Configure prometheus data source.
 	PROMETHEUS_IP=`$(GET_CONTAINER_IP) k8sfv-prometheus` && \
-	curl 'http://admin:admin@127.0.0.1:3000/api/datasources' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary "{\"name\":\"my-prom\",\"type\":\"prometheus\",\"url\":\"http://$${PROMETHEUS_IP}:9090\",\"access\":\"direct\",\"isDefault\":true,\"database\":\"mydb\",\"user\":\"admin\",\"password\":\"admin\"}"
-	# Configure dashboard for observing the FV test.
-	{ \
-	  echo '{"dashboard":'; \
-	  cat $(K8SFV_DIR)/prometheus/k8s-scale-testing.json; \
-	  echo ', "overwrite": true, "inputs": '; \
-	  echo '[{"name": "DS_MY-PROM", "pluginId": "prometheus", "type": "datasource", "value": "my-prom"}]}'; \
-	} | curl 'http://admin:admin@127.0.0.1:3000/api/dashboards/import' -X POST -H 'Content-Type: application/json;charset=UTF-8' --data-binary @-
+	sed "s/__PROMETHEUS_IP__/$${PROMETHEUS_IP}/" < $(K8SFV_DIR)/grafana-datasources/my-prom.json.in | \
+	curl 'http://admin:admin@127.0.0.1:3000/api/datasources' -X POST \
+	    -H 'Content-Type: application/json;charset=UTF-8' --data-binary @-
 
 stop-grafana:
 	@-docker rm -f k8sfv-grafana
