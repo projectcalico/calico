@@ -145,7 +145,7 @@ In addition, the following methods are supported in the `policy` section of the 
 * `k8s_client_key`
 * `k8s_certificate_authority`
 
-### IPAM
+## IPAM
 
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.
 

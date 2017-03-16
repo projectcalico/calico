@@ -20,7 +20,7 @@ Additional configuration can be added as detailed below.
 
 ## Generic
 
-#### Datastore type
+### Datastore type
 
 The following option allows configuration of the Calico datastore type.
 
@@ -31,7 +31,7 @@ The Calico CNI plugin supports the following datastore types:
 * etcdv2 (default)
 * kubernetes (experimental)
 
-#### Etcd location
+### Etcd location
 
 The following options are valid when `datastore_type` is `etcdv2`.
 
@@ -48,7 +48,7 @@ The following deprecated options are also supported
   * If `etcd_authority` is set at the same time as `etcd_endpoints` then `etcd_endpoints` is used.
 * `etcd_scheme` (default is `http`)
 
-#### Logging
+### Logging
 
 * Logging is always to `stderr`
 * Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
@@ -67,7 +67,7 @@ The following deprecated options are also supported
 }
 ```
 
-#### IPAM
+### IPAM
 
 When using Calico IPAM, the following flags determine what IP addresses should be assigned. NOTE: These flags are strings and not boolean values.
 
@@ -137,7 +137,7 @@ As a convenience, the API location location can also be configured directly, e.g
 }
 ```
 
-#### Enabling Kubernetes Policy
+### Enabling Kubernetes Policy
 
 If you wish to use the Kubernetes NetworkPolicy API then you must set a policy type in the network config.
 There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
@@ -160,7 +160,7 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calicoctl/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
 
-#### Deprecated ways of specifying Kubernetes API access details
+### Deprecated ways of specifying Kubernetes API access details
 
 From the examples above, you can see that the `k8s_api_root` can appear in either the `kubernetes` or `policy` configuration blocks.
 
@@ -173,7 +173,7 @@ In addition, the following methods are supported in the `policy` section of the 
 * `k8s_client_key`
 * `k8s_certificate_authority`
 
-#### IPAM
+## IPAM
 
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.
 
@@ -197,9 +197,9 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 
 When making use of the `usePodCidr` option, the Calico CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
-##### IPAM Manipulation with Kubernetes Annotations
+### IPAM Manipulation with Kubernetes Annotations
 
-###### Specifying IP Pools on a per-Pod basis
+#### Specifying IP Pools on a per-Pod basis
 
 In addition to specifying IP Pools in the CNI config as discussed above, Calico IPAM supports specifying IP Pools per-Pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/).
 
@@ -228,7 +228,7 @@ If provided, these IP Pools will override any IP Pools specified in the CNI conf
   > This requires the IP Pools to exist before `ipv4pools` or `ipv6pools` annotations are used.
   > Requesting a subset of an IP Pool is not supported. IP Pools requested in the annotations must exactly match a configured [IP Pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
-###### Requesting a Specific IP address
+#### Requesting a Specific IP address
 
 You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with Calico IPAM. 
 There are two annotations to request a specific IP address:
