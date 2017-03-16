@@ -108,7 +108,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	if in.ICMPType != nil {
 		if in.ICMPCode != nil {
 			out.Icmp = &proto.Rule_IcmpTypeCode{
-				&proto.IcmpTypeAndCode{
+				IcmpTypeCode: &proto.IcmpTypeAndCode{
 					Type: int32(*in.ICMPType),
 					Code: int32(*in.ICMPCode),
 				},
@@ -122,7 +122,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 	if in.NotICMPType != nil {
 		if in.NotICMPCode != nil {
 			out.NotIcmp = &proto.Rule_NotIcmpTypeCode{
-				&proto.IcmpTypeAndCode{
+				NotIcmpTypeCode: &proto.IcmpTypeAndCode{
 					Type: int32(*in.NotICMPType),
 					Code: int32(*in.NotICMPCode),
 				},
@@ -169,11 +169,13 @@ func protocolToProtoProtocol(in *numorstring.Protocol) (out *proto.Protocol) {
 	if in != nil {
 		if in.Type == numorstring.NumOrStringNum {
 			out = &proto.Protocol{
-				NumberOrName: &proto.Protocol_Number{int32(in.NumVal)},
+				NumberOrName: &proto.Protocol_Number{
+					Number: int32(in.NumVal),
+				},
 			}
 		} else {
 			out = &proto.Protocol{
-				NumberOrName: &proto.Protocol_Name{in.StrVal},
+				NumberOrName: &proto.Protocol_Name{Name: in.StrVal},
 			}
 		}
 	}

@@ -21,10 +21,8 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/labelindex"
-	"github.com/projectcalico/felix/tagindex"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -145,31 +143,6 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 	}
 	activeSelectorIndex.RegisterWith(allUpdDispatcher)
 
-	// The active tag index does the same for tags.  Calculating which
-	// endpoints match each tag.
-	tagIndex := tagindex.NewIndex(
-		func(key model.Key, tagID string) {
-			memberCalc.MatchStarted(key, TagIPSetID(tagID))
-		},
-		func(key model.Key, tagID string) {
-			memberCalc.MatchStopped(key, TagIPSetID(tagID))
-		},
-	)
-
-	ruleScanner.OnTagActive = func(tag string) {
-		log.Infof("Tag %v now active", tag)
-		callbacks.OnIPSetAdded(hash.MakeUniqueID("t", tag))
-		tagIndex.SetTagActive(tag)
-		gaugeNumActiveTags.Inc()
-	}
-	ruleScanner.OnTagInactive = func(tag string) {
-		log.Infof("Tag %v now inactive", tag)
-		tagIndex.SetTagInactive(tag)
-		callbacks.OnIPSetRemoved(hash.MakeUniqueID("t", tag))
-		gaugeNumActiveTags.Dec()
-	}
-	tagIndex.RegisterWith(allUpdDispatcher)
-
 	// The member calculator merges the IPs from different endpoints to
 	// calculate the actual IPs that should be in each IP set.  It deals
 	// with corner cases, such as having the same IP on multiple endpoints.
@@ -208,10 +181,6 @@ func (l *localEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
 	disp.Register(model.WorkloadEndpointKey{}, led.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, led.OnUpdate)
 	disp.RegisterStatusHandler(led.OnDatamodelStatus)
-}
-
-func TagIPSetID(tagID string) string {
-	return hash.MakeUniqueID("t", tagID)
 }
 
 // endpointHostnameFilter provides an UpdateHandler that filters out endpoints

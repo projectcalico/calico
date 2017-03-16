@@ -22,7 +22,6 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/multidict"
-	"github.com/projectcalico/felix/tagindex"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -69,7 +68,7 @@ type ActiveRulesCalculator struct {
 	labelIndex *labelindex.InheritIndex
 
 	// Cache of profile IDs by local endpoint.
-	endpointKeyToProfileIDs *tagindex.EndpointKeyToProfileIDMap
+	endpointKeyToProfileIDs *EndpointKeyToProfileIDMap
 
 	// Callback objects.
 	RuleScanner         ruleScanner
@@ -87,7 +86,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		profileIDToEndpointKeys: multidict.NewIfaceToIface(),
 
 		// Cache of profile IDs by local endpoint.
-		endpointKeyToProfileIDs: tagindex.NewEndpointKeyToProfileIDMap(),
+		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
 	}
 	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc
@@ -104,7 +103,7 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	allUpdDispatcher.Register(model.ProfileTagsKey{}, arc.OnUpdate)
 }
 
-func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (filterOut bool) {
+func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		if update.Value != nil {
@@ -281,4 +280,48 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey) {
 	} else {
 		arc.RuleScanner.OnPolicyInactive(policyKey)
 	}
+}
+
+// EndpointKeyToProfileIDMap is a specialised map that calculates the deltas to the profile IDs
+// when making an update.
+type EndpointKeyToProfileIDMap struct {
+	endpointKeyToProfileIDs map[model.Key][]string
+}
+
+func NewEndpointKeyToProfileIDMap() *EndpointKeyToProfileIDMap {
+	return &EndpointKeyToProfileIDMap{
+		endpointKeyToProfileIDs: make(map[model.Key][]string),
+	}
+}
+
+func (idx EndpointKeyToProfileIDMap) Update(
+	key model.Key,
+	profileIDs []string,
+) (
+	removedIDs, addedIDs map[string]bool,
+) {
+	oldIDs := idx.endpointKeyToProfileIDs[key]
+	removedIDs = make(map[string]bool)
+	for _, id := range oldIDs {
+		removedIDs[id] = true
+	}
+	addedIDs = make(map[string]bool)
+	for _, id := range profileIDs {
+		if removedIDs[id] {
+			delete(removedIDs, id)
+		} else {
+			addedIDs[id] = true
+		}
+	}
+
+	// Store off the update in our cache.
+	if len(profileIDs) > 0 {
+		idx.endpointKeyToProfileIDs[key] = profileIDs
+	} else {
+		// No profiles is equivalent to deletion so we may as well
+		// clean up completely.
+		delete(idx.endpointKeyToProfileIDs, key)
+	}
+
+	return removedIDs, addedIDs
 }

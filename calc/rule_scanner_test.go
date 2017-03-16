@@ -24,9 +24,12 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"fmt"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/hash"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -38,13 +41,13 @@ var (
 	ports        = []numorstring.Port{numorstring.SinglePort(10)}
 
 	tag1   = "tag1"
-	tag1ID = TagIPSetID(tag1)
+	tag1ID = ipSetIDForTag(tag1)
 	tag2   = "tag2"
-	tag2ID = TagIPSetID(tag2)
+	tag2ID = ipSetIDForTag(tag2)
 	tag3   = "tag3"
-	tag3ID = TagIPSetID(tag3)
+	tag3ID = ipSetIDForTag(tag3)
 	tag4   = "tag4"
-	tag4ID = TagIPSetID(tag4)
+	tag4ID = ipSetIDForTag(tag4)
 
 	sel1   = "a == 'b'"
 	sel1ID = selectorId(sel1)
@@ -200,7 +203,6 @@ var _ = Describe("ParsedRule", func() {
 
 type scanUpdateRecorder struct {
 	activeSelectors set.Set
-	activeTags      set.Set
 	activeRules     map[model.Key]*ParsedRules
 }
 
@@ -217,14 +219,6 @@ func (ur *scanUpdateRecorder) OnProfileInactive(key model.ProfileRulesKey) {
 	delete(ur.activeRules, key)
 }
 
-func (ur *scanUpdateRecorder) tagActive(tag string) {
-	ur.activeTags.Add(tag)
-}
-
-func (ur *scanUpdateRecorder) tagInactive(tag string) {
-	ur.activeTags.Discard(tag)
-}
-
 func (ur *scanUpdateRecorder) selectorActive(sel selector.Selector) {
 	ur.activeSelectors.Add(sel.String())
 }
@@ -237,13 +231,15 @@ func newHookedRulesScanner() (*RuleScanner, *scanUpdateRecorder) {
 	rs := NewRuleScanner()
 	ur := &scanUpdateRecorder{
 		activeSelectors: set.New(),
-		activeTags:      set.New(),
 		activeRules:     make(map[model.Key]*ParsedRules),
 	}
 	rs.RulesUpdateCallbacks = ur
-	rs.OnTagActive = ur.tagActive
-	rs.OnTagInactive = ur.tagInactive
 	rs.OnSelectorActive = ur.selectorActive
 	rs.OnSelectorInactive = ur.selectorInactive
 	return rs, ur
+}
+
+func ipSetIDForTag(tagID string) string {
+	// Tags are now implemented as a has(tagName) selector:
+	return hash.MakeUniqueID("s", fmt.Sprintf("has(%s)", tagID))
 }
