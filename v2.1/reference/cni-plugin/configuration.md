@@ -18,9 +18,9 @@ A minimal configuration file that uses Calico for networking and IPAM looks like
 
 Additional configuration can be added as detailed below.
 
-# Generic
+## Generic
 
-## Datastore type
+### Datastore type
 
 The following option allows configuration of the Calico datastore type.
 
@@ -31,7 +31,7 @@ The Calico CNI plugin supports the following datastore types:
 * etcdv2 (default)
 * kubernetes (experimental)
 
-## Etcd location
+### Etcd location
 
 The following options are valid when `datastore_type` is `etcdv2`.
 
@@ -48,7 +48,7 @@ The following deprecated options are also supported
   * If `etcd_authority` is set at the same time as `etcd_endpoints` then `etcd_endpoints` is used.
 * `etcd_scheme` (default is `http`)
 
-## Logging
+### Logging
 
 * Logging is always to `stderr`
 * Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
@@ -67,7 +67,7 @@ The following deprecated options are also supported
 }
 ```
 
-## IPAM
+### IPAM
 
 When using Calico IPAM, the following flags determine what IP addresses should be assigned. NOTE: These flags are strings and not boolean values.
 
@@ -105,7 +105,7 @@ Example CNI config:
 
 Any IP Pools specified in the CNI config must have already been created. It is an error to specify IP Pools in the config that do not exist.
 
-# Kubernetes specific
+## Kubernetes specific
 
 When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
 
@@ -137,7 +137,7 @@ As a convenience, the API location location can also be configured directly, e.g
 }
 ```
 
-## Enabling Kubernetes Policy
+### Enabling Kubernetes Policy
 
 If you wish to use the Kubernetes NetworkPolicy API then you must set a policy type in the network config.
 There is a single supported policy type, `k8s` which uses the Kubernetes NetworkPolicy API in conjunction with the `calico/kube-policy-controller`.
@@ -160,7 +160,7 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 Previous versions of the plugin (`v1.3.1` and earlier) supported an alternative type called [`k8s-annotations`](https://github.com/projectcalico/calicoctl/blob/v0.20.0/docs/cni/kubernetes/AnnotationPolicy.md) This uses annotations on pods to specify network policy but is no longer supported.
 
-## Deprecated ways of specifying Kubernetes API access details
+### Deprecated ways of specifying Kubernetes API access details
 
 From the examples above, you can see that the `k8s_api_root` can appear in either the `kubernetes` or `policy` configuration blocks.
 
