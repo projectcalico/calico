@@ -1,5 +1,5 @@
-hash: 25c836fa323ae2eb87ab26a6b12064b5bda7cfd743b42020c40c759465d0ce5e
-updated: 2017-03-14T13:21:17.214096655Z
+hash: 2f2ea57a89c3a1144113ca791083f3e534a1457b294a8c62c05f8bc7c4168a49
+updated: 2017-03-16T10:02:36.405239332Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 1a6be700d80073bb36f7cdf36e4834f8c7c7a3b8
+  version: d78b03fb27374c370d82973a94dda9f59647e750
   subpackages:
   - client
   - pkg/pathutil
@@ -61,7 +61,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 98c45284d68a05a0e0a576de574bd975946ef9ad
+  version: 1730955e3146956d6a087861380f9b4667ed5071
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -108,7 +108,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: ab07225d112dc7a93c289ac5b2e12735c2c46035
+  version: 5ca121185e255e5041d7727d77992618545a93d2
   subpackages:
   - config
   - extensions/table
@@ -118,6 +118,7 @@ imports:
   - internal/leafnodes
   - internal/remote
   - internal/spec
+  - internal/spec_iterator
   - internal/specrunner
   - internal/suite
   - internal/testingtproxy
@@ -138,7 +139,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 70c9896a09b3dd8b4a3398f6eade318e07d464b9
+  version: 956d63e025dc7bab82798ca4f823dc4a41e07ff0
   subpackages:
   - lib
   - lib/api
@@ -190,7 +191,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 1deb2db2a6fff8a35532079061b903c3a25eed52
+  version: 547e984ad93a90192134fc0fdb57a468edb514fe
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
