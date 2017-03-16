@@ -1,5 +1,5 @@
-hash: 2a26cc5aa99bcb07893e216443e5b898e0082318adf3e2f87da736457904f13a
-updated: 2017-03-08T18:14:30.857330778Z
+hash: e61ea0d79c205ced9b2e8580eb4651c228e3fbfa5264554e63c8c893253d93a3
+updated: 2017-03-16T09:47:22.321998056Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: 7f43fdde7485de5be2922024bb0aed1b14803b20
+  version: d78b03fb27374c370d82973a94dda9f59647e750
   subpackages:
   - client
   - pkg/pathutil
@@ -59,7 +59,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 74bdc99692c3408cb103221e38675ce8fda0a718
+  version: 1730955e3146956d6a087861380f9b4667ed5071
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -69,7 +69,7 @@ imports:
 - name: github.com/go-openapi/swag
   version: 1d0bd113de87027671077d3c71eb3ac5d7dbba72
 - name: github.com/gogo/protobuf
-  version: 909568be09de550ed094403c2bf8a261b5bb730a
+  version: 100ba4e885062801d56799d78530b73b178a78f3
   subpackages:
   - proto
   - sortkeys
@@ -90,7 +90,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kardianos/osext
-  version: 9b883c5eb462dd5cb1b0a7a104fe86bc6b9bd391
+  version: 9d302b58e975387d0b4d9be876622c86cefe64be
 - name: github.com/kelseyhightower/envconfig
   version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/mailru/easyjson
@@ -106,7 +106,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: ab07225d112dc7a93c289ac5b2e12735c2c46035
+  version: 5ca121185e255e5041d7727d77992618545a93d2
   subpackages:
   - config
   - extensions/table
@@ -116,6 +116,7 @@ imports:
   - internal/leafnodes
   - internal/remote
   - internal/spec
+  - internal/spec_iterator
   - internal/specrunner
   - internal/suite
   - internal/testingtproxy
@@ -136,7 +137,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5fb02394d07d5335f9df9a825e3707d5452a69f3
+  version: 42a36f79c2f92d07467c6ee15603a340e9cf6035
   subpackages:
   - lib
   - lib/api
@@ -188,7 +189,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
+  version: 547e984ad93a90192134fc0fdb57a468edb514fe
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
