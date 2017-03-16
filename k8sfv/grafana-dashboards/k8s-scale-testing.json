@@ -47,7 +47,7 @@
         {
           "aliasColors": {},
           "bars": false,
-          "datasource": "${DS_MY-PROM}",
+          "datasource": "my-prom",
           "fill": 1,
           "id": 1,
           "legend": {
@@ -118,7 +118,7 @@
         {
           "aliasColors": {},
           "bars": false,
-          "datasource": "${DS_MY-PROM}",
+          "datasource": "my-prom",
           "fill": 1,
           "id": 2,
           "legend": {
@@ -240,7 +240,7 @@
         {
           "aliasColors": {},
           "bars": false,
-          "datasource": "${DS_MY-PROM}",
+          "datasource": "my-prom",
           "fill": 1,
           "id": 3,
           "legend": {
@@ -323,7 +323,7 @@
         {
           "aliasColors": {},
           "bars": false,
-          "datasource": "${DS_MY-PROM}",
+          "datasource": "my-prom",
           "fill": 1,
           "id": 4,
           "legend": {
