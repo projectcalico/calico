@@ -51,3 +51,6 @@ is in an IP Pool that has IPIP enabled.  In addition, if the `mode` is set to `c
 Calico will only route using IP in IP if the IP address of the destination node is in a different
 subnet.  The subnet of each node is configured on the node resource (which may be automatically 
 determined when running the calico/node service).
+
+For details on configuring IP-in-IP on your deployment, please read the
+[Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip).

@@ -31,6 +31,7 @@ cat << EOF | calicoctl apply -f -
     nat-outgoing: true
 EOF
 ```
+
 [set `ipip:` `enabled:true` if needed]
 
 Please note that many solutions for inbound connectivity will also provide

@@ -7,7 +7,7 @@ toc:
   path: /usage/
 - title: Calico and Systemd
   path: /usage/configuration/as-service
-- title: BGP Peering
+- title: Configuring BGP Peers
   path: /usage/configuration/bgp
 - title: Route Reflector
   path: /usage/bird-rr-config
@@ -15,6 +15,10 @@ toc:
   path: /usage/ipv6
 - title: External Connectivity
   path: /usage/external-connectivity
+- title: Configuring IP-in-IP
+  path: /usage/configuration/ip-in-ip
+- title: Configuring a Node IP Address and Subnet
+  path: /usage/configuration/node
 - title: Configuring Conntrack
   path: /usage/configuration/conntrack
 - title: Calico for OpenStack

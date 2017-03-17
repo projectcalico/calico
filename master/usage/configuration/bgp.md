@@ -1,5 +1,5 @@
 ---
-title: BGP Configuration
+title: Configuring BGP Peers
 ---
 
 This document describes the commands available in `calicoctl` for managing BGP.  It
