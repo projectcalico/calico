@@ -16,12 +16,15 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"reflect"
+	"runtime"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -83,6 +86,9 @@ Options:
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
 func main() {
+	// Go's RNG is not seeded by default.  Do that now.
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
