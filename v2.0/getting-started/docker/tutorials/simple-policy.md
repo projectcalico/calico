@@ -1,6 +1,5 @@
 ---
 title: Simple Policy
-redirect_from: latest/getting-started/docker/tutorials/simple-policy
 ---
 
 The following guide walks through a simple policy demo.

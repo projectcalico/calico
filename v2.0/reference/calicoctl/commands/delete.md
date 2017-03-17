@@ -1,6 +1,5 @@
 ---
 title: calicoctl delete
-redirect_from: latest/reference/calicoctl/commands/delete
 ---
 
 This sections describes the `calicoctl delete` command.

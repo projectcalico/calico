@@ -1,5 +1,6 @@
 ---
 title: External Connectivity
+redirect_from: latest/usage/external-connectivity
 ---
 Calico creates a routed network on which your containers look like normal IP
 speakers. You can connect to them from a host in your cluster (assuming the

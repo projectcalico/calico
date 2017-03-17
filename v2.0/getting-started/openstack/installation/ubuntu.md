@@ -1,6 +1,5 @@
 ---
 title: 'Ubuntu Packaged Install Instructions'
-redirect_from: latest/getting-started/openstack/installation/ubuntu
 ---
 
 These instructions will take you through a first-time install of Calico using

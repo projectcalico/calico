@@ -1,6 +1,5 @@
 ---
 title: calicoctl ipam
-redirect_from: latest/reference/calicoctl/commands/ipam/index
 ---
 
 This section describes the `calicoctl ipam` commands.

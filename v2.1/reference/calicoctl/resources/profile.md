@@ -1,5 +1,6 @@
 ---
 title: Profile Resource (profile)
+redirect_from: latest/reference/calicoctl/resources/profile
 ---
 
 A Profile resource (profile) represents a set of rules which are applied 
