@@ -17,3 +17,4 @@ pyinstaller /code/controller.py -ayF
 # Cleanup everything that was installed now that we have a self contained binary
 apk del temp && rm -rf /var/cache/apk/*
 rm -rf /usr/lib/python2.7
+rm -rf /build
