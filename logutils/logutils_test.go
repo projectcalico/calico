@@ -79,7 +79,6 @@ var _ = DescribeTable("Formatter",
 		Expect(err).NotTo(HaveOccurred())
 		expectedLog = strings.Replace(expectedLog, "<PID>", fmt.Sprintf("%v", os.Getpid()), 1)
 		Expect(string(out)).To(Equal(expectedLog))
-		expectedSyslog = strings.Replace(expectedSyslog, "<PID>", fmt.Sprintf("%v", os.Getpid()), 1)
 		Expect(FormatForSyslog(&entry)).To(Equal(expectedSyslog))
 	},
 	Entry("Empty", log.Entry{},
@@ -129,14 +128,10 @@ var _ = Describe("StreamDestination", func() {
 	var pr *io.PipeReader
 	var pw *io.PipeWriter
 	var c chan<- QueuedLog
-	var mt *mockMonotime
 
 	BeforeEach(func() {
 		pr, pw = io.Pipe()
-		mt = &mockMonotime{
-			time: 100 * time.Hour,
-		}
-		s = NewStreamDestination(log.InfoLevel, pw, mt)
+		s = NewStreamDestination(log.InfoLevel, pw)
 		go s.LoopWritingLogs()
 		c = s.Channel()
 	})
@@ -156,25 +151,28 @@ var _ = Describe("StreamDestination", func() {
 		Expect(string(b[:n])).To(Equal("Message"))
 	})
 
-	It("should log dropped logs after time advances far enough", func() {
+	It("should log number of dropped logs", func() {
+		// Increment the dropped logs counter.
 		s.OnLogDropped()
+		// Next log should emit a drop warning.
 		c <- QueuedLog{
 			Level:         log.InfoLevel,
 			Message:       []byte("Message"),
 			SyslogMessage: "syslog message",
 		}
+		// But log after that shouldn't.
 		c <- QueuedLog{
 			Level:         log.InfoLevel,
 			Message:       []byte("Message 2"),
-			SyslogMessage: "syslog message 2",
+			SyslogMessage: "syslog message",
 		}
 		b := make([]byte, 1024)
 		n, err := pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("Message"))
+		Expect(string(b[:n])).To(Equal("... dropped 1 logs ...\n"))
 		n, err = pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("... dropped 1 logs in 1.002s ...\n"))
+		Expect(string(b[:n])).To(Equal("Message"))
 		n, err = pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(b[:n])).To(Equal("Message 2"))
@@ -202,14 +200,10 @@ var _ = Describe("SyslogDestination", func() {
 	var pr *io.PipeReader
 	var pw *io.PipeWriter
 	var c chan<- QueuedLog
-	var mt *mockMonotime
 
 	BeforeEach(func() {
 		pr, pw = io.Pipe()
-		mt = &mockMonotime{
-			time: 100 * time.Hour,
-		}
-		s = NewSyslogDestination(log.InfoLevel, (*mockSyslogWriter)(pw), mt)
+		s = NewSyslogDestination(log.InfoLevel, (*mockSyslogWriter)(pw))
 		go s.LoopWritingLogs()
 		c = s.Channel()
 	})
@@ -229,13 +223,15 @@ var _ = Describe("SyslogDestination", func() {
 		Expect(string(b[:n])).To(Equal("INFO syslog message"))
 	})
 
-	It("should log dropped logs after time advances far enough", func() {
+	It("should log number of dropped logs", func() {
 		s.OnLogDropped()
+		// Log after that should emit a drop warning.
 		c <- QueuedLog{
 			Level:         log.InfoLevel,
 			Message:       []byte("Message"),
 			SyslogMessage: "syslog message",
 		}
+		// But log after that shouldn't.
 		c <- QueuedLog{
 			Level:         log.InfoLevel,
 			Message:       []byte("Message"),
@@ -244,10 +240,10 @@ var _ = Describe("SyslogDestination", func() {
 		b := make([]byte, 1024)
 		n, err := pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+		Expect(string(b[:n])).To(Equal("WARNING ... dropped 1 logs ...\n"))
 		n, err = pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("WARNING ... dropped 1 logs in 1.002s ...\n"))
+		Expect(string(b[:n])).To(Equal("INFO syslog message"))
 		n, err = pr.Read(b)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(b[:n])).To(Equal("INFO syslog message 2"))
@@ -291,21 +287,4 @@ func (s *mockSyslogWriter) Err(m string) error {
 func (s *mockSyslogWriter) Crit(m string) error {
 	_, err := fmt.Fprintf((*io.PipeWriter)(s), "CRITICAL %s", m)
 	return err
-}
-
-type mockMonotime struct {
-	time time.Duration
-}
-
-func (m *mockMonotime) Now() time.Duration {
-	t := m.time
-	fmt.Fprintf(GinkgoWriter, "mockMonotime Now() = %v\n", t)
-	m.time += 501 * time.Millisecond
-	return t
-}
-
-func (m *mockMonotime) Since(t time.Duration) time.Duration {
-	since := m.Now() - t
-	fmt.Fprintf(GinkgoWriter, "mockMonotime Since() = %v\n", since)
-	return since
 }

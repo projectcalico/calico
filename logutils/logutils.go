@@ -29,7 +29,6 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/gavv/monotime"
 	"github.com/mipearson/rfw"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -113,7 +112,7 @@ func ConfigureLogging(configParams *config.Config) {
 	// Screen target.
 	var dests []Destination
 	if configParams.LogSeverityScreen != "" {
-		screenDest := NewStreamDestination(logLevelScreen, os.Stderr, realMonotime{})
+		screenDest := NewStreamDestination(logLevelScreen, os.Stderr)
 		dests = append(dests, screenDest)
 	}
 
@@ -125,7 +124,7 @@ func ConfigureLogging(configParams *config.Config) {
 		var rotAwareFile io.Writer
 		rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
 		if fileDirErr == nil && fileOpenErr == nil {
-			fileDest := NewStreamDestination(logLevelFile, rotAwareFile, realMonotime{})
+			fileDest := NewStreamDestination(logLevelFile, rotAwareFile)
 			dests = append(dests, fileDest)
 		}
 	}
@@ -145,7 +144,7 @@ func ConfigureLogging(configParams *config.Config) {
 		tag := "calico-felix"
 		w, sysErr := syslog.Dial(net, addr, priority, tag)
 		if sysErr == nil {
-			syslogDest := NewSyslogDestination(logLevelSyslog, w, realMonotime{})
+			syslogDest := NewSyslogDestination(logLevelSyslog, w)
 			dests = append(dests, syslogDest)
 		}
 	}
@@ -173,7 +172,7 @@ func ConfigureLogging(configParams *config.Config) {
 	}
 	if sysErr != nil {
 		// We don't bail out if we can't connect to syslog because our default is to try to
-		// connect but ti's very common for syslog to be disabled when we're run in a
+		// connect but it's very common for syslog to be disabled when we're run in a
 		// container.
 		log.WithError(sysErr).Error(
 			"Failed to connect to syslog. To prevent this error, either set config " +
@@ -260,7 +259,10 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 			fmt.Fprintf(b, " %v=%#v", key, value)
 			continue
 		}
-		fmt.Fprintf(b, " %v=%v", key, stringifiedValue)
+		b.WriteByte(' ')
+		b.WriteString(key)
+		b.WriteByte('=')
+		b.WriteString(stringifiedValue)
 	}
 	b.WriteByte('\n')
 }
@@ -311,13 +313,17 @@ type QueuedLog struct {
 	WaitGroup     *sync.WaitGroup
 }
 
-func NewStreamDestination(level log.Level, writer io.Writer, mt monotimeIface) *StreamDestination {
+func (ql QueuedLog) OnLogDone() {
+	if ql.WaitGroup != nil {
+		ql.WaitGroup.Done()
+	}
+}
+
+func NewStreamDestination(level log.Level, writer io.Writer) *StreamDestination {
 	return &StreamDestination{
-		level:           level,
-		writer:          writer,
-		channel:         make(chan QueuedLog, 10000),
-		lastDropLogTime: mt.Now(),
-		mt:              mt,
+		level:   level,
+		writer:  writer,
+		channel: make(chan QueuedLog, 10000),
 	}
 }
 
@@ -328,11 +334,7 @@ type StreamDestination struct {
 
 	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
 	// Must be read/updated using atomic.XXX.
-	numDroppedLogs  uint64
-	lastDropLogTime time.Duration
-
-	// mt is our shim for the monotime package.
-	mt monotimeIface
+	numDroppedLogs uint64
 }
 
 func (d *StreamDestination) Level() log.Level {
@@ -350,27 +352,19 @@ func (d *StreamDestination) OnLogDropped() {
 func (d *StreamDestination) LoopWritingLogs() {
 	var numSeenDroppedLogs uint64
 	for ql := range d.channel {
-		// If it's been a while since our last check, see if we're dropping logs.
-		timeSinceLastCheck := d.mt.Since(d.lastDropLogTime)
-		if timeSinceLastCheck > time.Second {
-			currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
-			if currentNumDroppedLogs > numSeenDroppedLogs {
-				fmt.Fprintf(d.writer, "... dropped %d logs in %v ...\n",
-					currentNumDroppedLogs-numSeenDroppedLogs,
-					timeSinceLastCheck)
-				numSeenDroppedLogs = currentNumDroppedLogs
-			}
-			d.lastDropLogTime = d.mt.Now()
+		currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
+		if currentNumDroppedLogs > numSeenDroppedLogs {
+			fmt.Fprintf(d.writer, "... dropped %d logs ...\n",
+				currentNumDroppedLogs-numSeenDroppedLogs)
 		}
+		numSeenDroppedLogs = currentNumDroppedLogs
 
 		_, err := d.writer.Write(ql.Message)
 		if err != nil {
 			counterLogErrors.Inc()
 			fmt.Fprintf(os.Stderr, "Failed to write to log: %v", err)
 		}
-		if ql.WaitGroup != nil {
-			ql.WaitGroup.Done()
-		}
+		ql.OnLogDone()
 	}
 }
 
@@ -379,22 +373,11 @@ type monotimeIface interface {
 	Since(time.Duration) time.Duration
 }
 
-type realMonotime struct{}
-
-func (_ realMonotime) Now() time.Duration {
-	return monotime.Now()
-}
-func (_ realMonotime) Since(t time.Duration) time.Duration {
-	return monotime.Since(t)
-}
-
-func NewSyslogDestination(level log.Level, writer syslogWriter, mt monotimeIface) *SyslogDestination {
+func NewSyslogDestination(level log.Level, writer syslogWriter) *SyslogDestination {
 	return &SyslogDestination{
-		level:           level,
-		writer:          writer,
-		channel:         make(chan QueuedLog, 10000),
-		lastDropLogTime: mt.Now(),
-		mt:              mt,
+		level:   level,
+		writer:  writer,
+		channel: make(chan QueuedLog, 10000),
 	}
 }
 
@@ -413,11 +396,7 @@ type SyslogDestination struct {
 
 	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
 	// Must be read/updated using atomic.XXX.
-	numDroppedLogs  uint64
-	lastDropLogTime time.Duration
-
-	// mt is our shim for the monotime package.
-	mt monotimeIface
+	numDroppedLogs uint64
 }
 
 func (d *SyslogDestination) Level() log.Level {
@@ -436,26 +415,19 @@ func (d *SyslogDestination) LoopWritingLogs() {
 	var numSeenDroppedLogs uint64
 	for ql := range d.channel {
 		// If it's been a while since our last check, see if we're dropping logs.
-		timeSinceLastCheck := d.mt.Since(d.lastDropLogTime)
-		if timeSinceLastCheck > time.Second {
-			currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
-			if currentNumDroppedLogs > numSeenDroppedLogs {
-				d.writer.Warning(fmt.Sprintf("... dropped %d logs in %v ...\n",
-					currentNumDroppedLogs-numSeenDroppedLogs,
-					timeSinceLastCheck))
-				numSeenDroppedLogs = currentNumDroppedLogs
-			}
-			d.lastDropLogTime = d.mt.Now()
+		currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
+		if currentNumDroppedLogs > numSeenDroppedLogs {
+			d.writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
+				currentNumDroppedLogs-numSeenDroppedLogs))
 		}
+		numSeenDroppedLogs = currentNumDroppedLogs
 
 		err := d.write(ql)
 		if err != nil {
 			counterLogErrors.Inc()
 			fmt.Fprintf(os.Stderr, "Failed to write to syslog: %v", err)
 		}
-		if ql.WaitGroup != nil {
-			ql.WaitGroup.Done()
-		}
+		ql.OnLogDone()
 	}
 }
 
