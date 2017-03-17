@@ -130,13 +130,13 @@ toc:
     path: /getting-started/rkt/
   - title: Installation
     section:
-    - title: 'Manual installation'
+    - title: 'Manual Installation'
       path: /getting-started/rkt/installation/manual
     - title: 'Vagrant/VirtualBox: CoreOS'
       path: /getting-started/rkt/installation/vagrant-coreos/
   - title: Tutorials
     section:
-    - title: Basic network isolation
+    - title: Basic Network Isolation
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
     path: /getting-started/rkt/troubleshooting

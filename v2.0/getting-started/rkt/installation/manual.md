@@ -1,5 +1,5 @@
 ---
-title:  Manual installation of Calico with rkt
+title:  Manual Installation of Calico with rkt
 ---
 
 This tutorial describes how to manually configure a working environment for
@@ -173,5 +173,6 @@ EOF
 
 ## Next steps
 
-With your deployment ready we recommend you follow the [tutorials]({{site.baseurl}}/{{page.version}}/getting-started/rkt#tutorials)
-to run through examples of managing Calico policy with your rkt containers.
+Now that you have your cluster setup, see the
+[Basic Network Isolation guide]({{site.baseurl}}/{{page.version}}/getting-started/rkt/tutorials/basic)
+for an example of managing Calico policy with your rkt containers.
