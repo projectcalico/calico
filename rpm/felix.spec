@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.0.2
+Version:        2.1.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,337 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Mar 17 2017 Neil Jerram <neil@tigera.io> 2.1.0-1
+  - Felix 2.1.0 (from Git commit fb5b330).
+    [Changes recorded in 2.1.0 tag]
+    - Port dataplane driver to Golang and move in-process (#1202).
+      This has a number of benefits and allowed for a number of
+      bugfixes and enhancements to be worked in:
+    
+      - Improve dataplane programming performance and decrease
+        occupancy by having only one process instead of two.
+        It also simplifies the codebase substantially.
+      - Simplify deployment (now only one binary needed).
+      - Use netlink directly for critical-path route programming
+        operations.
+      - Move to a synchronization model for route programming.
+        Allows for monitoring and restoring routes if they are
+        removed.  Allows for clean up of routes that relate to
+        orphaned endpoints.
+      - Ensure IPIP tunnel device configuration is maintained;
+        replace it if it is accidentally removed.
+      - Retry iptables/ipset updates in more failure cases to work
+        around transient failures of those commands.
+      - Switch to a synchronisation model for iptables.  Avoid
+        reprogramming rules that haven't changed.  This improves
+        performance.
+      - Label our iptables rules with a hash to allow rules to be
+        identified.  Allows for simpler sync and cleanup.
+      - Limit OpenStack special-case rules to deployments with "tap"
+        devices (#1020).
+    
+    - Add support for host endpoint policies that bypass the conntrack
+      table.  Useful for high connection throughput workloads such as
+      memcacheDB. (#1284)
+    - Fix that setting LogFilePath doesn't prevent early logging (#803)
+    - Fix log spam when adding tunl0 device (#1008)
+    - Retry ipset commands to deal with transient failures (#1181)
+    - Document deb/RPM release process (#1237)
+    - Rev libcalico-go to v1.1.3, includes a number of fixes (#1364).
+    [Changes recorded in 2.1.0-rc8 tag]
+    - Clean up undocumented options
+    [Changes recorded in 2.1.0-rc7 tag]
+    - Rev libcalico-go to v1.1.2 (#1378).
+    - Ignore empty configuration values (#1370).
+    [Changes recorded in 2.1.0-rc6 tag]
+    - Build the felix RPMS on EL6 as well (#1327)
+    - Disable interfaces that are admin down. (#1354)
+    - Throttle dataplane updates and opportunistically batch. (#1356)
+    - Fix IP address parsing to use net.IP.To4() instead of len(). (#1358)
+    - Rev calico/go-build container to v0.4 to pick up patch to runtime.
+    - Implement bulk updates to ipsets. (Improves performance.)
+    - Implement periodic resyncs of IP sets. (Works around #1347)
+    - Add prometheus metrics for exec calls.
+    - Rev libcalico-go to 1.1.1. (Includes minor fixes.)
+    [Changes recorded in 2.1.0-rc5 tag]
+    - Change chain name prefix from "cali" to "cali-" to avoid conflict with DHCP agent. (#1336)
+    - Remove unused policy rendering code and simplify. (#1337)
+    - Decouple stats collector from usage reporter (#1353).
+    - Add log to indicate end of initial sync. (#1350)
+    - Ignore removal of non-Calico chain. Fixes spammy warning logs. (#1352)
+    [Changes recorded in 2.1.0-rc4 tag]
+    - Improve logs around resync.  Downgrade smoe spammy logs.
+    - glide: Pin libcalico-go
+    [Changes recorded in 2.1.0-rc3 tag]
+    Changes since 2.1.0-rc2:
+    
+    - Implement loose RPF startup check. (#1322)
+    - Add coverage reporting target for golang. (#1323)
+    - Handle interfaces being renamed in interface monitor. (#1329)
+    - Aggressively re-check iptables after an update. (#1326)
+    - Rev libcalico-go to v1.1.0-rc1.
+    [Changes recorded in 2.1.0-rc2 tag]
+    Changes since 2.1.0-rc1:
+    
+    - Add extra prometheus metrics (#1304)
+    - Switch to goimports for formatting code (#1305)
+    - Add gometalinter and fix a couple of bugs it spotted. (#1306)
+    - Increase timeout when doing async calc graph test. (#1312)
+    - Pass chain insert mode down to iptables.Table.
+    - Implement periodic refresh of route table. (#1313)
+    - Explicitly ACCEPT packets that are allowed by host policy. (#1318)
+    - Remove flags that are unused in golang dataplane driver. (#1321)
+    - Plumb through Ipv6Support flag and ReportingIntervalSecs. (#1320)
+    - Add automated check of dependency licenses.
+    [Changes recorded in 2.1.0-rc1 tag]
+    - Rework EventBuffer as EventSequencer.
+    - Change ActiveRulesCalculator to generate dummy drop rules.
+    - WiP on iptables writer.
+    - Improve logutils: avoid name clash with user-supplied fields.
+    - Implement iptables hash resync.  Fix up programming.
+    - Rework Felix's main() to pull out external dataplane driver.  Start of internal driver.
+    - Add IP set CRUD logic.
+    - Minor cleanups.
+    - Get IP sets programming in internal DP driver.
+    - Refactor to create a Rule and Chain class.
+    - Skeleton for policy programming.  Still needs rule rendering!
+    - Minor clean-ups.
+    - Skeleton for rule rendering logic and other minor tweaks.
+    - Implement basic dispatch chain logic.  Add endpointManager.
+    - Validate that workload endpoints have names; required by felix.
+    - Add drop action to dispatch chains.
+    - Add support for hooking kernel chains, use to hook FORWARD chain.
+    - Add backoff/panic on iptables failure.
+    - Factor out manager objects.
+    - Start of profile support.
+    - Add dedicated MatchCriteria type for building rules.
+    - Add profiles to endpoint chains.
+    - Fix failure to delete iptables chains.
+    - Switch to RenderInsert() for calculating insert rules.
+    - Fix up hash extraction and add UTs.
+    - Do deletes right at the end, after cleaning up insertions.
+    - WiP on routing table syncer.
+    - Add routing table syncer.  Currently poll-based.
+    - Skip interfaces that are marked as down when updating routes.
+    - Program workload endpoint routes.
+    - Minor fixes: - Fix that iptables.Table never set the in-sync flag. - Retry after failing to program routes. (Still need to start monitoring for changes.)
+    - Do per-interface proc-sys config.
+    - Implement mainline match criteria and fix V6 IP set rendering.
+    - Default to using internal dataplane driver.
+    - Fix up iptables UT.
+    - Add dummy endpoint status reports; should get OpenStack running.
+    - Fix name of outbound profile chain.
+    - WiP on ipsets cleanup.
+    - WiP on route programming retry/monitoring.
+    - Implement process status reporting.
+    - Add static NAT chains.  Add OpenStack Metadata IP special-case.
+    - Add support for setting destination MAC address when programming routes.
+    - Add an opaque ID/hash to each rule.
+    - Fix that dispatch chains were being calculated from stale data.
+    - Fixes to routing table:
+    - Add a make patch-script target.
+    - Fix copy/paste error in dispatch chain rendering.
+    - Add special-case regex used to find old felix rule insertions.
+    - Clean ups:
+    - Add IPAM pool masquerade support.
+    - Self review/go fmt markups.
+    - Fix UTs.
+    - WiP on IPIP mode.
+    - Make WorkloadEndpointChainName usable for host endpoints also
+    - Use clearer 'ifaceName' for EndpointChainName arg
+    - WiP on IPIP manager
+    - Remove label from IP address.
+    - Improve comments/logs in IPIP code.
+    - Improve handling of ICMPv6: guess the IP version from the protocol version.
+    - Add negated match criteria, UTs and fixes.
+    - Improve internal dataplane comments.
+    - Improve external dataplane commenting.
+    - Add log action, log prefix support and DropActionOverride support.
+    - Support >15 ports in a match.
+    - Tweak cleanup script to remove cali chains.
+    - Populate felix-INPUT chain, refine naming, split out wl-to-host chain.
+    - Fix UT broken by removal of field.
+    - Implement filter output chain, ready for host endpoints to be added.
+    - Fix that RouteTable was syncing routes for non-calico interfaces.
+    - Add missing return statement.
+    - IP sets self-review markups.
+    - Shim IP set commands for UT.
+    - UTs for ExistenceCache.
+    - Organise ipsets classes into files.  Move tests to ipsets_test package.
+    - Implement HostDispatchChains
+    - Start a test suite for the internal dataplane driver
+    - Enhance ifacemonitor to provide address updates as well
+    - Checkpoint - ** Coding tasks [4/8]
+    - Implement HostEndpointToIptablesChains
+    - Link from static input/output chains to host endpoint chains
+    - UT fix
+    - Implement host endpoint failsafe chains
+    - Fixes from running calico-felix by hand
+    - Finishing adding host endpoint failsafes
+    - Link in cali-INPUT and cali-OUTPUT
+    - Add UTs for IPSet object.
+    - More UTs for IP sets, cover failure cases.
+    - Revert incorrect empty map initializers
+    - Code review markups
+    - Add mainling UTs for IP set Registry.
+    - Add non-coverage UT target (which is lots faster).
+    - Making things work - but not sure I need all of these
+    - Code review markups
+    - Remove conntrack flows when an endpoint is removed.
+    - RouteTable and conntrack fixes:
+    - Remove optimization from RouteTable that is now incorrect.
+    - Code review markups
+    - Better error reporting on route sync.
+    - Change ifaceAddrs to be a Set
+    - Delay status reports: work around OpenStack FV issue.
+    - Implement endpoint status reporting.
+    - Improve comments and UTs in iptables package.
+    - Use host endpoint ID as map key, instead of pointer to ID
+    - Code review markups
+    - self-review markups
+    - Notify iface addrs regardless of iface oper state
+    - UT fix
+    - Start a UT suite for the 'set' package
+    - Improve logging.
+    - Work-in-progress on adding iptables UTs.
+    - Coverage tests for iptables Table object and minor improvements:
+    - Implement periodic iptables refresh.
+    - Fix comment.
+    - Refresh IPIP tunnel device config on a timer.
+    - Mop up some TODOs:
+    - Fix lack of log hook in intdataplane test suite.
+    - Implement configuration of mark bits, fix mark rendering and add UTs.
+    - Fix log leakage during test run.
+    - Downgrade spammy route programming failure log to Warning.
+    - Fix out-of-date comment.
+    - Improve logging when config parsing fails.
+    - Shim netlink in routetable package.
+    - Mainline tests for RouteTable along with removal of sync conditions.
+    - Recheck interface existence to avoid logging errors during tear down.
+    - Expand error filtering to more cases to avoid spammy logs on failures.
+    - Add more UT for set package.
+    - Minor cleanups to routetable.  Remove unused function.
+    - Fix that dispatchChains didn't indirect through DropRules().
+    - Create structure for ifacemonitor UT
+    - Progress on ifacemonitor UT
+    - ifacemonitor UT - full coverage except error conditions
+    - Call callbacks when link removal is spotted by resync
+    - Fix accidental channel write blocking
+    - Add comments to explain ifacemonitor testing
+    - Address callback now expected when link is down
+    - Don't notify addresses after link record deleted
+    - Only call address callback when iface addrs are changing
+    - Make callback detection channels non-global
+    - Remove sleep, make test resilient to slow running
+    - Other code review markups
+    - Support running Felix on a NAT gateway or router
+    - Code review markups.
+    - Add UT for conntrack package.
+    - Fix occasional test hang: need correct ifIndex on link deletion
+    - Add UT for static chains.
+    - Cover StaticNATTableChains.
+    - Cover rule rendering corner cases.
+    - Add UT for per-endpoint chain rendering.
+    - Add UT for NAT outgoing rules.
+    - Fix test hang: allow for occasional extra addr callback
+    - Retry iptables-save to improve robustness and avoid log spam.
+    - Code review markups
+    - Adjust jittered ticker tests to avoid comparing real sleeps.
+    - Fix tracking of best host endpoint match for a host interface
+    - Add extra logging around IPIP startup.
+    - Fix flap of IPIP tunnel address at start up.
+    - Avoid setting link MTU or flags if they're already correct.
+    - Write deltas to IP sets where possible.
+    - Endpoint manager UT
+    - Complete coverage of resolveHostEndpoints
+    - Rework host endpoint tests into better ginkgo style
+    - Fix: host i/fs map to programmed chains, not host endpoints
+    - Fix append bug
+    - Add tests with two resolved host interfaces
+    - Order rules by i/f name in both host and wl dispatch chains
+    - Test which gets used when multiple host eps match an interface
+    - Improve representation of host endpoint configuration
+    - Code review markups.
+    - Shim dataplane in IPIP manager.
+    - Add UT for IPIP manager dataplane programming.
+    - Add error-case coverage for IPIP manager.
+    - Rework ipipManager to deal with transient duplicate IPs.  Add UTs.
+    - Honour max IP set size.
+    - Add set.FromArray() and Set.AddAll() functions.
+    - Add UT for ipsets manager.
+    - Add set.From() and use to streamline UTs.
+    - Add UT for masquerade manager.
+    - UT masquerade manager dirtiness tracking.
+    - Add UTs for policy manager.
+    - Code review markups.
+    - Add UT for status combiner.
+    - Really test IPv4 and IPv6 versions of EndpointManager
+    - Add go-ut-watch make target.
+    - Workload endpoints UT
+    - Fix: remove old chains when endpoint's iface changes
+    - Introduce TableOptions parameter on NewTable.
+    - Rename 'procSysWriter' field to 'writeProcSys'
+    - Port ChainInsertMode to golang.
+    - Port LogPrefix parameter to Go.
+    - Implement tree-based dispatch chains.
+    - Code review markups.
+    - Code review markups.
+    - Floating IPs in golang dataplane driver
+    - Code fixes and missing manager reg
+    - Adapt existing UTs
+    - Code review markups
+    - UT and fixes
+    - Markups from FV testing:
+    - Add host endpoint status reports.
+    - Only recalculate the dispatch chains if the data they depend on has changed.
+    - Improve commenting/naming.
+    - Fix failure to make host endpoint status dirty and add UT.
+    - Code review markups.
+    - Add marker fields so that action types get traced out in UT output.
+    - Include all release notes since last packaging
+    - Allow overriding the Git-determined version
+    - Felix 2.0.2 Deb/RPM packaging
+    - Add support for untracked policies on host endpoints.
+    - Rename test file for event sequencer.
+    - UTs for untracked policy.
+    - Add marker fields so that action types get traced out in UT output.
+    - UT and fixes for raw host endpoint chain generation.
+    - UT for policy manager.
+    - UT for deletion of non-existing chain.
+    - Demote overly prominent ifacemonitor warning log
+    - Fix that iptables RPF check was being applied for IPv4.
+    - Add UT for raw chains.
+    - Endpoint manager UT and fixes for notrack.
+    - Add additional diags to iptables.Table when it's about to panic.
+    - Quick fix for policy/endpoint sequencing issue.  Program all policies to both raw and filter.
+    - Code review markups.
+    - Remove Python code and update Makefile.
+    - Move go code up to main directory.
+    - Fix up Golang imports after moving go files.
+    - Update Makefile for new location of go files.
+    - Guard against running builds from non-git dir.
+    - Move go/docs folder into root.
+    - Remove gen-version.sh.
+    - Remove unneeded line.
+    - Tidy up .gitignore.
+    - Make iptables mark allocation stateful.
+    - Add more UT.
+    - Improve dataplane driver API doc.
+    - Cleanup README, CONTRIBUTING and unused file.
+    - Fix that an empty string for FailsafeIn/OutboundHostPorts was rejected.
+    - Fix ifacemonitor UT concurrent map access
+    - Check for expected NAT OUTPUT chain
+    - Add NAT table insertion for OUTPUT chain
+    - Pin libcalico-go to v1.0.2
+    - Code review markups
+    - Switch to calico/go-build container
+    - Pin calico/build to version with Felix's deps.
+    - Code review markups.
+    - Add datamodel overview to API doc.
+    - Remove accidental inclusion of licensecheck code from other branch.
+    - Code review markups.
+    - Fix heading.
+
 * Wed Jan 25 2017 Neil Jerram <neil@tigera.io> 2.0.2-1
   - Felix 2.0.2 (from Git commit c9e5e3a).
     [Changes recorded in 2.0.2 tag]
