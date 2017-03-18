@@ -64,10 +64,16 @@ toc:
         path: /getting-started/mesos/installation/dc-os/custom
   - title: Tutorials
     section:
-    - title: Docker Containerizer
-      path: /getting-started/mesos/tutorials/docker
-    - title: Unified Containerizer
-      path: /getting-started/mesos/tutorials/unified
+    - title: Launching Tasks
+      path: /getting-started/mesos/tutorials/launching-tasks
+    - title: Connecting to Tasks
+      path: /getting-started/mesos/tutorials/connecting-tasks
+    - title: Configuring Policy
+      section:
+      - title: Universal Containerizer
+        path: /getting-started/mesos/tutorials/policy/universal-containerizer
+      - title: Docker Containerizer
+        path: /getting-started/mesos/tutorials/policy/docker-containerizer
   - title: Demos
     section:
     - title: Vagrant Quickstart - Docker Containerizer
