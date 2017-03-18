@@ -1,5 +1,5 @@
 ---
-title: Basic network isolation
+title: Basic Network Isolation
 redirect_from: latest/getting-started/rkt/tutorials/basic
 ---
 
