@@ -17,11 +17,11 @@ This repository includes a top-level CNI networking plugin, as well as a CNI IPA
 To learn more about CNI, visit the [appc/cni][cni] repo.
 
 ## Building the plugins and running tests
-To build the Calico Networking Plugin for CNI locally, clone this repository and run `make`.  This will build both CNI plugin binaries and run the tests.
+To build the Calico Networking Plugin for CNI locally, clone this repository and run `make`.  This will build both CNI plugin binaries and run the tests. This requires a recent version of Docker.
 
 - To just build the binaries, with no tests, run `make binary`. This will produce `dist/calico` and `dist/calico-ipam`.
 - To only run the tests, simply run `make test`.
-
+- To run a non-containerized build (i.e. not inside a docker container) you need to have Go 1.7+ and glide installed. 
 [cni]: https://github.com/appc/cni
 
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
