@@ -188,4 +188,20 @@ var _ = Describe("Calico IPAM Tests", func() {
 			})
 		})
 	})
+
+	Describe("Run IPAM DEL", func() {
+		netconf := fmt.Sprintf(`
+					{"name": "net1",
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "ipam": {
+					    "type": "%s"
+					  }
+					}`, os.Getenv("ETCD_IP"), plugin)
+
+		It("should exit successfully even if no address exists", func() {
+			_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123")
+			Expect(exitCode).Should(Equal(0))
+		})
+	})
 })

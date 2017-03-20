@@ -325,24 +325,39 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := calicoClient.WorkloadEndpoints().Delete(api.WorkloadEndpointMetadata{
+	ep := api.WorkloadEndpointMetadata{
 		Name:         args.IfName,
 		Node:         nodename,
 		Orchestrator: orchestrator,
-		Workload:     workload}); err != nil {
-		return err
+		Workload:     workload}
+	if err = calicoClient.WorkloadEndpoints().Delete(ep); err != nil {
+		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+			logger.WithField("endpoint", ep).Info("Endpoint object does not exist, no need to clean up.")
+		} else {
+			return err
+		}
 	}
 
 	// Only try to delete the device if a namespace was passed in.
 	if args.Netns != "" {
-		fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
-		err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-			_, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
+		logger.Debug("Checking namespace & device exist.")
+		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+			_, err := netlink.LinkByName(args.IfName)
 			return err
 		})
 
-		if err != nil {
-			return err
+		if devErr == nil {
+			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
+			err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+				_, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
+				return err
+			})
+
+			if err != nil {
+				return err
+			}
+		} else {
+			logger.Info("veth does not exist, no need to clean up.")
 		}
 	}
 
