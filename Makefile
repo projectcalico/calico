@@ -58,8 +58,8 @@ endif
 	@echo "docker push quay.io/calico/cni:latest"
 
 
-# Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
+## Use this to populate the vendor directory after checking out the repository.
 vendor: glide.yaml
 	# To build without Docker just run "glide install -strip-vendor"
 	-mkdir -p ~/.glide
@@ -74,25 +74,26 @@ vendor: glide.yaml
 			cd /go/src/github.com/projectcalico/cni-plugin && \
 			glide install -strip-vendor' 
 
-# Build the Calico network plugin
+## Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -i -o dist/calico \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
 
-# Build the Calico ipam plugin
+## Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -i -o dist/calico-ipam  \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
 
 .PHONY: test
-# Run the unit tests.
+## Run the unit tests.
 test: dist/calico dist/calico-ipam dist/host-local run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo)
 
-# Run the unit tests, watching for changes.
+.PHONY: test-watch
+## Run the unit tests, watching for changes.
 test-watch: dist/calico dist/calico-ipam run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
@@ -108,9 +109,10 @@ dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
 	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/v0.4.0/cni-amd64-v0.4.0.tgz | tar -xz -C dist ./flannel ./loopback ./host-local
 
-# Run the tests in a container (as root). Useful for CI but currently slow for 
-# local development because the .go-pkg-cache can't be used (since tests run as root)
+# Useful for CI but currently slow for local development because the
+# .go-pkg-cache can't be used (since tests run as root)
 .PHONY: test-containerized
+## Run the tests in a container (as root)
 test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-local
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
@@ -122,8 +124,8 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-loc
 			ginkgo'
 	make stop-etcd
 
-# Run the build in a container. Useful for CI
 .PHONY: build-containerized
+## Run the build in a container. Useful for CI
 build-containerized: vendor
 	-mkdir -p dist
 	-mkdir -p .go-pkg-cache
@@ -136,7 +138,7 @@ build-containerized: vendor
 			cd /go/src/github.com/projectcalico/cni-plugin && \
 			make binary'
 	
-# Etcd is used by the tests
+## Etcd is used by the tests
 run-etcd: stop-etcd
 	docker run --detach \
 	-p 2379:2379 \
@@ -145,7 +147,7 @@ run-etcd: stop-etcd
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
-# Etcd is used by the kubernetes
+## Etcd is used by the kubernetes
 run-etcd-host: stop-etcd
 	docker run --detach \
 	--net=host \
@@ -154,10 +156,11 @@ run-etcd-host: stop-etcd
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
+## Stops calico-etcd containers
 stop-etcd:
 	@-docker rm -f calico-etcd
 
-# Kubernetes apiserver used for tests
+## Kubernetes apiserver used for tests
 run-k8s-apiserver: stop-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
@@ -165,11 +168,12 @@ run-k8s-apiserver: stop-k8s-apiserver
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 
 
+## Stop Kubernetes apiserver
 stop-k8s-apiserver:
 	@-docker rm -f calico-k8s-apiserver
 
-# Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
 .PHONY: static-checks
+## Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
 static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
@@ -181,12 +185,12 @@ static-checks: vendor
 install:
 	CGO_ENABLED=0 go install github.com/projectcalico/cni-plugin
 
-# Retrieve an old version of the Python CNI plugin for use in tests
+## Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-python:
 	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico -o $@
 	chmod +x $@
 
-# Retrieve an old version of the Python CNI plugin for use in tests
+## Retrieve an old version of the Python CNI plugin for use in tests
 dist/calico-ipam-python:
 	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.3.1/calico-ipam -o $@
 	chmod +x $@
@@ -207,6 +211,7 @@ deploy-rkt: binary
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=dev
 	@echo sudo rkt run quay.io/coreos/alpine-sh --exec ifconfig --net=prod --net=dev
 
+## Run kubernetes master
 run-kubernetes-master: stop-kubernetes-master run-etcd-host binary 
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
@@ -246,6 +251,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary
 
 	@echo "Now manually start a calico-node container"
 
+## Stop kubernetes master
 stop-kubernetes-master:
 	# Stop any existing kubelet that we started
 	-docker rm -f calico-kubelet-master
@@ -257,6 +263,7 @@ stop-kubernetes-master:
 	-docker volume ls -qf dangling=true | xargs -r docker volume rm
 	-mount |grep kubelet | awk '{print $$3}' |sudo xargs umount
 
+## Run kube-proxy
 run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
@@ -274,4 +281,19 @@ ci: clean static-checks test-containerized docker-image
 		fi; \
 	fi
 
+.PHONY: help
+help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
+	$(info Available targets)
+	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
+	        nb = sub( /^## /, "", helpMsg );                                \
+	        if(nb == 0) {                                                   \
+	                helpMsg = $$0;                                              \
+	                nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
+	        }                                                               \
+	        if (nb)                                                         \
+	                printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
+	}                                                                   \
+	{ helpMsg = $$0 }'                                                  \
+	width=20                                                            \
+	$(MAKEFILE_LIST)
 
