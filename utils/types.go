@@ -56,6 +56,7 @@ type NetConf struct {
 	} `json:"ipam,omitempty"`
 	MTU            int        `json:"mtu"`
 	Hostname       string     `json:"hostname"`
+	Nodename       string     `json:"nodename"`
 	DatastoreType  string     `json:"datastore_type"`
 	EtcdAuthority  string     `json:"etcd_authority"`
 	EtcdEndpoints  string     `json:"etcd_endpoints"`
