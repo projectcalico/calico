@@ -134,13 +134,17 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		err = netlink.LinkSetUp(hostIf)
 		panicIfError(err)
 
+		// Lock mutex, to enable pod creation from multiple goroutines.
+		localNetworkingMutex.Lock()
+		defer localNetworkingMutex.Unlock()
+
 		localNetworkingMap[nsName+"."+name] = &localNetworking{
 			podIf:     podIf,
 			hostIf:    hostIf,
 			namespace: podNamespace,
 		}
-
 	}
+	return
 }
 
 func removeLocalPodNetworking(pod *v1.Pod) {
@@ -195,7 +199,8 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	podsDeleted := 0
 	admission := make(chan int, 10)
-	waiter := make(chan int, len(nsList.Items))
+	waiter := sync.WaitGroup{}
+	waiter.Add(len(nsList.Items))
 	for _, ns := range nsList.Items {
 		nsName := ns.ObjectMeta.Name
 		go func() {
@@ -216,12 +221,10 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 				podsDeleted += len(podList.Items)
 			}
 			<-admission
-			waiter <- 1
+			waiter.Done()
 		}()
 	}
-	for _ = range nsList.Items {
-		<-waiter
-	}
+	waiter.Wait()
 	log.WithField("podsDeleted", podsDeleted).Info("Cleaned up all pods")
 }
 
