@@ -305,8 +305,12 @@ class Controller(object):
 
                 # Start a watch from the latest resource_version.
                 self._watch_resource(resource_type, resource_version)
-            except requests.ConnectionError, requests.ChunkedEncodingError:
-                _log.exception("Connection error querying: %s", resource_type)
+            except requests.exceptions.ConnectTimeout as e:
+                _log.warning("Connection attempt timed out: %s ...%s", resource_type, e)
+            except requests.ConnectionError as e:
+                _log.warning("Connection error: %s ...%s", resource_type, e)
+            except requests.exceptions.ChunkedEncodingError:
+                _log.exception("Read error querying: %s", resource_type)
             except requests.HTTPError:
                 _log.exception("HTTP error querying: %s", resource_type)
             except KubernetesApiError:
@@ -439,7 +443,7 @@ class Controller(object):
         if self.auth_token:
             session.headers.update({'Authorization': 'Bearer ' + self.auth_token})
         verify = CA_CERT_PATH if self.ca_crt_exists else False
-        return session.get(path, verify=verify, stream=stream)
+        return session.get(path, verify=verify, stream=stream, timeout=(5, 10))
 
     def _is_leader(self):
         """
