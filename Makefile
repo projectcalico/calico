@@ -154,13 +154,12 @@ calico/felix: bin/calico-felix
 # with k8s model resources being injected by a separate test client.
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.5.3
-FELIX_K8S=felix-k8s
 .PHONY: k8s-fv-test run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 k8s-fv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
-	@-docker rm -f $(FELIX_K8S)
+	@-docker rm -f k8sfv-felix
 	sleep 1
-	K8S_IP=`$(GET_CONTAINER_IP) calico-k8s-apiserver` && \
-	docker run --detach --privileged --name=$(FELIX_K8S) \
+	K8S_IP=`$(GET_CONTAINER_IP) k8sfv-apiserver` && \
+	docker run --detach --privileged --name=k8sfv-felix \
 	-e FELIX_LOGSEVERITYSCREEN=info \
 	-e FELIX_DATASTORETYPE=kubernetes \
 	-e FELIX_PROMETHEUSMETRICSENABLED=true \
@@ -170,30 +169,30 @@ k8s-fv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	calico/felix \
 	/bin/sh -c "for n in 1 2; do calico-felix; done"
 	sleep 1
-	K8S_IP=`$(GET_CONTAINER_IP) calico-k8s-apiserver` && \
-	docker exec $(FELIX_K8S) /testcode/k8sfv/k8sfv.test -ginkgo.v https://$${K8S_IP}:6443
+	K8S_IP=`$(GET_CONTAINER_IP) k8sfv-apiserver` && \
+	docker exec k8sfv-felix /testcode/k8sfv/k8sfv.test -ginkgo.v https://$${K8S_IP}:6443
 
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
-	ETCD_IP=`$(GET_CONTAINER_IP) calico-etcd` && \
+	ETCD_IP=`$(GET_CONTAINER_IP) k8sfv-etcd` && \
 	docker run --detach \
-	  --name calico-k8s-apiserver \
+	  --name k8sfv-apiserver \
 	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$${ETCD_IP}:2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 -v=10
 
 stop-k8s-apiserver: stop-etcd
-	@-docker rm -f calico-k8s-apiserver
+	@-docker rm -f k8sfv-apiserver
 	sleep 2
 
 run-etcd: stop-etcd
 	docker run --detach \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name k8sfv-etcd quay.io/coreos/etcd \
 	etcd \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 stop-etcd:
-	@-docker rm -f calico-etcd
+	@-docker rm -f k8sfv-etcd
 
 PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
 K8SFV_PROMETHEUS_DATA_DIR := $(PROMETHEUS_DATA_DIR)/k8sfv
@@ -203,7 +202,7 @@ $(K8SFV_PROMETHEUS_DATA_DIR):
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
 run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)
-	FELIX_IP=`$(GET_CONTAINER_IP) $(FELIX_K8S)` && \
+	FELIX_IP=`$(GET_CONTAINER_IP) k8sfv-felix` && \
 	sed "s/__FELIX_IP__/$${FELIX_IP}/" < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
 	docker run --detach --name k8sfv-prometheus \
 	-v $${PWD}/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \

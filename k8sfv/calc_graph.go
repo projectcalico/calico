@@ -15,6 +15,8 @@
 package main
 
 import (
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/apis/meta/v1"
@@ -43,7 +45,8 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 	d := NewDeployment(49, true)
 
 	// Create pods.
-	waiter := make(chan int, len(nsMaturity))
+	waiter := sync.WaitGroup{}
+	waiter.Add(len(nsMaturity))
 	for nsName, _ := range nsMaturity {
 		nsName := nsName
 		go func() {
@@ -63,12 +66,10 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 					}
 				}
 			}
-			waiter <- 1
+			waiter.Done()
 		}()
 	}
-	for _ = range nsMaturity {
-		<-waiter
-	}
+	waiter.Wait()
 
 	// Rotate the namespace labels.
 	changeFrom := append(maturities, "out-of-service")
