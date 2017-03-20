@@ -41,7 +41,7 @@ import (
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoClient *calicoclient.Client, endpoint *api.WorkloadEndpoint) (*types.Result, error) {
+func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoClient *calicoclient.Client, endpoint *api.WorkloadEndpoint) (*types.Result, error) {
 	var err error
 	var result *types.Result
 
@@ -60,7 +60,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	logger := utils.CreateContextLogger(workload)
 	logger.WithFields(log.Fields{
 		"Orchestrator": orchestrator,
-		"Node":         hostname,
+		"Node":         nodename,
 	}).Info("Extracted identifiers for CmdAddK8s")
 
 	if endpoint != nil {
@@ -90,7 +90,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
 				return nil, err
 			}
-			podCidr, err := getPodCidr(client, conf, hostname)
+			podCidr, err := getPodCidr(client, conf, nodename)
 			if err != nil {
 				return nil, err
 			}
@@ -210,7 +210,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		// Create the endpoint object and configure it.
 		endpoint = api.NewWorkloadEndpoint()
 		endpoint.Metadata.Name = args.IfName
-		endpoint.Metadata.Node = hostname
+		endpoint.Metadata.Node = nodename
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
 		endpoint.Metadata.Labels = labels
@@ -543,20 +543,19 @@ func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs utils.K8sArgs
 	return labels, pod.Annotations, nil
 }
 
-func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, hostname string) (string, error) {
-	// Pull the node name out of the config if it's set. Defaults to hostname
-	nodeName := hostname
+func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, nodename string) (string, error) {
+	// Pull the node name out of the config if it's set. Defaults to nodename
 	if conf.Kubernetes.NodeName != "" {
-		nodeName = conf.Kubernetes.NodeName
+		nodename = conf.Kubernetes.NodeName
 	}
 
-	node, err := client.Nodes().Get(nodeName, metav1.GetOptions{})
+	node, err := client.Nodes().Get(nodename, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 
 	if node.Spec.PodCIDR == "" {
-		err = fmt.Errorf("No podCidr for node %s", nodeName)
+		err = fmt.Errorf("No podCidr for node %s", nodename)
 		return "", err
 	} else {
 		return node.Spec.PodCIDR, nil

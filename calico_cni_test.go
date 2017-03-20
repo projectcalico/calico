@@ -154,4 +154,89 @@ var _ = Describe("CalicoCni", func() {
 			})
 		})
 	})
+
+	Describe("Run Calico CNI plugin", func() {
+		Context("depricate Hostname for nodename", func() {
+			netconf := fmt.Sprintf(`
+			{
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "hostname": "namedHostname",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  }
+			}`, os.Getenv("ETCD_IP"))
+
+			It("has hostname even though deprecated", func() {
+				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result := types.Result{}
+				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+					panic(err)
+				}
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:         "namedHostname",
+					Name:         "eth0",
+					Workload:     containerID,
+					Orchestrator: "cni",
+				}))
+
+				session, err = DeleteContainer(netconf, netnspath, "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+			})
+		})
+	})
+
+	Describe("Run Calico CNI plugin", func() {
+		Context("depricate Hostname for nodename", func() {
+			netconf := fmt.Sprintf(`
+			{
+			  "name": "net1",
+			  "type": "calico",
+			  "etcd_endpoints": "http://%s:2379",
+			  "hostname": "namedHostname",
+			  "nodename": "namedNodename",
+			  "ipam": {
+			    "type": "host-local",
+			    "subnet": "10.0.0.0/8"
+			  }
+			}`, os.Getenv("ETCD_IP"))
+
+			It("nodename takes precedence over hostname", func() {
+				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result := types.Result{}
+				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+					panic(err)
+				}
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:         "namedNodename",
+					Name:         "eth0",
+					Workload:     containerID,
+					Orchestrator: "cni",
+				}))
+
+				session, err = DeleteContainer(netconf, netnspath, "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+			})
+		})
+	})
 })

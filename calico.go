@@ -38,7 +38,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var hostname string
+var nodename string
 
 func init() {
 	// This ensures that main runs only on main thread (thread group leader).
@@ -46,7 +46,17 @@ func init() {
 	// must ensure that the goroutine does not jump from OS thread to thread
 	runtime.LockOSThread()
 
-	hostname, _ = os.Hostname()
+	nodename, _ = os.Hostname()
+}
+
+func updateNodename(conf NetConf, logger *log.Entry) {
+	if conf.Hostname != "" {
+		nodename = conf.Hostname
+		logger.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
+	}
+	if conf.Nodename != "" {
+		nodename = conf.Nodename
+	}
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -65,14 +75,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	logger := CreateContextLogger(workload)
 
-	// Allow the hostname to be overridden by the network config
-	if conf.Hostname != "" {
-		hostname = conf.Hostname
-	}
+	// Allow the nodename to be overridden by the network config
+	updateNodename(conf, logger)
 
 	logger.WithFields(log.Fields{
 		"Orchestrator": orchestrator,
-		"Node":         hostname,
+		"Node":         nodename,
 	}).Info("Extracted identifiers")
 
 	logger.WithFields(log.Fields{"NetConfg": conf}).Info("Loaded CNI NetConf")
@@ -83,7 +91,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Always check if there's an existing endpoint.
 	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
-		Node:         hostname,
+		Node:         nodename,
 		Orchestrator: orchestrator,
 		Workload:     workload})
 	if err != nil {
@@ -106,7 +114,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
 	if orchestrator == "k8s" {
-		if result, err = k8s.CmdAddK8s(args, conf, hostname, calicoClient, endpoint); err != nil {
+		if result, err = k8s.CmdAddK8s(args, conf, nodename, calicoClient, endpoint); err != nil {
 			return err
 		}
 	} else {
@@ -151,7 +159,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 2) Create the endpoint object
 			endpoint = api.NewWorkloadEndpoint()
 			endpoint.Metadata.Name = args.IfName
-			endpoint.Metadata.Node = hostname
+			endpoint.Metadata.Node = nodename
 			endpoint.Metadata.Orchestrator = orchestrator
 			endpoint.Metadata.Workload = workload
 			endpoint.Metadata.Labels = labels
@@ -270,15 +278,13 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger := CreateContextLogger(workload)
 
-	// Allow the hostname to be overridden by the network config
-	if conf.Hostname != "" {
-		hostname = conf.Hostname
-	}
+	// Allow the nodename to be overridden by the network config
+	updateNodename(conf, logger)
 
 	logger.WithFields(log.Fields{
 		"Workload":     workload,
 		"Orchestrator": orchestrator,
-		"Node":         hostname,
+		"Node":         nodename,
 	}).Info("Extracted identifiers")
 
 	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
@@ -321,7 +327,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	if err := calicoClient.WorkloadEndpoints().Delete(api.WorkloadEndpointMetadata{
 		Name:         args.IfName,
-		Node:         hostname,
+		Node:         nodename,
 		Orchestrator: orchestrator,
 		Workload:     workload}); err != nil {
 		return err
