@@ -49,7 +49,7 @@ workloads.
 >
 > Since version 2.1.0, Calico applies host endpoint policy to traffic that is
 > being forwarded between host interfaces.
-> 
+>
 > ![]({{site.baseurl}}/images/bare-metal-packet-flows.png)
 
 ## Installation overview
