@@ -45,3 +45,7 @@ htmlcov/
 /.dir-locals.el
 # Old go sub-dir, used to be where we kept go source.
 /go/
+
+/k8sfv/prometheus/data
+/k8sfv/prometheus/prometheus.yml
+/k8sfv/k8sfv.test
