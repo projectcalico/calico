@@ -295,8 +295,8 @@ class Controller(object):
     def _manage_resource(self, resource_type):
         """
         Routine for a worker thread.  Syncs with API for the given resource
-        and starts a watch.  If an error occurs within the watch, will re-sync
-        with the API and re-start the watch.
+        and starts a watch.  If an error occurs within the watch, will resync
+        with the API and restart the watch.
         """
         sync_needed = True
         while True:
@@ -335,12 +335,12 @@ class Controller(object):
             finally:
                 if sync_needed:
                     # Sleep for a second so that we don't tight-loop.
-                    _log.warning("Re-starting watch on resource: %s",
-                                 resource_type)
+                    _log.info("Restarting watch on resource: %s",
+                              resource_type)
                     time.sleep(1)
                 else:
-                    _log.debug ("Re-starting watch on resource: %s",
-                                resource_type)
+                    _log.debug("Restarting watch on resource: %s",
+                               resource_type)
 
     def _watch_resource(self, resource_type, resource_version):
         """
@@ -348,7 +348,7 @@ class Controller(object):
         Add any events to the event queue.
         """
         path = WATCH_URLS[resource_type] % self.k8s_api
-        _log.info("Starting watch on: %s", path)
+        _log.debug("Starting watch on: %s", path)
         while True:
             # Attempt to stream API resources.
             response = self._api_get(path,
