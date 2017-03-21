@@ -97,6 +97,11 @@ class Controller(object):
         self.add_handler(RESOURCE_TYPE_POD, TYPE_DELETED,
                          delete_pod)
 
+        self._last_resource_version = {}
+        """
+        Keeps track of last received version for each resource type.
+        """
+
     def add_handler(self, resource_type, event_type, handler):
         """
         Adds an event handler for the given event type (ADD, DELETE) for the
@@ -303,7 +308,7 @@ class Controller(object):
             try:
                 if sync_needed:
                     # Sync existing resources for this type.
-                    resource_version = self._sync_resources(resource_type)
+                    self._sync_resources(resource_type)
 
                 # There are many exception conditions below for which we would
                 # need to sync again.  Even though sync isn't needed in the
@@ -313,7 +318,7 @@ class Controller(object):
                 sync_needed = True
 
                 # Start a watch from the latest resource_version.
-                self._watch_resource(resource_type, resource_version)
+                self._watch_resource(resource_type)
             except requests.exceptions.ConnectTimeout as e:
                 _log.warning("Connection attempt timed out: %s ...%s", resource_type, e)
             except requests.ConnectionError as e:
@@ -342,7 +347,7 @@ class Controller(object):
                     _log.debug("Restarting watch on resource: %s",
                                resource_type)
 
-    def _watch_resource(self, resource_type, resource_version):
+    def _watch_resource(self, resource_type):
         """
         Watch the given resource type starting at the given resource version.
         Add any events to the event queue.
@@ -351,9 +356,11 @@ class Controller(object):
         _log.debug("Starting watch on: %s", path)
         while True:
             # Attempt to stream API resources.
-            response = self._api_get(path,
-                                     stream=True,
-                                     resource_version=resource_version)
+            response = self._api_get(
+                path,
+                stream=True,
+                resource_version=self._last_resource_version[resource_type]
+            )
             _log.debug("Watch response for %s: %s", path, response)
 
             # Check for successful response, raise error if not.
@@ -394,9 +401,10 @@ class Controller(object):
 
                     # Extract the latest resource version.
                     new_ver = resource["metadata"]["resourceVersion"]
-                    _log.debug("Update resourceVersion, was: %s, now: %s",
-                               resource_version, new_ver)
-                    resource_version = new_ver
+                    _log.info("Update resourceVersion, was: %s, now: %s",
+                              self._last_resource_version[resource_type],
+                              new_ver)
+                    self._last_resource_version[resource_type] = new_ver
 
     def _sync_resources(self, resource_type):
         """
@@ -437,7 +445,7 @@ class Controller(object):
 
         _log.info("Done getting %s(s) - new resourceVersion: %s",
                   resource_type, resource_version)
-        return resource_version
+        self._last_resource_version[resource_type] = resource_version
 
     def _api_get(self, path, stream, resource_version=None):
         """
