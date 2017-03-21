@@ -56,4 +56,7 @@ for n in `seq 0 9`; do
     # Check for that namespace in etcd.
     docker exec st-etcd etcdctl ls --recursive /calico | grep testns${n}
 
+    # Wait 120 seconds
+    sleep 120
+
 done
