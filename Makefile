@@ -9,7 +9,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # fail if unable to download
 CURL=curl -sSf
 
-K8S_VERSION=1.4.6
+K8S_VERSION=1.5.4
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
