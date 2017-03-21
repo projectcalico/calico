@@ -298,17 +298,30 @@ class Controller(object):
         and starts a watch.  If an error occurs within the watch, will re-sync
         with the API and re-start the watch.
         """
+        sync_needed = True
         while True:
             try:
-                # Sync existing resources for this type.
-                resource_version = self._sync_resources(resource_type)
+                if sync_needed:
+                    # Sync existing resources for this type.
+                    resource_version = self._sync_resources(resource_type)
+
+                # There are many exception conditions below for which we would
+                # need to sync again.  Even though sync isn't needed in the
+                # most mainline case - read timeout - we save some lines of
+                # code by setting sync_needed True here, and resetting it below
+                # in the cases where it isn't needed.
+                sync_needed = True
 
                 # Start a watch from the latest resource_version.
                 self._watch_resource(resource_type, resource_version)
             except requests.exceptions.ConnectTimeout as e:
                 _log.warning("Connection attempt timed out: %s ...%s", resource_type, e)
             except requests.ConnectionError as e:
-                _log.warning("Connection error: %s ...%s", resource_type, e)
+                if "Read timed out" in str(e):
+                    _log.debug("Normal read time out for %s", resource_type)
+                    sync_needed = False
+                else:
+                    _log.warning("Connection error: %s ...%s", resource_type, e)
             except requests.exceptions.ChunkedEncodingError:
                 _log.exception("Read error querying: %s", resource_type)
             except requests.HTTPError:
@@ -320,10 +333,14 @@ class Controller(object):
             except Exception:
                 _log.exception("Unhandled exception killed %s manager", resource_type)
             finally:
-                # Sleep for a second so that we don't tight-loop.
-                _log.warning("Re-starting watch on resource: %s",
-                             resource_type)
-                time.sleep(1)
+                if sync_needed:
+                    # Sleep for a second so that we don't tight-loop.
+                    _log.warning("Re-starting watch on resource: %s",
+                                 resource_type)
+                    time.sleep(1)
+                else:
+                    _log.debug ("Re-starting watch on resource: %s",
+                                resource_type)
 
     def _watch_resource(self, resource_type, resource_version):
         """
