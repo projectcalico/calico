@@ -92,7 +92,5 @@ To use Calico to enforce egress policy on Kubernetes pods, see [the advanced pol
 You can clean up the demo by deleting the demo Namespaces:
 
 ```shell
-kubectl delete ns client
-kubectl delete ns stars
-kubectl delete ns management-ui
+kubectl delete ns client stars management-ui
 ```
