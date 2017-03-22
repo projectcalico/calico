@@ -12,28 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-import time
 
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
+from tests.st.utils.constants import (LARGE_AS_NUM)
 from tests.st.utils.docker_host import DockerHost
-from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
-                                      DEFAULT_IPV4_ADDR_3,
-                                      DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
-from tests.st.utils.utils import assert_network, assert_profile, \
-    assert_number_endpoints, get_profile_name, ETCD_CA, ETCD_CERT, \
-    ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip, check_bird_status, \
+from tests.st.utils.utils import check_bird_status, \
     retry_until_success
-from tests.st.utils.exceptions import CommandExecError
-
 from .peer import ADDITIONAL_DOCKER_OPTIONS
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
-class TestBGPBackends(TestBase):
 
+class TestBGPBackends(TestBase):
     @attr('slow')
     def test_bgp_backends(self):
         """
@@ -45,12 +38,12 @@ class TestBGPBackends(TestBase):
         with DockerHost('host1',
                         additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
                         start_calico=False) as host1, \
-             DockerHost('host2',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
-                        start_calico=False) as host2, \
-             DockerHost('host3',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
-                        start_calico=True) as host3:
+                DockerHost('host2',
+                           additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                           start_calico=False) as host2, \
+                DockerHost('host3',
+                           additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                           start_calico=True) as host3:
 
             # Set the default AS number.
             host1.calicoctl("config set asNumber %s" % LARGE_AS_NUM)
@@ -81,52 +74,51 @@ class TestBGPBackends(TestBase):
             # Check the BGP status on the BIRD/GoBGP host.
             _log.debug("==== docker exec -it calico-node ps -a  ====")
             host3.execute("docker exec -it calico-node ps -a")
-            
+
             hosts = [host1, host2, host3]
             workloads = [workload_host1, workload_host2, workload_host3]
-            def check_connected(): 
+
+            def check_connected():
                 for target in hosts:
                     expected = [("node-to-node mesh", h.ip, "Established") for h in hosts if h is not target]
                     _log.debug("expected : %s", expected)
                     check_bird_status(target, expected)
 
-            def delete_workload(host, workload):
-                host.calicoctl("ipam release --ip=%s" % workload.ip)
-                host.execute("docker rm -f %s" % workload.name)
-                host.workloads.remove(workload)
-                
+            def delete_workload(host, host_workload):
+                host.calicoctl("ipam release --ip=%s" % host_workload.ip)
+                host.execute("docker rm -f %s" % host_workload.name)
+                host.workloads.remove(host_workload)
+
             for iteration in range(1, 4):
-                _log.debug("Iteration %s", iteration) 
-                _log.debug("identify and pkill bird pid") 
+                _log.debug("Iteration %s", iteration)
+                _log.debug("identify and pkill bird pid")
                 host3.execute("docker exec -it calico-node pgrep bird")
                 host3.execute("docker exec -it calico-node pkill bird")
-                 
-                _log.debug('check connected and retry until "Established"') 
-                retry_until_success(check_connected, retries=10, ex_class=Exception) 
-                 
-                _log.debug("new bird pid") 
+
+                _log.debug('check connected and retry until "Established"')
+                retry_until_success(check_connected, retries=10, ex_class=Exception)
+
+                _log.debug("new bird pid")
                 host3.execute("docker exec -it calico-node pgrep bird")
-                
+
                 new_workloads = []
-                extension = 'ip'
                 for workload in workloads:
-                    new_workload = "%s_%s" % (workload,iteration) 
+                    new_workload = "%s_%s" % (workload, iteration)
                     new_workloads.append(new_workload)
-                
+
                 index = 0
-                for new_workload in new_workloads: 
-                    new_workload = hosts[index].create_workload(new_workload, network=network1) 
-                    print(new_workload.name)
-                    _log.debug("host: %s and workload: %s", hosts[index].name, new_workload.name) 
+                for new_workload in new_workloads:
+                    new_workload = hosts[index].create_workload(new_workload, network=network1)
+                    _log.debug("host: %s and workload: %s", hosts[index].name, new_workload.name)
 
                     # Check connectivity in both directions
                     self.assert_ip_connectivity(workload_list=[workload_host1,
                                                                workload_host2,
-                                                               workload_host3, 
+                                                               workload_host3,
                                                                new_workload],
-                                                 ip_pass_list=[workload_host1.ip,
-                                                               workload_host2.ip,
-                                                               workload_host3.ip, 
-                                                               new_workload.ip])
-                    delete_workload(hosts[index], new_workload) 
+                                                ip_pass_list=[workload_host1.ip,
+                                                              workload_host2.ip,
+                                                              workload_host3.ip,
+                                                              new_workload.ip])
+                    delete_workload(hosts[index], new_workload)
                     index += 1
