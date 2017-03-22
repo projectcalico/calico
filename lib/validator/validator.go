@@ -364,6 +364,26 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 				"Destination.NotPorts", "", reason("protocol does not support ports"))
 		}
 	}
+
+	// Check for mismatch in IP versions
+	if rule.Source.Net != nil && rule.IPVersion != nil {
+		if rule.Source.Net.Version() != *(rule.IPVersion) {
+			structLevel.ReportError(reflect.ValueOf(rule.Source.Net), "Source.Net",
+				"", reason("rule contains an IP version that does not match src CIDR version"))
+		}
+	}
+	if rule.Destination.Net != nil && rule.IPVersion != nil {
+		if rule.Destination.Net.Version() != *(rule.IPVersion) {
+			structLevel.ReportError(reflect.ValueOf(rule.Destination.Net), "Destination.Net",
+				"", reason("rule contains an IP version that does not match dst CIDR version"))
+		}
+	}
+	if rule.Source.Net != nil && rule.Destination.Net != nil {
+		if rule.Source.Net.Version() != rule.Destination.Net.Version() {
+			structLevel.ReportError(reflect.ValueOf(rule.Destination.Net), "Destination.Net",
+				"", reason("rule does not support mixing of IPv4/v6 CIDRs"))
+		}
+	}
 }
 
 func validateBackendRule(v *validator.Validate, structLevel *validator.StructLevel) {
