@@ -17,6 +17,7 @@ package node
 import (
 	"bufio"
 	"fmt"
+	gonet "net"
 	"os"
 	"os/exec"
 	"strings"
@@ -32,12 +33,16 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 const (
-	ETCD_KEY_NODE_FILE     = "/etc/calico/certs/key.pem"
-	ETCD_CERT_NODE_FILE    = "/etc/calico/certs/cert.crt"
-	ETCD_CA_CERT_NODE_FILE = "/etc/calico/certs/ca_cert.crt"
+	ETCD_KEY_NODE_FILE             = "/etc/calico/certs/key.pem"
+	ETCD_CERT_NODE_FILE            = "/etc/calico/certs/cert.crt"
+	ETCD_CA_CERT_NODE_FILE         = "/etc/calico/certs/ca_cert.crt"
+	AUTODETECTION_METHOD_FIRST     = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE = "interface="
 )
 
 var (
@@ -54,6 +59,8 @@ func Run(args []string) {
 	doc := fmt.Sprintf(`Usage:
   calicoctl node run [--ip=<IP>] [--ip6=<IP6>] [--as=<AS_NUM>]
                      [--name=<NAME>]
+                     [--ip-autodetection-method=<IP_AUTODETECTION_METHOD>]
+                     [--ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>]
                      [--log-dir=<LOG_DIR>]
                      [--node-image=<DOCKER_IMAGE_NAME>]
                      [--backend=(bird|gobgp|none)]
@@ -63,6 +70,7 @@ func Run(args []string) {
                      [--init-system]
                      [--disable-docker-networking]
                      [--docker-networking-ifprefix=<IFPREFIX>]
+                     [--use-docker-networking-container-labels]
 
 Options:
   -h --help                Show this screen.
@@ -84,7 +92,31 @@ Options:
                            If omitted, it will use the value configured on the
                            node resource.  If there is no configured value
                            and the --ip6 option is omitted, the node will not
-                           route IPv6.
+                           route IPv6.  Use a value of 'autodetect' to force
+                           autodetection of the IP each time the node starts.
+     --ip-autodetection-method=<IP_AUTODETECTION_METHOD>
+                           Specify the autodetection method for detecting the
+                           local IPv4 routing address for this node.  The valid
+                           options are:
+                           > first-found
+                             Use the first valid IP address on the first
+                             enumerated interface (common known exceptions are
+                             filtered out, e.g. the docker bridge).  It is not
+                             recommended to use this if you have multiple
+                             external interfaces on your host.
+                           > can-reach=<IP OR DOMAINNAME>
+                             Use the interface determined by your host routing
+                             tables that will be used to reach the supplied
+                             destination IP or domain name.
+                           > interface=<IFACE NAME REGEX>
+                             Use the first valid IP address found on interfaces
+                             named as per the supplied interface name regex.
+                           [default: first-found]
+     --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
+                           Specify the autodetection method for detecting the
+                           local IPv6 routing address for this node.  See
+                           ip-autodetection-method flag for valid options.
+                           [default: first-found]
      --log-dir=<LOG_DIR>   The directory containing Calico logs.
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
@@ -110,6 +142,13 @@ Options:
                            within the Docker containers that have been networked
                            by the Calico driver.
                            [default: cali]
+     --use-docker-networking-container-labels
+                           Extract the Calico-namespaced Docker container labels
+                           (org.projectcalico.label.*) and apply them to the
+                           container endpoints for use with Calico policy.
+                           When this option is enabled traffic must be
+                           explicitly allowed by configuring Calico policies
+                           and Calico profiles are disabled.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
@@ -131,6 +170,8 @@ Description:
 	// Extract all the parameters.
 	ipv4 := argutils.ArgStringOrBlank(arguments, "--ip")
 	ipv6 := argutils.ArgStringOrBlank(arguments, "--ip6")
+	ipv4ADMethod := argutils.ArgStringOrBlank(arguments, "--ip-autodetection-method")
+	ipv6ADMethod := argutils.ArgStringOrBlank(arguments, "--ip6-autodetection-method")
 	logDir := argutils.ArgStringOrBlank(arguments, "--log-dir")
 	asNumber := argutils.ArgStringOrBlank(arguments, "--as")
 	img := argutils.ArgStringOrBlank(arguments, "--node-image")
@@ -142,6 +183,7 @@ Description:
 	disableDockerNw := argutils.ArgBoolOrFalse(arguments, "--disable-docker-networking")
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
 	ifprefix := argutils.ArgStringOrBlank(arguments, "--docker-networking-ifprefix")
+	useDockerContainerLabels := argutils.ArgBoolOrFalse(arguments, "--use-docker-networking-container-labels")
 
 	// Validate parameters.
 	if ipv4 != "" && ipv4 != "autodetect" {
@@ -151,7 +193,7 @@ Description:
 			os.Exit(1)
 		}
 	}
-	if ipv6 != "" {
+	if ipv6 != "" && ipv6 != "autodetect" {
 		ip := argutils.ValidateIP(ipv6)
 		if ip.Version() != 6 {
 			fmt.Println("Error executing command: --ip6 is wrong IP version")
@@ -168,6 +210,10 @@ Description:
 		fmt.Printf("Error executing command: unknown backend '%s'\n", backend)
 		os.Exit(1)
 	}
+
+	// Validate the IP autodetection methods if specified.
+	validateIpAutodetectionMethod(ipv4ADMethod, 4)
+	validateIpAutodetectionMethod(ipv6ADMethod, 6)
 
 	// Use the hostname if a name is not specified.  We should always
 	// pass in a fixed value to the node container so that if the user
@@ -201,15 +247,24 @@ Description:
 
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
-		"NODENAME":                  name,
-		"CALICO_NETWORKING_BACKEND": backend,
-		"NO_DEFAULT_POOLS":          noPoolsString,
-		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
+		"NODENAME":                          name,
+		"CALICO_NETWORKING_BACKEND":         backend,
+		"NO_DEFAULT_POOLS":                  noPoolsString,
+		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
+		"IP_AUTODETECTION_METHOD":           ipv4ADMethod,
+		"IP6_AUTODETECTION_METHOD":          ipv6ADMethod,
+		"CALICO_LIBNETWORK_CREATE_PROFILES": fmt.Sprint(!useDockerContainerLabels),
+		"CALICO_LIBNETWORK_LABEL_ENDPOINTS": fmt.Sprint(useDockerContainerLabels),
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
 	if !ifprefixMatch.MatchString(ifprefix) {
 		fmt.Printf("Error executing command: invalid interface prefix '%s'\n", ifprefix)
+		os.Exit(1)
+	}
+
+	if disableDockerNw && useDockerContainerLabels {
+		fmt.Printf("Error executing command: invalid to disable Docker Networking and enable Container labels\n")
 		os.Exit(1)
 	}
 
@@ -229,17 +284,23 @@ Description:
 		envs["IP6"] = ipv6
 	}
 
-	// Create a map of read only bindings.
-	vols := map[string]string{
-		logDir:            "/var/log/calico",
-		"/var/run/calico": "/var/run/calico",
-		"/lib/modules":    "/lib/modules",
+	// Create a struct for volumes to mount.
+	type vol struct {
+		hostPath      string
+		containerPath string
+	}
+
+	// vols is a slice of read only volume bindings.
+	vols := []vol{
+		{hostPath: logDir, containerPath: "/var/log/calico"},
+		{hostPath: "/var/run/calico", containerPath: "/var/run/calico"},
+		{hostPath: "/lib/modules", containerPath: "/lib/modules"},
 	}
 
 	if !disableDockerNw {
 		log.Info("Include docker networking volume mounts")
-		vols["/run/docker/plugins"] = "/run/docker/plugins"
-		vols["/var/run/docker.sock"] = "/var/run/docker.sock"
+		vols = append(vols, vol{hostPath: "/run/docker/plugins", containerPath: "/run/docker/plugins"},
+			vol{hostPath: "/var/run/docker.sock", containerPath: "/var/run/docker.sock"})
 	}
 
 	if etcdcfg.EtcdEndpoints == "" {
@@ -253,13 +314,14 @@ Description:
 	}
 	if etcdcfg.EtcdCACertFile != "" {
 		envs["ETCD_CA_CERT_FILE"] = ETCD_CA_CERT_NODE_FILE
-		vols[etcdcfg.EtcdCACertFile] = ETCD_CA_CERT_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdCACertFile, containerPath: ETCD_CA_CERT_NODE_FILE})
+
 	}
 	if etcdcfg.EtcdKeyFile != "" && etcdcfg.EtcdCertFile != "" {
 		envs["ETCD_KEY_FILE"] = ETCD_KEY_NODE_FILE
-		vols[etcdcfg.EtcdKeyFile] = ETCD_KEY_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdKeyFile, containerPath: ETCD_KEY_NODE_FILE})
 		envs["ETCD_CERT_FILE"] = ETCD_CERT_NODE_FILE
-		vols[etcdcfg.EtcdCertFile] = ETCD_CERT_NODE_FILE
+		vols = append(vols, vol{hostPath: etcdcfg.EtcdCertFile, containerPath: ETCD_CERT_NODE_FILE})
 	}
 
 	// Create the Docker command to execute (or display).  Start with the
@@ -282,8 +344,8 @@ Description:
 	}
 
 	// Add the volume mounts.
-	for k, v := range vols {
-		cmd = append(cmd, "-v", fmt.Sprintf("%s:%s", k, v))
+	for _, v := range vols {
+		cmd = append(cmd, "-v", fmt.Sprintf("%s:%s", v.hostPath, v.containerPath))
 	}
 
 	// Add the container image name
@@ -340,7 +402,7 @@ Description:
 	}
 
 	// Create the command to follow the docker logs for the calico/node
-	fmt.Println("Container started, checking progress logs.")
+	fmt.Print("Container started, checking progress logs.\n\n")
 	logCmd := exec.Command("docker", "logs", "--follow", "calico-node")
 
 	// Get the stdout pipe
@@ -377,16 +439,18 @@ Description:
 		}
 	}
 
-	// If we didn't successfully start then notify the user.
-	if outScanner.Err() != nil {
-		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
-	} else if !started {
-		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
-	}
-
 	// Kill the process if it is still running.
 	logCmd.Process.Kill()
 	logCmd.Wait()
+
+	// If we didn't successfully start then notify the user.
+	if outScanner.Err() != nil {
+		fmt.Println("Error executing command: error reading calico/node logs, check logs for details")
+		os.Exit(1)
+	} else if !started {
+		fmt.Println("Error executing command: calico/node has terminated, check logs for details")
+		os.Exit(1)
+	}
 }
 
 // runningInContainer returns whether we are running calicoctl within a container.
@@ -438,4 +502,43 @@ func setNFConntrackMax() {
 	if err != nil {
 		fmt.Println("WARNING: Could not set nf_contrack_max. This may have an impact at scale.")
 	}
+}
+
+// Validate the IP autodection method string.
+func validateIpAutodetectionMethod(method string, version int) {
+	if method == AUTODETECTION_METHOD_FIRST {
+		// Auto-detection method is "first-found", no additional validation
+		// required.
+		return
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
+		// Auto-detection method is "can-reach", validate that the address
+		// resolves to at least one IP address of the required version.
+		addrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
+		ips, err := gonet.LookupIP(addrStr)
+		if err != nil {
+			fmt.Printf("Error executing command: cannot resolve address specified for IP autodetection: %s\n", addrStr)
+			os.Exit(1)
+		}
+
+		for _, ip := range ips {
+			cip := net.IP{ip}
+			if cip.Version() == version {
+				return
+			}
+		}
+		fmt.Printf("Error executing command: address for IP autodetection does not resolve to an IPv%d address: %s\n", version, addrStr)
+		os.Exit(1)
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
+		// Auto-detection method is "interface", validate that the interface
+		// regex is a valid golang regex.
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
+		if _, err := regexp.Compile(ifStr); err != nil {
+			fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifStr)
+			os.Exit(1)
+		}
+		return
+	}
+
+	fmt.Printf("Error executing command: invalid IP autodetection method: %s\n", method)
+	os.Exit(1)
 }

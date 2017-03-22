@@ -14,10 +14,10 @@
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.route_reflector import RouteReflectorCluster
 
-from .peer import create_bgp_peer, ADDITIONAL_DOCKER_OPTIONS
+from .peer import create_bgp_peer
 
 class TestSingleRouteReflector(TestBase):
 
@@ -28,9 +28,9 @@ class TestSingleRouteReflector(TestBase):
         peering.
         """
         with DockerHost('host1',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS) as host1, \
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
              DockerHost('host2',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS) as host2, \
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2, \
              RouteReflectorCluster(1, 1) as rrc:
 
             # Set the default AS number - as this is used by the RR mesh, and

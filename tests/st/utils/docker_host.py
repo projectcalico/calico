@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import json
 import os
 import uuid
+import yaml
 from functools import partial
 from subprocess import CalledProcessError, Popen, PIPE
 
@@ -31,6 +33,18 @@ CHECKOUT_DIR = os.getenv("HOST_CHECKOUT_DIR", "")
 if CHECKOUT_DIR == "":
     CHECKOUT_DIR = os.getcwd()
 
+NODE_CONTAINER_NAME = os.getenv("NODE_CONTAINER_NAME", "calico/node:latest")
+
+if ETCD_SCHEME == "https":
+    CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " \
+                                "--cluster-store-opt kv.cacertfile=%s " \
+                                "--cluster-store-opt kv.certfile=%s " \
+                                "--cluster-store-opt kv.keyfile=%s " % \
+                                (ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
+                                 ETCD_KEY)
+else:
+    CLUSTER_STORE_DOCKER_OPTIONS = "--cluster-store=etcd://%s:2379 " % \
+                                get_ip()
 
 class DockerHost(object):
     """
@@ -174,7 +188,7 @@ class DockerHost(object):
             raise Exception("Command %s returned non-zero exit code %s" %
                             (command, status))
 
-    def calicoctl(self, command):
+    def calicoctl(self, command, version=None):
         """
         Convenience function for abstracting away calling the calicoctl
         command.
@@ -183,10 +197,16 @@ class DockerHost(object):
         return code.
 
         :param command:  The calicoctl command line parms as a single string.
+        :param version:  The calicoctl version to use (this is appended to the
+                         executable name.  It is assumed the Makefile will ensure
+                         the required versions are downloaded.
         :return: The output from the command with leading and trailing
         whitespace removed.
         """
-        calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+        if not version:
+            calicoctl = os.environ.get("CALICOCTL", "/code/dist/calicoctl")
+        else:
+            calicoctl = "/code/dist/calicoctl-" + version
 
         if ETCD_SCHEME == "https":
             etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
@@ -217,9 +237,15 @@ class DockerHost(object):
         calicoctl node command.
         """
         args = ['node', 'run']
-        if self.ip:
+        if "--node-image" not in options:
+            args.append('--node-image=%s' % NODE_CONTAINER_NAME)
+
+        # Add the IP addresses if required and we aren't explicitly specifying
+        # them in the options.  The --ip and  --ip6 options can be specified
+        # using "=" or space-separated parms.
+        if self.ip and "--ip=" not in options and "--ip " not in options:
             args.append('--ip=%s' % self.ip)
-        if self.ip6:
+        if self.ip6 and "--ip6=" not in options and "--ip6 " not in options:
             args.append('--ip6=%s' % self.ip6)
         args.append(options)
 
@@ -264,9 +290,9 @@ class DockerHost(object):
                      "-e ETCD_AUTHORITY=%s -e ETCD_SCHEME=%s %s "
                      "-v /var/log/calico:/var/log/calico "
                      "-v /var/run/calico:/var/run/calico "
-                     "calico/node:latest" % (hostname_args,
-                                             self.ip,
-                                             etcd_auth, ETCD_SCHEME, ssl_args))
+                     "%s" % (hostname_args, self.ip, etcd_auth, ETCD_SCHEME,
+                             ssl_args, NODE_CONTAINER_NAME)
+                     )
 
     def remove_workloads(self):
         """
@@ -386,11 +412,11 @@ class DockerHost(object):
         """
         assert self._cleaned
 
-    def create_workload(self, name, image="busybox", network="bridge", ip=None):
+    def create_workload(self, name, image="busybox", network="bridge", ip=None, labels=[]):
         """
         Create a workload container inside this host container.
         """
-        workload = Workload(self, name, image=image, network=network, ip=ip)
+        workload = Workload(self, name, image=image, network=network, ip=ip, labels=labels)
         self.workloads.add(workload)
         return workload
 
@@ -464,3 +490,46 @@ class DockerHost(object):
         :return: Return code of execute operation.
         """
         return self.execute("cat << EOF > %s\n%s" % (filename, data))
+
+    def writejson(self, filename, data):
+        """
+        Converts a python dict to json and outputs to a file.
+        :param filename: filename to write
+        :param data: dictionary to write out as json
+        """
+        text = json.dumps(data,
+                          sort_keys=True,
+                          indent=2,
+                          separators=(',', ': '))
+        self.writefile(filename, text)
+
+    def add_resource(self, resource_data):
+        """
+        Add resource specified in resource_data object.
+        :param resource_data: object representing json data for the resource
+        to add
+        """
+        self._apply_resources(resource_data)
+
+    def delete_all_resource(self, resource):
+        """
+        Delete all resources of the specified type.
+        :param resource: string, resource type to delete
+        """
+        # Grab all objects of a resource type
+        objects = yaml.load(self.calicoctl("get %s -o yaml" % resource))
+        # and delete them (if there are any)
+        if len(objects) > 0:
+            self._delete_data(objects)
+
+    def _delete_data(self, data):
+        logger.debug("Deleting data with calicoctl: %s", data)
+        self._exec_calicoctl("delete", data)
+
+    def _apply_resources(self, resources):
+        self._exec_calicoctl("apply", resources)
+
+    def _exec_calicoctl(self, action, data):
+        # use calicoctl with data
+        self.writejson("new_data", data)
+        self.calicoctl("%s -f new_data" % action)

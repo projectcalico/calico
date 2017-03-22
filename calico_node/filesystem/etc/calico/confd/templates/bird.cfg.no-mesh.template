@@ -2,11 +2,12 @@
 include "bird_aggr.cfg";
 include "custom_filters.cfg";
 include "bird_ipam.cfg";
+{{$node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}{{$node_ip := getv $node_ip_key}}
 
-router id {{getenv "IP"}};
+router id {{$node_ip}};
 
 {{define "LOGGING"}}
-{{$node_logging_key := printf "/host/%s/loglevel" (getenv "HOSTNAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
+{{$node_logging_key := printf "/host/%s/loglevel" (getenv "NODENAME")}}{{if exists $node_logging_key}}{{$logging := getv $node_logging_key}}
 {{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
 {{else if exists "/global/loglevel"}}{{$logging := getv "/global/loglevel"}}
 {{if eq $logging "debug"}}  debug all;{{else if ne $logging "none"}}  debug { states };{{end}}
@@ -39,7 +40,7 @@ protocol direct {
   interface -"cali*", "*"; # Exclude cali* but include everything else.
 }
 
-{{$node_as_key := printf "/host/%s/as_num" (getenv "HOSTNAME")}}
+{{$node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
   {{template "LOGGING"}}
@@ -52,7 +53,7 @@ template bgp bgp_template {
   export filter calico_pools;  # Only want to export routes for workloads.
   next hop self;     # Disable next hop processing and always advertise our
                      # local address as nexthop
-  source address {{getenv "IP"}};  # The local address we use for the TCP connection
+  source address {{$node_ip}};  # The local address we use for the TCP connection
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
 }
@@ -71,7 +72,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 
 
 # ------------- Node-specific peers -------------
-{{$node_peers_key := printf "/host/%s/peer_v4" (getenv "HOSTNAME")}}
+{{$node_peers_key := printf "/host/%s/peer_v4" (getenv "NODENAME")}}
 {{if ls $node_peers_key}}
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}

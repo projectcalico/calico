@@ -27,13 +27,17 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
-	DEFAULT_IPV4_POOL_CIDR = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR = "fd80:24e2:f998:72d6::/64"
+	DEFAULT_IPV4_POOL_CIDR         = "192.168.0.0/16"
+	DEFAULT_IPV6_POOL_CIDR         = "fd80:24e2:f998:72d6::/64"
+	AUTODETECTION_METHOD_FIRST     = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE = "interface="
 )
 
 // For testing purposes we define an exit function that we can override.
@@ -51,7 +55,8 @@ var exitFunction = os.Exit
 func main() {
 	var err error
 
-	// Determine the name for this node.
+	// Determine the name for this node and ensure the environment is always
+	// available in the startup env file that is sourced in rc.local.
 	nodeName := determineNodeName()
 
 	// Create the Calico API client.
@@ -76,6 +81,14 @@ func main() {
 			terminate()
 		}
 		log.Info("Kubernetes is initialized as a Calico datastore")
+
+		// We also need to configure IP Pools.  Do this explicitly here for now since the
+		// node configuration below is not yet supported, but once
+		// the full set of operations is supported in the kubernetes datastore driver
+		// we can remove this special case.
+		configureIPPools(client)
+
+		// Write out the startup environment file.
 		writeStartupEnv(nodeName, nil, nil)
 		return
 	}
@@ -153,9 +166,9 @@ func waitForConnection(c *client.Client) {
 	message("Checking datastore connection")
 	for {
 		// Query some arbitrary configuration to see if the connection
-		// is working.  Getting a specific node is a good option, even
-		// if the node does not exist.
-		_, err := c.Nodes().Get(api.NodeMetadata{Name: "foo"})
+		// is working.  Getting a specific config is a good option, even
+		// if the config does not exist.
+		_, _, err := c.Config().GetFelixConfig("foo", "")
 
 		// We only care about a couple of error cases, all others would
 		// suggest the datastore is accessible.
@@ -169,6 +182,9 @@ func waitForConnection(c *client.Client) {
 				continue
 			}
 		}
+
+		// We've connected to the datastore - break out of the loop.
+		break
 	}
 	message("Datastore connection verified")
 }
@@ -176,14 +192,18 @@ func waitForConnection(c *client.Client) {
 // writeStartupEnv writes out the startup.env file to set environment variables
 // that are required by confd/bird etc. but may not have been passed into the
 // container.
-func writeStartupEnv(nodeName string, ip, ip6 *net.IP) {
-	text := "export HOSTNAME=" + nodeName + "\n"
-	text += "export NODENAME=" + nodeName + "\n"
+func writeStartupEnv(nodeName string, ip, ip6 *net.IPNet) {
+	text := "export NODENAME=" + nodeName + "\n"
+
+	// TODO:  See https://github.com/projectcalico/calico-bgp-daemon/issues/18
+	// The following entries are required for go-bgp.  Once updated to use
+	// NODENAME and the node IP parameters, these entries can be removed.
+	text += "export HOSTNAME=" + nodeName + "\n"
 	if ip != nil {
-		text += "export IP=" + ip.String() + "\n"
+		text += "export IP=" + ip.IP.String() + "\n"
 	}
 	if ip6 != nil {
-		text += "export IP6=" + ip6.String() + "\n"
+		text += "export IP6=" + ip6.IP.String() + "\n"
 	}
 
 	// Write out the startup.env file to ensure required environments are
@@ -234,16 +254,24 @@ func configureIPsAndSubnets(node *api.Node) {
 	// value and possibly fix up missing subnet configuration.
 	ipv4Env := os.Getenv("IP")
 	if ipv4Env == "autodetect" || (ipv4Env == "" && node.Spec.BGP.IPv4Address == nil) {
-		adm := os.Getenv("IP_AUTODETECT_METHOD")
-		node.Spec.BGP.IPv4Address = autoDetectCIDR(adm, 4)
-
-		// We must have an IPv4 address configured for BGP to run.
-		if node.Spec.BGP.IPv4Address == nil {
+		adm := os.Getenv("IP_AUTODETECTION_METHOD")
+		cidr := autoDetectCIDR(adm, 4)
+		if cidr != nil {
+			// We autodetected an IPv4 address so update the value in the node.
+			node.Spec.BGP.IPv4Address = cidr
+		} else if node.Spec.BGP.IPv4Address == nil {
+			// No IPv4 address is configured, but we always require one, so exit.
 			fatal("Couldn't autodetect a management IPv4 address:")
-			message("  -  provide an IP address by configuring one in the node resource, or")
-			message("  -  provide an IP address using the IP environment, or")
+			message("  -  provide an IPv4 address by configuring one in the node resource, or")
+			message("  -  provide an IPv4 address using the IP environment, or")
 			message("  -  if auto-detecting, use a different autodetection method.")
 			terminate()
+		} else {
+			// No IPv4 autodetected, but a previous one was configured.
+			// Tell the user we are leaving the value unchanged.  We
+			// will validate that the IP matches one on the interface.
+			warning("Autodetection of IPv4 address failed, keeping existing value: %s", node.Spec.BGP.IPv4Address.String())
+			validateIP(node.Spec.BGP.IPv4Address)
 		}
 	} else {
 		if ipv4Env != "" {
@@ -254,8 +282,26 @@ func configureIPsAndSubnets(node *api.Node) {
 
 	ipv6Env := os.Getenv("IP6")
 	if ipv6Env == "autodetect" {
-		adm := os.Getenv("IP6_AUTODETECT_METHOD")
-		node.Spec.BGP.IPv6Address = autoDetectCIDR(adm, 6)
+		adm := os.Getenv("IP6_AUTODETECTION_METHOD")
+		cidr := autoDetectCIDR(adm, 6)
+		if cidr != nil {
+			// We autodetected an IPv6 address so update the value in the node.
+			node.Spec.BGP.IPv6Address = cidr
+		} else if node.Spec.BGP.IPv6Address == nil {
+			// No IPv6 address is configured, but we have requested one, so exit.
+			fatal("Couldn't autodetect a management IPv6 address:")
+			message("  -  provide an IPv6 address by configuring one in the node resource, or")
+			message("  -  provide an IPv6 address using the IP6 environment, or")
+			message("  -  use a different autodetection method, or")
+			message("  -  don't request autodetection of an IPv6 address.")
+			terminate()
+		} else {
+			// No IPv6 autodetected, but a previous one was configured.
+			// Tell the user we are leaving the value unchanged.  We
+			// will validate that the IP matches one on the interface.
+			warning("Autodetection of IPv6 address failed, keeping existing value: %s", node.Spec.BGP.IPv6Address.String())
+			validateIP(node.Spec.BGP.IPv4Address)
+		}
 	} else {
 		if ipv6Env != "" {
 			node.Spec.BGP.IPv6Address = parseIPEnvironment("IP6", ipv6Env, 6)
@@ -268,9 +314,12 @@ func configureIPsAndSubnets(node *api.Node) {
 // fetchAndValidateIPAndNetwork fetches and validates the IP configuration from
 // either the environment variables or from the values already configured in the
 // node.
-func parseIPEnvironment(envName, envValue string, version int) *net.IP {
-	ip := &net.IP{}
-	err := ip.UnmarshalText([]byte(envValue))
+func parseIPEnvironment(envName, envValue string, version int) *net.IPNet {
+	// To parse the environment (which could be an IP or a CIDR), convert
+	// to a JSON string and use the UnmarshalJSON method on the IPNet
+	// struct to parse the value.
+	ip := &net.IPNet{}
+	err := ip.UnmarshalJSON([]byte("\"" + envValue + "\""))
 	if err != nil || ip.Version() != version {
 		fatal("Environment does not contain a valid IPv%d address: %s=%s", version, envName, envValue)
 		terminate()
@@ -282,11 +331,14 @@ func parseIPEnvironment(envName, envValue string, version int) *net.IP {
 
 // validateIP checks that the IP address is actually on one of the host
 // interfaces and warns if not.
-func validateIP(ip *net.IP) {
+func validateIP(ipn *net.IPNet) {
 	// No validation required if no IP address is specified.
-	if ip == nil {
+	if ipn == nil {
 		return
 	}
+
+	// Pull out the IP as a net.IP (it has useful string and version methods).
+	ip := net.IP{ipn.IP}
 
 	// Get a complete list of interfaces with their addresses and check if
 	// the IP address can be found.
@@ -312,33 +364,72 @@ func validateIP(ip *net.IP) {
 
 // autoDetectCIDR auto-detects the IP and Network using the requested
 // detection method.
-func autoDetectCIDR(detectionMethod string, version int) *net.IP {
-	incl := []string{}
-	excl := []string{"^docker.*", "^cbr.*", "dummy.*",
-		"virbr.*", "lxcbr.*", "veth.*", "lo",
-		"cali.*", "tunl.*", "flannel.*"}
+func autoDetectCIDR(method string, version int) *net.IPNet {
+	if method == "" || method == AUTODETECTION_METHOD_FIRST {
+		// Autodetect the IP by enumerating all interfaces (excluding
+		// known internal interfaces).
+		return autoDetectCIDRFirstFound(version)
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
+		// Autodetect the IP from the specified interface.
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
+		return autoDetectCIDRByInterface(ifStr, version)
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_CAN_REACH) {
+		// Autodetect the IP by connecting a UDP socket to a supplied address.
+		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
+		return autoDetectCIDRByReach(destStr, version)
+	}
 
-	// At the moment, we don't support anything other than the default
-	// (blank) auto-detection method.
-	if detectionMethod != "" {
-		fatal("IP detection method is not supported: %s", detectionMethod)
-		terminate()
+	// The autodetection method is not recognised and is required.  Exit.
+	fatal("Invalid IP autodection method: %s", method)
+	terminate()
+	return nil
+}
+
+// autoDetectCIDRFirstFound auto-detects the first valid Network it finds across
+// all interfaces (excluding common known internal interface names).
+func autoDetectCIDRFirstFound(version int) *net.IPNet {
+	incl := []string{}
+	excl := []string{
+		"docker.*", "cbr.*", "dummy.*",
+		"virbr.*", "lxcbr.*", "veth.*", "lo",
+		"cali.*", "tunl.*", "flannel.*",
 	}
 
 	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, version)
 	if err != nil {
-		message("Unable to auto-detect any valid IPv%d addresses: %s", version, err)
-		return nil
-	}
-
-	if cidr == nil {
-		message("Unable to auto-detect an IPv%d address", version)
+		warning("Unable to auto-detect an IPv%d address: %s", version, err)
 		return nil
 	}
 
 	message("Using autodetected IPv%d address on interface %s: %s", version, iface.Name, cidr.String())
 
-	return &net.IP{cidr.IP}
+	return cidr
+}
+
+// autoDetectCIDRByInterface auto-detects the first valid Network on the interfaces
+// matching the supplied interface regex.
+func autoDetectCIDRByInterface(ifaceRegex string, version int) *net.IPNet {
+	iface, cidr, err := autodetection.FilteredEnumeration([]string{ifaceRegex}, nil, version)
+	if err != nil {
+		warning("Unable to auto-detect an IPv%d address using interface regex %s: %s", version, ifaceRegex, err)
+		return nil
+	}
+
+	message("Using autodetected IPv%d address %s on matching interface %s", version, cidr.String(), iface.Name)
+
+	return cidr
+}
+
+// autoDetectCIDRByReach auto-detects the IP and Network by setting up a UDP
+// connection to a "reach" address.
+func autoDetectCIDRByReach(dest string, version int) *net.IPNet {
+	if cidr, err := autodetection.ReachDestination(dest, version); err != nil {
+		warning("Unable to auto-detect IPv%d address by connecting to %s: %s", version, dest, err)
+		return nil
+	} else {
+		message("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
+		return cidr
+	}
 }
 
 // configureASNumber configures the Node resource with the AS number specified
@@ -351,14 +442,14 @@ func configureASNumber(node *api.Node) {
 			fatal("The AS number specified in the environment (AS=%s) is not valid: %s", asStr, err)
 			terminate()
 		} else {
-			message("Using AS number specified in environment: AS=%s", asNum)
+			message("Using AS number specified in environment (AS=%s)", asNum)
 			node.Spec.BGP.ASNumber = &asNum
 		}
 	} else {
 		if node.Spec.BGP.ASNumber == nil {
 			message("No AS number configured on node resource, using global value")
 		} else {
-			message("Using AS number configured in node resource: %s", node.Spec.BGP.ASNumber)
+			message("Using AS number %s configured in node resource", node.Spec.BGP.ASNumber)
 		}
 	}
 }
@@ -366,16 +457,28 @@ func configureASNumber(node *api.Node) {
 // configureIPPools ensures that default IP pools are created (unless explicitly
 // requested otherwise).
 func configureIPPools(client *client.Client) {
+	// Read in environment variables for use here and later.
+	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
+	ipv6Pool := os.Getenv("CALICO_IPV6POOL_CIDR")
+
 	if strings.ToLower(os.Getenv("NO_DEFAULT_POOLS")) == "true" {
+		if len(ipv4Pool) > 0 || len(ipv6Pool) > 0 {
+			fatal("Invalid configuration with NO_DEFAULT_POOLS defined and CALICO_IPV4POOL_CIDR or CALICO_IPV6POOL_CIDR defined.")
+			terminate()
+		}
+
 		log.Info("Skipping IP pool configuration")
 		return
 	}
+
+	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(api.IPPoolMetadata{})
 	if err != nil {
 		fatal("Unable to fetch IP pool list: %s", err)
 		terminate()
+		return // not really needed but allows testing to function
 	}
 
 	// Check for IPv4 and IPv6 pools.
@@ -390,14 +493,36 @@ func configureIPPools(client *client.Client) {
 		}
 	}
 
+	// Read IPV4 CIDR from env if set and parse then check it for errors
+	if ipv4Pool == "" {
+		ipv4Pool = DEFAULT_IPV4_POOL_CIDR
+	}
+	_, ipv4Cidr, err := net.ParseCIDR(ipv4Pool)
+	if err != nil || ipv4Cidr.Version() != 4 {
+		fatal("Invalid CIDR specified in CALICO_IPV4POOL_CIDR '%s'", ipv4Pool)
+		terminate()
+		return // not really needed but allows testing to function
+	}
+
+	// Read IPV6 CIDR from env if set and parse then check it for errors
+	if ipv6Pool == "" {
+		ipv6Pool = DEFAULT_IPV6_POOL_CIDR
+	}
+	_, ipv6Cidr, err := net.ParseCIDR(ipv6Pool)
+	if err != nil || ipv6Cidr.Version() != 6 {
+		fatal("Invalid CIDR specified in CALICO_IPV6POOL_CIDR '%s'", ipv6Pool)
+		terminate()
+		return // not really needed but allows testing to function
+	}
+
 	// Ensure there are pools created for each IP version.
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
-		createIPPool(client, DEFAULT_IPV4_POOL_CIDR)
+		createIPPool(client, ipv4Cidr, ipv4IpipModeEnvVar)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
-		createIPPool(client, DEFAULT_IPV6_POOL_CIDR)
+		createIPPool(client, ipv6Cidr, string(ipip.Undefined))
 	}
 }
 
@@ -420,21 +545,36 @@ func ipv6Supported() bool {
 	return supported
 }
 
-// createIPPool creates an IP pool using the specified CIDR string.  This
+// createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(client *client.Client, cs string) {
-	_, cidr, _ := net.ParseCIDR(cs)
+func createIPPool(client *client.Client, cidr *net.IPNet, ipipModeName string) {
 	version := cidr.Version()
+	ipipMode := ipip.Mode(ipipModeName)
 
-	log.Info("Ensure default IPv%d pool is created", version)
+	// off is not an actual valid value so switch it to an empty string
+	if ipipModeName == "off" {
+		ipipMode = ipip.Undefined
+	}
+
 	pool := &api.IPPool{
 		Metadata: api.IPPoolMetadata{
 			CIDR: *cidr,
 		},
 		Spec: api.IPPoolSpec{
 			NATOutgoing: true,
+			IPIP: &api.IPIPConfiguration{
+				Enabled: ipipMode != ipip.Undefined,
+				Mode:    ipipMode,
+			},
 		},
 	}
+
+	// Use off when logging for disabled instead of blank
+	if ipipMode == ipip.Undefined {
+		ipipModeName = "off"
+	}
+
+	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s", version, ipipModeName)
 
 	// Create the pool.  There is a small chance that another node may
 	// beat us to it, so handle the fact that the pool already exists.
@@ -444,7 +584,8 @@ func createIPPool(client *client.Client, cs string) {
 			terminate()
 		}
 	} else {
-		message("Created default IPv%d pool (%s) with NAT outgoing enabled", version, cidr)
+		message("Created default IPv%d pool (%s) with NAT outgoing enabled. IPIP mode: %s",
+			version, cidr, ipipModeName)
 	}
 }
 
@@ -478,34 +619,34 @@ func checkConflictingNodes(client *client.Client, node *api.Node) {
 		// an indication of multiple nodes using the same name.  This
 		// is not an error condition as the IPs could actually change.
 		if theirNode.Metadata.Name == node.Metadata.Name {
-			if theirIPv4 != nil && !theirIPv4.Equal(ourIPv4.IP) {
+			if theirIPv4 != nil && ourIPv4 != nil && !theirIPv4.IP.Equal(ourIPv4.IP) {
 				warning("Calico node '%s' IPv4 address has changed:",
 					theirNode.Metadata.Name)
 				message(" -  This could happen if multiple nodes are configured with the same name")
-				message(" -  Original IP: %s", theirIPv4)
-				message(" -  Updated IP: %s", ourIPv4)
+				message(" -  Original IP: %s", theirIPv4.IP)
+				message(" -  Updated IP: %s", ourIPv4.IP)
 			}
-			if theirIPv6 != nil && ourIPv6 != nil && !theirIPv6.Equal(ourIPv6.IP) {
+			if theirIPv6 != nil && ourIPv6 != nil && !theirIPv6.IP.Equal(ourIPv6.IP) {
 				warning("Calico node '%s' IPv6 address has changed:",
 					theirNode.Metadata.Name)
 				message(" -  This could happen if multiple nodes are configured with the same name")
-				message(" -  Original IP: %s", theirIPv6)
-				message(" -  Updated IP: %s", ourIPv6)
+				message(" -  Original IP: %s", theirIPv6.IP)
+				message(" -  Updated IP: %s", ourIPv6.IP)
 			}
 			continue
 		}
 
 		// Check that other nodes aren't using the same IP addresses.
 		// This is an error condition.
-		if theirIPv4 != nil && theirIPv4.Equal(ourIPv4.IP) {
+		if theirIPv4 != nil && ourIPv4 != nil && theirIPv4.IP.Equal(ourIPv4.IP) {
 			message("Calico node '%s' is already using the IPv4 address %s:",
-				theirNode.Metadata.Name, ourIPv4)
+				theirNode.Metadata.Name, ourIPv4.IP)
 			message(" -  Check the node configuration to remove the IP address conflict")
 			errored = true
 		}
-		if theirIPv6 != nil && theirIPv6.Equal(ourIPv6.IP) {
+		if theirIPv6 != nil && ourIPv6 != nil && theirIPv6.IP.Equal(ourIPv6.IP) {
 			message("Calico node '%s' is already using the IPv6 address %s:",
-				theirNode.Metadata.Name, ourIPv6)
+				theirNode.Metadata.Name, ourIPv6.IP)
 			message(" -  Check the node configuration to remove the IP address conflict")
 			errored = true
 		}

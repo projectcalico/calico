@@ -12,7 +12,7 @@ ARCH := amd64
 GO_BUILD_VER:=latest
 # Set libcalico-go version in glide.yaml first then do a `glide up -v` to update glide.lock.
 # Setting LIBCALICOGO_VER in the Makefile won't update the glide dependencies.
-LIBCALICOGO_VER := v1.0.2
+LIBCALICOGO_VER := v1.0.3
 ###############################################################################
 
 CALICOCTL_DIR=calicoctl
@@ -87,6 +87,11 @@ dist/calicoctl-darwin-amd64: $(CALICOCTL_FILES) vendor
 dist/calicoctl-windows-amd64.exe: $(CALICOCTL_FILES) vendor
 	$(MAKE) OS=windows ARCH=amd64 binary-containerized
 	mv dist/calicoctl-windows-amd64 dist/calicoctl-windows-amd64.exe
+
+# Download calicoctl v1.0.2 from releases.  Used for STs (testing pre/post v1.1.0 data model)
+dist/calicoctl-v1.0.2:
+	wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.2/calicoctl -O dist/calicoctl-v1.0.2
+	chmod +x dist/calicoctl-v1.0.2
 
 ## Run the build in a container. Useful for CI
 binary-containerized: $(CALICOCTL_FILES) vendor

@@ -14,16 +14,24 @@
 package autodetection
 
 import (
+	"errors"
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // FilteredEnumeration performs basic IP and IPNetwork discovery by enumerating
 // all interfaces and filtering in/out based on the supplied filter regex.
+//
+// The incl and excl slice of regex strings may be nil.
 func FilteredEnumeration(incl, excl []string, version int) (*Interface, *net.IPNet, error) {
 	interfaces, err := GetInterfaces(incl, excl, version)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(interfaces) == 0 {
+		return nil, nil, errors.New("no valid host interfaces found")
 	}
 
 	// Find the first interface with a valid IP address and network.
@@ -39,5 +47,5 @@ func FilteredEnumeration(incl, excl []string, version int) (*Interface, *net.IPN
 		}
 	}
 
-	return nil, nil, nil
+	return nil, nil, fmt.Errorf("no valid IPv%d addresses found on the host interfaces", version)
 }

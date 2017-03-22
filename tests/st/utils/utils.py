@@ -22,6 +22,7 @@ from subprocess import CalledProcessError
 from subprocess import check_output, STDOUT
 from time import sleep
 
+import termios
 import yaml
 from netaddr import IPNetwork, IPAddress
 from exceptions import CommandExecError
@@ -35,7 +36,6 @@ ETCD_CA = os.environ.get("ETCD_CA_CERT_FILE", "")
 ETCD_CERT = os.environ.get("ETCD_CERT_FILE", "")
 ETCD_KEY = os.environ.get("ETCD_KEY_FILE", "")
 ETCD_HOSTNAME_SSL = "etcd-authority-ssl"
-
 
 """
 Compile Regexes
@@ -81,23 +81,37 @@ def get_ip(v6=False):
     return ip
 
 
-def log_and_run(command, raise_exception_on_failure=True):
+# Some of the commands we execute like to mess with the TTY configuration, which can break the
+# output formatting. As a wrokaround, save off the terminal settings and restore them after
+# each command.
+_term_settings = termios.tcgetattr(sys.stdin.fileno())
 
+
+def log_and_run(command, raise_exception_on_failure=True):
     def log_output(results):
+        if results is None:
+            logger.info("  # <no output>")
+
         lines = results.split("\n")
         for line in lines:
-            logger.info("  # %s", line)
+            logger.info("  # %s", line.rstrip())
 
     try:
-        logger.info(command)
-        results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        logger.info("%s", command)
+        try:
+            results = check_output(command, shell=True, stderr=STDOUT).rstrip()
+        finally:
+            # Restore terminal settings in case the command we ran manipulated them.  Note:
+            # under concurrent access, this is still not a perfect solution since another thread's
+            # child process may break the settings again before we log below.
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _term_settings)
         log_output(results)
         return results
     except CalledProcessError as e:
         # Wrap the original exception with one that gives a better error
         # message (including command output).
         logger.info("  # Return code: %s", e.returncode)
-        log_output(e.output.rstrip())
+        log_output(e.output)
         if raise_exception_on_failure:
             raise CommandExecError(e)
 
@@ -231,9 +245,10 @@ def assert_number_endpoints(host, expected):
             actual += 1
 
     if int(actual) != int(expected):
-        msg = "Incorrect number of endpoints: \n" \
-              "Expected: %s; Actual: %s" % (expected, actual)
-        raise AssertionError(msg)
+        raise AssertionError(
+            "Incorrect number of endpoints on host %s: \n"
+            "Expected: %s; Actual: %s" % (hostname, expected, actual)
+        )
 
 
 @debug_failures
@@ -334,3 +349,39 @@ def get_host_ips(version=4, exclude=None):
                     ip_addrs.append(IPAddress(address))
 
     return ip_addrs
+
+def curl_etcd(path, options=None, recursive=True, ip=None):
+    """
+    Perform a curl to etcd, returning JSON decoded response.
+    :param path:  The key path to query
+    :param options:  Additional options to include in the curl
+    :param recursive:  Whether we want recursive query or not
+    :return:  The JSON decoded response.
+    """
+    if options is None:
+        options = []
+    if ETCD_SCHEME == "https":
+        # Etcd is running with SSL/TLS, require key/certificates
+        rc = check_output(
+            "curl --cacert %s --cert %s --key %s "
+            "-sL https://%s:2379/v2/keys/%s?recursive=%s %s"
+            % (ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL,
+               path, str(recursive).lower(), " ".join(options)),
+            shell=True)
+    else:
+        rc = check_output(
+            "curl -sL http://%s:2379/v2/keys/%s?recursive=%s %s"
+            % (ip, path, str(recursive).lower(), " ".join(options)),
+            shell=True)
+
+    return json.loads(rc.strip())
+
+def wipe_etcd(ip):
+    # Delete /calico if it exists. This ensures each test has an empty data
+    # store at start of day.
+    curl_etcd("calico", options=["-XDELETE"], ip=ip)
+
+    # Disable Usage Reporting to usage.projectcalico.org
+    # We want to avoid polluting analytics data with unit test noise
+    curl_etcd("calico/v1/config/UsageReportingEnabled",
+                   options=["-XPUT -d value=False"], ip=ip)

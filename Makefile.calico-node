@@ -8,9 +8,9 @@ SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
 ###############################################################################
 # Subcomponent versions:
-BIRD_VER := v0.2.0
+BIRD_VER := v0.2.2-alpha1
 GOBGPD_VER := v0.1.2
-FELIX_VER := 2.1.0-rc1
+FELIX_VER := 2.1.0
 LIBNETWORK_PLUGIN_VER := v1.1.0
 CONFD_VER := v0.10.0-scale
 SYSTEMTEST_CONTAINER_VER := latest
@@ -240,7 +240,7 @@ st-checks:
 
 ## Run the STs in a container
 .PHONY: st
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created
+st: dist/calicoctl dist/calicoctl-v1.0.2 busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd-host calico_test.created
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -255,6 +255,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
 	           --rm -ti \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           -v $(SOURCE_DIR):/code \
@@ -282,6 +283,7 @@ st-ssl: run-etcd-ssl dist/calicoctl busybox.tar calico-node.tar routereflector.t
 	           -e HOST_CHECKOUT_DIR=$(HOST_CHECKOUT_DIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           -e NODE_CONTAINER_NAME=$(NODE_CONTAINER_NAME) \
 	           -e ETCD_SCHEME=https \
 	           -e ETCD_CA_CERT_FILE=$(SOURCE_DIR)/certs/ca.pem \
 	           -e ETCD_CERT_FILE=$(SOURCE_DIR)/certs/client.pem \
@@ -324,11 +326,11 @@ run-etcd-host:
 	--listen-client-urls "http://0.0.0.0:2379"
 
 ###############################################################################
-# calico_node UTs
+# calico_node FVs
 ###############################################################################
-.PHONY: node-ut
-## Run the Unit Tests locally
-node-ut:
+.PHONY: node-fv
+## Run the Functional Verification tests locally, must have local etcd running
+node-fv:
 	# Run tests in random order find tests recursively (-r).
 	ginkgo -cover -r --skipPackage vendor calico_node/*
 
@@ -348,7 +350,8 @@ node-ut:
 
 PHONY: node-test-containerized
 ## Run the tests in a container. Useful for CI, Mac dev.
-node-test-containerized:
+node-test-containerized: vendor run-etcd-host
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-ut'
+	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	--net=host \
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'

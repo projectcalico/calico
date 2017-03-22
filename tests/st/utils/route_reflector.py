@@ -36,17 +36,13 @@ class RouteReflectorCluster(object):
         Set up the route reflector clusters when entering context.
         :return: self.
         """
-        # Construct the common environment variables passed in when starting
-        # the route reflector.
-        etcd_auth = "-e ETCD_AUTHORITY=%s:2379" % get_ip()
-
         # Create the route reflector hosts, grouped by redundancy.
         for ii in range(self.num_redundancy_groups):
             cluster_id = str(IPAddress(0xFF000001 + ii))
             redundancy_group = []
             for jj in range(self.num_in_redundancy_group):
                 rr = DockerHost('RR.%d.%d' % (ii, jj), start_calico=False)
-                ip = "-e IP=%s" % rr.ip
+                ip_env = "-e IP=%s" % rr.ip
                 rr.execute("docker load --input /code/routereflector.tar")
 
                 # Check which type of etcd is being run, then invoke the
@@ -58,14 +54,13 @@ class RouteReflectorCluster(object):
                     # Etcd is running with SSL/TLS, pass the key values
                     rr.execute("docker run --privileged --net=host -d "
                                "--name rr %s "
-                               "-e ETCD_AUTHORITY=%s:2379 "
+                               "-e ETCD_ENDPOINTS=https://%s:2379 "
                                "-e ETCD_CA_CERT_FILE=%s "
                                "-e ETCD_CERT_FILE=%s "
                                "-e ETCD_KEY_FILE=%s "
-                               "-e ETCD_SCHEME=https "
                                "-v %s/certs:%s/certs "
                                "calico/routereflector" %
-                               (ip, ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
+                               (ip_env, ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
                                 ETCD_KEY, CHECKOUT_DIR,CHECKOUT_DIR))
                     rr.execute(r'curl --cacert %s --cert %s --key %s '
                                r'-L https://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
@@ -78,8 +73,9 @@ class RouteReflectorCluster(object):
 
                 else:
                     rr.execute("docker run --privileged --net=host -d "
-                           "--name rr %s %s "
-                           "calico/routereflector" % (etcd_auth, ip))
+                           "--name rr %s "
+                           "-e ETCD_ENDPOINTS=http://%s:2379 "
+                           "calico/routereflector" % (ip_env, get_ip()))
                     rr.execute(r'curl -L http://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
                                r'-XPUT -d value="{'
                                  r'\"ip\":\"%s\",'

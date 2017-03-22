@@ -54,16 +54,20 @@ class DockerNetwork(object):
         ipam_option = ("--ipam-driver %s" % ipam_driver) if ipam_driver else ""
         subnet_option = ("--subnet %s" % subnet) if subnet else ""
 
-        # Create the network, if this fails - attempt deletion and then
-        # try again.
+        # Check if network is present before we create it
+        try:
+            host.execute("docker network inspect %s" % name)
+            # Network exists - delete it
+            host.execute("docker network rm " + name)
+        except CommandExecError:
+            # Network didn't exist, no problem.
+            pass
+
+        # Create the network,
         cmd = "docker network create %s %s %s %s" % \
               (driver_option, ipam_option, subnet_option, name)
         docker_net_create = partial(host.execute, cmd)
-        try:
-            self.uuid = retry_until_success(docker_net_create)
-        except CommandExecError:
-            host.execute("docker network rm " + name, raise_exception_on_failure=False)
-            self.uuid = host.execute(cmd)
+        self.uuid = retry_until_success(docker_net_create)
 
     def delete(self, host=None):
         """

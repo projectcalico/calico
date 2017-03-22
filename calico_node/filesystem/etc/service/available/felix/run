@@ -1,9 +1,9 @@
 #!/bin/sh
 exec 2>&1
-# Felix doesn't understand HOSTNAME, but the container exports it as a common
-# interface. This ensures Felix gets the right hostname.
-if [ ! -z $HOSTNAME ]; then
-    export FELIX_FELIXHOSTNAME=$HOSTNAME
+# Felix doesn't understand NODENAME, but the container exports it as a common
+# interface. This ensures Felix gets the right name for the node.
+if [ ! -z $NODENAME ]; then
+    export FELIX_FELIXHOSTNAME=$NODENAME
 fi
 export FELIX_ETCDADDR=$ETCD_AUTHORITY
 export FELIX_ETCDENDPOINTS=$ETCD_ENDPOINTS

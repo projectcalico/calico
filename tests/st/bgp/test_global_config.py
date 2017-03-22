@@ -14,15 +14,11 @@
 from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import (DEFAULT_IPV4_ADDR_1, DEFAULT_IPV4_ADDR_2,
                                       DEFAULT_IPV4_POOL_CIDR, LARGE_AS_NUM)
 from tests.st.utils.exceptions import CommandExecError
-from tests.st.utils.utils import assert_network, assert_profile, \
-    assert_number_endpoints, get_profile_name, ETCD_CA, ETCD_CERT, \
-    ETCD_KEY, ETCD_HOSTNAME_SSL, ETCD_SCHEME, get_ip, check_bird_status
-
-from .peer import ADDITIONAL_DOCKER_OPTIONS
+from tests.st.utils.utils import check_bird_status
 
 class TestBGP(TestBase):
 
@@ -55,10 +51,10 @@ class TestBGP(TestBase):
         We run a multi-host test for this as we need to set up real BGP peers.
         """
         with DockerHost('host1',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=False) as host1, \
              DockerHost('host2',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=False) as host2:
 
             # Set the default AS number.

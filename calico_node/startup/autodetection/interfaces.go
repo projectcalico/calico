@@ -45,14 +45,22 @@ func GetInterfaces(includeRegexes []string, excludeRegexes []string, version int
 	// Create single include and exclude regexes to perform the interface
 	// check.
 	if len(includeRegexes) > 0 {
-		includeRegexp = regexp.MustCompile("(" + strings.Join(includeRegexes, ")|(") + ")")
+		if includeRegexp, err = regexp.Compile("(" + strings.Join(includeRegexes, ")|(") + ")"); err != nil {
+			log.WithError(err).Warnf("Invalid interface regex")
+			return nil, err
+		}
 	}
 	if len(excludeRegexes) > 0 {
-		excludeRegexp = regexp.MustCompile("(" + strings.Join(excludeRegexes, ")|(") + ")")
+		if excludeRegexp, err = regexp.Compile("(" + strings.Join(excludeRegexes, ")|(") + ")"); err != nil {
+			log.WithError(err).Warnf("Invalid interface regex")
+			return nil, err
+		}
 	}
 
-	// Loop through interfaces filtering on the regexes.
-	for _, iface := range netIfaces {
+	// Loop through interfaces filtering on the regexes.  Loop in reverse
+	// order to maintain behavior with older versions.
+	for idx := len(netIfaces)-1; idx >= 0; idx-- {
+		iface := netIfaces[idx]
 		include := (includeRegexp == nil) || includeRegexp.MatchString(iface.Name)
 		exclude := (excludeRegexp != nil) && excludeRegexp.MatchString(iface.Name)
 		if include && !exclude {
