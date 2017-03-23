@@ -25,7 +25,7 @@ You must have a cluster which meets the following requirements:
 
 ## Installation
 
-### Using single YAML file
+### Using a single YAML file
 
 To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
 
@@ -37,7 +37,7 @@ Once installed, you can try out NetworkPolicy by following the [simple policy gu
 
 Below are a few examples for how to get started.
 
-### Using Kubernetes' addon-manager
+### Using the Kubernetes addon-manager
 
 The Kubernetes [addon-manager](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/addon-manager)
 can be used for deploying Calico alongside other cluster addons. It monitors
