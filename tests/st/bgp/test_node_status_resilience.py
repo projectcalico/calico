@@ -72,7 +72,7 @@ class TestBGPBackends(TestBase):
 
             # Check the BGP status on the BIRD/GoBGP host.
             _log.debug("==== docker exec -it calico-node ps -a  ====")
-            host3.execute("docker exec -it calico-node ps -a")
+            _log.debug(host3.execute("docker exec -it calico-node ps -a"))
 
             hosts = [host1, host2, host3]
             workloads = [workload_host1, workload_host2, workload_host3]
