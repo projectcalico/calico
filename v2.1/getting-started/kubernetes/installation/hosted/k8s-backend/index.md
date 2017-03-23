@@ -1,9 +1,8 @@
 ---
 title: Etcdless Hosted Install
-redirect_from: latest/getting-started/kubernetes/installation/hosted/k8s-backend/index
 ---
 
-This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
+This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.
 This mode uses the Kubernetes API as the datastore.  Note that this feature
 currently comes with a number of limitations, namely:
 
@@ -26,6 +25,8 @@ You must have a cluster which meets the following requirements:
 
 ## Installation
 
+### Using a single YAML file
+
 To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
 
 ```
@@ -35,6 +36,23 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
 Below are a few examples for how to get started.
+
+### Using the Kubernetes addon-manager
+
+The Kubernetes [addon-manager](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/addon-manager)
+can be used for deploying Calico alongside other cluster addons. It monitors
+`/etc/kubernetes/addons` for manifests and ensures they
+are applied to the cluster.
+
+To install Calico using the addon-manager, run the following commands on a Kubernetes
+master which has the addon-manager installed:
+
+```
+curl -sL -o /etc/kubernetes/addons/calico-configmap.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/addon-manager/calico-configmap.yaml
+curl -sL -o /etc/kubernetes/addons/calico-daemonset.yaml http://docs.projectcalico.org/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/addon-manager/calico-daemonset.yaml
+```
+
+### Examples
 
 #### Example: kubeadm + flannel
 
