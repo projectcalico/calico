@@ -17,10 +17,9 @@ from nose.plugins.attrib import attr
 
 from tests.st.test_base import TestBase
 from tests.st.utils.constants import (LARGE_AS_NUM)
-from tests.st.utils.docker_host import DockerHost
+from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import check_bird_status, \
     retry_until_success
-from .peer import ADDITIONAL_DOCKER_OPTIONS
 
 _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
@@ -36,13 +35,13 @@ class TestBGPBackends(TestBase):
         backends and a single BIRD backend.
         """
         with DockerHost('host1',
-                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         start_calico=False) as host1, \
                 DockerHost('host2',
-                           additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                           additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                            start_calico=False) as host2, \
                 DockerHost('host3',
-                           additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                           additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                            start_calico=True) as host3:
 
             # Set the default AS number.
