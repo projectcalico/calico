@@ -191,9 +191,9 @@ func (c converter) globalConfigToTPR(kvp *model.KVPair) thirdparty.GlobalConfig 
 	return tpr
 }
 
-// isCalicoPod returns true if the pod should be shown as a workloadEndpoint
+// isReadyCalicoPod returns true if the pod should be shown as a workloadEndpoint
 // in the Calico API and false otherwise.
-func (c converter) isCalicoPod(pod *kapiv1.Pod) bool {
+func (c converter) isReadyCalicoPod(pod *kapiv1.Pod) bool {
 	if c.isHostNetworked(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 		return false
@@ -219,23 +219,24 @@ func (c converter) hasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != ""
 }
 
+// podToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
+// has verified that the provided Pod is valid to convert to a WorkloadEndpoint.
 func (c converter) podToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error) {
 	// Pull out the profile and workload ID based on pod name and Namespace.
 	profile := fmt.Sprintf("ns.projectcalico.org/%s", pod.ObjectMeta.Namespace)
 	workload := fmt.Sprintf("%s.%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 
-	// If the pod isn't ready, we can't parse it.
-	if !c.isCalicoPod(pod) {
-		return nil, fmt.Errorf("Pod is not ready / valid. pod=%s", pod.Name)
+	// We do, in some circumstances, want to parse Pods without an IP address.  For example,
+	// a DELETE update will not include an IP.
+	ipNets := []cnet.IPNet{}
+	if c.hasIPAddress(pod) {
+		_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
+		if err != nil {
+			log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
+			return nil, err
+		}
+		ipNets = append(ipNets, *ipNet)
 	}
-
-	// Parse the Pod's IP address.
-	_, ipNet, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", pod.Status.PodIP))
-	if err != nil {
-		log.WithFields(log.Fields{"ip": pod.Status.PodIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
-		return nil, err
-	}
-	ipNets := []cnet.IPNet{*ipNet}
 
 	// Generate the interface name and MAC based on workload.  This must match
 	// the host-side veth configured by the CNI plugin.

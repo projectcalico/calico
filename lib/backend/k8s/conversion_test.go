@@ -129,7 +129,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Revision.(string)).To(Equal("1234"))
 	})
 
-	It("should fail to parse a Pod without an IP to a WorkloadEndpoint", func() {
+	It("should not parse a Pod without an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name:      "podA",
@@ -149,7 +149,7 @@ var _ = Describe("Test Pod conversion", func() {
 		}
 
 		_, err := c.podToWorkloadEndpoint(&pod)
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should parse a Pod with no labels", func() {
@@ -182,7 +182,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*model.WorkloadEndpoint).Labels).To(Equal(map[string]string{"calico/k8s_ns": "default"}))
 	})
 
-	It("should not Parse a Pod with no NodeName", func() {
+	It("should Parse a Pod with no NodeName", func() {
 		pod := k8sapi.Pod{
 			ObjectMeta: k8sapi.ObjectMeta{
 				Name:      "podA",
@@ -195,7 +195,7 @@ var _ = Describe("Test Pod conversion", func() {
 		}
 
 		_, err := c.podToWorkloadEndpoint(&pod)
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 })
@@ -698,7 +698,7 @@ var _ = Describe("Test Node conversion", func() {
 				ResourceVersion: "1234",
 				Annotations: map[string]string{
 					"projectcalico.org/IPv4Address": "172.17.17.10/24",
-					"projectcalico.org/ASNumber": "2546",
+					"projectcalico.org/ASNumber":    "2546",
 				},
 			},
 			Status: k8sapi.NodeStatus{
@@ -746,7 +746,7 @@ var _ = Describe("Test Node conversion", func() {
 				Name:            "TestNode",
 				Labels:          l,
 				ResourceVersion: "1234",
-				Annotations: map[string]string{"projectcalico.org/IPv4Address": "172.984.12.5/24"},
+				Annotations:     map[string]string{"projectcalico.org/IPv4Address": "172.984.12.5/24"},
 			},
 			Spec: k8sapi.NodeSpec{},
 		}
