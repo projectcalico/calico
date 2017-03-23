@@ -66,6 +66,11 @@ func (i *IPNet) Version() int {
 	return 0
 }
 
+// IsNetOverlap is a utility function that returns true if the two subnet have an overlap.
+func (i IPNet) IsNetOverlap(n net.IPNet) bool {
+	return n.Contains(i.IP) || i.Contains(n.IP)
+}
+
 // Network returns the masked IP network.
 func (i *IPNet) Network() *IPNet {
 	_, n, _ := ParseCIDR(i.String())

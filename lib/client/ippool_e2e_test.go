@@ -215,7 +215,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		// Test 4: Pass two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
 		Entry("Two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6)",
 			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("2001::2/120")},
 			api.IPPoolSpec{
 				NATOutgoing: true,
 				Disabled:    true,
@@ -229,7 +229,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		// Test 5: Test starting with IPIP (cross subnet mode) and moving to no IPIP
 		Entry("IPIP (cross subnet mode) and moving to no IPIP",
 			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("fe80::00/120")},
+			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("2001::2/120")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,

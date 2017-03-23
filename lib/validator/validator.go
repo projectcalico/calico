@@ -15,6 +15,7 @@
 package validator
 
 import (
+	"net"
 	"reflect"
 	"regexp"
 	"strings"
@@ -34,17 +35,29 @@ import (
 var validate *validator.Validate
 
 var (
-	labelRegex         = regexp.MustCompile(`^` + tokenizer.LabelKeyMatcher + `$`)
-	labelValueRegex    = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
-	nameRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
-	interfaceRegex     = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
-	actionRegex        = regexp.MustCompile("^(allow|deny|log|pass)$")
-	backendActionRegex = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
-	protocolRegex      = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
-	ipipModeRegex      = regexp.MustCompile("^(always|cross-subnet|)$")
-	reasonString       = "Reason: "
-	poolSmallIPv4      = "IP pool size is too small (min /26) for use with Calico IPAM"
-	poolSmallIPv6      = "IP pool size is too small (min /122) for use with Calico IPAM"
+	labelRegex          = regexp.MustCompile(`^` + tokenizer.LabelKeyMatcher + `$`)
+	labelValueRegex     = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
+	nameRegex           = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
+	interfaceRegex      = regexp.MustCompile("^[a-zA-Z0-9_-]{1,15}$")
+	actionRegex         = regexp.MustCompile("^(allow|deny|log|pass)$")
+	backendActionRegex  = regexp.MustCompile("^(allow|deny|log|next-tier|)$")
+	protocolRegex       = regexp.MustCompile("^(tcp|udp|icmp|icmpv6|sctp|udplite)$")
+	ipipModeRegex       = regexp.MustCompile("^(always|cross-subnet|)$")
+	reasonString        = "Reason: "
+	poolSmallIPv4       = "IP pool size is too small (min /26) for use with Calico IPAM"
+	poolSmallIPv6       = "IP pool size is too small (min /122) for use with Calico IPAM"
+	overlapsV4LinkLocal = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
+	overlapsV6LinkLocal = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
+
+	ipv4LinkLocalNet = net.IPNet{
+		IP:   net.ParseIP("169.254.0.0"),
+		Mask: net.CIDRMask(16, 32),
+	}
+
+	ipv6LinkLocalNet = net.IPNet{
+		IP:   net.ParseIP("fe80::"),
+		Mask: net.CIDRMask(10, 128),
+	}
 )
 
 // Validate is used to validate the supplied structure according to the
@@ -326,8 +339,18 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 				}
 			}
 		}
-	}
 
+		// IP Pool CIDR cannot overlap with IPv4 or IPv6 link local address range.
+		if pool.Metadata.CIDR.Version() == 4 && pool.Metadata.CIDR.IsNetOverlap(ipv4LinkLocalNet) {
+			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+				"CIDR", "", reason(overlapsV4LinkLocal))
+		}
+
+		if pool.Metadata.CIDR.Version() == 6 && pool.Metadata.CIDR.IsNetOverlap(ipv6LinkLocalNet) {
+			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
+				"CIDR", "", reason(overlapsV6LinkLocal))
+		}
+	}
 }
 
 func validateICMPFields(v *validator.Validate, structLevel *validator.StructLevel) {

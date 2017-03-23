@@ -304,6 +304,10 @@ func init() {
 					IPIP: &api.IPIPConfiguration{Enabled: true},
 				},
 			}, false),
+		Entry("should reject IPv4 pool with a CIDR range overlapping with Link Local range",
+			api.IPPool{Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("169.254.5.0/24")}}, false),
+		Entry("should reject IPv6 pool with a CIDR range overlapping with Link Local range",
+			api.IPPool{Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("fe80::/120")}}, false),
 
 		// (API) IPIPConfiguration
 		Entry("should accept IPIP disabled", api.IPIPConfiguration{Enabled: false}, true),
