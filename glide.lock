@@ -1,5 +1,5 @@
-hash: f968684e60460182de3d374fc9e0bf4b4b25b1111928353b2d27b2322bbc80ba
-updated: 2017-03-03T13:57:46.543385909-08:00
+hash: 0156b94c730d478479aad3b2bea0dcc66143b8b6c9357a751b0cd3a7a0a4420b
+updated: 2017-03-23T08:42:40.814289495-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -113,8 +113,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 2efe65f136fdfa53f0498a521c87a519257b6656
-  repo: git@github.com:heschlie/libcalico-go.git
+  version: 145b1337740162dba4f0702bf24d2075f66026e1
   subpackages:
   - lib/backend/api
   - lib/backend/k8s/resources

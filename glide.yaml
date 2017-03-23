@@ -42,8 +42,7 @@ import:
   version: 32a4556de2a1aab8ea4c8600f5ea24db3fbd8908
   repo: https://github.com/kelseyhightower/memkv/
 - package: github.com/projectcalico/libcalico-go
-  version: node-testing
-  repo: git@github.com:heschlie/libcalico-go.git
+  version: 145b1337740162dba4f0702bf24d2075f66026e1
   subpackages:
   - lib/backend/k8s/thirdparty
 - package: k8s.io/client-go
