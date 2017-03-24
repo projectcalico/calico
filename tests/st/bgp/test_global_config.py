@@ -44,7 +44,7 @@ class TestBGP(TestBase):
             self.assertEquals(host.calicoctl("config get nodeToNodeMesh"), "on")
 
     @attr('slow')
-    def test_as_num(self):
+    def _test_as_num(self, backend='bird'):
         """
         Test using different AS number for the node-to-node mesh.
 
@@ -62,8 +62,8 @@ class TestBGP(TestBase):
 
             # Start host1 using the inherited AS, and host2 using a specified
             # AS (same as default).
-            host1.start_calico_node()
-            host2.start_calico_node("--as=%s" % LARGE_AS_NUM)
+            host1.start_calico_node("--backend=%s" % backend)
+            host2.start_calico_node("--backend=%s --as=%s" % (backend, LARGE_AS_NUM))
 
             # Create a network and a couple of workloads on each host.
             network1 = host1.create_network("subnet1", subnet=DEFAULT_IPV4_POOL_CIDR)
@@ -82,3 +82,11 @@ class TestBGP(TestBase):
             # Check the BGP status on each host.
             check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
             check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
+
+    @attr('slow')
+    def test_bird_as_num(self):
+        self._test_as_num(backend='bird')
+
+    @attr('slow')
+    def test_gobgp_as_num(self):
+        self._test_as_num(backend='gobgp')

@@ -50,10 +50,10 @@ class TestBGPBackends(TestBase):
             host2.start_calico_node("--backend=gobgp --as=%s" % LARGE_AS_NUM)
 
             # Create a network and a couple of workloads on each host.
-            network1 = host1.create_network("subnet1")
-            workload_host1 = host1.create_workload("workload1", network=network1)
-            workload_host2 = host2.create_workload("workload2", network=network1)
-            workload_host3 = host3.create_workload("workload3", network=network1)
+            network1 = host1.create_network("subnet1", subnet=DEFAULT_IPV4_POOL_CIDR)
+            workload_host1 = host1.create_workload("workload1", network=network1, ip=DEFAULT_IPV4_ADDR_1)
+            workload_host2 = host2.create_workload("workload2", network=network1, ip=DEFAULT_IPV4_ADDR_2)
+            workload_host3 = host3.create_workload("workload3", network=network1, ip=DEFAULT_IPV4_ADDR_3)
 
             # Allow network to converge
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
@@ -71,6 +71,3 @@ class TestBGPBackends(TestBase):
             for target in hosts:
                 expected = [("node-to-node mesh", h.ip, "Established") for h in hosts if h is not target]
                 check_bird_status(target, expected)
-
-            # TODO Need to test when IPs across hosts are in the same /26
-            # see https://github.com/projectcalico/calicoctl/issues/1362
