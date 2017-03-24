@@ -62,7 +62,7 @@ class TestBGPBackends(TestBase):
             # Allow network to converge
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
 
-            # Check connectivity in both directions
+           # Check connectivity in both directions
             self.assert_ip_connectivity(workload_list=[workload_host1,
                                                        workload_host2,
                                                        workload_host3],
@@ -70,12 +70,15 @@ class TestBGPBackends(TestBase):
                                                       workload_host2.ip,
                                                       workload_host3.ip])
 
-            # Check the BGP status on the BIRD/GoBGP host.
-            _log.debug("==== docker exec -it calico-node ps -a  ====")
-            _log.debug(host3.execute("docker exec -it calico-node ps -a"))
-
             hosts = [host1, host2, host3]
             workloads = [workload_host1, workload_host2, workload_host3]
+            pid_name = "bird"
+            test_host = 2
+            iterations = 4 
+
+            # Check the BGP status on the BIRD/GoBGP host.
+            _log.debug("==== docker exec -it calico-node ps -a  ====")
+            _log.debug(hosts[test_host].execute("docker exec -it calico-node ps -a"))
 
             def check_connected():
                 for target in hosts:
@@ -88,17 +91,32 @@ class TestBGPBackends(TestBase):
                 host.execute("docker rm -f %s" % host_workload.name)
                 host.workloads.remove(host_workload)
 
-            for iteration in range(1, 4):
+            def pid_parse(pid_str):
+                if '\r\n' in pid_str:
+                    pid_list = pid_str.split('\r\n')
+                    return pid_list
+                else:
+                    return [pid_str]
+
+            for iteration in range(1, iterations):
                 _log.debug("Iteration %s", iteration)
-                _log.debug("identify and pkill bird pid")
-                host3.execute("docker exec -it calico-node pgrep bird")
-                host3.execute("docker exec -it calico-node pkill bird")
+                _log.debug("Host under test: %s", hosts[test_host].name)
+                _log.debug("Identify and pkill process: %s", pid_name)
+                
+                pre_pkill = hosts[test_host].execute("docker exec -it calico-node pgrep %s" % pid_name)
+                pre_pkill_list = pid_parse(pre_pkill)
+                _log.debug("Pre pkill list: %s", pre_pkill_list)
+                
+                hosts[test_host].execute("docker exec -it calico-node pkill %s" % pid_name) 
 
                 _log.debug('check connected and retry until "Established"')
                 retry_until_success(check_connected, retries=10, ex_class=Exception)
 
-                _log.debug("new bird pid")
-                host3.execute("docker exec -it calico-node pgrep bird")
+                post_pkill = hosts[test_host].execute("docker exec -it calico-node pgrep %s" % pid_name) 
+                post_pkill_list = pid_parse(post_pkill)
+                _log.debug("Post pkill list: %s", post_pkill_list)
+
+                assert pre_pkill_list != post_pkill_list, "The pids should not be the same after pkill"
 
                 new_workloads = []
                 for workload in workloads:
