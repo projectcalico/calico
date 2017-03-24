@@ -191,15 +191,23 @@ func CreateClientAndSyncer(cfg KubeConfig) (*KubeClient, *cb, api.Syncer) {
 }
 
 var _ = Describe("Test Syncer API for Kubernetes backend", func() {
-	log.SetLevel(log.DebugLevel)
+	var (
+		c      *KubeClient
+		cb     *cb
+		syncer api.Syncer
+	)
 
-	// Start the syncer.
-	cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
-	c, cb, syncer := CreateClientAndSyncer(cfg)
-	syncer.Start()
+	BeforeEach(func() {
+		log.SetLevel(log.DebugLevel)
 
-	// Start processing updates.
-	go cb.ProcessUpdates()
+		// Start the syncer.
+		cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+		c, cb, syncer = CreateClientAndSyncer(cfg)
+		syncer.Start()
+
+		// Start processing updates.
+		go cb.ProcessUpdates()
+	})
 
 	It("should handle a Namespace with DefaultDeny", func() {
 		ns := k8sapi.Namespace{
