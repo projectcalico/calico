@@ -8,12 +8,12 @@ import (
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/vishvananda/netlink"
 )
 
 // DoNetworking performs the networking for the given config and IPAM result
-func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *log.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
+func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logger *log.Entry, desiredVethName string) (hostVethName, contVethMAC string, err error) {
 	// Select the first 11 characters of the containerID for the host veth.
 	hostVethName = "cali" + args.ContainerID[:min(11, len(args.ContainerID))]
 	contVethName := args.IfName
@@ -71,54 +71,58 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 		// Both ends of the veth are still in the container's network namespace.
 
-		// Before returning, create the routes inside the namespace, first for IPv4 then IPv6.
-		if res.IP4 != nil {
-			// Add a connected route to a dummy next hop so that a default route can be set
-			gw := net.IPv4(169, 254, 1, 1)
-			gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
-			if err = netlink.RouteAdd(&netlink.Route{
-				LinkIndex: contVeth.Attrs().Index,
-				Scope:     netlink.SCOPE_LINK,
-				Dst:       gwNet}); err != nil {
-				return fmt.Errorf("failed to add route %v", err)
+		for _, addr := range result.IPs {
+
+			// Before returning, create the routes inside the namespace, first for IPv4 then IPv6.
+			if addr.Version == "4" {
+				// Add a connected route to a dummy next hop so that a default route can be set
+				gw := net.IPv4(169, 254, 1, 1)
+				gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
+				if err = netlink.RouteAdd(&netlink.Route{
+					LinkIndex: contVeth.Attrs().Index,
+					Scope:     netlink.SCOPE_LINK,
+					Dst:       gwNet}); err != nil {
+					return fmt.Errorf("failed to add route %v", err)
+				}
+
+				if err = ip.AddDefaultRoute(gw, contVeth); err != nil {
+					return fmt.Errorf("failed to add route %v", err)
+				}
+
+				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
+					return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
+				}
+
 			}
 
-			if err = ip.AddDefaultRoute(gw, contVeth); err != nil {
-				return fmt.Errorf("failed to add route %v", err)
-			}
+			// Handle IPv6 routes
+			if addr.Version == "6" {
+				// No need to add a dummy next hop route as the host veth device will already have an IPv6
+				// link local address that can be used as a next hop.
+				// Just fetch the address of the host end of the veth and use it as the next hop.
+				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
+				if err != nil {
+					logger.Errorf("Error listing IPv6 addresses: %s", err)
+					return err
+				}
 
-			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP4.IP}); err != nil {
-				return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
-			}
-		}
+				if len(addresses) < 1 {
+					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+					// support IPv6. Since a IPv6 address has been allocated that can't be used,
+					// return an error.
+					return fmt.Errorf("Failed to get IPv6 addresses for host side of the veth pair")
+				}
 
-		// Handle IPv6 routes
-		if res.IP6 != nil {
-			// No need to add a dummy next hop route as the host veth device will already have an IPv6
-			// link local address that can be used as a next hop.
-			// Just fetch the address of the host end of the veth and use it as the next hop.
-			addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
-			if err != nil {
-				logger.Errorf("Error listing IPv6 addresses: %s", err)
-				return err
-			}
+				hostIPv6Addr := addresses[0].IP
 
-			if len(addresses) < 1 {
-				// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
-				// support IPv6. Since a IPv6 address has been allocated that can't be used,
-				// return an error.
-				return fmt.Errorf("Failed to get IPv6 addresses for host side of the veth pair")
-			}
+				_, defNet, _ := net.ParseCIDR("::/0")
+				if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
+					return fmt.Errorf("failed to add default gateway to %v %v", hostIPv6Addr, err)
+				}
 
-			hostIPv6Addr := addresses[0].IP
-
-			_, defNet, _ := net.ParseCIDR("::/0")
-			if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
-				return fmt.Errorf("failed to add default gateway to %v %v", hostIPv6Addr, err)
-			}
-
-			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP6.IP}); err != nil {
-				return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
+				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
+					return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
+				}
 			}
 		}
 

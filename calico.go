@@ -15,6 +15,7 @@ package main
 
 import (
 	"encoding/json"
+	goerrors "errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,8 @@ import (
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
+	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/projectcalico/cni-plugin/k8s"
 	. "github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -65,6 +68,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
+
+	cniVersion := conf.CNIVersion
 
 	ConfigureLogging(conf.LogLevel)
 
@@ -109,7 +114,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Collect the result in this variable - this is ultimately what gets "returned" by this function by printing
 	// it to stdout.
-	var result *types.Result
+	var result *current.Result
 
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
@@ -144,10 +149,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
 			logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
 				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
-			result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
-			logger.WithField("result", result).Info("Got result from IPAM plugin")
+			ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
 			if err != nil {
 				return err
+			}
+
+			// Convert IPAM result into current Result.
+			// IPAM result has a bunch of fields that are optional for an IPAM plugin
+			// but required for a CNI plugin, so this is to populate those fields.
+			// See CNI Spec doc for more details.
+			result, err = current.NewResultFromResult(ipamResult)
+			if err != nil {
+				return err
+			}
+
+			if len(result.IPs) == 0 {
+				return goerrors.New("IPAM plugin returned missing IP config")
 			}
 
 			// Parse endpoint labels passed in by Mesos, and store in a map.
@@ -260,7 +278,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
-	return result.Print()
+	// Print result to stdout, in the format defined by the requested cniVersion.
+	return types.PrintResult(result, cniVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {
@@ -389,5 +408,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, cmdDel)
+	skel.PluginMain(cmdAdd, cmdDel, cniSpecVersion.All)
 }

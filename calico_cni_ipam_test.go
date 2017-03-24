@@ -14,6 +14,8 @@ import (
 var plugin = "calico-ipam"
 
 var _ = Describe("Calico IPAM Tests", func() {
+	cniVersion := os.Getenv("CNI_SPEC_VERSION")
+
 	BeforeEach(func() {
 		WipeEtcd()
 		testutils.CreateNewIPPool(*calicoClient, "192.168.0.0/16", false, false, true)
@@ -25,30 +27,41 @@ var _ = Describe("Calico IPAM Tests", func() {
 			DescribeTable("Request different numbers of IP addresses",
 				func(expectedIPv4, expectedIPv6 bool, netconf string) {
 
-					result, _, _ := RunIPAMPlugin(netconf, "ADD", "")
+					result, _, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+					var ip4Mask, ip6Mask string
+
+					for _, ip := range result.IPs {
+						if ip.Version == "4" {
+							ip4Mask = ip.Address.Mask.String()
+						} else if ip.Version == "6" {
+							ip6Mask = ip.Address.Mask.String()
+						}
+					}
 
 					if expectedIPv4 {
-						Expect(result.IP4.IP.Mask.String()).Should(Equal("ffffffff"))
+						Expect(ip4Mask).Should(Equal("ffffffff"))
 					}
 
 					if expectedIPv6 {
-						Expect(result.IP6.IP.Mask.String()).Should(Equal("ffffffffffffffffffffffffffffffff"))
+						Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffff"))
 					}
 
-					_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "")
+					_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "", cniVersion)
 					Expect(exitCode).Should(Equal(0))
 				},
 				Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
 			  "ipam": {
 			    "type": "%s"
 			  }
-			}`, os.Getenv("ETCD_IP"), plugin)),
+			}`, cniVersion, os.Getenv("ETCD_IP"), plugin)),
 				Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -56,9 +69,10 @@ var _ = Describe("Calico IPAM Tests", func() {
 			    "type": "%s",
 			    "assign_ipv4": "true"
 			  }
-			}`, os.Getenv("ETCD_IP"), plugin)),
+			}`, cniVersion, os.Getenv("ETCD_IP"), plugin)),
 				Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -67,9 +81,10 @@ var _ = Describe("Calico IPAM Tests", func() {
 			    "assign_ipv4": "false",
 			    "assign_ipv6": "true"
 			  }
-			}`, os.Getenv("ETCD_IP"), plugin)),
+			}`, cniVersion, os.Getenv("ETCD_IP"), plugin)),
 				Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -78,7 +93,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			    "assign_ipv4": "true",
 			    "assign_ipv6": "true"
 			  }
-			}`, os.Getenv("ETCD_IP"), plugin)),
+			}`, cniVersion, os.Getenv("ETCD_IP"), plugin)),
 			)
 		})
 	})
@@ -88,17 +103,18 @@ var _ = Describe("Calico IPAM Tests", func() {
 			It("Uses the ipv4 pool", func() {
 				netconf := fmt.Sprintf(`
                 {
-                      "name": "net1",
-                      "type": "calico",
-                      "etcd_endpoints": "http://%s:2379",
-                      "ipam": {
-                        "type": "%s",
-                        "assign_ipv4": "true",
-                        "ipv4_pools": [ "192.168.0.0/16" ]
-                      }
-                }`, os.Getenv("ETCD_IP"), plugin)
-				result, _, _ := RunIPAMPlugin(netconf, "ADD", "")
-				Expect(result.IP4.IP.String()).Should(HavePrefix("192.168."))
+                  "cniVersion": "%s",
+                  "name": "net1",
+                  "type": "calico",
+                  "etcd_endpoints": "http://%s:2379",
+                  "ipam": {
+                    "type": "%s",
+                    "assign_ipv4": "true",
+                    "ipv4_pools": [ "192.168.0.0/16" ]
+                    }
+                }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
+				result, _, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.168."))
 			})
 		})
 
@@ -107,6 +123,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				testutils.CreateNewIPPool(*calicoClient, "192.169.1.0/24", false, false, true)
 				netconf := fmt.Sprintf(`
                 {
+                      "cniVersion": "%s",
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
@@ -115,9 +132,9 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.169.1.0/24", "192.168.0.0/16" ]
                       }
-                }`, os.Getenv("ETCD_IP"), plugin)
-				result, _, _ := RunIPAMPlugin(netconf, "ADD", "")
-				Expect(result.IP4.IP.String()).Should(Or(HavePrefix("192.168."), HavePrefix("192.169.1")))
+                }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
+				result, _, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				Expect(result.IPs[0].Address.IP.String()).Should(Or(HavePrefix("192.168."), HavePrefix("192.169.1")))
 			})
 		})
 
@@ -126,6 +143,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				// Put the bogus pool last in the array
 				netconf := fmt.Sprintf(`
                     {
+                      "cniVersion": "%s",
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
@@ -134,8 +152,8 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
-                    }`, os.Getenv("ETCD_IP"), plugin)
-				_, error, _ := RunIPAMPlugin(netconf, "ADD", "")
+                    }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
+				_, error, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
 				Expect(error.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 
@@ -143,6 +161,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				// Put the bogus pool first in the array
 				netconf := fmt.Sprintf(`
                     {
+                      "cniVersion": "%s",
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
@@ -151,8 +170,8 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "assign_ipv4": "true",
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
-                    }`, os.Getenv("ETCD_IP"), plugin)
-				_, error, _ := RunIPAMPlugin(netconf, "ADD", "")
+                    }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
+				_, error, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
 				Expect(error.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 		})
@@ -161,29 +180,35 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 	Describe("Run IPAM plugin", func() {
 		netconf := fmt.Sprintf(`
-					{"name": "net1",
+					{
+					  "cniVersion": "%s",
+					  "name": "net1",
 					  "type": "calico",
 					  "etcd_endpoints": "http://%s:2379",
 					  "ipam": {
 					    "type": "%s"
 					  }
-					}`, os.Getenv("ETCD_IP"), plugin)
+					}`, cniVersion, os.Getenv("ETCD_IP"), plugin)
 		Context("Pass explicit IP address", func() {
 			It("Return the expected IP", func() {
-				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
-				Expect(result.IP4.IP.String()).Should(Equal("192.168.123.123/32"))
+				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(1))
+				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
 			})
 			It("Return the expected IP twice after deleting in the middle", func() {
-				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
-				Expect(result.IP4.IP.String()).Should(Equal("192.168.123.123/32"))
-				_, _, _ = RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123")
-				result, _, _ = RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
-				Expect(result.IP4.IP.String()).Should(Equal("192.168.123.123/32"))
+				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(1))
+				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
+				_, _, _ = RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				result, _, _ = RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(1))
+				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
 			})
 			It("Doesn't allow an explicit IP to be assigned twice", func() {
-				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
-				Expect(result.IP4.IP.String()).Should(Equal("192.168.123.123/32"))
-				result, _, exitCode := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
+				result, _, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				Expect(len(result.IPs)).Should(Equal(1))
+				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
+				result, _, exitCode := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
 				Expect(exitCode).Should(BeNumerically(">", 0))
 			})
 		})
@@ -191,16 +216,18 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 	Describe("Run IPAM DEL", func() {
 		netconf := fmt.Sprintf(`
-					{"name": "net1",
+					{
+					  "cniVersion": "%s",
+					  "name": "net1",
 					  "type": "calico",
 					  "etcd_endpoints": "http://%s:2379",
 					  "ipam": {
 					    "type": "%s"
 					  }
-					}`, os.Getenv("ETCD_IP"), plugin)
+					}`, cniVersion, os.Getenv("ETCD_IP"), plugin)
 
 		It("should exit successfully even if no address exists", func() {
-			_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123")
+			_, _, exitCode := RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
 			Expect(exitCode).Should(Equal(0))
 		})
 	})

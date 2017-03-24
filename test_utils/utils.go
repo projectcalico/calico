@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -22,7 +23,10 @@ import (
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/020"
+	"github.com/containernetworking/cni/pkg/types/current"
 	etcdclient "github.com/coreos/etcd/client"
+	version "github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
 	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
@@ -54,6 +58,35 @@ func WipeEtcd() {
 	}
 }
 
+// GetResultForCurrent takes the session output with cniVersion and returns the Result in current.Result format.
+func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Result, error) {
+
+	// Check if the version is older than 0.3.0.
+	// Convert it to Current standard spec version if that is the case.
+	if version.Compare(cniVersion, "0.3.0", "<") {
+		r020 := types020.Result{}
+
+		if err := json.Unmarshal(session.Out.Contents(), &r020); err != nil {
+			log.Fatalf("Error unmarshaling session output to Result: %v\n", err)
+		}
+
+		rCurrent, err := current.NewResultFromResult(&r020)
+		if err != nil {
+			return nil, err
+		}
+
+		return rCurrent, nil
+	}
+
+	r := current.Result{}
+
+	if err := json.Unmarshal(session.Out.Contents(), &r); err != nil {
+		log.Fatalf("Error unmarshaling session output to Result: %v\n", err)
+	}
+	return &r, nil
+
+}
+
 // Delete all K8s pods from the "test" namespace
 func WipeK8sPods() {
 	config, err := clientcmd.DefaultClientConfig.ClientConfig()
@@ -81,7 +114,7 @@ func WipeK8sPods() {
 
 // RunIPAMPlugin sets ENV vars required then calls the IPAM plugin
 // specified in the config and returns the result and exitCode.
-func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, int) {
+func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(fmt.Errorf("failed to load netconf: %v", err))
@@ -107,13 +140,15 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, in
 	}
 	session.Wait(5)
 	exitCode := session.ExitCode()
-	result := types.Result{}
+
+	result := &current.Result{}
 	error := types.Error{}
 	stdout := session.Out.Contents()
 	if exitCode == 0 {
 		if command == "ADD" {
-			if err := json.Unmarshal(stdout, &result); err != nil {
-				panic(fmt.Errorf("failed to load result: %s %v", stdout, err))
+			result, err = GetResultForCurrent(session, cniVersion)
+			if err != nil {
+				log.Fatalf("Error getting result from the session: %v \n %v\n", session, err)
 			}
 		}
 	} else {
