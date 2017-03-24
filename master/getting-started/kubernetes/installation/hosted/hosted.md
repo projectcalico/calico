@@ -4,7 +4,7 @@ title: Standard Hosted Install
 
 To install Calico as a Kubernetes add-on using your own etcd cluster:
 
-1. Download [`calico.yaml`](calico.yaml)
+1. Download [calico.yaml](calico.yaml)
 2. Configure `etcd_endpoints` in the provided ConfigMap to match your etcd cluster.
 
 Then simply apply the manifest:
