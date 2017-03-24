@@ -8,7 +8,7 @@ SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 CALICOCONTAINERS_VERSION?=$(shell git describe --tags --dirty --always)
 ###############################################################################
 # Subcomponent versions:
-BIRD_VER := v0.2.0
+BIRD_VER := v0.3.0
 GOBGPD_VER := v0.2.0
 FELIX_VER := 2.1.1
 LIBNETWORK_PLUGIN_VER := v1.1.0
