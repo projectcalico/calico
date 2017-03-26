@@ -23,6 +23,14 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, res *types.Result, logger *l
 		hostVethName = desiredVethName
 	}
 
+	// Clean up if hostVeth exists.
+	if oldHostVeth, err := netlink.LinkByName(hostVethName); err == nil {
+		if err = netlink.LinkDel(oldHostVeth); err != nil {
+			return "", "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
+		}
+		logger.Infof("clean old hostVeth: %v", hostVethName)
+	}
+
 	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
 		veth := &netlink.Veth{
 			LinkAttrs: netlink.LinkAttrs{
