@@ -22,10 +22,11 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/vishvananda/netlink"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 )
 
 type podSpec struct {

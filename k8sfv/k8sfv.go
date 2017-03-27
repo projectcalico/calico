@@ -16,12 +16,13 @@ package main
 
 import (
 	log "github.com/Sirupsen/logrus"
-	capi "github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/libcalico-go/lib/client"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+
+	capi "github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
 func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
