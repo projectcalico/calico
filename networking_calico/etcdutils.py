@@ -272,8 +272,8 @@ class EtcdWatcher(EtcdClientOwner):
             try:
                 db_ready = self.client.read(READY_KEY, timeout=10).value
             except etcd.EtcdKeyNotFound:
-                _log.warn("Ready flag not present in etcd; felix will pause "
-                          "updates until the orchestrator sets the flag.")
+                _log.warning("Ready flag not present in etcd; felix will pause"
+                             " updates until the orchestrator sets the flag.")
                 db_ready = "false"
             except etcd.EtcdException as e:
                 # Note: we don't log the
