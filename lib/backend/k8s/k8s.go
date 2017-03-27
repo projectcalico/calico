@@ -501,7 +501,7 @@ func (c *KubeClient) listWorkloadEndpoints(l model.WorkloadEndpointListOptions) 
 	ret := []*model.KVPair{}
 	for _, pod := range pods.Items {
 		// Decide if this pod should be displayed.
-		if !c.converter.isCalicoPod(&pod) {
+		if !c.converter.isReadyCalicoPod(&pod) {
 			continue
 		}
 
@@ -526,7 +526,7 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 	}
 
 	// Decide if this pod should be displayed.
-	if !c.converter.isCalicoPod(pod) {
+	if !c.converter.isReadyCalicoPod(pod) {
 		return nil, nil
 	}
 	return c.converter.podToWorkloadEndpoint(pod)

@@ -433,7 +433,7 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 		versions.podVersion = poList.ListMeta.ResourceVersion
 		for _, po := range poList.Items {
 			// Ignore any updates for pods which are not ready / valid.
-			if !syn.kc.converter.isCalicoPod(&po) {
+			if !syn.kc.converter.isReadyCalicoPod(&po) {
 				log.Debugf("Skipping pod %s/%s", po.ObjectMeta.Namespace, po.ObjectMeta.Name)
 				continue
 			}
@@ -588,10 +588,22 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		log.Panicf("Invalid pod event. Type: %s, Object: %+v", e.Type, e.Object)
 	}
 
-	// Ignore updates for Pods that aren't ready / valid.
-	if !syn.kc.converter.isCalicoPod(pod) {
-		log.Debugf("Skipping pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
-		return nil
+	switch e.Type {
+	case watch.Deleted:
+		// For deletes, the validity conditions are different.  We only care if the update
+		// is not for a host-networked Pods, but don't care about IP / scheduled state.
+		if syn.kc.converter.isHostNetworked(pod) {
+			log.WithField("pod", pod.Name).Debug("Pod is host networked.")
+			log.Debugf("Skipping delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+			return nil
+		}
+	default:
+		// Ignore add/modify updates for Pods that shouldn't be shown in the Calico API.
+		// e.g host networked Pods, or Pods that don't yet have an IP address.
+		if !syn.kc.converter.isReadyCalicoPod(pod) {
+			log.Debugf("Skipping add/modify for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
+			return nil
+		}
 	}
 
 	// Convert the received Pod into a KVPair.
