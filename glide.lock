@@ -1,5 +1,5 @@
-hash: e61ea0d79c205ced9b2e8580eb4651c228e3fbfa5264554e63c8c893253d93a3
-updated: 2017-03-16T09:47:22.321998056Z
+hash: b9600864fa8a6ee329e7b5dfbf36ae3a2b80d86e24d1a7e6af1ad7216a19d1d1
+updated: 2017-03-27T17:38:06.107281939Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,7 +13,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/coreos/etcd
-  version: d78b03fb27374c370d82973a94dda9f59647e750
+  version: e6f72b4f425c8196036fb809b65140f4659ed950
   subpackages:
   - client
   - pkg/pathutil
@@ -106,7 +106,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: 5ca121185e255e5041d7727d77992618545a93d2
+  version: 67b9df7f55fe1165fd9ad49aca7754cce01a42b8
   subpackages:
   - config
   - extensions/table
@@ -137,7 +137,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 42a36f79c2f92d07467c6ee15603a340e9cf6035
+  version: ab2351e017129928b55999b99c67001f49fc2eae
   subpackages:
   - lib
   - lib/api
@@ -187,9 +187,9 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: 547e984ad93a90192134fc0fdb57a468edb514fe
+  version: 10f801ebc38b33738c9d17d50860f484a0988ff5
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -199,7 +199,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 6c782366d2d5d98d4a70eea226ec10beab397af0
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -227,7 +227,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 99f16d856c9836c42d24e7ab64ea72916925fa97
+  version: afadfcc7779c1f4db0f6f6438afcb108d9c9c7cd
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -384,7 +384,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: 1de7ab2df9105aa5c15c4d7e14a8a514e3cb8d4b
+  version: 334b8f472b3af5d541c5642701c1e29e2126f486
   subpackages:
   - format
   - internal/assertion
