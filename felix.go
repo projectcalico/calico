@@ -23,8 +23,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"reflect"
-	"runtime"
-	"runtime/pprof"
 	"syscall"
 	"time"
 
