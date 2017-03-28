@@ -25,12 +25,14 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
 
-class TestBGPBackends(TestBase):
+class TestNodeStatusResilience(TestBase):
     @attr('slow')
-    def test_bgp_backends(self):
+    def test_node_status_resilience(self):
         """
-        Test using different BGP backends.
+        Test that newly restarted BGP backend processes consistently
+        transition to an Established state.
 
+        Test using different BGP backends.
         We run a multi-host test for this to test peering between two gobgp
         backends and a single BIRD backend.
         """
@@ -76,10 +78,10 @@ class TestBGPBackends(TestBase):
             test_host = 2
             iterations = 4
 
-            # Check the BGP status on the BIRD/GoBGP host.
             _log.debug("==== docker exec -it calico-node ps -a  ====")
             _log.debug(hosts[test_host].execute("docker exec -it calico-node ps -a"))
 
+            # Check the BGP status on the BIRD/GoBGP host.
             def check_connected():
                 for target in hosts:
                     expected = [("node-to-node mesh", h.ip, "Established") for h in hosts if h is not target]
@@ -123,6 +125,7 @@ class TestBGPBackends(TestBase):
                     new_workload = "%s_%s" % (workload, iteration)
                     new_workloads.append(new_workload)
 
+                # create new workloads
                 index = 0
                 for new_workload in new_workloads:
                     new_workload = hosts[index].create_workload(new_workload, network=network1)
