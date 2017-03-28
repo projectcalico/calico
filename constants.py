@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 # Logging constants.
 LOG_FORMAT = '%(asctime)s %(process)d %(levelname)s %(message)s'
 
@@ -50,9 +52,8 @@ NET_POL_TIER_ORDER = 1000
 NET_POL_ORDER = 1000
 
 # The priority assigned to the backstop policy that applies
-# to traffic which doesn't match one of the configured policies
-# in the NET_POL_TIER_NAME tier.
-NET_POL_BACKSTOP_ORDER = 2000
+# to traffic which doesn't match one of the configured policies.
+NET_POL_NO_MATCH_ORDER = int(os.environ.get("NO_MATCH_ORDER", 2000))
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
