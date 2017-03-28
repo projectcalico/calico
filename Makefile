@@ -33,11 +33,10 @@ run-k8s-apiserver: stop-k8s-apiserver
 
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
-	sleep 2
 
 run-etcd: stop-etcd
 	docker run --detach \
-	--name st-etcd quay.io/coreos/etcd \
+	--name st-etcd quay.io/coreos/etcd:v3.1.5 \
 	etcd \
 	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
