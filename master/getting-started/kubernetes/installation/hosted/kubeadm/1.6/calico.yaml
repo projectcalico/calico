@@ -128,7 +128,7 @@ spec:
       tolerations:
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
-      serviceAccountName: calico-cni-plugin
+      serviceAccountName: calico-node
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -271,67 +271,11 @@ spec:
             - name: CONFIGURE_ETC_HOSTS
               value: "true"
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: calico-cni-plugin
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: calico-cni-plugin
-subjects:
-- kind: ServiceAccount
-  name: calico-cni-plugin
-  namespace: kube-system
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: calico-cni-plugin
-  namespace: kube-system
-rules:
-  - apiGroups: [""]
-    resources:
-      - pods
-      - nodes
-    verbs:
-      - get
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: calico-cni-plugin
+  name: calico-node
   namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: calico-policy-controller
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: calico-policy-controller
-subjects:
-- kind: ServiceAccount
-  name: calico-policy-controller
-  namespace: kube-system
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
-metadata:
-  name: calico-policy-controller
-  namespace: kube-system
-rules:
-  - apiGroups:
-    - ""
-    - extensions
-    resources:
-      - pods
-      - namespaces
-      - networkpolicies
-    verbs:
-      - watch
-      - list
 ---
 apiVersion: v1
 kind: ServiceAccount

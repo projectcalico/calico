@@ -28,6 +28,11 @@ For Kubeadm >=1.6.0-beta with Kubernetes 1.6.x:
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
 ```
 
+Then, apply Calico's RBAC role and bindings:
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
+```
+
 ## About
 
 This manifest deploys the standard Calico components described
