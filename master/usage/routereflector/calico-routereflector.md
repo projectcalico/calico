@@ -28,6 +28,9 @@ For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bi
 -  There is no `calicoctl` integration or similar - it is necessary to configure 
    data directly into the `etcd` datastore each time a new route reflector 
    is added to the deployment.
+-  Each Route Reflector will form a full mesh between all other Route Reflectors
+   in the cluster.  It is not possible to form multiple separate meshed groups 
+   of Route Reflectors using this image.
 
 ## Using the Route Reflector image
 
@@ -39,7 +42,7 @@ installed.
 Run the following command to start the Route Reflector container image.
 
 ```
-docker run -privileged -net=host -d                                \ 
+docker run --privileged --net=host -d                              \ 
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
            -e ETCD_ENDPOINTS=<http://ETCD_IP:PORT>                 \
@@ -60,11 +63,15 @@ Where:
 > Note: If you require TLS/SSL enabled etcd, see the [section below](#route-reflector-with-tlsssl-etcd)
 > for details on how to start the route reflector.
 
-#### Adding the Route Reflector into etcd
+#### Configuring the Route Reflector
 
-Add an entry in etcd for this Route Reflector.  This tells the Route Reflector
-to participate in peering, and provides enough information to allow the Route
-Reflector instances to automatically form a full BGP mesh.
+Each Route Reflector instance reads its configuration from etcd (necessarily the
+same etcdv2 cluster that Calico is using).  At present, there is no `calicoctl` 
+integration to allow you to configure the Route Reflector.  
+To configure Calico to use the Route Reflector it is necessary to explicitly
+add an entry into etcd.  The etcd configuration serves two purposes: it tells the 
+Route Reflector to participate in peering, and it provides sufficient information 
+to allow all of the Route Reflector instances to automatically form a full BGP mesh.
 
 The configuration for the Route Reflector is stored for IPv4 at:
 
@@ -77,7 +84,7 @@ and IPv6 at:
 In all cases, the data is a JSON blob in the form:
 
         {
-          "ip": "<IP address of BGP Peer>",
+          "ip": "<IP address of Route Reflector>",
           "cluster_id": "<Cluster ID for this RR (see notes)>"
         }
 
@@ -85,10 +92,23 @@ To add this entry into etcd, you could use the following commands:
 
 ```
 # IPv4 entries
-curl -L http://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
+curl -L http://<ETCD_IP:PORT>/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
 
 # IPv6 entries
-curl -L http://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v6/<IPv6_RR> -XPUT -d value="{\"ip\":\"<IPv6_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
+curl -L http://<ETCD_IP:PORT>/v2/keys/calico/bgp/v1/rr_v6/<IPv6_RR> -XPUT -d value="{\"ip\":\"<IPv6_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
+```
+
+Replacing <ETCD_IP:PORT>, <IPv4_RR>, <IPv6_RR> and <CLUSTER_ID> as required.  For
+example, for a Route Reflector with the values:
+
+-  etcd running at http://192.0.2.10:2379
+-  The Route Reflector IP address of 192.0.2.50
+-  A Cluster ID of 1.0.0.1
+
+the following command would be used to configure the Route Reflector.
+
+```
+curl -L http://192.0.2.10:2379/v2/keys/calico/bgp/v1/rr_v4/192.0.2.50 -XPUT -d value="{\"ip\":\"192.0.2.50\",\"cluster_id\":\"1.0.0.1\"}"
 ```
 
 See [below](#example-topology--multiple-cluster-ids) for details 
@@ -251,7 +271,7 @@ For example, to set up the topology described above, you would:
   * N1, N2 and N3 with RR1 and RR2
   * N4, N5 and N6 with RR3 and RR4
   * N7, N8 and N9 with RR5 and RR6
--  Add [etcd config](#adding-the-route-reflector-into-etcd) for the Route 
+-  Add [etcd config](#configuring-the-route-reflector) for the Route 
    Reflectors:
   * RR1 and RR2 both using the cluster ID 1.0.0.1
   * RR2 and RR3 both using the cluster ID 1.0.0.2  
