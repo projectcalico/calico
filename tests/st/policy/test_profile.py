@@ -319,6 +319,11 @@ class MultiHostMainline(TestBase):
 
         self._check_original_connectivity(n1_workloads, n2_workloads)
 
+        if simulate_gce_routing:
+            # Check that we are using IP-in-IP for some routes.
+            assert "tunl0" in host1.execute("ip r")
+            assert "tunl0" in host2.execute("ip r")
+
         # Test deleting the network. It will fail if there are any
         # endpoints connected still.
         self.assertRaises(CommandExecError, network1.delete)
