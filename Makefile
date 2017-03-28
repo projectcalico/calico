@@ -88,7 +88,7 @@ clean:
 	rm -rf dist image.created
 	-docker rmi $(CONTAINER_NAME)
 
-ci: clean docker-image st
+ci: clean docker-image ut st
 # Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \
