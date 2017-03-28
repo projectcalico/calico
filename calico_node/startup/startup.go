@@ -672,6 +672,16 @@ func ensureDefaultConfig(c *client.Client, node *api.Node) error {
 		return err
 	}
 
+	// Configure Felix to allow traffic from the containers to the host (if
+	// not otherwise firewalled by the host administrator or profiles).
+	// This is important for container deployments, where it is common
+	// for containers to speak to services running on the host (e.g. k8s
+	// pods speaking to k8s api-server, and mesos tasks registering with agent
+	// on startup).
+	if err := ensureFelixConfig(c, node.Metadata.Name, "DefaultEndpointToHostAction", "RETURN"); err != nil {
+		return err
+	}
+
 	// Set the default values for some of the global BGP config values and
 	// per-node directory structure.
 	// These are required by both confd and the GoBGP daemon.  Some of this
@@ -701,6 +711,19 @@ func ensureGlobalFelixConfig(c *client.Client, key, def string) error {
 		return c.Config().SetFelixConfig(key, "", def)
 	} else {
 		log.WithField(key, val).Debug("Global Felix value already assigned")
+		return nil
+	}
+}
+
+// ensureFelixConfig ensures that the supplied felix config value
+// is initialized, and if not initialize it with the supplied default.
+func ensureFelixConfig(c *client.Client, host, key, def string) error {
+	if val, assigned, err := c.Config().GetFelixConfig(key, host); err != nil {
+		return err
+	} else if !assigned {
+		return c.Config().SetFelixConfig(key, host, def)
+	} else {
+		log.WithField(key, val).Debug("Host Felix value already assigned")
 		return nil
 	}
 }
