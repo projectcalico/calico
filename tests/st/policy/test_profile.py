@@ -30,7 +30,8 @@ POST_DOCKER_COMMANDS = ["docker load -i /code/calico-node.tar",
 class MultiHostMainline(TestBase):
     @parameterized.expand([
         #"tags",
-        "rules.tags",
+        ("rules.tags", False),
+        ("rules.tags", True),
         #"rules.protocol.icmp",
         #"rules.ip.addr",
         #"rules.ip.net",
@@ -38,7 +39,7 @@ class MultiHostMainline(TestBase):
         #"rules.tcp.port",
         #"rules.udp.port",
     ])
-    def test_multi_host(self, test_type):
+    def test_multi_host(self, test_type, simulate_gce_routing):
         """
         Run a mainline multi-host test.
         Because multihost tests are slow to setup, this tests most mainline
@@ -58,13 +59,15 @@ class MultiHostMainline(TestBase):
         with DockerHost("host1",
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                         post_docker_commands=POST_DOCKER_COMMANDS,
+                        simulate_gce_routing=simulate_gce_routing,
                         start_calico=False) as host1, \
                 DockerHost("host2",
                            additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
                            post_docker_commands=POST_DOCKER_COMMANDS,
+                           simulate_gce_routing=simulate_gce_routing,
                            start_calico=False) as host2:
             (n1_workloads, n2_workloads, networks) = \
-                self._setup_workloads(host1, host2)
+                self._setup_workloads(host1, host2, simulate_gce_routing)
 
             # Get the original profiles:
             output = host1.calicoctl("get profile -o yaml")
@@ -246,10 +249,25 @@ class MultiHostMainline(TestBase):
                        yaml.dump(new_profile, default_flow_style=False))
         host.calicoctl("apply -f new_profiles")
 
-    def _setup_workloads(self, host1, host2):
+    def _setup_workloads(self, host1, host2, simulate_gce_routing):
         # TODO work IPv6 into this test too
         host1.start_calico_node()
         host2.start_calico_node()
+
+        if simulate_gce_routing:
+            # We are simulating GCE instance routing, where there is a router
+            # between the instances, and each instance has a /32 address that
+            # appears not to be directly connected to any subnet.  Hence we
+            # need to enable IP-in-IP to get from one host to the other.
+            for host in [host1, host2]:
+                pools_output = host.calicoctl("get ippool -o yaml")
+                pools_dict = yaml.safe_load(pools_output)
+                for pool in pools_dict:
+                    print "Pool is %s" % pool
+                    if ':' not in pool['metadata']['cidr']:
+                        pool['spec']['ipip'] = {'mode': 'always', 'enabled': True}
+                    host.writefile("ippools.yaml", pools_dict)
+                    host.calicoctl("apply -f ippools.yaml")
 
         # Create the networks on host1, but it should be usable from all
         # hosts.  We create one network using the default driver, and the
