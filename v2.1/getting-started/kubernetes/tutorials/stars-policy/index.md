@@ -32,8 +32,7 @@ kubectl get pods --all-namespaces --watch
 The management UI runs as a `NodePort` Service on Kubernetes, and shows the connectivity
 of the Services in this example.
 
-If you're running the vagrant cluster, you can view the UI by visiting `http://172.18.18.102:30002` in a browser.  For other clusters, accessing
-the web UI may vary.
+You can view the UI by visiting `http://<k8s-node-ip>:30002` in a browser.
 
 Once all the pods are started, they should have full connectivity. You can see this by visiting the UI.  Each service is
 represented by a single node in the graph.
@@ -86,3 +85,11 @@ The client can now access the frontend, but not the backend.  Neither the fronte
 can initiate connections to the client.  The frontend can still access the backend.
 
 To use Calico to enforce egress policy on Kubernetes pods, see [the advanced policy demo]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/advanced-policy).
+
+### 6) (Optional) Clean up the demo environment.
+
+You can clean up the demo by deleting the demo Namespaces:
+
+```shell
+kubectl delete ns client stars management-ui
+```
