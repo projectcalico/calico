@@ -1,3 +1,15 @@
+felix (2.1.1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.1.1 (from Git commit ff29d69).
+    [Changes recorded in 2.1.1 tag]
+    - Seed Go's RNG.
+    - Fix felix.go imports.
+    - Rev libcalico-go to 1.1.4, to pick up pod deletion fix (libcalico-go
+      #375) when using the Kubernetes datastore driver.
+    - Ensure IP forwarding is enabled on the interfaces we control.
+
+ -- Neil Jerram <neil@tigera.io>  Wed, 29 Mar 2017 17:53:56 +0100
+
 felix (2.1.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.1.0 (from Git commit fb5b330).
