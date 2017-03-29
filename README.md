@@ -1,3 +1,6 @@
+[![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
+[![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+
 # Project Calico Documentation
 
 This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos.  
