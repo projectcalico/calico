@@ -19,7 +19,7 @@ from netaddr import IPAddress, IPNetwork
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
-from tests.st.utils.utils import retry_until_success
+from tests.st.utils.utils import check_bird_status, retry_until_success
 from time import sleep
 
 """
@@ -136,7 +136,7 @@ class TestIPIP(TestBase):
             host.start_calico_node()
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
-            # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore. 
+            # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore.
             self.pool_action(host, "apply", ipv4_pool, True, disabled=True)
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
 
@@ -287,3 +287,51 @@ class TestIPIP(TestBase):
         match = re.search(r'RX packets:(\d+) ',
                           output)
         return int(match.group(1))
+
+    def test_ipip_gce(self):
+        """
+        Test IPIP routing on simulated GCE instances.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        simulate_gce_routing=True,
+                        start_calico=False) as host1, \
+             DockerHost('host2',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        simulate_gce_routing=True,
+                        start_calico=False) as host2:
+
+            host1.start_calico_node()
+            host2.start_calico_node()
+
+            # We are simulating GCE instance routing, where there is a router
+            # between the instances, and each instance has a /32 address that
+            # appears not to be directly connected to any subnet.  Hence we
+            # also need to enable IP-in-IP to get from one host to the other.
+            host1.enable_ipip()
+            host2.enable_ipip()
+
+            # Create a network and a workload on each host.
+            network1 = host1.create_network("subnet1")
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=network1)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=network1)
+
+            # Allow network to converge.
+            self.assert_true(
+                workload_host1.check_can_ping(workload_host2.ip, retries=10))
+
+            # Check connectivity in both directions
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[workload_host1.ip,
+                                                      workload_host2.ip])
+
+            # Check that we are using IP-in-IP for some routes.
+            assert "tunl0" in host1.execute("ip r")
+            assert "tunl0" in host2.execute("ip r")
+
+            # Check the BGP status on each host.
+            check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
+            check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
