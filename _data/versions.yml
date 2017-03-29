@@ -35,6 +35,9 @@ master:
      networking-calico:
       version: master
       url: ""
+     calico/routereflector:
+      version: master
+      url: ""
 
 v2.1:
 - title: v2.1.1
@@ -198,6 +201,9 @@ v2.1:
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
+    calico/routereflector:
+      version: v0.2.1
+      url: "https://github.com/projectcalico/bird/releases/tag/v0.2.1"
 
 - title: v2.1.0-rc5
   note: |

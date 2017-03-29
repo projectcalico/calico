@@ -10,7 +10,11 @@ toc:
 - title: Configuring BGP Peers
   path: /usage/configuration/bgp
 - title: Route Reflector
-  path: /usage/bird-rr-config
+  section:
+  - title: Configuring BIRD
+    path: /usage/routereflector/bird-rr-config
+  - title: The calico/routereflector container
+    path: /usage/routereflector/calico-routereflector
 - title: IPv6
   path: /usage/ipv6
 - title: External Connectivity
