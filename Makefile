@@ -15,6 +15,35 @@ ut: update-version
 	calico/test \
 	nosetests tests/unit -c nose.cfg
 
+# Run system tests.
+st: docker-image run-etcd run-k8s-apiserver
+	./tests/system/apiserver-reconnection.sh
+	$(MAKE) stop-k8s-apiserver stop-etcd
+
+GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
+K8S_VERSION=1.5.3
+.PHONY: run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
+run-k8s-apiserver: stop-k8s-apiserver
+	ETCD_IP=`$(GET_CONTAINER_IP) st-etcd` && \
+	docker run --detach \
+	  --name st-apiserver \
+	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+		  /hyperkube apiserver --etcd-servers=http://$${ETCD_IP}:2379 \
+		  --service-cluster-ip-range=10.101.0.0/16 -v=10
+
+stop-k8s-apiserver:
+	@-docker rm -f st-apiserver
+
+run-etcd: stop-etcd
+	docker run --detach \
+	--name st-etcd quay.io/coreos/etcd:v3.1.5 \
+	etcd \
+	--advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+
+stop-etcd:
+	@-docker rm -f st-etcd
+
 # Makes tests on Circle CI.
 test-circle: update-version
 	# Can't use --rm on circle
@@ -30,7 +59,7 @@ test-circle: update-version
 
 image.created: update-version
 	# Build the docker image for the policy controller.
-	docker build -t $(CONTAINER_NAME) . 
+	docker build -t $(CONTAINER_NAME) .
 	touch image.created
 
 # Update the version file.
@@ -59,7 +88,7 @@ clean:
 	rm -rf dist image.created
 	-docker rmi $(CONTAINER_NAME)
 
-ci: clean docker-image
+ci: clean docker-image ut st
 # Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \
