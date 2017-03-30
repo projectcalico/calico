@@ -1,5 +1,5 @@
-hash: b9600864fa8a6ee329e7b5dfbf36ae3a2b80d86e24d1a7e6af1ad7216a19d1d1
-updated: 2017-03-30T01:11:22.107047598Z
+hash: d9f87f8b305cbd21632e5117b6a721dc4789de7f6edf5a3c78dc28720b02a770
+updated: 2017-03-30T17:07:37.011610282Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -80,7 +80,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: c9c7427a2a70d2eb3bafa0ab2dc163e45f143317
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -141,7 +141,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ab2351e017129928b55999b99c67001f49fc2eae
+  version: dcb95fb8f0ccd40a73f46a9c688db03d69876406
+  repo: https://github.com/neiljerram/libcalico-go
   subpackages:
   - lib
   - lib/api
@@ -193,7 +194,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: 10f801ebc38b33738c9d17d50860f484a0988ff5
   subpackages:
   - hooks/syslog
 - name: github.com/spf13/pflag
@@ -229,7 +230,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: 9a7256cb28ed514b4e1e5f68959914c4c28a92e0
   subpackages:
   - unix
 - name: golang.org/x/text
