@@ -10,9 +10,9 @@ network policy for any existing pods.  However, it is recommended that you do no
 new pods to a node that is being upgraded.
 
 It is recommended to upgrade one node at a time, rendering each node as
-unscheduleable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/kubectl_cordon/)
+unscheduleable using [kubectl cordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#cordon)
 before upgrading the node, and then make the node scheduleable after the upgrade is
-complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/kubectl_uncordon/).
+complete using [kubectl uncordon](http://kubernetes.io/docs/user-guide/kubectl/v1.6/#uncordon).
 
 ## Upgrading a Hosted Installation of Calico
 
