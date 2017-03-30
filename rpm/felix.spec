@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.1.0
+Version:        2.1.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,15 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Mar 29 2017 Neil Jerram <neil@tigera.io> 2.1.1-1
+  - Felix 2.1.1 (from Git commit ff29d69).
+    [Changes recorded in 2.1.1 tag]
+    - Seed Go's RNG.
+    - Fix felix.go imports.
+    - Rev libcalico-go to 1.1.4, to pick up pod deletion fix (libcalico-go
+      #375) when using the Kubernetes datastore driver.
+    - Ensure IP forwarding is enabled on the interfaces we control.
+
 * Fri Mar 17 2017 Neil Jerram <neil@tigera.io> 2.1.0-1
   - Felix 2.1.0 (from Git commit fb5b330).
     [Changes recorded in 2.1.0 tag]
