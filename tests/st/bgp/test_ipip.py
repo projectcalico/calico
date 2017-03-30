@@ -16,6 +16,7 @@ import re
 import subprocess
 
 from netaddr import IPAddress, IPNetwork
+from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
@@ -288,9 +289,13 @@ class TestIPIP(TestBase):
                           output)
         return int(match.group(1))
 
-    def test_ipip_gce(self):
+    @parameterized.expand([
+        (False,),
+        (True,),
+    ])
+    def test_gce(self, with_ipip):
         """
-        Test IPIP routing on simulated GCE instances.
+        Test with and without IPIP routing on simulated GCE instances.
         """
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
@@ -308,8 +313,10 @@ class TestIPIP(TestBase):
             # between the instances, and each instance has a /32 address that
             # appears not to be directly connected to any subnet.  Hence we
             # also need to enable IP-in-IP to get from one host to the other.
-            host1.enable_ipip()
-            host2.enable_ipip()
+            # (In the case where we don't do this, we will expect workload
+            # connectivity to fail.)
+            if with_ipip:
+                host1.enable_ipip()
 
             # Create a network and a workload on each host.
             network1 = host1.create_network("subnet1")
@@ -318,19 +325,24 @@ class TestIPIP(TestBase):
             workload_host2 = host2.create_workload("workload2",
                                                    network=network1)
 
-            # Allow network to converge.
-            self.assert_true(
-                workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            if with_ipip:
+                # Allow network to converge.
+                self.assert_true(
+                    workload_host1.check_can_ping(workload_host2.ip, retries=10))
 
-            # Check connectivity in both directions
-            self.assert_ip_connectivity(workload_list=[workload_host1,
-                                                       workload_host2],
-                                        ip_pass_list=[workload_host1.ip,
-                                                      workload_host2.ip])
+                # Check connectivity in both directions
+                self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                           workload_host2],
+                                            ip_pass_list=[workload_host1.ip,
+                                                          workload_host2.ip])
 
-            # Check that we are using IP-in-IP for some routes.
-            assert "tunl0" in host1.execute("ip r")
-            assert "tunl0" in host2.execute("ip r")
+                # Check that we are using IP-in-IP for some routes.
+                assert "tunl0" in host1.execute("ip r")
+                assert "tunl0" in host2.execute("ip r")
+            else:
+                # Expect non-connectivity between workloads on different hosts.
+                self.assert_false(
+                    workload_host1.check_can_ping(workload_host2.ip, retries=10))
 
             # Check the BGP status on each host.
             check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
