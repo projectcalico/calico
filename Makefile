@@ -68,6 +68,10 @@ run-kubernetes-master: stop-kubernetes-master
                  	--cluster-dns=10.0.0.10 \
                  	--cluster-domain=cluster.local \
                  	--allow-privileged=true --v=2
+	# Wait until the newly launched API server can respond to a
+	# request on port 8080, before completing this Makefile
+	# target.
+	while ! curl http://localhost:8080/apis/extensions/v1beta1/thirdpartyresources; do sleep 2; done
 
 stop-kubernetes-master:
 	# Stop any existing kubelet that we started
