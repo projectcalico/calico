@@ -12,7 +12,7 @@ BIRD_VER := v0.2.0
 GOBGPD_VER := v0.2.0
 FELIX_VER := 2.1.0
 LIBNETWORK_PLUGIN_VER := v1.1.0
-CONFD_VER := v0.10.0-scale
+CONFD_VER := v0.11.0
 SYSTEMTEST_CONTAINER_VER := latest
 
 ###############################################################################
