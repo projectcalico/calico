@@ -22,7 +22,7 @@ vendor: glide.yaml
       glide install -strip-vendor'
 
 .PHONY: ut
-## Run the UTs locally.  This requires a local etcd to be running.
+## Run the UTs locally.  This requires a local etcd and local kubernetes master to be running.
 ut: vendor
 	./run-uts
 
