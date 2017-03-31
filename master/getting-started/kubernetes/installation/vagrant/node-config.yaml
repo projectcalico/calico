@@ -22,18 +22,16 @@ write_files:
       current-context: kubelet-context
 
 coreos:
-  etcd2:
-    proxy: on
-    listen-client-urls: http://127.0.0.1:2379
-    initial-cluster: etcdserver=http://172.18.18.101:2380
   update:
     reboot-strategy: off
   units:
-    - name: etcd2.service
+    - name: etcd-member.service
       command: start
-    - name: fleet.service
-      command: start
-
+      drop-ins:
+        - name: 10-etcd-member_proxy.conf
+          content: |
+            [Service]
+            Environment="ETCD_OPTS=--proxy on --listen-client-urls http://127.0.0.1:2379 --initial-cluster=etcdserver=http://172.18.18.101:2380"
     - name: kubelet.service
       runtime: true
       command: start

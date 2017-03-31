@@ -3,22 +3,14 @@
 coreos:
   update:
     reboot-strategy: off
-  etcd2:
-    name: "etcdserver"
-    listen-client-urls: http://0.0.0.0:2379
-    advertise-client-urls: http://$private_ipv4:2379
-    initial-cluster: etcdserver=http://$private_ipv4:2380
-    initial-advertise-peer-urls: http://$private_ipv4:2380
-    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
-    listen-peer-urls: http://0.0.0.0:2380
-  fleet:
-    metadata: "role=master"
-    etcd_servers: "http://127.0.0.1:2379"
   units:
-    - name: etcd2.service
+    - name: etcd-member.service
       command: start
-    - name: fleet.service
-      command: start
+      drop-ins:
+        - name: 10-etcd.conf
+          content: |
+            [Service]
+            Environment="ETCD_OPTS=--name \"etcdserver\" --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://$private_ipv4:2379 --initial-cluster=etcdserver=http://$private_ipv4:2380 --initial-advertise-peer-urls=http://$private_ipv4:2380 --listen-client-urls=http://0.0.0.0:2379,http://0.0.0.0:4001 --listen-peer-urls=http://0.0.0.0:2380"
 
     - name: kube-apiserver.service
       command: start
@@ -26,8 +18,8 @@ coreos:
         [Unit]
         Description=Kubernetes API Server
         Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-        Requires=etcd2.service
-        After=etcd2.service
+        Requires=etcd-member.service
+        After=etcd-member.service
         [Service]
         TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kubectl
@@ -40,7 +32,6 @@ coreos:
         --runtime-config=extensions/v1beta1=true,extensions/v1beta1/networkpolicies=true \
         --insecure-bind-address=0.0.0.0 \
         --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota \
-        --storage-backend etcd2 \
         --advertise-address=$private_ipv4 \
         --service-cluster-ip-range=10.100.0.0/24 \
         --logtostderr=true
