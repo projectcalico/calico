@@ -281,13 +281,13 @@ class DockerHost(object):
         self.calicoctl(cmd)
         self.attach_log_analyzer()
 
-    def enable_ipip(self):
+    def set_ipip_enabled(self, enabled):
         pools_output = self.calicoctl("get ippool -o yaml")
         pools_dict = yaml.safe_load(pools_output)
         for pool in pools_dict:
             print "Pool is %s" % pool
             if ':' not in pool['metadata']['cidr']:
-                pool['spec']['ipip'] = {'mode': 'always', 'enabled': True}
+                pool['spec']['ipip'] = {'mode': 'always', 'enabled': enabled}
             self.writefile("ippools.yaml", pools_dict)
             self.calicoctl("apply -f ippools.yaml")
 
