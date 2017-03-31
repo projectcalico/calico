@@ -394,7 +394,7 @@ which allows access to ssh; as well as outbound communication to ports
 The lists of failsafe ports can be configured via the configuration parameters
 described in [Configuring
 Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).  They
-can be disabled by setting each configuration value to an empty string.
+can be disabled by setting each configuration value to "none".
 
 > **WARNING**
 >
