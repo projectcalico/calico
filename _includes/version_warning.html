@@ -1,0 +1,5 @@
+{% if page.version != site.data.versions.first[0] %}
+  <div class="alert alert-warning" role="alert">
+    <strong>Warning:</strong> You are viewing the {{ page.version }} docs. <a href="{{site.baseurl}}/latest">Click here to view the docs for the latest release.</a>
+  </div>
+{% endif %}
