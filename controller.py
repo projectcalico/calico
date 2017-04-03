@@ -281,7 +281,7 @@ class Controller(object):
 
                 # Log out when the queue is empty.
                 if self._event_queue.empty():
-                    _log.info("Emptied the event queue")
+                    _log.debug("Emptied the event queue")
 
     def _process_update(self, event_type, resource_type, resource):
         """
@@ -384,8 +384,12 @@ class Controller(object):
             for line in response.iter_lines():
                 # Filter out keep-alive new lines.
                 if line:
-                    _log.debug("Read line: %s", line)
-                    parsed = json.loads(line)
+                    _log.debug("Read from API: %s", line)
+                    try:
+                        parsed = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        _log.error("Bad response '%s' from API: %s", line, e)
+                        raise
 
                     # Check if we've encountered an error.  If so,
                     # raise an exception.
@@ -400,7 +404,7 @@ class Controller(object):
                     resource = parsed["object"]
 
                     # Successful update - send to the queue.
-                    _log.info("%s %s: %s to queue (%s) (%s)",
+                    _log.debug("%s %s: %s to queue (%s) (%s)",
                               event_type,
                               resource_type,
                               resource["metadata"]["name"],
@@ -414,7 +418,7 @@ class Controller(object):
 
                     # Extract the latest resource version.
                     new_ver = resource["metadata"]["resourceVersion"]
-                    _log.info("Update resourceVersion, was: %s, now: %s",
+                    _log.debug("Update resourceVersion, was: %s, now: %s",
                               self._last_resource_version[resource_type],
                               new_ver)
                     self._last_resource_version[resource_type] = new_ver
@@ -447,7 +451,7 @@ class Controller(object):
         # Add the existing resources to the queue to be processed.
         # Treat as a MODIFIED event to trigger updates which may not always
         # occur on ADDED.
-        _log.info("%s existing %s(s) - add to queue",
+        _log.debug("%s existing %s(s) - add to queue",
                   len(resources), resource_type)
         for resource in resources:
             _log.debug("Queueing update: %s", resource)
@@ -456,7 +460,7 @@ class Controller(object):
                                   block=True,
                                   timeout=QUEUE_PUT_TIMEOUT)
 
-        _log.info("Done getting %s(s) - new resourceVersion: %s",
+        _log.info("Done syncing %s(s) - new resourceVersion: %s",
                   resource_type, resource_version)
         self._last_resource_version[resource_type] = resource_version
 
