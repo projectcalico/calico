@@ -3,22 +3,14 @@
 coreos:
   update:
     reboot-strategy: off
-  etcd2:
-    name: "etcdserver"
-    listen-client-urls: http://0.0.0.0:2379
-    advertise-client-urls: http://$private_ipv4:2379
-    initial-cluster: etcdserver=http://$private_ipv4:2380
-    initial-advertise-peer-urls: http://$private_ipv4:2380
-    listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
-    listen-peer-urls: http://0.0.0.0:2380
-  fleet:
-    metadata: "role=master"
-    etcd_servers: "http://127.0.0.1:2379"
   units:
-    - name: etcd2.service
+    - name: etcd-member.service
       command: start
-    - name: fleet.service
-      command: start
+      drop-ins:
+        - name: 10-etcd.conf
+          content: |
+            [Service]
+            Environment="ETCD_OPTS=--name \"etcdserver\" --listen-client-urls=http://0.0.0.0:2379 --advertise-client-urls=http://$private_ipv4:2379 --initial-cluster=etcdserver=http://$private_ipv4:2380 --initial-advertise-peer-urls=http://$private_ipv4:2380 --listen-client-urls=http://0.0.0.0:2379,http://0.0.0.0:4001 --listen-peer-urls=http://0.0.0.0:2380"
 
     - name: kube-apiserver.service
       command: start
@@ -26,12 +18,12 @@ coreos:
         [Unit]
         Description=Kubernetes API Server
         Documentation=https://github.com/GoogleCloudPlatform/kubernetes
-        Requires=etcd2.service
-        After=etcd2.service
+        Requires=etcd-member.service
+        After=etcd-member.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kubectl
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kube-apiserver
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kubectl
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kube-apiserver
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubectl
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-apiserver
         ExecStart=/opt/bin/kube-apiserver \
@@ -56,7 +48,7 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kube-controller-manager
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kube-controller-manager
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-controller-manager
         ExecStart=/opt/bin/kube-controller-manager \
         --master=$private_ipv4:8080 \
@@ -76,7 +68,7 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kube-scheduler
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kube-scheduler
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-scheduler
         ExecStart=/opt/bin/kube-scheduler --master=$private_ipv4:8080
         Restart=always
@@ -94,7 +86,7 @@ coreos:
 
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
@@ -102,7 +94,6 @@ coreos:
         --api-servers=http://127.0.0.1:8080 \
         --cluster-dns=10.100.0.10 \
         --cluster-domain=cluster.local \
-        --config=/etc/kubernetes/manifests \
         --hostname-override=$private_ipv4 \
         --logtostderr=true \
         --register-node=true \
@@ -123,7 +114,7 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.5.1/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
         --master=http://$private_ipv4:8080 \
