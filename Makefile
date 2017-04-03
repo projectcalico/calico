@@ -171,7 +171,7 @@ k8sfv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	sleep 1
 	FELIX_IP=`$(GET_CONTAINER_IP) k8sfv-felix` && \
 	K8S_IP=`$(GET_CONTAINER_IP) k8sfv-apiserver` && \
-	docker exec k8sfv-felix /testcode/k8sfv/k8sfv.test -ginkgo.v https://$${K8S_IP}:6443 $${FELIX_IP}
+	docker exec k8sfv-felix /bin/sh -c "cd /testcode/k8sfv && /testcode/k8sfv/k8sfv.test -ginkgo.v https://$${K8S_IP}:6443 $${FELIX_IP}"
 
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	ETCD_IP=`$(GET_CONTAINER_IP) k8sfv-etcd` && \
