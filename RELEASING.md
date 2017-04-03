@@ -16,28 +16,28 @@ Creating a new release creates the following artifacts:
 1. Make sure you are on the master branch and don't have any local uncommitted changes. e.g. Update the libcalico-go pin to the latest release in `glide.yaml` and run `glide up -v`, create PR, ensure test pass and merge.
 
 2. Pre-requisits for pushing container images:
-  - Make sure you have write access to calico orgs on Dockerhub and quay.io. 
-  - Login using your dockerhub credentials.
-  - `docker login` in your terminal. 
-  - For quay.io: 
-    a. Go to your account on quay.io
-    b. Go to the account settings
-    c. Go to the "settings" tab
-    d. Click on "Generate Encrypted Password", it will popup a new sub-window
-    e. Go to "Docker login" tab in that window
-    f. Copy the command with encrypted password and paste it in your terminal
-  - Now you should be able to push the container images with `docker push` command.
+   - Make sure you have write access to calico orgs on Dockerhub and quay.io. 
+   - Login using your dockerhub credentials.
+   - `docker login` in your terminal. 
+   - For quay.io: 
+     1. Go to your account on quay.io
+     2. Go to the account settings
+     3. Go to the "settings" tab
+     4. Click on "Generate Encrypted Password", it will popup a new sub-window
+     5. Go to "Docker login" tab in that window
+     6. Copy the command with encrypted password and paste it in your terminal
+   - Now you should be able to push the container images with `docker push` command.
 
 3. Update the sub-component versions in the Makefiles:
-  - Makefile.calico-node:  
-    - `CONFD_VER`
-    - `BIRD_VER`
-    - `GOBGPD_VER`
-    - `FELIX_VER`
-    - `LIBNETWORK_PLUGIN_VER`
-  - Makefile.calicoctl:
-    - `LIBCALICOGO_VER`
-    - `GO_BUILD_VER`
+   - Makefile.calico-node:  
+     - `CONFD_VER`
+     - `BIRD_VER`
+     - `GOBGPD_VER`
+     - `FELIX_VER`
+     - `LIBNETWORK_PLUGIN_VER`
+   - Makefile.calicoctl:
+     - `LIBCALICOGO_VER`
+     - `GO_BUILD_VER`
 
 4. If build fails during `make release`, make sure git tag is deleted before doing `make release` again. (This can be done with `git tag -d <tag>`)
 
