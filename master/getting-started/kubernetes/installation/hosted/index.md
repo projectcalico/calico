@@ -87,6 +87,20 @@ To use these manifests with a TLS enabled etcd cluster you must do the following
   - `etcd_key: /calico-secrets/etcd-key`
   - `etcd_cert: /calico-secrets/etcd-cert`
 
+### Authorization Options
+
+Calico's manifests assign its components one of two service accounts.
+Depending on your cluster's authorization mode, you'll want to back these
+ServiceAccounts with the neccessary permissions.
+
+#### RBAC
+
+If using Calico with RBAC, apply the `ClusterRole` and `ClusterRoleBinding` specs:
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
+```
+
 ### Other Configuration Options
 
 The following table outlines the remaining supported ConfigMap options:
