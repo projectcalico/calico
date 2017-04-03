@@ -57,6 +57,7 @@ spec:
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
+      serviceAccountName: calico-node
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
