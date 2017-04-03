@@ -23,7 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"reflect"
-	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"syscall"
 	"time"
@@ -59,6 +59,14 @@ Options:
   --version                    Print the version and exit.
 `
 
+const (
+	// Our default value for GOGC if it is not set.  This is the percentage that heap usage must
+	// grow by to trigger a garbage collection.  Go's default is 100, meaning that 50% of the
+	// heap can be lost to garbage.  We reduce it to this value to trade increased CPU usage for
+	// lower occupancy.
+	defaultGCPercent = 20
+)
+
 // main is the entry point to the calico-felix binary.
 //
 // Its main role is to sequence Felix's startup by:
@@ -92,6 +100,14 @@ func main() {
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
+
+	if os.Getenv("GOGC") == "" {
+		// Tune the GC to trade off a little extra CPU usage for significantly lower
+		// occupancy at high scale.  This is worthwhile because Felix runs per-host so
+		// any occupancy improvement is multiplied by the number of hosts.
+		log.Debugf("No GOGC value set, defaulting to %d%%.", defaultGCPercent)
+		debug.SetGCPercent(defaultGCPercent)
+	}
 
 	// Parse command-line args.
 	version := ("Version:            " + buildinfo.GitVersion + "\n" +
@@ -251,7 +267,9 @@ configRetry:
 				if memProfFile != nil {
 					log.WithField("filename", memProfFileName).
 						Info("Writing memory profile...")
-					runtime.GC() // get up-to-date statistics
+					// The initial resync uses a lot of scratch space so now is
+					// a good time to force a GC and return any RAM that we can.
+					debug.FreeOSMemory()
 					if err := pprof.WriteHeapProfile(memProfFile); err != nil {
 						log.Fatal("could not write memory profile: ", err)
 					}
