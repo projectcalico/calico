@@ -17,11 +17,13 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/k8sfv/leastsquares"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -65,12 +67,39 @@ var _ = Context("with a k8s clientset", func() {
 
 		It("should not leak memory", func() {
 			addNamespaces(clientset, nsPrefix)
+			occupancyMeasurements := []leastsquares.Point{}
 			for ii := 0; ii < 10; ii++ {
 				addEndpoints(clientset, nsPrefix, d, 10000)
-				time.Sleep(20 * time.Second)
+				time.Sleep(10 * time.Second)
+				bytes, err := strconv.ParseFloat(
+					getFelixMetric("go_memstats_heap_inuse_bytes"),
+					64,
+				)
+				panicIfError(err)
+				log.WithFields(log.Fields{
+					"iteration": ii,
+					"bytes":     bytes,
+				}).Info("Bytes in use now")
+				occupancyMeasurements = append(
+					occupancyMeasurements,
+					leastsquares.Point{float64(ii) - 4.5, bytes},
+				)
 				cleanupAllPods(clientset, nsPrefix)
-				time.Sleep(20 * time.Second)
+				time.Sleep(10 * time.Second)
 			}
+			gradient, constant := leastsquares.LeastSquaresMethod(&occupancyMeasurements)
+			log.WithFields(log.Fields{
+				"gradient": gradient,
+				"constant": constant,
+			}).Info("Least squares fit")
+
+			// Initial strawman is that we don't expect to see any increase in memory
+			// over the long term.  Given just 10 iterations, let's say that we require
+			// the average gradient, per iteration, to be less than 2% of the average
+			// occupancy.
+			log.WithField("bytes", constant).Info("Average occupancy")
+			log.WithField("%", gradient*100/constant).Info("Increase per iteration")
+			Expect(gradient).To(BeNumerically("<", 0.02*constant))
 		})
 	})
 
