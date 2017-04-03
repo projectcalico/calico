@@ -31,6 +31,8 @@ To install Calico, ensure you have a cluster which meets the above requirements 
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
+>[Click here to view the above yaml directly.](calico.yaml)
+
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
 Below are a few examples for how to get started.
