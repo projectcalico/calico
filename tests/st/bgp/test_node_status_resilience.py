@@ -14,6 +14,7 @@
 import logging
 
 from nose.plugins.attrib import attr
+from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
 from tests.st.utils.constants import (LARGE_AS_NUM)
@@ -26,8 +27,12 @@ _log.setLevel(logging.DEBUG)
 
 
 class TestNodeStatusResilience(TestBase):
+    @parameterized.expand([
+        (2, 'bird'),
+        (0, 'calico-bgp-daemon')
+    ])
     @attr('slow')
-    def test_node_status_resilience(self):
+    def test_node_status_resilience(self, test_host, pid_name):
         """
         Test that newly restarted BGP backend processes consistently
         transition to an Established state.
@@ -74,9 +79,6 @@ class TestNodeStatusResilience(TestBase):
 
             hosts = [host1, host2, host3]
             workloads = [workload_host1, workload_host2, workload_host3]
-            pid_name = "bird"
-            test_host = 2
-            iterations = 4
 
             _log.debug("==== docker exec -it calico-node ps -a  ====")
             _log.debug(hosts[test_host].execute("docker exec -it calico-node ps -a"))
@@ -100,7 +102,8 @@ class TestNodeStatusResilience(TestBase):
                 else:
                     return [pid_str]
 
-            for iteration in range(1, iterations):
+            iterations = 3
+            for iteration in range(1, iterations+1):
                 _log.debug("Iteration %s", iteration)
                 _log.debug("Host under test: %s", hosts[test_host].name)
                 _log.debug("Identify and pkill process: %s", pid_name)
@@ -112,7 +115,7 @@ class TestNodeStatusResilience(TestBase):
                 hosts[test_host].execute("docker exec -it calico-node pkill %s" % pid_name)
 
                 _log.debug('check connected and retry until "Established"')
-                retry_until_success(check_connected, retries=10, ex_class=Exception)
+                retry_until_success(check_connected, retries=20, ex_class=Exception)
 
                 post_pkill = hosts[test_host].execute("docker exec -it calico-node pgrep %s" % pid_name)
                 post_pkill_list = pid_parse(post_pkill)
