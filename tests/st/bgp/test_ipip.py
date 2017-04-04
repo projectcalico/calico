@@ -16,10 +16,11 @@ import re
 import subprocess
 
 from netaddr import IPAddress, IPNetwork
+from nose_parameterized import parameterized
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
-from tests.st.utils.utils import retry_until_success
+from tests.st.utils.utils import check_bird_status, retry_until_success
 from time import sleep
 
 """
@@ -136,7 +137,7 @@ class TestIPIP(TestBase):
             host.start_calico_node()
             self.assert_tunl_ip(host, ipv4_pool, expect=True)
 
-            # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore. 
+            # Disable the IP Pool, and make sure the tunl IP is not from this IP pool anymore.
             self.pool_action(host, "apply", ipv4_pool, True, disabled=True)
             self.assert_tunl_ip(host, ipv4_pool, expect=False)
 
@@ -287,3 +288,78 @@ class TestIPIP(TestBase):
         match = re.search(r'RX packets:(\d+) ',
                           output)
         return int(match.group(1))
+
+    @parameterized.expand([
+        (False,),
+        (True,),
+    ])
+    def test_gce(self, with_ipip):
+        """Test with and without IP-in-IP routing on simulated GCE instances.
+
+        In this test we simulate GCE instance routing, where there is a router
+        between the instances, and each instance has a /32 address that appears
+        not to be directly connected to any subnet.  With that setup,
+        connectivity between workloads on different hosts _should_ require
+        IP-in-IP to be enabled.  We test that we do get connectivity _with_
+        IP-in-IP, that we don't get connectivity _without_ IP-in-IP, and that
+        the situation updates dynamically if we toggle IP-in-IP with workloads
+        already existing.
+
+        Note that this test targets the BGP implementation, to check that it
+        does IP-in-IP routing correctly, and handles the underlying GCE
+        routing, and switches dynamically between IP-in-IP and normal routing
+        as directed by calicoctl.  (In the BIRD case, these are all points for
+        which we've patched the upstream BIRD code.)  But naturally it also
+        involves calicoctl and confd, so it isn't _only_ about the BGP code.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        simulate_gce_routing=True,
+                        start_calico=False) as host1, \
+             DockerHost('host2',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        simulate_gce_routing=True,
+                        start_calico=False) as host2:
+
+            host1.start_calico_node()
+            host2.start_calico_node()
+
+            # Before creating any workloads, set the initial IP-in-IP state.
+            host1.set_ipip_enabled(with_ipip)
+
+            # Create a network and a workload on each host.
+            network1 = host1.create_network("subnet1")
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=network1)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=network1)
+
+            for _ in [1, 2]:
+                # Check we do or don't have connectivity between the workloads,
+                # according to the IP-in-IP setting.
+                if with_ipip:
+                    # Allow network to converge.
+                    self.assert_true(
+                        workload_host1.check_can_ping(workload_host2.ip, retries=10))
+
+                    # Check connectivity in both directions
+                    self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                               workload_host2],
+                                                ip_pass_list=[workload_host1.ip,
+                                                              workload_host2.ip])
+
+                    # Check that we are using IP-in-IP for some routes.
+                    assert "tunl0" in host1.execute("ip r")
+                    assert "tunl0" in host2.execute("ip r")
+                else:
+                    # Expect non-connectivity between workloads on different hosts.
+                    self.assert_false(
+                        workload_host1.check_can_ping(workload_host2.ip, retries=10))
+
+                # Check the BGP status on each host.
+                check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
+                check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
+
+                # Flip the IP-in-IP state for the next iteration.
+                with_ipip = not with_ipip
+                host1.set_ipip_enabled(with_ipip)
