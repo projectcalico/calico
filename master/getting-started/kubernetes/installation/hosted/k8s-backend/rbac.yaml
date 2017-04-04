@@ -1,0 +1,78 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: calico-node
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs:
+      - list
+      - get
+      - watch
+  - apiGroups: [""]
+    resources:
+      - pods/status
+    verbs:
+      - update
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - list
+      - get
+      - watch
+  - apiGroups: ["extensions"]
+    resources:
+      - thirdpartyresources
+    verbs:
+      - get
+      - create
+  - apiGroups: ["extensions"]
+    resources:
+      - networkpolicies
+    verbs:
+      - watch
+      - list
+      - get
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - globalconfigs
+    verbs:
+      - create
+      - get
+      - update
+      - watch
+      - list
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - ippools
+    verbs:
+      - create
+      - list
+      - get
+      - update
+      - delete
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-node
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-node
+subjects:
+- kind: ServiceAccount
+  name: calico-node
+  namespace: kube-system

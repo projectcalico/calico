@@ -25,13 +25,36 @@ You must have a cluster which meets the following requirements:
 
 ## Installation
 
-To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
+To install Calico, ensure you have a cluster which meets the above requirements and run the following command.
+
+For kubernetes 1.6 clusters:
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/1.6/calico.yaml
+```
+
+>[Click here to view the above yaml directly.](1.6/calico.yaml)
+
+For Kubernetes 1.5 clusters:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
 ```
 
 >[Click here to view the above yaml directly.](calico.yaml)
+
+### RBAC
+
+If your Kubernetes cluster has RBAC enabled, you'll need to create RBAC roles for Calico.
+Apply the following manifest to create these RBAC roles.
+
+>Note: Currently, only the above 1.6 manifest assigns service accounts to Calico components.
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/rbac.yaml
+```
+
+>[Click here to view the above yaml directly.](rbac.yaml)
 
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
