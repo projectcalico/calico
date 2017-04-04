@@ -89,6 +89,7 @@ spec:
            {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
+      serviceAccountName: calico-node
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -236,6 +237,7 @@ spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
+      serviceAccountName: calico-policy-controller
       containers:
         - name: calico-policy-controller
           image: quay.io/calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
@@ -282,3 +284,19 @@ spec:
         - name: etcd-certs
           secret:
             secretName: calico-etcd-secrets
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-policy-controller
+  namespace: kube-system
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-node
+  namespace: kube-system
