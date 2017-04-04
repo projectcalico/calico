@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/multidict"
+	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -70,6 +71,12 @@ type ActiveRulesCalculator struct {
 	// Cache of profile IDs by local endpoint.
 	endpointKeyToProfileIDs *EndpointKeyToProfileIDMap
 
+	// True if we've got the in-sync message from the datastore.
+	datastoreInSync bool
+	// Set containing the names of any profiles that were missing during the resync.  Used to
+	// log out those profiles at the end of the resync.
+	missingProfiles set.Set
+
 	// Callback objects.
 	RuleScanner         ruleScanner
 	PolicyMatchListener PolicyMatchListener
@@ -84,6 +91,7 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		// Policy/profile ID to matching endpoint sets.
 		policyIDToEndpointKeys:  multidict.NewIfaceToIface(),
 		profileIDToEndpointKeys: multidict.NewIfaceToIface(),
+		missingProfiles:         set.New(),
 
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
@@ -101,6 +109,7 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileLabelsKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileTagsKey{}, arc.OnUpdate)
+	allUpdDispatcher.RegisterStatusHandler(arc.OnStatusUpdate)
 }
 
 func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
@@ -184,6 +193,23 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
+func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
+	if status == api.InSync && !arc.datastoreInSync {
+		arc.datastoreInSync = true
+		if arc.missingProfiles.Len() > 0 {
+			// Log out any profiles that were missing during the resync.  We defer
+			// this until now because we may hear about profiles or endpoints first.
+			arc.missingProfiles.Iter(func(item interface{}) error {
+				log.WithField("profileID", item).Warning(
+					"End of resync: local endpoints refer to missing " +
+						"or invalid profile, profile's rules replaced " +
+						"with drop rules.")
+				return set.RemoveItem
+			})
+		}
+	}
+}
+
 func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profileIDs []string) {
 	// Figure out which profiles have been added/removed.
 	log.Debugf("Endpoint %#v now has profile IDs: %v", key, profileIDs)
@@ -252,11 +278,23 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 		profileID, known, active)
 	key := model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: profileID}}
 
+	// We'll re-add the profile to the set if it's still missing below.
+	arc.missingProfiles.Discard(key.Name)
 	if active {
 		if !known {
-			// Profile is missing from the datastore or it failed validation.
-			log.WithField("profileID", profileID).Warn(
-				"Profile not known or invalid, generating dummy profile that drops all traffic.")
+			if arc.datastoreInSync {
+				// We're in sync so we know the profile is missing from the
+				// datastore or it failed validation
+				log.WithField("profileID", profileID).Warn(
+					"Profile not known or invalid, generating dummy profile " +
+						"that drops all traffic.")
+			} else {
+				// Not in sync, the profile may still show up.  Keep a record of its
+				// name so we can log it out at the end of the resync.
+				arc.missingProfiles.Add(profileID)
+				log.WithField("profileID", profileID).Debug(
+					"Profile unknown during resync.")
+			}
 			rules = &DummyDropRules
 		}
 		arc.RuleScanner.OnProfileActive(key, rules)
