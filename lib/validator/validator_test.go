@@ -477,6 +477,58 @@ func init() {
 					NotPorts: []numorstring.Port{numorstring.Port{MinPort: 0, MaxPort: 100}},
 				},
 			}, false),
+		Entry("should reject rule mixed IPv4 (src) and IPv6 (dest)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Source: api.EntityRule{
+					Net: &netv4_3,
+				},
+				Destination: api.EntityRule{
+					Net: &netv6_3,
+				},
+			}, false),
+		Entry("should reject rule mixed IPv6 (src) and IPv4 (dest)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Source: api.EntityRule{
+					Net: &netv6_2,
+				},
+				Destination: api.EntityRule{
+					Net: &netv4_2,
+				},
+			}, false),
+		Entry("should reject rule mixed IPv6 version and IPv4 Net",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V6,
+				Source: api.EntityRule{
+					Net: &netv4_4,
+				},
+				Destination: api.EntityRule{
+					Net: &netv4_2,
+				},
+			}, false),
+		Entry("should reject rule mixed IPVersion and Source Net IP version",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V6,
+				Source: api.EntityRule{
+					Net: &netv4_1,
+				},
+			}, false),
+		Entry("should reject rule mixed IPVersion and Dest Net IP version",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Destination: api.EntityRule{
+					Net: &netv6_1,
+				},
+			}, false),
 
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &netv4_1}}, true),
