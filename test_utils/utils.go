@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	etcdclient "github.com/coreos/etcd/client"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
+	k8sbackend "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/vishvananda/netlink"
 )
 
@@ -35,6 +37,13 @@ func init() {
 	cfg := etcdclient.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
 	c, _ := etcdclient.New(cfg)
 	kapi = etcdclient.NewKeysAPI(c)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Delete everything under /calico from etcd
@@ -117,6 +126,10 @@ func RunIPAMPlugin(netconf, command, args string) (types.Result, types.Error, in
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId, netnspath string, err error) {
+	return CreateContainerNamespaceWithCid("")
+}
+
+func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS, containerId, netnspath string, err error) {
 	containerNs, err = ns.NewNS()
 	if err != nil {
 		return nil, "", "", err
@@ -125,6 +138,10 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId, netnspath st
 	netnspath = containerNs.Path()
 	netnsname := path.Base(netnspath)
 	containerId = netnsname[:10]
+
+	if container_id != "" {
+		containerId = container_id
+	}
 
 	err = containerNs.Do(func(_ ns.NetNS) error {
 		lo, err := netlink.LinkByName("lo")
@@ -138,7 +155,12 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId, netnspath st
 }
 
 func CreateContainer(netconf string, k8sName string, ip string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
-	targetNs, container_id, netnspath, err := CreateContainerNamespace()
+	return CreateContainerWithId(netconf, k8sName, ip, "")
+}
+
+// Create container with the giving containerId when containerId is not empty
+func CreateContainerWithId(netconf string, k8sName string, ip string, containerId string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+	targetNs, container_id, netnspath, err := CreateContainerNamespaceWithCid(containerId)
 
 	if err != nil {
 		return "", "", nil, nil, nil, nil, err
@@ -193,10 +215,50 @@ func CreateContainer(netconf string, k8sName string, ip string) (container_id, n
 	return
 }
 
+// Create veth pair on host
+func CreateHostVeth(containerId string, k8sName string, k8sNamespace string) error {
+	hostVethName := "cali" + containerId[:min(11, len(containerId))]
+	if k8sName != "" {
+		workload := fmt.Sprintf("%s.%s", k8sNamespace, k8sName)
+		hostVethName = k8sbackend.VethNameForWorkload(workload)
+	}
+
+	peerVethName := "calipeer"
+
+	// Clean up if peer Veth exists.
+	if oldPeerVethName, err := netlink.LinkByName(peerVethName); err == nil {
+		if err = netlink.LinkDel(oldPeerVethName); err != nil {
+			return fmt.Errorf("failed to delete old peer Veth %v: %v", oldPeerVethName, err)
+		}
+	}
+
+	veth := &netlink.Veth{
+		LinkAttrs: netlink.LinkAttrs{
+			Name:  hostVethName,
+			Flags: net.FlagUp,
+			MTU:   1500,
+		},
+		PeerName: peerVethName,
+	}
+
+	if err := netlink.LinkAdd(veth); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Executes the Calico CNI plugin and return the error code of the command.
 func DeleteContainer(netconf, netnspath, name string) (exitCode int, err error) {
+	return DeleteContainerWithId(netconf, netnspath, name, "")
+}
+
+func DeleteContainerWithId(netconf, netnspath, name, containerId string) (exitCode int, err error) {
 	netnsname := path.Base(netnspath)
 	container_id := netnsname[:10]
+	if containerId != "" {
+		container_id = containerId
+	}
 	var k8s_env = ""
 	if name != "" {
 		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", name)

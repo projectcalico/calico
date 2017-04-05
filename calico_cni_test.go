@@ -3,6 +3,7 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 
 	"net"
@@ -150,6 +151,24 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).Should(HaveOccurred())
 				Expect(err.Error()).Should(Equal("Link not found"))
 
+			})
+
+			Context("when the same hostVeth exists", func() {
+				It("successfully networks the namespace", func() {
+					container_id := fmt.Sprintf("con%d", rand.Uint32())
+					CreateHostVeth(container_id, "", "")
+					_, netnspath, session, _, _, _, err := CreateContainerWithId(netconf, "", "", container_id)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					result := types.Result{}
+					if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+						panic(err)
+					}
+
+					_, err = DeleteContainerWithId(netconf, netnspath, "", container_id)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
 			})
 		})
 	})

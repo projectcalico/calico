@@ -176,6 +176,41 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err.Error()).Should(Equal("Link not found"))
 			})
 
+			Context("when the same hostVeth exists", func() {
+				It("successfully networks the namespace", func() {
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					name := fmt.Sprintf("run%d", rand.Uint32())
+
+					// Create a K8s pod w/o any special params
+					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{Name: name},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					CreateHostVeth("", name, K8S_TEST_NS)
+					_, netnspath, session, _, _, _, err := CreateContainer(netconf, name, "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					result := types.Result{}
+					if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+						panic(err)
+					}
+
+					_, err = DeleteContainer(netconf, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
 			Context("using calico-ipam with ipPools annotation", func() {
 				It("successfully assigns an IP address from the annotated ipPool", func() {
 					netconfCalicoIPAM := fmt.Sprintf(`
