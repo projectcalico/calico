@@ -378,12 +378,12 @@ static-checks:
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r
+	$(DOCKER_GO_BUILD) ginkgo -r $(GINKGO_OPTIONS)
 
 .PHONY: ut-watch
 ut-watch: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r
+	$(DOCKER_GO_BUILD) ginkgo watch -r $(GINKGO_OPTIONS)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
