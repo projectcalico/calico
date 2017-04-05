@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,6 @@ package k8s
 import (
 	"time"
 
-	"reflect"
-
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
@@ -35,20 +33,18 @@ import (
 
 func newSyncer(kc KubeClient, callbacks api.SyncerCallbacks) *kubeSyncer {
 	syn := &kubeSyncer{
-		kc:         kc,
-		callbacks:  callbacks,
-		tracker:    map[string]model.Key{},
-		labelCache: map[string]map[string]string{},
+		kc:        kc,
+		callbacks: callbacks,
+		tracker:   map[string]model.Key{},
 	}
 	return syn
 }
 
 type kubeSyncer struct {
-	kc         KubeClient
-	callbacks  api.SyncerCallbacks
-	OneShot    bool
-	tracker    map[string]model.Key
-	labelCache map[string]map[string]string
+	kc        KubeClient
+	callbacks api.SyncerCallbacks
+	OneShot   bool
+	tracker   map[string]model.Key
 }
 
 // Holds resource version information.
@@ -100,17 +96,9 @@ func (syn *kubeSyncer) updateTracker(updates []api.Update) {
 		if upd.UpdateType == api.UpdateTypeKVDeleted {
 			log.Debugf("Delete from tracker: %+v", upd.KVPair.Key)
 			delete(syn.tracker, upd.KVPair.Key.String())
-			switch key := upd.KVPair.Key.(type) {
-			case model.WorkloadEndpointKey:
-				delete(syn.labelCache, key.WorkloadID)
-			}
 		} else {
 			log.Debugf("Update tracker: %+v: %+v", upd.KVPair.Key, upd.KVPair.Revision)
 			syn.tracker[upd.KVPair.Key.String()] = upd.KVPair.Key
-			switch key := upd.KVPair.Key.(type) {
-			case model.WorkloadEndpointKey:
-				syn.labelCache[key.WorkloadID] = upd.KVPair.Value.(*model.WorkloadEndpoint).Labels
-			}
 		}
 	}
 }
@@ -620,15 +608,6 @@ func (syn *kubeSyncer) parsePodEvent(e watch.Event) *model.KVPair {
 		// For deletes, we need to nil out the Value part of the KVPair.
 		log.Debugf("Delete for pod %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
 		kvp.Value = nil
-	default:
-		// Only send an update if the labels have changed.
-		workload := kvp.Key.(model.WorkloadEndpointKey).WorkloadID
-		labels := kvp.Value.(*model.WorkloadEndpoint).Labels
-		if reflect.DeepEqual(syn.labelCache[workload], labels) {
-			// Labels haven't changed - no need to send an update for this add/modify.
-			log.Debugf("Skipping pod event - labels didn't change: %s/%s", pod.ObjectMeta.Namespace, pod.ObjectMeta.Name)
-			return nil
-		}
 	}
 
 	return kvp
