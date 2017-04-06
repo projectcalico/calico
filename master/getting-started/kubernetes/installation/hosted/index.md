@@ -21,7 +21,7 @@ the recommended hosted approach for deploying Calico in production.
 This manifest installs Calico as well as a single node etcd cluster.  This is the recommended hosted approach
 for getting started quickly with Calico in conjunction with tools like kubeadm.
 
-#### [Etcdless Hosted Install](k8s-backend/)
+#### [Kubernetes Datastore](kubernetes-datastore/)
 
 This manifest installs Calico in a mode where it does not require its own etcd cluster.  This is an experimental
 mode in which the Kubernetes API is used by Calico as its datastore.
@@ -130,8 +130,8 @@ be filled in automatically by the `calico/cni` container:
 
 > **NOTE**
 >
-> The following information applies to the etcdv2 backend only. See the [etcdless hosted install](k8s-backend/)
-for how to run calicoctl in an etcdless installation.
+> The following information applies to the etcdv2 backend only. See the [Kubernetes datastore install](kubernetes-datastore/)
+for how to run calicoctl in an Kubernetes datastore driver installation.
 
 Using calicoctl is no different on a self-hosted installation.  However, the manifests above do not
 install calicoctl.

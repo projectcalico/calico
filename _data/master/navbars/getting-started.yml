@@ -21,8 +21,8 @@ toc:
         path: /getting-started/kubernetes/installation/hosted/hosted
       - title: Kubeadm Hosted Install
         path: /getting-started/kubernetes/installation/hosted/kubeadm/
-      - title: Etcdless Hosted Install
-        path: /getting-started/kubernetes/installation/hosted/k8s-backend/
+      - title: Kubernetes Datastore Hosted Install
+        path: /getting-started/kubernetes/installation/hosted/kubernetes-datastore/
     - title: Integration Guide
       path: /getting-started/kubernetes/installation/integration
     - title: AWS

@@ -78,7 +78,7 @@ coreos:
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
-        --cluster-cidr="192.168.0.0/16" \
+        --cluster-cidr="10.244.0.0/16" \
         --proxy-mode=iptables \
         --logtostderr=true
         Restart=always

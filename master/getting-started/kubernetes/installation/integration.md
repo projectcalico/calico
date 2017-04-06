@@ -21,7 +21,7 @@ for most users.
 
 > **NOTE:**
 >
-> Calico can also enforce network policy [without a dependency on etcd](hosted/k8s-backend/). This feature is currently experimental
+> Calico can also enforce network policy [without a dependency on etcd](hosted/kubernetes-datastore/). This feature is currently experimental
 and is currently only supported as via hosted install.
 
 ## About the Calico Components
