@@ -1,3 +1,6 @@
+---
+layout: null
+---
 # Create this manifest using kubectl to deploy
 # the Calico policy controller on Kubernetes.
 # It deploys a single instance of the policy controller.
