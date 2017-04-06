@@ -196,7 +196,9 @@ var _ = Describe("CalicoCni", func() {
 					})
 					Expect(err).NotTo(HaveOccurred())
 
-					CreateHostVeth("", name, K8S_TEST_NS)
+					if err := CreateHostVeth("", name, K8S_TEST_NS); err != nil {
+						panic(err)
+					}
 					_, netnspath, session, _, _, _, err := CreateContainer(netconf, name, "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
