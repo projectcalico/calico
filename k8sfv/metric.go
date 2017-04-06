@@ -16,15 +16,15 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"net/http"
+	"strconv"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
 )
 
 func getFelixMetric(name string) (metric string) {
-	resp, err := http.Get("http://" + flag.Arg(1) + ":9091/metrics")
+	resp, err := http.Get("http://" + felixIP + ":9091/metrics")
 	panicIfError(err)
 	log.WithField("resp", resp).Debug("Metric response")
 	defer resp.Body.Close()
@@ -38,5 +38,12 @@ func getFelixMetric(name string) (metric string) {
 			break
 		}
 	}
+	panicIfError(scanner.Err())
 	return
+}
+
+func getFelixFloatMetric(name string) float64 {
+	metric, err := strconv.ParseFloat(getFelixMetric(name), 64)
+	panicIfError(err)
+	return metric
 }

@@ -21,19 +21,19 @@ type Point struct {
 	Y float64
 }
 
-func LeastSquaresMethod(points *[]Point) (a float64, b float64) {
+func LeastSquaresMethod(points []Point) (a float64, b float64) {
 	// Calculate a and b such that y = ax + b is the best fit to the given points.
 	//
 	// http://ja.wikipedia.org/wiki/%E6%9C%80%E5%B0%8F%E4%BA%8C%E4%B9%97%E6%B3%95
 
-	n := float64(len(*points))
+	n := float64(len(points))
 
 	sumX := 0.0
 	sumY := 0.0
 	sumXY := 0.0
 	sumXX := 0.0
 
-	for _, p := range *points {
+	for _, p := range points {
 		sumX += p.X
 		sumY += p.Y
 		sumXY += p.X * p.Y
@@ -46,21 +46,3 @@ func LeastSquaresMethod(points *[]Point) (a float64, b float64) {
 
 	return a, b
 }
-
-/*
-func main() {
-	points := make([]Point, 0)
-
-	points = append(points, Point{x: 0.0, y: 1.0})
-	points = append(points, Point{x: 0.1, y: 1.5})
-	points = append(points, Point{x: 0.2, y: 2.0})
-	points = append(points, Point{x: 0.3, y: 2.5})
-	points = append(points, Point{x: 0.4, y: 3.0})
-	points = append(points, Point{x: 0.5, y: 3.5})
-	points = append(points, Point{x: 0.6, y: 4.0})
-
-	a, b := LeastSquaresMethod(&points)
-	fmt.Println(a)
-	fmt.Println(b)
-}
-*/

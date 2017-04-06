@@ -15,9 +15,7 @@
 package main
 
 import (
-	"flag"
 	"math/rand"
-	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -45,7 +43,7 @@ var _ = Context("with a k8s clientset", func() {
 	)
 
 	BeforeEach(func() {
-		clientset = initialize(flag.Arg(0))
+		clientset = initialize(k8sServerEndpoint)
 		nsPrefix = getNamespacePrefix()
 	})
 
@@ -69,25 +67,35 @@ var _ = Context("with a k8s clientset", func() {
 			addNamespaces(clientset, nsPrefix)
 			occupancyMeasurements := []leastsquares.Point{}
 			for ii := 0; ii < 10; ii++ {
+				// Add 10,000 endpoints.
 				addEndpoints(clientset, nsPrefix, d, 10000)
+
+				// Allow a little time for Felix to finish digesting those.
 				time.Sleep(10 * time.Second)
-				bytes, err := strconv.ParseFloat(
-					getFelixMetric("go_memstats_heap_inuse_bytes"),
-					64,
-				)
-				panicIfError(err)
+
+				// Get current occupancy.
+				bytes := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
 				log.WithFields(log.Fields{
 					"iteration": ii,
 					"bytes":     bytes,
 				}).Info("Bytes in use now")
-				occupancyMeasurements = append(
-					occupancyMeasurements,
-					leastsquares.Point{float64(ii) - 4.5, bytes},
-				)
+
+				// Discard the first couple of occupancy measurements since the
+				// first runs have the advantage of running in a clean, unfragmented
+				// heap.
+				if ii >= 2 {
+					occupancyMeasurements = append(
+						occupancyMeasurements,
+						leastsquares.Point{float64(ii) - 5.5, bytes},
+					)
+				}
+
+				// Delete endpoints, then pause before continuing to the next cycle.
 				cleanupAllPods(clientset, nsPrefix)
 				time.Sleep(10 * time.Second)
 			}
-			gradient, constant := leastsquares.LeastSquaresMethod(&occupancyMeasurements)
+
+			gradient, constant := leastsquares.LeastSquaresMethod(occupancyMeasurements)
 			log.WithFields(log.Fields{
 				"gradient": gradient,
 				"constant": constant,

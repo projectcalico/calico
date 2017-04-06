@@ -1,5 +1,5 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,35 +15,22 @@
 package main
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes"
+	"github.com/projectcalico/felix/k8sfv/leastsquares"
 )
 
-var _ = Describe("calculation graph scale test", func() {
+var _ = Context("least squares", func() {
 
-	var (
-		clientset *kubernetes.Clientset
-		nsPrefix  string
-	)
-
-	BeforeEach(func() {
-		clientset = initialize(k8sServerEndpoint)
-		nsPrefix = getNamespacePrefix()
-	})
-
-	It("should run label rotation test", func() {
-		Expect(rotateLabels(clientset, nsPrefix)).To(BeNil())
-	})
-
-	It("should process 1000 pods", func() {
-		Expect(create1000Pods(clientset, nsPrefix)).To(BeNil())
-	})
-
-	AfterEach(func() {
-		time.Sleep(10 * time.Second)
-		cleanupAll(clientset, nsPrefix)
+	It("should fit a straight line", func() {
+		p := []leastsquares.Point{
+			{1, 1},
+			{2, 2},
+			{3, 3},
+			{4, 4},
+		}
+		gradient, constant := leastsquares.LeastSquaresMethod(p)
+		Expect(gradient).To(BeNumerically("==", 1))
+		Expect(constant).To(BeNumerically("==", 0))
 	})
 })
