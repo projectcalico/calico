@@ -156,7 +156,9 @@ var _ = Describe("CalicoCni", func() {
 			Context("when the same hostVeth exists", func() {
 				It("successfully networks the namespace", func() {
 					container_id := fmt.Sprintf("con%d", rand.Uint32())
-					CreateHostVeth(container_id, "", "")
+					if err := CreateHostVeth(container_id, "", ""); err != nil {
+						panic(err)
+					}
 					_, netnspath, session, _, _, _, err := CreateContainerWithId(netconf, "", "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
