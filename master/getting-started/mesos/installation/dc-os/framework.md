@@ -58,7 +58,4 @@ and prevent cluster availability impact by viewing the [Custom Install Guide](cu
 
 #### Deploying Applications
 
-Once installed, see the standard usage guides for the
-[Docker Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
-and
-[Unified Containerizer]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified).
+Once installed, see the [standard usage guides]({{site.baseurl}}/{{page.version}}/getting-started/mesos#tutorials)

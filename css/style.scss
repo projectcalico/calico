@@ -10,11 +10,15 @@
 // These lines here extend the table so it automatically gets those
 // stylings and look like real tables without having to add
 // that class to everything.
-// Restrict to just content-main as tables outside of content (for example gsc search table)
-// shouldn't need this styling.
-#content-main table {
-  @extend .table;
-  @extend .table-bordered;
+#content-main {
+  table {
+    @extend .table;
+    @extend .table-bordered;
+  }
+
+  img {
+    @extend .img-responsive;
+  }
 }
 
 // Default blockquotes are too big in Bootstrap.

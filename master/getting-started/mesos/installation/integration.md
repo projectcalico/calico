@@ -2,8 +2,8 @@
 title: Integration Guide
 ---
 
-This guide explains the components necessary to install Calico on Mesos for integrating with custom configuration management. To install Calico in Mesos, no changes are needed on any Mesos Master.
-**Adding Calico to a Mesos cluster only requires modifications to each Agent.**
+This guide explains how to integrate Calico networking and policy on an existing
+Mesos cluster. These instruction should be followed on each **Agent**.
 
 Ensure you've met the [prerequisites](prerequisites) before continuing, namely that
 you have etcd running.
@@ -54,10 +54,25 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico-ipam
    ```
 
+5. Create a Calico CNI configuration in the [`$NETWORK_CNI_CONF_DIR` you configured for Mesos](prerequisites), replacing `http://master.mesos:2379` with
+   etcd's address:
+
+   ```shell
+   cat > $NETWORK_CNI_CONF_DIR/calico.conf <<EOF
+   {
+      "name": "calico",
+      "type": "calico",
+      "ipam": {
+          "type": "calico-ipam"
+      },
+      "etcd_endpoints": "http://master.mesos:2379"
+   }
+   EOF
+   ```
+
+
+
 ## Next Steps
 
 With Calico Installed, you're now ready to launch Calico-networked tasks.
-View the guide relevant to your workloads:
-
-- [Docker Containerizer Tutorial]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/docker)
-- [Unified Containerizer Tutorial]({{site.baseurl}}/{{page.version}}/getting-started/mesos/tutorials/unified)
+View the [guides on using Calico with Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos#tutorials)

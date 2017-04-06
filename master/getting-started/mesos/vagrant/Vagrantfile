@@ -10,7 +10,7 @@ num_instances = 2
 instance_name_prefix="calico"
 
 # Version of mesos to install from official mesos repo
-mesos_version = "1.0.0"
+mesos_version = "1.1.0"
 
 # Download URL for Mesos DNS.
 mesos_dns_url = "https://github.com/mesosphere/mesos-dns/releases/download/v0.5.0/mesos-dns-v0.5.0-linux-amd64"
@@ -72,6 +72,19 @@ cat <<EOF > /etc/sysconfig/mesos-dns
 EOF
 SCRIPT
 
+$write_cni_conf=<<SCRIPT
+cat <<EOF > /etc/cni/net.d/calico.conf
+{
+   "name": "calico",
+   "type": "calico",
+   "ipam": {
+       "type": "calico-ipam"
+   },
+   "etcd_endpoints": "http://master.mesos:2379"
+}
+EOF
+SCRIPT
+
 Vagrant.configure("2") do |config|
   config.vm.box = 'centos/7'
 
@@ -84,6 +97,8 @@ Vagrant.configure("2") do |config|
     # in CoreOS, so tell Vagrant that so it can be smarter.
     vbox.functional_vboxsf = false
     vbox.check_guest_additions = false
+    vbox.memory = 2048
+    vbox.cpus = 1.5
   end
 
   master_ip = "172.24.197.101"
@@ -107,7 +122,8 @@ Vagrant.configure("2") do |config|
 
       # Add official Mesos Repos and install Mesos.
       host.vm.provision :shell, inline: "sudo rpm -Uvh http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-3.noarch.rpm"
-      host.vm.provision :shell, inline: "yum -y install mesos-#{mesos_version}"
+      # Intsall net-tools for ifconfig, which mesos depends on for CNI
+      host.vm.provision :shell, inline: "yum -y install net-tools mesos-#{mesos_version}"
 
       # Write out the Calico environment file.
       host.vm.provision :shell, inline: $write_calico_env, args: "#{master_ip}"
@@ -185,6 +201,16 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/ip'"
       host.vm.provision :shell, inline: "sh -c 'echo #{ip} > /etc/mesos-slave/hostname'"
       host.vm.provision :shell, inline: "sh -c 'echo mesos,docker > /etc/mesos-slave/containerizers'"
+      host.vm.provision :shell, inline: "mkdir -p /etc/cni/net.d"
+      host.vm.provision :shell, inline: $write_cni_conf
+      host.vm.provision :shell, inline: "sh -c 'echo /etc/cni/net.d/ > /etc/mesos-slave/network_cni_config_dir'"
+      host.vm.provision :shell, inline: "mkdir -p /opt/cni/bin"
+      host.vm.provision :shell, inline: "curl -L -o /opt/cni/bin/calico {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}"
+      host.vm.provision :shell, inline: "curl -L -o /opt/cni/bin/calico-ipam {{site.data.versions[page.version].first.components["calico/cni"].download_calico_ipam_url}}"
+      host.vm.provision :shell, inline: "chmod +x /opt/cni/bin/*"
+      host.vm.provision :shell, inline: "sh -c 'echo /opt/cni/bin/ > /etc/mesos-slave/network_cni_plugins_dir'"
+
+
       host.vm.provision :shell, inline: "systemctl start mesos-slave.service"
     end
   end

@@ -29,12 +29,7 @@ and improve reliability. See additional information on
 
 ## Tutorials
 
-#### [Docker Containerizer](tutorials/docker)
-
-This tutorial walks through launching Docker Containerizer tasks
-with Calico networking and policy.
-
-#### [Unified Containerizer with CNI](tutorials/unified)
-
-This tutorial walks through deploying Unified Containerizer tasks
-with Calico networking and policy.
+- [Launching Tasks](tutorials/launching-tasks)
+- [Connecting to Tasks](tutorials/connecting-tasks)
+- [Configuring Policy for Docker Containerizer Tasks](tutorials/policy/docker-containerizer)
+- [Configuring Policy for Universal Containerizer Tasks](tutorials/policy/universal-containerizer)
