@@ -1,0 +1,83 @@
+#!/bin/bash -ex
+
+# Run the 'k8sfv' test suite, a functional and scale test of Felix
+# running with the Kubernetes datastore driver, driven by CRUD
+# operations through the k8s API server.
+
+# Config.
+#
+# What version of the k8s API server to use.
+: ${K8S_VERSION:=1.5.3}
+#
+# A string to insert into the container names that we use; a calling
+# script can set this to something to make the container names unique,
+# and hence to allow multiple copies of this script to run in
+# parallel.
+: ${UNIQUE:=}
+
+# Generate a unique prefix for the names of the containers that we
+# will create.
+prefix=k8sfv${UNIQUE}
+
+# Arrange to always clean up the containers that we create.
+function cleanup {
+    # Clean up the containers that this script generates.
+    docker rm -f ${prefix}-felix || true
+    docker rm -f ${prefix}-apiserver || true
+    docker rm -f ${prefix}-etcd || true
+    # List all remaining containers.
+    docker ps -a
+}
+trap cleanup EXIT SIGINT SIGQUIT
+
+# Utility - get a container's IP address.
+function get_container_ip {
+    docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
+}
+
+# Just in case containers already exist with the same names, clean
+# them up.
+cleanup
+
+# Run etcd.
+docker run --detach --name ${prefix}-etcd \
+       quay.io/coreos/etcd \
+       etcd \
+       --advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
+       --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+etcd_ip=$(get_container_ip ${prefix}-etcd)
+
+# Run k8s API server.
+docker run --detach --name ${prefix}-apiserver \
+       gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+       /hyperkube apiserver \
+       --etcd-servers=http://${etcd_ip}:2379 \
+       --service-cluster-ip-range=10.101.0.0/16 -v=10
+k8s_ip=$(get_container_ip ${prefix}-apiserver)
+k8s_api_endpoint=https://${k8s_ip}:6443
+
+# Wait until the newly launched API server can respond to a request,
+# before continuing.
+while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources; do
+    sleep 2
+done
+
+# Run Felix.
+mkdir -p k8sfv/output
+docker run --detach --privileged --name ${prefix}-felix \
+       -e FELIX_LOGSEVERITYSCREEN=info \
+       -e FELIX_DATASTORETYPE=kubernetes \
+       -e FELIX_PROMETHEUSMETRICSENABLED=true \
+       -e FELIX_USAGEREPORTINGENABLED=false \
+       -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
+       -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -v ${PWD}:/testcode \
+       -w /testcode/k8sfv/output \
+       calico/felix \
+       /bin/sh -c "for n in 1 2; do calico-felix; done"
+felix_ip=$(get_container_ip ${prefix}-felix)
+
+# Run the test suite.
+docker exec ${prefix}-felix /bin/sh -c \
+       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v ${k8s_api_endpoint} ${felix_ip}"
