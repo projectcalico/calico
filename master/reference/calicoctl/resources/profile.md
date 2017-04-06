@@ -59,7 +59,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| action      | Action to perform when matching this rule. | allow, deny, log | string | | 
+| action      | Action to perform when matching this rule. | allow, deny, log | string | |
 | protocol    | Positive protocol match.  | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
 | notProtocol | Negative protocol match. | tcp, udp, icmp, icmpv6, sctp, udplite, integer 1-255. | string | |
 | icmp        | ICMP match criteria.     | | [ICMP](#icmp) | |
