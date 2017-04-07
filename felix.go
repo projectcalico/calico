@@ -314,6 +314,13 @@ configRetry:
 			configParams.ClusterType,
 			statsChanOut,
 		)
+	} else {
+		// Usage reporting disabled, but we still want a stats collector for the
+		// felix_cluster_* metrics.  Register a no-op function as the callback.
+		statsCollector := calc.NewStatsCollector(func(stats calc.StatsUpdate) error {
+			return nil
+		})
+		statsCollector.RegisterWith(asyncCalcGraph.Dispatcher)
 	}
 
 	// Create the validator, which sits between the syncer and the
