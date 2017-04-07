@@ -163,6 +163,7 @@ k8s-fv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	-e FELIX_LOGSEVERITYSCREEN=info \
 	-e FELIX_DATASTORETYPE=kubernetes \
 	-e FELIX_PROMETHEUSMETRICSENABLED=true \
+	-e FELIX_USAGEREPORTINGENABLED=false \
 	-e K8S_API_ENDPOINT=https://$${K8S_IP}:6443 \
 	-e K8S_INSECURE_SKIP_TLS_VERIFY=true \
 	-v $${PWD}:/testcode \
