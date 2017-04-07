@@ -23,27 +23,34 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ipsets"
 	. "github.com/projectcalico/felix/iptables"
 )
 
 var _ = Describe("Static", func() {
 	var rr *DefaultRuleRenderer
-	var config Config
+	var conf Config
 	JustBeforeEach(func() {
 		// Cast back to the expected type so we can access a finer-grained API for testing.
-		rr = NewRenderer(config).(*DefaultRuleRenderer)
+		rr = NewRenderer(conf).(*DefaultRuleRenderer)
 	})
 
 	Describe("with default config", func() {
 		BeforeEach(func() {
-			config = Config{
-				WorkloadIfacePrefixes:     []string{"cali"},
-				FailsafeInboundHostPorts:  []uint16{22, 1022},
-				FailsafeOutboundHostPorts: []uint16{23, 1023},
-				IptablesMarkAccept:        0x10,
-				IptablesMarkPass:          0x20,
-				IptablesMarkFromWorkload:  0x40,
+			conf = Config{
+				WorkloadIfacePrefixes: []string{"cali"},
+				FailsafeInboundHostPorts: []config.ProtoPort{
+					{Protocol: "tcp", Port: 22},
+					{Protocol: "tcp", Port: 1022},
+				},
+				FailsafeOutboundHostPorts: []config.ProtoPort{
+					{Protocol: "tcp", Port: 23},
+					{Protocol: "tcp", Port: 1023},
+				},
+				IptablesMarkAccept:       0x10,
+				IptablesMarkPass:         0x20,
+				IptablesMarkFromWorkload: 0x40,
 			}
 		})
 
@@ -294,7 +301,7 @@ var _ = Describe("Static", func() {
 
 	Describe("with openstack special-cases", func() {
 		BeforeEach(func() {
-			config = Config{
+			conf = Config{
 				WorkloadIfacePrefixes:        []string{"tap"},
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
@@ -392,7 +399,7 @@ var _ = Describe("Static", func() {
 
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
-			config = Config{
+			conf = Config{
 				WorkloadIfacePrefixes:    []string{"cali"},
 				IPIPEnabled:              true,
 				IPIPTunnelAddress:        net.ParseIP("10.0.0.1"),

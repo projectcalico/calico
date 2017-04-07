@@ -210,9 +210,11 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 func (r *DefaultRuleRenderer) failsafeInChain() *Chain {
 	rules := []Rule{}
 
-	for _, port := range r.Config.FailsafeInboundHostPorts {
+	for _, protoPort := range r.Config.FailsafeInboundHostPorts {
 		rules = append(rules, Rule{
-			Match:  Match().Protocol("tcp").DestPorts(port),
+			Match: Match().
+				Protocol(protoPort.Protocol).
+				DestPorts(protoPort.Port),
 			Action: AcceptAction{},
 		})
 	}
@@ -226,9 +228,11 @@ func (r *DefaultRuleRenderer) failsafeInChain() *Chain {
 func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 	rules := []Rule{}
 
-	for _, port := range r.Config.FailsafeOutboundHostPorts {
+	for _, protoPort := range r.Config.FailsafeOutboundHostPorts {
 		rules = append(rules, Rule{
-			Match:  Match().Protocol("tcp").DestPorts(port),
+			Match: Match().
+				Protocol(protoPort.Protocol).
+				DestPorts(protoPort.Port),
 			Action: AcceptAction{},
 		})
 	}

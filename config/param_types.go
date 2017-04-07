@@ -211,12 +211,27 @@ type PortListParam struct {
 }
 
 func (p *PortListParam) Parse(raw string) (interface{}, error) {
-	var result []uint16
+	var result []ProtoPort
 	for _, portStr := range strings.Split(raw, ",") {
 		portStr = strings.Trim(portStr, " ")
 		if portStr == "" {
 			continue
 		}
+
+		parts := strings.Split(portStr, ":")
+		if len(parts) > 2 {
+			return nil, p.parseFailed(raw,
+				"ports should be <protocol>:<number> or <number>")
+		}
+		protocolStr := "tcp"
+		if len(parts) > 1 {
+			protocolStr = strings.ToLower(parts[0])
+			portStr = parts[1]
+		}
+		if protocolStr != "tcp" && protocolStr != "udp" {
+			return nil, p.parseFailed(raw, "unknown protocol: "+protocolStr)
+		}
+
 		port, err := strconv.Atoi(portStr)
 		if err != nil {
 			err = p.parseFailed(raw, "ports should be integers")
@@ -226,7 +241,10 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 			err = p.parseFailed(raw, "ports must be in range 0-65535")
 			return nil, err
 		}
-		result = append(result, uint16(port))
+		result = append(result, ProtoPort{
+			Protocol: protocolStr,
+			Port:     uint16(port),
+		})
 	}
 	return result, nil
 }
