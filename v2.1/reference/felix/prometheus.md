@@ -10,13 +10,65 @@ Felix can be configured to report a number of metrics through Prometheus.  See t
 
 #### Felix Specific
 
+Felix exports a number of Prometheus metrics.  The current set is as follows.  Since some metrics
+are tied to particular implementation choices inside Felix we can't make any hard guarantees that
+metrics will persist across releases.  However, we aim not to make any spurious changes to
+existing metrics.
+
 | Name          | Description     |
 | ------------- | --------------- |
-| `felix_resync_state`    | Current datastore state. |
-| `felix_resyncs_started` | Number of datastore resyncs initiated. |
+| `felix_active_local_endpoints` | Number of active endpoints on this host. |
+| `felix_active_local_policies` | Number of active policies on this host. |
+| `felix_active_local_selectors` | Number of active selectors on this host. |
+| `felix_active_local_tags` | Number of active tags on this host. |
+| `felix_calc_graph_output_events` | Number of events emitted by the calculation graph. |
+| `felix_calc_graph_update_time_seconds` | Seconds to update calculation graph for each datastore OnUpdate call. |
+| `felix_calc_graph_updates_processed` | Number of datastore updates processed by the calculation graph. |
+| `felix_cluster_num_host_endpoints` | Total number of host endpoints cluster-wide. |
+| `felix_cluster_num_hosts` | Total number of calico hosts in the cluster. |
+| `felix_cluster_num_workload_endpoints` | Total number of workload endpoints cluster-wide. |
+| `felix_exec_time_micros` | Summary of time taken to fork/exec child processes |
+| `felix_int_dataplane_apply_time_seconds` | Time in seconds that it took to apply a dataplane update. |
+| `felix_int_dataplane_failures` | Number of times dataplane updates failed and will be retried. |
+| `felix_int_dataplane_messages` | Number dataplane messages by type. |
+| `felix_int_dataplane_msg_batch_size` | Number of messages processed in each batch. Higher values indicate we're doing more batching to try to keep up. |
+| `felix_ipset_calls` | Number of ipset commands executed. |
+| `felix_ipset_errors` | Number of ipset command failures. |
+| `felix_ipset_lines_executed` | Number of ipset operations executed. |
+| `felix_ipsets_calico` | Number of active Calico IP sets. |
+| `felix_ipsets_total` | Total number of active IP sets. |
+| `felix_iptables_chains` | Number of active iptables chains. |
+| `felix_iptables_lines_executed` | Number of iptables rule updates executed. |
+| `felix_iptables_restore_calls` | Number of iptables-restore calls. |
+| `felix_iptables_restore_errors` | Number of iptables-restore errors. |
+| `felix_iptables_rules` | Number of active iptables rules. |
+| `felix_iptables_save_calls` | Number of iptables-save calls. |
+| `felix_iptables_save_errors` | Number of iptables-save errors. |
+| `felix_resync_state` | Current datastore state. |
+| `felix_resyncs_started` | Number of times Felix has started resyncing with the datastore. |
 
+Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
+metrics along with their help text and type information:
+
+```
+$ curl -s http://localhost:9091/metrics | head
+# HELP felix_active_local_endpoints Number of active endpoints on this host.
+# TYPE felix_active_local_endpoints gauge
+felix_active_local_endpoints 91
+# HELP felix_active_local_policies Number of active policies on this host.
+# TYPE felix_active_local_policies gauge
+felix_active_local_policies 0
+# HELP felix_active_local_selectors Number of active selectors on this host.
+# TYPE felix_active_local_selectors gauge
+felix_active_local_selectors 82
+# HELP felix_active_local_tags Number of active tags on this host.
+...
+```
 
 #### CPU / Memory metrics
+
+Felix also exports the default set of metrics that Prometheus makes available.  Currently, those
+include:
 
 | Name          | Description     |
 | ------------- | --------------- |
