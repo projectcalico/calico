@@ -108,22 +108,15 @@ OpenStack plugin in certain error cases). However, in a Docker
 environment the use of environment variables or etcd is often more
 convenient.
 
-### etcd configuration
+### Datastore
 
-> **NOTE**
->
-> etcd configuration cannot be used to set either EtcdAddr or
->
-> :   FelixHostname, both of which are required before the etcd
->     configuration can be read.
->
+Felix also reads configuration parameters from the datastore.  It supports
+a global setting and a per-host override.  Datastore-based configuration
+can be set using the `--raw=felix` option of the calicoctl tool.  For example,
+to set a per-host override for "myhost" to move the log file to /tmp/felix.log:
 
-when using the etcd datastore driver, etcd configuration is read from
-etcd from two places.
+    ./calicoctl config set --raw=felix --node=myhost LogFilePath /tmp/felix.log
 
-1.  For a host of FelixHostname value `HOSTNAME` and a parameter named
-    `NAME`, it is read from `/calico/v1/host/HOSTNAME/config/NAME`.
-2.  For a parameter named `NAME`, it is read from
-    `/calico/v1/config/NAME`.
+(For a global setting, omit the `--node=` option.)
 
-Note that the names are case sensitive.
+For more information, see the [calicoctl config documentation](../calicoctl/commands/config).
