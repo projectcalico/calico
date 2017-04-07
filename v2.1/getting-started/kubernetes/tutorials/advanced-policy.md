@@ -5,7 +5,7 @@ redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
 
 The Kubernetes NetworkPolicy API allows users to express ingress policy to Kubernetes pods
 based on labels and ports.  Calico implements this API, but also supports a number of
-policy features which are not currently expressble through the NetworkPolicy API such as CIDR
+policy features which are not currently expressible through the NetworkPolicy API such as CIDR
 and egress policy.
 
 This guide walks through using the Calico APIs directly in conjunction with Kubernetes NetworkPolicy
