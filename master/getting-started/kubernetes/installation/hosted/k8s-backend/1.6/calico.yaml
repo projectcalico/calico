@@ -86,7 +86,7 @@ spec:
               value: "false"
             # Wait for the datastore.
             - name: WAIT_FOR_DATASTORE
-              value: "true"
+              value: "false"
             # The Calico IPv4 pool to use.  This should match `--cluster-cidr`
             - name: CALICO_IPV4POOL_CIDR
               value: "10.244.0.0/16"
