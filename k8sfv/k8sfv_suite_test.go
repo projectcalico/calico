@@ -19,6 +19,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/logutils"
@@ -33,5 +34,6 @@ func init() {
 
 func TestMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Felix/KDD FV tests")
+	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Felix/KDD FV tests", []Reporter{junitReporter})
 }

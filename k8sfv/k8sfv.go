@@ -15,7 +15,10 @@
 package main
 
 import (
+	"flag"
+
 	log "github.com/Sirupsen/logrus"
+	. "github.com/onsi/ginkgo"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -24,6 +27,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
+
+// Global config - these are set by arguments on the ginkgo command line.
+var (
+	k8sServerEndpoint string // e.g. "http://172.17.0.2:6443"
+	felixIP           string // e.g. "172.17.0.3"
+)
+var _ = BeforeSuite(func() {
+	k8sServerEndpoint = flag.Arg(0)
+	felixIP = flag.Arg(1)
+})
 
 func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
 

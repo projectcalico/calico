@@ -15,13 +15,13 @@
 package main
 
 import (
-	"flag"
 	"math/rand"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/felix/k8sfv/leastsquares"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -43,7 +43,7 @@ var _ = Context("with a k8s clientset", func() {
 	)
 
 	BeforeEach(func() {
-		clientset = initialize(flag.Arg(0))
+		clientset = initialize(k8sServerEndpoint)
 		nsPrefix = getNamespacePrefix()
 	})
 
@@ -65,12 +65,49 @@ var _ = Context("with a k8s clientset", func() {
 
 		It("should not leak memory", func() {
 			addNamespaces(clientset, nsPrefix)
+			occupancyMeasurements := []leastsquares.Point{}
 			for ii := 0; ii < 10; ii++ {
+				// Add 10,000 endpoints.
 				addEndpoints(clientset, nsPrefix, d, 10000)
-				time.Sleep(20 * time.Second)
+
+				// Allow a little time for Felix to finish digesting those.
+				time.Sleep(10 * time.Second)
+
+				// Get current occupancy.
+				bytes := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
+				log.WithFields(log.Fields{
+					"iteration": ii,
+					"bytes":     bytes,
+				}).Info("Bytes in use now")
+
+				// Discard the first couple of occupancy measurements since the
+				// first runs have the advantage of running in a clean, unfragmented
+				// heap.
+				if ii >= 2 {
+					occupancyMeasurements = append(
+						occupancyMeasurements,
+						leastsquares.Point{float64(ii) - 5.5, bytes},
+					)
+				}
+
+				// Delete endpoints, then pause before continuing to the next cycle.
 				cleanupAllPods(clientset, nsPrefix)
-				time.Sleep(20 * time.Second)
+				time.Sleep(10 * time.Second)
 			}
+
+			gradient, constant := leastsquares.LeastSquaresMethod(occupancyMeasurements)
+			log.WithFields(log.Fields{
+				"gradient": gradient,
+				"constant": constant,
+			}).Info("Least squares fit")
+
+			// Initial strawman is that we don't expect to see any increase in memory
+			// over the long term.  Given just 10 iterations, let's say that we require
+			// the average gradient, per iteration, to be less than 2% of the average
+			// occupancy.
+			log.WithField("bytes", constant).Info("Average occupancy")
+			log.WithField("%", gradient*100/constant).Info("Increase per iteration")
+			Expect(gradient).To(BeNumerically("<", 0.02*constant))
 		})
 	})
 
