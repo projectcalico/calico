@@ -154,6 +154,7 @@ calico/felix: bin/calico-felix
 # with k8s model resources being injected by a separate test client.
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 K8S_VERSION=1.5.3
+GRAFANA_VERSION=4.1.2
 .PHONY: k8sfv-test run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 k8sfv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	@-docker rm -f k8sfv-felix
@@ -221,7 +222,7 @@ run-grafana: stop-grafana run-prometheus
 	docker run --detach --name k8sfv-grafana -p 3000:3000 \
 	-v $${PWD}/$(K8SFV_DIR)/grafana:/etc/grafana \
 	-v $${PWD}/$(K8SFV_DIR)/grafana-dashboards:/etc/grafana-dashboards \
-	grafana/grafana --config /etc/grafana/grafana.ini
+	grafana/grafana:$(GRAFANA_VERSION) --config /etc/grafana/grafana.ini
 	# Wait for it to get going.
 	sleep 5
 	# Configure prometheus data source.
