@@ -168,6 +168,7 @@ k8sfv-test: calico/felix run-k8s-apiserver k8sfv/k8sfv.test
 	-e K8S_API_ENDPOINT=https://$${K8S_IP}:6443 \
 	-e K8S_INSECURE_SKIP_TLS_VERIFY=true \
 	-v $${PWD}:/testcode \
+	-w /testcode/k8sfv \
 	calico/felix \
 	/bin/sh -c "for n in 1 2; do calico-felix; done"
 	sleep 1
