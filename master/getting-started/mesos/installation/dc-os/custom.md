@@ -96,6 +96,7 @@ on each agent:
    cat <<EOF > /opt/mesosphere/etc/dcos/network/cni/calico.conf
    {
        "name": "calico",
+       "cniVersion": "0.3.1",
        "type": "calico",
        "ipam": {
            "type": "calico-ipam"

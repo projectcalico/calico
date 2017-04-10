@@ -49,6 +49,7 @@ This worked example creates two rkt networks. Run these commands on both `calico
 cat >/etc/rkt/net.d/10-calico-network1.conf <<EOF
 {
     "name": "network1",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "ipam": {
         "type": "calico-ipam"
@@ -59,6 +60,7 @@ EOF
 cat >/etc/rkt/net.d/10-calico-network2.conf <<EOF
 {
     "name": "network2",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "ipam": {
         "type": "calico-ipam"

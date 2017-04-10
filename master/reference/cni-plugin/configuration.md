@@ -9,6 +9,7 @@ A minimal configuration file that uses Calico for networking and IPAM looks like
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "ipam": {
         "type": "calico-ipam"
@@ -59,6 +60,7 @@ The following deprecated options are also supported
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "log_level": "DEBUG",
     "ipam": {
@@ -88,6 +90,7 @@ Example CNI config:
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "ipam": {
         "type": "calico-ipam",
@@ -112,6 +115,7 @@ When using the Calico CNI plugin with Kubernetes, the plugin must be able to acc
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "kubernetes": {
         "kubeconfig": "/path/to/kubeconfig"
@@ -127,6 +131,7 @@ As a convenience, the API location location can also be configured directly, e.g
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "kubernetes": {
         "k8s_api_root": "http://127.0.0.1:8080"
@@ -145,6 +150,7 @@ There is a single supported policy type, `k8s` which uses the Kubernetes Network
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "policy": {
       "type": "k8s",
@@ -183,6 +189,7 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 ```json
 {
     "name": "any_name",
+    "cniVersion": "0.3.1",
     "type": "calico",
     "kubernetes": {
         "kubeconfig": "/path/to/kubeconfig",
