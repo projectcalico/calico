@@ -80,7 +80,7 @@ help:
 all: deb rpm calico/felix
 test: ut
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.4
+GO_BUILD_CONTAINER?=calico/go-build:v0.5
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
@@ -365,11 +365,13 @@ check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
 	$(DOCKER_GO_BUILD) bin/check-licenses
 
 .PHONY: go-meta-linter
-go-meta-linter: vendor/.up-to-date
+go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
+	# Run staticcheck stand-alone since gometalinter runs concurrent copies, which
+	# uses a lot of RAM.
+	$(DOCKER_GO_BUILD) sh -c 'staticcheck `glide nv`'
 	$(DOCKER_GO_BUILD) gometalinter --deadline=300s \
 	                                --disable-all \
 	                                --enable=goimports \
-	                                --enable=staticcheck \
 	                                --vendor ./...
 
 .PHONY: static-checks

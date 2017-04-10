@@ -70,12 +70,12 @@ var _ = Describe("RouteTable", func() {
 	})
 
 	Describe("with some interfaces", func() {
-		var cali1, cali2, cali3, eth0 *mockLink
+		var cali1, cali3, eth0 *mockLink
 		var gatewayRoute, cali1Route, cali1Route2, cali3Route netlink.Route
 		BeforeEach(func() {
 			eth0 = dataplane.addIface(0, "eth0", true, true)
 			cali1 = dataplane.addIface(1, "cali1", true, true)
-			cali2 = dataplane.addIface(2, "cali2", true, true)
+			dataplane.addIface(2, "cali2", true, true)
 			cali3 = dataplane.addIface(3, "cali3", true, true)
 			cali1Route = netlink.Route{
 				LinkIndex: cali1.attrs.Index,

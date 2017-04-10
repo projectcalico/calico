@@ -187,6 +187,7 @@ func (acg *AsyncCalcGraph) onEvent(event interface{}) {
 
 func (acg *AsyncCalcGraph) Start() {
 	log.Info("Starting AsyncCalcGraph")
-	acg.flushTicks = time.Tick(tickInterval)
+	flushTicker := time.NewTicker(tickInterval)
+	acg.flushTicks = flushTicker.C
 	go acg.loop()
 }
