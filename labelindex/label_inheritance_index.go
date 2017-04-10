@@ -48,6 +48,8 @@
 package labelindex
 
 import (
+	"reflect"
+
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/felix/dispatcher"
@@ -217,6 +219,12 @@ func (idx *InheritIndex) UpdateLabels(id interface{}, labels map[string]string, 
 	var oldParents []*parentData
 	if oldItemData != nil {
 		oldParents = oldItemData.parents
+		oldLabels := oldItemData.labels
+		if reflect.DeepEqual(oldLabels, labels) &&
+			reflect.DeepEqual(oldParents, parentIDs) {
+			log.Debug("No change to labels or parentIDs, ignoring.")
+			return
+		}
 	}
 	newItemData := &itemData{}
 	if len(labels) > 0 {
