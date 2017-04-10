@@ -34,6 +34,7 @@ func getFelixMetric(name string) (metric string) {
 		line := scanner.Text()
 		log.WithField("line", line).Debug("Line")
 		if strings.HasPrefix(line, name) {
+			log.WithField("line", line).Info("Line")
 			metric = strings.TrimSpace(strings.TrimPrefix(line, name))
 			break
 		}
@@ -46,4 +47,24 @@ func getFelixFloatMetric(name string) float64 {
 	metric, err := strconv.ParseFloat(getFelixMetric(name), 64)
 	panicIfError(err)
 	return metric
+}
+
+func getNumEndpoints() int64 {
+	s := getFelixMetric("felix_cluster_num_workload_endpoints")
+	numEndpoints, err := strconv.ParseInt(s, 10, 64)
+	panicIfError(err)
+	return numEndpoints
+}
+
+func getNumEndpointsDefault(def int64) func() int64 {
+	return func() int64 {
+		numEndpoints := def
+		defer func() {
+			if r := recover(); r != nil {
+				log.WithField("r", r).Warn("Panic recovery")
+			}
+		}()
+		numEndpoints = getNumEndpoints()
+		return numEndpoints
+	}
 }

@@ -53,7 +53,7 @@ type localNetworking struct {
 var localNetworkingMap = map[string]*localNetworking{}
 var localNetworkingMutex = sync.Mutex{}
 
-func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spec podSpec) {
+func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spec podSpec) *v1.Pod {
 	name := spec.name
 	if name == "" {
 		name = fmt.Sprintf("run%d", rand.Uint32())
@@ -145,7 +145,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 			namespace: podNamespace,
 		}
 	}
-	return
+	return pod_out
 }
 
 func removeLocalPodNetworking(pod *v1.Pod) {
