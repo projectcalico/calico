@@ -104,6 +104,12 @@ WantedBy=multi-user.target
 ```
 > Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 
+> **NOTE:**
+>
+> To ensure reasonable dataplane programming latency on a system under load,
+`calico/node` requires a CPU reservation of at least 0.25 cores with additional
+benefits up to 0.5 cores.
+
 ## Installing the Calico CNI plugins
 
 The Kubernetes `kubelet` should be configured to use the `calico` and `calico-ipam` plugins.
