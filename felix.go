@@ -425,7 +425,7 @@ func servePrometheusMetrics(port int) {
 
 func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
 	// Ask the runtime to tell us if we get a term signal.
-	termSignalChan := make(chan os.Signal)
+	termSignalChan := make(chan os.Signal, 1)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
 
 	// Start a background thread to tell us when the dataplane driver stops.
