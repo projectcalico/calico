@@ -1,5 +1,5 @@
-hash: f1f3ca84a9e8fbb5236e2d05ea93407af3af5e44bf67959698c945f2ee108e04
-updated: 2017-02-10T22:11:11.887587505Z
+hash: 8004af46ac86678ab2d3788808fd138bc43e5bc67bf54747f5af99bf8b4f9ad3
+updated: 2017-04-10T13:05:24.123332168-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -9,7 +9,7 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 07a8a28637e97b22eb8dfe710eeae1344f69d16e
+  version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
   subpackages:
   - pkg/invoke
   - pkg/ip
@@ -17,10 +17,12 @@ imports:
   - pkg/ns
   - pkg/skel
   - pkg/types
+  - pkg/types/020
+  - pkg/types/current
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: 454f1da2f2bc48f9d2aede84fece95d292c8e3fc
+  version: ac1c7eba21545c4ee025f2c340e143cacb53c754
   subpackages:
   - client
   - pkg/fileutil
@@ -105,6 +107,8 @@ imports:
   - buffer
   - jlexer
   - jwriter
+- name: github.com/mcuadros/go-version
+  version: 257f7b9a7d87427c8d7f89469a5958d57f8abd7c
 - name: github.com/onsi/ginkgo
   version: 7f8ab55aaf3b86885aa55b762e803744d1674700
   subpackages:
@@ -177,7 +181,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: d26492970760ca5d33129d2d799e34be5c4782eb
+  version: c078b1e43f58d563c74cebe63c85789e76ddb627
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -185,7 +189,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 9dee363ad4abbc3c9a4a24a9f1e33363e224b111
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -211,7 +215,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 478fcf54317e52ab69f40bb4c7a1520288d7f7ea
+  version: 076b546753157f758b316e59bcb51e6807c04057
   subpackages:
   - unix
 - name: golang.org/x/text

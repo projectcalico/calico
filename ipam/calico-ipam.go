@@ -25,6 +25,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
+	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -53,7 +55,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	skel.PluginMain(cmdAdd, cmdDel)
+	skel.PluginMain(cmdAdd, cmdDel, cniSpecVersion.All)
 }
 
 type ipamArgs struct {
@@ -66,6 +68,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
+
+	cniVersion := conf.CNIVersion
 
 	utils.ConfigureLogging(conf.LogLevel)
 
@@ -85,7 +89,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	r := &types.Result{}
+	r := &current.Result{}
 	if ipamArgs.IP != nil {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
@@ -102,13 +106,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if ipamArgs.IP.To4() == nil {
 			// It's an IPv6 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(128, 128)}
-			r.IP6 = &types.IPConfig{IP: ipNetwork}
-			logger.WithField("result.IP6", r.IP6).Info("Result IPv6")
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version: "6",
+				Address: ipNetwork,
+			})
+
+			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv6 address to the result")
 		} else {
 			// It's an IPv4 address.
 			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
-			r.IP4 = &types.IPConfig{IP: ipNetwork}
-			logger.WithField("result.IP4", r.IP4).Info("Result IPv4")
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version: "4",
+				Address: ipNetwork,
+			})
+
+			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv4 address to the result")
 		}
 	} else {
 		// Default to assigning an IPv4 address
@@ -155,7 +167,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("Failed to request %d IPv4 addresses. IPAM allocated only %d.", num4, len(assignedV4))
 			}
 			ipV4Network := net.IPNet{IP: assignedV4[0].IP, Mask: net.CIDRMask(32, 32)}
-			r.IP4 = &types.IPConfig{IP: ipV4Network}
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version: "4",
+				Address: ipV4Network,
+			})
 		}
 
 		if num6 == 1 {
@@ -163,12 +178,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("Failed to request %d IPv6 addresses. IPAM allocated only %d.", num6, len(assignedV6))
 			}
 			ipV6Network := net.IPNet{IP: assignedV6[0].IP, Mask: net.CIDRMask(128, 128)}
-			r.IP6 = &types.IPConfig{IP: ipV6Network}
+			r.IPs = append(r.IPs, &current.IPConfig{
+				Version: "6",
+				Address: ipV6Network,
+			})
 		}
-		logger.WithFields(log.Fields{"result.IP4": r.IP4, "result.IP6": r.IP6}).Info("IPAM Result")
+		logger.WithFields(log.Fields{"result.IPs": r.IPs}).Info("IPAM Result")
 	}
 
-	return r.Print()
+	// Print result to stdout, in the format defined by the requested cniVersion.
+	return types.PrintResult(r, cniVersion)
 }
 
 func cmdDel(args *skel.CmdArgs) error {

@@ -27,6 +27,7 @@ import (
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -62,22 +63,19 @@ func AddIgnoreUnknownArgs() error {
 	return os.Setenv("CNI_ARGS", cniArgs)
 }
 
-func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*types.Result, error) {
-	result := &types.Result{}
+func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*current.Result, error) {
+	result := &current.Result{}
 
 	for _, v := range ep.Spec.IPNetworks {
 		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v.String())
-		parsedIP := types.IPConfig{}
+		parsedIP := current.IPConfig{}
+
 		if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
 			log.Errorf("Error unmarshalling existing endpoint IP: %s", err)
 			return nil, err
 		}
 
-		if len(v.IP) == net.IPv4len {
-			result.IP4 = &parsedIP
-		} else {
-			result.IP6 = &parsedIP
-		}
+		result.IPs = append(result.IPs, &parsedIP)
 	}
 
 	return result, nil
@@ -100,19 +98,19 @@ func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID strin
 	return workloadID, orchestratorID, nil
 }
 
-func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *types.Result) error {
-	if result.IP4 == nil && result.IP6 == nil {
+func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *current.Result) error {
+	if len(result.IPs) == 0 {
 		return errors.New("IPAM plugin did not return any IP addresses")
 	}
 
-	if result.IP4 != nil {
-		result.IP4.IP.Mask = net.CIDRMask(32, 32)
-		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{result.IP4.IP})
-	}
+	for _, ip := range result.IPs {
+		if ip.Version == "4" {
+			ip.Address.Mask = net.CIDRMask(32, 32)
+		} else {
+			ip.Address.Mask = net.CIDRMask(128, 128)
+		}
 
-	if result.IP6 != nil {
-		result.IP6.IP.Mask = net.CIDRMask(128, 128)
-		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{result.IP6.IP})
+		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, cnet.IPNet{ip.Address})
 	}
 
 	return nil

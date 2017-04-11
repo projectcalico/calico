@@ -9,10 +9,13 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # fail if unable to download
 CURL=curl -sSf
 
-K8S_VERSION=1.6.0
-CNI_VERSION=v0.5.1
+K8S_VERSION=1.6.1
+CNI_VERSION=v0.5.2
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
+
+# By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
+CNI_SPEC_VERSION?=0.3.1
 
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
@@ -119,11 +122,33 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-loc
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
 	-e PLUGIN=calico \
+	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
 			ginkgo'
 	make stop-etcd
+
+
+run-test-containerized-without-building: run-etcd run-k8s-apiserver
+	docker run --rm --privileged --net=host \
+	-e ETCD_IP=$(LOCAL_IP_ENV) \
+	-e LOCAL_USER_ID=0 \
+	-e PLUGIN=calico \
+	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
+	$(CALICO_BUILD) sh -c '\
+			cd  /go/src/github.com/projectcalico/cni-plugin && \
+			ginkgo'
+	make stop-etcd
+
+## Run the tests in a container (as root) for different CNI spec versions
+## to make sure we don't break backwards compatiblity.
+.PHONY: test-containerized-cni-versions
+test-containerized-cni-versions: build-containerized dist/host-local;
+	for cniversion in "0.2.0" "0.3.1" ; do \
+		make run-test-containerized-without-building CNI_SPEC_VERSION=$$cniversion; \
+	done
 
 .PHONY: build-containerized
 ## Run the build in a container. Useful for CI
@@ -269,7 +294,7 @@ run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
-ci: clean static-checks test-containerized docker-image
+ci: clean static-checks test-containerized-cni-versions docker-image
 # Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \

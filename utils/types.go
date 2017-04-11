@@ -43,9 +43,10 @@ type NetworkInfo struct {
 
 // NetConf stores the common network config for Calico CNI plugin
 type NetConf struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-	IPAM struct {
+	CNIVersion string `json:"cniVersion,omitempty"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	IPAM       struct {
 		Name       string
 		Type       string   `json:"type"`
 		Subnet     string   `json:"subnet"`

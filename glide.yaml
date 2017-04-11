@@ -2,7 +2,7 @@ package: github.com/projectcalico/cni-plugin
 import:
 - package: github.com/Sirupsen/logrus
 - package: github.com/containernetworking/cni
-  version: 07a8a28637e97b22eb8dfe710eeae1344f69d16e
+  version: v0.5.2
   subpackages:
   - pkg/ip
   - pkg/ipam
@@ -26,3 +26,4 @@ import:
   subpackages:
   - kubernetes
   - tools/clientcmd
+- package: github.com/mcuadros/go-version

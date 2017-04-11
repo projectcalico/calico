@@ -1,8 +1,8 @@
 package main_test
 
 import (
-	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 
@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/containernetworking/cni/pkg/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -47,10 +46,14 @@ var _ = Describe("CalicoCni", func() {
 		WipeEtcd()
 	})
 
+	cniVersion := os.Getenv("CNI_SPEC_VERSION")
+
 	Describe("Run Calico CNI plugin", func() {
 		Context("using host-local IPAM", func() {
+
 			netconf := fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -58,22 +61,24 @@ var _ = Describe("CalicoCni", func() {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
 			  }
-			}`, os.Getenv("ETCD_IP"))
+			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
 				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result := types.Result{}
-				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
-					panic(err)
+				result, err := GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
+
 				mac := contVeth.Attrs().HardwareAddr
 
-				ip := result.IP4.IP.IP.String()
-				result.IP4.IP.IP = result.IP4.IP.IP.To4() // Make sure the IP is respresented as 4 bytes
-				Expect(result.IP4.IP.Mask.String()).Should(Equal("ffffffff"))
+				Expect(len(result.IPs)).Should(Equal(1))
+				ip := result.IPs[0].Address.IP.String()
+				result.IPs[0].Address.IP = result.IPs[0].Address.IP.To4() // Make sure the IP is respresented as 4 bytes
+				Expect(result.IPs[0].Address.Mask.String()).Should(Equal("ffffffff"))
 
 				// datastore things:
 				// Profile is created with correct details
@@ -96,7 +101,7 @@ var _ = Describe("CalicoCni", func() {
 
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 					InterfaceName: fmt.Sprintf("cali%s", containerID),
-					IPNetworks:    []cnet.IPNet{{result.IP4.IP}},
+					IPNetworks:    []cnet.IPNet{{result.IPs[0].Address}},
 					MAC:           &cnet.MAC{HardwareAddr: mac},
 					Profiles:      []string{"net1"},
 				}))
@@ -163,11 +168,6 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
-					result := types.Result{}
-					if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
-						panic(err)
-					}
-
 					_, err = DeleteContainerWithId(netconf, netnspath, "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
 				})
@@ -179,6 +179,7 @@ var _ = Describe("CalicoCni", func() {
 		Context("depricate Hostname for nodename", func() {
 			netconf := fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -187,17 +188,19 @@ var _ = Describe("CalicoCni", func() {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
 			  }
-			}`, os.Getenv("ETCD_IP"))
+			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("has hostname even though deprecated", func() {
 				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result := types.Result{}
-				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
-					panic(err)
+				result, err := GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
+
+				log.Printf("Unmarshaled result: %v\n", result)
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
@@ -220,6 +223,7 @@ var _ = Describe("CalicoCni", func() {
 		Context("depricate Hostname for nodename", func() {
 			netconf := fmt.Sprintf(`
 			{
+			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
@@ -229,17 +233,19 @@ var _ = Describe("CalicoCni", func() {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/8"
 			  }
-			}`, os.Getenv("ETCD_IP"))
+			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("nodename takes precedence over hostname", func() {
 				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result := types.Result{}
-				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
-					panic(err)
+				result, err := GetResultForCurrent(session, cniVersion)
+				if err != nil {
+					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
+
+				log.Printf("Unmarshaled result: %v\n", result)
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
@@ -261,6 +267,7 @@ var _ = Describe("CalicoCni", func() {
 	Describe("DEL", func() {
 		netconf := fmt.Sprintf(`
 		{
+			"cniVersion": "%s",
 			"name": "net1",
 			"type": "calico",
 			"etcd_endpoints": "http://%s:2379",
@@ -268,7 +275,7 @@ var _ = Describe("CalicoCni", func() {
 				"type": "host-local",
 				"subnet": "10.0.0.0/8"
 			}
-		}`, os.Getenv("ETCD_IP"))
+		}`, cniVersion, os.Getenv("ETCD_IP"))
 
 		Context("when it was never called for SetUP", func() {
 			Context("and a namespace does exist", func() {
