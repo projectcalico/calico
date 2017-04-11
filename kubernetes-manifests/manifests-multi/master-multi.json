@@ -19,6 +19,7 @@
         "--root-ca-file=/srv/kubernetes/ca.crt",
         "--min-resync-period=3m",
         "--leader-elect=true",
+        "--allocate-node-cidrs=true",
         "--cluster-cidr=10.1.0.0/16",
         "--v=2"
       ],

@@ -40,6 +40,8 @@ import (
 	"k8s.io/client-go/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	v1 "k8s.io/client-go/pkg/api/v1"
 )
 
 type KubeClient struct {
@@ -739,9 +741,79 @@ func (c *KubeClient) deleteGlobalConfig(k *model.KVPair) error {
 }
 
 func (c *KubeClient) getHostConfig(k model.HostConfigKey) (*model.KVPair, error) {
+	if k.Name == "IpInIpTunnelAddr" {
+		n, err := c.clientSet.Nodes().Get(k.Hostname, metav1.GetOptions{})
+		if err != nil {
+			return nil, resources.K8sErrorToCalico(err, k)
+		}
+
+		kvp, err := getTunIp(n)
+		if err != nil {
+			return nil, err
+		}
+
+		return kvp, nil
+	}
+
 	return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
 func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVPair, error) {
-	return []*model.KVPair{}, nil
+	var kvps = []*model.KVPair{}
+
+	// Short circuit if they aren't asking for information we can provide.
+	if l.Name == "" || l.Name == "IpInIpTunnelAddr" {
+		// First see if we were handed a specific host, if not list all Nodes
+		if l.Hostname == "" {
+			nodes, err := c.clientSet.Nodes().List(v1.ListOptions{})
+			if err != nil {
+				return nil, resources.K8sErrorToCalico(err, l)
+			}
+
+			for _, node := range nodes.Items {
+				kvp, err := getTunIp(&node)
+				if err != nil {
+					log.Warnf("Invalid IP for HostConfig: %s, %s", node.Name, node.Spec.PodCIDR)
+					continue
+				}
+
+				kvps = append(kvps, kvp)
+			}
+		} else {
+			node, err := c.clientSet.Nodes().Get(l.Hostname, metav1.GetOptions{})
+			if err != nil {
+				return nil, resources.K8sErrorToCalico(err, l)
+			}
+
+			kvp, err := getTunIp(node)
+			if err != nil {
+				return []*model.KVPair{}, nil
+			}
+
+			kvps = append(kvps, kvp)
+		}
+	}
+
+	return kvps, nil
+}
+
+func getTunIp(n *v1.Node) (*model.KVPair, error) {
+	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
+	if err != nil {
+		return nil, err
+	}
+	// We need to get the IP for the podCIDR and increment it to the
+	// first IP in the CIDR.
+	tunIp := ip.To4()
+	tunIp[3]++
+
+	kvp := &model.KVPair{
+		Key: model.HostConfigKey{
+			Hostname: n.Name,
+			Name: "IpInIpTunnelAddr",
+		},
+		Value: tunIp,
+	}
+
+	return kvp, nil
 }
