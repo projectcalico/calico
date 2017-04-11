@@ -28,3 +28,4 @@ class TestNodeRun(TestBase):
             output = host.calicoctl("node run --dryrun")
             assert "ETCD_AUTHORITY" not in output
             assert "ETCD_SCHEME" not in output
+            assert "ETCD_ENDPOINTS" in output
