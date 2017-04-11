@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"runtime/pprof"
+	"strings"
 	"syscall"
 	"time"
 
@@ -194,18 +195,6 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// If asked to do so, dump a memory profile after the first sync.
-	var memProfFile *os.File
-	memProfFileName := configParams.DebugMemoryProfilePath
-	if memProfFileName != "" {
-		log.WithField("file", memProfFileName).Info("Asked to create a memory profile.")
-		memProfFile, err = os.Create(memProfFileName)
-		if err != nil {
-			log.WithError(err).Fatal("Could not create memory profile file")
-			memProfFile = nil
-		}
-	}
-
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dataplaneDriver
@@ -263,21 +252,7 @@ configRetry:
 			StatusReportingInterval: time.Duration(configParams.ReportingIntervalSecs) *
 				time.Second,
 
-			PostInSyncCallback: func() {
-				if memProfFile != nil {
-					log.WithField("filename", memProfFileName).
-						Info("Writing memory profile...")
-					// The initial resync uses a lot of scratch space so now is
-					// a good time to force a GC and return any RAM that we can.
-					debug.FreeOSMemory()
-					if err := pprof.WriteHeapProfile(memProfFile); err != nil {
-						log.Fatal("could not write memory profile: ", err)
-					}
-					memProfFile.Close()
-					log.WithField("filename", memProfFileName).
-						Info("Finished writing memory profile")
-				}
-			},
+			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
@@ -407,9 +382,55 @@ configRetry:
 		go servePrometheusMetrics(configParams.PrometheusMetricsPort)
 	}
 
+	// On receipt of SIGUSR1, write out heap profile.
+	usr1SignalChan := make(chan os.Signal, 1)
+	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
+	go func() {
+		for {
+			<-usr1SignalChan
+			dumpHeapMemoryProfile(configParams)
+		}
+	}()
+
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
 	monitorAndManageShutdown(failureReportChan, dpDriverCmd, stopSignalChans)
+}
+
+func dumpHeapMemoryProfile(configParams *config.Config) {
+	// If a memory profile file name is configured, dump a heap memory profile.  If the
+	// configured filename includes "<timestamp>", that will be replaced with a stamp indicating
+	// the current time.
+	memProfFileName := configParams.DebugMemoryProfilePath
+	if memProfFileName != "" {
+		logCxt := log.WithField("file", memProfFileName)
+		logCxt.Info("Asked to create a memory profile.")
+
+		// If the configured file name includes "<timestamp>", replace that with the current
+		// time.
+		if strings.Contains(memProfFileName, "<timestamp>") {
+			timestamp := time.Now().Format("2006-01-02-15:04:05")
+			memProfFileName = strings.Replace(memProfFileName, "<timestamp>", timestamp, 1)
+			logCxt = log.WithField("file", memProfFileName)
+		}
+
+		// Open a file with that name.
+		memProfFile, err := os.Create(memProfFileName)
+		if err != nil {
+			logCxt.WithError(err).Fatal("Could not create memory profile file")
+			memProfFile = nil
+		} else {
+			defer memProfFile.Close()
+			logCxt.Info("Writing memory profile...")
+			// The initial resync uses a lot of scratch space so now is
+			// a good time to force a GC and return any RAM that we can.
+			debug.FreeOSMemory()
+			if err := pprof.WriteHeapProfile(memProfFile); err != nil {
+				logCxt.WithError(err).Fatal("Could not write memory profile")
+			}
+			logCxt.Info("Finished writing memory profile")
+		}
+	}
 }
 
 func servePrometheusMetrics(port int) {
