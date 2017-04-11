@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -52,6 +51,8 @@ func init() {
 		counterLogErrors,
 	)
 }
+
+const logQueueSize = 100
 
 // ConfigureEarlyLogging installs our logging adapters, and enables early logging to screen
 // if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
@@ -110,9 +111,10 @@ func ConfigureLogging(configParams *config.Config) {
 	log.SetLevel(mostVerboseLevel)
 
 	// Screen target.
-	var dests []Destination
+	var dests []*Destination
 	if configParams.LogSeverityScreen != "" {
-		screenDest := NewStreamDestination(logLevelScreen, os.Stderr)
+		screenDest := NewStreamDestination(
+			logLevelScreen, os.Stderr, make(chan QueuedLog, logQueueSize))
 		dests = append(dests, screenDest)
 	}
 
@@ -124,7 +126,8 @@ func ConfigureLogging(configParams *config.Config) {
 		var rotAwareFile io.Writer
 		rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
 		if fileDirErr == nil && fileOpenErr == nil {
-			fileDest := NewStreamDestination(logLevelFile, rotAwareFile)
+			fileDest := NewStreamDestination(
+				logLevelFile, rotAwareFile, make(chan QueuedLog, logQueueSize))
 			dests = append(dests, fileDest)
 		}
 	}
@@ -144,7 +147,8 @@ func ConfigureLogging(configParams *config.Config) {
 		tag := "calico-felix"
 		w, sysErr := syslog.Dial(net, addr, priority, tag)
 		if sysErr == nil {
-			syslogDest := NewSyslogDestination(logLevelSyslog, w)
+			syslogDest := NewSyslogDestination(
+				logLevelSyslog, w, make(chan QueuedLog, logQueueSize))
 			dests = append(dests, syslogDest)
 		}
 	}
@@ -311,6 +315,10 @@ type QueuedLog struct {
 	Message       []byte
 	SyslogMessage string
 	WaitGroup     *sync.WaitGroup
+
+	// NumSkippedLogs contains the number of logs that were skipped before this log (due to the
+	// queue being blocked).
+	NumSkippedLogs uint
 }
 
 func (ql QueuedLog) OnLogDone() {
@@ -319,47 +327,73 @@ func (ql QueuedLog) OnLogDone() {
 	}
 }
 
-func NewStreamDestination(level log.Level, writer io.Writer) *StreamDestination {
-	return &StreamDestination{
-		level:   level,
-		writer:  writer,
-		channel: make(chan QueuedLog, 10000),
+func NewStreamDestination(level log.Level, writer io.Writer, c chan QueuedLog) *Destination {
+	return &Destination{
+		Level:   level,
+		channel: c,
+		writeLog: func(ql QueuedLog) error {
+			if ql.NumSkippedLogs > 0 {
+				fmt.Fprintf(writer, "... dropped %d logs ...\n",
+					ql.NumSkippedLogs)
+			}
+			_, err := writer.Write(ql.Message)
+			return err
+		},
 	}
 }
 
-type StreamDestination struct {
-	level   log.Level
-	writer  io.Writer
+func NewSyslogDestination(level log.Level, writer syslogWriter, c chan QueuedLog) *Destination {
+	return &Destination{
+		Level:   level,
+		channel: c,
+		writeLog: func(ql QueuedLog) error {
+			if ql.NumSkippedLogs > 0 {
+				writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
+					ql.NumSkippedLogs))
+			}
+			err := writeToSyslog(writer, ql)
+			return err
+		},
+	}
+}
+
+type Destination struct {
+	// Level is the minimum level that a log must have to be logged to this destination.
+	Level log.Level
+	// Channel is the channel used to queue logs to the background worker thread.  Public for
+	// test purposes.
 	channel chan QueuedLog
+	// writeLog is the function to actually make a log.  The constructors above initialise this
+	// with a function that logs to a stream or to syslog, for example.
+	writeLog func(ql QueuedLog) error
 
-	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
-	// Must be read/updated using atomic.XXX.
-	numDroppedLogs uint64
+	// lock protects the numDroppedLogs count.
+	lock           sync.Mutex
+	numDroppedLogs uint
 }
 
-func (d *StreamDestination) Level() log.Level {
-	return d.level
+// Send sends a log to the background thread.  It returns true on success or false if the channel
+// is blocked.
+func (d *Destination) Send(ql QueuedLog) (ok bool) {
+	d.lock.Lock()
+	ql.NumSkippedLogs = d.numDroppedLogs
+	select {
+	case d.channel <- ql:
+		// We've now queued reporting of all the dropped logs, zero out the counter.
+		d.numDroppedLogs = 0
+		ok = true
+	default:
+		d.numDroppedLogs += 1
+	}
+	d.lock.Unlock()
+	return
 }
 
-func (d *StreamDestination) Channel() chan<- QueuedLog {
-	return d.channel
-}
-
-func (d *StreamDestination) OnLogDropped() {
-	atomic.AddUint64(&d.numDroppedLogs, 1)
-}
-
-func (d *StreamDestination) LoopWritingLogs() {
-	var numSeenDroppedLogs uint64
+// LoopWritingLogs is intended to be used as a background go-routine.  It processes the logs from
+// the channel.
+func (d *Destination) LoopWritingLogs() {
 	for ql := range d.channel {
-		currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
-		if currentNumDroppedLogs > numSeenDroppedLogs {
-			fmt.Fprintf(d.writer, "... dropped %d logs ...\n",
-				currentNumDroppedLogs-numSeenDroppedLogs)
-		}
-		numSeenDroppedLogs = currentNumDroppedLogs
-
-		_, err := d.writer.Write(ql.Message)
+		err := d.writeLog(ql)
 		if err != nil {
 			counterLogErrors.Inc()
 			fmt.Fprintf(os.Stderr, "Failed to write to log: %v", err)
@@ -368,17 +402,10 @@ func (d *StreamDestination) LoopWritingLogs() {
 	}
 }
 
-type monotimeIface interface {
-	Now() time.Duration
-	Since(time.Duration) time.Duration
-}
-
-func NewSyslogDestination(level log.Level, writer syslogWriter) *SyslogDestination {
-	return &SyslogDestination{
-		level:   level,
-		writer:  writer,
-		channel: make(chan QueuedLog, 10000),
-	}
+// Close closes the channel to the background goroutine.  This is only safe to call if you know
+// that the destination is no longer in use by any thread; in tests, for example.
+func (d *Destination) Close() {
+	close(d.channel)
 }
 
 type syslogWriter interface {
@@ -389,79 +416,35 @@ type syslogWriter interface {
 	Crit(m string) error
 }
 
-type SyslogDestination struct {
-	level   log.Level
-	writer  syslogWriter
-	channel chan QueuedLog
-
-	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
-	// Must be read/updated using atomic.XXX.
-	numDroppedLogs uint64
-}
-
-func (d *SyslogDestination) Level() log.Level {
-	return d.level
-}
-
-func (d *SyslogDestination) Channel() chan<- QueuedLog {
-	return d.channel
-}
-
-func (d *SyslogDestination) OnLogDropped() {
-	atomic.AddUint64(&d.numDroppedLogs, 1)
-}
-
-func (d *SyslogDestination) LoopWritingLogs() {
-	var numSeenDroppedLogs uint64
-	for ql := range d.channel {
-		// If it's been a while since our last check, see if we're dropping logs.
-		currentNumDroppedLogs := atomic.LoadUint64(&d.numDroppedLogs)
-		if currentNumDroppedLogs > numSeenDroppedLogs {
-			d.writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
-				currentNumDroppedLogs-numSeenDroppedLogs))
-		}
-		numSeenDroppedLogs = currentNumDroppedLogs
-
-		err := d.write(ql)
-		if err != nil {
-			counterLogErrors.Inc()
-			fmt.Fprintf(os.Stderr, "Failed to write to syslog: %v", err)
-		}
-		ql.OnLogDone()
-	}
-}
-
-func (d *SyslogDestination) write(ql QueuedLog) error {
+func writeToSyslog(writer syslogWriter, ql QueuedLog) error {
 	switch ql.Level {
 	case log.PanicLevel:
-		return d.writer.Crit(ql.SyslogMessage)
+		return writer.Crit(ql.SyslogMessage)
 	case log.FatalLevel:
-		return d.writer.Crit(ql.SyslogMessage)
+		return writer.Crit(ql.SyslogMessage)
 	case log.ErrorLevel:
-		return d.writer.Err(ql.SyslogMessage)
+		return writer.Err(ql.SyslogMessage)
 	case log.WarnLevel:
-		return d.writer.Warning(ql.SyslogMessage)
+		return writer.Warning(ql.SyslogMessage)
 	case log.InfoLevel:
-		return d.writer.Info(ql.SyslogMessage)
+		return writer.Info(ql.SyslogMessage)
 	case log.DebugLevel:
-		return d.writer.Debug(ql.SyslogMessage)
+		return writer.Debug(ql.SyslogMessage)
 	default:
 		return nil
 	}
 }
 
-type Destination interface {
-	Level() log.Level
-	LoopWritingLogs()
-	Channel() chan<- QueuedLog
-	OnLogDropped()
-}
-
+// BackgroundHook is a logrus Hook that (synchronously) formats each log and sends it to one or more
+// Destinations for writing ona background thread.  It supports filtering destinations on
+// individual log levels.  We write logs from background threads so that blocking of the output
+// stream doesn't block the mainline code.  Up to a point, we queue logs for writing, then we start
+// dropping logs.
 type BackgroundHook struct {
 	levels      []log.Level
 	syslogLevel log.Level
 
-	destinations []Destination
+	destinations []*Destination
 
 	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
 	// Must be read/updated using atomic.XXX.
@@ -469,7 +452,7 @@ type BackgroundHook struct {
 	lastDropLogTime time.Duration
 }
 
-func NewBackgroundHook(levels []log.Level, syslogLevel log.Level, destinations []Destination) *BackgroundHook {
+func NewBackgroundHook(levels []log.Level, syslogLevel log.Level, destinations []*Destination) *BackgroundHook {
 	return &BackgroundHook{
 		destinations: destinations,
 		levels:       levels,
@@ -515,22 +498,25 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 	}
 
 	for _, dest := range h.destinations {
-		if ql.Level > dest.Level() {
+		if ql.Level > dest.Level {
 			continue
 		}
 		if waitGroup != nil {
+			// Thread safety: we must call add before we send the wait group over the
+			// channel (or the background thread could be scheduled immediately and
+			// call Done() before we call Add()).  Since we don't know if the send
+			// will succeed that leads to the need to call Done() on the 'default:'
+			// branch below to correctly pair Add()/Done() calls.
 			waitGroup.Add(1)
 		}
-		select {
-		case dest.Channel() <- ql:
-		default:
+
+		if ok := dest.Send(ql); !ok {
 			// Background thread isn't keeping up.  Drop the log and count how many
 			// we've dropped.
 			if waitGroup != nil {
 				waitGroup.Done()
 			}
 			counterDroppedLogs.Inc()
-			dest.OnLogDropped()
 		}
 	}
 	if waitGroup != nil {

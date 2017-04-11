@@ -21,13 +21,14 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"sync"
 
 	. "github.com/projectcalico/felix/logutils"
 )
@@ -123,146 +124,185 @@ func theTime() time.Time {
 	return theTime
 }
 
-var _ = Describe("StreamDestination", func() {
-	var s *StreamDestination
+var (
+	message1 = QueuedLog{
+		Level:         log.InfoLevel,
+		Message:       []byte("Message"),
+		SyslogMessage: "syslog message",
+	}
+)
+
+var _ = Describe("Stream Destination", func() {
+	var s *Destination
+	var c chan QueuedLog
 	var pr *io.PipeReader
 	var pw *io.PipeWriter
-	var c chan<- QueuedLog
 
 	BeforeEach(func() {
+		c = make(chan QueuedLog, 1)
 		pr, pw = io.Pipe()
-		s = NewStreamDestination(log.InfoLevel, pw)
-		go s.LoopWritingLogs()
-		c = s.Channel()
-	})
-	AfterEach(func() {
-		close(c)
-	})
-
-	It("should write a log (no WaitGroup)", func() {
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("Message"))
+		s = NewStreamDestination(
+			log.InfoLevel,
+			pw,
+			c,
+		)
 	})
 
-	It("should log number of dropped logs", func() {
-		// Increment the dropped logs counter.
-		s.OnLogDropped()
-		// Next log should emit a drop warning.
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-		}
-		// But log after that shouldn't.
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message 2"),
-			SyslogMessage: "syslog message",
-		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("... dropped 1 logs ...\n"))
-		n, err = pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("Message"))
-		n, err = pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("Message 2"))
+	It("should report dropped logs to background thread", func() {
+		// First message should be queued on the channel.
+		ok := s.Send(message1)
+		Expect(ok).To(BeTrue())
+		// Second message should be dropped.  Drop counter should now be 1.
+		ok = s.Send(message1)
+		Expect(ok).To(BeFalse())
+		// Drain the queue.
+		Expect(<-c).To(Equal(message1))
+		// Third message should go through.
+		ok = s.Send(message1)
+		Expect(ok).To(BeTrue())
+		Expect(<-c).To(Equal(QueuedLog{
+			Level:          log.InfoLevel,
+			Message:        []byte("Message"),
+			SyslogMessage:  "syslog message",
+			NumSkippedLogs: 1,
+		}))
+		// Subsequent messages should have the counter reset.
+		ok = s.Send(message1)
+		Expect(ok).To(BeTrue())
+		Expect(<-c).To(Equal(message1))
 	})
 
-	It("should trigger WaitGroup", func() {
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-			WaitGroup:     wg,
+	Describe("With real background thread", func() {
+		BeforeEach(func() {
+			go s.LoopWritingLogs()
+		})
+		AfterEach(func() {
+			s.Close()
+		})
+
+		readNextMsg := func() string {
+			b := make([]byte, 1024)
+			n, err := pr.Read(b)
+			Expect(err).NotTo(HaveOccurred())
+			return string(b[:n])
 		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		wg.Wait()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("Message"))
+
+		It("should write a log (no WaitGroup)", func() {
+			ok := s.Send(message1)
+			Expect(ok).To(BeTrue())
+			msg := readNextMsg()
+			Expect(msg).To(Equal("Message"))
+		})
+
+		It("should log number of dropped logs", func() {
+			// Bypass Send() so we can force NumSkippedLogs to be non-zero.
+			c <- QueuedLog{
+				Level:          log.InfoLevel,
+				Message:        []byte("Message"),
+				SyslogMessage:  "syslog message",
+				NumSkippedLogs: 1,
+			}
+			msg := readNextMsg()
+			Expect(msg).To(Equal("... dropped 1 logs ...\n"))
+			msg = readNextMsg()
+			Expect(msg).To(Equal("Message"))
+		})
+
+		It("should trigger WaitGroup", func() {
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			c <- QueuedLog{
+				Level:         log.InfoLevel,
+				Message:       []byte("Message"),
+				SyslogMessage: "syslog message",
+				WaitGroup:     wg,
+			}
+			b := make([]byte, 1024)
+			n, err := pr.Read(b)
+			wg.Wait()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(b[:n])).To(Equal("Message"))
+		})
 	})
 })
 
-var _ = Describe("SyslogDestination", func() {
-	var s *SyslogDestination
+var _ = Describe("Syslog Destination", func() {
+	var s *Destination
+	var c chan QueuedLog
 	var pr *io.PipeReader
 	var pw *io.PipeWriter
-	var c chan<- QueuedLog
 
 	BeforeEach(func() {
+		c = make(chan QueuedLog, 1)
 		pr, pw = io.Pipe()
-		s = NewSyslogDestination(log.InfoLevel, (*mockSyslogWriter)(pw))
-		go s.LoopWritingLogs()
-		c = s.Channel()
-	})
-	AfterEach(func() {
-		close(c)
-	})
-
-	It("should write a log (no WaitGroup)", func() {
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+		s = NewSyslogDestination(
+			log.InfoLevel,
+			(*mockSyslogWriter)(pw),
+			c,
+		)
 	})
 
-	It("should log number of dropped logs", func() {
-		s.OnLogDropped()
-		// Log after that should emit a drop warning.
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-		}
-		// But log after that shouldn't.
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message 2",
-		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("WARNING ... dropped 1 logs ...\n"))
-		n, err = pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("INFO syslog message"))
-		n, err = pr.Read(b)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("INFO syslog message 2"))
-	})
+	Describe("With real background thread", func() {
+		BeforeEach(func() {
+			go s.LoopWritingLogs()
+		})
+		AfterEach(func() {
+			s.Close()
+		})
 
-	It("should trigger WaitGroup", func() {
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		c <- QueuedLog{
-			Level:         log.InfoLevel,
-			Message:       []byte("Message"),
-			SyslogMessage: "syslog message",
-			WaitGroup:     wg,
+		readNextMsg := func() string {
+			b := make([]byte, 1024)
+			n, err := pr.Read(b)
+			Expect(err).NotTo(HaveOccurred())
+			return string(b[:n])
 		}
-		b := make([]byte, 1024)
-		n, err := pr.Read(b)
-		wg.Wait()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(b[:n])).To(Equal("INFO syslog message"))
+
+		defineLogLevelTest := func(level log.Level, levelName string) {
+			It("should write a log (no WaitGroup) level "+levelName, func() {
+				ql := message1
+				ql.Level = level
+				ok := s.Send(ql)
+				Expect(ok).To(BeTrue())
+				msg := readNextMsg()
+				Expect(msg).To(Equal(levelName + " syslog message"))
+			})
+		}
+		defineLogLevelTest(log.InfoLevel, "INFO")
+		defineLogLevelTest(log.WarnLevel, "WARNING")
+		defineLogLevelTest(log.DebugLevel, "DEBUG")
+		defineLogLevelTest(log.ErrorLevel, "ERROR")
+		defineLogLevelTest(log.FatalLevel, "CRITICAL")
+		defineLogLevelTest(log.PanicLevel, "CRITICAL")
+
+		It("should log number of dropped logs", func() {
+			// Bypass Send() so we can force NumSkippedLogs to be non-zero.
+			c <- QueuedLog{
+				Level:          log.InfoLevel,
+				Message:        []byte("Message"),
+				SyslogMessage:  "syslog message",
+				NumSkippedLogs: 1,
+			}
+			msg := readNextMsg()
+			Expect(msg).To(Equal("WARNING ... dropped 1 logs ...\n"))
+			msg = readNextMsg()
+			Expect(msg).To(Equal("INFO syslog message"))
+		})
+
+		It("should trigger WaitGroup", func() {
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			c <- QueuedLog{
+				Level:         log.InfoLevel,
+				Message:       []byte("Message"),
+				SyslogMessage: "syslog message",
+				WaitGroup:     wg,
+			}
+			b := make([]byte, 1024)
+			n, err := pr.Read(b)
+			wg.Wait()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(b[:n])).To(Equal("INFO syslog message"))
+		})
 	})
 })
 

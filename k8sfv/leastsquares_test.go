@@ -17,6 +17,7 @@ package main
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/felix/k8sfv/leastsquares"
 )
 
