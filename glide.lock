@@ -1,5 +1,5 @@
-hash: 5639d6096c315707cae2f1820595d1ea8819254dca3051d082a82c0a45dbe72e
-updated: 2017-04-04T16:32:23.973853582Z
+hash: a2a606221911856b912ba0abbc55521382a4b1cad07942cb13946b4f16a9f1ad
+updated: 2017-04-10T15:56:26.784382675Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,12 +13,12 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 470e86eb8b643ca997b08611a0ef1003093106d7
+  version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 972d8c55ab9b5934a2e54acb8191ea2262e8e063
+  version: 25acdbf41bb918b5b40274d9c62b6d272cb77626
   subpackages:
   - client
   - pkg/pathutil
@@ -112,7 +112,7 @@ imports:
 - name: github.com/mipearson/rfw
   version: b66ec87bd85055de3f749a8640e9e4c8053052e4
 - name: github.com/onsi/ginkgo
-  version: 77a8c1e5c40d6bb6c5eb4dd4bdce9763564f6298
+  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
   - config
   - extensions/table
@@ -143,7 +143,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a005d7a4d28a42efcdcca80523c237053615313f
+  version: 2c13cbb31b1aad738942517c46351bdd7cd64246
   subpackages:
   - lib
   - lib/api
@@ -205,7 +205,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: aec6f885c2544dafc5baedfc95fdd15e75a1b1b4
+  version: 1e86b2bee5b6a7d377e4c02bb7f98209d6a7297c
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -231,7 +231,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 493114f68206f85e7e333beccfabc11e98cba8dd
+  version: f3918c30c5c2cb527c0b071a27c35120a6c0719a
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -388,7 +388,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: 334b8f472b3af5d541c5642701c1e29e2126f486
+  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
   subpackages:
   - format
   - internal/assertion
