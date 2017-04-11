@@ -304,13 +304,9 @@ Description:
 	}
 
 	if etcdcfg.EtcdEndpoints == "" {
-		envs["ETCD_AUTHORITY"] = etcdcfg.EtcdAuthority
-		envs["ETCD_SCHEME"] = etcdcfg.EtcdScheme
-		envs["ETCD_ENDPOINTS"] = ""
+		envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdScheme + "://" + etcdcfg.EtcdAuthority
 	} else {
 		envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
-		envs["ETCD_AUTHORITY"] = ""
-		envs["ETCD_SCHEME"] = ""
 	}
 	if etcdcfg.EtcdCACertFile != "" {
 		envs["ETCD_CA_CERT_FILE"] = ETCD_CA_CERT_NODE_FILE
