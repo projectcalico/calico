@@ -25,12 +25,17 @@ import (
 )
 
 var _ = DescribeTable("Config parsing",
-	func(key, value string, expected interface{}) {
+	func(key, value string, expected interface{}, errorExpected ...bool) {
 		config := New()
 		config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
 		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
 		Expect(newVal).To(Equal(expected))
+		if len(errorExpected) > 0 && errorExpected[0] {
+			Expect(config.Err).To(HaveOccurred())
+		} else {
+			Expect(config.Err).NotTo(HaveOccurred())
+		}
 	},
 
 	Entry("FelixHostname", "FelixHostname", "hostname", "hostname"),
@@ -102,12 +107,75 @@ var _ = DescribeTable("Config parsing",
 	Entry("PrometheusMetricsEnabled", "PrometheusMetricsEnabled", "true", true),
 	Entry("PrometheusMetricsPort", "PrometheusMetricsPort", "1234", int(1234)),
 
-	Entry("FailsafeInboundHostPorts", "FailsafeInboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
-	Entry("FailsafeOutboundHostPorts", "FailsafeOutboundHostPorts", "1,2,3,4", []uint16{1, 2, 3, 4}),
-	Entry("FailsafeInboundHostPorts none", "FailsafeInboundHostPorts", "none", []uint16(nil)),
-	Entry("FailsafeOutboundHostPorts none", "FailsafeOutboundHostPorts", "none", []uint16(nil)),
-	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "", []uint16{22}),
-	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "", []uint16{2379, 2380, 4001, 7001}),
+	Entry("FailsafeInboundHostPorts old syntax", "FailsafeInboundHostPorts", "1,2,3,4",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "tcp", Port: 2},
+			{Protocol: "tcp", Port: 3},
+			{Protocol: "tcp", Port: 4},
+		}),
+	Entry("FailsafeOutboundHostPorts old syntax", "FailsafeOutboundHostPorts", "1,2,3,4",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "tcp", Port: 2},
+			{Protocol: "tcp", Port: 3},
+			{Protocol: "tcp", Port: 4},
+		}),
+	Entry("FailsafeInboundHostPorts new syntax", "FailsafeInboundHostPorts", "tcp:1,udp:2",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "udp", Port: 2},
+		}),
+	Entry("FailsafeOutboundHostPorts new syntax", "FailsafeOutboundHostPorts", "tcp:1,udp:2",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "udp", Port: 2},
+		}),
+	Entry("FailsafeInboundHostPorts mixed syntax", "FailsafeInboundHostPorts", "1,udp:2",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "udp", Port: 2},
+		}),
+	Entry("FailsafeOutboundHostPorts mixed syntax", "FailsafeOutboundHostPorts", "1,udp:2",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 1},
+			{Protocol: "udp", Port: 2},
+		}),
+
+	Entry("FailsafeInboundHostPorts bad syntax -> defaulted", "FailsafeInboundHostPorts", "foo:1",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 22},
+			{Protocol: "udp", Port: 68},
+		},
+		true,
+	),
+	Entry("FailsafeInboundHostPorts too many parts -> defaulted", "FailsafeInboundHostPorts", "tcp:1:bar",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 22},
+			{Protocol: "udp", Port: 68},
+		},
+		true,
+	),
+
+	Entry("FailsafeInboundHostPorts none", "FailsafeInboundHostPorts", "none", []ProtoPort(nil)),
+	Entry("FailsafeOutboundHostPorts none", "FailsafeOutboundHostPorts", "none", []ProtoPort(nil)),
+
+	Entry("FailsafeInboundHostPorts empty", "FailsafeInboundHostPorts", "",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 22},
+			{Protocol: "udp", Port: 68},
+		},
+	),
+	Entry("FailsafeOutboundHostPorts empty", "FailsafeOutboundHostPorts", "",
+		[]ProtoPort{
+			{Protocol: "tcp", Port: 2379},
+			{Protocol: "tcp", Port: 2380},
+			{Protocol: "tcp", Port: 4001},
+			{Protocol: "tcp", Port: 7001},
+			{Protocol: "udp", Port: 53},
+			{Protocol: "udp", Port: 67},
+		},
+	),
 )
 
 var _ = DescribeTable("Mark bit calculation tests",
