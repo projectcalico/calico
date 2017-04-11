@@ -31,7 +31,11 @@ class TestIPIP(TestBase):
     def tearDown(self):
         self.remove_tunl_ip()
 
-    def test_ipip(self):
+    @parameterized.expand([
+        ('bird',),
+        ('gobgp',),
+    ])
+    def test_ipip(self, backend):
         """
         Test IPIP routing with the different IPIP modes.
 
@@ -55,8 +59,8 @@ class TestIPIP(TestBase):
 
             # Autodetect the IP addresses - this should ensure the subnet is
             # correctly configured.
-            host1.start_calico_node("--ip=autodetect")
-            host2.start_calico_node("--ip=autodetect")
+            host1.start_calico_node("--ip=autodetect --backend={0}".format(backend))
+            host2.start_calico_node("--ip=autodetect --backend={0}".format(backend))
 
             # Create a network and a workload on each host.
             network1 = host1.create_network("subnet1")
@@ -292,8 +296,10 @@ class TestIPIP(TestBase):
     @parameterized.expand([
         (False,),
         (True,),
+        (False,'gobgp',),
+        (True,'gobgp',),
     ])
-    def test_gce(self, with_ipip):
+    def test_gce(self, with_ipip, backend='bird'):
         """Test with and without IP-in-IP routing on simulated GCE instances.
 
         In this test we simulate GCE instance routing, where there is a router
@@ -321,8 +327,8 @@ class TestIPIP(TestBase):
                         simulate_gce_routing=True,
                         start_calico=False) as host2:
 
-            host1.start_calico_node()
-            host2.start_calico_node()
+            host1.start_calico_node("--backend={0}".format(backend))
+            host2.start_calico_node("--backend={0}".format(backend))
 
             # Before creating any workloads, set the initial IP-in-IP state.
             host1.set_ipip_enabled(with_ipip)
