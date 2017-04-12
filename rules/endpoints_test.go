@@ -44,6 +44,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-tw-cali1234",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					{Action: ClearMarkAction{Mark: 0x8}},
 					{Action: DropAction{},
 						Comment: "Drop if no profiles matched"},
@@ -52,6 +58,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-fw-cali1234",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					{Action: ClearMarkAction{Mark: 0x8}},
 					{Action: DropAction{},
 						Comment: "Drop if no profiles matched"},
@@ -89,6 +101,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-tw-cali1234",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					{Action: ClearMarkAction{Mark: 0x8}},
 
 					{Comment: "Start of policies",
@@ -123,6 +141,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-fw-cali1234",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					{Action: ClearMarkAction{Mark: 0x8}},
 
 					{Comment: "Start of policies",
@@ -162,6 +186,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-th-eth0",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-out"}},
 
@@ -199,6 +229,12 @@ var _ = Describe("Endpoints", func() {
 			{
 				Name: "cali-fh-eth0",
 				Rules: []Rule{
+					// conntrack rules.
+					{Match: Match().ConntrackState("INVALID"),
+						Action: DropAction{}},
+					{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+						Action: AcceptAction{}},
+
 					// Host endpoints get extra failsafe rules.
 					{Action: JumpAction{Target: "cali-failsafe-in"}},
 

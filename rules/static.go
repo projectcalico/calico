@@ -69,18 +69,6 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	// Allow established connections via the conntrack table.
-	inputRules = append(inputRules, Rule{
-		Match:  Match().ConntrackState("INVALID"),
-		Action: DropAction{},
-	})
-	inputRules = append(inputRules,
-		Rule{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
-		},
-	)
-
 	// Apply our policy to packets coming from workload endpoints.
 	for _, prefix := range r.WorkloadIfacePrefixes {
 		log.WithField("ifacePrefix", prefix).Debug("Adding workload match rules")
@@ -246,19 +234,6 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	// raw chain.
 	rules = append(rules, r.acceptUntrackedRules()...)
 
-	// conntrack rules to reject invalid packets and accept established connections.
-	// Ideally, we'd limit these rules to the interfaces that we're managing so that we
-	// co-exist better with the user's other rules. However, to do that we'd have to push
-	// them down into the per-endpoint chains, which would increase per-packet overhead.
-	rules = append(rules, Rule{
-		Match:  Match().ConntrackState("INVALID"),
-		Action: DropAction{},
-	})
-	rules = append(rules, Rule{
-		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-		Action: AcceptAction{},
-	})
-
 	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
 	// The first dispatches the packet to our dispatch chains if it is going to/from an
@@ -341,16 +316,6 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
 	// raw chain.
 	rules = append(rules, r.acceptUntrackedRules()...)
-
-	// conntrack rules.
-	rules = append(rules, Rule{
-		Match:  Match().ConntrackState("INVALID"),
-		Action: DropAction{},
-	})
-	rules = append(rules, Rule{
-		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-		Action: AcceptAction{},
-	})
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
