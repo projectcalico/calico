@@ -368,7 +368,7 @@ check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
 go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 	# Run staticcheck stand-alone since gometalinter runs concurrent copies, which
 	# uses a lot of RAM.
-	$(DOCKER_GO_BUILD) sh -c 'staticcheck `glide nv`'
+	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs -n 3 staticcheck'
 	$(DOCKER_GO_BUILD) gometalinter --deadline=300s \
 	                                --disable-all \
 	                                --enable=goimports \
