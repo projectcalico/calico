@@ -316,6 +316,13 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 }
 
 func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule) []Rule {
+	// Allow return packets for established connections.
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
+		},
+	)
 	if !r.Config.DisableConntrackInvalid {
 		// Drop packets that aren't either a valid handshake or part of an established
 		// connection.
@@ -324,13 +331,6 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule) []Rule {
 			Action: DropAction{},
 		})
 	}
-	// Allow return packets for established connections.
-	rules = append(rules,
-		Rule{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: AcceptAction{},
-		},
-	)
 	return rules
 }
 
