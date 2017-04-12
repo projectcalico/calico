@@ -140,6 +140,7 @@ The Calico CNI plugins require a standard CNI config file.
 To define a rkt network for Calico, create a configuration file in `/etc/rkt/net.d/`.
 
 - Each network should be given a unique "name".
+- Specify the CNI specification version with "cniVersion", for example "cniVersion": "0.3.1".
 - To use Calico networking, specify "type": "calico"
 - To use Calico IPAM, specify "type": "calico-ipam" in the "ipam" section.
 
@@ -157,6 +158,7 @@ For example, run the following to create a network called "mynet"
 cat >/etc/rkt/net.d/10-calico-mynet.conf <<EOF
 {
     "name": "mynet",
+    "cniVersion": "0.3.1",
     "etcd_endpoints": "http://<ETCD_IP>:<ETCD_PORT>",
     "type": "calico",
     "ipam": {
