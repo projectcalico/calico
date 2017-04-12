@@ -114,7 +114,11 @@ func ConfigureLogging(configParams *config.Config) {
 	var dests []*Destination
 	if configParams.LogSeverityScreen != "" {
 		screenDest := NewStreamDestination(
-			logLevelScreen, os.Stderr, make(chan QueuedLog, logQueueSize))
+			logLevelScreen,
+			os.Stderr,
+			make(chan QueuedLog, logQueueSize),
+			configParams.DebugDisableLogDropping,
+		)
 		dests = append(dests, screenDest)
 	}
 
@@ -127,7 +131,11 @@ func ConfigureLogging(configParams *config.Config) {
 		rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
 		if fileDirErr == nil && fileOpenErr == nil {
 			fileDest := NewStreamDestination(
-				logLevelFile, rotAwareFile, make(chan QueuedLog, logQueueSize))
+				logLevelFile,
+				rotAwareFile,
+				make(chan QueuedLog, logQueueSize),
+				configParams.DebugDisableLogDropping,
+			)
 			dests = append(dests, fileDest)
 		}
 	}
@@ -148,7 +156,11 @@ func ConfigureLogging(configParams *config.Config) {
 		w, sysErr := syslog.Dial(net, addr, priority, tag)
 		if sysErr == nil {
 			syslogDest := NewSyslogDestination(
-				logLevelSyslog, w, make(chan QueuedLog, logQueueSize))
+				logLevelSyslog,
+				w,
+				make(chan QueuedLog, logQueueSize),
+				configParams.DebugDisableLogDropping,
+			)
 			dests = append(dests, syslogDest)
 		}
 	}
@@ -327,7 +339,12 @@ func (ql QueuedLog) OnLogDone() {
 	}
 }
 
-func NewStreamDestination(level log.Level, writer io.Writer, c chan QueuedLog) *Destination {
+func NewStreamDestination(
+	level log.Level,
+	writer io.Writer,
+	c chan QueuedLog,
+	disableLogDropping bool,
+) *Destination {
 	return &Destination{
 		Level:   level,
 		channel: c,
@@ -339,10 +356,16 @@ func NewStreamDestination(level log.Level, writer io.Writer, c chan QueuedLog) *
 			_, err := writer.Write(ql.Message)
 			return err
 		},
+		disableLogDropping: disableLogDropping,
 	}
 }
 
-func NewSyslogDestination(level log.Level, writer syslogWriter, c chan QueuedLog) *Destination {
+func NewSyslogDestination(
+	level log.Level,
+	writer syslogWriter,
+	c chan QueuedLog,
+	disableLogDropping bool,
+) *Destination {
 	return &Destination{
 		Level:   level,
 		channel: c,
@@ -354,6 +377,7 @@ func NewSyslogDestination(level log.Level, writer syslogWriter, c chan QueuedLog
 			err := writeToSyslog(writer, ql)
 			return err
 		},
+		disableLogDropping: disableLogDropping,
 	}
 }
 
@@ -367,6 +391,9 @@ type Destination struct {
 	// with a function that logs to a stream or to syslog, for example.
 	writeLog func(ql QueuedLog) error
 
+	// disableLogDropping forces all logs to be queued even if the destination blocks.
+	disableLogDropping bool
+
 	// lock protects the numDroppedLogs count.
 	lock           sync.Mutex
 	numDroppedLogs uint
@@ -375,6 +402,12 @@ type Destination struct {
 // Send sends a log to the background thread.  It returns true on success or false if the channel
 // is blocked.
 func (d *Destination) Send(ql QueuedLog) (ok bool) {
+	if d.disableLogDropping {
+		d.channel <- ql
+		ok = true
+		return
+	}
+
 	d.lock.Lock()
 	ql.NumSkippedLogs = d.numDroppedLogs
 	select {

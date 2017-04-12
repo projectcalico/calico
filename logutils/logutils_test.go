@@ -130,6 +130,11 @@ var (
 		Message:       []byte("Message"),
 		SyslogMessage: "syslog message",
 	}
+	message2 = QueuedLog{
+		Level:         log.InfoLevel,
+		Message:       []byte("Message2"),
+		SyslogMessage: "syslog message2",
+	}
 )
 
 var _ = Describe("Stream Destination", func() {
@@ -145,6 +150,7 @@ var _ = Describe("Stream Destination", func() {
 			log.InfoLevel,
 			pw,
 			c,
+			false,
 		)
 	})
 
@@ -170,6 +176,37 @@ var _ = Describe("Stream Destination", func() {
 		ok = s.Send(message1)
 		Expect(ok).To(BeTrue())
 		Expect(<-c).To(Equal(message1))
+	})
+
+	Describe("with dropping disabled", func() {
+		BeforeEach(func() {
+			c = make(chan QueuedLog, 1)
+			pr, pw = io.Pipe()
+			s = NewStreamDestination(
+				log.InfoLevel,
+				pw,
+				c,
+				true,
+			)
+		})
+
+		It("should not drop logs", func() {
+			// First message should be queued on the channel.
+			ok := s.Send(message1)
+			Expect(ok).To(BeTrue())
+			done := make(chan bool)
+			go func() {
+				// Second message should block so we do it in a goroutine.
+				ok = s.Send(message2)
+				done <- ok
+			}()
+			// Sleep so that the background goroutine has a chance to try to write.
+			time.Sleep(10 * time.Millisecond)
+			// Drain the queue.
+			Expect(<-c).To(Equal(message1))
+			Expect(<-c).To(Equal(message2))
+			Expect(<-done).To(BeTrue())
+		})
 	})
 
 	Describe("With real background thread", func() {
@@ -239,7 +276,37 @@ var _ = Describe("Syslog Destination", func() {
 			log.InfoLevel,
 			(*mockSyslogWriter)(pw),
 			c,
+			false,
 		)
+	})
+
+	Describe("with dropping disabled", func() {
+		BeforeEach(func() {
+			s = NewSyslogDestination(
+				log.InfoLevel,
+				(*mockSyslogWriter)(pw),
+				c,
+				true,
+			)
+		})
+
+		It("should not drop logs", func() {
+			// First message should be queued on the channel.
+			ok := s.Send(message1)
+			Expect(ok).To(BeTrue())
+			done := make(chan bool)
+			go func() {
+				// Second message should block so we do it in a goroutine.
+				ok = s.Send(message2)
+				done <- ok
+			}()
+			// Sleep so that the background goroutine has a chance to try to write.
+			time.Sleep(10 * time.Millisecond)
+			// Drain the queue.
+			Expect(<-c).To(Equal(message1))
+			Expect(<-c).To(Equal(message2))
+			Expect(<-done).To(BeTrue())
+		})
 	})
 
 	Describe("With real background thread", func() {

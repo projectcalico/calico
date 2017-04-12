@@ -147,7 +147,8 @@ type Config struct {
 	ClusterGUID           string `config:"string;baddecaf"`
 	ClusterType           string `config:"string;"`
 
-	DebugMemoryProfilePath string `config:"file;;"`
+	DebugMemoryProfilePath  string `config:"file;;"`
+	DebugDisableLogDropping bool   `config:"bool;false"`
 
 	// State tracking.
 
