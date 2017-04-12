@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
@@ -83,15 +84,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 	DescribeTable("Test IP pool env variables",
 		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string) {
-
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
 			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
 
 			// Set the env variables specified.
 			for _, env := range envList {
@@ -171,15 +166,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 	Describe("Test NO_DEFAULT_POOLS env variable", func() {
 		Context("Should have no pools defined", func() {
-
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
 			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
 
 			// Set the env variables specified.
 			os.Setenv("NO_DEFAULT_POOLS", "true")
@@ -207,14 +196,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 			exitFunction = func(ec int) { my_ec = ec }
 			defer func() { exitFunction = oldExit }()
 
-			// Erase etcd clean.
-			testutils.CleanEtcd()
-
 			// Create a new client.
-			c, err := testutils.NewClient("")
-			if err != nil {
-				log.Println("Error creating client:", err)
-			}
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
 
 			// Set the env variables specified.
 			for _, env := range envList {
@@ -249,20 +233,15 @@ var _ = Describe("FV tests against a real etcd", func() {
 	)
 
 	Describe("Test we properly wait for the etcd datastore", func() {
-		// Erase etcd clean.
-		testutils.CleanEtcd()
-
 		// Create a new client.
-		client, err := testutils.NewClient("")
-		if err != nil {
-			log.Println("Error creating client:", err)
-		}
+		cfg, _ := client.LoadClientConfigFromEnvironment()
+		c := testutils.CreateCleanClient(*cfg)
 
 		// Wait for a connection.
 		done := make(chan bool)
 		go func() {
 			// Wait for a connection.
-			waitForConnection(client)
+			waitForConnection(c)
 
 			// Once connected, indicate that we connected on the channel.
 			done <- true
@@ -270,7 +249,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 		// Wait for a done signal to indicate that we've connected to the datastore.
 		// If we don't receive one in 5 seconds, then fail.
-		c := 0
+		count := 0
 		for {
 			select {
 			case <-done:
@@ -278,9 +257,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 				log.Println("Connected to datastore")
 				return
 			default:
-				c++
+				count++
 				time.Sleep(1 * time.Second)
-				if c > 5 {
+				if count > 5 {
 					log.Fatal("Timed out waiting for datastore after 5 seconds")
 				}
 			}

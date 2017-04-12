@@ -49,8 +49,6 @@ var exitFunction = os.Exit
 // -  Configuring the node resource with IP/AS information provided in the
 //    environment, or autodetected.
 // -  Creating default IP Pools for quick-start use
-// -  TODO:  Configuring IPIP tunnel with an IP address from an IP pool
-// TODO: Different auto-detection methods
 
 func main() {
 	// Determine the name for this node and ensure the environment is always
@@ -144,9 +142,9 @@ func waitForConnection(c *client.Client) {
 	message("Checking datastore connection")
 	for {
 		// Query some arbitrary configuration to see if the connection
-		// is working.  Getting a specific config is a good option, even
-		// if the config does not exist.
-		_, _, err := c.Config().GetFelixConfig("foo", "")
+		// is working.  Getting a specific Node is a good option, even
+		// if the Node does not exist.
+		_, err := c.Nodes().Get(api.NodeMetadata{Name: "foo"})
 
 		// We only care about a couple of error cases, all others would
 		// suggest the datastore is accessible.
