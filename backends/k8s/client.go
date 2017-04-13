@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"strconv"
 	"time"
+	"strings"
 )
 
 const (
@@ -32,6 +33,7 @@ const (
 
 var (
 	singleNode = regexp.MustCompile("^/calico/bgp/v1/host/([a-zA-Z0-9._-]*)$")
+	ipBlock    = regexp.MustCompile("^/calico/ipam/v2/host/([a-zA-Z0-9._-]*)/ipv4/block")
 )
 
 type Client struct {
@@ -93,6 +95,17 @@ func (c *Client) GetValues(keys []string) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
+		  // Find the podCIDR assigned to individual Nodes
+		} else if m := ipBlock.FindStringSubmatch(key); m != nil {
+			host := m[len(m)-1]
+			kNode, err := c.clientSet.Nodes().Get(host, metav1.GetOptions{})
+			if err != nil {
+				return nil, err
+			}
+			cidr := kNode.Spec.PodCIDR
+			parts := strings.Split(cidr, "/")
+			cidr = strings.Join(parts, "-")
+			kvps[key + cidr] = "{}"
 		}
 		switch key {
 		case global:
