@@ -1,5 +1,5 @@
-hash: a2a606221911856b912ba0abbc55521382a4b1cad07942cb13946b4f16a9f1ad
-updated: 2017-04-11T16:58:30.823493262Z
+hash: 15430b6c8ed7d10c7dc812ced188b7ba71d8f919079d7fde08f5e310ac57d72e
+updated: 2017-04-13T08:09:47.158168096Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 216a6347b2839c4ccc6a12298286fadf4014ed2c
+  version: 4582a7e90035d40d79975f5f018413230ed5d691
   subpackages:
   - client
   - pkg/pathutil
@@ -203,7 +203,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 1e86b2bee5b6a7d377e4c02bb7f98209d6a7297c
+  version: 1d1fee5b1873b5396355214125b824ca3409c64a
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
