@@ -148,7 +148,7 @@ calico/felix: bin/calico-felix
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix docker-image/bin/
-	docker build -t calico/felix docker-image
+	docker build --pull -t calico/felix docker-image
 
 # Targets for Felix testing with the k8s backend and a k8s API server,
 # with k8s model resources being injected by a separate test client.
