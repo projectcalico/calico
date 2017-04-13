@@ -122,7 +122,8 @@ func init() {
 		// accept and reject cases here.
 		Entry("should accept valid selector", api.EntityRule{Selector: "foo == \"bar\""}, true),
 		Entry("should accept valid selector with 'has' and a '/'", api.EntityRule{Selector: "has(calico/k8s_ns)"}, true),
-		Entry("should accept valid selector with 'has'and two '/'", api.EntityRule{Selector: "has(calico/k8s_ns/role)"}, true),
+		Entry("should accept valid selector with 'has' and two '/'", api.EntityRule{Selector: "has(calico/k8s_ns/role)"}, true),
+		Entry("should accept valid selector with 'has' and two '/' and '-.'", api.EntityRule{Selector: "has(calico/k8s_NS-.1/role)"}, true),
 		Entry("should reject invalid selector", api.EntityRule{Selector: "thing=hello &"}, false),
 
 		// (API) Tags.
@@ -138,6 +139,7 @@ func init() {
 		Entry("should accept label key where prefix is 253 characters", api.HostEndpointMetadata{Labels: map[string]string{"projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.calico12345/k8s_ns": "gold"}}, true),
 		Entry("should accept label key where prefix begins with an uppercase character", api.HostEndpointMetadata{Labels: map[string]string{"Projectcalico.org12345/k8s_ns": "gold"}}, true),
 		Entry("should accept label key with multiple /", api.HostEndpointMetadata{Labels: map[string]string{"k8s_ns/label/role": "gold"}}, true),
+		Entry("should accept label key with - and .", api.HostEndpointMetadata{Labels: map[string]string{"k8s_ns/label-ro.le": "gold"}}, true),
 		Entry("should reject label key with !", api.HostEndpointMetadata{Labels: map[string]string{"rank!": "gold"}}, false),
 		Entry("should reject label key starting with ~", api.HostEndpointMetadata{Labels: map[string]string{"~rank_.0-9": "gold"}}, false),
 		Entry("should reject label key ending with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9~": "gold"}}, false),
