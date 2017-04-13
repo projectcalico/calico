@@ -32,7 +32,8 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 # This is the list of logs we should ignore for all tests.
 LOGS_IGNORE_ALL_TESTS = [
     "Failed to connect to syslog error=Unix syslog delivery error level=",
-    ]
+    "Exiting. reason=\"config changed\"",
+]
 
 
 class Log(object):
