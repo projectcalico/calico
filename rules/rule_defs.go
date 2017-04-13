@@ -195,6 +195,8 @@ type Config struct {
 
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
+
+	DisableConntrackInvalid bool
 }
 
 func NewRenderer(config Config) RuleRenderer {

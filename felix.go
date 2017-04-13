@@ -244,6 +244,8 @@ configRetry:
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
+
+				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
 			},
 			IPIPMTU:                 configParams.IpInIpMtu,
 			IptablesRefreshInterval: time.Duration(configParams.IptablesRefreshInterval) * time.Second,

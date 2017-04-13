@@ -140,6 +140,13 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		return []*Chain{&toEndpointChain, &fromEndpointChain}
 	}
 
+	if chainType == chainTypeTracked {
+		// Tracked chain: install conntrack rules, which implement our stateful connections.
+		// This allows return traffic associated with a previously-permitted request.
+		toRules = r.appendConntrackRules(toRules)
+		fromRules = r.appendConntrackRules(fromRules)
+	}
+
 	// First set up failsafes.
 	if toFailsafeChain != "" {
 		toRules = append(toRules, Rule{
@@ -306,6 +313,25 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		Rules: fromRules,
 	}
 	return []*Chain{&toEndpointChain, &fromEndpointChain}
+}
+
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []Rule) []Rule {
+	// Allow return packets for established connections.
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: AcceptAction{},
+		},
+	)
+	if !r.Config.DisableConntrackInvalid {
+		// Drop packets that aren't either a valid handshake or part of an established
+		// connection.
+		rules = append(rules, Rule{
+			Match:  Match().ConntrackState("INVALID"),
+			Action: DropAction{},
+		})
+	}
+	return rules
 }
 
 func EndpointChainName(prefix string, ifaceName string) string {

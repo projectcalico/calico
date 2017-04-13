@@ -122,6 +122,20 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 		}
 
 		outRules := []iptables.Rule{}
+
+		if !raw {
+			outRules = append(outRules,
+				iptables.Rule{
+					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
+					Action: iptables.AcceptAction{},
+				},
+			)
+			outRules = append(outRules, iptables.Rule{
+				Match:  iptables.Match().ConntrackState("INVALID"),
+				Action: iptables.DropAction{},
+			})
+		}
+
 		if host {
 			outRules = append(outRules, iptables.Rule{
 				Match:  iptables.Match(),
@@ -174,6 +188,20 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 		}
 
 		inRules := []iptables.Rule{}
+
+		if !raw {
+			inRules = append(inRules,
+				iptables.Rule{
+					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
+					Action: iptables.AcceptAction{},
+				},
+			)
+			inRules = append(inRules, iptables.Rule{
+				Match:  iptables.Match().ConntrackState("INVALID"),
+				Action: iptables.DropAction{},
+			})
+		}
+
 		if host {
 			inRules = append(inRules, iptables.Rule{
 				Match:  iptables.Match(),
