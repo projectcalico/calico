@@ -83,12 +83,6 @@ var _ = Describe("Static", func() {
 							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
 								Action: AcceptAction{}},
 
-							// conntrack rules.
-							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-
 							// Per-prefix workload jump rules.
 							{Match: Match().InInterface("cali+"),
 								Action: JumpAction{Target: ChainFromWorkloadDispatch}},
@@ -121,12 +115,6 @@ var _ = Describe("Static", func() {
 							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
 								Action: AcceptAction{}},
 
-							// conntrack rules.
-							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{}},
-
 							// Per-prefix workload jump rules.  Note use of goto so that we
 							// don't return here.
 							{Match: Match().InInterface("cali+"),
@@ -149,12 +137,6 @@ var _ = Describe("Static", func() {
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
 							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
-								Action: AcceptAction{}},
-
-							// conntrack rules.
-							{Match: Match().ConntrackState("INVALID"),
-								Action: DropAction{}},
-							{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: AcceptAction{}},
 
 							// Return if to workload.
@@ -422,12 +404,6 @@ var _ = Describe("Static", func() {
 					Action:  DropAction{},
 					Comment: "Drop IPIP packets from non-Calico hosts"},
 
-				// conntrack rules.
-				{Match: Match().ConntrackState("INVALID"),
-					Action: DropAction{}},
-				{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
-					Action: AcceptAction{}},
-
 				// Per-prefix workload jump rules.  Note use of goto so that we
 				// don't return here.
 				{Match: Match().InInterface("cali+"),
@@ -450,12 +426,6 @@ var _ = Describe("Static", func() {
 			Rules: []Rule{
 				// Untracked packets already matched in raw table.
 				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
-					Action: AcceptAction{}},
-
-				// conntrack rules.
-				{Match: Match().ConntrackState("INVALID"),
-					Action: DropAction{}},
-				{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
 					Action: AcceptAction{}},
 
 				// Per-prefix workload jump rules.  Note use of goto so that we

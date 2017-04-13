@@ -137,6 +137,8 @@ type Config struct {
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xff000000;non-zero,die-on-fail"`
 
+	DisableConntrackInvalidCheck bool `config:"bool;false"`
+
 	PrometheusMetricsEnabled bool `config:"bool;false"`
 	PrometheusMetricsPort    int  `config:"int(0,65535);9091"`
 
