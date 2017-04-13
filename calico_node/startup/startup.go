@@ -79,6 +79,9 @@ func main() {
 	// Check for conflicting node configuration
 	checkConflictingNodes(client, node)
 
+	// Check expected filesystem
+	ensureFilesystemAsExpected()
+
 	// Apply the updated node resource.
 	if _, err := client.Nodes().Apply(node); err != nil {
 		fatal("Unable to set node resource configuration: %s", err)
@@ -631,6 +634,32 @@ func checkConflictingNodes(client *client.Client, node *api.Node) {
 	if errored {
 		terminate()
 	}
+}
+
+// Checks that the filesystem is as expected and fix it if possible
+func ensureFilesystemAsExpected() {
+	runDir := "/var/run/calico"
+	// Check if directory already exists
+	if _, err := os.Stat(runDir); err != nil {
+		// Create the runDir
+		if err = os.MkdirAll(runDir, os.ModeDir); err != nil {
+			fatal("Unable to create '%s'", runDir)
+			terminate()
+		}
+		warning("%s was not mounted, 'calicoctl node status' may provide incomplete status information", runDir)
+	}
+
+	logDir := "/var/log/calico"
+	// Check if directory already exists
+	if _, err := os.Stat(logDir); err != nil {
+		// Create the logDir
+		if err = os.MkdirAll(logDir, os.ModeDir); err != nil {
+			fatal("Unable to create '%s'", logDir)
+			terminate()
+		}
+		warning("%s was not mounted, 'calicoctl node diags' will not be able to collect logs", logDir)
+	}
+
 }
 
 // ensureDefaultConfig ensures all of the required default settings are
