@@ -764,35 +764,37 @@ func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVP
 	var kvps = []*model.KVPair{}
 
 	// Short circuit if they aren't asking for information we can provide.
-	if l.Name == "" || l.Name == "IpInIpTunnelAddr" {
-		// First see if we were handed a specific host, if not list all Nodes
-		if l.Hostname == "" {
-			nodes, err := c.clientSet.Nodes().List(v1.ListOptions{})
-			if err != nil {
-				return nil, resources.K8sErrorToCalico(err, l)
-			}
+	if l.Name != "" && l.Name != "IpInIpTunnelAddr" {
+		return kvps, nil
+	}
 
-			for _, node := range nodes.Items {
-				kvp, err := getTunIp(&node)
-				if err != nil || kvp == nil {
-					continue
-				}
+	// First see if we were handed a specific host, if not list all Nodes
+	if l.Hostname == "" {
+		nodes, err := c.clientSet.Nodes().List(v1.ListOptions{})
+		if err != nil {
+			return nil, resources.K8sErrorToCalico(err, l)
+		}
 
-				kvps = append(kvps, kvp)
-			}
-		} else {
-			node, err := c.clientSet.Nodes().Get(l.Hostname, metav1.GetOptions{})
-			if err != nil {
-				return nil, resources.K8sErrorToCalico(err, l)
-			}
-
-			kvp, err := getTunIp(node)
+		for _, node := range nodes.Items {
+			kvp, err := getTunIp(&node)
 			if err != nil || kvp == nil {
-				return []*model.KVPair{}, nil
+				continue
 			}
 
 			kvps = append(kvps, kvp)
 		}
+	} else {
+		node, err := c.clientSet.Nodes().Get(l.Hostname, metav1.GetOptions{})
+		if err != nil {
+			return nil, resources.K8sErrorToCalico(err, l)
+		}
+
+		kvp, err := getTunIp(node)
+		if err != nil || kvp == nil {
+			return []*model.KVPair{}, nil
+		}
+
+		kvps = append(kvps, kvp)
 	}
 
 	return kvps, nil
