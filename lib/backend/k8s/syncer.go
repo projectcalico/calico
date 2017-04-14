@@ -576,7 +576,7 @@ func (syn *kubeSyncer) parseNodeEvent(e watch.Event) *model.KVPair {
 	}
 
 	kvpHostIp := &model.KVPair{
-		Key: model.HostConfigKey{Hostname: node.Name},
+		Key: model.HostIPKey{Hostname: node.Name},
 		Value: kvp.Value.(*model.Node).BGPIPv4Addr,
 		Revision: kvp.Revision,
 	}

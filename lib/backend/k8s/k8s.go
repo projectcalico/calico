@@ -750,6 +750,8 @@ func (c *KubeClient) getHostConfig(k model.HostConfigKey) (*model.KVPair, error)
 		kvp, err := getTunIp(n)
 		if err != nil {
 			return nil, err
+		} else if kvp == nil {
+			return nil, errors.ErrorResourceDoesNotExist{}
 		}
 
 		return kvp, nil
@@ -772,8 +774,7 @@ func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVP
 
 			for _, node := range nodes.Items {
 				kvp, err := getTunIp(&node)
-				if err != nil {
-					log.Warnf("Invalid IP for HostConfig: %s, %s", node.Name, node.Spec.PodCIDR)
+				if err != nil || kvp == nil {
 					continue
 				}
 
@@ -786,7 +787,7 @@ func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVP
 			}
 
 			kvp, err := getTunIp(node)
-			if err != nil {
+			if err != nil || kvp == nil {
 				return []*model.KVPair{}, nil
 			}
 
@@ -798,8 +799,14 @@ func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVP
 }
 
 func getTunIp(n *v1.Node) (*model.KVPair, error) {
+	if n.Spec.PodCIDR == "" {
+		log.Warnf("Node %s does not have podCIDR for HostConfig", n.Name)
+		return nil, nil
+	}
+
 	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
 	if err != nil {
+		log.Warnf("Invalid podCIDR for HostConfig: %s, %s", n.Name, n.Spec.PodCIDR)
 		return nil, err
 	}
 	// We need to get the IP for the podCIDR and increment it to the
