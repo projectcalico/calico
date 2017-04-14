@@ -92,11 +92,15 @@ var _ = Describe("CalicoCni", func() {
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(endpoints.Items).Should(HaveLen(1))
+
+				// Set the Revision to nil since we can't assert it's exact value.
+				endpoints.Items[0].Metadata.Revision = nil
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
-					Node:         hostname,
-					Name:         "eth0",
-					Workload:     containerID,
-					Orchestrator: "cni",
+					Node:             hostname,
+					Name:             "eth0",
+					Workload:         containerID,
+					ActiveInstanceID: "",
+					Orchestrator:     "cni",
 				}))
 
 				Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
@@ -176,7 +180,7 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Describe("Run Calico CNI plugin", func() {
-		Context("depricate Hostname for nodename", func() {
+		Context("deprecate Hostname for nodename", func() {
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
@@ -200,17 +204,21 @@ var _ = Describe("CalicoCni", func() {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
 
-				log.Printf("Unmarshaled result: %v\n", result)
+				log.Printf("Unmarshalled result: %v\n", result)
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(endpoints.Items).Should(HaveLen(1))
+
+				// Set the Revision to nil since we can't assert it's exact value.
+				endpoints.Items[0].Metadata.Revision = nil
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
-					Node:         "namedHostname",
-					Name:         "eth0",
-					Workload:     containerID,
-					Orchestrator: "cni",
+					Node:             "namedHostname",
+					Name:             "eth0",
+					Workload:         containerID,
+					ActiveInstanceID: "",
+					Orchestrator:     "cni",
 				}))
 
 				_, err = DeleteContainer(netconf, netnspath, "")
@@ -220,7 +228,7 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	Describe("Run Calico CNI plugin", func() {
-		Context("depricate Hostname for nodename", func() {
+		Context("deprecate Hostname for nodename", func() {
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
@@ -245,17 +253,21 @@ var _ = Describe("CalicoCni", func() {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
 
-				log.Printf("Unmarshaled result: %v\n", result)
+				log.Printf("Unmarshalled result: %v\n", result)
 
 				// The endpoint is created in etcd
 				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(endpoints.Items).Should(HaveLen(1))
+
+				// Set the Revision to nil since we can't assert it's exact value.
+				endpoints.Items[0].Metadata.Revision = nil
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
-					Node:         "namedNodename",
-					Name:         "eth0",
-					Workload:     containerID,
-					Orchestrator: "cni",
+					Node:             "namedNodename",
+					Name:             "eth0",
+					Workload:         containerID,
+					ActiveInstanceID: "",
+					Orchestrator:     "cni",
 				}))
 
 				_, err = DeleteContainer(netconf, netnspath, "")

@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -24,13 +25,16 @@ import (
 
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
+	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/vishvananda/netlink"
 )
 
 func min(a, b int) int {
@@ -38,6 +42,72 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// CleanUpNamespace deletes the devices in the network namespace.
+func CleanUpNamespace(args *skel.CmdArgs, logger *log.Entry) error {
+	// Only try to delete the device if a namespace was passed in.
+	if args.Netns != "" {
+		logger.Debug("Checking namespace & device exist.")
+		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+			_, err := netlink.LinkByName(args.IfName)
+			return err
+		})
+
+		if devErr == nil {
+			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
+			err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+				_, err := ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
+				return err
+			})
+
+			if err != nil {
+				return err
+			}
+		} else {
+			logger.Info("veth does not exist, no need to clean up.")
+		}
+	}
+
+	return nil
+}
+
+// CleanUpIPAM calls IPAM plugin to release the IP address.
+// It also contains IPAM plugin specific changes needed before calling the plugin.
+func CleanUpIPAM(conf NetConf, args *skel.CmdArgs, logger *log.Entry) error {
+	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
+	logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
+		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+
+	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
+	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
+		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
+		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
+		dummyPodCidr := "0.0.0.0/0"
+		var stdinData map[string]interface{}
+
+		err := json.Unmarshal(args.StdinData, &stdinData)
+		if err != nil {
+			return err
+		}
+
+		logger.WithField("podCidr", dummyPodCidr).Info("Using a dummy podCidr to release the IP")
+		stdinData["ipam"].(map[string]interface{})["subnet"] = dummyPodCidr
+
+		args.StdinData, err = json.Marshal(stdinData)
+		if err != nil {
+			return err
+		}
+		logger.WithField("stdin", args.StdinData).Debug("Updated stdin data for Delete Cmd")
+	}
+
+	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
+
+	if err != nil {
+		logger.Error(err)
+	}
+
+	return err
 }
 
 // ValidateNetworkName checks that the network name meets felix's expectations

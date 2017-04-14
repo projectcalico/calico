@@ -20,16 +20,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
-
-	"github.com/vishvananda/netlink"
 
 	"net"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
-	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -306,78 +301,40 @@ func cmdDel(args *skel.CmdArgs) error {
 		"Node":         nodename,
 	}).Info("Extracted identifiers")
 
-	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
-	fmt.Fprintf(os.Stderr, "Calico CNI releasing IP address\n")
-	logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
-		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
-
-	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
-	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
-
-		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
-		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
-		dummyPodCidr := "0.0.0.0/0"
-		var stdinData map[string]interface{}
-
-		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-			return err
-		}
-
-		logger.WithField("podCidr", dummyPodCidr).Info("Using a dummy podCidr to release the IP")
-		stdinData["ipam"].(map[string]interface{})["subnet"] = dummyPodCidr
-
-		args.StdinData, err = json.Marshal(stdinData)
-		if err != nil {
-			return err
-		}
-		logger.WithField("stdin", args.StdinData).Debug("Updated stdin data for Delete Cmd")
-	}
-
-	ipamErr := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
-
-	if ipamErr != nil {
-		logger.Error(ipamErr)
-	}
-
 	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
 	}
 
-	ep := api.WorkloadEndpointMetadata{
+	wep := api.WorkloadEndpointMetadata{
 		Name:         args.IfName,
 		Node:         nodename,
 		Orchestrator: orchestrator,
-		Workload:     workload}
-	if err = calicoClient.WorkloadEndpoints().Delete(ep); err != nil {
+		Workload:     workload,
+	}
+
+	// Handle k8s specific bits of handling the DEL.
+	if orchestrator == "k8s" {
+		return k8s.CmdDelK8s(calicoClient, wep, args, conf, logger)
+	}
+
+	// Release the IP address by calling the configured IPAM plugin.
+	ipamErr := CleanUpIPAM(conf, args, logger)
+
+	// Delete the WorkloadEndpoint object from the datastore.
+	if err = calicoClient.WorkloadEndpoints().Delete(wep); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			logger.WithField("endpoint", ep).Info("Endpoint object does not exist, no need to clean up.")
+			// Log and proceed with the clean up if WEP doesn't exist.
+			logger.WithField("endpoint", wep).Info("Endpoint object does not exist, no need to clean up.")
 		} else {
 			return err
 		}
 	}
 
-	// Only try to delete the device if a namespace was passed in.
-	if args.Netns != "" {
-		logger.Debug("Checking namespace & device exist.")
-		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-			_, err := netlink.LinkByName(args.IfName)
-			return err
-		})
-
-		if devErr == nil {
-			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
-			err = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-				_, err = ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
-				return err
-			})
-
-			if err != nil {
-				return err
-			}
-		} else {
-			logger.Info("veth does not exist, no need to clean up.")
-		}
+	// Clean up namespace by removing the interfaces.
+	err = CleanUpNamespace(args, logger)
+	if err != nil {
+		return err
 	}
 
 	// Return the IPAM error if there was one. The IPAM error will be lost if there was also an error in cleaning up
