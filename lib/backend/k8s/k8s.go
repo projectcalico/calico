@@ -819,7 +819,7 @@ func getTunIp(n *v1.Node) (*model.KVPair, error) {
 			Hostname: n.Name,
 			Name: "IpInIpTunnelAddr",
 		},
-		Value: tunIp,
+		Value: tunIp.String(),
 	}
 
 	return kvp, nil
