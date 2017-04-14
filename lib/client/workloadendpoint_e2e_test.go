@@ -66,7 +66,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			_, outError := c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
 
 			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
 
 			By("Create, Apply, Get and compare")
 
@@ -147,7 +147,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			_, outError = c.WorkloadEndpoints().Get(meta1)
 
 			// Expect an error since the WorkloadEndpoint was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=host1)").Error()))
+			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
 
 			// Delete the second WorkloadEndpoint with meta2.
 			outError1 = c.WorkloadEndpoints().Delete(meta2)
@@ -172,9 +172,10 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		},
 
 		// Test 1: Pass two fully populated WorkloadEndpointSpecs and expect the series of operations to succeed.
+		// This also tests two endpoints in the same workload.
 		Entry("Two fully populated WorkloadEndpointSpecs",
 			api.WorkloadEndpointMetadata{
-				Name:         "host1",
+				Name:         "ep1",
 				Workload:     "workload1",
 				Orchestrator: "kubernetes",
 				Node:         "node1",
@@ -183,8 +184,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 					"prod": "no",
 				}},
 			api.WorkloadEndpointMetadata{
-				Name:         "host2",
-				Workload:     "workload2",
+				Name:         "ep1/with_foo",
+				Workload:     "workload1",
 				Orchestrator: "mesos",
 				Node:         "node2",
 				Labels: map[string]string{
@@ -225,7 +226,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		// Test 2: Pass one partially populated WorkloadEndpointSpec and another fully populated WorkloadEndpointSpec and expect the series of operations to succeed.
 		Entry("One partially populated WorkloadEndpointSpec and another fully populated WorkloadEndpointSpec",
 			api.WorkloadEndpointMetadata{
-				Name:         "host1",
+				Name:         "ep1",
 				Workload:     "workload1",
 				Orchestrator: "kubernetes",
 				Node:         "node1",
@@ -234,9 +235,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 					"prod": "no",
 				}},
 			api.WorkloadEndpointMetadata{
-				Name:         "host2",
-				Workload:     "workload2",
-				Orchestrator: "mesos",
+				Name:         "ep1",
+				Workload:     "workload2/with_foo",
+				Orchestrator: "kubernetes",
 				Node:         "node2",
 				Labels: map[string]string{
 					"app":  "app-xyz",
@@ -272,7 +273,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 		// Test 3: Pass one fully populated WorkloadEndpointSpec and another empty WorkloadEndpointSpec and expect the series of operations to succeed.
 		Entry("One fully populated WorkloadEndpointSpec and a (nearly) empty WorkloadEndpointSpec",
 			api.WorkloadEndpointMetadata{
-				Name:         "host1",
+				Name:         "ep1",
 				Workload:     "workload1",
 				Orchestrator: "kubernetes",
 				Node:         "node1",
@@ -281,10 +282,10 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 					"prod": "no",
 				}},
 			api.WorkloadEndpointMetadata{
-				Name:         "host2",
+				Name:         "ep2",
 				Workload:     "workload2",
-				Orchestrator: "mesos",
-				Node:         "node2",
+				Orchestrator: "kubernetes/v2.0.0",
+				Node:         "node1",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "yes",

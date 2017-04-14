@@ -47,7 +47,7 @@ type PolicyMetadata struct {
 	unversioned.ObjectMetadata
 
 	// The name of the selector-based security policy.
-	Name string `json:"name,omitempty" validate:"omitempty,name"`
+	Name string `json:"name,omitempty" validate:"omitempty,namespacedname"`
 }
 
 // PolicySpec contains the specification for a selector-based security Policy resource.

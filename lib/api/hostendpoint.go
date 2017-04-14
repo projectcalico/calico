@@ -32,7 +32,7 @@ type HostEndpointMetadata struct {
 	unversioned.ObjectMetadata
 
 	// The name of the endpoint.
-	Name string `json:"name,omitempty" validate:"omitempty,name"`
+	Name string `json:"name,omitempty" validate:"omitempty,namespacedname"`
 
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
@@ -64,7 +64,7 @@ type HostEndpointSpec struct {
 	// A list of identifiers of security Profile objects that apply to this endpoint. Each
 	// profile is applied in the order that they appear in this list.  Profile rules are applied
 	// after the selector-based security policy.
-	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
+	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,namespacedname"`
 }
 
 // NewHostEndpoint creates a new (zeroed) HostEndpoint struct with the TypeMetadata initialised to the current

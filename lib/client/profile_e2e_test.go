@@ -183,7 +183,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				Tags: tags1,
 			},
 			api.ProfileMetadata{
-				Name: "profile2",
+				Name: "profile1/with_foo",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "no",
@@ -205,7 +205,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				Tags: tags2,
 			},
 			api.ProfileMetadata{
-				Name: "profile2",
+				Name: "profile1/with_foo",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "no",
@@ -225,7 +225,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				},
 			},
 			api.ProfileMetadata{
-				Name: "profile2",
+				Name: "profile1/with.foo",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "no",

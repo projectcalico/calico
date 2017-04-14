@@ -50,7 +50,7 @@ func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "endpoint"}
 	}
 	return fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s/endpoint/%s",
-		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID), nil
+		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
 }
 
 func (key WorkloadEndpointStatusKey) defaultDeletePath() (string, error) {
@@ -68,7 +68,7 @@ func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
 	workload := fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s",
-		key.Hostname, key.OrchestratorID, key.WorkloadID)
+		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID))
 	endpoints := workload + "/endpoint"
 	return []string{endpoints, workload}, nil
 }
@@ -98,15 +98,15 @@ func (options WorkloadEndpointStatusListOptions) defaultPathRoot() string {
 	if options.OrchestratorID == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s", options.OrchestratorID)
+	k = k + fmt.Sprintf("/%s", escapeName(options.OrchestratorID))
 	if options.WorkloadID == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s/endpoint", options.WorkloadID)
+	k = k + fmt.Sprintf("/%s/endpoint", escapeName(options.WorkloadID))
 	if options.EndpointID == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s", options.EndpointID)
+	k = k + fmt.Sprintf("/%s", escapeName(options.EndpointID))
 	return k
 }
 
@@ -118,9 +118,9 @@ func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string)
 		return nil
 	}
 	hostname := r[0][1]
-	orchID := r[0][2]
-	workloadID := r[0][3]
-	endpointID := r[0][4]
+	orchID := unescapeName(r[0][2])
+	workloadID := unescapeName(r[0][3])
+	endpointID := unescapeName(r[0][4])
 	if options.Hostname != "" && hostname != options.Hostname {
 		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
