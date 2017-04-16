@@ -1,5 +1,32 @@
-{% if page.version != site.data.versions.first[0] %}
+{% comment %}
+Jekyll has this annoying behavior where you can't get the .second item of a map
+so this loop is used to grab the second
+{% endcommend %}
+
+{% assign i = 0 %}
+{% for entry in site.data.versions %}
+  {% if i == 1 %}
+    {% assign second_item = entry %}
+    {% break %}
+  {% else %}
+    {% assign i = i | plus: 1 %}
+  {% endif %}
+{% endfor %}
+
+
+{% assign s = site.data.versions.first[1].first.title | split: "-" | size  %}
+{% if s == 2 %}
+  {% assign rcIsUp = true %}
+{% else %}
+  {% assign rcIsUp = false %}
+{% endif %}
+
+{% if page.version == site.data.versions.first[0] and rcIsUp %}
   <div class="alert alert-warning" role="alert">
-    <strong>Warning:</strong> You are viewing the {{ page.version }} docs. <a href="{{site.baseurl}}/latest">Click here to view the docs for the latest release.</a>
+    <strong>Warning:</strong>Calico {{ page.version }} is a release candidate. <a href="{{site.baseurl}}/latest">Click here to view the docs for the latest release.</a>
+  </div>
+{% elsif (page.version != site.data.versions.first[0] and true != rcIsUp) or (page.version != second_item.first[0] and true != rcIsUp) %}
+  <div class="alert alert-warning" role="alert">
+    <strong>Warning:</strong>You are viewing the {{ page.version }} docs. <a href="{{site.baseurl}}/latest">Click here to view the docs for the latest release.</a>
   </div>
 {% endif %}
