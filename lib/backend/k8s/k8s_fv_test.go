@@ -736,4 +736,18 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(getNode.Value.(*model.Node).BGPASNumber).To(BeNil())
 		})
 	})
+
+	It("Should support Getting and Listing HostConfig", func() {
+		By("Listing all Nodes HostConfig", func() {
+			l, err := c.List(model.HostConfigListOptions{Hostname: ""})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l[0].Value).NotTo(BeZero())
+		})
+
+		By("Getting a specific Nodes HostConfig", func() {
+			h, err := c.Get(model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(h.Value).NotTo(BeZero())
+		})
+	})
 })

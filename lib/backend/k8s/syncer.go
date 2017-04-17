@@ -451,6 +451,21 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 			keys[c.Key.String()] = true
 		}
 
+		// Sync Hostconfig.
+		log.Info("Syncing HostConfig")
+		hostConfList, err := syn.kc.listHostConfig(model.HostConfigListOptions{})
+		if err != nil {
+			log.Warnf("Error querying HostConfig during snapshot, retrying: %s", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		log.Info("Received HostConfig List() response")
+
+		for _, h := range hostConfList {
+			snap = append(snap, *h)
+			keys[h.Key.String()] = true
+		}
+
 		// Sync IP Pools.
 		log.Info("Syncing IP Pools")
 		poolList, err := syn.kc.List(model.IPPoolListOptions{})
@@ -556,16 +571,21 @@ func (syn *kubeSyncer) parseNodeEvent(e watch.Event) *model.KVPair {
 	}
 
 	kvp, err := resources.K8sNodeToCalico(node)
-
 	if err != nil {
 		log.Panicf("%s", err)
+	}
+
+	kvpHostIp := &model.KVPair{
+		Key: model.HostIPKey{Hostname: node.Name},
+		Value: kvp.Value.(*model.Node).BGPIPv4Addr,
+		Revision: kvp.Revision,
 	}
 
 	if e.Type == watch.Deleted {
 		kvp.Value = nil
 	}
 
-	return kvp
+	return kvpHostIp
 }
 
 // parsePodEvent returns a KVPair for the given event.  If the event isn't
