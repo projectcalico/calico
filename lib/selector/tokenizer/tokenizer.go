@@ -55,7 +55,7 @@ type Token struct {
 
 const (
 	// LabelKeyMatcher is the base regex for a valid label key.
-	LabelKeyMatcher = `([a-zA-Z0-9_.-/]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?`
+	LabelKeyMatcher = `([a-zA-Z0-9_.\-/]{0,253}/)?[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?`
 	hasExpr         = `has\(\s*(` + LabelKeyMatcher + `)\s*\)`
 	allExpr         = `all\(\s*\)`
 	notInExpr       = `not\s*in\b`

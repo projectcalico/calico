@@ -67,6 +67,10 @@ var tokenTests = []struct {
 		{tokenizer.TokHas, "calico/k8s_ns/role"},
 		{tokenizer.TokEof, nil},
 	}},
+	{`has(calico/k8s_NS-.1/role)`, []tokenizer.Token{
+		{tokenizer.TokHas, "calico/k8s_NS-.1/role"},
+		{tokenizer.TokEof, nil},
+	}},
 	{`calico/k8s_ns == "kube-system" && k8s-app == "kube-dns"`, []tokenizer.Token{
 		{tokenizer.TokLabel, "calico/k8s_ns"},
 		{tokenizer.TokEq, nil},
