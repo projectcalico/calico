@@ -310,9 +310,11 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Update(d)
 	default:
-		// If the resource isn't supported, then this is a no-op.
-		log.Debugf("'Update' for %+v is no-op", d.Key)
-		return d, nil
+		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
+		return nil, errors.ErrorOperationNotSupported{
+			Identifier: d.Key,
+			Operation:  "Update",
+		}
 	}
 }
 
@@ -330,8 +332,11 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
 	default:
-		log.Debugf("'Apply' for %s is no-op", d.Key)
-		return d, nil
+		log.Warn("Attempt to 'Apply' using kubernetes backend is not supported.")
+		return nil, errors.ErrorOperationNotSupported{
+			Identifier: d.Key,
+			Operation:  "Apply",
+		}
 	}
 }
 
@@ -346,8 +351,11 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 	case model.NodeKey:
 		return c.nodeClient.Delete(d)
 	default:
-		log.Warn("Attempt to 'Delete' using kubernetes datastore driver is not supported.")
-		return nil
+		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
+		return errors.ErrorOperationNotSupported{
+			Identifier: d.Key,
+			Operation:  "Delete",
+		}
 	}
 }
 
