@@ -1,5 +1,5 @@
-hash: f57d647217030b4e5d06e9c709febecb0531438e79171dfc3cd2f4ca025cf893
-updated: 2017-04-17T12:41:34.172995793-07:00
+hash: b09db45186e8eb5791c87b46fd9c6f3bf18519983221af3a506b4e54eb691c71
+updated: 2017-04-17T14:27:46.140817125-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 2bba0603135d7d7f5cb73b2125beeda19c09f4ef
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -131,20 +131,6 @@ imports:
   - reporters/stenographer
   - reporters/stenographer/support/go-colorable
   - reporters/stenographer/support/go-isatty
-  - types
-- name: github.com/onsi/gomega
-  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
-  subpackages:
-  - format
-  - internal/assertion
-  - internal/asyncassertion
-  - internal/oraclematcher
-  - internal/testingtsupport
-  - matchers
-  - matchers/support/goraph/bipartitegraph
-  - matchers/support/goraph/edge
-  - matchers/support/goraph/node
-  - matchers/support/goraph/util
   - types
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
@@ -209,7 +195,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: 10f801ebc38b33738c9d17d50860f484a0988ff5
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -398,4 +384,18 @@ imports:
   - tools/clientcmd/api/v1
   - tools/metrics
   - transport
-testImports: []
+testImports:
+- name: github.com/onsi/gomega
+  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
