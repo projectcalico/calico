@@ -32,7 +32,7 @@ var (
 
 type HostEndpointStatusKey struct {
 	Hostname   string `json:"-" validate:"required,hostname"`
-	EndpointID string `json:"-" validate:"required,hostname"`
+	EndpointID string `json:"-" validate:"required,namespacedName"`
 }
 
 func (key HostEndpointStatusKey) defaultPath() (string, error) {
@@ -43,7 +43,7 @@ func (key HostEndpointStatusKey) defaultPath() (string, error) {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
 	e := fmt.Sprintf("/calico/felix/v1/host/%s/endpoint/%s",
-		key.Hostname, key.EndpointID)
+		key.Hostname, escapeName(key.EndpointID))
 	return e, nil
 }
 
@@ -77,7 +77,7 @@ func (options HostEndpointStatusListOptions) defaultPathRoot() string {
 	if options.EndpointID == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s", options.EndpointID)
+	k = k + fmt.Sprintf("/%s", escapeName(options.EndpointID))
 	return k
 }
 
@@ -89,7 +89,7 @@ func (options HostEndpointStatusListOptions) KeyFromDefaultPath(ekey string) Key
 		return nil
 	}
 	hostname := r[0][1]
-	endpointID := r[0][2]
+	endpointID := unescapeName(r[0][2])
 	if options.Hostname != "" && hostname != options.Hostname {
 		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil

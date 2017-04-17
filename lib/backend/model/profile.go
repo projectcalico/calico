@@ -42,7 +42,7 @@ func (key ProfileKey) defaultPath() (string, error) {
 	if key.Name == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
-	e := fmt.Sprintf("/calico/v1/policy/profile/%s", key.Name)
+	e := fmt.Sprintf("/calico/v1/policy/profile/%s", escapeName(key.Name))
 	return e, nil
 }
 
@@ -125,7 +125,7 @@ func (options ProfileListOptions) defaultPathRoot() string {
 	if options.Name == "" {
 		return k
 	}
-	k = k + fmt.Sprintf("/%s", options.Name)
+	k = k + fmt.Sprintf("/%s", escapeName(options.Name))
 	return k
 }
 
@@ -136,7 +136,7 @@ func (options ProfileListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	name := r[0][1]
+	name := unescapeName(r[0][1])
 	kind := r[0][2]
 	if options.Name != "" && name != options.Name {
 		log.Debugf("Didn't match name %s != %s", options.Name, name)
