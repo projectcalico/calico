@@ -18,7 +18,7 @@ You can easily create a cluster compatible with this manifest by following [the 
 To install this Calico and a single node etcd on a run the following command
 depending on your kubeadm / kubernetes version:
 
-For Kubeadm <=1.6.0-alpha with Kubernetes 1.5.x:
+For Kubeadm 1.5 with Kubernetes 1.5.x:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/calico.yaml
@@ -26,7 +26,7 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 >[Click here to view the above yaml directly.](calico.yaml)
 
-For Kubeadm >=1.6.0-beta with Kubernetes 1.6.x:
+For Kubeadm 1.6 with Kubernetes 1.6.x:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
@@ -44,17 +44,19 @@ recommended you use a secure, replicated etcd cluster.
 This manifest uses a node label to select the master node on which Calico's etcd is run. This label is configured
 automatically on the master when using kubeadm.
 
-To check if the required label is applied, run the following command:
+To check if the required label is applied, run the following command and
+inspect the output for the correct label:
 
 ```shell
-$ kubectl get node <master_name> -o yaml | grep kubeadm
-   kubeadm.alpha.kubernetes.io/role: master
+$ kubectl get node <master_name> -o yaml
 ```
 
 ### Requirements / Limitations
 
 * This install does not configure etcd TLS
-* This install expects that one Kubernetes master node has been labeled with `kubeadm.alpha.kubernetes.io/role: master`
+* This install expects that one Kubernetes master node has been labeled with:
+  * For Kubeadm 1.5 `kubeadm.alpha.kubernetes.io/role: master`
+  * For Kubeadm 1.6 `node-role.kubernetes.io/master: ""`
 * This install assumes no other pod network has been installed.
 * The CIDR(s) specified with the flag `--cluster-cidr` (pre 1.6) or
   `--pod-network-cidr` (1.6+) must match the Calico IP Pools to have Network
