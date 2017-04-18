@@ -5,3 +5,7 @@ order: 0
 toc:
 - title: Introduction
   path: /introduction/
+- title: Component Architecture
+  path: /introduction/component-architecture
+- title: Network Architecture
+  path: /introduction/network-architecture
