@@ -154,17 +154,18 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 	d := model.KVPair{
 		Key: k,
 		Value: &model.WorkloadEndpoint{
-			Labels:      ah.Metadata.Labels,
-			State:       "active",
-			Name:        ah.Spec.InterfaceName,
-			Mac:         ah.Spec.MAC,
-			ProfileIDs:  ah.Spec.Profiles,
-			IPv4Nets:    ipv4Nets,
-			IPv6Nets:    ipv6Nets,
-			IPv4NAT:     ipv4NAT,
-			IPv6NAT:     ipv6NAT,
-			IPv4Gateway: ah.Spec.IPv4Gateway,
-			IPv6Gateway: ah.Spec.IPv6Gateway,
+			Labels:           ah.Metadata.Labels,
+			ActiveInstanceID: ah.Metadata.ActiveInstanceID,
+			State:            "active",
+			Name:             ah.Spec.InterfaceName,
+			Mac:              ah.Spec.MAC,
+			ProfileIDs:       ah.Spec.Profiles,
+			IPv4Nets:         ipv4Nets,
+			IPv6Nets:         ipv6Nets,
+			IPv4NAT:          ipv4NAT,
+			IPv6NAT:          ipv6NAT,
+			IPv4Gateway:      ah.Spec.IPv4Gateway,
+			IPv6Gateway:      ah.Spec.IPv6Gateway,
 		},
 		Revision: ah.Metadata.Revision,
 	}
@@ -197,6 +198,7 @@ func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Res
 	ah.Metadata.Name = bk.EndpointID
 	ah.Metadata.Labels = bh.Labels
 	ah.Spec.InterfaceName = bh.Name
+	ah.Metadata.ActiveInstanceID = bh.ActiveInstanceID
 	ah.Spec.MAC = bh.Mac
 	ah.Spec.Profiles = bh.ProfileIDs
 	if len(nets) == 0 {
