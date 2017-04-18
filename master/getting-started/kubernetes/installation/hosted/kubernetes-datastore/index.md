@@ -1,15 +1,15 @@
 ---
-title: Etcdless Hosted Install
+title: Kubernetes Datastore
 ---
 
 This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
 This mode uses the Kubernetes API as the datastore.  Note that this feature
 currently comes with a number of limitations, namely:
 
-- it supports policy enforcement only and does not yet support Calico BGP networking.
-- it does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
-- it does not yet support the full set of `calicoctl` commands.
-- it does not yet support the full set of calico/node options (such as IP autodiscovery).
+- It does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
+- It does not yet support the full set of `calicoctl` commands.
+- It does not yet support the full set of calico/node options (such as IP autodiscovery).
+- It supports BGP full-mesh networking, but does not yet support BGP peer configuration.
 
 ## Requirements
 
@@ -21,28 +21,50 @@ You must have a cluster which meets the following requirements:
 - You have a Kubernetes cluster configured to use CNI network plugins (i.e. by passing `--network-plugin=cni` to the kubelet)
 - Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e. by passing `--allocate-node-cidrs=true` to the controller manager)
 - Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=10.244.0.0/16`, which the manifest expects by default).
-- You have configured your network to route pod traffic based on pod CIDR allocations, either through static routes, a Kubernetes cloud-provider integration, or flannel.
 
 ## Installation
 
-To install Calico, ensure you have a cluster which meets the above requirements and run the following command:
+To install Calico, ensure you have a cluster which meets the above requirements and run one of the following commands based on your Kubernetes version:
+
+For Kubernetes 1.6 clusters:
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/1.6/calico.yaml
+```
+
+>[Click here to view the above yaml directly.](1.6/calico.yaml)
+
+For Kubernetes 1.5 clusters:
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico.yaml
 ```
 
 >[Click here to view the above yaml directly.](calico.yaml)
+
+### RBAC
+
+If your Kubernetes cluster has RBAC enabled, you'll need to create RBAC roles for Calico.
+Apply the following manifest to create these RBAC roles.
+
+>Note: The following RBAC policy is compatible with the Kubernetes v1.6 manifest only.
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac.yaml
+```
+
+>[Click here to view the above yaml directly.](rbac.yaml)
 
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
 Below are a few examples for how to get started.
 
-#### Example: kubeadm + flannel
+#### Example: kubeadm
 
-This example explains how to install Calico on kubeadm with flannel for routing.
+This example explains how to install Calico on kubeadm.
 
 Follow the [official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).  For
-steps that require it, follow the instructions for installing flannel as the pod network.
+steps that require it.
 
 To initialize the master run
 
@@ -53,39 +75,10 @@ kubeadm init --pod-network-cidr=10.244.0.0/16
 Then run the following command to install Calico.
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico.yaml
 ```
 
-Then continue following the guide, following the instructions for installing flannel as the pod network.
-
-#### Example: kube-up on GCE
-
-This example explains how to install Calico for NetworkPolicy on GCE using kube-up.
-
-See the [GCE documentation](http://kubernetes.io/docs/getting-started-guides/gce/#prerequisites) for
-a list of requirements before starting.
-
-##### 1) Start a Kubernetes cluster
-
-Run the following commands to start a Kubernetes cluster on GCE configured to use CNI
-network plugins.
-
-```shell
-export NETWORK_PROVIDER=cni
-export KUBE_NODE_OS_DISTRIBUTION=debian
-export KUBE_MASTER_OS_DISTRIBUTION=debian
-curl -sS https://get.k8s.io | bash
-```
-
-##### 2) Install Calico using the etcdless manifest
-
-Once the cluster is running, install Calico:
-
-```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/k8s-backend/calico.yaml
-```
-
-You should see all pods enter "Running" state.
+Then continue following the guide.
 
 ## Configuration details
 
@@ -93,7 +86,7 @@ The following environment variable configuration options are supported by the va
 
 | Option                 | Description    | Examples
 |------------------------|----------------|----------
-| DATASTORE_TYPE         | Indicates the datastore to use | kubernetes, etcdv2
+| DATASTORE_TYPE         | Indicates the datastore to use | kubernetes
 | KUBECONFIG             | When using the kubernetes datastore, the location of a kubeconfig file to use. | /path/to/kube/config
 | K8S_API_ENDPOINT       | Location of the Kubernetes API.  Not required if using kubeconfig. | https://kubernetes-api:443
 | K8S_CERT_FILE          | Location of a client certificate for accessing the Kubernetes API. | /path/to/cert

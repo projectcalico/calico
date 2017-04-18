@@ -12,7 +12,6 @@ data:
   cni_network_config: |-
     {
         "name": "k8s-pod-network",
-        "cniVersion": "0.3.1",
         "type": "calico",
         "log_level": "debug",
         "datastore_type": "kubernetes",
@@ -71,9 +70,6 @@ spec:
             # Enable felix debug logging.
             - name: FELIX_LOGSEVERITYSCREEN
               value: "debug"
-            # Don't enable BGP.
-            - name: CALICO_NETWORKING_BACKEND
-              value: "none"
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
@@ -89,6 +85,9 @@ spec:
             # The Calico IPv4 pool to use.  This should match `--cluster-cidr`
             - name: CALICO_IPV4POOL_CIDR
               value: "10.244.0.0/16"
+            # Enable IPIP
+            - name: CALICO_IPV4POOL_IPIP
+              value: "always"
             # Set based on the k8s node name.
             - name: NODENAME
               valueFrom:
@@ -146,3 +145,11 @@ spec:
         - name: cni-net-dir
           hostPath:
             path: /etc/cni/net.d
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-node
+  namespace: kube-system
