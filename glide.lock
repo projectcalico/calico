@@ -1,5 +1,5 @@
-hash: 15430b6c8ed7d10c7dc812ced188b7ba71d8f919079d7fde08f5e310ac57d72e
-updated: 2017-04-13T08:09:47.158168096Z
+hash: b09db45186e8eb5791c87b46fd9c6f3bf18519983221af3a506b4e54eb691c71
+updated: 2017-04-17T14:27:46.140817125-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -82,7 +82,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 2bba0603135d7d7f5cb73b2125beeda19c09f4ef
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -98,7 +98,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 9d302b58e975387d0b4d9be876622c86cefe64be
 - name: github.com/kelseyhightower/envconfig
-  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -143,7 +143,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2c13cbb31b1aad738942517c46351bdd7cd64246
+  version: 9c7017a9f079eb344a01cc21b72cb4c36ab2270f
   subpackages:
   - lib
   - lib/api
@@ -195,7 +195,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: 10f801ebc38b33738c9d17d50860f484a0988ff5
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
