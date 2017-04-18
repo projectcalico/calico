@@ -12,13 +12,6 @@ own etcd.
 
 You can easily create a cluster compatible with this manifest by following [the official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-> Notes:
->   - The Kubeadm flag `--cluster-cidr` (pre 1.6) or
->     `--pod-network-cidr` (1.6+) is not utilized by Calico nor Kubernetes
->     if using Calico for routing.
->   - The `--service-cidr` should not overlap with the Calico IP Pool.
->     - The default for `--service-cidr` is `10.96.0.0/12`.
->     - The calico.yaml linked below sets the IP Pool to `192.168.0.0/16`.
 
 #### Installation
 
@@ -63,3 +56,9 @@ $ kubectl get node <master_name> -o yaml | grep kubeadm
 * This install does not configure etcd TLS
 * This install expects that one Kubernetes master node has been labeled with `kubeadm.alpha.kubernetes.io/role: master`
 * This install assumes no other pod network has been installed.
+* The CIDR(s) specified with the flag `--cluster-cidr` (pre 1.6) or
+  `--pod-network-cidr` (1.6+) must match the Calico IP Pools to have Network
+  Policy function correctly. The default is `192.168.0.0/16`.
+* The CIDR specified with the flag `--service-cidr` should not overlap with the Calico IP Pool.
+  * The default CIDR for `--service-cidr` is `10.96.0.0/12`.
+  * The calico.yaml(s) linked sets the Calico IP Pool to `192.168.0.0/16`.
