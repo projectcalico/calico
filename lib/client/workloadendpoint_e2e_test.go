@@ -12,30 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Test cases (WorkloadEndpoint object e2e):
-// Test 1: Pass two fully populated WorkloadEndpointSpecs and expect the series of operations to succeed.
-// Test 2: Pass one partially populated WorkloadEndpointSpec and another fully populated WorkloadEndpointSpec and expect the series of operations to succeed.
-// Test 3: Pass one fully populated WorkloadEndpointSpec and another empty WorkloadEndpointSpec and expect the series of operations to succeed.
-
-// Series of operations each test goes through:
-// Update meta1 - check for failure (because it doesn't exist).
-// Create meta1 with spec1.
-// Apply meta2 with spec2.
-// Get meta1 and meta2, compare spec1 and spec2.
-// Update meta1 with spec2.
-// Get meta1 compare spec2.
-// List (empty Meta) ... Get meta1 and meta2.
-// List (using Meta1) ... Get meta1.
-// Delete meta1.
-// Get meta1 ... fail.
-// Delete meta2.
-// List (empty Meta) ... Get no entries (should not error).
-
 package client_test
 
 import (
 	"errors"
-	"log"
 	"net"
 
 	. "github.com/onsi/ginkgo"
@@ -48,7 +28,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.DatastoreEtcdV2, func(apiConfig api.CalicoAPIConfig) {
 	cidr1 := testutils.MustParseNetwork("10.0.0.0/32")
 	cidr2 := testutils.MustParseNetwork("20.0.0.0/32")
 	cidr3 := testutils.MustParseNetwork("192.168.0.0/32")
@@ -60,119 +40,119 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 	DescribeTable("WorkloadEndpoint e2e tests",
 		func(meta1, meta2 api.WorkloadEndpointMetadata, spec1, spec2 api.WorkloadEndpointSpec) {
-			c := testutils.CreateCleanClient(config)
+			c := testutils.CreateCleanClient(apiConfig)
 
-			By("Updating the WorkloadEndpoint before it is created")
-			_, outError := c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
+			// Updating non-existent workloadEndpoint1 should return an error
+			By("Updating the workloadEndpoint before it is created")
+			_, err := c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
+			Expect(err.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
 
-			// Should return an error.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
+			// Create a new workloadEndpoint1 with meta1 and spec1.  This should not error.
+			By("Creating a new workloadEndpoint1")
+			outWorkloadEndpoint, err := c.WorkloadEndpoints().Create(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
+			Expect(err).NotTo(HaveOccurred())
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta1, spec1)
 
-			By("Create, Apply, Get and compare")
+			// Failing to create the same resource.
+			By("Creating a the same workloadEndpoint1 and checking for failure")
+			_, err = c.WorkloadEndpoints().Create(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
+			Expect(err.Error()).To(Equal(errors.New("resource already exists: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
 
-			// Create a WorkloadEndpoint with meta1 and spec1.
-			_, outError = c.WorkloadEndpoints().Create(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec1})
-			Expect(outError).NotTo(HaveOccurred())
+			// Apply a new workloadEndpoint2 with meta2 and spec2.  This should not error.
+			By("Applying a new workloadEndpoint2")
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Apply(&api.WorkloadEndpoint{Metadata: meta2, Spec: spec2})
+			Expect(err).NotTo(HaveOccurred())
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta2, spec2)
 
-			// Apply a WorkloadEndpoint with meta2 and spec2.
-			_, outError = c.WorkloadEndpoints().Apply(&api.WorkloadEndpoint{Metadata: meta2, Spec: spec2})
-			Expect(outError).NotTo(HaveOccurred())
+			// Get workloadEndpoint1.  This should not error, spec should match spec1.
+			By("Getting workloadEndpoint1 and comparing with spec1")
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Get(meta1)
+			Expect(err).NotTo(HaveOccurred())
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta1, spec1)
 
-			// Get WorkloadEndpoint with meta1.
-			outWorkloadEndpoint1, outError1 := c.WorkloadEndpoints().Get(meta1)
-			log.Println("Out WorkloadEndpoint object: ", outWorkloadEndpoint1)
+			// Store the returned workloadEndpoint - we will use this to attempt a working CAS
+			// operation.
+			// Revision should be set (currently revision is only supported on Get and Delete operations of
+			// the workload endpoint).
+			storedWorkloadEndpoint1 := outWorkloadEndpoint
+			Expect(storedWorkloadEndpoint1.Metadata.Revision).NotTo(BeNil())
 
-			// Get WorkloadEndpoint with meta2.
-			outWorkloadEndpoint2, outError2 := c.WorkloadEndpoints().Get(meta2)
-			log.Println("Out WorkloadEndpoint object: ", outWorkloadEndpoint2)
 
-			// Should match spec1 & outWorkloadEndpoint1 and outWorkloadEndpoint2 & spec2 and errors to be nil.
-			Expect(outError1).NotTo(HaveOccurred())
-			Expect(outError2).NotTo(HaveOccurred())
-			Expect(outWorkloadEndpoint1.Spec).To(Equal(spec1))
-			Expect(outWorkloadEndpoint2.Spec).To(Equal(spec2))
+			// Get workloadEndpoint2  This should not error, spec should match spec1.
+			By("Getting workloadEndpoint2 and comparing with spec2")
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Get(meta2)
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta2, spec2)
 
-			By("Update, Get and compare")
+			// Update workloadEndpoint1 with spec2.
+			By("Updating workloadEndpoint1 with spec2 using CAS")
+			storedWorkloadEndpoint1.Spec = spec2
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Update(storedWorkloadEndpoint1)
+			Expect(err).NotTo(HaveOccurred())
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta1, spec2)
 
-			// Update meta1 WorkloadEndpoint with spec2.
-			_, outError = c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta1, Spec: spec2})
-			Expect(outError).NotTo(HaveOccurred())
+			// Delete workloadEndpoint1 with the same revision as before (should fail CAS).
+			By("Deleting workloadEndpoint1 with previous revision (should fail)")
+			err = c.WorkloadEndpoints().Delete(storedWorkloadEndpoint1.Metadata)
+			Expect(err).To(HaveOccurred())
 
-			// Get WorkloadEndpoint with meta1.
-			outWorkloadEndpoint1, outError1 = c.WorkloadEndpoints().Get(meta1)
+			// Apply workloadEndpoint2 with spec1.
+			By("Applying workloadEndpoint2 with spec1")
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Update(&api.WorkloadEndpoint{Metadata: meta2, Spec: spec1})
+			Expect(err).NotTo(HaveOccurred())
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta2, spec1)
 
-			// Assert the Spec for WorkloadEndpoint with meta1 matches spec2 and no error.
-			Expect(outError1).NotTo(HaveOccurred())
-			Expect(outWorkloadEndpoint1.Spec).To(Equal(spec2))
+			// Get workloadEndpoint with meta1.
+			By("Getting workloadEndpoint1 and comparing with spec2")
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Get(meta1)
+			validateReturnedWorkloadEndpoint(outWorkloadEndpoint, meta1, spec2)
 
-			By("List all the WorkloadEndpoints and compare")
+			// Get a list of workloadEndpoints.  This should not error.  Compare this
+			// against the expected results - there are only two entries
+			// so just use brute force comparison.
+			By("Listing all the workloadEndpoints and comparing with expected")
+			workloadEndpointList, err := c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(workloadEndpointList.Items)).To(Equal(2))
+			validateReturnedWorkloadEndpoint(&workloadEndpointList.Items[0], meta1, spec2)
+			validateReturnedWorkloadEndpoint(&workloadEndpointList.Items[1], meta2, spec1)
 
-			// Get a list of WorkloadEndpoints.
-			WorkloadEndpointList, outError := c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
-			Expect(outError).NotTo(HaveOccurred())
-			log.Println("Get WorkloadEndpoint list returns: ", WorkloadEndpointList.Items)
-			metas := []api.WorkloadEndpointMetadata{meta1, meta2}
-			expectedWorkloadEndpoints := []api.WorkloadEndpoint{}
-			// Go through meta list and append them to expectedWorkloadEndpoints.
-			for _, v := range metas {
-				p, outError := c.WorkloadEndpoints().Get(v)
-				Expect(outError).NotTo(HaveOccurred())
-				expectedWorkloadEndpoints = append(expectedWorkloadEndpoints, *p)
-			}
+			// Get a workloadEndpoint list with meta2.
+			By("Listing a specific workloadEndpoint and comparing with expected")
+			workloadEndpointList, err = c.WorkloadEndpoints().List(meta2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(workloadEndpointList.Items)).To(Equal(1))
+			validateReturnedWorkloadEndpoint(&workloadEndpointList.Items[0], meta2, spec1)
 
-			// Assert the returned WorkloadEndpointList is has the meta1 and meta2 WorkloadEndpoints.
-			Expect(WorkloadEndpointList.Items).To(Equal(expectedWorkloadEndpoints))
+			// Get a workloadEndpoint with meta2 and compare against the list results.  This
+			// checks the full output of List is the same as Get.
+			outWorkloadEndpoint, err = c.WorkloadEndpoints().Get(meta2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(workloadEndpointList.Items[0]).To(Equal(*outWorkloadEndpoint))
 
-			By("List a specific WorkloadEndpoint and compare")
+			// Deleting workloadEndpoint1 should not error.
+			By("Deleting workloadEndpoint1")
+			err = c.WorkloadEndpoints().Delete(meta1)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Get a WorkloadEndpoint list with meta1.
-			WorkloadEndpointList, outError = c.WorkloadEndpoints().List(meta1)
-			Expect(outError).NotTo(HaveOccurred())
-			log.Println("Get WorkloadEndpoint list returns: ", WorkloadEndpointList.Items)
+			// Get a workloadEndpoint with meta1.
+			By("Getting workloadEndpoint1 and checking for error")
+			_, err = c.WorkloadEndpoints().Get(meta1)
+			Expect(err.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
 
-			// Get a WorkloadEndpoint with meta1.
-			outWorkloadEndpoint1, outError1 = c.WorkloadEndpoints().Get(meta1)
+			// Delete workloadEndpoint2 should not error.
+			By("Deleting workloadEndpoint2")
+			err = c.WorkloadEndpoints().Delete(meta2)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Assert they are equal and no errors.
-			Expect(outError1).NotTo(HaveOccurred())
-			Expect(WorkloadEndpointList.Items[0].Spec).To(Equal(outWorkloadEndpoint1.Spec))
-
-			By("Delete, Get and assert error")
-
-			// Delete a WorkloadEndpoint with meta1.
-			outError1 = c.WorkloadEndpoints().Delete(meta1)
-			Expect(outError1).NotTo(HaveOccurred())
-
-			// Get a WorkloadEndpoint with meta1.
-			_, outError = c.WorkloadEndpoints().Get(meta1)
-
-			// Expect an error since the WorkloadEndpoint was deleted.
-			Expect(outError.Error()).To(Equal(errors.New("resource does not exist: WorkloadEndpoint(node=node1, orchestrator=kubernetes, workload=workload1, name=ep1)").Error()))
-
-			// Delete the second WorkloadEndpoint with meta2.
-			outError1 = c.WorkloadEndpoints().Delete(meta2)
-			Expect(outError1).NotTo(HaveOccurred())
-
-			By("Delete all the WorkloadEndpoints, Get WorkloadEndpoint list and expect empty WorkloadEndpoint list")
-
-			// Both WorkloadEndpoints are deleted in the calls above.
-			// Get the list of all the WorkloadEndpoints.
-			WorkloadEndpointList, outError = c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
-			Expect(outError).NotTo(HaveOccurred())
-			log.Println("Get WorkloadEndpoint list returns: ", WorkloadEndpointList.Items)
-
-			// Create an empty WorkloadEndpoint list.
-			// Note: you can't use make([]api.WorkloadEndpoint, 0) because it creates an empty underlying struct,
-			// whereas new([]api.WorkloadEndpoint) just returns a pointer without creating an empty struct.
-			emptyWorkloadEndpointList := new([]api.WorkloadEndpoint)
-
-			// Expect returned WorkloadEndpointList to contain empty WorkloadEndpointList.
-			Expect(WorkloadEndpointList.Items).To(Equal(*emptyWorkloadEndpointList))
-
+			// Both resources are deleted in the calls above, so listing the
+			// resources should return no results.
+			By("Listing resources and checking for empty list")
+			workloadEndpointList, err = c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(workloadEndpointList.Items)).To(Equal(0))
 		},
 
 		// Test 1: Pass two fully populated WorkloadEndpointSpecs and expect the series of operations to succeed.
-		// This also tests two endpoints in the same workload.
 		Entry("Two fully populated WorkloadEndpointSpecs",
 			api.WorkloadEndpointMetadata{
 				Name:         "ep1",
@@ -186,8 +166,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			api.WorkloadEndpointMetadata{
 				Name:         "ep1/with_foo",
 				Workload:     "workload1",
-				Orchestrator: "mesos",
-				Node:         "node2",
+				Orchestrator: "kubernetes",
+				Node:         "node1",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "yes",
@@ -236,9 +216,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				}},
 			api.WorkloadEndpointMetadata{
 				Name:         "ep1",
-				Workload:     "workload2/with_foo",
+				Workload:     "workload1/with.bar",
 				Orchestrator: "kubernetes",
-				Node:         "node2",
+				Node:         "node1",
 				Labels: map[string]string{
 					"app":  "app-xyz",
 					"prod": "yes",
@@ -282,9 +262,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 					"prod": "no",
 				}},
 			api.WorkloadEndpointMetadata{
-				Name:         "ep2",
-				Workload:     "workload2",
-				Orchestrator: "kubernetes/v2.0.0",
+				Name:         "ep1",
+				Workload:     "workload1",
+				Orchestrator: "kubernetes/v2.2",
 				Node:         "node1",
 				Labels: map[string]string{
 					"app":  "app-xyz",
@@ -309,5 +289,16 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				InterfaceName: "eth1",
 			}),
 	)
-
 })
+
+// Validate the returned workloadEndpoint contains the expected data.
+func validateReturnedWorkloadEndpoint(res *api.WorkloadEndpoint, expMeta api.WorkloadEndpointMetadata, expSpec api.WorkloadEndpointSpec) {
+	//  Unset the Revision and then compare the Meta and Spec.
+	rev := res.Metadata.Revision
+	res.Metadata.Revision = nil
+	Expect(res.Metadata).To(Equal(expMeta))
+	Expect(res.Spec).To(Equal(expSpec))
+
+	// Set it back so we can use the workloadEndpoint as original.
+	res.Metadata.Revision = rev
+}

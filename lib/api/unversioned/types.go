@@ -45,6 +45,10 @@ type ResourceMetadata interface {
 
 // ---- Metadata common to all resources ----
 type ObjectMetadata struct {
+	// Object revision used to perform atomic updates and deletes.  Currently
+	// only supported on Get and Delete operations of the WorkloadEndpoint
+	// resource type.
+	Revision interface{}
 }
 
 func (md ObjectMetadata) GetObjectMetadata() ObjectMetadata {

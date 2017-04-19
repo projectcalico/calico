@@ -273,9 +273,12 @@ func (c *Client) delete(metadata unversioned.ResourceMetadata, helper conversion
 		return err
 	}
 
+	// Convert the Metadata to a Key and combine with the Metadata revision to create
+	// a KVPair for the delete operation.  At the moment only the WorkloadEndpoint Get
+	// operations fills in the revision information.
 	if k, err := helper.convertMetadataToKey(metadata); err != nil {
 		return err
-	} else if err := c.Backend.Delete(&model.KVPair{Key: k}); err != nil {
+	} else if err := c.Backend.Delete(&model.KVPair{Key: k, Revision: metadata.GetObjectMetadata().Revision}); err != nil {
 		return err
 	} else {
 		return nil

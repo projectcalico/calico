@@ -166,6 +166,7 @@ func (w *workloadEndpoints) convertAPIToKVPair(a unversioned.Resource) (*model.K
 			IPv4Gateway: ah.Spec.IPv4Gateway,
 			IPv6Gateway: ah.Spec.IPv6Gateway,
 		},
+		Revision: ah.Metadata.Revision,
 	}
 
 	return &d, nil
@@ -210,6 +211,7 @@ func (w *workloadEndpoints) convertKVPairToAPI(d *model.KVPair) (unversioned.Res
 	}
 	ah.Spec.IPv4Gateway = bh.IPv4Gateway
 	ah.Spec.IPv6Gateway = bh.IPv6Gateway
+	ah.Metadata.Revision = d.Revision
 
 	return ah, nil
 }
