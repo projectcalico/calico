@@ -53,7 +53,7 @@ Apply the following manifest to create these RBAC roles.
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac.yaml
 ```
 
->[Click here to view the above yaml directly.](rbac.yaml)
+>[Click here to view the above yaml directly.](../rbac.yaml)
 
 Once installed, you can try out NetworkPolicy by following the [simple policy guide](../../../tutorials/simple-policy).
 
