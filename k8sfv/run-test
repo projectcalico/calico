@@ -22,6 +22,10 @@
 # A CI job that regularly tests a particular (checked in) code branch
 # should set this to the name of that branch, e.g. 'master'.
 : ${CODE_LEVEL:=dev}
+#
+# Tell this script to wait before cleaning up the test containers -
+# e.g. to allow investigation of Felix logs.
+: ${SLEEP_BEFORE_CLEANUP:=0}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -87,5 +91,13 @@ docker run --detach --privileged --name ${prefix}-felix \
 felix_ip=$(get_container_ip ${prefix}-felix)
 
 # Run the test suite.
+set +e
 docker exec ${prefix}-felix /bin/sh -c \
        "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v ${k8s_api_endpoint} ${felix_ip} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+test_result=$?
+
+# Sleep before cleanup.
+sleep ${SLEEP_BEFORE_CLEANUP}
+
+# Report the test result.
+exit ${test_result}
