@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: management-ui 
+  labels:
+    role: management-ui 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: management-ui 
+  namespace: management-ui 
+spec:
+  type: NodePort
+  ports:
+  - port: 9001 
+    targetPort: 9001
+    nodePort: 30002
+  selector:
+    role: management-ui 
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: management-ui 
+  namespace: management-ui 
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        role: management-ui 
+    spec:
+      containers:
+      - name: management-ui 
+        image: calico/star-collect:v0.1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9001
