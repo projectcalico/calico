@@ -29,6 +29,10 @@
 #
 # Felix logging level.
 : ${FELIX_LOG_LEVEL:=info}
+#
+# Ginkgo focus term (regexp); this can be set to focus on particular
+# tests.
+: ${GINKGO_FOCUS:=}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -98,8 +102,12 @@ felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 
 # Run the test suite.
+args=-v
+if test -n "${GINKGO_FOCUS}"; then
+    args="${args} -focus"
+fi
 set +e
-ginkgo -v k8sfv -- ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} "${PROMPG_URL}" "${CODE_LEVEL}"
+ginkgo ${args} "${GINKGO_FOCUS[@]}" k8sfv -- ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} "${PROMPG_URL}" "${CODE_LEVEL}"
 test_result=$?
 set -e
 mv k8sfv/junit.xml k8sfv/output/
