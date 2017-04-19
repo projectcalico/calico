@@ -58,7 +58,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 remote node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(1, false)
+			d = NewDeployment(clientset, 1, false)
 		})
 
 		It("should create 10k endpoints", func() {
@@ -153,7 +153,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 local node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(0, true)
+			d = NewDeployment(clientset, 0, true)
 		})
 
 		It("should handle a local endpoint", func() {
@@ -183,7 +183,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 local and 9 remote nodes", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(9, true)
+			d = NewDeployment(clientset, 9, true)
 		})
 
 		It("should add and remove 1000 pods, of which about 100 on local node", func() {

@@ -42,9 +42,12 @@ function cleanup {
 }
 trap cleanup EXIT SIGINT SIGQUIT
 
-# Utility - get a container's IP address.
+# Utilities - get a container's IP address and hostname.
 function get_container_ip {
     docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
+}
+function get_container_hostname {
+    docker inspect --format='{{.Config.Hostname}}' $1
 }
 
 # Just in case containers already exist with the same names, clean
@@ -89,12 +92,14 @@ docker run --detach --privileged --name ${prefix}-felix \
        calico/felix \
        /bin/sh -c "for n in 1 2; do calico-felix; done"
 felix_ip=$(get_container_ip ${prefix}-felix)
+felix_hostname=$(get_container_hostname ${prefix}-felix)
 
 # Run the test suite.
 set +e
-docker exec ${prefix}-felix /bin/sh -c \
-       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v ${k8s_api_endpoint} ${felix_ip} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+ginkgo -v k8sfv -- ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} "${PROMPG_URL}" "${CODE_LEVEL}"
 test_result=$?
+set -e
+mv k8sfv/junit.xml k8sfv/output/
 
 # Sleep before cleanup.
 sleep ${SLEEP_BEFORE_CLEANUP}

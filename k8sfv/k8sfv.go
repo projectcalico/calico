@@ -37,6 +37,7 @@ import (
 var (
 	k8sServerEndpoint string // e.g. "http://172.17.0.2:6443"
 	felixIP           string // e.g. "172.17.0.3"
+	felixHostname     string // e.g. "b6fc45dcc1cb"
 	prometheusPushURL string // e.g. "http://172.17.0.3:9091"
 	codeLevel         string // e.g. "master"
 )
@@ -65,11 +66,13 @@ var _ = BeforeSuite(func() {
 	// Get and log command line args.
 	k8sServerEndpoint = flag.Arg(0)
 	felixIP = flag.Arg(1)
-	prometheusPushURL = flag.Arg(2)
-	codeLevel = flag.Arg(3)
+	felixHostname = flag.Arg(2)
+	prometheusPushURL = flag.Arg(3)
+	codeLevel = flag.Arg(4)
 	log.WithFields(log.Fields{
 		"k8sServerEndpoint": k8sServerEndpoint,
 		"felixIP":           felixIP,
+		"felixHostname":     felixHostname,
 		"prometheusPushURL": prometheusPushURL,
 		"codeLevel":         codeLevel,
 	}).Info("Args")
@@ -167,7 +170,7 @@ func initializeCalicoDeployment(k8sServerEndpoint string) {
 
 func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 
-	d := NewDeployment(49, true)
+	d := NewDeployment(clientset, 49, true)
 	nsName := nsPrefix + "test"
 
 	// Create 1000 pods.

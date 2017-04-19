@@ -44,7 +44,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 remote node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(1, false)
+			d = NewDeployment(clientset, 1, false)
 		})
 
 		// Test for https://github.com/projectcalico/libcalico-go/pull/375.
