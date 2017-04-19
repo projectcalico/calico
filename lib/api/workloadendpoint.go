@@ -36,13 +36,23 @@ type WorkloadEndpointMetadata struct {
 	Name string `json:"name,omitempty" validate:"omitempty,namespacedname"`
 
 	// The name of the workload.
-	Workload string `json:"workload,omitempty" valid:"omitempty,namespacedname"`
+	Workload string `json:"workload,omitempty" validate:"omitempty,namespacedname"`
 
 	// The name of the orchestrator.
-	Orchestrator string `json:"orchestrator,omitempty" valid:"omitempty,namespacedname"`
+	Orchestrator string `json:"orchestrator,omitempty" validate:"omitempty,namespacedname"`
 
 	// The node name identifying the Calico node instance.
-	Node string `json:"node,omitempty" valid:"omitempty,name"`
+	Node string `json:"node,omitempty" validate:"omitempty,name"`
+
+	// ActiveInstanceID is an optional field that orchestrators may use to store additional
+	// information about the endpoint. The primary use case is to store a unique identifier
+	// for the active instance of a container. For example, with Calico CNI, a re-spawned
+	// container may use the same endpoint indexing (Node, Orchestrator, Workload, Endpoint)
+	// for the new container as for the old - the ActiveInstanceID is used to store an additional
+	// unique ID which the CNI plugin uses to determine whether the DEL operation needs to
+	// delete the Calico WorkloadEndpoint.
+	// This field is not an index field of the WorkloadEndpoint resource.
+	ActiveInstanceID string `json:activeInstanceID,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the workload endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
