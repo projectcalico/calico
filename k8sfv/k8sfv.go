@@ -108,6 +108,7 @@ var _ = AfterSuite(func() {
 
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	panicIfError(err)
+	fmt.Println("")
 	for _, family := range metricFamilies {
 		if strings.HasPrefix(*family.Name, "k8sfv") {
 			fmt.Println(proto.MarshalTextString(family))
