@@ -52,3 +52,8 @@ defaults:
       path: v2.1
     values:
       version: v2.1
+  -
+    scope:
+      path: v2.2
+    values:
+      version: v2.2
