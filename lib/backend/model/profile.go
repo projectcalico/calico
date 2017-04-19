@@ -168,13 +168,6 @@ type ProfileRules struct {
 	OutboundRules []Rule `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 }
 
-type client interface {
-	Create(object *KVPair) (*KVPair, error)
-	Update(object *KVPair) (*KVPair, error)
-	Apply(object *KVPair) (*KVPair, error)
-	Get(key Key) (*KVPair, error)
-}
-
 func (_ *ProfileListOptions) ListConvert(ds []*KVPair) []*KVPair {
 
 	profiles := make(map[string]*KVPair)
