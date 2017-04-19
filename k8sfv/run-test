@@ -14,6 +14,14 @@
 # and hence to allow multiple copies of this script to run in
 # parallel.
 : ${UNIQUE:=}
+#
+# URL of a Prometheus push gateway that k8sfv should push metrics to.
+: ${PROMPG_URL:=}
+#
+# Code level to report for the metrics that this test run generates.
+# A CI job that regularly tests a particular (checked in) code branch
+# should set this to the name of that branch, e.g. 'master'.
+: ${CODE_LEVEL:=dev}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -80,4 +88,4 @@ felix_ip=$(get_container_ip ${prefix}-felix)
 
 # Run the test suite.
 docker exec ${prefix}-felix /bin/sh -c \
-       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v ${k8s_api_endpoint} ${felix_ip}"
+       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v ${k8s_api_endpoint} ${felix_ip} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"os/exec"
 	"time"
@@ -94,6 +95,15 @@ var _ = Context("with a k8s clientset", func() {
 					"heapAlloc": heapAlloc,
 				}).Info("Bytes in use now")
 
+				gaugeVecHeapAllocBytes.WithLabelValues(
+					"felix",
+					testName,
+					fmt.Sprintf("iteration%d", ii),
+					codeLevel,
+				).Set(
+					heapAlloc,
+				)
+
 				// Discard the first occupancy measurements since the first runs
 				// have the advantage of running in a clean, unfragmented heap.
 				if ii >= ignore {
@@ -128,8 +138,15 @@ var _ = Context("with a k8s clientset", func() {
 			// the average gradient, per iteration, to be less than 2% of the average
 			// occupancy.
 			log.WithField("bytes", constant).Info("Average occupancy")
-			log.WithField("%", gradient*100/constant).Info("Increase per iteration")
-			Expect(gradient).To(BeNumerically("<", 0.02*constant))
+			increase := gradient * 100 / constant
+			log.WithField("%", increase).Info("Increase per iteration")
+
+			gaugeVecOccupancyMeanBytes.WithLabelValues(
+				"felix", testName, codeLevel).Set(constant)
+			gaugeVecOccupancyIncreasePercent.WithLabelValues(
+				"felix", testName, codeLevel).Set(increase)
+
+			Expect(increase).To(BeNumerically("<", 2))
 		})
 	})
 

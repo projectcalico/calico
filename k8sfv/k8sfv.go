@@ -16,9 +16,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/push"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -32,10 +37,82 @@ import (
 var (
 	k8sServerEndpoint string // e.g. "http://172.17.0.2:6443"
 	felixIP           string // e.g. "172.17.0.3"
+	prometheusPushURL string // e.g. "http://172.17.0.3:9091"
+	codeLevel         string // e.g. "master"
 )
+
+// Prometheus metrics.
+var (
+	gaugeVecHeapAllocBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "k8sfv_heap_alloc_bytes",
+		Help: "Occupancy measurement",
+	}, []string{"process", "test_name", "test_step", "code_level"})
+	gaugeVecOccupancyMeanBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "k8sfv_occupancy_mean_bytes",
+		Help: "Mean occupancy for a test",
+	}, []string{"process", "test_name", "code_level"})
+	gaugeVecOccupancyIncreasePercent = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "k8sfv_occupancy_increase_percent",
+		Help: "% occupancy increase during a test",
+	}, []string{"process", "test_name", "code_level"})
+	gaugeVecTestResult = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "k8sfv_test_result",
+		Help: "Test result, i.e. pass (1) or failure (0)",
+	}, []string{"test_name", "code_level"})
+)
+
 var _ = BeforeSuite(func() {
+	// Get and log command line args.
 	k8sServerEndpoint = flag.Arg(0)
 	felixIP = flag.Arg(1)
+	prometheusPushURL = flag.Arg(2)
+	codeLevel = flag.Arg(3)
+	log.WithFields(log.Fields{
+		"k8sServerEndpoint": k8sServerEndpoint,
+		"felixIP":           felixIP,
+		"prometheusPushURL": prometheusPushURL,
+		"codeLevel":         codeLevel,
+	}).Info("Args")
+
+	// Register Prometheus metrics.
+	prometheus.MustRegister(gaugeVecHeapAllocBytes)
+	prometheus.MustRegister(gaugeVecOccupancyMeanBytes)
+	prometheus.MustRegister(gaugeVecOccupancyIncreasePercent)
+	prometheus.MustRegister(gaugeVecTestResult)
+})
+
+var testName string
+
+var _ = JustBeforeEach(func() {
+	testName = CurrentGinkgoTestDescription().FullTestText
+})
+
+var _ = AfterEach(func() {
+	result := float64(1)
+	if CurrentGinkgoTestDescription().Failed {
+		result = 0
+	}
+	gaugeVecTestResult.WithLabelValues(testName, codeLevel).Set(result)
+})
+
+var _ = AfterSuite(func() {
+	if prometheusPushURL != "" {
+		// Push metrics to Prometheus push gateway.
+		err := push.FromGatherer(
+			"k8sfv",
+			nil,
+			prometheusPushURL,
+			prometheus.DefaultGatherer)
+		panicIfError(err)
+	}
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	panicIfError(err)
+	for _, family := range metricFamilies {
+		if strings.HasPrefix(*family.Name, "k8sfv") {
+			fmt.Println(proto.MarshalTextString(family))
+		}
+	}
 })
 
 func initialize(k8sServerEndpoint string) (clientset *kubernetes.Clientset) {
