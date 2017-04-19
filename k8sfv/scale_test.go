@@ -16,6 +16,7 @@ package main
 
 import (
 	"math/rand"
+	"os/exec"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -65,29 +66,44 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should not leak memory", func() {
+			const (
+				cycles = 20
+				ignore = 12
+			)
+			iiAverage := 0.5 * (ignore + cycles - 1)
 			addNamespaces(clientset, nsPrefix)
-			occupancyMeasurements := []leastsquares.Point{}
-			for ii := 0; ii < 10; ii++ {
+			heapInUseMeasurements := []leastsquares.Point{}
+			heapAllocMeasurements := []leastsquares.Point{}
+			for ii := 0; ii < cycles; ii++ {
 				// Add 10,000 endpoints.
 				addEndpoints(clientset, nsPrefix, d, 10000)
 
 				// Allow a little time for Felix to finish digesting those.
 				time.Sleep(10 * time.Second)
 
+				// Get Felix to GC and dump heap memory profile.
+				exec.Command("pkill", "-USR1", "calico-felix").Run()
+				time.Sleep(2 * time.Second)
+
 				// Get current occupancy.
-				bytes := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
+				heapInUse := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
+				heapAlloc := getFelixFloatMetric("go_memstats_heap_alloc_bytes")
 				log.WithFields(log.Fields{
 					"iteration": ii,
-					"bytes":     bytes,
+					"heapInUse": heapInUse,
+					"heapAlloc": heapAlloc,
 				}).Info("Bytes in use now")
 
-				// Discard the first couple of occupancy measurements since the
-				// first runs have the advantage of running in a clean, unfragmented
-				// heap.
-				if ii >= 2 {
-					occupancyMeasurements = append(
-						occupancyMeasurements,
-						leastsquares.Point{float64(ii) - 5.5, bytes},
+				// Discard the first occupancy measurements since the first runs
+				// have the advantage of running in a clean, unfragmented heap.
+				if ii >= ignore {
+					heapInUseMeasurements = append(
+						heapInUseMeasurements,
+						leastsquares.Point{float64(ii) - iiAverage, heapInUse},
+					)
+					heapAllocMeasurements = append(
+						heapAllocMeasurements,
+						leastsquares.Point{float64(ii) - iiAverage, heapAlloc},
 					)
 				}
 
@@ -96,11 +112,16 @@ var _ = Context("with a k8s clientset", func() {
 				time.Sleep(10 * time.Second)
 			}
 
-			gradient, constant := leastsquares.LeastSquaresMethod(occupancyMeasurements)
+			gradient, constant := leastsquares.LeastSquaresMethod(heapInUseMeasurements)
 			log.WithFields(log.Fields{
 				"gradient": gradient,
 				"constant": constant,
-			}).Info("Least squares fit")
+			}).Info("Least squares fit for inuse")
+			gradient, constant = leastsquares.LeastSquaresMethod(heapAllocMeasurements)
+			log.WithFields(log.Fields{
+				"gradient": gradient,
+				"constant": constant,
+			}).Info("Least squares fit for alloc")
 
 			// Initial strawman is that we don't expect to see any increase in memory
 			// over the long term.  Given just 10 iterations, let's say that we require
