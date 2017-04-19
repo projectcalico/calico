@@ -26,6 +26,9 @@
 # Tell this script to wait before cleaning up the test containers -
 # e.g. to allow investigation of Felix logs.
 : ${SLEEP_BEFORE_CLEANUP:=0}
+#
+# Felix logging level.
+: ${FELIX_LOG_LEVEL:=info}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -80,7 +83,7 @@ done
 # Run Felix.
 mkdir -p k8sfv/output
 docker run --detach --privileged --name ${prefix}-felix \
-       -e FELIX_LOGSEVERITYSCREEN=info \
+       -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
        -e FELIX_DATASTORETYPE=kubernetes \
        -e FELIX_PROMETHEUSMETRICSENABLED=true \
        -e FELIX_USAGEREPORTINGENABLED=false \
