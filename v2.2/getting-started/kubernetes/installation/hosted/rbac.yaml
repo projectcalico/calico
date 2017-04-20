@@ -30,11 +30,14 @@ rules:
       - list
       - get
       - watch
+      - update
   - apiGroups: ["extensions"]
     resources:
       - thirdpartyresources
     verbs:
+      - list
       - get
+      - watch
       - create
   - apiGroups: ["extensions"]
     resources:
@@ -61,6 +64,7 @@ rules:
       - get
       - update
       - delete
+      - watch
 
 ---
 
