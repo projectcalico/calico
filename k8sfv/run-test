@@ -23,9 +23,16 @@
 # should set this to the name of that branch, e.g. 'master'.
 : ${CODE_LEVEL:=dev}
 #
-# Tell this script to wait before cleaning up the test containers -
-# e.g. to allow investigation of Felix logs.
-: ${SLEEP_BEFORE_CLEANUP:=0}
+# Whether to clean up the etcd, API server and Felix containers that
+# this test creates.  The default 'false' is intended to be what
+# development work typically needs: containers are not cleaned up,
+# because (1) that allows the developer to look at them when a test
+# has completed, and (2) the containers from a previous run will
+# always be cleaned up when this script is run again - so we are never
+# going to leak an increasing number of containers.  CI should set
+# CLEANUP to 'true', so that the containers are cleaned up regardless
+# of test outcome.
+: ${CLEANUP:=false}
 #
 # Felix logging level.
 : ${FELIX_LOG_LEVEL:=info}
@@ -41,7 +48,8 @@
 # will create.
 prefix=k8sfv${UNIQUE}
 
-# Arrange to always clean up the containers that we create.
+# If CLEANUP says so, arrange to always clean up the containers that
+# we create.
 function cleanup {
     # Clean up the containers that this script generates.
     docker rm -f ${prefix}-felix || true
@@ -50,7 +58,9 @@ function cleanup {
     # List all remaining containers.
     docker ps -a
 }
-trap cleanup EXIT SIGINT SIGQUIT
+if ${CLEANUP}; then
+    trap cleanup EXIT SIGINT SIGQUIT
+fi
 
 # Utilities - get a container's IP address and hostname.
 function get_container_ip {
@@ -110,14 +120,5 @@ args=-ginkgo.v
 if test -n "${GINKGO_FOCUS}"; then
     args="${args} -ginkgo.focus"
 fi
-set +e
 docker exec ${prefix}-felix /bin/sh -c \
        "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test ${args} \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
-test_result=$?
-set -e
-
-# Sleep before cleanup.
-sleep ${SLEEP_BEFORE_CLEANUP}
-
-# Report the test result.
-exit ${test_result}
