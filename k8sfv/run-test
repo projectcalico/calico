@@ -102,15 +102,15 @@ felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 
 # Run the test suite.
-args=-v
+args=-ginkgo.v
 if test -n "${GINKGO_FOCUS}"; then
-    args="${args} -focus"
+    args="${args} -ginkgo.focus"
 fi
 set +e
-ginkgo ${args} "${GINKGO_FOCUS[@]}" k8sfv -- ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} "${PROMPG_URL}" "${CODE_LEVEL}"
+docker exec ${prefix}-felix /bin/sh -c \
+       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test ${args} \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
 test_result=$?
 set -e
-mv k8sfv/junit.xml k8sfv/output/
 
 # Sleep before cleanup.
 sleep ${SLEEP_BEFORE_CLEANUP}
