@@ -62,19 +62,30 @@ func NewDeployment(
 	}
 	// Regardless of whether we're going to place _pods_ on the local host, we need to define a
 	// Node resource for the local host, so that Felix can get going.
-	d.ensureNodeDefined(clientset, felixHostname)
+	d.ensureNodeDefined(clientset, felixHostname, felixIP+"/24")
 	return d
 }
+
+var GetNextRemoteHostCIDR = ipAddrAllocator("11.65.%d.%d/16")
 
 func (d *localPlusRemotes) ensureNodeDefined(
 	clientset *kubernetes.Clientset,
 	hostName string,
+	hostCIDR string,
 ) {
 	d.mutex.Lock()
 	if !d.k8sCreated[hostName] {
+		if hostCIDR == "" {
+			hostCIDR = GetNextRemoteHostCIDR()
+		}
 		node_in := &v1.Node{
-			ObjectMeta: v1.ObjectMeta{Name: hostName},
-			Spec:       v1.NodeSpec{},
+			ObjectMeta: v1.ObjectMeta{
+				Name: hostName,
+				Annotations: map[string]string{
+					"projectcalico.org/IPv4Address": hostCIDR,
+				},
+			},
+			Spec: v1.NodeSpec{},
 		}
 		log.WithField("node_in", node_in).Debug("Node defined")
 		node_out, err := clientset.Nodes().Create(node_in)
@@ -94,7 +105,7 @@ func (d *localPlusRemotes) ChooseHost(clientset *kubernetes.Clientset) (h host) 
 	} else {
 		h = host{name: fmt.Sprintf("%s%d", d.remotePrefix, r), isLocal: false}
 	}
-	d.ensureNodeDefined(clientset, h.name)
+	d.ensureNodeDefined(clientset, h.name, "")
 	return
 }
 
