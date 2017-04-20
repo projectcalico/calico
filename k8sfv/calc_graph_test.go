@@ -17,6 +17,7 @@ package main
 import (
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
@@ -30,6 +31,7 @@ var _ = Describe("calculation graph scale test", func() {
 	)
 
 	BeforeEach(func() {
+		log.Info(">>> BeforeEach <<<")
 		clientset = initialize(k8sServerEndpoint)
 		nsPrefix = getNamespacePrefix()
 	})
@@ -43,6 +45,7 @@ var _ = Describe("calculation graph scale test", func() {
 	})
 
 	AfterEach(func() {
+		log.Info(">>> AfterEach <<<")
 		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})

@@ -63,6 +63,7 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	log.Info(">>> BeforeSuite <<<")
 	// Get and log command line args.
 	k8sServerEndpoint = flag.Arg(0)
 	felixIP = flag.Arg(1)
@@ -87,10 +88,12 @@ var _ = BeforeSuite(func() {
 var testName string
 
 var _ = JustBeforeEach(func() {
+	log.Info(">>> JustBeforeEach <<<")
 	testName = CurrentGinkgoTestDescription().FullTestText
 })
 
 var _ = AfterEach(func() {
+	log.Info(">>> AfterEach <<<")
 	result := float64(1)
 	if CurrentGinkgoTestDescription().Failed {
 		result = 0
@@ -99,6 +102,7 @@ var _ = AfterEach(func() {
 })
 
 var _ = AfterSuite(func() {
+	log.Info(">>> AfterSuite <<<")
 	if prometheusPushURL != "" {
 		// Push metrics to Prometheus push gateway.
 		err := push.FromGatherer(

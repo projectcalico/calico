@@ -46,11 +46,13 @@ var _ = Context("with a k8s clientset", func() {
 	)
 
 	BeforeEach(func() {
+		log.Info(">>> BeforeEach <<<")
 		clientset = initialize(k8sServerEndpoint)
 		nsPrefix = getNamespacePrefix()
 	})
 
 	AfterEach(func() {
+		log.Info(">>> AfterEach <<<")
 		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
@@ -58,6 +60,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 remote node", func() {
 
 		BeforeEach(func() {
+			log.Info(">>> BeforeEach <<<")
 			d = NewDeployment(clientset, 1, false)
 		})
 
@@ -153,6 +156,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 local node", func() {
 
 		BeforeEach(func() {
+			log.Info(">>> BeforeEach <<<")
 			d = NewDeployment(clientset, 0, true)
 		})
 
@@ -183,6 +187,7 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 local and 9 remote nodes", func() {
 
 		BeforeEach(func() {
+			log.Info(">>> BeforeEach <<<")
 			d = NewDeployment(clientset, 9, true)
 		})
 

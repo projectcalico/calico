@@ -17,7 +17,7 @@ package main
 import (
 	"testing"
 
-	"github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -29,7 +29,7 @@ import (
 func init() {
 	testutils.HookLogrusForGinkgo()
 	logutils.ConfigureEarlyLogging()
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 }
 
 func TestMain(t *testing.T) {
