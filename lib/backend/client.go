@@ -32,18 +32,21 @@ func NewClient(config api.CalicoAPIConfig) (c bapi.Client, err error) {
 	switch config.Spec.DatastoreType {
 	case api.EtcdV2:
 		c, err = etcd.NewEtcdClient(&config.Spec.EtcdConfig)
+		if c != nil {
+			// Wrap the backend, which deals only in raw KV pairs with an
+			// adaptor that handles aggregate datatypes.  This allows for
+			// reading and writing Profile and Node objects, which for etcdv2
+			// are composed of multiple backend keys.
+			//
+			// This is only required for etcdv2 backend as Kuberenetes driver
+			// uses the composite Profile and Node KV types.
+			c = compat.NewAdaptor(c)
+		}
 	case api.Kubernetes:
 		c, err = k8s.NewKubeClient(&config.Spec.KubeConfig)
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v",
 			config.Spec.DatastoreType))
-	}
-	if c != nil {
-		// Wrap the backend, which deals only in raw KV pairs with an
-		// adaptor that handles aggregate datatypes.  This allows for
-		// reading and writing Profile objects, which are composed
-		// of multiple backend keys.
-		c = compat.NewAdaptor(c)
 	}
 	return
 }
