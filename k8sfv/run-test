@@ -116,9 +116,11 @@ felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 
 # Run the test suite.
-args=-ginkgo.v
+run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v"
 if test -n "${GINKGO_FOCUS}"; then
-    args="${args} -ginkgo.focus"
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+else
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
 fi
-docker exec ${prefix}-felix /bin/sh -c \
-       "cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test ${args} \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
