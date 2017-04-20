@@ -48,7 +48,7 @@ type ObjectMetadata struct {
 	// Object revision used to perform atomic updates and deletes.  Currently
 	// only supported on Get and Delete operations of the WorkloadEndpoint
 	// resource type.
-	Revision interface{}
+	Revision interface{} `json:"-"`
 }
 
 func (md ObjectMetadata) GetObjectMetadata() ObjectMetadata {
