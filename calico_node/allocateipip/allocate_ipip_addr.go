@@ -18,7 +18,13 @@ import (
 
 func main() {
 	// Load the client config from environment.
-	_, c := calicoclient.CreateClient()
+	cfg, c := calicoclient.CreateClient()
+
+	// This is a no-op for KDD.
+	if cfg.Spec.DatastoreType == api.Kubernetes {
+		log.Info("Kubernetes datastore driver handles IPIP allocation - no op")
+		return
+	}
 
 	// The allocate_ipip_addr binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
