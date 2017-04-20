@@ -1,5 +1,5 @@
-hash: b09db45186e8eb5791c87b46fd9c6f3bf18519983221af3a506b4e54eb691c71
-updated: 2017-04-17T14:27:46.140817125-07:00
+hash: d8792fca9ff6d6f56e0ee95d464b9ea1bd21eb244ee78767a1062db1b8aaebbe
+updated: 2017-04-20T08:36:47.784309561-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,12 +13,12 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
+  version: 4a2f3ddd5d5626e883af9b3485be123f30beb5b2
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 4582a7e90035d40d79975f5f018413230ed5d691
+  version: 17ae440991da3bdb2df4309936dd2074f66ec394
   subpackages:
   - client
   - pkg/pathutil
@@ -98,7 +98,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 9d302b58e975387d0b4d9be876622c86cefe64be
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -143,7 +143,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9c7017a9f079eb344a01cc21b72cb4c36ab2270f
+  version: 341b130b8c7ec018d4b60bcf7c124f97a0fe5f39
   subpackages:
   - lib
   - lib/api
@@ -193,7 +193,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
+  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
@@ -203,7 +203,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 1d1fee5b1873b5396355214125b824ca3409c64a
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -229,7 +229,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: f3918c30c5c2cb527c0b071a27c35120a6c0719a
+  version: 21f2569f6feb83b68a25c98c1b20eca5d4e1e6ae
   subpackages:
   - unix
 - name: golang.org/x/text
