@@ -23,9 +23,12 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-func getFelixMetric(name string) (metric string) {
-	resp, err := http.Get("http://" + felixIP + ":9091/metrics")
-	panicIfError(err)
+func getFelixMetric(name string) (metric string, err error) {
+	var resp *http.Response
+	resp, err = http.Get("http://" + felixIP + ":9091/metrics")
+	if err != nil {
+		return
+	}
 	log.WithField("resp", resp).Debug("Metric response")
 	defer resp.Body.Close()
 
@@ -39,32 +42,32 @@ func getFelixMetric(name string) (metric string) {
 			break
 		}
 	}
-	panicIfError(scanner.Err())
+	err = scanner.Err()
 	return
 }
 
 func getFelixFloatMetric(name string) float64 {
-	metric, err := strconv.ParseFloat(getFelixMetric(name), 64)
+	metricS, err := getFelixMetric(name)
+	panicIfError(err)
+	metric, err := strconv.ParseFloat(metricS, 64)
 	panicIfError(err)
 	return metric
 }
 
-func getNumEndpoints() int64 {
-	s := getFelixMetric("felix_cluster_num_workload_endpoints")
-	numEndpoints, err := strconv.ParseInt(s, 10, 64)
-	panicIfError(err)
-	return numEndpoints
+func getNumEndpoints() (int64, error) {
+	s, err := getFelixMetric("felix_cluster_num_workload_endpoints")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(s, 10, 64)
 }
 
 func getNumEndpointsDefault(def int64) func() int64 {
 	return func() int64 {
-		numEndpoints := def
-		defer func() {
-			if r := recover(); r != nil {
-				log.WithField("r", r).Warn("Panic recovery")
-			}
-		}()
-		numEndpoints = getNumEndpoints()
+		numEndpoints, err := getNumEndpoints()
+		if err != nil {
+			numEndpoints = def
+		}
 		return numEndpoints
 	}
 }
