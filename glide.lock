@@ -1,5 +1,5 @@
-hash: 1cf35de13c8d37013d484e8f4a7e9413ca39052d7a1ae5b9136a06923906f9d9
-updated: 2017-04-17T20:33:33.36217707-07:00
+hash: cabdbcfd96019d5edd285109f4eade3d9b3f81751e9676fd0a5a67279065bb80
+updated: 2017-04-20T15:59:43.162277628-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -130,7 +130,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: febf2d34b54a69ce7530036c7503b1c9fbfdf0bb
 - name: github.com/onsi/ginkgo
-  version: bb93381d543b0e5725244abe752214a110791d01
+  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
   - config
   - extensions/table
@@ -140,6 +140,7 @@ imports:
   - internal/leafnodes
   - internal/remote
   - internal/spec
+  - internal/spec_iterator
   - internal/specrunner
   - internal/suite
   - internal/testingtproxy
@@ -177,7 +178,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9c7017a9f079eb344a01cc21b72cb4c36ab2270f
+  version: 6c651a90a7ae1fb3b52141143ced1cdf3c80ad9c
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -429,7 +430,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: c463cd2a8578290d4be7a25cba69de81cf35785e
+  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
   subpackages:
   - format
   - internal/assertion
