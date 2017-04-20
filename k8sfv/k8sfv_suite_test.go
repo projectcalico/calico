@@ -15,6 +15,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	log "github.com/Sirupsen/logrus"
@@ -29,7 +30,9 @@ import (
 func init() {
 	testutils.HookLogrusForGinkgo()
 	logutils.ConfigureEarlyLogging()
-	log.SetLevel(log.InfoLevel)
+	logLevel, err := log.ParseLevel(os.Getenv("K8SFV_LOG_LEVEL"))
+	panicIfError(err)
+	log.SetLevel(logLevel)
 }
 
 func TestMain(t *testing.T) {

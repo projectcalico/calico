@@ -33,6 +33,9 @@
 # Ginkgo focus term (regexp); this can be set to focus on particular
 # tests.
 : ${GINKGO_FOCUS:=}
+#
+# k8sfv logging level.
+: ${K8SFV_LOG_LEVEL:=info}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -94,6 +97,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
        -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
        calico/felix \
