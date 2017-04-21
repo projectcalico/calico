@@ -42,7 +42,7 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 		}
 	}
 
-	d := NewDeployment(49, true)
+	d := NewDeployment(clientset, 49, true)
 
 	// Create pods.
 	waiter := sync.WaitGroup{}

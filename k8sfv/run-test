@@ -1,0 +1,126 @@
+#!/bin/bash -ex
+
+# Run the 'k8sfv' test suite, a functional and scale test of Felix
+# running with the Kubernetes datastore driver, driven by CRUD
+# operations through the k8s API server.
+
+# Config.
+#
+# What version of the k8s API server to use.
+: ${K8S_VERSION:=1.5.3}
+#
+# A string to insert into the container names that we use; a calling
+# script can set this to something to make the container names unique,
+# and hence to allow multiple copies of this script to run in
+# parallel.
+: ${UNIQUE:=}
+#
+# URL of a Prometheus push gateway that k8sfv should push metrics to.
+: ${PROMPG_URL:=}
+#
+# Code level to report for the metrics that this test run generates.
+# A CI job that regularly tests a particular (checked in) code branch
+# should set this to the name of that branch, e.g. 'master'.
+: ${CODE_LEVEL:=dev}
+#
+# Whether to clean up the etcd, API server and Felix containers that
+# this test creates.  The default 'false' is intended to be what
+# development work typically needs: containers are not cleaned up,
+# because (1) that allows the developer to look at them when a test
+# has completed, and (2) the containers from a previous run will
+# always be cleaned up when this script is run again - so we are never
+# going to leak an increasing number of containers.  CI should set
+# CLEANUP to 'true', so that the containers are cleaned up regardless
+# of test outcome.
+: ${CLEANUP:=false}
+#
+# Felix logging level.
+: ${FELIX_LOG_LEVEL:=info}
+#
+# Ginkgo focus term (regexp); this can be set to focus on particular
+# tests.
+: ${GINKGO_FOCUS:=}
+#
+# k8sfv logging level.
+: ${K8SFV_LOG_LEVEL:=info}
+
+# Generate a unique prefix for the names of the containers that we
+# will create.
+prefix=k8sfv${UNIQUE}
+
+# If CLEANUP says so, arrange to always clean up the containers that
+# we create.
+function cleanup {
+    # Clean up the containers that this script generates.
+    docker rm -f ${prefix}-felix || true
+    docker rm -f ${prefix}-apiserver || true
+    docker rm -f ${prefix}-etcd || true
+    # List all remaining containers.
+    docker ps -a
+}
+if ${CLEANUP}; then
+    trap cleanup EXIT SIGINT SIGQUIT
+fi
+
+# Utilities - get a container's IP address and hostname.
+function get_container_ip {
+    docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
+}
+function get_container_hostname {
+    docker inspect --format='{{.Config.Hostname}}' $1
+}
+
+# Just in case containers already exist with the same names, clean
+# them up.
+cleanup
+
+# Run etcd.
+docker run --detach --name ${prefix}-etcd \
+       quay.io/coreos/etcd \
+       etcd \
+       --advertise-client-urls "http://127.0.0.1:2379,http://127.0.0.1:4001" \
+       --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+etcd_ip=$(get_container_ip ${prefix}-etcd)
+
+# Run k8s API server.
+docker run --detach --name ${prefix}-apiserver \
+       gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+       /hyperkube apiserver \
+       --etcd-servers=http://${etcd_ip}:2379 \
+       --service-cluster-ip-range=10.101.0.0/16 -v=10
+k8s_ip=$(get_container_ip ${prefix}-apiserver)
+k8s_api_endpoint=https://${k8s_ip}:6443
+
+# Wait until the newly launched API server can respond to a request,
+# before continuing.
+while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources; do
+    sleep 2
+done
+
+# Run Felix.
+mkdir -p k8sfv/output
+docker run --detach --privileged --name ${prefix}-felix \
+       -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
+       -e FELIX_DATASTORETYPE=kubernetes \
+       -e FELIX_PROMETHEUSMETRICSENABLED=true \
+       -e FELIX_USAGEREPORTINGENABLED=false \
+       -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
+       -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
+       -v ${PWD}:/testcode \
+       -w /testcode/k8sfv/output \
+       calico/felix \
+       /bin/sh -c "for n in 1 2; do calico-felix; done"
+felix_ip=$(get_container_ip ${prefix}-felix)
+felix_hostname=$(get_container_hostname ${prefix}-felix)
+
+# Run the test suite.
+run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v"
+if test -n "${GINKGO_FOCUS}"; then
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+else
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+fi

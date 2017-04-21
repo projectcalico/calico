@@ -17,7 +17,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
@@ -43,7 +42,11 @@ type localPlusRemotes struct {
 	mutex         sync.Mutex
 }
 
-func NewDeployment(numRemotes int, includeLocal bool) deployment {
+func NewDeployment(
+	clientset *kubernetes.Clientset,
+	numRemotes int,
+	includeLocal bool,
+) deployment {
 	numLocal := 0
 	if includeLocal {
 		numLocal = 1
@@ -55,9 +58,44 @@ func NewDeployment(numRemotes int, includeLocal bool) deployment {
 		k8sCreated:   map[string]bool{},
 	}
 	if includeLocal {
-		d.localHostname, _ = os.Hostname()
+		d.localHostname = felixHostname
 	}
+	// Regardless of whether we're going to place _pods_ on the local host, we need to define a
+	// Node resource for the local host, so that Felix can get going.
+	d.ensureNodeDefined(clientset, felixHostname, felixIP+"/24")
 	return d
+}
+
+var GetNextRemoteHostCIDR = ipAddrAllocator("11.65.%d.%d/16")
+
+func (d *localPlusRemotes) ensureNodeDefined(
+	clientset *kubernetes.Clientset,
+	hostName string,
+	hostCIDR string,
+) {
+	d.mutex.Lock()
+	if !d.k8sCreated[hostName] {
+		if hostCIDR == "" {
+			hostCIDR = GetNextRemoteHostCIDR()
+		}
+		node_in := &v1.Node{
+			ObjectMeta: v1.ObjectMeta{
+				Name: hostName,
+				Annotations: map[string]string{
+					"projectcalico.org/IPv4Address": hostCIDR,
+				},
+			},
+			Spec: v1.NodeSpec{},
+		}
+		log.WithField("node_in", node_in).Debug("Node defined")
+		node_out, err := clientset.Nodes().Create(node_in)
+		log.WithField("node_out", node_out).Debug("Created node")
+		if err != nil {
+			panic(err)
+		}
+		d.k8sCreated[hostName] = true
+	}
+	d.mutex.Unlock()
 }
 
 func (d *localPlusRemotes) ChooseHost(clientset *kubernetes.Clientset) (h host) {
@@ -67,21 +105,7 @@ func (d *localPlusRemotes) ChooseHost(clientset *kubernetes.Clientset) (h host) 
 	} else {
 		h = host{name: fmt.Sprintf("%s%d", d.remotePrefix, r), isLocal: false}
 	}
-	d.mutex.Lock()
-	if !d.k8sCreated[h.name] {
-		node_in := &v1.Node{
-			ObjectMeta: v1.ObjectMeta{Name: h.name},
-			Spec:       v1.NodeSpec{},
-		}
-		log.WithField("node_in", node_in).Debug("Node defined")
-		node_out, err := clientset.Nodes().Create(node_in)
-		log.WithField("node_out", node_out).Debug("Created node")
-		if err != nil {
-			panic(err)
-		}
-		d.k8sCreated[h.name] = true
-	}
-	d.mutex.Unlock()
+	d.ensureNodeDefined(clientset, h.name, "")
 	return
 }
 

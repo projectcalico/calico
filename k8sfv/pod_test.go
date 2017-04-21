@@ -18,6 +18,7 @@ import (
 	"flag"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
@@ -32,11 +33,13 @@ var _ = Context("with a k8s clientset", func() {
 	)
 
 	BeforeEach(func() {
+		log.Info(">>> BeforeEach <<<")
 		clientset = initialize(flag.Arg(0))
 		nsPrefix = getNamespacePrefix()
 	})
 
 	AfterEach(func() {
+		log.Info(">>> AfterEach <<<")
 		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
@@ -44,7 +47,8 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 remote node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(1, false)
+			log.Info(">>> BeforeEach <<<")
+			d = NewDeployment(clientset, 1, false)
 		})
 
 		// Test for https://github.com/projectcalico/libcalico-go/pull/375.

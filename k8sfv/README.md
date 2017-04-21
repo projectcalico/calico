@@ -177,3 +177,32 @@ So, some possible tests:
 	 selector = random set of labels to work on, random ops and values
 	 between 1 and 10 rules, each with random source selector (as above) and ports
 	Create say 10 of those, then churn by deleting the oldest, making a new one, etc.
+
+## Test design notes
+
+The test architecture involves:
+
+- an etcd container, as backing store for the k8s API server
+
+- a k8s API server container (hyperkube, 1.5.3)
+
+- a full Felix executable:
+  - running in a container, so as to have its own network namespace
+  - configured to use KDD
+  - other miscellaneous config for logging, prometheus, no usage reporting,
+    memory dumps etc.
+
+Each of those containers has its own IP address, and they are all bridged
+together on the default 'docker0' bridge.
+
+Then there is a separate test program executable, `k8sfv.test`.  This:
+
+- is run (with docker-exec) in the Felix container, so that it can create
+  workload interfaces in Felix's network namespace
+
+- has various test cases, organized in the Ginkgo way
+
+- acts as a k8s client, creating, updating and deleting k8s API resources
+  (Node, Namespace, Pod etc.)
+
+- thereby drives Felix, via the KDD backend.

@@ -61,7 +61,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 	host := d.ChooseHost(clientset)
 	ip := spec.ipv4Addr
 	if ip == "" {
-		ip = GetNextAddr()
+		ip = GetNextPodAddr()
 	}
 	pod_in := &v1.Pod{
 		ObjectMeta: v1.ObjectMeta{Name: name},
@@ -183,13 +183,7 @@ func removeLocalPodNetworking(pod *v1.Pod) {
 	return
 }
 
-var ipNum = 0
-
-func GetNextAddr() (addr string) {
-	addr = fmt.Sprintf("10.28.%d.%d", ipNum/255, ipNum%255)
-	ipNum++
-	return
-}
+var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
 
 func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("nsPrefix", nsPrefix).Info("Cleaning up all pods...")

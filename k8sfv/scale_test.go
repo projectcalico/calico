@@ -15,7 +15,9 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os/exec"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -44,11 +46,13 @@ var _ = Context("with a k8s clientset", func() {
 	)
 
 	BeforeEach(func() {
+		log.Info(">>> BeforeEach <<<")
 		clientset = initialize(k8sServerEndpoint)
 		nsPrefix = getNamespacePrefix()
 	})
 
 	AfterEach(func() {
+		log.Info(">>> AfterEach <<<")
 		time.Sleep(10 * time.Second)
 		cleanupAll(clientset, nsPrefix)
 	})
@@ -56,7 +60,8 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 remote node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(1, false)
+			log.Info(">>> BeforeEach <<<")
+			d = NewDeployment(clientset, 1, false)
 		})
 
 		It("should create 10k endpoints", func() {
@@ -65,29 +70,53 @@ var _ = Context("with a k8s clientset", func() {
 		})
 
 		It("should not leak memory", func() {
+			const (
+				cycles = 20
+				ignore = 12
+			)
+			iiAverage := 0.5 * (ignore + cycles - 1)
 			addNamespaces(clientset, nsPrefix)
-			occupancyMeasurements := []leastsquares.Point{}
-			for ii := 0; ii < 10; ii++ {
+			heapInUseMeasurements := []leastsquares.Point{}
+			heapAllocMeasurements := []leastsquares.Point{}
+			for ii := 0; ii < cycles; ii++ {
 				// Add 10,000 endpoints.
 				addEndpoints(clientset, nsPrefix, d, 10000)
 
 				// Allow a little time for Felix to finish digesting those.
 				time.Sleep(10 * time.Second)
 
+				// Get Felix to GC and dump heap memory profile.
+				exec.Command("pkill", "-USR1", "calico-felix").Run()
+				time.Sleep(2 * time.Second)
+
 				// Get current occupancy.
-				bytes := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
+				heapInUse := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
+				heapAlloc := getFelixFloatMetric("go_memstats_heap_alloc_bytes")
 				log.WithFields(log.Fields{
 					"iteration": ii,
-					"bytes":     bytes,
+					"heapInUse": heapInUse,
+					"heapAlloc": heapAlloc,
 				}).Info("Bytes in use now")
 
-				// Discard the first couple of occupancy measurements since the
-				// first runs have the advantage of running in a clean, unfragmented
-				// heap.
-				if ii >= 2 {
-					occupancyMeasurements = append(
-						occupancyMeasurements,
-						leastsquares.Point{float64(ii) - 5.5, bytes},
+				gaugeVecHeapAllocBytes.WithLabelValues(
+					"felix",
+					testName,
+					fmt.Sprintf("iteration%d", ii),
+					codeLevel,
+				).Set(
+					heapAlloc,
+				)
+
+				// Discard the first occupancy measurements since the first runs
+				// have the advantage of running in a clean, unfragmented heap.
+				if ii >= ignore {
+					heapInUseMeasurements = append(
+						heapInUseMeasurements,
+						leastsquares.Point{float64(ii) - iiAverage, heapInUse},
+					)
+					heapAllocMeasurements = append(
+						heapAllocMeasurements,
+						leastsquares.Point{float64(ii) - iiAverage, heapAlloc},
 					)
 				}
 
@@ -96,26 +125,39 @@ var _ = Context("with a k8s clientset", func() {
 				time.Sleep(10 * time.Second)
 			}
 
-			gradient, constant := leastsquares.LeastSquaresMethod(occupancyMeasurements)
+			gradient, constant := leastsquares.LeastSquaresMethod(heapInUseMeasurements)
 			log.WithFields(log.Fields{
 				"gradient": gradient,
 				"constant": constant,
-			}).Info("Least squares fit")
+			}).Info("Least squares fit for inuse")
+			gradient, constant = leastsquares.LeastSquaresMethod(heapAllocMeasurements)
+			log.WithFields(log.Fields{
+				"gradient": gradient,
+				"constant": constant,
+			}).Info("Least squares fit for alloc")
 
 			// Initial strawman is that we don't expect to see any increase in memory
 			// over the long term.  Given just 10 iterations, let's say that we require
 			// the average gradient, per iteration, to be less than 2% of the average
 			// occupancy.
 			log.WithField("bytes", constant).Info("Average occupancy")
-			log.WithField("%", gradient*100/constant).Info("Increase per iteration")
-			Expect(gradient).To(BeNumerically("<", 0.02*constant))
+			increase := gradient * 100 / constant
+			log.WithField("%", increase).Info("Increase per iteration")
+
+			gaugeVecOccupancyMeanBytes.WithLabelValues(
+				"felix", testName, codeLevel).Set(constant)
+			gaugeVecOccupancyIncreasePercent.WithLabelValues(
+				"felix", testName, codeLevel).Set(increase)
+
+			Expect(increase).To(BeNumerically("<", 2))
 		})
 	})
 
 	Context("with 1 local node", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(0, true)
+			log.Info(">>> BeforeEach <<<")
+			d = NewDeployment(clientset, 0, true)
 		})
 
 		It("should handle a local endpoint", func() {
@@ -145,7 +187,8 @@ var _ = Context("with a k8s clientset", func() {
 	Context("with 1 local and 9 remote nodes", func() {
 
 		BeforeEach(func() {
-			d = NewDeployment(9, true)
+			log.Info(">>> BeforeEach <<<")
+			d = NewDeployment(clientset, 9, true)
 		})
 
 		It("should add and remove 1000 pods, of which about 100 on local node", func() {
