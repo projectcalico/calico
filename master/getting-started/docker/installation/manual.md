@@ -10,7 +10,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 
    ```
    sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
-   sudo chmod +x calicoctl
+   sudo chmod +x /usr/local/bin/calicoctl
    ```
 
 2. Configure access to your etcd cluster, [calicoctl - etcd datastore]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2).
