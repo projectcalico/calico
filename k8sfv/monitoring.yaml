@@ -1,0 +1,901 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: prometheus-operator
+  labels:
+    operator: prometheus
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        operator: prometheus
+    spec:
+      containers:
+       - name: prometheus-operator
+         image: quay.io/coreos/prometheus-operator:v0.6.0
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: prom-gateway
+  labels:
+    name: prom-gateway
+    tier: k8sfv
+spec:
+  replicas: 1
+  selector:
+    name: prom-gateway
+  template:
+    metadata:
+      labels:
+        name: prom-gateway
+    spec:
+      containers:
+      - name: prom-gateway
+        image: prom/pushgateway
+        ports:
+          - containerPort: 9091
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prom-gateway
+  labels:
+    name: prom-gateway
+    tier: k8sfv
+spec:
+  selector:
+    name: prom-gateway
+  ports:
+    - name: metrics
+      port: 9091
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: Prometheus
+metadata:
+  name: prometheus-k8sfv
+  labels:
+    prometheus: k8sfv
+spec:
+  version: v1.5.2
+  retention: 43800h
+  # Define that all ServiceMonitor TPRs with the label `tier = k8sfv` should be included
+  # into the server's configuration.
+  serviceMonitorSelector:
+    matchLabels:
+      tier: k8sfv
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ServiceMonitor
+metadata:
+  name: k8sfv
+  labels:
+    tier: k8sfv
+spec:
+  selector:
+    matchLabels:
+      tier: k8sfv
+  endpoints:
+  - port: metrics
+    interval: 10s        # scrape the endpoint every 10 seconds
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+data:
+  grafana.ini: |
+    [dashboards.json]
+    enabled=true
+    path=/etc/grafana-dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+data:
+  k8sfv-summary.json: |
+    {
+      "__inputs": [
+        {
+          "name": "DS_MY-PROM",
+          "label": "my-prom",
+          "description": "",
+          "type": "datasource",
+          "pluginId": "prometheus",
+          "pluginName": "Prometheus"
+        }
+      ],
+      "__requires": [
+        {
+          "type": "grafana",
+          "id": "grafana",
+          "name": "Grafana",
+          "version": "4.1.1"
+        },
+        {
+          "type": "panel",
+          "id": "graph",
+          "name": "Graph",
+          "version": ""
+        },
+        {
+          "type": "datasource",
+          "id": "prometheus",
+          "name": "Prometheus",
+          "version": "1.0.0"
+        }
+      ],
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "hideControls": false,
+      "id": null,
+      "links": [],
+      "rows": [
+        {
+          "collapse": false,
+          "height": 494,
+          "panels": [
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 1,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "k8sfv_occupancy_mean_bytes",
+                  "intervalFactor": 2,
+                  "metric": "k8sfv_occupancy_mean_bytes",
+                  "refId": "A",
+                  "step": 120
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Occupancy (average for test)",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            },
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 2,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "k8sfv_occupancy_increase_percent",
+                  "intervalFactor": 2,
+                  "metric": "k8sfv_occupancy_increase_percent",
+                  "refId": "A",
+                  "step": 120
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Occupancy increase %",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            },
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 3,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "sum(k8sfv_test_result)",
+                  "intervalFactor": 2,
+                  "metric": "k8sfv_test_result",
+                  "refId": "A",
+                  "step": 120
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Test cases passing",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            }
+          ],
+          "repeat": null,
+          "repeatIteration": null,
+          "repeatRowId": null,
+          "showTitle": false,
+          "title": "Dashboard Row",
+          "titleSize": "h6"
+        }
+      ],
+      "schemaVersion": 14,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now/d",
+        "to": "now"
+      },
+      "timepicker": {
+        "refresh_intervals": [
+          "5s",
+          "10s",
+          "30s",
+          "1m",
+          "5m",
+          "15m",
+          "30m",
+          "1h",
+          "2h",
+          "1d"
+        ],
+        "time_options": [
+          "5m",
+          "15m",
+          "1h",
+          "6h",
+          "12h",
+          "24h",
+          "2d",
+          "7d",
+          "30d"
+        ]
+      },
+      "timezone": "browser",
+      "title": "k8sfv summary",
+      "version": 0
+    }
+  k8s-scale-testing.json: |
+    {
+      "__inputs": [
+        {
+          "name": "DS_MY-PROM",
+          "label": "my-prom",
+          "description": "",
+          "type": "datasource",
+          "pluginId": "prometheus",
+          "pluginName": "Prometheus"
+        }
+      ],
+      "__requires": [
+        {
+          "type": "grafana",
+          "id": "grafana",
+          "name": "Grafana",
+          "version": "4.1.2"
+        },
+        {
+          "type": "panel",
+          "id": "graph",
+          "name": "Graph",
+          "version": ""
+        },
+        {
+          "type": "datasource",
+          "id": "prometheus",
+          "name": "Prometheus",
+          "version": "1.0.0"
+        }
+      ],
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "hideControls": false,
+      "id": null,
+      "links": [],
+      "refresh": "10s",
+      "rows": [
+        {
+          "collapse": false,
+          "height": 427,
+          "panels": [
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 1,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "felix_cluster_num_workload_endpoints",
+                  "intervalFactor": 2,
+                  "metric": "felix_cluster_num_workload_endpoints",
+                  "refId": "A",
+                  "step": 2
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Endpoints",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            },
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 2,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [
+                {
+                  "alias": "go_gc_duration_seconds{instance=\"172.17.0.1:9091\",job=\"felix\",quantile=\"0\"}",
+                  "yaxis": 2
+                },
+                {
+                  "alias": "go_gc_duration_seconds{instance=\"172.17.0.1:9091\",job=\"felix\",quantile=\"0.25\"}",
+                  "yaxis": 2
+                },
+                {
+                  "alias": "go_gc_duration_seconds{instance=\"172.17.0.1:9091\",job=\"felix\",quantile=\"0.5\"}",
+                  "yaxis": 2
+                },
+                {
+                  "alias": "go_gc_duration_seconds{instance=\"172.17.0.1:9091\",job=\"felix\",quantile=\"0.75\"}",
+                  "yaxis": 2
+                },
+                {
+                  "alias": "go_gc_duration_seconds{instance=\"172.17.0.1:9091\",job=\"felix\",quantile=\"1\"}",
+                  "yaxis": 2
+                },
+                {
+                  "alias": "process_resident_memory_bytes{instance=\"172.17.0.1:9091\",job=\"felix\"}",
+                  "yaxis": 1
+                },
+                {
+                  "alias": "process_virtual_memory_bytes{instance=\"172.17.0.1:9091\",job=\"felix\"}",
+                  "yaxis": 1
+                }
+              ],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "go_memstats_heap_inuse_bytes{job=\"felix\"}",
+                  "intervalFactor": 1,
+                  "metric": "go_memstats_heap_inuse_bytes",
+                  "refId": "A",
+                  "step": 1
+                },
+                {
+                  "expr": "go_gc_duration_seconds{job=\"felix\"}",
+                  "hide": false,
+                  "intervalFactor": 1,
+                  "metric": "go_gc_duration_seconds",
+                  "refId": "B",
+                  "step": 1
+                },
+                {
+                  "expr": "process_resident_memory_bytes{job=\"felix\"}",
+                  "intervalFactor": 2,
+                  "metric": "process_resident_memory_bytes",
+                  "refId": "C",
+                  "step": 2
+                },
+                {
+                  "expr": "process_virtual_memory_bytes{job=\"felix\"}",
+                  "intervalFactor": 2,
+                  "metric": "process_virtual_memory_bytes",
+                  "refId": "D",
+                  "step": 2
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Occupancy (heap bytes) and GC time",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "decbytes",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            },
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 3,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "links": [],
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 4,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "delta(process_cpu_seconds_total{job=\"felix\"}[10s])",
+                  "intervalFactor": 2,
+                  "metric": "process_cpu_seconds_total",
+                  "refId": "A",
+                  "step": 2
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Felix CPU time (seconds)",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            }
+          ],
+          "repeat": null,
+          "repeatIteration": null,
+          "repeatRowId": null,
+          "showTitle": false,
+          "title": "Dashboard Row",
+          "titleSize": "h6"
+        },
+        {
+          "collapse": false,
+          "height": 250,
+          "panels": [
+            {
+              "aliasColors": {},
+              "bars": false,
+              "datasource": "my-prom",
+              "fill": 1,
+              "id": 4,
+              "legend": {
+                "avg": false,
+                "current": false,
+                "max": false,
+                "min": false,
+                "show": true,
+                "total": false,
+                "values": false
+              },
+              "lines": true,
+              "linewidth": 1,
+              "nullPointMode": "null",
+              "percentage": false,
+              "pointradius": 5,
+              "points": false,
+              "renderer": "flot",
+              "seriesOverrides": [],
+              "span": 12,
+              "stack": false,
+              "steppedLine": false,
+              "targets": [
+                {
+                  "expr": "felix_iptables_perf",
+                  "intervalFactor": 2,
+                  "metric": "felix_iptables_perf",
+                  "refId": "A",
+                  "step": 2
+                }
+              ],
+              "thresholds": [],
+              "timeFrom": null,
+              "timeShift": null,
+              "title": "Panel Title",
+              "tooltip": {
+                "shared": true,
+                "sort": 0,
+                "value_type": "individual"
+              },
+              "type": "graph",
+              "xaxis": {
+                "mode": "time",
+                "name": null,
+                "show": true,
+                "values": []
+              },
+              "yaxes": [
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                },
+                {
+                  "format": "short",
+                  "label": null,
+                  "logBase": 1,
+                  "max": null,
+                  "min": null,
+                  "show": true
+                }
+              ]
+            }
+          ],
+          "repeat": null,
+          "repeatIteration": null,
+          "repeatRowId": null,
+          "showTitle": false,
+          "title": "Dashboard Row",
+          "titleSize": "h6"
+        }
+      ],
+      "schemaVersion": 14,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-15m",
+        "to": "now"
+      },
+      "timepicker": {
+        "refresh_intervals": [
+          "5s",
+          "10s",
+          "30s",
+          "1m",
+          "5m",
+          "15m",
+          "30m",
+          "1h",
+          "2h",
+          "1d"
+        ],
+        "time_options": [
+          "5m",
+          "15m",
+          "1h",
+          "6h",
+          "12h",
+          "24h",
+          "2d",
+          "7d",
+          "30d"
+        ]
+      },
+      "timezone": "browser",
+      "title": "k8s scale testing",
+      "version": 0
+    }
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - image: grafana/grafana:4.1.1
+        name: grafana
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: grafana
+          protocol: TCP
+        env:
+          - name: GF_AUTH_BASIC_ENABLED
+            value: "false"
+          - name: GF_AUTH_ANONYMOUS_ENABLED
+            value: "true"
+          - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+            value: Admin
+        volumeMounts:
+        - name: grafana-config
+          mountPath: /etc/grafana
+        - name: grafana-dashboards
+          mountPath: /etc/grafana-dashboards
+      volumes:
+      - name: grafana-config
+        configMap:
+          name: grafana-config
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+---
