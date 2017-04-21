@@ -12,7 +12,7 @@ ARCH := amd64
 GO_BUILD_VER:=latest
 # Set libcalico-go version in glide.yaml first then do a `glide up -v` to update glide.lock.
 # Setting LIBCALICOGO_VER in the Makefile won't update the glide dependencies.
-LIBCALICOGO_VER := v1.2.1-rc1
+LIBCALICOGO_VER := v1.2.1-rc4
 ###############################################################################
 
 CALICOCTL_DIR=calicoctl
