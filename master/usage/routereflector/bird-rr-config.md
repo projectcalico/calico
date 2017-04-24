@@ -50,12 +50,11 @@ be sufficient:
 
 If that fails, try the following instead:
 
-    wget https://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-9.noarch.rpm
-    sudo yum install epel-release-7-9.noarch.rpm
+    sudo yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
 
 With that complete, you can now install BIRD:
 
-    yum install -y bird bird6
+    yum install -y bird{,6}
 
 ### Step 2: Set your BIRD IPv4 configuration
 
