@@ -154,8 +154,13 @@ calico/felix: bin/calico-felix
 # with k8s model resources being injected by a separate test client.
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 GRAFANA_VERSION=4.1.2
-.PHONY: k8sfv-test
-k8sfv-test: calico/felix bin/k8sfv.test
+.PHONY: k8sfv-test k8sfv-test-existing-felix
+# Run k8sfv test with Felix built from current code.
+k8sfv-test: calico/felix k8sfv-test-existing-felix
+# Run k8sfv test with whatever is the existing 'calico/felix:latest'
+# container image.  To use some existing Felix version other than
+# 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
+k8sfv-test-existing-felix: bin/k8sfv.test
 	k8sfv/run-test
 
 PROMETHEUS_DATA_DIR := $$HOME/prometheus-data
@@ -287,7 +292,7 @@ bin/calico-felix: $(FELIX_GO_FILES) vendor/.up-to-date
                ( ldd bin/calico-felix 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
-bin/k8sfv.test: $(K8SFV_GO_FILES)
+bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go test -c -o $@ ./k8sfv && \

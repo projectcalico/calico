@@ -6,6 +6,9 @@
 
 # Config.
 #
+# What version of Felix (container image) to use.
+: ${FELIX_VERSION:=latest}
+#
 # What version of the k8s API server to use.
 : ${K8S_VERSION:=1.5.3}
 #
@@ -110,7 +113,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
-       calico/felix \
+       calico/felix:${FELIX_VERSION} \
        /bin/sh -c "for n in 1 2; do calico-felix; done"
 felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
