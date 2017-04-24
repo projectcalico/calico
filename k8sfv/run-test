@@ -100,16 +100,24 @@ while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources;
     sleep 2
 done
 
-# Run Felix.
+# Get the API server's (self-signed) TLS certificate.
 mkdir -p k8sfv/output
+docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/
+
+# Run Felix.
+#
+# Specifying CALICO_DATASTORE_TYPE as well as FELIX_DATASTORETYPE is
+# only needed for Felix 2.1 and earlier.  For 2.2, FELIX_DATASTORETYPE
+# is sufficient.
 docker run --detach --privileged --name ${prefix}-felix \
+       -e CALICO_DATASTORE_TYPE=kubernetes \
        -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
        -e FELIX_DATASTORETYPE=kubernetes \
        -e FELIX_PROMETHEUSMETRICSENABLED=true \
        -e FELIX_USAGEREPORTINGENABLED=false \
        -e FELIX_DEBUGMEMORYPROFILEPATH="heap-<timestamp>" \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
-       -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
+       -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
        -e K8SFV_LOG_LEVEL=${K8SFV_LOG_LEVEL} \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
