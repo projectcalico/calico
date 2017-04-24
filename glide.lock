@@ -1,5 +1,5 @@
-hash: 42560bc98c1fa4f647cb68bb6d523eab6ae7757639fe6fa80c2c2c92b2b0deba
-updated: 2017-02-28T15:24:10.651564715-08:00
+hash: a6368d3f1d45d196a24053dff3dd9eb1744fe6cf908d22697bda3f620e73c1d3
+updated: 2017-04-24T10:49:02.153982762-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -130,7 +130,7 @@ imports:
 - name: github.com/olekukonko/tablewriter
   version: febf2d34b54a69ce7530036c7503b1c9fbfdf0bb
 - name: github.com/onsi/ginkgo
-  version: bb93381d543b0e5725244abe752214a110791d01
+  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
   - config
   - extensions/table
@@ -140,6 +140,7 @@ imports:
   - internal/leafnodes
   - internal/remote
   - internal/spec
+  - internal/spec_iterator
   - internal/specrunner
   - internal/suite
   - internal/testingtproxy
@@ -177,7 +178,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 8de5b8d6e6f0a44208f033e208a2dec986abedb8
+  version: 7b7ca3676570fd4652ece26c734e3b02b8a13228
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -209,7 +210,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 0208149b40d863d2c1a2f8fe5753096a9cf2cc8b
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/afero
   version: 9be650865eab0c12963d8753212f4f9c66cdcf12
   subpackages:
@@ -429,7 +430,7 @@ imports:
   - transport
 testImports:
 - name: github.com/onsi/gomega
-  version: c463cd2a8578290d4be7a25cba69de81cf35785e
+  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
   subpackages:
   - format
   - internal/assertion
