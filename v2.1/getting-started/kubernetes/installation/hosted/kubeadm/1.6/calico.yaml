@@ -1,6 +1,7 @@
 ---
 layout: null
 ---
+# Calico Version {{site.data.versions[page.version].first.title}}
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
 apiVersion: v1

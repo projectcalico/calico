@@ -2,6 +2,7 @@
 layout: null
 ---
 #cloud-config
+# Calico Version {{site.data.versions[page.version].first.title}}
 ---
 coreos:
   update:

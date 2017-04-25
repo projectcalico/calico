@@ -1,6 +1,7 @@
 ---
 layout: null
 ---
+# Calico Version {{site.data.versions[page.version].first.title}}
 
 ---
 kind: ClusterRole
