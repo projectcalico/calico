@@ -24,7 +24,7 @@ we do a new patch release, the updates are made in-place.
 These steps are for creating a new major/minor release, with the expectation that a release candidate will be created, published and tested before the final release is announced.
 
 1. Run release-scripts/do_release.py to copy master directory to the new version directory
-2. Add the new version to `_data/versions.yaml`
+2. Add the new version to `_data/versions.yaml` (add the date of the release in the description)
 3. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
 
    ```
@@ -61,5 +61,5 @@ These steps are for creating a new major/minor release, with the expectation tha
 ### Performing a "patch" release
 Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).
 
-1. Add the new version to `_data/versions.yaml`
+1. Add the new version to `_data/versions.yaml` (Remember to add the date in the description)
 2. Test the changes locally then open a pull request, make sure it passes CI, then merge.
