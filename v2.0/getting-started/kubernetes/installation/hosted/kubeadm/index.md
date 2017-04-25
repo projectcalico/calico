@@ -11,6 +11,10 @@ own etcd.
 
 You can easily create a cluster compatible with this manifest by following [the official kubeadm guide](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
+> **Note:**
+>   For the best Calico experience, when using kubeadm 1.6+ use 
+[Calico v2.1]({{site.baseurl}}/v2.1/getting-started/kubernetes/installation/hosted/kubeadm/)
+or higher.
 
 #### Installation 
 
