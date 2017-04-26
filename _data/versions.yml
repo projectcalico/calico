@@ -2,6 +2,14 @@ v2.1:
 - title: v2.1.4
   note: |
     * Include a new version of the CNI plugin to fix issue with Kubernetes v1.6 (https://github.com/projectcalico/calicoctl/issues/1592)
+    * Includes fix for default cni configuration file not existing
+      (https://github.com/projectcalico/cni-plugin/issues/299)
+      * This changes the behavior of `install-cni.sh` to install a
+        configuration file even when CNI_NETWORK_CONFIG is not defined.
+      * If the configuration file creation is unwanted then mounting the
+        `/host/etc/cni/net.d` folder can be omitted, though this puts
+        configuration of certificates and Kubernetes configuration as a step
+        for the user or integrator.
     * Include a new version of Felix with a number of small fixes
   components:
     felix:
