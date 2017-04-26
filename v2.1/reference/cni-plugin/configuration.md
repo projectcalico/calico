@@ -17,6 +17,19 @@ A minimal configuration file that uses Calico for networking and IPAM looks like
 }
 ```
 
+If the `calico-node` container on a node registered with a `NODENAME` other than the node hostname, the CNI plugin on this node must be configured with the same `nodename`:
+
+```json
+{
+    "name": "any_name",
+    "nodename": "<NODENAME>",
+    "type": "calico",
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+```
+
 Additional configuration can be added as detailed below.
 
 ## Generic
