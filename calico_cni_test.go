@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	tu "github.com/projectcalico/cni-plugin/test_utils"
+	. "github.com/projectcalico/cni-plugin/test_utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -43,7 +43,7 @@ func init() {
 var _ = Describe("CalicoCni", func() {
 	hostname, _ := os.Hostname()
 	BeforeEach(func() {
-		tu.WipeEtcd()
+		WipeEtcd()
 	})
 
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
@@ -64,11 +64,11 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, _, err := tu.CreateContainer(netconf, "", "")
+				containerID, netnspath, session, contVeth, contAddresses, contRoutes, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result, err := tu.GetResultForCurrent(session, cniVersion)
+				result, err := GetResultForCurrent(session, cniVersion)
 				if err != nil {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
@@ -138,7 +138,7 @@ var _ = Describe("CalicoCni", func() {
 						Type:      syscall.RTN_UNICAST,
 					})))
 
-				_, err = tu.DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
 
 				// Make sure there are no endpoints anymore
@@ -165,14 +165,14 @@ var _ = Describe("CalicoCni", func() {
 			Context("when the same hostVeth exists", func() {
 				It("successfully networks the namespace", func() {
 					container_id := fmt.Sprintf("con%d", rand.Uint32())
-					if err := tu.CreateHostVeth(container_id, "", ""); err != nil {
+					if err := CreateHostVeth(container_id, "", ""); err != nil {
 						panic(err)
 					}
-					_, netnspath, session, _, _, _, _, err := tu.CreateContainerWithId(netconf, "", "", container_id)
+					_, netnspath, session, _, _, _, _, err := CreateContainerWithId(netconf, "", "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
-					_, err = tu.DeleteContainerWithId(netconf, netnspath, "", container_id)
+					_, err = DeleteContainerWithId(netconf, netnspath, "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
@@ -195,11 +195,11 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("has hostname even though deprecated", func() {
-				containerID, netnspath, session, _, _, _, _, err := tu.CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result, err := tu.GetResultForCurrent(session, cniVersion)
+				result, err := GetResultForCurrent(session, cniVersion)
 				if err != nil {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
@@ -221,7 +221,7 @@ var _ = Describe("CalicoCni", func() {
 					Orchestrator:     "cni",
 				}))
 
-				_, err = tu.DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -244,11 +244,11 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("nodename takes precedence over hostname", func() {
-				containerID, netnspath, session, _, _, _, _, err := tu.CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result, err := tu.GetResultForCurrent(session, cniVersion)
+				result, err := GetResultForCurrent(session, cniVersion)
 				if err != nil {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
@@ -270,7 +270,7 @@ var _ = Describe("CalicoCni", func() {
 					Orchestrator:     "cni",
 				}))
 
-				_, err = tu.DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})
@@ -292,9 +292,9 @@ var _ = Describe("CalicoCni", func() {
 		Context("when it was never called for SetUP", func() {
 			Context("and a namespace does exist", func() {
 				It("exits with 'success' error code", func() {
-					_, _, netnspath, err := tu.CreateContainerNamespace()
+					_, _, netnspath, err := CreateContainerNamespace()
 					Expect(err).ShouldNot(HaveOccurred())
-					exitCode, err := tu.DeleteContainer(netconf, netnspath, "")
+					exitCode, err := DeleteContainer(netconf, netnspath, "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(exitCode).To(Equal(0))
 				})
@@ -302,7 +302,7 @@ var _ = Describe("CalicoCni", func() {
 
 			Context("and no namespace exists", func() {
 				It("exits with 'success' error code", func() {
-					exitCode, err := tu.DeleteContainer(netconf, "/not/a/real/path1234567890", "")
+					exitCode, err := DeleteContainer(netconf, "/not/a/real/path1234567890", "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(exitCode).To(Equal(0))
 				})
@@ -318,21 +318,19 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "hostname": "namedHostname",
-			  "nodename": "namedNodename",
 			  "ipam": {
 			    "type": "host-local",
 			    "subnet": "10.0.0.0/24"
 			  }
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
-			It("nodename takes precedence over hostname", func() {
+			It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the pod", func() {
 
-				containerID, netnspath, session, _, _, _, contNs, err := tu.CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, contNs, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				result, err := tu.GetResultForCurrent(session, cniVersion)
+				result, err := GetResultForCurrent(session, cniVersion)
 				if err != nil {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
@@ -347,7 +345,7 @@ var _ = Describe("CalicoCni", func() {
 				// Set the Revision to nil since we can't assert it's exact value.
 				endpoints.Items[0].Metadata.Revision = nil
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
-					Node:             "namedNodename",
+					Node:             hostname,
 					Name:             "eth0",
 					Workload:         containerID,
 					ActiveInstanceID: "",
@@ -355,11 +353,11 @@ var _ = Describe("CalicoCni", func() {
 				}))
 
 				// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-				session, _, _, _, err = tu.RunCNIPluginWithId(netconf, "", "", netnspath, containerID, contNs)
+				session, _, _, _, err = RunCNIPluginWithId(netconf, "", "", netnspath, containerID, contNs)
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
-				resultSecondAdd, err := tu.GetResultForCurrent(session, cniVersion)
+				resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
 				if err != nil {
 					log.Fatalf("Error getting result from the session: %v\n", err)
 				}
@@ -367,7 +365,7 @@ var _ = Describe("CalicoCni", func() {
 				log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 				Expect(resultSecondAdd).Should(Equal(result))
 
-				_, err = tu.DeleteContainer(netconf, netnspath, "")
+				_, err = DeleteContainer(netconf, netnspath, "")
 				Expect(err).ShouldNot(HaveOccurred())
 			})
 		})

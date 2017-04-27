@@ -273,6 +273,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	}
 
+	// Set Gateway to nil. Calico-IPAM doesn't set it, but host-local does.
+	// We modify IPs subnet received from the IPAM plugin (host-local),
+	// so Gateway isn't valid anymore. It is also not used anywhere by Calico.
+	for _, ip := range result.IPs {
+		ip.Gateway = nil
+	}
+
 	// Print result to stdout, in the format defined by the requested cniVersion.
 	return types.PrintResult(result, cniVersion)
 }

@@ -201,55 +201,10 @@ func CreateContainerWithId(netconf string, k8sName string, ip string, containerI
 		return "", "", nil, nil, nil, nil, nil, err
 	}
 
-	// Set up the env for running the CNI plugin
-	//TODO pass in the env properly
-	var k8s_env = ""
-	if k8sName != "" {
-		k8s_env = fmt.Sprintf("CNI_ARGS=\"K8S_POD_NAME=%s;K8S_POD_NAMESPACE=test;K8S_POD_INFRA_CONTAINER_ID=whatever\"", k8sName)
+	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, k8sName, ip, netnspath, container_id, targetNs)
 
-		// Append IP=<ip> to CNI_ARGS only if it's not an empty string.
-		if ip != "" {
-			k8s_env = fmt.Sprintf("%s;IP=%s\"", strings.TrimRight(k8s_env, "\""), ip)
-		}
-	}
-	cni_env := fmt.Sprintf("CNI_COMMAND=ADD CNI_CONTAINERID=%s CNI_NETNS=%s CNI_IFNAME=eth0 CNI_PATH=dist %s", container_id, netnspath, k8s_env)
-
-	// Run the CNI plugin passing in the supplied netconf
-	//TODO - Get rid of this PLUGIN thing and use netconf instead
-	subProcess := exec.Command("bash", "-c", fmt.Sprintf("%s dist/%s", cni_env, os.Getenv("PLUGIN")), netconf)
-	stdin, err := subProcess.StdinPipe()
-	if err != nil {
-		panic("some error found")
-	}
-
-	io.WriteString(stdin, netconf)
-	io.WriteString(stdin, "\n")
-	stdin.Close()
-
-	session, err = gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
-	session.Wait(5)
-
-	err = targetNs.Do(func(_ ns.NetNS) error {
-		contVeth, err = netlink.LinkByName("eth0")
-		if err != nil {
-			return err
-		}
-
-		contAddr, err = netlink.AddrList(contVeth, syscall.AF_INET)
-		if err != nil {
-			return err
-		}
-
-		contRoutes, err = netlink.RouteList(contVeth, syscall.AF_INET)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
 	return
 }
-
 
 // RunCNIPluginWithId calls CNI plugin with a containerID and targetNs passed to it.
 // This is for when you want to call CNI for an existing container.
