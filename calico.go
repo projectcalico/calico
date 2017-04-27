@@ -58,7 +58,7 @@ func updateNodename(conf NetConf, logger *log.Entry) {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	// Unmarshall the network config, and perform validation
+	// Unmarshal the network config, and perform validation
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
