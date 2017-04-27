@@ -90,7 +90,7 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name, "")
+				containerID, netnspath, session, contVeth, contAddresses, contRoutes, _, err := CreateContainer(netconf, name, "")
 
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
@@ -206,7 +206,7 @@ var _ = Describe("CalicoCni", func() {
 					if err := CreateHostVeth("", name, K8S_TEST_NS); err != nil {
 						panic(err)
 					}
-					_, netnspath, session, _, _, _, err := CreateContainer(netconf, name, "")
+					_, netnspath, session, _, _, _, _, err := CreateContainer(netconf, name, "")
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
@@ -264,7 +264,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					_, _, _, _, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					_, _, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
@@ -316,7 +316,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -408,7 +408,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -498,7 +498,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -586,7 +586,7 @@ var _ = Describe("CalicoCni", func() {
 					requestedIP := "10.0.0.42"
 					expectedIP := net.IPv4(10, 0, 0, 42).To4()
 
-					_, netnspath, _, _, contAddresses, _, err := CreateContainer(netconfHostLocalIPAM, name, requestedIP)
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfHostLocalIPAM, name, requestedIP)
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
@@ -610,7 +610,7 @@ var _ = Describe("CalicoCni", func() {
 					})
 					Expect(err).NotTo(HaveOccurred())
 
-					_, netnspath, _, _, contAddresses, _, err = CreateContainer(netconfHostLocalIPAM, name2, requestedIP)
+					_, netnspath, _, _, contAddresses, _, _, err = CreateContainer(netconfHostLocalIPAM, name2, requestedIP)
 					Expect(err).NotTo(HaveOccurred())
 
 					pod2IP := contAddresses[0].IP
@@ -671,7 +671,7 @@ var _ = Describe("CalicoCni", func() {
 					logger.Infof("Created POD object: %v", pod)
 
 					// ADD the container with passing a CNI_ContainerID "X".
-					_, netnspath, session, _, _, _, err := CreateContainerWithId(netconf, name, "", cniContainerIDX)
+					_, netnspath, session, _, _, _, _, err := CreateContainerWithId(netconf, name, "", cniContainerIDX)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit())
 
@@ -709,7 +709,7 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items).Should(HaveLen(0))
 
 					// ADD a new container with passing a CNI_ContainerID "Y".
-					_, netnspath, session, _, _, _, err = CreateContainerWithId(netconf, name, "", cniContainerIDY)
+					_, netnspath, session, _, _, _, _, err = CreateContainerWithId(netconf, name, "", cniContainerIDY)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit())
 
@@ -757,6 +757,97 @@ var _ = Describe("CalicoCni", func() {
 						Labels:           map[string]string{"calico/k8s_ns": "test"},
 					}))
 
+				})
+			})
+
+			Context("Create a container then send another ADD for the same container", func() {
+				netconf := fmt.Sprintf(`
+				{
+				"cniVersion": "%s",
+				"name": "net8",
+				"type": "calico",
+				"etcd_endpoints": "http://%s:2379",
+			 	"ipam": {
+			    		"type": "calico-ipam"
+			        	},
+				"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+				"policy": {"type": "k8s"},
+				"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+				It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the container", func() {
+					// Create a new ipPool.
+					c, _ := testutils.NewClient("")
+					testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod.
+					name := fmt.Sprintf("run%d-pool", rand.Uint32())
+
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(
+						&v1.Pod{
+							ObjectMeta: v1.ObjectMeta{
+								Name: name,
+							},
+							Spec: v1.PodSpec{Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+							}}},
+						})
+
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					containerID, netnspath, session, _, _, _, contNs, err := CreateContainer(netconf, name, "")
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					result, err := GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+
+					log.Printf("Unmarshalled result from first ADD: %v\n", result)
+
+					// The endpoint is created in etcd
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: containerID,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+
+					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
+					session, _, _, _, err = RunCNIPluginWithId(netconf, name, "", netnspath, containerID, contNs)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit())
+
+					resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
+					if err != nil {
+						log.Fatalf("Error getting result from the session: %v\n", err)
+					}
+
+					log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
+					Expect(resultSecondAdd).Should(Equal(result))
+
+					_, err = DeleteContainer(netconf, netnspath, "")
+					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 		})

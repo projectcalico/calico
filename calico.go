@@ -58,7 +58,7 @@ func updateNodename(conf NetConf, logger *log.Entry) {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	// Unmarshall the network config, and perform validation
+	// Unmarshal the network config, and perform validation
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
@@ -271,6 +271,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 		}
+	}
+
+	// Set Gateway to nil. Calico-IPAM doesn't set it, but host-local does.
+	// We modify IPs subnet received from the IPAM plugin (host-local),
+	// so Gateway isn't valid anymore. It is also not used anywhere by Calico.
+	for _, ip := range result.IPs {
+		ip.Gateway = nil
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
