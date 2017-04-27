@@ -223,7 +223,6 @@ cat << EOF | calicoctl create -f -
     order: 0
     selector: role == 'database'
     ingress:
-    ingress:
     - action: allow
       protocol: tcp
       source:
