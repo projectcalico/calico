@@ -30,7 +30,7 @@ The task's stdout output should show a Calico IP from the default Calico pool of
 To launch a Docker Containerizer task, first create a Docker Network to launch it on:
 
 ```
-docker network create --driver=calico --ipam-driver=calico calico-nginx
+docker network create --driver=calico --ipam-driver=calico-ipam calico-nginx
 ```
 
 Then in your marathon application definition,
