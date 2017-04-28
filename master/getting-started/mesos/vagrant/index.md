@@ -25,7 +25,13 @@ This guide requires a host machine with:
 vagrant up
 ```
 
-That's it! Your Mesos Cluster is ready to use!
+That's it! Your Mesos Cluster is ready to use! Access it's services at the
+following URLs:
+
+| Service         | URL                        |
+| :-------------- | :------------------------- |
+| Mesos-Master UI | http://172.24.197.101:5050 |
+| Marathon UI     | http://172.24.197.101:8080 |
 
 ### Cluster Layout
 

@@ -3,7 +3,7 @@ title: Launching Tasks
 ---
 
 The following information describes how to launch Calico networked tasks in Mesos
-using Marathon.
+using sample Marathon application definitions.
 
 ### Unified Containerizer
 
