@@ -143,7 +143,6 @@ func init() {
 		Entry("should reject label key with !", api.HostEndpointMetadata{Labels: map[string]string{"rank!": "gold"}}, false),
 		Entry("should reject label key starting with ~", api.HostEndpointMetadata{Labels: map[string]string{"~rank_.0-9": "gold"}}, false),
 		Entry("should reject label key ending with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9~": "gold"}}, false),
-		Entry("should reject label key where prefix > 253 characters", api.HostEndpointMetadata{Labels: map[string]string{"Projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org.projectcalico.org123/k8s_ns": "gold"}}, false),
 		Entry("should reject label value starting with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "~gold"}}, false),
 		Entry("should reject label value ending with ~", api.HostEndpointMetadata{Labels: map[string]string{"rank_.0-9": "gold~"}}, false),
 
