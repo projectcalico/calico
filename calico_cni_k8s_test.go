@@ -139,6 +139,26 @@ var _ = Describe("CalicoCni", func() {
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 				Expect(hostVeth.Attrs().MTU).Should(Equal(1500))
 
+				// Assert hostVeth sysctl values are set to what we expect for IPv4.
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", interfaceName), "1")
+				Expect(err).ShouldNot(HaveOccurred())
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", interfaceName), "0")
+				Expect(err).ShouldNot(HaveOccurred())
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", interfaceName), "1")
+				Expect(err).ShouldNot(HaveOccurred())
+
+				// Assert if the host side route is programmed correctly.
+				hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(hostRoutes[0]).Should(Equal(netlink.Route{
+					LinkIndex: hostVeth.Attrs().Index,
+					Scope:     netlink.SCOPE_LINK,
+					Dst:       &result.IPs[0].Address,
+					Protocol:  syscall.RTPROT_BOOT,
+					Table:     syscall.RT_TABLE_MAIN,
+					Type:      syscall.RTN_UNICAST,
+				}))
+
 				// Routes and interface in netns
 				Expect(contVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 
@@ -264,13 +284,17 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					_, _, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 
 					podIP := contAddresses[0].IP
 					logger.Infof("All container IPs: %v", contAddresses)
 					logger.Infof("Container got IP address: %s", podIP)
 					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -316,7 +340,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, netnspath, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -351,6 +375,10 @@ var _ = Describe("CalicoCni", func() {
 						MAC:      &cnet.MAC{HardwareAddr: mac},
 						Profiles: []string{"k8s_ns.test"},
 					}))
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -408,7 +436,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, netnspath, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -443,6 +471,10 @@ var _ = Describe("CalicoCni", func() {
 						MAC:      &cnet.MAC{HardwareAddr: mac},
 						Profiles: []string{"k8s_ns.test"},
 					}))
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 
@@ -498,7 +530,7 @@ var _ = Describe("CalicoCni", func() {
 
 					logger.Infof("Created POD object: %v", pod)
 
-					containerID, _, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					containerID, netnspath, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
 					Expect(err).NotTo(HaveOccurred())
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -533,6 +565,10 @@ var _ = Describe("CalicoCni", func() {
 						MAC:      &cnet.MAC{HardwareAddr: mac},
 						Profiles: []string{"k8s_ns.test"},
 					}))
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
 

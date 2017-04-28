@@ -37,7 +37,7 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-func min(a, b int) int {
+func Min(a, b int) int {
 	if a < b {
 		return a
 	}

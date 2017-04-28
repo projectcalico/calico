@@ -21,6 +21,7 @@ import (
 
 	"syscall"
 
+	"bufio"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
@@ -376,4 +377,28 @@ func CmdWithStdin(cmd, stdin_string string) string {
 	//}
 
 	return stdout_buf.String()
+}
+
+// CheckSysctlValue is a utility function to assert sysctl value is set to what is expected.
+func CheckSysctlValue(sysctlPath, value string) error {
+	fh, err := os.Open(sysctlPath)
+	if err != nil {
+		return err
+	}
+
+	f := bufio.NewReader(fh)
+	defer fh.Close()
+
+	// Ignoring second output (isPrefix) since it's not necessory
+	buf, _, err := f.ReadLine()
+	if err != nil {
+		// EOF without a match
+		return err
+	}
+
+	if string(buf) != value {
+		return fmt.Errorf("error asserting sysctl value: expected: %s, got: %s for sysctl path: %s", value, string(buf), sysctlPath)
+	}
+
+	return nil
 }

@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	. "github.com/projectcalico/cni-plugin/test_utils"
+	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -112,10 +113,32 @@ var _ = Describe("CalicoCni", func() {
 
 				// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
 				//fmt.Println(Cmd("ip link show")) // Useful for debugging
-				hostVeth, err := netlink.LinkByName("cali" + containerID)
+				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
+
+				hostVeth, err := netlink.LinkByName(hostVethName)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(hostVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
 				Expect(hostVeth.Attrs().MTU).Should(Equal(1500))
+
+				// Assert hostVeth sysctl values are set to what we expect for IPv4.
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostVethName), "1")
+				Expect(err).ShouldNot(HaveOccurred())
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostVethName), "0")
+				Expect(err).ShouldNot(HaveOccurred())
+				err = CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", hostVethName), "1")
+				Expect(err).ShouldNot(HaveOccurred())
+
+				// Assert if the host side route is programmed correctly.
+				hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(hostRoutes[0]).Should(Equal(netlink.Route{
+					LinkIndex: hostVeth.Attrs().Index,
+					Scope:     netlink.SCOPE_LINK,
+					Dst:       &result.IPs[0].Address,
+					Protocol:  syscall.RTPROT_BOOT,
+					Table:     syscall.RT_TABLE_MAIN,
+					Type:      syscall.RTN_UNICAST,
+				}))
 
 				// Routes and interface in netns
 				Expect(contVeth.Attrs().Flags.String()).Should(ContainSubstring("up"))
