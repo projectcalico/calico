@@ -69,7 +69,7 @@ forward requests on to Calico tasks. The following diagram demonstrates how this
 ![Marathon-LB]({{site.baseurl}}/images/marathon-lb.png)
 
 As per the [official marathon-lb docs](https://dcos.io/docs/1.7/usage/service-discovery/marathon-lb/usage/#virtual-hosts), select a `HAPROXY_GROUP` and
-optionally choose a `HAPROXY_VHOST` for your application.
+optionally choose a `HAPROXY_VHOST` for your application in its Marathon application definition.
 
 Additionally, for Calico, you'll need to explicitly tell it which port to load balance to.
 Set `containerPort` in your application's `portMappings`:

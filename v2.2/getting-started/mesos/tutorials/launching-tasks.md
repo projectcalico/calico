@@ -3,7 +3,7 @@ title: Launching Tasks
 ---
 
 The following information describes how to launch Calico networked tasks in Mesos
-using Marathon.
+using sample Marathon application definitions.
 
 ### Unified Containerizer
 
@@ -30,7 +30,7 @@ The task's stdout output should show a Calico IP from the default Calico pool of
 To launch a Docker Containerizer task, first create a Docker Network to launch it on:
 
 ```
-docker network create --driver=calico --ipam-driver=calico calico-nginx
+docker network create --driver=calico --ipam-driver=calico-ipam calico-nginx
 ```
 
 Then in your marathon application definition,
