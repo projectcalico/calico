@@ -8,7 +8,7 @@ This document will demonstrate how to manipulate policy for Calico using
 - Set labels on our workload at launch
 - Configure policy based off these labels
 
-To demonstrate this, we will launch an nginx webserver using the Universal Containerizer.
+To demonstrate this, we will use Marathon to launch an nginx webserver using the Universal Containerizer.
 Then, we will launch basic curl task which will repeatedly curl the webserver.
 
 ## Setting Labels
