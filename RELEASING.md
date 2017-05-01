@@ -25,6 +25,8 @@ These steps are for creating a new major/minor release, with the expectation tha
 
 1. Run release-scripts/do_release.py to copy master directory to the new version directory
 2. Add the new version to `_data/versions.yaml` (add the date of the release in the description)
+   - Add new versions that are a release candidate to the end of the file.
+     If a release is added to the top of the file it will become the 'Latest Release'.
 3. Add a section in `_config.yaml` so that `page.version` will be set correctly in the new subdirectory:
 
    ```
@@ -53,10 +55,12 @@ These steps are for creating a new major/minor release, with the expectation tha
 1. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file. This step should NOT be performed until testing of the release is complete.
 
 2. Modify the redirect in `/index.html` to point to your new release.. 
- 
-3. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects. 
 
-4. Test the changes locally then open a pull request, make sure it passes CI, then merge.
+3. Move the section for the release in `_data/versions.yaml` to the top of the file so that it will be the 'Latest Release'.
+ 
+4. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects.
+
+5. Test the changes locally then open a pull request, make sure it passes CI, then merge.
 
 ### Performing a "patch" release
 Patch releases shouldn't include any new functionality, just bug fixes (expect during pre-release testing).
