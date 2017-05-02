@@ -1,13 +1,3 @@
----
-layout: null
----
-# Calico Version {{site.data.versions[page.version].first.title}}
-# http://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
-# This manifest includes the following component versions:
-#   calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
-#   calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
-#   calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
-
 # This ConfigMap is used to configure a self-hosted Calico installation.
 kind: ConfigMap
 apiVersion: v1
@@ -26,7 +16,6 @@ data:
   cni_network_config: |-
     {
         "name": "k8s-pod-network",
-        "cniVersion": "0.3.1",
         "type": "calico",
         "etcd_endpoints": "__ETCD_ENDPOINTS__",
         "log_level": "info",
@@ -62,19 +51,14 @@ spec:
         k8s-app: calico-etcd
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-           {"key":"CriticalAddonsOnly", "operator":"Exists"},
-           {"key": "node-role.kubernetes.io/master", "effect": "NoSchedule"}]
-
     spec:
       # Only run this pod on the master.
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
       nodeSelector:
         node-role.kubernetes.io/master: ""
       hostNetwork: true
-      tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
       containers:
         - name: calico-etcd
           image: gcr.io/google_containers/etcd:2.2.1
@@ -136,18 +120,18 @@ spec:
         k8s-app: calico-node
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
-      serviceAccountName: calico
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      serviceAccountName: calico-cni-plugin
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+          image: quay.io/calico/node:master
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -183,9 +167,6 @@ spec:
               value: ""
           securityContext:
             privileged: true
-          resources:
-            requests:
-              cpu: 250m
           volumeMounts:
             - mountPath: /lib/modules
               name: lib-modules
@@ -196,7 +177,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          image: quay.io/calico/cni:master
           command: ["/install-cni.sh"]
           env:
             # The location of the Calico etcd cluster.
@@ -256,17 +237,17 @@ spec:
         k8s-app: calico-policy-controller
       annotations:
         scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       # The policy controller must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
       hostNetwork: true
-      serviceAccountName: calico
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      serviceAccountName: calico-policy-controller
       containers:
         - name: calico-policy-controller
-          image: quay.io/calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
+          image: quay.io/calico/kube-policy-controller:master
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -287,41 +268,67 @@ spec:
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: calico
+  name: calico-cni-plugin
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: calico
+  name: calico-cni-plugin
 subjects:
 - kind: ServiceAccount
-  name: calico
+  name: calico-cni-plugin
   namespace: kube-system
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: calico
+  name: calico-cni-plugin
   namespace: kube-system
 rules:
-  - apiGroups:
-      - ""
+  - apiGroups: [""]
     resources:
       - pods
-      - namespaces
+      - nodes
     verbs:
-      - list
-      - watch
       - get
-  - apiGroups:
-      - extensions
-    resources:
-      - networkpolicies
-    verbs:
-      - list
-      - watch
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: calico
+  name: calico-cni-plugin
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-policy-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-policy-controller
+subjects:
+- kind: ServiceAccount
+  name: calico-policy-controller
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: calico-policy-controller
+  namespace: kube-system
+rules:
+  - apiGroups:
+    - ""
+    - extensions
+    resources:
+      - pods
+      - namespaces
+      - networkpolicies
+    verbs:
+      - watch
+      - list
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-policy-controller
   namespace: kube-system
