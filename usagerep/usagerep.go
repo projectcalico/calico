@@ -48,7 +48,9 @@ func PeriodicallyReportUsage(interval time.Duration, hostname, clusterGUID, clus
 	ReportUsage(hostname, clusterGUID, clusterType, stats)
 
 	log.WithField("interval", interval).Info("Initial check-in done, switching to timer.")
-	ticker := jitter.NewTicker(interval, interval/10)
+	baseInterval := interval * 9 / 10
+	maxJitter := interval - baseInterval
+	ticker := jitter.NewTicker(baseInterval, maxJitter)
 	for {
 		select {
 		case stats = <-statsUpdateC:
