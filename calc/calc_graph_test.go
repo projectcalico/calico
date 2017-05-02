@@ -24,12 +24,17 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var testIP = mustParseIP("10.0.0.1")
+var testIP2 = mustParseIP("10.0.0.2")
+var testIPAs6 = net.IP{testIP.To16()}
+var testIPAs4 = net.IP{testIP.To4()}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {
@@ -110,3 +115,109 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			Hostname: "foo",
 		}),
 )
+
+var _ = Describe("Host IP duplicate squashing test", func() {
+	var eb *EventSequencer
+	var messagesReceived []interface{}
+	var cg *dispatcher.Dispatcher
+
+	BeforeEach(func() {
+		// Create a calculation graph/event buffer combo.
+		eb = NewEventBuffer(nil)
+		messagesReceived = nil
+		eb.Callback = func(message interface{}) {
+			logrus.WithField("message", message).Info("Received message")
+			messagesReceived = append(messagesReceived, message)
+		}
+		cg = NewCalculationGraph(eb, "hostname")
+	})
+
+	It("should coalesce duplicate updates", func() {
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIPAs6,
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIPAs4,
+			},
+		})
+		eb.Flush()
+		Expect(messagesReceived).To(ConsistOf(&proto.HostMetadataUpdate{
+			Hostname: "foo",
+			Ipv4Addr: "10.0.0.1",
+		}))
+	})
+	It("should pass on genuine changes", func() {
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIPAs6,
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIP2,
+			},
+		})
+		eb.Flush()
+		Expect(messagesReceived).To(ConsistOf(
+			&proto.HostMetadataUpdate{
+				Hostname: "foo",
+				Ipv4Addr: "10.0.0.1",
+			},
+			&proto.HostMetadataUpdate{
+				Hostname: "foo",
+				Ipv4Addr: "10.0.0.2",
+			},
+		))
+	})
+	It("should pass on delete and recreate", func() {
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIPAs6,
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key: model.HostIPKey{Hostname: "foo"},
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVNew,
+			KVPair: model.KVPair{
+				Key:   model.HostIPKey{Hostname: "foo"},
+				Value: &testIPAs6,
+			},
+		})
+		eb.Flush()
+		Expect(messagesReceived).To(ConsistOf(
+			&proto.HostMetadataUpdate{
+				Hostname: "foo",
+				Ipv4Addr: "10.0.0.1",
+			},
+			&proto.HostMetadataRemove{
+				Hostname: "foo",
+			},
+			&proto.HostMetadataUpdate{
+				Hostname: "foo",
+				Ipv4Addr: "10.0.0.1",
+			},
+		))
+	})
+})

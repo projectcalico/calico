@@ -23,15 +23,20 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-// DataplanePassthru simply passes through some datamodel updates to the dataplane layer.
-// It maps OnUpdate() calls to dedicated method calls for consistency with the
-// rest of the dataplane API.
+// DataplanePassthru passes through some datamodel updates to the dataplane layer, removing some
+// duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
+// with the rest of the dataplane API.
 type DataplanePassthru struct {
 	callbacks passthruCallbacks
+
+	hostIPs map[string]*net.IP
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
-	return &DataplanePassthru{callbacks: callbacks}
+	return &DataplanePassthru{
+		callbacks: callbacks,
+		hostIPs:   map[string]*net.IP{},
+	}
 }
 
 func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
@@ -45,10 +50,20 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		hostname := key.Hostname
 		if update.Value == nil {
 			log.WithField("update", update).Debug("Passing-through HostIP deletion")
+			delete(h.hostIPs, hostname)
 			h.callbacks.OnHostIPRemove(hostname)
 		} else {
-			log.WithField("update", update).Debug("Passing-through HostIP update")
 			ip := update.Value.(*net.IP)
+			oldIP := h.hostIPs[hostname]
+			// libcalico-go's IP struct wraps a standard library IP struct.  To
+			// compare two IPs, we need to unwrap them and use Equal() since standard
+			// library IPs have multiple, equivalent, representations.
+			if oldIP != nil && ip.IP.Equal(oldIP.IP) {
+				log.WithField("update", update).Debug("Ignoring duplicate HostIP update")
+				return
+			}
+			log.WithField("update", update).Debug("Passing-through HostIP update")
+			h.hostIPs[hostname] = ip
 			h.callbacks.OnHostIPUpdate(hostname, ip)
 		}
 	case model.IPPoolKey:
@@ -61,6 +76,5 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			h.callbacks.OnIPPoolUpdate(key, pool)
 		}
 	}
-
-	return false
+	return
 }
