@@ -2,19 +2,19 @@
 title: Deploying Calico and Kubernetes on GCE
 ---
 
-There are several possibilities for [deploying Kubernetes on GCE][running-GCE-on-K8s]
-and with minimal adjustments Calico can be [installed](.) too.
-The information on this page provides the customization needed.
+There are several tools for deploying a Kubernetes cluster on Google Compute
+Engine and with minimal adjustments Calico can be [installed](.) too.
+The information on this page describes Calico's requirements to operate
+successfully on Google Compute Engine.
 
 ### Setting up GCE networking
 
-Setting up Kubernetes will require [some GCE firewall rules][default-GCE-networking]
-for communication to be allowed between hosts in the cluster, in addition to
-those rules a rule is required that allows IP-in-IP traffic between the
-hosts in the cluster.  The following command allows IP-in-IP traffic to
-flow between containers on different hosts (where the source-ranges parameter
-assumes you have created your project with the default GCE network
-parameters - modify the address range if yours is different):
+In addition to the standard [GCE firewall rules required by kubernetes][default-GCE-networking],
+Calico will need a firewall rule to allow IP-in-IP traffic between hosts.
+The following command allows IP-in-IP traffic to flow between containers on
+different hosts (where the source-ranges parameter assumes you have created
+your project with the default GCE network parameters - modify the address
+range if yours is different):
 
 **Note**: The [gcloud tool][gcloud-instructions] must be installed and configured before using the commands below.
 
@@ -28,6 +28,5 @@ You can verify the rule with this command:
 gcloud compute firewall-rules list
 ```
 
-[running-GCE-on-K8s]: https://kubernetes.io/docs/getting-started-guides/gce/
 [default-GCE-networking]: https://kubernetes.io/docs/getting-started-guides/gce/#networking
 [gcloud-instructions]: https://cloud.google.com/sdk/
