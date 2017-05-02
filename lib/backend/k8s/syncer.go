@@ -145,6 +145,7 @@ func newSyncer(kubeAPI kubeAPI, converter converter, callbacks api.SyncerCallbac
 		callbacks:       callbacks,
 		tracker:         map[string]model.Key{},
 		disableNodePoll: disableNodePoll,
+		stopChan:        make(chan int),
 	}
 	return syn
 }
@@ -156,6 +157,7 @@ type kubeSyncer struct {
 	OneShot         bool
 	tracker         map[string]model.Key
 	disableNodePoll bool
+	stopChan        chan int
 }
 
 // Holds resource version information.
@@ -172,6 +174,10 @@ func (syn *kubeSyncer) Start() {
 	// Start a background thread to read snapshots from and watch the Kubernetes API,
 	// and pass updates via callbacks.
 	go syn.readFromKubernetesAPI()
+}
+
+func (syn *kubeSyncer) Stop() {
+	syn.stopChan <- 1
 }
 
 // sendUpdates sends updates to the callback and updates the resource
@@ -337,6 +343,9 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 		// Select on the various watch channels.
 		select {
+		case <-syn.stopChan:
+			log.Info("Syncer told to stop reading")
+			return
 		case event = <-nsChan:
 			log.Debugf("Incoming Namespace watch event. Type=%s", event.Type)
 			if needsResync = syn.eventTriggersResync(event); needsResync {

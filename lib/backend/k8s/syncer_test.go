@@ -159,6 +159,10 @@ var _ = Describe("Test Syncer", func() {
 			syn.Start()
 		})
 
+		AfterEach(func() {
+			syn.Stop()
+		})
+
 		It("should correctly handle pod being deleted in resync", func() {
 			// Define a Pod and corresponding Calico model key.
 			pod := k8sapi.Pod{
