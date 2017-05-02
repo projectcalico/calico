@@ -95,6 +95,8 @@ toc:
   section:
     - title: AWS
       path: /reference/public-cloud/aws
+    - title: GCE
+      path: /reference/public-cloud/gce
 - title: Deploying on Private Cloud
   section:
     - title: Calico Over Ethernet Fabrics
