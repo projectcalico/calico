@@ -30,7 +30,11 @@ Vagrant.configure("2") do |config|
     vm_name = "%s-%02d" % [instance_name_prefix, i]
     config.vm.define vm_name do |host|
       host.vm.hostname = vm_name
-      host.vm.network :private_network, ip: "172.18.18.#{i+100}"
+      ip = "172.18.18.#{i+100}"
+      host.vm.network :private_network, ip: ip
+      # Workaround VirtualBox issue where eth1 has 2 IP Addresses at startup
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
 
       # Use a different cloud-init on the first server.
       if i == 1

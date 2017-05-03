@@ -48,6 +48,9 @@ Vagrant.configure("2") do |config|
 
       ip = "172.17.8.#{i+100}"
       host.vm.network :private_network, ip: ip
+      # Workaround VirtualBox issue where eth1 has 2 IP Addresses at startup
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
+      host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
 
       # Pre-load the calico/node image.  This slows down the vagrant up
       # command, but speeds up the actual tutorial.
