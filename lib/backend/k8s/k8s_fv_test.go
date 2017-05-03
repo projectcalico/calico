@@ -165,11 +165,8 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 	}
 }
 
-func CreateClientAndSyncer() (*KubeClient, *cb, api.Syncer) {
+func CreateClientAndSyncer(cfg KubeConfig) (*KubeClient, *cb, api.Syncer) {
 	// First create the client.
-	cfg := KubeConfig{
-		K8sAPIEndpoint: "http://localhost:8080",
-	}
 	c, err := NewKubeClient(&cfg)
 	if err != nil {
 		panic(err)
@@ -197,7 +194,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	log.SetLevel(log.DebugLevel)
 
 	// Start the syncer.
-	c, cb, syncer := CreateClientAndSyncer()
+	cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+	c, cb, syncer := CreateClientAndSyncer(cfg)
 	syncer.Start()
 
 	// Start processing updates.
@@ -466,7 +464,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Expecting a Syncer snapshot to include the update", func() {
 			// Create a new syncer / callback pair so that it performs a snapshot.
-			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer()
+			cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
 
@@ -734,6 +733,30 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			getNode, err := c.Get(kvp.Key.(model.NodeKey))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getNode.Value.(*model.Node).BGPASNumber).To(BeNil())
+		})
+
+		By("Syncing HostIPs over the Syncer", func() {
+			expectExist := []model.KVPair{
+				{Key: model.HostIPKey{Hostname: nodeHostname}},
+			}
+
+			// Expect the snapshot to include the right keys.
+			cb.ExpectExists(expectExist)
+		})
+
+		By("Not syncing Nodes when K8sDisableNodePoll is enabled", func() {
+			cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
+
+			go snapshotCallbacks.ProcessUpdates()
+			snapshotSyncer.Start()
+
+			expectNotExist := []model.KVPair{
+				{Key: model.HostIPKey{Hostname: nodeHostname}},
+			}
+
+			// Expect the snapshot to have not received the update.
+			snapshotCallbacks.ExpectDeleted(expectNotExist)
 		})
 	})
 

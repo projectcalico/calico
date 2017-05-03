@@ -15,11 +15,11 @@
 package resources
 
 import (
+	"fmt"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	"fmt"
 )
 
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.
@@ -34,18 +34,20 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 	calicoNode := model.Node{}
 	calicoNode.Labels = node.Labels
 	annotations := node.ObjectMeta.Annotations
-	cidrString, ok := annotations["projectcalico.org/IPv4Address"]; if ok {
+	cidrString, ok := annotations["projectcalico.org/IPv4Address"]
+	if ok {
 		ip, cidr, err := net.ParseCIDR(cidrString)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse projectcalico.org/IPv4Address: %s", err)
 		}
 
-		calicoNode.FelixIPv4   = ip
+		calicoNode.FelixIPv4 = ip
 		calicoNode.BGPIPv4Addr = ip
-		calicoNode.BGPIPv4Net  = cidr
+		calicoNode.BGPIPv4Net = cidr
 	}
 
-	asnString, ok := annotations["projectcalico.org/ASNumber"]; if ok {
+	asnString, ok := annotations["projectcalico.org/ASNumber"]
+	if ok {
 		asn, err := numorstring.ASNumberFromString(asnString)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse projectcalico.org/ASNumber: %s", err)
