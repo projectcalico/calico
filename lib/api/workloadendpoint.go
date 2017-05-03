@@ -52,7 +52,7 @@ type WorkloadEndpointMetadata struct {
 	// unique ID which the CNI plugin uses to determine whether the DEL operation needs to
 	// delete the Calico WorkloadEndpoint.
 	// This field is not an index field of the WorkloadEndpoint resource.
-	ActiveInstanceID string `json:activeInstanceID,omitempty" validate:"omitempty,name"`
+	ActiveInstanceID string `json:"activeInstanceID,omitempty" validate:"omitempty,name"`
 
 	// The labels applied to the workload endpoint.  It is expected that many endpoints share
 	// the same labels. For example, they could be used to label all “production” workloads
