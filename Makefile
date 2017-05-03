@@ -72,7 +72,12 @@ run-kubernetes-master: stop-kubernetes-master
 	# Wait until the newly launched API server can respond to a
 	# request on port 8080, before completing this Makefile
 	# target.
-	while ! curl http://localhost:8080/apis/extensions/v1beta1/thirdpartyresources; do sleep 2; done
+	docker run \
+		-ti \
+		--rm \
+		--net=host \
+		tutum/curl \
+		sh -c "while ! curl http://localhost:8080/apis/extensions/v1beta1/thirdpartyresources; do sleep 2; done"
 
 ## Stop the local kubernetes master
 stop-kubernetes-master:
