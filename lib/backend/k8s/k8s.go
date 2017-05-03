@@ -28,9 +28,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"k8s.io/client-go/kubernetes"
 	clientapi "k8s.io/client-go/pkg/api"
 	kerrors "k8s.io/client-go/pkg/api/errors"
+	"k8s.io/client-go/pkg/api/v1"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
@@ -40,8 +42,6 @@ import (
 	"k8s.io/client-go/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"github.com/projectcalico/libcalico-go/lib/net"
-	v1 "k8s.io/client-go/pkg/api/v1"
 )
 
 type KubeClient struct {
@@ -50,6 +50,8 @@ type KubeClient struct {
 
 	// Client for interacting with ThirdPartyResources.
 	tprClient *rest.RESTClient
+
+	disableNodePoll bool
 
 	// Contains methods for converting Kubernetes resources to
 	// Calico resources.
@@ -68,6 +70,7 @@ type KubeConfig struct {
 	K8sCAFile                string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
 	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
 	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
+	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default""`
 }
 
 func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
@@ -123,8 +126,9 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 		return nil, fmt.Errorf("Failed to build TPR client: %s", err)
 	}
 	kubeClient := &KubeClient{
-		clientSet: cs,
-		tprClient: tprClient,
+		clientSet:       cs,
+		tprClient:       tprClient,
+		disableNodePoll: kc.K8sDisableNodePoll,
 	}
 
 	// Create the Calico sub-clients.
@@ -276,7 +280,7 @@ func buildTPRClient(baseConfig *rest.Config) (*rest.RESTClient, error) {
 }
 
 func (c *KubeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return newSyncer(*c, callbacks)
+	return newSyncer(*c, callbacks, c.disableNodePoll)
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
@@ -827,7 +831,7 @@ func getTunIp(n *v1.Node) (*model.KVPair, error) {
 	kvp := &model.KVPair{
 		Key: model.HostConfigKey{
 			Hostname: n.Name,
-			Name: "IpInIpTunnelAddr",
+			Name:     "IpInIpTunnelAddr",
 		},
 		Value: tunIp.String(),
 	}

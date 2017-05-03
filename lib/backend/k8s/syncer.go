@@ -31,20 +31,22 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func newSyncer(kc KubeClient, callbacks api.SyncerCallbacks) *kubeSyncer {
+func newSyncer(kc KubeClient, callbacks api.SyncerCallbacks, disableNodePoll bool) *kubeSyncer {
 	syn := &kubeSyncer{
-		kc:        kc,
-		callbacks: callbacks,
-		tracker:   map[string]model.Key{},
+		kc:              kc,
+		callbacks:       callbacks,
+		tracker:         map[string]model.Key{},
+		disableNodePoll: disableNodePoll,
 	}
 	return syn
 }
 
 type kubeSyncer struct {
-	kc        KubeClient
-	callbacks api.SyncerCallbacks
-	OneShot   bool
-	tracker   map[string]model.Key
+	kc              KubeClient
+	callbacks       api.SyncerCallbacks
+	OneShot         bool
+	tracker         map[string]model.Key
+	disableNodePoll bool
 }
 
 // Holds resource version information.
@@ -217,13 +219,16 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 
-			// Create watcher for Node objects
-			opts := k8sapi.ListOptions{ResourceVersion: latestVersions.nodeVersion}
-			nodeWatch, err := syn.kc.clientSet.Nodes().Watch(opts)
-			if err != nil {
-				log.Warnf("Failed to watch Nodes, retrying: %s", err)
-				time.Sleep(1 * time.Second)
-				continue
+			if !syn.disableNodePoll {
+				// Create watcher for Node objects
+				opts := k8sapi.ListOptions{ResourceVersion: latestVersions.nodeVersion}
+				nodeWatch, err := syn.kc.clientSet.Nodes().Watch(opts)
+				if err != nil {
+					log.Warnf("Failed to watch Nodes, retrying: %s", err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				noChan = nodeWatch.ResultChan()
 			}
 
 			nsChan = nsWatch.ResultChan()
@@ -231,7 +236,6 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			npChan = npWatch.ResultChan()
 			gcChan = globalConfigWatch.ResultChan()
 			poolChan = ipPoolWatch.ResultChan()
-			noChan = nodeWatch.ResultChan()
 
 			// Success - reset the flag.
 			needsResync = false
@@ -481,24 +485,26 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 			keys[p.Key.String()] = true
 		}
 
-		log.Info("Syncing Nodes")
-		noList, err := syn.kc.clientSet.Nodes().List(opts)
-		if err != nil {
-			log.Warnf("Error syncing Nodes, retrying: %s", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		log.Info("Received Node List() response")
-
-		versions.nodeVersion = noList.ListMeta.ResourceVersion
-		for _, no := range noList.Items {
-			node, err := resources.K8sNodeToCalico(&no)
+		if !syn.disableNodePoll {
+			log.Info("Syncing Nodes")
+			noList, err := syn.kc.clientSet.Nodes().List(opts)
 			if err != nil {
-				log.Panicf("%s", err)
+				log.Warnf("Error syncing Nodes, retrying: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
 			}
-			if node != nil {
-				snap = append(snap, *node)
-				keys[node.Key.String()] = true
+			log.Info("Received Node List() response")
+
+			versions.nodeVersion = noList.ListMeta.ResourceVersion
+			for _, no := range noList.Items {
+				node, err := resources.K8sNodeToCalico(&no)
+				if err != nil {
+					log.Panicf("%s", err)
+				}
+				if node != nil {
+					snap = append(snap, *node)
+					keys[node.Key.String()] = true
+				}
 			}
 		}
 
@@ -576,8 +582,8 @@ func (syn *kubeSyncer) parseNodeEvent(e watch.Event) *model.KVPair {
 	}
 
 	kvpHostIp := &model.KVPair{
-		Key: model.HostIPKey{Hostname: node.Name},
-		Value: kvp.Value.(*model.Node).BGPIPv4Addr,
+		Key:      model.HostIPKey{Hostname: node.Name},
+		Value:    kvp.Value.(*model.Node).BGPIPv4Addr,
 		Revision: kvp.Revision,
 	}
 
