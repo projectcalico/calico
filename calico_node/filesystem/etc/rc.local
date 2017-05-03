@@ -42,6 +42,8 @@ case "$CALICO_NETWORKING_BACKEND" in
 	# Run calico-bgp-daemon instead of BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
 	cp -a /etc/service/available/calico-bgp-daemon /etc/service/enabled/
+	sh -c 'for file in `find /etc/calico/confd/conf.d/ -not -name 'tunl-ip.toml' -type f`; do rm $file; done'
+	cp -a /etc/service/available/confd /etc/service/enabled/
 	;;
 	* )
 	# Run BIRD / Confd.
