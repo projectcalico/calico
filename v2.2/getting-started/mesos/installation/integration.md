@@ -61,7 +61,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    cat > $NETWORK_CNI_CONF_DIR/calico.conf <<EOF
    {
       "name": "calico",
-      "cniVersion": "0.3.1",
+      "cniVersion": "0.1.0",
       "type": "calico",
       "ipam": {
           "type": "calico-ipam"

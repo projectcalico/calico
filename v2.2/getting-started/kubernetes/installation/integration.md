@@ -132,7 +132,7 @@ mkdir -p /etc/cni/net.d
 cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
-    "cniVersion": "0.3.1",
+    "cniVersion": "0.1.0",
     "type": "calico",
     "etcd_endpoints": "http://<ETCD_IP>:<ETCD_PORT>",
     "log_level": "info",
