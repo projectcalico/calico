@@ -156,10 +156,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// See CNI Spec doc for more details.
 			result, err = current.NewResultFromResult(ipamResult)
 			if err != nil {
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return err
 			}
 
 			if len(result.IPs) == 0 {
+				ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return goerrors.New("IPAM plugin returned missing IP config")
 			}
 
