@@ -370,6 +370,13 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 	if cfg.Spec.DatastoreType == "etcdv2" {
 		cfg.Spec.DatastoreType = api.DatastoreType(config.DatastoreType)
 	}
+
+	if !config.IpInIpEnabled {
+		// Polling k8s for node updates is expensive (because we get many superfluous
+		// updates) so disable if we don't need it.
+		log.Info("IPIP disabled, disabling node poll (if KDD is in use).")
+		cfg.Spec.K8sDisableNodePoll = true
+	}
 	return *cfg
 }
 
