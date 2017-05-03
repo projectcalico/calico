@@ -80,7 +80,7 @@ help:
 all: deb rpm calico/felix
 test: ut
 
-GO_BUILD_CONTAINER?=calico/go-build:v0.5
+GO_BUILD_CONTAINER?=calico/go-build:v0.6
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
