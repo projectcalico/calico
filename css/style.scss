@@ -60,3 +60,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     box-sizing: content-box;
     line-height: normal;
 }
+
+#tigera-navbar ul.nav li a {
+    @media (max-width: $screen-sm-min) {
+        padding: 10px 0;
+    }
+    @media (min-width: $screen-xs-max) {
+        padding: 0 0;
+    }
+}
