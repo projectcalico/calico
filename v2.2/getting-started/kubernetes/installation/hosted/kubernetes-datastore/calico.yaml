@@ -22,7 +22,7 @@ data:
         "type": "calico",
         "log_level": "debug",
         "datastore_type": "kubernetes",
-        "hostname": "__KUBERNETES_NODE_NAME__",
+        "nodename": "__KUBERNETES_NODE_NAME__",
         "ipam": {
             "type": "host-local",
             "subnet": "usePodCidr"
