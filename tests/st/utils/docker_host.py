@@ -383,18 +383,33 @@ class DockerHost(object):
         Exit the context of this host.
         :return: None
         """
-        self.cleanup()
+        self.cleanup(log_extra_diags=bool(exc_type))
 
-    def cleanup(self):
+    def cleanup(self, log_extra_diags=False):
         """
         Clean up this host, including removing any containers created.  This is
         necessary especially for Docker-in-Docker so we don't leave dangling
         volumes.
-        :return:
+
+        Also, perform log analysis to check for any errors, raising an exception
+        if any were found.
+
+        If log_extra_is set to True we will log some extra diagnostics (this is
+        set to True if the DockerHost context manager exits with an exception).
+        Extra logs will also be output if the log analyzer detects any errors.
         """
-        # Check for logs before tearing down
-        if self.log_analyzer is not None:
-            self.log_analyzer.check_logs_for_exceptions()
+        # Check for logs before tearing down, log extra diags if we spot an error.
+        log_exception = None
+        try:
+            if self.log_analyzer is not None:
+                self.log_analyzer.check_logs_for_exceptions()
+        except Exception, e:
+            log_exception = e
+            log_extra_diags = True
+
+        # Log extra diags if we need to.
+        if log_extra_diags:
+            self.log_extra_diags()
 
         logger.info("# Cleaning up host %s", self.name)
         if self.dind:
@@ -420,6 +435,10 @@ class DockerHost(object):
             log_and_run("docker rm -f calico-node || true")
 
         self._cleaned = True
+
+        # Now that tidy-up is complete, re-raise any exceptions found in the logs.
+        if log_exception:
+            raise log_exception
 
     def cleanup_networks(self):
         """
@@ -571,3 +590,10 @@ class DockerHost(object):
         # use calicoctl with data
         self.writejson("new_data", data)
         self.calicoctl("%s -f new_data" % action)
+
+    def log_extra_diags(self):
+        # Run a set of commands to trace ip routes, iptables and ipsets.
+        self.execute("ip route", raise_exception_on_failure=False)
+        self.execute("iptables-save", raise_exception_on_failure=False)
+        self.execute("ip6tables-save", raise_exception_on_failure=False)
+        self.execute("ipset save", raise_exception_on_failure=False)
