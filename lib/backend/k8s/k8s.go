@@ -335,6 +335,12 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Apply(d)
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
+	case model.ActiveStatusReportKey, model.LastStatusReportKey,
+		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
+		// Felix periodically reports status to the datastore.  This isn't supported
+		// right now, but we handle it anyway to avoid spamming warning logs.
+		log.WithField("key", d.Key).Debug("Dropping status report (not supported)")
+		return d, nil
 	default:
 		log.Warn("Attempt to 'Apply' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
