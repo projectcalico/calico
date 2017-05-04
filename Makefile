@@ -73,7 +73,6 @@ run-kubernetes-master: stop-kubernetes-master
 	# request on port 8080, before completing this Makefile
 	# target.
 	docker run \
-		-ti \
 		--rm \
 		--net=host \
 		tutum/curl \
