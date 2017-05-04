@@ -76,9 +76,10 @@ coreos:
         TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
+        # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
-        --cluster-cidr="10.244.0.0/16" \
+        --cluster-cidr="192.168.0.0/16" \
         --proxy-mode=iptables \
         --logtostderr=true
         Restart=always

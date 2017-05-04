@@ -20,7 +20,7 @@ You must have a cluster which meets the following requirements:
 
 - You have a Kubernetes cluster configured to use CNI network plugins (i.e. by passing `--network-plugin=cni` to the kubelet)
 - Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e. by passing `--allocate-node-cidrs=true` to the controller manager)
-- Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=10.244.0.0/16`, which the manifest expects by default).
+- Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=192.168.0.0/16`, which the manifest expects by default).
 
 ## Installation
 
@@ -69,7 +69,7 @@ steps that require it.
 To initialize the master run
 
 ```
-kubeadm init --pod-network-cidr=10.244.0.0/16
+kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
 
 Then run the following command to install Calico.
