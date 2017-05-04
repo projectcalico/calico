@@ -182,6 +182,19 @@ var _ = Context("with a k8s clientset", func() {
 			time.Sleep(10 * time.Second)
 		})
 
+		It("should create two isolated namespaces", func() {
+			createIsolatedNamespace(clientset, nsPrefix+"test1", nil)
+			createIsolatedNamespace(clientset, nsPrefix+"test2", nil)
+			createNetworkPolicy(clientset, nsPrefix+"test1")
+			createNetworkPolicy(clientset, nsPrefix+"test2")
+			createPod(clientset, d, nsPrefix+"test1", podSpec{})
+			createPod(clientset, d, nsPrefix+"test1", podSpec{})
+			createPod(clientset, d, nsPrefix+"test1", podSpec{})
+			createPod(clientset, d, nsPrefix+"test2", podSpec{})
+			createPod(clientset, d, nsPrefix+"test2", podSpec{})
+			createPod(clientset, d, nsPrefix+"test2", podSpec{})
+		})
+
 	})
 
 	Context("with 1 local and 9 remote nodes", func() {

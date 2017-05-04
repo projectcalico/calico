@@ -15,12 +15,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/k8sfv/internalversion"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/apis/extensions"
+	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 )
 
 var nsPrefixNum = 0
@@ -31,12 +36,39 @@ func getNamespacePrefix() (nsPrefix string) {
 	return
 }
 
+type namespacePolicy struct {
+	Ingress struct {
+		Isolation string `json:"isolation"`
+	} `json:"ingress"`
+}
+
 func createNamespace(clientset *kubernetes.Clientset, name string, labels map[string]string) {
+	createNamespaceInt(clientset, name, labels, "")
+}
+
+func createIsolatedNamespace(clientset *kubernetes.Clientset, name string, labels map[string]string) {
+	createNamespaceInt(clientset, name, labels, "DefaultDeny")
+}
+
+func createNamespaceInt(
+	clientset *kubernetes.Clientset,
+	name string,
+	labels map[string]string,
+	isolation string,
+) {
 	ns_in := &v1.Namespace{
 		ObjectMeta: v1.ObjectMeta{
 			Name:   name,
 			Labels: labels,
 		},
+	}
+	if isolation != "" {
+		np := namespacePolicy{}
+		np.Ingress.Isolation = isolation
+		annotation, _ := json.Marshal(np)
+		ns_in.ObjectMeta.Annotations = map[string]string{
+			"net.beta.kubernetes.io/network-policy": string(annotation),
+		}
 	}
 	log.WithField("ns_in", ns_in).Debug("Namespace defined")
 	ns_out, err := clientset.Namespaces().Create(ns_in)
@@ -64,4 +96,38 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 		}
 	}
 	log.Info("Cleaned up all namespaces")
+}
+
+// Create a NetworkPolicy, for pods in the specified namespace, that allows ingress from other pods
+// in the same namespace.
+func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
+	npInterface := internalversion.NewNetworkPolicies(clientset.ExtensionsV1beta1Client, namespace)
+	np := extensions.NetworkPolicy{
+		ObjectMeta: api.ObjectMeta{
+			Namespace: namespace,
+			Name:      "test-syncer-basic-net-policy",
+		},
+		Spec: extensions.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"calico/k8s_ns": namespace},
+			},
+			Ingress: []extensions.NetworkPolicyIngressRule{
+				extensions.NetworkPolicyIngressRule{
+					Ports: []extensions.NetworkPolicyPort{
+						extensions.NetworkPolicyPort{},
+					},
+					From: []extensions.NetworkPolicyPeer{
+						extensions.NetworkPolicyPeer{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"calico/k8s_ns": namespace,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	npInterface.Create(&np)
 }
