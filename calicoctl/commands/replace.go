@@ -49,8 +49,15 @@ Description:
   The replace command is used to replace a set of resources by filename or
   stdin.  JSON and YAML formats are accepted.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint,
-  ipPool, policy, and profile.
+  Valid resource types are:
+
+    * node
+    * bgpPeer
+    * hostEndpoint
+    * workloadEndpoint
+    * ipPool
+    * policy
+    * profile
 
   Attempting to replace a resource that does not exist is treated as a
   terminating error.

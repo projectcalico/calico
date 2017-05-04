@@ -50,8 +50,15 @@ Description:
   The create command is used to create a set of resources by filename or stdin.
   JSON and YAML formats are accepted.
 
-  Valid resource types are node, bgpPeer, hostEndpoint, workloadEndpoint,
-  ipPool, policy, and profile.
+  Valid resource types are:
+
+    * node
+    * bgpPeer
+    * hostEndpoint
+    * workloadEndpoint
+    * ipPool
+    * policy
+    * profile
 
   Attempting to create a resource that already exists is treated as a
   terminating error unless the --skip-exists flag is set.  If this flag is set,
