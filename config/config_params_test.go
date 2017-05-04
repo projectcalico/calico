@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
@@ -209,3 +210,27 @@ var _ = DescribeTable("Next mark bit calculation tests",
 	Entry("7th bit in 0xf00f", "0xf00f", 8, uint32(0x8000)),
 	Entry("0th bit of 0xff000000", "0xff000000", 1, uint32(0x01000000)),
 )
+
+var _ = Describe("DatastoreConfig tests", func() {
+	var c *Config
+	Describe("with IPIP enabled", func() {
+		BeforeEach(func() {
+			c = New()
+			c.DatastoreType = "k8s"
+			c.IpInIpEnabled = true
+		})
+		It("should leave node polling enabled", func() {
+			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeFalse())
+		})
+	})
+	Describe("with IPIP disabled", func() {
+		BeforeEach(func() {
+			c = New()
+			c.DatastoreType = "k8s"
+			c.IpInIpEnabled = false
+		})
+		It("should leave node polling enabled", func() {
+			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
+		})
+	})
+})
