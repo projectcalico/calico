@@ -76,7 +76,7 @@ $write_cni_conf=<<SCRIPT
 cat <<EOF > /etc/cni/net.d/calico.conf
 {
    "name": "calico",
-   "cniVersion": "0.3.1",
+   "cniVersion": "0.1.0",
    "type": "calico",
    "ipam": {
        "type": "calico-ipam"
