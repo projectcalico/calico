@@ -547,7 +547,7 @@ func (c *KubeClient) getWorkloadEndpoint(k model.WorkloadEndpointKey) (*model.KV
 
 	// Decide if this pod should be displayed.
 	if !c.converter.isReadyCalicoPod(pod) {
-		return nil, nil
+		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 	return c.converter.podToWorkloadEndpoint(pod)
 }
