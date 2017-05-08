@@ -41,7 +41,7 @@ Ensure you have a cluster which meets the above requirements.  There may be addi
 
 > Note:  There is currently no upgrade path to switch between different installation options.  Therefore, 
 > if you are upgrading from Calico v2.1, use the [Calico policy-only with user-supplied networking](#calico-policy-only-with-user-supplied-networking) installation instructions 
-> to upgrade Calico policy-only leaving the networking solution unchanged.
+> to upgrade Calico policy-only which leaves the networking solution unchanged.
 
 ### Calico policy with Calico networking (Beta)
 
