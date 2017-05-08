@@ -2,14 +2,17 @@
 title: Kubernetes Datastore
 ---
 
-This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
-This mode uses the Kubernetes API as the datastore.  Note that this feature
-currently comes with a number of limitations, namely:
+This document describes how to install Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
+This mode uses the Kubernetes API as the datastore.
+
+Note that this feature currently comes with a number of limitations, namely:
 
 - It does not yet support Calico IPAM.  It is recommended to use `host-local` IPAM in conjunction with Kubernetes pod CIDR assignments.
 - It does not yet support the full set of `calicoctl` commands.
 - It does not yet support the full set of calico/node options (such as IP autodiscovery).
-- It supports BGP full-mesh networking, but does not yet support BGP peer configuration.
+- Calico networking support is in Beta and has limited configuration options:
+  -  it only supports a full BGP node-to-node mesh
+  -  it does not yet support BGP peer configuration.
 
 ## Requirements
 
@@ -22,25 +25,78 @@ You must have a cluster which meets the following requirements:
 - Your Kubernetes controller manager is configured to allocate pod CIDRs (i.e. by passing `--allocate-node-cidrs=true` to the controller manager)
 - Your Kubernetes controller manager has been provided a cluster-cidr (i.e. by passing `--cluster-cidr=192.168.0.0/16`, which the manifest expects by default).
 
+> Note:  If you are upgrading from Calico v2.1, the cluster-cidr selected for your controller manager should remain
+> unchanged from the v2.1 install (the v2.1 manifests default to `10.244.0.0/16`).
+
 ## Installation
 
-To install Calico, ensure you have a cluster which meets the above requirements and run one of the following commands based on your Kubernetes version:
+This document describes three installation options for Calico using Kubernetes API as the datastore:
+
+-  Calico policy with Calico networking
+-  Calico policy-only
+   -  with user-supplied networking
+   -  with flannel networking
+
+Ensure you have a cluster which meets the above requirements.  There may be additional requirements based on the installation option you choose.
+
+> Note:  There is currently no upgrade path to switch between different installation options.  Therefore, 
+> if you are upgrading from Calico v2.1, use the [Calico policy-only with user-supplied networking](#calico-policy-only-with-user-supplied-networking) installation instructions 
+> to upgrade Calico policy-only which leaves the networking solution unchanged.
+
+### Calico policy with Calico networking (Beta)
+
+With Kubernetes as the Calico datastore, Calico has Beta support for Calico networking.  This provides BGP-based
+networking with a full node-to-node mesh.  It is not currently possible to configure the Calico BGP network to peer with
+other routers - future releases of Calico are expected to bring feature parity with the etcd-backed Calico.
+
+To install Calico with Calico networking, run one of the following commands based on your Kubernetes version:
 
 For Kubernetes 1.6 clusters:
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/1.6/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.6/calico.yaml
 ```
 
->[Click here to view the above yaml directly.](1.6/calico.yaml)
+>[Click here to view the above yaml directly.](calico-networking/1.6/calico.yaml)
 
 For Kubernetes 1.5 clusters:
 
 ```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.5/calico.yaml
 ```
 
->[Click here to view the above yaml directly.](calico.yaml)
+>[Click here to view the above yaml directly.](calico-networking/1.5/calico.yaml)
+
+### Calico policy-only with user-supplied networking
+
+If you run Calico in policy-only mode it is necessary to configure your network to route pod traffic based on pod 
+CIDR allocations, either through static routes, a Kubernetes cloud-provider integration, or flannel (self-installed).
+
+To install Calico in policy-only mode, run one of the following commands based on your Kubernetes version:
+
+For Kubernetes 1.6 clusters:
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.6/calico.yaml
+```
+
+>[Click here to view the above yaml directly.](policy-only/1.6/calico.yaml)
+
+For Kubernetes 1.5 clusters:
+
+```
+kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.5/calico.yaml
+```
+
+>[Click here to view the above yaml directly.](policy-only/1.5/calico.yaml)
+
+### Calico policy-only with flannel networking
+
+The [Canal](https://github.com/projectcalico/canal) project provides a way to easily deploy
+Calico with flannel networking.
+
+Refer to the following [Kubernetes self-hosted install guide](https://github.com/projectcalico/canal/blob/master/k8s-install/README.md) 
+in the Canal project for details on installing Calico with flannel.
 
 ### RBAC
 
