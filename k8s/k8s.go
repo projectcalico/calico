@@ -195,10 +195,12 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 			// See CNI Spec doc for more details.
 			result, err = current.NewResultFromResult(ipamResult)
 			if err != nil {
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return nil, err
 			}
 
 			if len(result.IPs) == 0 {
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return nil, errors.New("IPAM plugin returned missing IP config")
 			}
 
@@ -223,7 +225,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 			}
 
 			if len(result.IPs) == 0 {
-				return nil, errors.New("IPAM plugin returned missing IP config")
+				return nil, errors.New("Failed to build result")
 			}
 
 		case ipAddrs != "":

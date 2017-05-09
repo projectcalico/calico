@@ -263,7 +263,7 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 	return calicoClient, nil
 }
 
-// ReleaseIPAM is called to cleanup IPAM allocations if something goes wrong during
+// ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution.
 func ReleaseIPAllocation(logger *log.Entry, ipamType string, stdinData []byte) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
