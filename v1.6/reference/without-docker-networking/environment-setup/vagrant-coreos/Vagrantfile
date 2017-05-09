@@ -8,7 +8,7 @@
 # the calico/node image which slows down the install process, but speeds up the
 # tutorial.
 #
-# This version should match the version required by calicotl installed in the
+# This version should match the version required by calicoctl installed in the
 # cloud config files.
 calico_docker_ver = "v0.23.1"
 
