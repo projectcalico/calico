@@ -6,6 +6,6 @@ toc:
 - title: Introduction
   path: /introduction/
 - title: Component Architecture
-  path: /introduction/component-architecture
+  path: /introduction/containers/component-architecture
 - title: Network Architecture
-  path: /introduction/network-architecture
+  path: /introduction/containers/network-architecture
