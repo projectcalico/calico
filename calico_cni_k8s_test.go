@@ -884,6 +884,60 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
+
+			Context("ask for more than 1 IPv4 addrs using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
+				It("should return an error", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "net9",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {},
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\", \"10.0.0.2\"]",
+							},
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, netnspath, _, _, _, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).To(HaveOccurred())
+
+					// Make sure the WorkloadEndpoint is not created in the datastore.
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(0))
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
 		})
 	})
 })
