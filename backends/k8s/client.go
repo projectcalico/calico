@@ -105,7 +105,7 @@ func (c *Client) GetValues(keys []string) (map[string]string, error) {
 			cidr := kNode.Spec.PodCIDR
 			parts := strings.Split(cidr, "/")
 			cidr = strings.Join(parts, "-")
-			kvps[key + cidr] = "{}"
+			kvps[key + "/" + cidr] = "{}"
 		}
 		switch key {
 		case global:
