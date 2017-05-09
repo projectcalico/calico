@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.1.1
+Version:        2.2.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,60 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Tue May 09 2017 Neil Jerram <neil@tigera.io> 2.2.0-1
+  - Felix 2.2.0 (from Git commit bc4d54d).
+    [Changes recorded in 2.2.0 tag]
+    - Rev libcalico-go to v1.2.1 for occupancy reduction and bug fixes.
+    - Buffer the signal channel. (#1416)
+    - Dump memory profile on receipt of SIGUSR1 (#1415)
+    - Add support for failsafe UDP ports and allow DNS/DHCP by default. (#1412)
+    - Felix is now built with Go v1.8.1 (#1446).
+    - Move log writing to background threads to improve robustness if stdout/stderr blocks. (#1389)
+    - Move conntrack rules to per-interface chains to avoid matching
+      non-Calico packets. (#1424)
+    - Squash duplicate host IP updates to avoid churning dataplane (#1445).
+    - Disable node polling if IPIP is disabled (#1448).
+    - Improvements to Kubernetes-based FV framework.
+    - Add option to disable ctstate=INVALID rules for some corner cases/experiments.
+    - Fix for spurious ERRORs around missing interfaces.
+    - Fix felix_cluster_* metrics not being updated.
+    [Changes recorded in 2.2.0-rc4 tag]
+    - Rev go-build to v0.6 to pick up go 1.8.1 (#1446).
+    - Squash duplicate host IP updates to avoid churning dataplane (#1445).
+    - Disable node polling if IPIP is disabled (#1448).
+    - Improvements to Kubernetes-based FV framework.
+    [Changes recorded in 2.2.0-rc3 tag]
+    - Rev libcalico-go to v1.2.1-rc3 (fixes selector validation issue in k8s)
+    [Changes recorded in 2.2.0-rc2 tag]
+    - Run `docker build` with `--pull`.
+    - Bumping libcalico-go to rev with KDD updatest
+    [Changes recorded in 2.2.0-rc1 tag]
+    - Fix felix_cluster_* metrics not being updated.
+    - Buffer the signal channel. (#1416)
+    - Dump memory profile on receipt of SIGUSR1 (#1415)
+    - Add support for failsafe UDP ports and allow DNS/DHCP by default. (#1412)
+    - Rev libcalico-go to v1.2.0 for occupancy reduction. (#1419)
+    - Move log writing to background threads to improve robustness if
+      stdout/stderr blocks. (#1389)
+    - Felix is now built with Go v1.8.1 (#1417).
+    - Move conntrack rules to per-interface chains to avoid matching
+      non-Calico packets. (#1424)
+    - Add option to disable ctstate=INVALID rules for some corner cases/experiments.
+    - Fix for spurious ERRORs around missing interfaces.
+    [Changes recorded in 2.2.0-pre1 tag]
+    - Generalize and explain datastore config construction
+    - Allow FELIX_DATASTORETYPE to fully control datastore type
+    - Ignore empty configuration values.
+    - Various performance and occupancy imporvements
+    - Ensure the IP forwarding is enabled on the interfaces we control.
+    - Reduce log spam from unconditional rewriting of dispatch chains.
+    - Improve stats: add route table stats, swap histograms for summaries.
+    - Switch to monotime package.  Remove need for time jump checks.
+    - Add more comments to inheritance index.
+    - Add FV test for Felix with k8s datastore driver
+    - Squash warnings about missing profiles during resync.
+    - Add GINKGO_OPTIONS variable to Makefile.
+
 * Wed Mar 29 2017 Neil Jerram <neil@tigera.io> 2.1.1-1
   - Felix 2.1.1 (from Git commit ff29d69).
     [Changes recorded in 2.1.1 tag]
