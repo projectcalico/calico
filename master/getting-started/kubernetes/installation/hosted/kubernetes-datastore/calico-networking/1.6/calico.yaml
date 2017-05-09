@@ -18,6 +18,7 @@ data:
   cni_network_config: |-
     {
         "name": "k8s-pod-network",
+        "cniVersion": "0.1.0",
         "type": "calico",
         "log_level": "debug",
         "datastore_type": "kubernetes",
