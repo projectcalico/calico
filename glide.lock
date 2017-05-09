@@ -1,5 +1,5 @@
-hash: 18a0faa41b2e9df7757c328286ae6585f89ec367fe01445857acc214aa653f0b
-updated: 2017-05-04T17:04:44.36093005Z
+hash: 382d79fe8ffaf9a5f620cdd19ac13bb2195adfb4120884b3ca316bce87b42b66
+updated: 2017-05-09T10:50:44.369661522Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,15 +13,16 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 231f6c4c5346c8cc56190bd46d4fa8a103b21d4b
+  version: 1a9288c3c09cea4e580fdb1a636f1c5e185a391f
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 505bf8c7089a292e0166a8141c6bce85e172bc3e
+  version: aac2292ab5fd3a34a40b859f5d9513c4663262ad
   subpackages:
   - client
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -143,7 +144,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: fbc28ba73774c7e7700a3269e9e379cebc2c09d1
+  version: 4c64e80b39466c5092e717246c6226dc4ed26b76
   subpackages:
   - lib
   - lib/api
@@ -204,7 +205,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 1e045880fbc2f6703d3c771db56cfb0351208637
+  version: 58c32ae2d72285baf322aaff05213c2fba8fb8a2
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
