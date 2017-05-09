@@ -500,13 +500,15 @@ func (c *KubeClient) listWorkloadEndpoints(l model.WorkloadEndpointListOptions) 
 			WorkloadID: l.WorkloadID,
 		})
 		if err != nil {
-			// Error getting the endpoint.
-			return nil, err
+			switch err.(type) {
+			// Return empty slice of KVPair if the object doesn't exist, return the error otherwise.
+			case errors.ErrorResourceDoesNotExist:
+				return []*model.KVPair{}, nil
+			default:
+				return nil, err
+			}
 		}
-		if kvp == nil {
-			// The workload endpoint doesn't exist.
-			return nil, nil
-		}
+
 		return []*model.KVPair{kvp}, nil
 	}
 
@@ -558,8 +560,15 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 		// Exact lookup on a NetworkPolicy.
 		kvp, err := c.getPolicy(model.PolicyKey{Name: l.Name})
 		if err != nil {
-			return []*model.KVPair{}, nil
+			switch err.(type) {
+			// Return empty slice of KVPair if the object doesn't exist, return the error otherwise.
+			case errors.ErrorResourceDoesNotExist:
+				return []*model.KVPair{}, nil
+			default:
+				return nil, err
+			}
 		}
+
 		return []*model.KVPair{kvp}, nil
 	}
 
