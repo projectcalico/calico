@@ -104,7 +104,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 			if err != nil {
 				return nil, err
 			}
-			logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
+			logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
 		}
 
 		labels := make(map[string]string)
@@ -170,7 +170,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 						return nil, err
 					}
 					args.StdinData = newData
-					logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
+					logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
 				}
 			}
 		}
@@ -363,39 +363,29 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 // each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
 func ipAddrsResult(ipAddrs string, conf utils.NetConf, args *skel.CmdArgs, logger *log.Entry) (*current.Result, error) {
-
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
-	ips, err := parseIPAddrs(ipAddrs, logger)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"cni.projectcalico.org/ipAddrs\": %s", ipAddrs, err)
-	}
 
-	// annotation value can't be empty.
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("Annotation \"cni.projectcalico.org/ipAddrs\" specified but empty")
+	// We need to make sure there is only one IPv4 and/or one IPv6
+	// passed in, since CNI spec only supports one of each right now.
+	ipList, err := validateAndExtractIPs(ipAddrs, "cni.projectcalico.org/ipAddrs", logger)
+	if err != nil {
+		return nil, err
 	}
 
 	result := current.Result{}
 
 	// Go through all the IPs passed in as annotation value and call IPAM plugin
 	// for each, and populate the result variable with IP4 and/or IP6 IPs returned
-	// from the IPAM plugin. We also make sure there is only one IPv4 and/or one IPv6
-	// passed in, since CNI spec only supports one of each right now.
-	for _, ip := range ips {
-		ipAddr := net.ParseIP(ip)
-		if ipAddr == nil {
-			logger.WithField("IP", ip).Error("Invalid IP format")
-			return nil, fmt.Errorf("Invalid IP format: %s", ip)
-		}
-
+	// from the IPAM plugin.
+	for _, ip := range ipList {
 		// Call callIPAMWithIP with the ip address.
-		r, err := callIPAMWithIP(ipAddr, conf, args, logger)
+		r, err := callIPAMWithIP(ip, conf, args, logger)
 		if err != nil {
 			return nil, fmt.Errorf("Error getting IP from IPAM: %s", err)
 		}
 
 		result.IPs = append(result.IPs, r.IPs[0])
-		logger.Debugf("Adding IPv%s: %s to result", r.IPs[0].Version, ipAddr.String())
+		logger.Debugf("Adding IPv%s: %s to result", r.IPs[0].Version, ip.String())
 	}
 
 	return &result, nil
@@ -476,35 +466,27 @@ func callIPAMWithIP(ip net.IP, conf utils.NetConf, args *skel.CmdArgs, logger *l
 // but sets IP field manually since IPAM is bypassed with this annotation.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
 func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*current.Result, error) {
-
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrsNoIpam\":%s", ipAddrsNoIpam)
-	ips, err := parseIPAddrs(ipAddrsNoIpam, logger)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"cni.projectcalico.org/ipAddrsNoIpam\": %s", ipAddrsNoIpam, err)
-	}
 
-	// annotation value can't be empty.
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("Annotation \"cni.projectcalico.org/ipAddrsNoIpam\" specified but empty")
+	// We need to make sure there is only one IPv4 and/or one IPv6
+	// passed in, since CNI spec only supports one of each right now.
+	ipList, err := validateAndExtractIPs(ipAddrsNoIpam, "cni.projectcalico.org/ipAddrsNoIpam", logger)
+	if err != nil {
+		return nil, err
 	}
 
 	result := current.Result{}
 
 	// Go through all the IPs passed in as annotation value and populate
 	// the result variable with IP4 and/or IP6 IPs.
-	for _, ip := range ips {
-		ipAddr := net.ParseIP(ip)
-		if ipAddr == nil {
-			logger.WithField("IP", ip).Error("Invalid IP format")
-			return nil, fmt.Errorf("Invalid IP format: %s", ip)
-		}
-
+	for _, ip := range ipList {
 		var version string
 		var mask net.IPMask
 
-		if ipAddr.To4() != nil {
+		if ip.To4() != nil {
 			version = "4"
 			mask = net.CIDRMask(32, 32)
+
 		} else {
 			version = "6"
 			mask = net.CIDRMask(128, 128)
@@ -513,15 +495,62 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *log.Entry) (*current.Resul
 		ipConf := &current.IPConfig{
 			Version: version,
 			Address: net.IPNet{
-				IP:   ipAddr,
+				IP:   ip,
 				Mask: mask,
 			},
 		}
 		result.IPs = append(result.IPs, ipConf)
-		logger.Debugf("Adding IPv%s: %s to result", ipConf.Version, ipAddr.String())
+		logger.Debugf("Adding IPv%s: %s to result", ipConf.Version, ip.String())
 	}
 
 	return &result, nil
+}
+
+// validateAndExtractIPs is a utility function that validates the passed IP list to make sure
+// there is one IPv4 and/or one IPv6 and then returns the slice of IPs.
+func validateAndExtractIPs(ipAddrs string, annotation string, logger *log.Entry) ([]net.IP, error) {
+	// Parse IPs from JSON.
+	ips, err := parseIPAddrs(ipAddrs, logger)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse IPs %s for annotation \"%s\": %s", ipAddrs, annotation, err)
+	}
+
+	// annotation value can't be empty.
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("Annotation \"%s\" specified but empty", annotation)
+	}
+
+	var hasIPv4, hasIPv6 bool
+	var ipList []net.IP
+
+	// We need to make sure there is only one IPv4 and/or one IPv6
+	// passed in, since CNI spec only supports one of each right now.
+	for _, ip := range ips {
+		ipAddr := net.ParseIP(ip)
+		if ipAddr == nil {
+			logger.WithField("IP", ip).Error("Invalid IP format")
+			return nil, fmt.Errorf("Invalid IP format: %s", ip)
+		}
+
+		if ipAddr.To4() != nil {
+			if hasIPv4 {
+				// Check if there is already has been an IPv4 in the list, as we only support one IPv4 and/or one IPv6 per interface for now.
+				return nil, fmt.Errorf("cannot have more than one IPv4 address for \"%s\" annotation", annotation)
+			}
+			hasIPv4 = true
+		} else {
+			if hasIPv6 {
+				// Check if there is already has been an IPv6 in the list, as we only support one IPv4 and/or one IPv6 per interface for now.
+				return nil, fmt.Errorf("cannot have more than one IPv6 address for \"%s\" annotation", annotation)
+			}
+			hasIPv6 = true
+		}
+
+		// Append the IP to ipList slice.
+		ipList = append(ipList, ipAddr)
+	}
+
+	return ipList, nil
 }
 
 // parseIPAddrs is a utility function that parses string of IPs in json format that are
