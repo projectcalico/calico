@@ -19,7 +19,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
 )
 
@@ -35,7 +34,7 @@ var calicoClient *client.Client
 
 func init() {
 	var err error
-	calicoClient, err = testutils.NewClient("")
+	calicoClient, err = client.NewFromEnv()
 	if err != nil {
 		panic(err)
 	}
