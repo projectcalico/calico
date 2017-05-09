@@ -41,6 +41,7 @@ else
     disable_service q-dhcp
     disable_service q-l3
     disable_service q-meta
+    disable_service q-metering
 
     # 'calico-bird' is an additional service that automatically
     # generates and maintains correct full mesh BIRD config, in a
@@ -59,3 +60,12 @@ Q_AGENT=calico-felix
 
 # Calico does not use namespaces.
 Q_USE_NAMESPACE=False
+
+# Tell configure_neutron_after_post_config not to set service_plugins.
+# The Calico plugin provides the 'router' extension itself and does
+# not want a service plugin to try to handle that extension also.
+Q_SERVICE_PLUGIN_CLASSES=
+ML2_L3_PLUGIN=
+
+# Don't use systemd.
+USE_SYSTEMD=False
