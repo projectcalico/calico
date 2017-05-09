@@ -26,9 +26,13 @@ for implementing network policy for the containers on each host.
 
 **calico/node:**
 
-Calico commonly distributes Felix in a Docker container named `calico/node`.
+Calico primarily distributes its components in a Docker container named `calico/node`. This typically includes:
+
+- Felix
+- confd & BIRD
+
 This container is run in host networking mode with some privileges
-to allow it to manipulate the hosts networking.
+to allow it to manipulate the host's networking.
 
 Some orchestrators provide a means for running this
 container using the orchestrator itself. For ones that do not, Calico's
