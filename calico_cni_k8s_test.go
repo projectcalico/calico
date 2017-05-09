@@ -4,16 +4,10 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
-	"time"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"net"
-
+	"os"
 	"syscall"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	. "github.com/onsi/ginkgo"
@@ -23,9 +17,13 @@ import (
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/libcalico-go/lib/client"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func init() {
@@ -255,7 +253,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a new ipPool.
 					ipPool := "172.16.0.0/16"
-					c, _ := testutils.NewClient("")
+					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
 					_, ipPoolCIDR, err := net.ParseCIDR(ipPool)
 					Expect(err).NotTo(HaveOccurred())
@@ -368,7 +366,7 @@ var _ = Describe("CalicoCni", func() {
 					}))
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 						InterfaceName: interfaceName,
-						IPNetworks: []cnet.IPNet{cnet.IPNet{net.IPNet{
+						IPNetworks: []cnet.IPNet{{net.IPNet{
 							IP:   assignIP,
 							Mask: net.CIDRMask(32, 32),
 						}}},
@@ -407,7 +405,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a new ipPool.
 					ipPool := "20.0.0.0/24"
-					c, _ := testutils.NewClient("")
+					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
 					_, _, err := net.ParseCIDR(ipPool)
 					Expect(err).NotTo(HaveOccurred())
@@ -464,7 +462,7 @@ var _ = Describe("CalicoCni", func() {
 					}))
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 						InterfaceName: interfaceName,
-						IPNetworks: []cnet.IPNet{cnet.IPNet{net.IPNet{
+						IPNetworks: []cnet.IPNet{{net.IPNet{
 							IP:   assignIP,
 							Mask: net.CIDRMask(32, 32),
 						}}},
@@ -501,7 +499,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a new ipPool.
 					ipPool := "20.0.0.0/24"
-					c, _ := testutils.NewClient("")
+					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
 					_, _, err := net.ParseCIDR(ipPool)
 					Expect(err).NotTo(HaveOccurred())
@@ -558,7 +556,7 @@ var _ = Describe("CalicoCni", func() {
 					}))
 					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
 						InterfaceName: interfaceName,
-						IPNetworks: []cnet.IPNet{cnet.IPNet{net.IPNet{
+						IPNetworks: []cnet.IPNet{{net.IPNet{
 							IP:   assignIP,
 							Mask: net.CIDRMask(32, 32),
 						}}},
@@ -676,7 +674,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a new ipPool.
 					ipPool := "10.0.0.0/24"
-					c, _ := testutils.NewClient("")
+					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
 
 					config, err := clientcmd.DefaultClientConfig.ClientConfig()
@@ -815,7 +813,7 @@ var _ = Describe("CalicoCni", func() {
 
 				It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the container", func() {
 					// Create a new ipPool.
-					c, _ := testutils.NewClient("")
+					c, _ := client.NewFromEnv()
 					testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 
 					config, err := clientcmd.DefaultClientConfig.ClientConfig()
