@@ -1,5 +1,6 @@
 ---
 title: calicoctl node checksystem
+redirect_from: latest/reference/calicoctl/commands/node/checksystem
 ---
 
 This section describes the `calicoctl node checksystem` command.

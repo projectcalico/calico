@@ -1,5 +1,6 @@
 ---
 title: Integration with Fuel
+redirect_from: latest/getting-started/openstack/installation/fuel
 ---
 
 Calico plugins are available for Fuel 6.1 and 7.0, and work is in progress for

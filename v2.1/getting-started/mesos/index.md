@@ -1,6 +1,5 @@
 ---
 title: Integration Guide
-redirect_from: latest/getting-started/mesos/index
 ---
 
 Calico introduces IP-per-container & fine-grained security policies to Mesos, while

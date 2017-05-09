@@ -1,5 +1,6 @@
 ---
 title: Connectivity in OpenStack
+redirect_from: latest/getting-started/openstack/connectivity
 ---
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be

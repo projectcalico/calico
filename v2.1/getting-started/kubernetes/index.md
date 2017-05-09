@@ -1,6 +1,5 @@
 ---
 title: Calico for Kubernetes
-redirect_from: latest/getting-started/kubernetes/index
 ---
 
 Calico enables networking and network policy in Kubernetes clusters across the cloud.  Calico works

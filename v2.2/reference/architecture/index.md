@@ -1,5 +1,6 @@
 ---
 title: Calico Architecture
+redirect_from: latest/reference/architecture/index
 ---
 
 This document discusses the various pieces of the Calico's architecture, 
