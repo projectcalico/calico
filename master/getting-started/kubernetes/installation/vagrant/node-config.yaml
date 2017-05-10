@@ -20,6 +20,23 @@ write_files:
           user: kubelet
         name: kubelet-context
       current-context: kubelet-context
+  - path: /load_k8s_binary.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      k8s_ver=v1.6.2
+
+      binary=$1
+      ver_binary=${binary}-$k8s_ver
+      dl_path=/k8s
+      if [ ! -f $dl_path/${ver_binary}.downloaded ]; then
+        # On nodes do not download to same location as master does
+        dl_path=/k8s_local; mkdir -p $dl_path;
+        /usr/bin/wget -O $dl_path/${ver_binary} https://storage.googleapis.com/kubernetes-release/release/${k8s_ver}/bin/linux/amd64/$binary
+      fi
+      mkdir -p /opt/bin
+      cp $dl_path/${ver_binary} /opt/bin/$binary
+      /usr/bin/chmod +x /opt/bin/$binary
 
 coreos:
   update:
@@ -47,9 +64,8 @@ coreos:
         TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.5.1/cni-v0.5.1.tgz
         ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.5.1.tgz -C /opt/cni/bin
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kubelet
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
+        ExecStartPre=/load_k8s_binary.sh kubelet
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
         --allow-privileged=true \
@@ -75,8 +91,7 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kube-proxy
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
+        ExecStartPre=/load_k8s_binary.sh kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
