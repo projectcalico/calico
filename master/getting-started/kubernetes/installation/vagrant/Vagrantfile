@@ -1,3 +1,7 @@
+---
+layout: null
+---
+
 # Size of the cluster created by Vagrant
 num_instances=3
 
@@ -29,6 +33,28 @@ Vagrant.configure("2") do |config|
     config.vbguest.auto_update = false
   end
 
+  # To speed up multiple runs of 'vagrant up' or when experiencing failures
+  # of the systemd service 'user-data', the Kubernetes binaries can be
+  # pre-downloaded.  To download the binaries, downloaded the script
+  # {{site.url}}{{page.dir}}fetch_k8s_binaries.sh
+  # into the same directory as this Vagrantfile, make it executable with
+  # `chmod +x fetch_k8s_binaries.sh`, and then run it to create a k8s directory
+  # and download the needed k8s binaries.
+  #
+  # If the environment variable K8S_CACHED is set to true and if the directory
+  # exists in the same folder as this Vagrantfile it will be mounted into
+  # each VM.  (This requires nfsd in Linux and may prompt for superuser
+  # permissions. This has only been tested on linux.)
+  if ENV['K8S_CACHED'] == "true"
+    if File.directory?(File.expand_path("./k8s"))
+      config.vm.synced_folder "./k8s", "/k8s", id: "core", :nfs => true,  :mount_options   => ['nolock,vers=3,udp,ro']
+    end
+  end
+
+  $k8s_binary_init = <<SCRIPT
+{% include {{page.version}}/kubernetes/fetch_k8s_binaries.sh %}
+SCRIPT
+
   # Set up each box
   (1..num_instances).each do |i|
     if i == 1
@@ -45,6 +71,11 @@ Vagrant.configure("2") do |config|
       # Workaround VirtualBox issue where eth1 has 2 IP Addresses at startup
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
+
+      host.vm.provision :shell, :inline => "sudo mkdir -p /opt/k8s/setup"
+      host.vm.provision :shell, :inline => "echo '#{$k8s_binary_init}' > /opt/k8s/setup/fetch_k8s_binaries.sh"
+      host.vm.provision :shell, :inline => "sudo chmod +x /opt/k8s/setup/*"
+
 
       if i == 1
         # Configure the master.
