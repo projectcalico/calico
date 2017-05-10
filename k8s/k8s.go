@@ -340,6 +340,10 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 			// Returning an error here is with the assumption that k8s (kubelet) retries deleting again.
 			logger.WithField("endpoint", wep).Warning("Error deleting endpoint: endpoint was modified before it could be deleted.")
 			return fmt.Errorf("Error deleting endpoint: endpoint was modified before it could be deleted: %v", err)
+		case cerrors.ErrorOperationNotSupported:
+			// KDD does not support WorkloadEndpoint deletion, the WEP is backed by the Pod and the
+			// deletion will be handled by Kubernetes. This error can be ignored.
+			logger.WithField("endpoint", wep).Info("Endpoint deletion will be handled by Kubernetes deletion of the Pod.")
 		default:
 			return err
 		}
@@ -356,7 +360,12 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 
 	// Return the IPAM error if there was one. The IPAM error will be lost if there was also an error in cleaning up
 	// the device or endpoint, but crucially, the user will know the overall operation failed.
-	return ipamErr
+	if ipamErr != nil {
+		return ipamErr
+	}
+
+	logger.WithField("endpoint", wep).Info("Teardown processing complete.")
+	return nil
 }
 
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
