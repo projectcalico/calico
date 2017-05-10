@@ -186,6 +186,19 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
+
+		// We now have some config flags that affect how we configure the syncer.
+		// After loading the config from the datastore, reconnect, possibly with new
+		// config.  We don't need to re-load the configuration _again_ because the
+		// calculation graph will spot if the config has changed since we were initialised.
+		datastoreConfig = configParams.DatastoreConfig()
+		datastore, err = backend.NewClient(datastoreConfig)
+		if err != nil {
+			log.WithError(err).Error("Failed to (re)connect to datastore")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+
 		break configRetry
 	}
 
