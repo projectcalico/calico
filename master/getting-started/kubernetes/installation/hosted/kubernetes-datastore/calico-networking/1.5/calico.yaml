@@ -95,6 +95,9 @@ spec:
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
               value: "always"
+            # Enable IP-in-IP within Felix.
+            - name: FELIX_IPINIPENABLED
+              value: "true"
             # Set based on the k8s node name.
             - name: NODENAME
               valueFrom:
