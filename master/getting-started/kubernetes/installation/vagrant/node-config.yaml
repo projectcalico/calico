@@ -30,18 +30,45 @@ write_files:
       ver_binary=${binary}-$k8s_ver
       dl_path=/k8s
       if [ ! -f $dl_path/${ver_binary}.downloaded ]; then
-        # On nodes do not download to same location as master does
-        dl_path=/k8s_local; mkdir -p $dl_path;
-        /usr/bin/wget -O $dl_path/${ver_binary} https://storage.googleapis.com/kubernetes-release/release/${k8s_ver}/bin/linux/amd64/$binary
+        exit 1
       fi
       mkdir -p /opt/bin
       cp $dl_path/${ver_binary} /opt/bin/$binary
       /usr/bin/chmod +x /opt/bin/$binary
+  - path: /k8s_init_download.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      k8s_ver=v1.6.2
+
+      binaries="kubelet kube-proxy"
+
+      for x in $binaries; do
+        if [ ! -f /k8s/${x}-$k8s_ver.downloaded ]; then
+          umount /k8s
+          mkdir -p /k8s
+          break;
+        fi
+      done
+      cd /
+      /tmp/fetch_k8s_binaries.sh kubelet kube-proxy
 
 coreos:
   update:
     reboot-strategy: off
   units:
+    - name: runcmd.service
+      command: start
+      content: |
+        [Unit]
+        Description=Downloads Kubernetes binaries
+        Before=kubelet.service kube-proxy.service
+
+        [Service]
+        Type=oneshot
+        TimeoutStartSec=1800
+        ExecStart=/k8s_init_download.sh
+        RemainAfterExit=true
     - name: etcd-member.service
       command: start
       drop-ins:

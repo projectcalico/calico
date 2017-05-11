@@ -53,6 +53,8 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
 
+      host.vm.provision :file, :source => "fetch_k8s_binaries.sh", :destination => "/tmp/fetch_k8s_binaries.sh"
+
       if i == 1
         # Configure the master.
         host.vm.provision :file, :source => "master-config.yaml", :destination => "/tmp/vagrantfile-user-data"

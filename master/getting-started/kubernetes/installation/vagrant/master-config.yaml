@@ -1,29 +1,39 @@
 #cloud-config
 ---
+
 write_files:
   - path: /load_k8s_binary.sh
     permissions: '0755'
     content: |
       #!/bin/bash
-      k8s_ver="v1.6.2"
+      k8s_ver=v1.6.2
 
       binary=$1
       ver_binary=${binary}-$k8s_ver
-      mkdir -p /k8s
-      if [ ! -f /k8s/${ver_binary}.downloaded ]; then
-        /usr/bin/wget -O /k8s/${ver_binary} https://storage.googleapis.com/kubernetes-release/release/$k8s_ver/bin/linux/amd64/$binary
-        if [ $? -eq 0 ]; then
-          touch /k8s/${ver_binary}.downloaded
-        fi
+      dl_path=/k8s
+      if [ ! -f $dl_path/${ver_binary}.downloaded ]; then
+        exit 1
       fi
       mkdir -p /opt/bin
-      cp /k8s/${ver_binary} /opt/bin/$binary
+      cp $dl_path/${ver_binary} /opt/bin/$binary
       /usr/bin/chmod +x /opt/bin/$binary
 
 coreos:
   update:
     reboot-strategy: off
   units:
+    - name: runcmd.service
+      command: start
+      content: |
+        [Unit]
+        Description=Downloads Kubernetes binaries
+        Before=kube-apiserver.service kube-controller-manager.service kube-scheduler.service kubelet.service kube-proxy.service
+
+        [Service]
+        Type=oneshot
+        TimeoutStartSec=1800
+        ExecStart=/bin/sh -c "cd /; /tmp/fetch_k8s_binaries.sh"
+        RemainAfterExit=true
     - name: etcd-member.service
       command: start
       drop-ins:

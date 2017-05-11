@@ -17,6 +17,7 @@ These instructions allow you to set up a Kubernetes cluster with Calico networki
     curl -O {{site.url}}{{page.dir}}Vagrantfile
     curl -O {{site.url}}{{page.dir}}master-config.yaml
     curl -O {{site.url}}{{page.dir}}node-config.yaml
+    curl -O {{site.url}}{{page.dir}}fetch_k8s_binaries.sh
 
 ### 1.3 Startup and SSH
 
