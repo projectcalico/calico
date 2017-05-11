@@ -16,10 +16,14 @@ This document covers configuration of:
 
 ### Concepts
 
+**AS Number**
+
 The global default node AS Number is the AS Number used by the BGP agent on a
 Calico node when it has not been explicitly specified.  Setting this value
 simplifies configuration when your network topology allows all of your Calico
 nodes to use the same AS Number.
+
+**Node-to-Node Mesh**
 
 The full node-to-node mesh option provides a mechanism to automatically
 configure peering between all Calico nodes.  When enabled, each Calico node
@@ -31,10 +35,14 @@ and explicit BGP peering to be configured.
 
 Explicit BGP peers may be configured globally or for a particular node.
 
+**Global BGP Peers**
+
 A global BGP peer is a BGP agent that peers with every Calico node in the
 network.  A typical use case for a global peer might be a mid-scale
 deployment where all of the Calico nodes are on the same L2 network and are
 each peering with the same Route Reflector (or set of Route Reflectors).
+
+**Per-Node BGP Peers**
 
 At scale, different network topologies come in to play.  For example, in the
 [AS per Rack model]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric#the-as-per-rack-model)
