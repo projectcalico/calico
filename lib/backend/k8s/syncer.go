@@ -247,6 +247,14 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	var event watch.Event
 	var kvp *model.KVPair
 	var opts k8sapi.ListOptions
+	var openWatchers []watch.Interface
+	closeWatchers := func() {
+		for _, w := range openWatchers {
+			log.WithField("watcher", w).Debug("Closing old watcher.")
+			w.Stop()
+		}
+		openWatchers = nil
+	}
 
 	// Always perform an initial snapshot.
 	needsResync := true
@@ -278,6 +286,10 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				return
 			}
 
+			// Close the previous crop of watchers to avoid leaking resources when we
+			// recreate them below.
+			closeWatchers()
+
 			// Create the Kubernetes API watchers.
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
 			nsWatch, err := syn.kubeAPI.NamespaceWatch(opts)
@@ -286,6 +298,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			openWatchers = append(openWatchers, nsWatch)
 			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.podVersion}
 			poWatch, err := syn.kubeAPI.PodWatch("", opts)
 			if err != nil {
@@ -293,16 +306,17 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				time.Sleep(1 * time.Second)
 				continue
 			}
-
-			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
+			openWatchers = append(openWatchers, poWatch)
 
 			// Create watcher for NetworkPolicy objects.
+			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
 			npWatch, err := syn.kubeAPI.NetworkPolicyWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch NetworkPolicies, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			openWatchers = append(openWatchers, npWatch)
 
 			// Create watcher for Calico global config resources.
 			globalConfigWatch, err := syn.kubeAPI.GlobalConfigWatch(opts)
@@ -311,6 +325,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			openWatchers = append(openWatchers, globalConfigWatch)
 
 			// Watcher for Calico IP Pool resources.
 			ipPoolWatch, err := syn.kubeAPI.IPPoolWatch(opts)
@@ -319,6 +334,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				time.Sleep(1 * time.Second)
 				continue
 			}
+			openWatchers = append(openWatchers, ipPoolWatch)
 
 			if !syn.disableNodePoll {
 				// Create watcher for Node objects
@@ -329,6 +345,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 					time.Sleep(1 * time.Second)
 					continue
 				}
+				openWatchers = append(openWatchers, nodeWatch)
 				noChan = nodeWatch.ResultChan()
 			}
 			nsChan = nsWatch.ResultChan()
@@ -345,6 +362,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 		select {
 		case <-syn.stopChan:
 			log.Info("Syncer told to stop reading")
+			closeWatchers()
 			return
 		case event = <-nsChan:
 			log.Debugf("Incoming Namespace watch event. Type=%s", event.Type)
