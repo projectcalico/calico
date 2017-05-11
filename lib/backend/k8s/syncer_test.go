@@ -28,10 +28,19 @@ import (
 )
 
 type testWatch struct {
-	c <-chan watch.Event
+	name      string
+	c         <-chan watch.Event
+	stopped   bool
+	stopMutex sync.Mutex
 }
 
 func (tw *testWatch) Stop() {
+	tw.stopMutex.Lock()
+	defer tw.stopMutex.Unlock()
+	if tw.stopped {
+		panic("testWatch already stopped")
+	}
+	tw.stopped = true
 	return
 }
 
@@ -40,9 +49,10 @@ func (tw *testWatch) ResultChan() <-chan watch.Event {
 }
 
 type testClient struct {
-	podC       chan watch.Event
-	state      map[model.Key]interface{}
-	stateMutex sync.Mutex
+	openWatchers []*testWatch
+	podC         chan watch.Event
+	state        map[model.Key]interface{}
+	stateMutex   sync.Mutex
 }
 
 func (tc *testClient) OnStatusUpdated(status api.SyncStatus) {
@@ -64,38 +74,49 @@ func (tc *testClient) OnUpdates(updates []api.Update) {
 	return
 }
 
+func (tc *testClient) newWatch(name string, c chan watch.Event) *testWatch {
+	tc.stateMutex.Lock()
+	defer tc.stateMutex.Unlock()
+	w := &testWatch{
+		name: name,
+		c:    c,
+	}
+	tc.openWatchers = append(tc.openWatchers, w)
+	return w
+}
+
 func (tc *testClient) NamespaceWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: make(chan watch.Event)}
+	w = tc.newWatch("ns", make(chan watch.Event))
 	err = nil
 	return
 }
 
 func (tc *testClient) PodWatch(namespace string, opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: tc.podC}
+	w = tc.newWatch("pod", tc.podC)
 	err = nil
 	return
 }
 
 func (tc *testClient) NetworkPolicyWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: make(chan watch.Event)}
+	w = tc.newWatch("pol", make(chan watch.Event))
 	err = nil
 	return
 }
 
 func (tc *testClient) GlobalConfigWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: make(chan watch.Event)}
+	w = tc.newWatch("global conf", make(chan watch.Event))
 	err = nil
 	return
 }
 
 func (tc *testClient) IPPoolWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: make(chan watch.Event)}
+	w = tc.newWatch("IP pool", make(chan watch.Event))
 	err = nil
 	return
 }
 
 func (tc *testClient) NodeWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
-	w = &testWatch{c: make(chan watch.Event)}
+	w = tc.newWatch("node", make(chan watch.Event))
 	err = nil
 	return
 }
@@ -208,6 +229,19 @@ var _ = Describe("Test Syncer", func() {
 			// Send in update for the pod again.
 			tc.podC <- watch.Event{Type: watch.Added, Object: &pod}
 			Eventually(getModelEndpoint).ShouldNot(BeNil())
+
+			// Check that, after the resync, the old watchers are stopped.
+			tc.stateMutex.Lock()
+			defer tc.stateMutex.Unlock()
+			// We expect 6 old watchers and 6 new. If that changes, we'll assert here
+			// so the maintainer can re-check the test still matches the logic.
+			Expect(tc.openWatchers).To(HaveLen(12))
+			for _, w := range tc.openWatchers[:len(tc.openWatchers)/2] {
+				w.stopMutex.Lock()
+				stopped := w.stopped
+				w.stopMutex.Unlock()
+				Expect(stopped).To(BeTrue())
+			}
 		})
 	})
 })
