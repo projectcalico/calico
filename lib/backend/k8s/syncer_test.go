@@ -15,6 +15,8 @@
 package k8s
 
 import (
+	"sync"
+
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -38,8 +40,9 @@ func (tw *testWatch) ResultChan() <-chan watch.Event {
 }
 
 type testClient struct {
-	podC  chan watch.Event
-	state map[model.Key]interface{}
+	podC       chan watch.Event
+	state      map[model.Key]interface{}
+	stateMutex sync.Mutex
 }
 
 func (tc *testClient) OnStatusUpdated(status api.SyncStatus) {
@@ -49,6 +52,8 @@ func (tc *testClient) OnStatusUpdated(status api.SyncStatus) {
 
 func (tc *testClient) OnUpdates(updates []api.Update) {
 	log.WithField("updates", updates).Info("OnUpdates")
+	tc.stateMutex.Lock()
+	defer tc.stateMutex.Unlock()
 	for _, update := range updates {
 		if update.UpdateType == api.UpdateTypeKVDeleted || update.Value == nil {
 			delete(tc.state, update.Key)
@@ -185,6 +190,8 @@ var _ = Describe("Test Syncer", func() {
 				EndpointID:     "eth0",
 			}
 			getModelEndpoint := func() interface{} {
+				tc.stateMutex.Lock()
+				defer tc.stateMutex.Unlock()
 				log.WithField("val", tc.state[key]).Info("state")
 				return tc.state[key]
 			}
