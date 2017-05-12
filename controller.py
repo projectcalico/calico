@@ -173,7 +173,7 @@ class Controller(object):
         self._client.create_policy("default",
                                    "k8s-policy-no-match",
                                    selector,
-                                   order=NET_POL_BACKSTOP_ORDER,
+                                   order=NET_POL_NO_MATCH_ORDER,
                                    rules=rules)
 
         # Read initial state from Kubernetes API.
