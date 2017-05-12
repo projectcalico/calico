@@ -12,13 +12,13 @@ BIRD_VER := v0.3.1
 GOBGPD_VER := v0.2.1
 FELIX_VER := 2.2.2
 LIBNETWORK_PLUGIN_VER := v1.1.0
-CONFD_VER := v0.11.2
+CONFD_VER := v0.12.1-calico0.1.0
 SYSTEMTEST_CONTAINER_VER := latest
 
 ###############################################################################
 # URL for Calico binaries
 # confd binary
-CONFD_URL?=https://github.com/projectcalico/confd/releases/download/$(CONFD_VER)/confd.static
+CONFD_URL?=https://github.com/projectcalico/confd/releases/download/$(CONFD_VER)/confd
 # bird binaries
 BIRD_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird
 BIRD6_URL?=https://github.com/projectcalico/calico-bird/releases/download/$(BIRD_VER)/bird6
