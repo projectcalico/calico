@@ -13,8 +13,8 @@ v2.2:
     For more details see the [blog post](https://www.projectcalico.org/project-calico-2-2-released/) or the component release notes linked below.
 
     There are two known issues with this release (that also affect previous releases). These issues will be addressed in v2.2.1 to be released shortly.
-    1) Some users may experience route flapping when using IPIP - For more details see https://github.com/projectcalico/bird/pull/37
-    2) There's a known memory leak in the Kubernetes datastore driver - For more details see https://github.com/projectcalico/felix/issues/1455
+    1. Some users may experience route flapping when using IPIP - For [more details](https://github.com/projectcalico/bird/pull/37)
+    2. There's a known memory leak in the Kubernetes datastore driver - For [more details](https://github.com/projectcalico/felix/issues/1455)
 
   components:
     felix:
