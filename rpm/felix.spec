@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        2.2.0
+Version:        2.2.1
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -152,6 +152,11 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu May 11 2017 Neil Jerram <neil@tigera.io> 2.2.1-1
+  - Felix 2.2.1 (from Git commit b04446b).
+    [Changes recorded in 2.2.1 tag]
+    - Fix that Felix didn't respect IpInIpEnabled flag (#1452).
+
 * Tue May 09 2017 Neil Jerram <neil@tigera.io> 2.2.0-1
   - Felix 2.2.0 (from Git commit bc4d54d).
     [Changes recorded in 2.2.0 tag]

@@ -1,3 +1,11 @@
+felix (2.2.1~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.2.1 (from Git commit b04446b).
+    [Changes recorded in 2.2.1 tag]
+    - Fix that Felix didn't respect IpInIpEnabled flag (#1452).
+
+ -- Neil Jerram <neil@tigera.io>  Thu, 11 May 2017 10:47:30 +0100
+
 felix (2.2.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.2.0 (from Git commit bc4d54d).
