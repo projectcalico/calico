@@ -74,9 +74,9 @@ spec:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
-            # Enable felix debug logging.
+            # Enable felix info logging.
             - name: FELIX_LOGSEVERITYSCREEN
-              value: "debug"
+              value: "info"
             # Disable file logging so `kubectl logs` works.
             - name: CALICO_DISABLE_FILE_LOGGING
               value: "true"
