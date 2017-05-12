@@ -1,5 +1,5 @@
-hash: 382d79fe8ffaf9a5f620cdd19ac13bb2195adfb4120884b3ca316bce87b42b66
-updated: 2017-05-09T10:50:44.369661522Z
+hash: fffb236edf049a68bf3fc95eab97ecbb3bf98fb44a1cac1ba2b53493b138a896
+updated: 2017-05-11T14:14:46.808845652-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,16 +13,16 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 1a9288c3c09cea4e580fdb1a636f1c5e185a391f
+  version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: aac2292ab5fd3a34a40b859f5d9513c4663262ad
+  version: d2716fc5ae7909a3b9651e31cfb0eba22b4920c3
   subpackages:
   - client
+  - pkg/fileutil
   - pkg/pathutil
-  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -39,9 +39,15 @@ imports:
   version: 568e959cd89871e61434c1143528d9162da89ef2
   subpackages:
   - semver
+- name: github.com/coreos/go-systemd
+  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
+  subpackages:
+  - activation
+  - journal
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
+  - capnslog
   - health
   - httputil
   - timeutil
@@ -83,7 +89,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 18c9bb3261723cd5401db4d0c9fbc5c3b6c70fe8
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -97,9 +103,9 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kardianos/osext
-  version: 9d302b58e975387d0b4d9be876622c86cefe64be
+  version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: b6fde1625d631a48340817849a547164f395d9eb
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -144,7 +150,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4c64e80b39466c5092e717246c6226dc4ed26b76
+  version: aafc4f711b0f74563cd718833b5c3631e349f8c7
   subpackages:
   - lib
   - lib/api
@@ -181,13 +187,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: d098ca18df8bc825079013daf7bacefbb1ee877e
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -195,9 +201,9 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
+  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: 5b60b3d3ee017ed00bcd0225fcca7acab767844b
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -205,11 +211,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 58c32ae2d72285baf322aaff05213c2fba8fb8a2
+  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
   version: 1f22c0103821b9390939b6776727195525381532
   subpackages:
@@ -231,7 +237,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 9ccfe848b9db8435a24c424abbc07a921adf1df5
+  version: d75a52659825e75fff6158388dddc6a5b04f9ba5
   subpackages:
   - unix
 - name: golang.org/x/text
