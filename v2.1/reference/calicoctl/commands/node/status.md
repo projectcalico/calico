@@ -1,6 +1,5 @@
 ---
 title: calicoctl node status
-redirect_from: latest/reference/calicoctl/commands/node/status
 ---
 
 This sections describes the `calicoctl node status` command.

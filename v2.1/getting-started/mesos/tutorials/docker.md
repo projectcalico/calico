@@ -1,6 +1,5 @@
 ---
 title: Calico-Mesos Usage Guide for the Docker Containerizer
-redirect_from: latest/getting-started/mesos/tutorials/docker
 ---
 
 This guide shows how to use Marathon to start

@@ -1,6 +1,5 @@
 ---
 title: Etcdless Hosted Install
-redirect_from: latest/getting-started/kubernetes/installation/hosted/k8s-backend/index
 ---
 
 This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  

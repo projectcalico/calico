@@ -1,5 +1,6 @@
 ---
 title: Configuring Conntrack
+redirect_from: latest/usage/configuration/conntrack
 ---
 
 A common problem on Linux systems is running out of space in the

@@ -1,6 +1,5 @@
 ---
 title: Integration Guide
-redirect_from: latest/getting-started/mesos/installation/integration
 ---
 
 This guide explains the components necessary to install Calico on Mesos for integrating with custom configuration management. To install Calico in Mesos, no changes are needed on any Mesos Master.

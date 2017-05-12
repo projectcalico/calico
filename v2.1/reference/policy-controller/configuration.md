@@ -1,6 +1,5 @@
 ---
 title: Configuring the Calico policy controller 
-redirect_from: latest/reference/policy-controller/configuration
 ---
 
 The policy controller is primarily configured through environment variables.  When running

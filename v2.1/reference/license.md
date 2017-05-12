@@ -1,6 +1,5 @@
 ---
 title: Third Party Software Attributions
-redirect_from: latest/reference/license
 ---
 
 

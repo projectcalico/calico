@@ -1,6 +1,5 @@
 ---
 title: Standard Hosted Install
-redirect_from: latest/getting-started/kubernetes/installation/hosted/hosted
 ---
 
 To install Calico as a Kubernetes add-on using your own etcd cluster:

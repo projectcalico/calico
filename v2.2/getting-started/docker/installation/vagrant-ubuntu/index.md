@@ -1,5 +1,6 @@
 ---
 title: Running the Calico tutorials on Ubuntu using Vagrant and VirtualBox
+redirect_from: latest/getting-started/docker/installation/vagrant-ubuntu/index
 ---
 
 These instructions allow you to set up an Ubuntu cluster ready to network Docker containers with

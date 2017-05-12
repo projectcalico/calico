@@ -1,6 +1,5 @@
 ---
 title: Networking Mesos Tasks with Calico
-redirect_from: latest/getting-started/mesos/tutorials/unified
 ---
 
 ## Prerequisites
