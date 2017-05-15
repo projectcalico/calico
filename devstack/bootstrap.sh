@@ -79,8 +79,9 @@ sudo apt-get update
 sudo apt-get -y install git
 
 # Prepare networking-calico tree - the following lines will check out
-# the master branch of networking-calico.
-git clone https://git.openstack.org/openstack/networking-calico
+# the master branch of networking-calico (if not already present).
+test -e networking-calico || \
+    git clone https://git.openstack.org/openstack/networking-calico
 cd networking-calico
 
 # If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
@@ -103,8 +104,9 @@ cd ..
 sudo sysctl -w net.ipv4.ip_forward=1
 sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
-# Clone the DevStack repository.
-git clone https://git.openstack.org/openstack-dev/devstack
+# Clone the DevStack repository (if not already present).
+test -e devstack || \
+    git clone https://git.openstack.org/openstack-dev/devstack
 cd devstack
 
 # If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
