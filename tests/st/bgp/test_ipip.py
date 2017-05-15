@@ -357,6 +357,19 @@ class TestIPIP(TestBase):
                     # Check that we are using IP-in-IP for some routes.
                     assert "tunl0" in host1.execute("ip r")
                     assert "tunl0" in host2.execute("ip r")
+
+                    # Check that routes are not flapping: the following shell
+                    # script checks that there is no output for 10s from 'ip
+                    # monitor', on either host.  The "-le 1" is to allow for
+                    # something (either 'timeout' or 'ip monitor', not sure)
+                    # saying 'Terminated' when the 10s are up.  (Note that all
+                    # commands here are Busybox variants; I tried 'grep -v' to
+                    # eliminate the Terminated line, but for some reason it
+                    # didn't work.)
+                    for host in [host1, host2]:
+                        host.execute("changes=`timeout -t 10 ip -t monitor 2>&1`; " +
+                                     "echo \"$changes\"; " +
+                                     "test `echo \"$changes\" | wc -l` -le 1")
                 else:
                     # Expect non-connectivity between workloads on different hosts.
                     self.assert_false(
