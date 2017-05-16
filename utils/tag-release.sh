@@ -38,7 +38,12 @@ cat <<EOF
 Changes (i.e. Git commit messages) since the last release ($last_tag) have been
 written into ${release_notes}.  These will become the tag release note.
 
-Please examine that file and edit as appropriate.
+Please examine that file and edit as appropriate:
+
+- Add PR or issue numbers in parens at the end of each line.
+- Re-order the issues to highlight more important ones at the top.
+- Reword any messages that don't give enough context.
+- Remove any "fluff" commits, such as changelog updates.
 
 Once you have edited the file to your liking, run
 
