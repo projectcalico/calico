@@ -1,3 +1,11 @@
+felix (2.2.2~__STREAM__) __STREAM__; urgency=low
+
+  * Felix 2.2.2 (from Git commit 9c92a96).
+    [Changes recorded in 2.2.2 tag]
+    - Pin libcalico-go to v1.2.2 to pick up memory leak fix (#1457).
+
+ -- Neil Jerram <neil@tigera.io>  Tue, 16 May 2017 10:53:29 +0100
+
 felix (2.2.1~__STREAM__) __STREAM__; urgency=low
 
   * Felix 2.2.1 (from Git commit b04446b).
