@@ -9,7 +9,7 @@ toc:
   path: /usage/configuration/
 - title: Calico and Systemd
   path: /usage/configuration/as-service
-- title: BGP Peering
+- title: Configuring BGP Peers
   path: /usage/configuration/bgp
 - title: Route Reflector
   path: /usage/bird-rr-config
