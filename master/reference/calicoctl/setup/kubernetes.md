@@ -7,7 +7,7 @@ This document covers the configuration options for calicoctl when using the Kube
 
 > **Note**
 >
-> This is an experimental feature. If running Calico on Kubernetes with the etcdv2 datastore, see the [etcdv2 configuration document](etcdv2) instead.
+> If running Calico on Kubernetes with the etcdv2 datastore, see the [etcdv2 configuration document](etcdv2) instead.
 > For more information on running with the Kubernetes datastore, see [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/)
 
 There are two ways to configure calicoctl with your Kubernetes API details: 

@@ -43,7 +43,7 @@ The following option allows configuration of the Calico datastore type.
 The Calico CNI plugin supports the following datastore types:
 
 * etcdv2 (default)
-* kubernetes (experimental)
+* kubernetes
 
 ### Etcd location
 
