@@ -1,5 +1,5 @@
 ---
-title: BGP Configuration
+title: Configuring BGP Peers
 ---
 
 This document describes the commands available in `calicoctl` for managing BGP.  It
@@ -15,25 +15,38 @@ This document covers configuration of:
 
 ### Concepts
 
+**AS Number**
+
 The global default node AS Number is the AS Number used by the BGP agent on a
 Calico node when it has not been explicitly specified.  Setting this value
 simplifies configuration when your network topology allows all of your Calico
 nodes to use the same AS Number.
 
+**Node-to-Node Mesh**
+
 The full node-to-node mesh option provides a mechanism to automatically
 configure peering between all Calico nodes.  When enabled, each Calico node
 automatically sets up a BGP peering with every other Calico node in the
-network.  By default this is enabled.  However, the full node-to-node mesh is
-only useful for small scale deployments and where all Calico nodes are on the
-same L2 network.  We generally expect the full node-to-node mesh to be disabled
-and explicit BGP peering to be configured.
+network.  By default this is enabled.
 
-Explicit BGP peers may be configured globally or for a particular node.
+The full node-to-node mesh provides a simple mechanism for auto-configuring
+the BGP network in small scale deployments (say 50 nodes - although this limit
+is not set in stone and Calico has been deployed with over 100 nodes in a full
+mesh topology).
+
+For large-scale deployments, or for deployments where you require a more specific
+BGP topology (e.g. peering with ToR switches) the full node-to-node mesh should be
+disabled and explicit BGP peers configured for your Calico nodes.  A BGP peer may 
+be configured in your Calico network as a Global BGP Peer or a Per-Node BGP Peer.
+
+**Global BGP Peers**
 
 A global BGP peer is a BGP agent that peers with every Calico node in the
 network.  A typical use case for a global peer might be a mid-scale
 deployment where all of the Calico nodes are on the same L2 network and are
 each peering with the same Route Reflector (or set of Route Reflectors).
+
+**Per-Node BGP Peers**
 
 At scale, different network topologies come in to play.  For example, in the
 [AS per Rack model]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric#the-as-per-rack-model)
@@ -60,9 +73,9 @@ complicated topologies where you are explicitly setting the AS number on each
 node, the default value will not be used and therefore using this command is
 not necessary.
 
-> Prior to Calico version 2.0.0, calicoctl and calico/node set the global default
+> Prior to version 2.0.0, calicoctl and calico/node set the global default
 > AS number to 64511.  Updating your deployment from a pre-2.0.0 version to use
-> the 2.0.0+ calicoctl and calico/node container images will not affect the 
+> the 2.0.0+ calicoctl and calico/node container images will not affect the
 > global value that was previously set.
 
 #### Example
@@ -115,8 +128,8 @@ without specifying the parameter, the command will output the current state.
 
 If your network topology includes BGP speakers that will be peered with *every*
 Calico node in your deployment, you can use the `calicoctl` resource management
-commands to set up the peering on your Calico nodes.  We refer to these types 
-of peer as global peers because they are configured in Calico once (globally) 
+commands to set up the peering on your Calico nodes.  We refer to these types
+of peer as global peers because they are configured in Calico once (globally)
 and Calico will peer every Calico node with these peers.
 
 Two situations where global BGP peer configuration is useful are (1) when adding
@@ -142,7 +155,7 @@ spec:
   asNumber: 64567
 EOF
 ```
-    
+
 To remove a global BGP peer that was configured with IP address 192.20.30.40
 (the AS number is not required when deleting) run the following command on any
 node:
@@ -153,14 +166,14 @@ To view the current list of global peers run the following command on any node:
 
 ```
 $ calicoctl get bgpPeer --scope=global
-SCOPE    PEERIP         NODE   ASN     
-global   192.20.30.40          64567   
+SCOPE    PEERIP         NODE   ASN
+global   192.20.30.40          64567
 ```
 
 ### Configuring a node specific BGP peer
 
 If your network topology requires specific peerings for each Calico node, you
-can use the `calicoctl` resource management commands to set up the peers 
+can use the `calicoctl` resource management commands to set up the peers
 specific to a Calico nodes.  We refer to these as node specific peers.
 
 Configuring node specific peers is necessary when the BGP topology is more
@@ -200,8 +213,8 @@ with Calico node "node1", run the following command from any node:
 
 ```
 $ calicoctl get bgpPeer --node=node1
-SCOPE   PEERIP      NODE    ASN     
-node    aa:bb::ff   node1   64514   
+SCOPE   PEERIP      NODE    ASN
+node    aa:bb::ff   node1   64514
 ```
 
 ### Checking the status of the BGP peers
