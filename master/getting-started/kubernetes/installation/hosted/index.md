@@ -23,8 +23,7 @@ for getting started quickly with Calico in conjunction with tools like kubeadm.
 
 #### [Kubernetes Datastore](kubernetes-datastore/)
 
-This manifest installs Calico in a mode where it does not require its own etcd cluster.  This is an experimental
-mode in which the Kubernetes API is used by Calico as its datastore.
+This manifest installs Calico in a mode where it does not require its own etcd cluster.
 
 ## How it works
 
