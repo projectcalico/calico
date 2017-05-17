@@ -471,15 +471,27 @@ release-once-tagged:
 	@echo "- Go to https://github.com/projectcalico/felix/releases/tag/$(VERSION)"
 	@echo "- Copy the tag content (release notes) shown on that page"
 	@echo "- Go to https://github.com/projectcalico/felix/releases/new?tag=$(VERSION)"
+	@echo "- Name the GitHub release:"
+	@echo "  - For a stable release: 'Felix $VERSION'"
+	@echo "  - For a test release:   'Felix $VERSION pre-release for testing'"
 	@echo "- Paste the copied tag content into the large textbox"
+	@echo "- Add an introduction message and, for a significant release,"
+	@echo "  append information about where to get the release.  (See the 2.2.0"
+	@echo "  release for an example.)"
 	@echo "- Attach the binary"
 	@echo "- Click the 'This is a pre-release' checkbox, if appropriate"
 	@echo "- Click 'Publish release'"
 	@echo
-	@echo "Then, push the docker images to Dockerhub and Quay:"
+	@echo "Then, push the versioned docker images to Dockerhub and Quay:"
 	@echo
 	@echo "- docker push calico/felix:$(VERSION)"
 	@echo "- docker push quay.io/calico/felix:$(VERSION)"
+	@echo
+	@echo "If this is the latest release from the most recent stable"
+	@echo "release series, also push the 'latest' tag:"
+	@echo
+	@echo "- docker push calico/felix:latest"
+	@echo "- docker push quay.io/calico/felix:latest"
 	@echo
 	@echo "If you also want to build Debian/Ubuntu and RPM packages for"
 	@echo "the new release, use 'make deb' and 'make rpm'."
