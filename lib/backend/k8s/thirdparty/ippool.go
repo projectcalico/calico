@@ -3,10 +3,8 @@ package thirdparty
 import (
 	"encoding/json"
 
-	"k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/meta"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/runtime/schema"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // IpPoolSpec is the specification of an IP Pool as represented in the Kubernetes
@@ -19,7 +17,7 @@ type IpPoolSpec struct {
 // IpPool is the ThirdPartyResource definition of an IPPool in the Kubernetes API.
 type IpPool struct {
 	metav1.TypeMeta `json:",inline"`
-	Metadata        api.ObjectMeta `json:"metadata"`
+	Metadata        metav1.ObjectMeta `json:"metadata"`
 
 	Spec IpPoolSpec `json:"spec"`
 }
@@ -38,7 +36,7 @@ func (e *IpPool) GetObjectKind() schema.ObjectKind {
 }
 
 // GetOjbectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
-func (e *IpPool) GetObjectMeta() meta.Object {
+func (e *IpPool) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 

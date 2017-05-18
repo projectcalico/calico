@@ -25,26 +25,28 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	k8sapi "k8s.io/client-go/pkg/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/pkg/fields"
-	"k8s.io/client-go/pkg/watch"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 )
 
 type kubeAPI interface {
-	NamespaceWatch(k8sapi.ListOptions) (watch.Interface, error)
-	PodWatch(string, k8sapi.ListOptions) (watch.Interface, error)
-	NetworkPolicyWatch(k8sapi.ListOptions) (watch.Interface, error)
-	GlobalConfigWatch(k8sapi.ListOptions) (watch.Interface, error)
-	IPPoolWatch(k8sapi.ListOptions) (watch.Interface, error)
-	NodeWatch(k8sapi.ListOptions) (watch.Interface, error)
-	NamespaceList(k8sapi.ListOptions) (*k8sapi.NamespaceList, error)
+	NamespaceWatch(metav1.ListOptions) (watch.Interface, error)
+	PodWatch(string, metav1.ListOptions) (watch.Interface, error)
+	NetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
+	GlobalConfigWatch(metav1.ListOptions) (watch.Interface, error)
+	IPPoolWatch(metav1.ListOptions) (watch.Interface, error)
+	NodeWatch(metav1.ListOptions) (watch.Interface, error)
+	NamespaceList(metav1.ListOptions) (*k8sapi.NamespaceList, error)
 	NetworkPolicyList() (extensions.NetworkPolicyList, error)
-	PodList(string, k8sapi.ListOptions) (*k8sapi.PodList, error)
+	PodList(string, metav1.ListOptions) (*k8sapi.PodList, error)
 	GlobalConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, error)
 	HostConfigList(model.HostConfigListOptions) ([]*model.KVPair, error)
 	IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, error)
-	NodeList(opts k8sapi.ListOptions) (list *k8sapi.NodeList, err error)
+	NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error)
 	getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error)
 }
 
@@ -52,17 +54,17 @@ type realKubeAPI struct {
 	kc *KubeClient
 }
 
-func (k *realKubeAPI) NamespaceWatch(opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) NamespaceWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	watch, err = k.kc.clientSet.Namespaces().Watch(opts)
 	return
 }
 
-func (k *realKubeAPI) PodWatch(namespace string, opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) PodWatch(namespace string, opts metav1.ListOptions) (watch watch.Interface, err error) {
 	watch, err = k.kc.clientSet.Pods(namespace).Watch(opts)
 	return
 }
 
-func (k *realKubeAPI) NetworkPolicyWatch(opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	netpolListWatcher := cache.NewListWatchFromClient(
 		k.kc.clientSet.Extensions().RESTClient(),
 		"networkpolicies",
@@ -72,7 +74,7 @@ func (k *realKubeAPI) NetworkPolicyWatch(opts k8sapi.ListOptions) (watch watch.I
 	return
 }
 
-func (k *realKubeAPI) GlobalConfigWatch(opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	globalConfigWatcher := cache.NewListWatchFromClient(
 		k.kc.tprClient,
 		"globalconfigs",
@@ -82,7 +84,7 @@ func (k *realKubeAPI) GlobalConfigWatch(opts k8sapi.ListOptions) (watch watch.In
 	return
 }
 
-func (k *realKubeAPI) IPPoolWatch(opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) IPPoolWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	ipPoolWatcher := cache.NewListWatchFromClient(
 		k.kc.tprClient,
 		"ippools",
@@ -92,12 +94,12 @@ func (k *realKubeAPI) IPPoolWatch(opts k8sapi.ListOptions) (watch watch.Interfac
 	return
 }
 
-func (k *realKubeAPI) NodeWatch(opts k8sapi.ListOptions) (watch watch.Interface, err error) {
+func (k *realKubeAPI) NodeWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	watch, err = k.kc.clientSet.Nodes().Watch(opts)
 	return
 }
 
-func (k *realKubeAPI) NamespaceList(opts k8sapi.ListOptions) (list *k8sapi.NamespaceList, err error) {
+func (k *realKubeAPI) NamespaceList(opts metav1.ListOptions) (list *k8sapi.NamespaceList, err error) {
 	list, err = k.kc.clientSet.Namespaces().List(opts)
 	return
 }
@@ -112,7 +114,7 @@ func (k *realKubeAPI) NetworkPolicyList() (list extensions.NetworkPolicyList, er
 	return
 }
 
-func (k *realKubeAPI) PodList(namespace string, opts k8sapi.ListOptions) (list *k8sapi.PodList, err error) {
+func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
 	list, err = k.kc.clientSet.Pods(namespace).List(opts)
 	return
 }
@@ -129,7 +131,7 @@ func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, er
 	return k.kc.List(l)
 }
 
-func (k *realKubeAPI) NodeList(opts k8sapi.ListOptions) (list *k8sapi.NodeList, err error) {
+func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
 	list, err = k.kc.clientSet.Nodes().List(opts)
 	return
 }
@@ -246,7 +248,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	var nsChan, poChan, npChan, gcChan, poolChan, noChan <-chan watch.Event
 	var event watch.Event
 	var kvp *model.KVPair
-	var opts k8sapi.ListOptions
+	var opts metav1.ListOptions
 	var openWatchers []watch.Interface
 	closeWatchers := func() {
 		for _, w := range openWatchers {
@@ -291,7 +293,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			closeWatchers()
 
 			// Create the Kubernetes API watchers.
-			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
 			nsWatch, err := syn.kubeAPI.NamespaceWatch(opts)
 			if err != nil {
 				log.Warn("Failed to watch Namespaces, retrying: %s", err)
@@ -299,7 +301,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 			openWatchers = append(openWatchers, nsWatch)
-			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.podVersion}
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.podVersion}
 			poWatch, err := syn.kubeAPI.PodWatch("", opts)
 			if err != nil {
 				log.Warn("Failed to watch Pods, retrying: %s", err)
@@ -309,7 +311,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			openWatchers = append(openWatchers, poWatch)
 
 			// Create watcher for NetworkPolicy objects.
-			opts = k8sapi.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
 			npWatch, err := syn.kubeAPI.NetworkPolicyWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch NetworkPolicies, retrying: %s", err)
@@ -338,7 +340,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 			if !syn.disableNodePoll {
 				// Create watcher for Node objects
-				opts := k8sapi.ListOptions{ResourceVersion: latestVersions.nodeVersion}
+				opts := metav1.ListOptions{ResourceVersion: latestVersions.nodeVersion}
 				nodeWatch, err := syn.kubeAPI.NodeWatch(opts)
 				if err != nil {
 					log.Warnf("Failed to watch Nodes, retrying: %s", err)
@@ -464,7 +466,7 @@ func (syn *kubeSyncer) performSnapshotDeletes(exists map[string]bool) {
 // populates the provided resourceVersions with the latest k8s resource version
 // for each.
 func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resourceVersions) {
-	opts := k8sapi.ListOptions{}
+	opts := metav1.ListOptions{}
 	versions := resourceVersions{}
 	var snap []model.KVPair
 	var keys map[string]bool

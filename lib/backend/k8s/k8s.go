@@ -31,15 +31,15 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"k8s.io/client-go/kubernetes"
 	clientapi "k8s.io/client-go/pkg/api"
-	kerrors "k8s.io/client-go/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/pkg/api/v1"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/runtime/schema"
-	"k8s.io/client-go/pkg/runtime/serializer"
-	"k8s.io/client-go/pkg/util/wait"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -179,7 +179,7 @@ func (c *KubeClient) createThirdPartyResources() error {
 	// Ensure a resource exists for Calico global configuration.
 	log.Info("Ensuring GlobalConfig ThirdPartyResource exists")
 	tpr := extensions.ThirdPartyResource{
-		ObjectMeta: kapiv1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "global-config.projectcalico.org",
 			Namespace: "kube-system",
 		},
@@ -433,7 +433,7 @@ func (c *KubeClient) listProfiles(l model.ProfileListOptions) ([]*model.KVPair, 
 	}
 
 	// Otherwise, enumerate all.
-	namespaces, err := c.clientSet.Namespaces().List(kapiv1.ListOptions{})
+	namespaces, err := c.clientSet.Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, l)
 	}
@@ -514,7 +514,7 @@ func (c *KubeClient) listWorkloadEndpoints(l model.WorkloadEndpointListOptions) 
 
 	// Otherwise, enumerate all pods in all namespaces.
 	// We don't yet support hostname, orchestratorID, for the k8s backend.
-	pods, err := c.clientSet.Pods("").List(kapiv1.ListOptions{})
+	pods, err := c.clientSet.Pods("").List(metav1.ListOptions{})
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, l)
 	}
@@ -594,7 +594,7 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 	}
 
 	// List all Namespaces and turn them into Policies as well.
-	namespaces, err := c.clientSet.Namespaces().List(kapiv1.ListOptions{})
+	namespaces, err := c.clientSet.Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -797,7 +797,7 @@ func (c *KubeClient) listHostConfig(l model.HostConfigListOptions) ([]*model.KVP
 
 	// First see if we were handed a specific host, if not list all Nodes
 	if l.Hostname == "" {
-		nodes, err := c.clientSet.Nodes().List(v1.ListOptions{})
+		nodes, err := c.clientSet.Nodes().List(metav1.ListOptions{})
 		if err != nil {
 			return nil, resources.K8sErrorToCalico(err, l)
 		}

@@ -23,8 +23,8 @@ import (
 
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/intstr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -88,7 +88,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 	It("should parse a Pod with an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
 				Annotations: map[string]string{
@@ -131,7 +131,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 	It("should not parse a Pod without an IP to a WorkloadEndpoint", func() {
 		pod := k8sapi.Pod{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
 				Annotations: map[string]string{
@@ -154,7 +154,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 	It("should parse a Pod with no labels", func() {
 		pod := k8sapi.Pod{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
 			},
@@ -184,7 +184,7 @@ var _ = Describe("Test Pod conversion", func() {
 
 	It("should Parse a Pod with no NodeName", func() {
 		pod := k8sapi.Pod{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podA",
 				Namespace: "default",
 			},
@@ -208,7 +208,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a basic NetworkPolicy to a Policy", func() {
 		port80 := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -257,7 +257,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with no rules", func() {
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -284,7 +284,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with multiple peers", func() {
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -346,7 +346,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		ninety := intstr.FromInt(90)
 
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -423,7 +423,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with empty podSelector", func() {
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -448,7 +448,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with podSelector.MatchExpressions", func() {
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -483,7 +483,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		protocol := k8sapi.ProtocolTCP
 		port := intstr.FromInt(80)
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "testPolicy",
 				Namespace: "default",
 			},
@@ -527,7 +527,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should parse a Namespace to a Profile", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Labels: map[string]string{
 					"foo":   "bar",
@@ -555,7 +555,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should parse a Namespace to a Policy", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Labels: map[string]string{
 					"foo":   "bar",
@@ -583,7 +583,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should parse a Namespace to a Profile with no labels", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
@@ -608,7 +608,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should parse a Namespace to Policy (DefaultDeny)", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
@@ -636,7 +636,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should not fail for malformed annotation", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "invalidJSON",
@@ -659,7 +659,7 @@ var _ = Describe("Test Namespace conversion", func() {
 
 	It("should handle a valid but not DefaultDeny annotation", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{}",
@@ -692,7 +692,7 @@ var _ = Describe("Test Node conversion", func() {
 	It("should parse a k8s Node to a Calico Node", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:            "TestNode",
 				Labels:          l,
 				ResourceVersion: "1234",
@@ -742,7 +742,7 @@ var _ = Describe("Test Node conversion", func() {
 	It("should error on an invalid IP", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:            "TestNode",
 				Labels:          l,
 				ResourceVersion: "1234",

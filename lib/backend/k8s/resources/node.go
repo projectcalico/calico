@@ -22,8 +22,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	"k8s.io/client-go/kubernetes"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -112,7 +111,7 @@ func (c *nodeClient) Get(key model.Key) (*model.KVPair, error) {
 
 func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 	log.Debug("Received List request on Node type")
-	nodes, err := c.clientSet.Nodes().List(kapiv1.ListOptions{})
+	nodes, err := c.clientSet.Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		K8sErrorToCalico(err, list)
 	}

@@ -4,7 +4,7 @@ default: all
 all: test
 test: ut
 
-K8S_VERSION=1.4.5
+K8S_VERSION=1.6.3
 CALICO_BUILD?=calico/go-build
 PACKAGE_NAME?=projectcalico/libcalico-go
 LOCAL_USER_ID?=$(shell id -u $$USER)
@@ -19,7 +19,7 @@ vendor: glide.yaml
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     $(CALICO_BUILD) /bin/sh -c ' \
 		  cd /go/src/github.com/$(PACKAGE_NAME) && \
-      glide install -strip-vendor'
+      glide install --strip-vendor'
 
 .PHONY: ut
 ## Run the UTs locally.  This requires a local etcd and local kubernetes master to be running.
@@ -40,7 +40,8 @@ test-containerized: vendor run-etcd run-kubernetes-master
 run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd:v2.3.6 \
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.1.7 \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
@@ -48,7 +49,7 @@ run-etcd: stop-etcd
 run-kubernetes-master: stop-kubernetes-master
 	# Run the kubelet which will launch the master components in a pod.
 	docker run \
-                 -v /:/rootfs:ro \
+                 -v /proc:/rootfs/proc:ro \
                  -v /sys:/sys:ro \
                  -v /var/run:/var/run:rw \
                  -v /var/lib/docker/:/var/lib/docker:rw \
@@ -65,10 +66,11 @@ run-kubernetes-master: stop-kubernetes-master
                  	--hostname-override="127.0.0.1" \
                  	--address="0.0.0.0" \
                  	--api-servers=http://localhost:8080 \
-                 	--config=/etc/kubernetes/manifests-multi \
+	                --pod-manifest-path=/etc/kubernetes/manifests-multi/ \
                  	--cluster-dns=10.0.0.10 \
                  	--cluster-domain=cluster.local \
-                 	--allow-privileged=true --v=2
+	                --allow-privileged=true --v=2 \
+			--cgroups-per-qos=false --enforce-node-allocatable=""
 	# Wait until the newly launched API server can respond to a
 	# request on port 8080, before completing this Makefile
 	# target.

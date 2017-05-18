@@ -21,7 +21,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	kapi "k8s.io/client-go/pkg/api"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ThirdPartyToIPPool takes a Kubernetes ThirdPartyResource representation
@@ -48,7 +48,7 @@ func IPPoolToThirdParty(kvp *model.KVPair) *thirdparty.IpPool {
 	}
 
 	tpr := thirdparty.IpPool{
-		Metadata: kapi.ObjectMeta{
+		Metadata: metav1.ObjectMeta{
 			// Names in Kubernetes must be lower-case.
 			Name: tprName(kvp.Key.(model.IPPoolKey)),
 		},

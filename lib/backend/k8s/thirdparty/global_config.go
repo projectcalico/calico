@@ -3,10 +3,8 @@ package thirdparty
 import (
 	"encoding/json"
 
-	"k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/meta"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/runtime/schema"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type GlobalConfigSpec struct {
@@ -16,7 +14,7 @@ type GlobalConfigSpec struct {
 
 type GlobalConfig struct {
 	metav1.TypeMeta `json:",inline"`
-	Metadata        api.ObjectMeta `json:"metadata"`
+	Metadata        metav1.ObjectMeta `json:"metadata"`
 
 	Spec GlobalConfigSpec `json:"spec"`
 }
@@ -34,7 +32,7 @@ func (e *GlobalConfig) GetObjectKind() schema.ObjectKind {
 }
 
 // Required to satisfy ObjectMetaAccessor interface
-func (e *GlobalConfig) GetObjectMeta() meta.Object {
+func (e *GlobalConfig) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
