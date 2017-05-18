@@ -8,7 +8,7 @@ calicoctl_url = "https://github.com/projectcalico/calico-containers/releases/dow
 # the calico/node image which slows down the install process, but speeds up the
 # tutorial.
 #
-# This version should match the version required by calicotl installed from
+# This version should match the version required by calicoctl installed from
 # calicoctl_url.
 calico_docker_ver = "v0.22.0"
 
