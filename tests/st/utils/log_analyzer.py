@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.ra, Inc. All rights reserved.
 
+from collections import deque
 from datetime import datetime
 import logging
 import re
@@ -28,6 +29,11 @@ FELIX_LOG_FORMAT = (
 )
 
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+# The number of additional logs to trace out before the first error log, and
+# the maximum number of errors to report.
+NUM_CONTEXT_LOGS = 300
+MAX_NUM_ERRORS = 100
 
 # This is the list of logs we should ignore for all tests.
 LOGS_IGNORE_ALL_TESTS = [
@@ -62,13 +68,16 @@ class Log(object):
         """
         self.msg += "\n" + logtext
 
-    def __str__(self):
+    def detailed(self):
         return "=== LOG %s %s [pid %s] ===\n%s" % (self.timestamp, self.level,
                                                    self.pid, self.msg)
 
+    def __str__(self):
+        return "%s %s %s %s" % (self.timestamp, self.level,
+                                self.pid, self.msg)
+
     def __repr__(self):
         return self.__str__()
-
 
 class LogAnalyzer(object):
     """
@@ -132,10 +141,9 @@ class LogAnalyzer(object):
         determine whether a file has flipped during a test.
         """
         cmd = "head -100 %s" % self.filename
-        logs = self._extract_logs(cmd)
-        if not logs:
-            return None
-        return logs[0].timestamp
+        for log in self._parse_logs(cmd):
+            return log.timestamp
+        return None
 
     def _get_logs_num_lines(self):
         """
@@ -165,13 +173,22 @@ class LogAnalyzer(object):
 
     def get_latest_logs(self, logfilter=None):
         """
-        Get the latest logs from the server.
+        Get the latest (filtered) logs from the server.
 
         :param logfilter: An optional filter that determines whether a log
         should be stored.  This is a function that takes the log as the only
         argument and returns True if the log should be filtered _out_ of the
         list.
         :return: A list of Log objects.
+        """
+        return [log for log in self._parse_latest_logs() if not logfilter or not logfilter(log)]
+
+    def _parse_latest_logs(self):
+        """
+        Parse the latest logs from the server, returning a generator that
+        iterates through the logs.
+
+        :return: A Log generator.
         """
         # Use the entire log file if the file has flipped (i.e. the first log
         # time is not the same, otherwise tail all but the first logs.
@@ -186,35 +203,37 @@ class LogAnalyzer(object):
             _log.debug("Check appended logs")
             cmd = "tail -n +%s %s" % (self.init_log_lines + 1,
                                       self.filename)
+        return self._parse_logs(cmd)
 
-        return self._extract_logs(cmd, logfilter=logfilter)
-
-    def _extract_logs(self, cmd, logfilter=None):
+    def _parse_logs(self, cmd):
         """
-        Return a list of logs parsed from the output of the supplied command.
+        Parse the logs from the output of the supplied command, returning a
+        generator that iterates through the logs.
 
         :param cmd: The command to run to output the logs.
-        :param logfilter: The log filter.  See get_latest_logs for details.
+
+        :return: A Log generator.
         """
-        logs = []
         last_log = None
         try:
             for line in self.host.execute_readline(cmd):
-                last_log = self._process_log_line(logs, line, logfilter,
-                                                  last_log)
+                log = self._process_log_line(line, last_log)
+
+                # Logs may be continued, in which case we only return the log
+                # when the parsing indicates a new log.
+                if last_log and last_log != log:
+                    yield last_log
+                last_log = log
         except Exception:
             _log.exception(
                 "Hit exception getting logs from %s - skip logs",
                 self.host.name)
 
-        # The last log will not have been added yet, so add it now if it is
-        # not filtered.
-        if last_log and (not logfilter or not logfilter(last_log)):
-            logs.append(last_log)
+        # Yield the final log.
+        if last_log:
+            yield last_log
 
-        return logs
-
-    def _process_log_line(self, logs, line, logfilter, last_log):
+    def _process_log_line(self, line, last_log):
         """
         Build up a list of logs from the supplied log line.
 
@@ -222,15 +241,13 @@ class LogAnalyzer(object):
         it is assumed it is a continuation of the previous log.  Similarly,
         a log with level "TRACE" is also treated as a continuation.
 
-        :param logs: List of logs to append any valid log to.
         :param line: The log line to process.  This may either add a new log
         or may be a continuation of a previous log, or may be filtered out.
-        :param logfilter: The log filter.  See get_latest_logs for details.
         :param last_log: The previous log that was processed by this command.
-        This may be None if the previous invocation did not add or update a
-        log (e.g. because it was filtered out).
+        This may be None for the first line in the log file.
         :return: The log that was added or updated by this method.  This may
-        return None if no log was added or updated.
+        return None if no log was parsed.  If this line was appended to the
+        previous log, it will return last_log.
         """
         # Put the full text of the log into logtext, but strip off ending whitespace because
         # we'll add \n back to it when we append to it
@@ -264,11 +281,6 @@ class LogAnalyzer(object):
                 last_log.append(logtext)
             return last_log
 
-        # We have started a new log.  We can now append the previous log iff
-        # it is not filtered out.
-        if last_log and (not logfilter or not logfilter(last_log)):
-            logs.append(last_log)
-
         # Create and return the new log.  We don't add it until we start the
         # next log as we need to get the entire log before we can run it
         # through the filter.
@@ -281,38 +293,63 @@ class LogAnalyzer(object):
         any are found.
         """
         _log.info("Checking logs for exceptions")
-        hit_errors = False
         _log.debug("Analyzing logs from %s on %s",
                    self.filename, self.host.name)
-        errors = self.get_latest_logs(logfilter=self.log_filter_in_errors)
-        errors_to_print = 100
+
+        # Store each error with a set of preceeding context logs.
+        errors = []
+        logs = deque(maxlen=NUM_CONTEXT_LOGS)
+
+        # Iterate through the logs finding all error logs and keeping track
+        # of unfiltered context logs.
+        for log in self._parse_latest_logs():
+            logs.append(log)
+            if self._is_error_log(log):
+                errors.append(logs)
+                logs = deque(maxlen=NUM_CONTEXT_LOGS)
+
+            # Limit the number of errors we report.
+            if len(errors) == MAX_NUM_ERRORS:
+                break
+
         if errors:
-            hit_errors = True
+            # Trace out the error logs (this is the last entry in each of the
+            # error deques).
             _log.error("***** Start of errors in logs from %s on %s *****"
                        "\n\n%s\n\n",
                        self.filename, self.host.name,
-                       "\n\n".join(map(str, errors)))
+                       "\n\n".join(map(lambda logs: logs[-1].detailed(), errors)))
             _log.error("****** End of errors in logs from %s on %s ******",
                        self.filename, self.host.name)
-            errors_to_print -= 1
-            if errors_to_print <= 0:
-                _log.error("Limited to 100 errors reported")
-        assert not hit_errors, "Test suite failed due to errors raised in logs"
 
-    @staticmethod
-    def log_filter_in_errors(log):
+            if len(errors) == MAX_NUM_ERRORS:
+                _log.error("Limited to %d errors reported" % MAX_NUM_ERRORS)
+
+            # Trace out the unfiltered logs - each error stored above contains a set
+            # proceeding context logs followed by the error log.  Join them all
+            # together to trace out, delimiting groups of logs with a "..." to
+            # indicate that some logs in between may be missing (because we only
+            # trace out a max number of proceeding logs).
+            _log.error("***** Start of context logs from %s on %s *****"
+                       "\n\n%s\n\n",
+                       self.filename, self.host.name,
+                       "\n...\n".join(map(lambda logs: "\n".join(map(str, logs)), errors)))
+            _log.error("****** End of context logs from %s on %s ******",
+                       self.filename, self.host.name)
+
+        assert not errors, "Test suite failed due to errors raised in logs"
+
+    def _is_error_log(self, log):
         """
-        Return the log filter function used for filtering logs to leave behind
-        just the error logs that will cause a test to fail.
+        Return whether the log is an error log or not.
 
-        :return: True if the log is being filtered (i.e. is NOT an error log),
-         otherwise returns False (it is an error log).
+        :return: True if the log is an error log.
 
-        Note that if we are skipping known failures, then ignore logs as
-        specified in the IGNORE_LOGS_LIST.
+        Note that we are skipping known failures as defined by the
+        LOGS_IGNORE_ALL_TESTS.
         """
         is_error = log.level in {"ERROR", "PANIC", "FATAL", "CRITICAL"}
         if is_error:
             is_error = not any(txt in log.msg for txt in LOGS_IGNORE_ALL_TESTS)
 
-        return not is_error
+        return is_error
