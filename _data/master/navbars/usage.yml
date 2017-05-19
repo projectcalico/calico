@@ -5,6 +5,8 @@ order: 2
 toc:
 - title: Using Calico
   path: /usage/
+- title: Policy Example
+  path: /usage/policy-example
 - title: Calico and Systemd
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
@@ -27,7 +29,7 @@ toc:
   path: /usage/configuration/conntrack
 - title: Calico for OpenStack
   section:
-  - title: Configuration 
+  - title: Configuration
     path: /usage/openstack/configuration
   - title: Detailed Semantics
     path: /usage/openstack/semantics
