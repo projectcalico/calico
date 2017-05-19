@@ -125,6 +125,11 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	if args.Num4 != 0 {
 		// Assign IPv4 addresses.
 		log.Debugf("Assigning IPv4 addresses")
+		for _, pool := range args.IPv4Pools {
+			if pool.IP.To4() == nil {
+				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
+			}
+		}
 		v4list, err = c.autoAssign(args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, ipv4, hostname)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %s", err)
@@ -135,6 +140,11 @@ func (c ipams) AutoAssign(args AutoAssignArgs) ([]net.IP, []net.IP, error) {
 	if args.Num6 != 0 {
 		// If no err assigning V4, try to assign any V6.
 		log.Debugf("Assigning IPv6 addresses")
+		for _, pool := range args.IPv6Pools {
+			if pool.IP.To4() != nil {
+				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
+			}
+		}
 		v6list, err = c.autoAssign(args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, ipv6, hostname)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %s", err)
