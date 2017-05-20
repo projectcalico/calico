@@ -146,7 +146,7 @@ This works as follows:
    `role = database` (i.e. to database containers)
 
 For details on all of the possible match criteria, see the
-[policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
+[policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy)
 documentation.
 
 ## Multiple networks
