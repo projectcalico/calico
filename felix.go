@@ -397,6 +397,13 @@ configRetry:
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
+		gaugeHost := prometheus.NewGauge(prometheus.GaugeOpts{
+			Name:        "felix_host",
+			Help:        "Configured Felix hostname (as a label), typically used in grouping/aggregating stats; the label defaults to the hostname of the host but can be overridden by configuration. The value of the gauge is always set to 1.",
+			ConstLabels: prometheus.Labels{"host": configParams.FelixHostname},
+		})
+		gaugeHost.Set(1)
+		prometheus.MustRegister(gaugeHost)
 		go servePrometheusMetrics(configParams)
 	}
 
