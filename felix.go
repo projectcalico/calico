@@ -32,6 +32,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/projectcalico/felix/buildinfo"
@@ -396,7 +397,7 @@ configRetry:
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
-		go servePrometheusMetrics(configParams.PrometheusMetricsPort)
+		go servePrometheusMetrics(configParams)
 	}
 
 	// On receipt of SIGUSR1, write out heap profile.
@@ -450,11 +451,23 @@ func dumpHeapMemoryProfile(configParams *config.Config) {
 	}
 }
 
-func servePrometheusMetrics(port int) {
+func servePrometheusMetrics(configParams *config.Config) {
 	for {
-		log.WithField("port", port).Info("Starting prometheus metrics endpoint")
+		log.WithField("port", configParams.PrometheusMetricsPort).Info("Starting prometheus metrics endpoint")
+		if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
+			log.Info("Including Golang & Process metrics")
+		} else {
+			if !configParams.PrometheusGoMetricsEnabled {
+				log.Info("Discarding Golang metrics")
+				prometheus.Unregister(prometheus.NewGoCollector())
+			}
+			if !configParams.PrometheusProcessMetricsEnabled {
+				log.Info("Discarding process metrics")
+				prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
+			}
+		}
 		http.Handle("/metrics", promhttp.Handler())
-		err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+		err := http.ListenAndServe(fmt.Sprintf(":%v", configParams.PrometheusMetricsPort), nil)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
