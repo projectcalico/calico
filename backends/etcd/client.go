@@ -116,15 +116,16 @@ func nodeWalk(node *client.Node, vars map[string]string) error {
 }
 
 func (c *Client) WatchPrefix(prefix string, keys []string, waitIndex uint64, stopChan chan bool) (uint64, error) {
-	// return something > 0 to trigger a key retrieval from the store
 	if waitIndex == 0 {
-		return 1, nil
+		resp, err := c.client.Get(context.Background(), prefix, &client.GetOptions{Quorum: true})
+		if err != nil {
+			return 0, err
+		}
+		return resp.Index, nil
 	}
 
-	// Setting AfterIndex to 0 (default) means that the Watcher
-	// should start watching for events starting at the current
-	// index, whatever that may be.
-	watcher := c.client.Watcher(prefix, &client.WatcherOptions{AfterIndex: uint64(0), Recursive: true})
+	// Create the watcher.
+	watcher := c.client.Watcher(prefix, &client.WatcherOptions{AfterIndex: waitIndex, Recursive: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancelRoutine := make(chan bool)
 	defer close(cancelRoutine)
@@ -154,9 +155,10 @@ func (c *Client) WatchPrefix(prefix string, keys []string, waitIndex uint64, sto
 		// This is not an exact match on the key so there is a chance
 		// we will still pickup on false positives. The net win here
 		// is reducing the scope of keys that can trigger updates.
+		waitIndex = resp.Node.ModifiedIndex
 		for _, k := range keys {
 			if strings.HasPrefix(resp.Node.Key, k) {
-				return resp.Node.ModifiedIndex, err
+				return waitIndex, err
 			}
 		}
 	}
