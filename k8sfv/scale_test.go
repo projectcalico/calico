@@ -86,8 +86,7 @@ var _ = Context("with a k8s clientset", func() {
 				time.Sleep(10 * time.Second)
 
 				// Get Felix to GC and dump heap memory profile.
-				exec.Command("pkill", "-USR1", "calico-felix").Run()
-				time.Sleep(2 * time.Second)
+				triggerFelixGCAndMemoryDump()
 
 				// Get current occupancy.
 				heapInUse := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
@@ -219,3 +218,8 @@ var _ = Context("with a k8s clientset", func() {
 		})
 	})
 })
+
+func triggerFelixGCAndMemoryDump() {
+	exec.Command("pkill", "-USR1", "calico-felix").Run()
+	time.Sleep(2 * time.Second)
+}
