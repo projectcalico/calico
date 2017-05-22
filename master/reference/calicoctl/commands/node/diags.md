@@ -37,22 +37,28 @@ Description:
 ### Examples
 
 ```
-$ calicoctl diags
-Collecting diags
-Using temp dir: /tmp/tmp991ZWu
-Dumping netstat output
-Dumping routes
-Dumping iptables
-  - Missing command: ipset
+$ sudo calicoctl node diags
+Collecting diagnostics
+Using temp dir: /tmp/calico676127473
+Dumping netstat
+Dumping routes (IPv4)
+Dumping routes (IPv6)
+Dumping interface info (IPv4)
+Dumping interface info (IPv6)
+Dumping iptables (IPv4)
+Dumping iptables (IPv6)
+Dumping ipsets
+exit status 1
+Dumping ipsets (container)
+Copying journal for calico-node.service
+Dumping felix stats
 Copying Calico logs
-Dumping datastore
 
-Diags saved to /tmp/tmp991ZWu/diags-151015_155032.tar.gz
-
-If required, you can upload the diagnostics bundle to a file sharing service
+Diags saved to /tmp/calico676127473/diags-20170522_151219.tar.gz
+If required, you can upload the diagnostics bundle to a file sharing service 
 such as transfer.sh using curl or similar.  For example:
 
-  curl --upload-file /tmp/tmp991ZWu/diags-151015_155032.tar.gz https://transfer.sh/diags-151015_155032.tar.gz
+    curl --upload-file /tmp/calico676127473/diags-20170522_151219.tar.gz https://transfer.sh//tmp/calico676127473/diags-20170522_151219.tar.gz
 ```
 
 ### Options
