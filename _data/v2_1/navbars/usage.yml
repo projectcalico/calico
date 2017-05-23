@@ -19,6 +19,8 @@ toc:
   path: /usage/configuration/ip-in-ip
 - title: Configuring a Node IP Address and Subnet
   path: /usage/configuration/node
+- title: Configuring MTU
+  path: /usage/configuration/mtu
 - title: Configuring Conntrack
   path: /usage/configuration/conntrack
 - title: Calico for OpenStack
