@@ -29,28 +29,31 @@ semaphore: clean
 
 	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
 	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICOCONTAINERS_VERSION
-	# tagged images to Dockerhub and quay for both calico/node and calico/ctl.  This
-	# requires a rebuild of calico/ctl in both cases.
+	# tagged images to Dockerhub and quay for both calico/node and calico/ctl.
 	set -e; \
 	if [ -z $$PULL_REQUEST_NUMBER ]; then \
-		rm dist/calicoctl ;\
-		CALICOCTL_NODE_VERSION=$$BRANCHNAME $(MAKE) calico/ctl ;\
 		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
 		docker push quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
+		\
 		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
 		docker push $(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
-		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
-		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push $(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
-		rm dist/calicoctl ;\
-		CALICOCTL_NODE_VERSION=$(CALICOCONTAINERS_VERSION) $(MAKE) calico/ctl ;\
+		\
 		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION) && \
 		docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION); \
+		\
 		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION) && \
 		docker push $(NODE_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION); \
+		\
+		\
+		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
+		\
+		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
+		docker push $(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
+		\
 		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION) && \
 		docker push quay.io/$(CTL_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION); \
+		\
 		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION) && \
 		docker push $(CTL_CONTAINER_NAME):$(CALICOCONTAINERS_VERSION); \
 	fi
@@ -66,8 +69,8 @@ endif
 	then echo current git working tree is "dirty". Make sure you do not have any uncommitted changes ;false; fi
 
 	# Build the calicoctl binaries, as well as the calico/ctl and calico/node images.
-	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe 
-	CALICOCTL_NODE_VERSION=$(VERSION) $(MAKE) calico/ctl calico/node
+	$(MAKE) dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
+	$(MAKE) calico/ctl calico/node
 
 	# Check that the version output includes the version specified.
 	# Tests that the "git tag" makes it into the binaries. Main point is to catch "-dirty" builds

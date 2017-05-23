@@ -20,7 +20,6 @@ CTL_CONTAINER_NAME?=calico/ctl
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created
 
-CALICOCTL_NODE_VERSION?="latest"
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 
@@ -30,7 +29,6 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(CALICOCONTAINERS_VERSION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/node.VERSION=$(CALICOCTL_NODE_VERSION) \
 	-X $(PACKAGE_NAME)/calicoctl/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
@@ -99,7 +97,7 @@ binary-containerized: $(CALICOCTL_FILES) vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
-	  -e CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) -e CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	  -e CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) \
 	  -e CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	  -v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
@@ -108,7 +106,7 @@ binary-containerized: $(CALICOCTL_FILES) vendor
 	  $(CALICO_BUILD) sh -c '\
 	    cd /go/src/$(PACKAGE_NAME) && \
 	    make OS=$(OS) ARCH=$(ARCH) \
-	         CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION) CALICOCTL_NODE_VERSION=$(CALICOCTL_NODE_VERSION) \
+	         CALICOCONTAINERS_VERSION=$(CALICOCONTAINERS_VERSION)  \
 	         CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
 	         binary' 
 
