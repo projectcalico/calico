@@ -1,16 +1,12 @@
-<!--- master only -->
 [![Build Status](https://semaphoreci.com/api/v1/calico/calicoctl/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/calicoctl)
 [![CircleCI branch](https://img.shields.io/circleci/project/projectcalico/calicoctl/master.svg?label=calicoctl)](https://circleci.com/gh/projectcalico/calicoctl/tree/master)
-[![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
-[![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
 
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
-<!--- end of master only -->
 
-# Calico for Containers
+# calicoctl
 
-This repository is the home of `calico/node` and `calicoctl`.
+This repository is the home of `calicoctl`.
 
 <blockquote>
 Note that the documentation in this repo is targeted at Calico contributors.
@@ -18,35 +14,11 @@ Note that the documentation in this repo is targeted at Calico contributors.
 </blockquote>
 
 
-
-For information on `calico/node`, see the [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
-
 For information on `calicoctl` usage, see the [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
 
 ### Developing
 
 Print useful actions with `make help`.
-
-### Building `calico/node`
-
-To build the `calico/node` container, run the following build step from
-the root of the repository:
-
-```
-make calico/node
-```
-
-Use the build variables listed in the `Calico binaries` variable section
-at the top of the Makefile to modify which components are included in the resulting image.
-For example, the following command will produce a docker image called `calico/node:custom`
-which uses custom Felix and Libnetwork binaries:
-
-```
-FELIX_CONTAINER_NAME=calico/felix:1.4.3 \
-LIBNETWORK_PLUGIN_CONTAINER_NAME=calico/libnetwork-plugin:v1.0.0-beta \
-BUILD_CONTAINER_NAME=calico/node:custom \
-make calico/node
-```
 
 ### Building `calicoctl`
 
@@ -91,12 +63,14 @@ The binary will be put in `./dist`:
 
 ## Tests
 
-Calico-containers system tests run in a container to ensure all build dependencies are met.
-Specifically, the `calico/test` image produced at https://github.com/projectcalico/libcalico
-is used.
+Tests can be run in a container to ensure all build dependencies are met.
 
-The following Makefile step will use that image to run all local tests:
-
+To run the tests
 ```
-make st
+make ut
+```
+
+To run the tests in a container
+```
+make test-containerized
 ```

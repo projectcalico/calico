@@ -1,8 +1,4 @@
 .go-pkg-cache
-calico_node/filesystem/startup
-startup.spec
-allocate-ipip-addr.spec
-calico_node/filesystem/bin
 build
 dist
 venv
@@ -15,18 +11,15 @@ certs
 cover
 *.tar
 *.created
-.releasedata
 docker
 **/*.sw[pon]
 birdcl
 .vagrant
 gobgp
-calico_node/bin
 calicoctl/calicoctl
 bin
 release
 *.coverprofile
 vendor
-calicoctl_build_container.created
 nosetests.xml
 testfile.yaml
