@@ -145,19 +145,19 @@ Description:
 		switch outputKey {
 		case "go-template":
 			if outputValue == "" {
-				fmt.Printf("need to specify a template")
+				fmt.Printf("need to specify a template\n")
 				os.Exit(1)
 			}
 			rp = resourcePrinterTemplate{template: outputValue}
 		case "go-template-file":
 			if outputValue == "" {
-				fmt.Printf("need to specify a template file")
+				fmt.Printf("need to specify a template file\n")
 				os.Exit(1)
 			}
 			rp = resourcePrinterTemplateFile{templateFile: outputValue}
 		case "custom-columns":
 			if outputValue == "" {
-				fmt.Printf("need to specify at least one column")
+				fmt.Printf("need to specify at least one column\n")
 				os.Exit(1)
 			}
 			rp = resourcePrinterTable{headings: outputValues}
@@ -165,7 +165,7 @@ Description:
 	}
 
 	if rp == nil {
-		fmt.Printf("unrecognized output format '%s'", output)
+		fmt.Printf("unrecognized output format '%s'\n", output)
 		os.Exit(1)
 	}
 
