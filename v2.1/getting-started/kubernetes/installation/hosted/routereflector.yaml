@@ -1,0 +1,66 @@
+# This manifest installs the calico/routereflector container as a daemon sets
+# each worker node need specific node labels (role=RouteReflector).
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: route-reflector
+  namespace: kube-system
+  labels:
+    k8s-app: route-reflector
+spec:
+  selector:
+    matchLabels:
+      k8s-app: route-reflector
+  template:
+    metadata:
+      labels:
+        k8s-app: route-reflector
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key":"CriticalAddonsOnly", "operator":"Exists"}]
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        role: RouteReflector
+      containers:
+        # Runs calico/node container on each Kubernetes node.  This
+        # container programs network policy and routes on each
+        # host.
+        - name: route-reflector
+          image: calico/routereflector:master
+          env:
+            # The location of the Calico etcd cluster.
+            - name: ETCD_ENDPOINTS
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_endpoints
+            # Location of the CA certificate for etcd.
+            - name: ETCD_CA_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_ca
+            # Location of the client key for etcd.
+            - name: ETCD_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_key
+            # Location of the client certificate for etcd.
+            - name: ETCD_CERT_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: etcd_cert
+            # Auto-detect the BGP IP address.
+            - name: IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 2
