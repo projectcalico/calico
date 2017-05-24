@@ -1,0 +1,45 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: calico-remove-iptables
+  namespace: kube-system
+  labels:
+    k8s-app: calico-remove-iptables
+spec:
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-remove-iptables
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/tolerations: |
+          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
+           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
+    spec:
+      hostNetwork: true
+      containers:
+        - name: calico-remove-iptables
+          image: ubuntu:16.04
+          command: ["/bin/sh","-c", "chmod +x /etc/config/calico/remove-policy/remove-calico-policy.sh; /etc/config/calico/remove-policy/remove-calico-policy.sh"]
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /sbin
+              name: sbin
+            - mountPath: /lib
+              name: sharedlib
+            - mountPath: /etc/config
+              name: config-volume
+      volumes:
+        - name: sbin
+          hostPath:
+            path: /sbin
+        - name: sharedlib
+          hostPath:
+            path: /lib
+        - name: config-volume
+          configMap:
+            name: remove-calico-policy-config
+            items:
+              - key: remove-calico-policy.sh
+                path: calico/remove-policy/remove-calico-policy.sh
