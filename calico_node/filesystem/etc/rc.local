@@ -69,10 +69,10 @@ case "$CALICO_NETWORKING_BACKEND" in
 		# confd needs a "-node" arguments for each etcd endpoint.
 		ETCD_ENDPOINTS_CONFD=`echo "-node=$ETCD_NODE" | sed -e 's/,/ -node=/g'`
 
-		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
+		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
 			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
 			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-1.log 2>&1 || true
-		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} -no-discover \
+		confd -confdir=/etc/calico/confd -onetime ${ETCD_ENDPOINTS_CONFD} \
 			  -client-key=${ETCD_KEY_FILE} -client-cert=${ETCD_CERT_FILE} \
 			  -client-ca-keys=${ETCD_CA_CERT_FILE} -keep-stage-file >/felix-startup-2.log 2>&1 || true
 	fi
