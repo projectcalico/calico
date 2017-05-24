@@ -35,7 +35,7 @@ echo "Cleaning up calico rules from the filter table..."
 iptables-save -t filter | grep -e '--comment "cali:' | cut -c 3- | sed 's/^ *//;s/ *$//' | xargs -l1 iptables -t filter -D
 
 # Set the CLUSTER_CIDR environment variable to the appropriate CIDR for this cluster if Calico is adding the traffic.
-if [ -n $CLUSTER_CIDR ]; then
+if [ "$CLUSTER_CIDR" != "" ]; then
     clusterCIDR=$CLUSTER_CIDR
 
     # Set up NAT rule so traffic gets masqueraded if it is going to any subnet other than cluster-cidr.
