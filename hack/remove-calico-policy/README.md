@@ -1,4 +1,4 @@
-# Disabling and removing Calico policy
+# Disabling and Removing Calico Policy
 
 Calico policy can be disabled and removed for troubleshooting purposes or in emergency situations using the following steps.
 
