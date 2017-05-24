@@ -12,7 +12,7 @@ include Makefile.calico-node
 .PHONY: semaphore
 semaphore: clean
 	# Clean up unwanted files to free disk space.
-	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv}'
+	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv} /usr/local/golang /var/lib/mongodb'
 
 	# Run the containerized UTs first.
 	$(MAKE) test-containerized
