@@ -17,15 +17,12 @@ package node
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	gonet "net"
 	"os"
 	"os/exec"
-	"strings"
-
 	"regexp"
-
-	"io/ioutil"
-
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -391,9 +388,12 @@ Description:
 
 	// Now execute the actual Docker run command and check for the
 	// unable to find image message.
-	err = exec.Command(cmd[0], cmd[1:]...).Run()
-	if err != nil {
+	runCmd := exec.Command(cmd[0], cmd[1:]...)
+	if output, err := runCmd.CombinedOutput(); err != nil {
 		fmt.Printf("Error executing command: %v\n", err)
+		for _, line := range strings.Split(string(output), "/n") {
+			fmt.Printf(" | %s/n", line)
+		}
 		os.Exit(1)
 	}
 
