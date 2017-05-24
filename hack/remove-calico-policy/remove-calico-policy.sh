@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Set the clusterCIDR to the appropriate CIDR for this cluster.
-clusterCIDR=10.244.0.0/16
-
 # Set FORWARD action to ACCEPT so outgoing packets can go through POSTROUTING chains.
 echo "Setting default FORWARD action to ACCEPT..."
 iptables -P FORWARD ACCEPT
@@ -37,17 +34,22 @@ iptables-save -t mangle | grep -e '--comment "cali:' | cut -c 3- | sed 's/^ *//;
 echo "Cleaning up calico rules from the filter table..."
 iptables-save -t filter | grep -e '--comment "cali:' | cut -c 3- | sed 's/^ *//;s/ *$//' | xargs -l1 iptables -t filter -D
 
-# Set up NAT rule so traffic gets masqueraded if it is going to any subnet other than cluster-cidr.
-echo "Adding masquerade rule for traffic going from $clusterCIDR to ! $clusterCIDR"
+# Set the CLUSTER_CIDR environment variable to the appropriate CIDR for this cluster if Calico is adding the traffic.
+if [ -n $CLUSTER_CIDR ]; then
+    clusterCIDR=$CLUSTER_CIDR
 
-# Create a new chain in nat table.
-iptables -t nat -N cali-brb-masq
+    # Set up NAT rule so traffic gets masqueraded if it is going to any subnet other than cluster-cidr.
+    echo "Adding masquerade rule for traffic going from $clusterCIDR to ! $clusterCIDR"
 
-# Append that chain to POSTROUTING table.
-iptables -t nat -A POSTROUTING -m comment --comment "cali:masq-outgoing" -j cali-brb-masq
+    # Create a new chain in nat table.
+    iptables -t nat -N cali-brb-masq
 
-# Add MASQUERADE rule for traffic from clusterCIDR to non-clusterCIDR.
-iptables -t nat -A cali-brb-masq -s $clusterCIDR ! -d $clusterCIDR -j MASQUERADE
+    # Append that chain to POSTROUTING table.
+    iptables -t nat -A POSTROUTING -m comment --comment "cali:masq-outgoing" -j cali-brb-masq
+
+    # Add MASQUERADE rule for traffic from clusterCIDR to non-clusterCIDR.
+    iptables -t nat -A cali-brb-masq -s $clusterCIDR ! -d $clusterCIDR -j MASQUERADE
+fi
 
 # Sleep forever so DaemonSet doesn't die.
 while true; do echo "sleeping..."; sleep 3600; done

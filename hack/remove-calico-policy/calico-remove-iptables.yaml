@@ -10,16 +10,20 @@ spec:
     metadata:
       labels:
         k8s-app: calico-remove-iptables
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ''
-        scheduler.alpha.kubernetes.io/tolerations: |
-          [{"key": "dedicated", "value": "master", "effect": "NoSchedule" },
-           {"key":"CriticalAddonsOnly", "operator":"Exists"}]
     spec:
       hostNetwork: true
+      nodeSelector: {}
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      - key: CriticalAddonsOnly
+        operator: Exists
       containers:
         - name: calico-remove-iptables
           image: ubuntu:16.04
+          env:
+          - name: CLUSTER_CIDR
+            value: ""
           command: ["/bin/sh","-c", "chmod +x /etc/config/calico/remove-policy/remove-calico-policy.sh; /etc/config/calico/remove-policy/remove-calico-policy.sh"]
           securityContext:
             privileged: true
