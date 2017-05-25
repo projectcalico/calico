@@ -48,12 +48,10 @@ var (
 	backendMatch    = regexp.MustCompile("^(none|bird|gobgp)$")
 )
 
-var VERSION string
-
 // Run function collects diagnostic information and logs
 func Run(args []string) {
 	var err error
-	doc := fmt.Sprintf(`Usage:
+	doc := `Usage:
   calicoctl node run [--ip=<IP>] [--ip6=<IP6>] [--as=<AS_NUM>]
                      [--name=<NAME>]
                      [--ip-autodetection-method=<IP_AUTODETECTION_METHOD>]
@@ -118,7 +116,7 @@ Options:
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
                            Docker image to use for Calico's per-node container.
-                           [default: quay.io/calico/node:%s]
+                           [default: quay.io/calico/node:latest]
      --backend=(bird|gobgp|none)
                            Specify which networking backend to use.  When set
                            to "none", Calico node runs in policy only mode.
@@ -153,7 +151,7 @@ Options:
 Description:
   This command is used to start a calico/node container instance which provides
   Calico networking and network policy on your compute host.
-`, VERSION)
+`
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		log.Info(err)
