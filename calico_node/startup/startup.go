@@ -638,26 +638,34 @@ func checkConflictingNodes(client *client.Client, node *api.Node) {
 
 // Checks that the filesystem is as expected and fix it if possible
 func ensureFilesystemAsExpected() {
-	runDir := "/var/run/calico"
-	// Check if directory already exists
-	if _, err := os.Stat(runDir); err != nil {
-		// Create the runDir
-		if err = os.MkdirAll(runDir, os.ModeDir); err != nil {
-			fatal("Unable to create '%s'", runDir)
-			terminate()
+	// BIRD requires the /var/run/calico directory in order to provide status
+	// information over the control socket, but other backends do not
+	// need this check.
+	if strings.ToLower(os.Getenv("CALICO_NETWORKING_BACKEND")) == "bird" {
+		runDir := "/var/run/calico"
+		// Check if directory already exists
+		if _, err := os.Stat(runDir); err != nil {
+			// Create the runDir
+			if err = os.MkdirAll(runDir, os.ModeDir); err != nil {
+				fatal("Unable to create '%s'", runDir)
+				terminate()
+			}
+			warning("%s was not mounted, 'calicoctl node status' may provide incomplete status information", runDir)
 		}
-		warning("%s was not mounted, 'calicoctl node status' may provide incomplete status information", runDir)
 	}
 
-	logDir := "/var/log/calico"
-	// Check if directory already exists
-	if _, err := os.Stat(logDir); err != nil {
-		// Create the logDir
-		if err = os.MkdirAll(logDir, os.ModeDir); err != nil {
-			fatal("Unable to create '%s'", logDir)
-			terminate()
+	// Ensure the log directory exists but only if logging to file is enabled.
+	if strings.ToLower(os.Getenv("CALICO_DISABLE_FILE_LOGGING")) != "true" {
+		logDir := "/var/log/calico"
+		// Check if directory already exists
+		if _, err := os.Stat(logDir); err != nil {
+			// Create the logDir
+			if err = os.MkdirAll(logDir, os.ModeDir); err != nil {
+				fatal("Unable to create '%s'", logDir)
+				terminate()
+			}
+			warning("%s was not mounted, 'calicoctl node diags' will not be able to collect logs", logDir)
 		}
-		warning("%s was not mounted, 'calicoctl node diags' will not be able to collect logs", logDir)
 	}
 
 }
