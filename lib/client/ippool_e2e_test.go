@@ -305,5 +305,17 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 			Expect(err).To(HaveOccurred())
 			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
 		})
+
+		// Step-4: Test data validation occurs on create.
+		It("should invoke validation failure", func() {
+			By("Creating a pool with unstrict masked CIDR")
+			_, err = c.IPPools().Create(&api.IPPool{
+				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.10.10.0/16")},
+				Spec:     api.IPPoolSpec{},
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+		})
 	})
 })
