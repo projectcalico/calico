@@ -23,8 +23,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	"k8s.io/client-go/kubernetes"
-	kerrors "k8s.io/client-go/pkg/api/errors"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/rest"
 )
@@ -159,7 +159,7 @@ func (c *client) List(list model.ListInterface) ([]*model.KVPair, error) {
 func (c *client) EnsureInitialized() error {
 	log.Info("Ensuring IP Pool ThirdPartyResource exists")
 	tpr := extensions.ThirdPartyResource{
-		ObjectMeta: kapiv1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ip-pool.projectcalico.org",
 			Namespace: "kube-system",
 		},

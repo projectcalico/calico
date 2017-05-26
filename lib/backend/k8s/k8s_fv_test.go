@@ -32,8 +32,8 @@ import (
 
 	k8sapi "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/wait"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // cb implements the callback interface required for the
@@ -211,7 +211,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 	It("should handle a Namespace with DefaultDeny", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-syncer-namespace-default-deny",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"DefaultDeny\"}}",
@@ -222,7 +222,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Make sure we clean up.
 		defer func() {
-			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &k8sapi.DeleteOptions{})
+			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -256,7 +256,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 	It("should handle a Namespace without DefaultDeny", func() {
 		ns := k8sapi.Namespace{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-syncer-namespace-no-default-deny",
 				Annotations: map[string]string{
 					"net.beta.kubernetes.io/network-policy": "{\"ingress\": {\"isolation\": \"\"}}",
@@ -267,7 +267,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Make sure we clean up after ourselves.
 		defer func() {
-			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &k8sapi.DeleteOptions{})
+			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}()
 
@@ -299,7 +299,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 	It("should handle a basic NetworkPolicy", func() {
 		np := extensions.NetworkPolicy{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-syncer-basic-net-policy",
 			},
 			Spec: extensions.NetworkPolicySpec{
@@ -388,7 +388,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 	It("should handle a basic Pod", func() {
 		pod := k8sapi.Pod{
-			ObjectMeta: k8sapi.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-syncer-basic-pod",
 				Namespace: "default",
 			},
@@ -408,7 +408,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// test below which deletes this pod, but that's OK.
 		defer func() {
 			log.Warnf("[TEST] Cleaning up test pod: %s", pod.ObjectMeta.Name)
-			_ = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &k8sapi.DeleteOptions{})
+			_ = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 		}()
 		By("Creating a pod", func() {
 			Expect(err).NotTo(HaveOccurred())
@@ -482,7 +482,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
-			err = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &k8sapi.DeleteOptions{})
+			err = c.clientSet.Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			cb.ExpectDeleted(expectedKeys)
 		})
@@ -492,7 +492,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	defer func() {
 		It("should clean up all pods", func() {
 			log.Warnf("[TEST] Waiting for pods to tear down")
-			pods, err := c.clientSet.Pods("default").List(k8sapi.ListOptions{})
+			pods, err := c.clientSet.Pods("default").List(metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait up to 60s for pod cleanup to occur.
@@ -500,7 +500,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				if len(pods.Items) == 0 {
 					return
 				}
-				pods, err = c.clientSet.Pods("default").List(k8sapi.ListOptions{})
+				pods, err = c.clientSet.Pods("default").List(metav1.ListOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				time.Sleep(1 * time.Second)
 			}

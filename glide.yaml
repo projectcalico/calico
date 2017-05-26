@@ -22,8 +22,10 @@ import:
 - package: gopkg.in/tchap/go-patricia.v2
   subpackages:
   - patricia
+- package: golang.org/x/text
+  version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
 - package: k8s.io/client-go
-  version: 243d8a9cb66a51ad8676157f79e71033b4014a2a
+  version: release-3.0
   subpackages:
   - kubernetes
   - pkg/api

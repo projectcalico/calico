@@ -23,8 +23,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	"k8s.io/client-go/pkg/watch"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 type testWatch struct {
@@ -85,43 +86,43 @@ func (tc *testClient) newWatch(name string, c chan watch.Event) *testWatch {
 	return w
 }
 
-func (tc *testClient) NamespaceWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) NamespaceWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("ns", make(chan watch.Event))
 	err = nil
 	return
 }
 
-func (tc *testClient) PodWatch(namespace string, opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) PodWatch(namespace string, opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("pod", tc.podC)
 	err = nil
 	return
 }
 
-func (tc *testClient) NetworkPolicyWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) NetworkPolicyWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("pol", make(chan watch.Event))
 	err = nil
 	return
 }
 
-func (tc *testClient) GlobalConfigWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) GlobalConfigWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("global conf", make(chan watch.Event))
 	err = nil
 	return
 }
 
-func (tc *testClient) IPPoolWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) IPPoolWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("IP pool", make(chan watch.Event))
 	err = nil
 	return
 }
 
-func (tc *testClient) NodeWatch(opts k8sapi.ListOptions) (w watch.Interface, err error) {
+func (tc *testClient) NodeWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
 	w = tc.newWatch("node", make(chan watch.Event))
 	err = nil
 	return
 }
 
-func (tc *testClient) NamespaceList(opts k8sapi.ListOptions) (list *k8sapi.NamespaceList, err error) {
+func (tc *testClient) NamespaceList(opts metav1.ListOptions) (list *k8sapi.NamespaceList, err error) {
 	list = &k8sapi.NamespaceList{}
 	err = nil
 	return
@@ -133,7 +134,7 @@ func (tc *testClient) NetworkPolicyList() (list extensions.NetworkPolicyList, er
 	return
 }
 
-func (tc *testClient) PodList(namespace string, opts k8sapi.ListOptions) (list *k8sapi.PodList, err error) {
+func (tc *testClient) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
 	list = &k8sapi.PodList{}
 	err = nil
 	return
@@ -151,7 +152,7 @@ func (tc *testClient) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, er
 	return []*model.KVPair{}, nil
 }
 
-func (tc *testClient) NodeList(opts k8sapi.ListOptions) (list *k8sapi.NodeList, err error) {
+func (tc *testClient) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
 	list = &k8sapi.NodeList{}
 	err = nil
 	return
@@ -192,7 +193,7 @@ var _ = Describe("Test Syncer", func() {
 		It("should correctly handle pod being deleted in resync", func() {
 			// Define a Pod and corresponding Calico model key.
 			pod := k8sapi.Pod{
-				ObjectMeta: k8sapi.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-pod",
 					Namespace: "my-namespace",
 				},

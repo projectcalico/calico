@@ -24,11 +24,10 @@ import (
 	"encoding/json"
 
 	log "github.com/Sirupsen/logrus"
-	kapi "k8s.io/client-go/pkg/api"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/util/intstr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -176,7 +175,7 @@ func (c converter) tprToGlobalConfig(tpr *thirdparty.GlobalConfig) *model.KVPair
 
 func (c converter) globalConfigToTPR(kvp *model.KVPair) thirdparty.GlobalConfig {
 	tpr := thirdparty.GlobalConfig{
-		Metadata: kapi.ObjectMeta{
+		Metadata: metav1.ObjectMeta{
 			// Names in Kubernetes must be lower-case.
 			Name: strings.ToLower(kvp.Key.(model.GlobalConfigKey).Name),
 		},
