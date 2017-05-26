@@ -1,6 +1,10 @@
 FROM alpine:3.4
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
+# Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
+RUN apk --no-cache add --update tini
+ENTRYPOINT ["/sbin/tini", "--"]
+
 # Download and install glibc in one layer
 RUN apk --no-cache add wget ca-certificates libgcc && \
     wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://raw.githubusercontent.com/sgerrand/alpine-pkg-glibc/master/sgerrand.rsa.pub && \
