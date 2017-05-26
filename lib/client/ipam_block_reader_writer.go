@@ -16,7 +16,6 @@ package client
 
 import (
 	goerrors "errors"
-	"fmt"
 	"hash/fnv"
 	"math/big"
 	"math/rand"
@@ -73,37 +72,23 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pools []
 }
 
 func (rw blockReaderWriter) claimNewAffineBlock(
-	host string, version ipVersion, givenPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
+	host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 
-	// If givenPools is not empty, use it.  Otherwise, default to
+	// If requestedPools is not empty, use it.  Otherwise, default to
 	// all configured pools.
 	pools := []cnet.IPNet{}
-	if len(givenPools) != 0 {
-		for _, pool := range givenPools {
-			// Validate the given pool is actually configured and matches the version.
-			if err := rw.checkPoolAvailability(pool); err != nil {
-				return nil, err
-			} else if version.Number != pool.Version() {
-				estr := fmt.Sprintf("The given pool (%s) does not match IP version %d", pool.String(), version.Number)
-				return nil, goerrors.New(estr)
-			}
-			pools = append(pools, pool)
-		}
-	} else {
-		// Default to all configured pools.
-		allPools, err := rw.client.IPPools().List(api.IPPoolMetadata{})
-		if err != nil {
-			log.Errorf("Error reading configured pools: %s", err)
-			return nil, err
-		}
 
-		// Grab all the IP networks in these pools.
-		for _, p := range allPools.Items {
-			// Don't include disabled pools or pools that don't match
-			// the requested IP version.
-			if !p.Spec.Disabled && version.Number == p.Metadata.CIDR.Version() {
-				pools = append(pools, p.Metadata.CIDR)
-			}
+	// Get all the configured pools.
+	allPools, err := rw.client.IPPools().List(api.IPPoolMetadata{})
+	if err != nil {
+		log.Errorf("Error reading configured pools: %s", err)
+		return nil, err
+	}
+
+	for _, p := range allPools.Items {
+		// Only include pools that are not disabled and are the correct version.
+		if !p.Spec.Disabled && version.Number == p.Metadata.CIDR.Version() && isPoolInRequestedPools(p.Metadata.CIDR, requestedPools) {
+			pools = append(pools, p.Metadata.CIDR)
 		}
 	}
 
@@ -137,6 +122,20 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 		}
 	}
 	return nil, noFreeBlocksError("No Free Blocks")
+}
+
+// isPoolInRequestedPools checks if the IP Pool that is passed in belongs to the list of IP Pools
+// that should be used for assigning IPs from.
+func isPoolInRequestedPools(pool cnet.IPNet, requestedPools []cnet.IPNet) bool {
+	if len(requestedPools) == 0 {
+		return true
+	}
+	for _, cidr := range requestedPools {
+		if reflect.DeepEqual(pool, cidr) {
+			return true
+		}
+	}
+	return false
 }
 
 func (rw blockReaderWriter) claimBlockAffinity(subnet cnet.IPNet, host string, config IPAMConfig) error {
@@ -289,22 +288,6 @@ func (rw blockReaderWriter) withinConfiguredPools(ip cnet.IP) bool {
 		}
 	}
 	return false
-}
-
-// checkPoolAvailability returns nil if the given IPNet is a configured
-// Calico IP pool, and a specific error otherwise.
-func (rw blockReaderWriter) checkPoolAvailability(cidr cnet.IPNet) error {
-	allPools, _ := rw.client.IPPools().List(api.IPPoolMetadata{})
-	for _, p := range allPools.Items {
-		// Compare any enabled pools.
-		if reflect.DeepEqual(p.Metadata.CIDR, cidr) {
-			if p.Spec.Disabled {
-				return goerrors.New(fmt.Sprintf("The given pool (%s) is disabled.", cidr.String()))
-			}
-			return nil
-		}
-	}
-	return goerrors.New(fmt.Sprintf("The given pool (%s) does not exist", cidr.String()))
 }
 
 // Generator to get list of block CIDRs which

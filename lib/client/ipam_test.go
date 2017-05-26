@@ -330,11 +330,71 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, 
 		host := "host-A"
 		pool1 := testutils.MustParseNetwork("10.0.0.0/24")
 		pool2 := testutils.MustParseNetwork("20.0.0.0/24")
+		pool3 := testutils.MustParseNetwork("30.0.0.0/24")
+		pool4_v6 := testutils.MustParseNetwork("fe80::11/120")
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
+		testutils.CreateNewIPPool(*c, "30.0.0.0/24", false, false, false)
+		testutils.CreateNewIPPool(*c, "fe80::11/120", false, false, true)
 
-		// Step-1: AutoAssign 300 IPs from 2 pools
+		// Step-1: Try to AutoAssign an IP from 2 pools  passed in IPv4Pools field with
+		// the second IP Pool in the list being an IPv6 IP Pool.
+		// Expect a non-nil error returned.
+		Context("AutoAssign 1 IP from 2 pools with the first IPPool disabled", func() {
+			args := client.AutoAssignArgs{
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1, pool4_v6},
+			}
+
+			_, _, outErr := ic.AutoAssign(args)
+
+			It("should have failed with a non-nil error", func() {
+				Expect(outErr).To(HaveOccurred())
+			})
+		})
+
+		// Step-2: Try to AutoAssign an IP from 2 pools  passed in IPv6Pools field with
+		// the second IP Pool in the list being an IPv4 IP Pool.
+		// Expect a non-nil error returned.
+		Context("AutoAssign 1 IP from 2 pools with the first IPPool disabled", func() {
+			args := client.AutoAssignArgs{
+				Num4:      0,
+				Num6:      1,
+				Hostname:  host,
+				IPv6Pools: []cnet.IPNet{pool4_v6, pool1},
+			}
+
+			_, _, outErr := ic.AutoAssign(args)
+
+			It("should have failed with a non-nil error", func() {
+				Expect(outErr).To(HaveOccurred())
+			})
+		})
+
+		// Step-3: AutoAssign an IP from 2 pools with the first IP Pool in the list disabled.
+		// Expect the returned IP is from the second IP Pool in the list.
+		Context("AutoAssign 1 IP from 2 pools with the first IPPool disabled", func() {
+			args := client.AutoAssignArgs{
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool3, pool2},
+			}
+
+			v4, _, outErr := ic.AutoAssign(args)
+			log.Println("IPAM returned: %v", v4)
+
+			It("should not have failed, and the returned IP is from the second IPPool in the list", func() {
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+				Expect(pool2.Contains(v4[0].IP)).To(BeTrue())
+			})
+		})
+
+		// Step-4: AutoAssign 300 IPs from 2 pools
 		// Expect that the IPs are from both pools
 		Context("AutoAssign 300 IPs from 2 pools", func() {
 			args := client.AutoAssignArgs{
@@ -353,9 +413,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, 
 			})
 		})
 
-		// Step-2: AutoAssign 300 IPs from both pools again.
-		// This time we should run out of IPS
-		Context("AutoAssign 300 IPs from both pools - none left tho", func() {
+		// Step-5: AutoAssign 300 IPs from both pools again.
+		// This time we should run out of IPs, so we should only get the remaining 209 IPs
+		Context("AutoAssign 300 IPs from both pools - none left this time", func() {
 			args := client.AutoAssignArgs{
 				Num4:      300,
 				Num6:      0,
@@ -366,9 +426,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, 
 			v4, _, outErr := ic.AutoAssign(args)
 			log.Println("v4: %d IPs", len(v4))
 
-			It("should have failed with less than 300", func() {
-				Expect(len(v4)).NotTo(Equal(300))
+			It("should have returned the remaining 209 IPs", func() {
 				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).NotTo(Equal(209))
 			})
 		})
 	})
