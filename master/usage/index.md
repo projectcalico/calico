@@ -33,12 +33,17 @@ there are many aspects of it that can/need to be configured.
   [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration)
   reference.
 
-#### Configuring calicoctl
+#### Using calicoctl
 
-Before using calicoctl it must be configured to access the datastore being
-used in your cluster be it
+Before using
+[calicoctl, it must be configured]({{site.baseurl}}/{{page.version}}/usage/calicoctl/install-and-configuration)
+to access the datastore being used in your cluster be it
 [etcdv2]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2) or
 [Kubernetes Datastore Driver]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/kubernetes).
+
+An alternative to the calicoctl binary is the container calico/ctl that is
+made available for each release, for more information see
+[calico/ctl container]({{site.baseurl}}/{{page.version}}/usage/calicoctl/install-and-configuration).
 
 {% comment %}
 Everything in this comment area is referencing reference info and getting-started info.
@@ -99,3 +104,4 @@ and
 [Calico BIRD Route Reflector container]({{site.baseurl}}/{{page.version}}/usage/routereflector/calico-routereflector)
 with the details on configuring 
 [BGP Peers here]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer).
+
