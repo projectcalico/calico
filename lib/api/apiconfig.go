@@ -27,7 +27,7 @@ const (
 	Kubernetes DatastoreType = "kubernetes"
 )
 
-// CalicoAPIConfig contains the connection information fo
+// CalicoAPIConfig contains the connection information for a Calico CalicoAPIConfig resource
 type CalicoAPIConfig struct {
 	unversioned.TypeMetadata
 	Metadata CalicoAPIConfigMetadata `json:"metadata,omitempty"`
