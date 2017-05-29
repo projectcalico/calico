@@ -62,6 +62,6 @@ the root directory of the container. This can be done by mounting a file from th
 ### Other configuration
 
 * `LOG_LEVEL`: Supports the standard Python log levels. e.g. `LOG_LEVEL=debug`, defaults to `info`
-* `NO_MATCH_ORDER`: The order used for the "no match" policies, which send traffic to per-Namespace Profiles.
+* `NO_MATCH_ORDER`: The order used for "no match" policies which implement default behavior.  New policies should not be created with an order greater than this value or else they will be ignored.  Default: 2000
 
 More information on leader election can be found in the [kubernetes/contrib](https://github.com/kubernetes/contrib/tree/master/election#simple-leader-election-with-kubernetes-and-docker) repository.
