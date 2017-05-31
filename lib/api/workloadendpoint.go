@@ -119,7 +119,7 @@ func NewWorkloadEndpoint() *WorkloadEndpoint {
 	}
 }
 
-// WorkloadEndpointList contains a list of Host Endpoint resources.  List types are returned
+// WorkloadEndpointList contains a list of Workload Endpoint resources.  List types are returned
 // from List() enumerations in the client interface.
 type WorkloadEndpointList struct {
 	unversioned.TypeMetadata
