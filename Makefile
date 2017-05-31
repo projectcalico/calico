@@ -107,7 +107,13 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 	touch $@
 
 .PHONY: fetch-cni-bins
-fetch-cni-bins: dist/flannel dist/loopback dist/host-local
+fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
+
+# For now we've got a checked in version of the plugin.  Eventually
+# this should pull from upstream releases.
+dist/portmap:
+	mkdir -p dist
+	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.8.3/portmap -o $@
 
 dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
