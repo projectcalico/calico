@@ -147,7 +147,8 @@ go-fmt goimports:
 	                          xargs goimports -w -local github.com/projectcalico/'
 
 check-licenses/dependency-licenses.txt: vendor/.up-to-date
-	$(DOCKER_GO_BUILD) sh -c 'licenses cmd/calico-typha > check-licenses/dependency-licenses.txt'
+	$(DOCKER_GO_BUILD) sh -c 'licenses ./cmd/calico-typha > check-licenses/dependency-licenses.tmp && \
+	                          mv check-licenses/dependency-licenses.tmp check-licenses/dependency-licenses.txt'
 
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(TYPHA_GO_FILES)
