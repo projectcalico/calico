@@ -38,11 +38,11 @@ const defaultMaxBatchSize = 100
 
 var (
 	summaryUpdateSize = prometheus.NewSummary(prometheus.SummaryOpts{
-		Name: "typha_update_size",
+		Name: "typha_breadcrumb_size",
 		Help: "Number of KVs recorded in each breadcrumb.",
 	})
 	gaugeCurrentSequenceNumber = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "typha_snapshot_seq_number",
+		Name: "typha_breadcrumb_seq_number",
 		Help: "Current (server-local) sequence number; number of snapshot deltas processed.",
 	})
 	counterBreadcrumbNonBlock = prometheus.NewCounter(prometheus.CounterOpts{
@@ -105,8 +105,14 @@ type SnapshotCache struct {
 	pendingStatus  api.SyncStatus
 	pendingUpdates []api.Update
 
-	kvs               *ctrie.Ctrie
-	breadcrumbCond    *sync.Cond
+	// kvs contains the current state of the datastore.  Its keys are the serialized form of our model keys
+	// and the values are SerializedUpdate objects.
+	kvs *ctrie.Ctrie
+	// breadcrumbCond is the condition variable used to signal when a new breadcrumb is available.
+	breadcrumbCond *sync.Cond
+	// currentBreadcrumb points to the most recent Breadcrumb, which contains the most recent snapshot of kvs.
+	// As described above, we use an unsafe.Pointer so we can do opportunistic atomic reads of the value to avoid
+	// blocking.
 	currentBreadcrumb unsafe.Pointer
 
 	wakeUpTicker *jitter.Ticker
@@ -172,6 +178,7 @@ func (c *SnapshotCache) loop(ctx context.Context) {
 		// First, block, waiting for updates and batch them up in our pendingXXX fields.
 		// This will opportunistically slurp up a limited number of pending updates.
 		if err := c.fillBatchFromInputQueue(ctx); err != nil {
+			log.WithError(err).Error("Snapshot main loop exiting.")
 			return
 		}
 		// Then publish the updates in new Breadcrumb(s).
@@ -189,13 +196,14 @@ func (c *SnapshotCache) fillBatchFromInputQueue(ctx context.Context) error {
 		case api.SyncStatus:
 			log.WithField("status", obj).Info("Received status update message from datastore.")
 			c.pendingStatus = obj
+			batchSize++
 		case []api.Update:
 			log.WithField("numUpdates", len(obj)).Debug("Received updates.")
 			c.pendingUpdates = append(c.pendingUpdates, obj...)
+			batchSize += len(obj)
 		default:
 			log.WithField("obj", obj).Panic("Unexpected object")
 		}
-		batchSize++
 	}
 
 	log.Debug("Waiting for next input...")
@@ -209,6 +217,7 @@ func (c *SnapshotCache) fillBatchFromInputQueue(ctx context.Context) error {
 			case obj = <-c.inputC:
 				storePendingUpdate(obj)
 			case <-ctx.Done():
+				log.WithError(ctx.Err()).Info("Context is done. Stopping.")
 				return ctx.Err()
 			default:
 				break batchLoop

@@ -17,22 +17,20 @@ package syncclient
 import (
 	"encoding/gob"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
-func New(addr string, myHostname, myInfo string, cbs api.SyncerCallbacks) *SyncerClient {
+func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallbacks) *SyncerClient {
 	return &SyncerClient{
 		callbacks: cbs,
 		addr:      addr,
 
+		myVersion:  myVersion,
 		myHostname: myHostname,
 		myInfo:     myInfo,
 	}
@@ -50,31 +48,12 @@ func (s *SyncerClient) Start() {
 
 func (s *SyncerClient) loop() {
 	log.Info("Starting Typha client")
-	parts := strings.Split(s.addr, ":")
-	var port int = syncproto.DefaultPort
-	if len(parts) > 1 {
-		var err error
-		port, err = strconv.Atoi(parts[1])
-		if err != nil {
-			log.WithError(err).Panic("Failed to parse port")
-		}
-	}
-
 	var err error
-	var c *net.TCPConn
-	logCxt := log.WithFields(log.Fields{
-		"address": parts[0],
-		"port":    port,
-	})
+	var c net.Conn
+	logCxt := log.WithField("address", s.addr)
 	for {
 		logCxt.Info("Connecting to Typha.")
-		c, err = net.DialTCP("tcp",
-			nil,
-			&net.TCPAddr{
-				IP:   net.ParseIP(parts[0]),
-				Port: port,
-			},
-		)
+		c, err = net.DialTimeout("tcp", s.addr, 10*time.Second)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to Typha, retrying...")
 			time.Sleep(2 * time.Second)
@@ -91,7 +70,7 @@ func (s *SyncerClient) loop() {
 	err = w.Encode(syncproto.Envelope{
 		Message: syncproto.MsgClientHello{
 			Hostname: s.myHostname,
-			Version:  buildinfo.GitVersion,
+			Version:  s.myVersion,
 			Info:     s.myInfo,
 		},
 	})
