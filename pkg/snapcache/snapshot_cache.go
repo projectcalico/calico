@@ -324,24 +324,33 @@ type Breadcrumb struct {
 	next     unsafe.Pointer
 }
 
-func (s *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
+func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
 	// Opportunistically grab the next Breadcrumb with an atomic read; this avoids lock
 	// contention if the next Breadcrumb is already available.
-	next := (*Breadcrumb)(atomic.LoadPointer(&s.next))
+	next := b.loadNext()
 	if next != nil {
 		counterBreadcrumbNonBlock.Inc()
 		return next, nil
 	}
 
 	// Next snapshot isn't available yet, block on the condition variable and wait for it.
-	counterBreadcrumbBlock.Inc()
-	s.nextCond.L.Lock()
-	for ; next == nil && ctx.Err() == nil; next = (*Breadcrumb)(atomic.LoadPointer(&s.next)) {
-		s.nextCond.Wait()
+	b.nextCond.L.Lock()
+	for ctx.Err() == nil {
+		next = b.loadNext()
+		if next != nil {
+			break
+		}
+		b.nextCond.Wait()
 	}
-	s.nextCond.L.Unlock()
+	b.nextCond.L.Unlock()
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	counterBreadcrumbBlock.Inc()
 	return next, nil
+}
+
+// loadNext does an atomic load of the next pointer.  It returns nil or the next Breadcrumb.
+func (b *Breadcrumb) loadNext() *Breadcrumb {
+	return (*Breadcrumb)(atomic.LoadPointer(&b.next))
 }
