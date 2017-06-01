@@ -29,9 +29,9 @@ import (
 
 	"reflect"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/syncproto"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
 const defaultMaxBatchSize = 100
@@ -132,7 +132,7 @@ func New(config Config) *SnapshotCache {
 		KVs:       kvs.ReadOnlySnapshot(),
 	}
 	return &SnapshotCache{
-		config: config,
+		config:            config,
 		inputC:            make(chan interface{}, config.MaxBatchSize*2),
 		breadcrumbCond:    cond,
 		kvs:               kvs,

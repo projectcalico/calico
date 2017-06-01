@@ -23,9 +23,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/syncproto"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
 func New(addr string, myHostname, myInfo string, cbs api.SyncerCallbacks) *SyncerClient {

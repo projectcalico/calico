@@ -28,11 +28,11 @@ import (
 
 	"sync"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncproto"
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
 var (
@@ -115,14 +115,14 @@ func New(cache BreadcrumbProvider, config Config) *SyncServer {
 	}
 	if config.MaxFallBehind <= 0 {
 		log.WithFields(log.Fields{
-			"value": config.MaxFallBehind,
+			"value":   config.MaxFallBehind,
 			"default": defaultMaxFallBehind,
 		}).Info("Defaulting MaxFallBehind.")
 		config.MaxFallBehind = defaultMaxFallBehind
 	}
 	if config.MaxFallBehind <= 0 {
 		log.WithFields(log.Fields{
-			"value": config.MinBatchingAgeThreshold,
+			"value":   config.MinBatchingAgeThreshold,
 			"default": defaultBatchingAgeThreshold,
 		}).Info("Defaulting MinBatchingAgeThreshold.")
 		config.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
@@ -130,7 +130,7 @@ func New(cache BreadcrumbProvider, config Config) *SyncServer {
 
 	return &SyncServer{
 		config: config,
-		cache: cache,
+		cache:  cache,
 	}
 }
 

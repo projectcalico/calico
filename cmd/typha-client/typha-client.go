@@ -19,8 +19,8 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
 type syncerCallbacks struct{}

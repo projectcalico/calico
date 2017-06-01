@@ -24,10 +24,11 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"time"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 	"github.com/projectcalico/libcalico-go/lib/client"
-	"time"
 )
 
 var (
@@ -110,7 +111,7 @@ type Config struct {
 
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
-	ServerMaxMessageSize              int `config:"int(1,);100"`
+	ServerMaxMessageSize              int           `config:"int(1,);100"`
 	ServerMaxFallBehindSecs           time.Duration `config:"seconds;90"`
 	ServerMinBatchingAgeThresholdSecs time.Duration `config:"seconds;0.01"`
 

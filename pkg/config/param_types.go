@@ -26,9 +26,10 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/kardianos/osext"
-	"time"
 )
 
 const (
