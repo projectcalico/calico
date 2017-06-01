@@ -35,6 +35,10 @@ import:
 - package: github.com/gavv/monotime
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
+- package: github.com/projectcalico/typha
+  version: v0.1.1
+  subpackages:
+  - pkg/syncclient
 testImport:
 - package: github.com/onsi/gomega
   version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c

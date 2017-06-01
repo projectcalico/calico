@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
 const usage = `Felix, the Calico per-host daemon.
@@ -301,8 +302,23 @@ configRetry:
 	// Get a Syncer from the datastore, which will feed the calculation
 	// graph with updates, bringing Felix into sync..
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	syncer := datastore.Syncer(syncerToValidator)
-	log.Debugf("Created Syncer: %#v", syncer)
+
+	var syncer Startable
+	log.WithField("addr", configParams.TyphaAddr).Info("Connecting to Typha?")
+	if configParams.TyphaAddr != "" {
+		// Use a remote Syncer, in the Typha server.
+		log.WithField("addr", configParams.TyphaAddr).Info("Connecting to Typha.")
+		syncer = syncclient.New(
+			configParams.TyphaAddr,
+			configParams.FelixHostname,
+			"", // TODO Typha fill in more build info?
+			syncerToValidator,
+		)
+	} else {
+		// Use the syncer locally.
+		syncer = datastore.Syncer(syncerToValidator)
+	}
+	log.WithField("syncer", syncer).Info("Created Syncer")
 
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies

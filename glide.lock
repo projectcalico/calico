@@ -1,5 +1,5 @@
-hash: fffb236edf049a68bf3fc95eab97ecbb3bf98fb44a1cac1ba2b53493b138a896
-updated: 2017-05-11T14:14:46.808845652-07:00
+hash: 7804d1c1f14eadc1d89b6b9674521cc944cb2a07cac4ee0f3282424f393e09d0
+updated: 2017-06-01T17:42:31.237977617Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,16 +13,16 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 137b4975ecab6e1f0c24c1e3c228a50a3cfba75e
+  version: 73c65fbe839f99eb3494eb2471a49c609da89c53
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: d2716fc5ae7909a3b9651e31cfb0eba22b4920c3
+  version: 0c923bdf11e65e21e3c5e7cbd7b46a1809d76386
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -36,18 +36,12 @@ imports:
   - oauth2
   - oidc
 - name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
-- name: github.com/coreos/go-systemd
-  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
-  subpackages:
-  - activation
-  - journal
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
-  - capnslog
   - health
   - httputil
   - timeutil
@@ -72,7 +66,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: e7fea39b01aea8d5671f6858f0532f56e8bff3a5
+  version: 36da989cdc560b989d8f195aec46214d33665d20
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -89,7 +83,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 6e4cc92cc905d5f4a73041c1b8228ea08f4c6147
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -105,7 +99,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: 70f0258d44cbaa3b6a2581d82f58da01a38e4de4
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -176,6 +170,12 @@ imports:
   - lib/selector/tokenizer
   - lib/testutils
   - lib/validator
+- name: github.com/projectcalico/typha
+  version: fb7e5c914e1758ce3ccb30c27497c3f938556788
+  subpackages:
+  - pkg/buildinfo
+  - pkg/syncclient
+  - pkg/syncproto
 - name: github.com/prometheus/client_golang
   version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
@@ -187,13 +187,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
+  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: d098ca18df8bc825079013daf7bacefbb1ee877e
+  version: a1dba9ce8baed984a2495b658c82687f8157b98f
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -201,9 +201,9 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: 5e5dc898656f695e2a086b8e12559febbfc01562
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -211,17 +211,17 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: 7bd45e5974271cfe07cb4697b79cf6ec63f78700
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
   version: 1f22c0103821b9390939b6776727195525381532
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
+  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
   - context/ctxhttp
@@ -237,13 +237,14 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: d75a52659825e75fff6158388dddc6a5b04f9ba5
+  version: b90f89a1e7a9c1f6b918820b3daa7f08488c8594
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 2910a502d2bf9e43193af9d68ca516529614eed3
+  version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
   - cases
+  - internal
   - internal/tag
   - language
   - runes
