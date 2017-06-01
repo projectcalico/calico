@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -180,9 +179,9 @@ func (tc *testClient) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.I
 	return tc.newWatch("system network policy", make(chan watch.Event)), nil
 }
 
-func (tc *testClient) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error) {
+func (tc *testClient) SystemNetworkPolicyList() ([]*model.KVPair, string, error) {
 	tc.countList()
-	return &thirdparty.SystemNetworkPolicyList{}, nil
+	return []*model.KVPair{}, "", nil
 }
 
 func (tc *testClient) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, error) {

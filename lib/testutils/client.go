@@ -86,6 +86,16 @@ func CleanIPPools(c *client.Client) {
 	}
 }
 
+func CleanBGPPeers(c *client.Client) {
+	if peers, err := c.BGPPeers().List(api.BGPPeerMetadata{}); err == nil {
+		for _, peer := range peers.Items {
+			if err := c.BGPPeers().Delete(peer.Metadata); err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 func CleanDatastore(config api.CalicoAPIConfig) {
 	var err error
 

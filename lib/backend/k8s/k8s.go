@@ -59,9 +59,10 @@ type KubeClient struct {
 	converter converter
 
 	// Clients for interacting with Calico resources.
-	ipPoolClient api.Client
-	nodeClient   api.Client
-	snpClient    api.Client
+	globalBgpClient resources.K8sResourceClient
+	ipPoolClient    resources.K8sResourceClient
+	snpClient       resources.K8sResourceClient
+	nodeClient      api.Client
 }
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
@@ -128,9 +129,10 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	}
 
 	// Create the Calico sub-clients.
-	kubeClient.ipPoolClient = resources.NewIPPools(cs, tprClientV1)
+	kubeClient.ipPoolClient = resources.NewIPPoolsClient(cs, tprClientV1)
 	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClientV1)
-	kubeClient.snpClient = resources.NewSystemNetworkPolicies(cs, tprClientV1alpha)
+	kubeClient.snpClient = resources.NewSystemNetworkPoliciesClient(cs, tprClientV1alpha)
+	kubeClient.globalBgpClient = resources.NewGlobalBGPPeerClient(cs, tprClientV1)
 
 	return kubeClient, nil
 }
@@ -196,6 +198,9 @@ func (c *KubeClient) createThirdPartyResources() error {
 		return err
 	}
 	if err := c.snpClient.EnsureInitialized(); err != nil {
+		return err
+	}
+	if err := c.globalBgpClient.EnsureInitialized(); err != nil {
 		return err
 	}
 
@@ -325,6 +330,8 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Create(d)
 	case model.NodeKey:
 		return c.nodeClient.Create(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Create(d)
 	default:
 		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -345,6 +352,8 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Update(d)
 	case model.NodeKey:
 		return c.nodeClient.Update(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Update(d)
 	default:
 		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -367,6 +376,8 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Apply(d)
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Apply(d)
 	case model.ActiveStatusReportKey, model.LastStatusReportKey,
 		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
 		// Felix periodically reports status to the datastore.  This isn't supported
@@ -392,6 +403,8 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 		return c.ipPoolClient.Delete(d)
 	case model.NodeKey:
 		return c.nodeClient.Delete(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Delete(d)
 	default:
 		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
 		return errors.ErrorOperationNotSupported{
@@ -418,9 +431,11 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 	case model.ReadyFlagKey:
 		return c.getReadyStatus(k.(model.ReadyFlagKey))
 	case model.IPPoolKey:
-		return c.ipPoolClient.Get(k.(model.IPPoolKey))
+		return c.ipPoolClient.Get(k)
 	case model.NodeKey:
 		return c.nodeClient.Get(k.(model.NodeKey))
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Get(k)
 	default:
 		return nil, errors.ErrorOperationNotSupported{
 			Identifier: k,
@@ -446,9 +461,13 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 	case model.HostConfigListOptions:
 		return c.listHostConfig(l.(model.HostConfigListOptions))
 	case model.IPPoolListOptions:
-		return c.ipPoolClient.List(l.(model.IPPoolListOptions))
+		k, _, err := c.ipPoolClient.List(l)
+		return k, err
 	case model.NodeListOptions:
 		return c.nodeClient.List(l.(model.NodeListOptions))
+	case model.GlobalBGPPeerListOptions:
+		k, _, err := c.globalBgpClient.List(l)
+		return k, err
 	default:
 		return []*model.KVPair{}, nil
 	}
@@ -627,7 +646,7 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 	}
 
 	// List all System Network Policies.
-	snps, err := c.snpClient.List(l)
+	snps, _, err := c.snpClient.List(l)
 	if err != nil {
 		return nil, err
 	}

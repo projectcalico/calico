@@ -25,19 +25,22 @@ import (
 type PolicyConverter struct{}
 
 // ConvertMetadataToKey converts a PolicyMetadata to a PolicyKey
-func (p PolicyConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) model.Key {
+func (p PolicyConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	pm := m.(api.PolicyMetadata)
 	k := model.PolicyKey{
 		Name: pm.Name,
 	}
-	return k
+	return k, nil
 }
 
 // ConvertAPIToKVPair converts an API Policy structure to a KVPair containing a
 // backend Policy and PolicyKey.
-func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) *model.KVPair {
+func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
 	ap := a.(api.Policy)
-	k := p.ConvertMetadataToKey(ap.Metadata)
+	k, err := p.ConvertMetadataToKey(ap.Metadata)
+	if err != nil {
+		return nil, err
+	}
 
 	d := model.KVPair{
 		Key: k,
@@ -50,12 +53,12 @@ func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) *model.KVPai
 		},
 	}
 
-	return &d
+	return &d, nil
 }
 
 // ConvertKVPairToAPI converts a KVPair containing a backend Policy and PolicyKey
 // to an API Policy structure.
-func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) unversioned.Resource {
+func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
 	bp := d.Value.(*model.Policy)
 	bk := d.Key.(model.PolicyKey)
 
@@ -67,5 +70,5 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) unversioned.Resourc
 	ap.Spec.Selector = bp.Selector
 	ap.Spec.DoNotTrack = bp.DoNotTrack
 
-	return ap
+	return ap, nil
 }
