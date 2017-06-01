@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"time"
 )
 
 var (
@@ -106,6 +107,12 @@ type Config struct {
 	PrometheusMetricsPort           int  `config:"int(0,65535);9093"`
 	PrometheusGoMetricsEnabled      bool `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool `config:"bool;true"`
+
+	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
+
+	ServerMaxMessageSize              int `config:"int(1,);100"`
+	ServerMaxFallBehindSecs           time.Duration `config:"seconds;90"`
+	ServerMinBatchingAgeThresholdSecs time.Duration `config:"seconds;0.01"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
@@ -331,9 +338,11 @@ func loadParams() {
 				if err != nil {
 					log.Panicf("Failed to parse min value for %v", field.Name)
 				}
-				max, err = strconv.Atoi(minAndMax[1])
-				if err != nil {
-					log.Panicf("Failed to parse max value for %v", field.Name)
+				if minAndMax[1] != "" {
+					max, err = strconv.Atoi(minAndMax[1])
+					if err != nil {
+						log.Panicf("Failed to parse max value for %v", field.Name)
+					}
 				}
 			}
 			param = &IntParam{Min: min, Max: max}
@@ -343,6 +352,8 @@ func loadParams() {
 			param = &MarkBitmaskParam{}
 		case "float":
 			param = &FloatParam{}
+		case "seconds":
+			param = &SecondsParam{}
 		case "iface-list":
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}

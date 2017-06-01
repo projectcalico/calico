@@ -79,11 +79,10 @@ func init() {
 	prometheus.MustRegister(summaryNumKVsPerMsg)
 }
 
-// TODO Typha make maxFallBehind and maxBatchSize configurable
 const (
-	maxBatchSize         = 100
-	maxFallBehind        = 90 * time.Second
-	batchingAgeThreshold = 100 * time.Millisecond
+	defaultMaxMessageSize       = 100
+	defaultMaxFallBehind        = 90 * time.Second
+	defaultBatchingAgeThreshold = 100 * time.Millisecond
 )
 
 type SyncServerContextKey string
@@ -91,6 +90,7 @@ type SyncServerContextKey string
 const CxtKeyConnID = SyncServerContextKey("ConnID")
 
 type SyncServer struct {
+	config     Config
 	cache      BreadcrumbProvider
 	nextConnID uint64
 }
@@ -99,8 +99,37 @@ type BreadcrumbProvider interface {
 	CurrentBreadcrumb() *snapcache.Breadcrumb
 }
 
-func New(cache BreadcrumbProvider) *SyncServer {
+type Config struct {
+	MaxMessageSize          int
+	MaxFallBehind           time.Duration
+	MinBatchingAgeThreshold time.Duration
+}
+
+func New(cache BreadcrumbProvider, config Config) *SyncServer {
+	if config.MaxMessageSize < 1 {
+		log.WithFields(log.Fields{
+			"value":   config.MaxMessageSize,
+			"default": defaultMaxMessageSize,
+		}).Info("Defaulting MaxMessageSize.")
+		config.MaxMessageSize = defaultMaxMessageSize
+	}
+	if config.MaxFallBehind <= 0 {
+		log.WithFields(log.Fields{
+			"value": config.MaxFallBehind,
+			"default": defaultMaxFallBehind,
+		}).Info("Defaulting MaxFallBehind.")
+		config.MaxFallBehind = defaultMaxFallBehind
+	}
+	if config.MaxFallBehind <= 0 {
+		log.WithFields(log.Fields{
+			"value": config.MinBatchingAgeThreshold,
+			"default": defaultBatchingAgeThreshold,
+		}).Info("Defaulting MinBatchingAgeThreshold.")
+		config.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
+	}
+
 	return &SyncServer{
+		config: config,
 		cache: cache,
 	}
 }
@@ -266,7 +295,7 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 				close(cancelC)
 				return
 			case entry := <-iter:
-				if len(kvs) >= maxBatchSize || (len(kvs) > 0 && entry == nil) {
+				if len(kvs) >= s.config.MaxMessageSize || (len(kvs) > 0 && entry == nil) {
 					logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
 					summaryNumKVsPerMsg.Observe(float64(len(kvs)))
 					err := sendMsg(syncproto.MsgKVs{
@@ -306,7 +335,7 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 			// Wait for new Breadcrumbs.  If we're behind, we may coalesce the deltas
 			// from multiple Breadcrumbs before exiting the loop.
 			var deltas []syncproto.SerializedUpdate
-			for len(deltas) < maxBatchSize {
+			for len(deltas) < s.config.MaxMessageSize {
 				nextStartTime := time.Now()
 				breadcrumb, err = breadcrumb.Next(connCxt)
 				if err != nil {
@@ -325,7 +354,7 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 
 				// Check if we're too far behind the latest snapshot.
 				summaryClientLatency.Observe(mySnapAge.Seconds())
-				if mySnapAge > maxFallBehind {
+				if mySnapAge > s.config.MaxFallBehind {
 					logCxt.WithFields(log.Fields{
 						"snapAge":     mySnapAge,
 						"mySeqNo":     breadcrumb.SequenceNumber,
@@ -334,13 +363,13 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 					return
 				}
 
-				if mySnapAge > batchingAgeThreshold || deltas != nil {
+				if mySnapAge > s.config.MinBatchingAgeThreshold || deltas != nil {
 					// We're behind (or already batching) need to append the
 					// deltas.
 					deltas = append(deltas, breadcrumb.Updates...)
 					summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
 				}
-				if mySnapAge > batchingAgeThreshold {
+				if mySnapAge > s.config.MinBatchingAgeThreshold {
 					// Still behind, batch if we can.
 					continue
 				}

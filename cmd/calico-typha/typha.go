@@ -195,10 +195,19 @@ configRetry:
 	validator := calc.NewValidationFilter(validatorToCache)
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
-	cache := snapcache.New()
+	cache := snapcache.New(snapcache.Config{
+		MaxBatchSize: configParams.SnapshotCacheMaxBatchSize,
+	})
 
 	// Create the server, which listens for connections from Felix.
-	server := syncserver.New(cache)
+	server := syncserver.New(
+		cache,
+		syncserver.Config{
+			MaxMessageSize:          configParams.ServerMaxMessageSize,
+			MinBatchingAgeThreshold: configParams.ServerMinBatchingAgeThresholdSecs,
+			MaxFallBehind:           configParams.ServerMaxFallBehindSecs,
+		},
+	)
 
 	// Now we've connected everything up, start the background processing threads.
 	log.Info("Starting the datastore Syncer/cache layer")

@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
-const maxBatchSize = 100
+const defaultMaxBatchSize = 100
 
 var (
 	summaryUpdateSize = prometheus.NewSummary(prometheus.SummaryOpts{
@@ -98,6 +98,8 @@ func init() {
 // more fiddly than using a non-blocking linked list and a condition variable and letting each
 // client look after itself.
 type SnapshotCache struct {
+	config Config
+
 	inputC chan interface{}
 
 	pendingStatus  api.SyncStatus
@@ -110,7 +112,18 @@ type SnapshotCache struct {
 	wakeUpTicker *jitter.Ticker
 }
 
-func New() *SnapshotCache {
+type Config struct {
+	MaxBatchSize int
+}
+
+func New(config Config) *SnapshotCache {
+	if config.MaxBatchSize <= 0 {
+		log.WithFields(log.Fields{
+			"value":   config.MaxBatchSize,
+			"default": defaultMaxBatchSize,
+		}).Info("Defaulting MaxBatchSize.")
+		config.MaxBatchSize = defaultMaxBatchSize
+	}
 	kvs := ctrie.New(nil /*default hash factory*/)
 	cond := sync.NewCond(&sync.Mutex{})
 	snap := &Breadcrumb{
@@ -119,7 +132,8 @@ func New() *SnapshotCache {
 		KVs:       kvs.ReadOnlySnapshot(),
 	}
 	return &SnapshotCache{
-		inputC:            make(chan interface{}, maxBatchSize*2),
+		config: config,
+		inputC:            make(chan interface{}, config.MaxBatchSize*2),
 		breadcrumbCond:    cond,
 		kvs:               kvs,
 		currentBreadcrumb: (unsafe.Pointer)(snap),
@@ -190,7 +204,7 @@ func (c *SnapshotCache) fillBatchFromInputQueue(ctx context.Context) error {
 		log.WithField("update", obj).Debug("Got first update, peeking...")
 		storePendingUpdate(obj)
 	batchLoop:
-		for batchSize < maxBatchSize {
+		for batchSize < c.config.MaxBatchSize {
 			select {
 			case obj = <-c.inputC:
 				storePendingUpdate(obj)
@@ -227,9 +241,9 @@ func (c *SnapshotCache) publishBreadcrumbs() {
 func (c *SnapshotCache) publishBreadcrumb() {
 	var updates []api.Update
 	var lastUpdate bool
-	if len(c.pendingUpdates) > maxBatchSize {
-		updates = c.pendingUpdates[:maxBatchSize]
-		c.pendingUpdates = c.pendingUpdates[maxBatchSize:]
+	if len(c.pendingUpdates) > c.config.MaxBatchSize {
+		updates = c.pendingUpdates[:c.config.MaxBatchSize]
+		c.pendingUpdates = c.pendingUpdates[c.config.MaxBatchSize:]
 	} else {
 		updates = c.pendingUpdates
 		c.pendingUpdates = c.pendingUpdates[:0]
