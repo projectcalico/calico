@@ -1,9 +1,9 @@
-package: github.com/projectcalico/felix
+package: github.com/projectcalico/typha
 homepage: https://projectcalico.org
 license: Apache-2.0
 owners:
-- name: Rob Brockbank
-  email: rob@tigera.io
+- name: Shaun Crampton
+  email: shaun@tigera.io
 import:
 - package: github.com/coreos/etcd
   subpackages:
@@ -11,7 +11,6 @@ import:
   - pkg/transport
 - package: github.com/docopt/docopt-go
 - package: github.com/ghodss/yaml
-- package: github.com/golang/glog
 - package: github.com/kelseyhightower/envconfig
 - package: golang.org/x/net
   subpackages:
@@ -28,10 +27,7 @@ import:
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
-- package: github.com/gogo/protobuf
-  version: ^0.3.0
-- package: github.com/vishvananda/netlink
+  version: ^0.8.0
 - package: github.com/gavv/monotime
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
