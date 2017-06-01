@@ -1,0 +1,2 @@
+#!/bin/sh
+sv restart /etc/service/enabled/confd

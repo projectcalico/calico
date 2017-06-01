@@ -1,0 +1,8 @@
+[template]
+src = "bird.toml.template"
+dest = "/etc/calico/confd/conf.d/bird.toml"
+prefix = "/calico/bgp/v1/global"
+keys = [
+    "/node_mesh",
+]
+reload_cmd = "restart-calico-confd"
