@@ -205,6 +205,8 @@ configRetry:
 			MaxMessageSize:          configParams.ServerMaxMessageSize,
 			MinBatchingAgeThreshold: configParams.ServerMinBatchingAgeThresholdSecs,
 			MaxFallBehind:           configParams.ServerMaxFallBehindSecs,
+			PingInterval:            configParams.ServerPingIntervalSecs,
+			PongTimeout:             configParams.ServerPongTimeoutSecs,
 		},
 	)
 

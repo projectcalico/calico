@@ -16,17 +16,14 @@ package syncserver
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"net"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
-	"encoding/gob"
-
 	"github.com/prometheus/client_golang/prometheus"
-
-	"sync"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
@@ -83,11 +80,12 @@ const (
 	defaultMaxMessageSize       = 100
 	defaultMaxFallBehind        = 90 * time.Second
 	defaultBatchingAgeThreshold = 100 * time.Millisecond
+	defaultPingInterval         = 10 * time.Second
 )
 
-type SyncServerContextKey string
+type syncServerContextKey string
 
-const CxtKeyConnID = SyncServerContextKey("ConnID")
+const CxtKeyConnID = syncServerContextKey("ConnID")
 
 type SyncServer struct {
 	config     Config
@@ -103,6 +101,8 @@ type Config struct {
 	MaxMessageSize          int
 	MaxFallBehind           time.Duration
 	MinBatchingAgeThreshold time.Duration
+	PingInterval            time.Duration
+	PongTimeout             time.Duration
 }
 
 func New(cache BreadcrumbProvider, config Config) *SyncServer {
@@ -126,6 +126,21 @@ func New(cache BreadcrumbProvider, config Config) *SyncServer {
 			"default": defaultBatchingAgeThreshold,
 		}).Info("Defaulting MinBatchingAgeThreshold.")
 		config.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
+	}
+	if config.PingInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   config.PingInterval,
+			"default": defaultPingInterval,
+		}).Info("Defaulting PingInterval.")
+		config.PingInterval = defaultPingInterval
+	}
+	if config.PongTimeout <= config.PingInterval*2 {
+		defaultTimeout := config.PongTimeout * 6
+		log.WithFields(log.Fields{
+			"value":   config.PongTimeout,
+			"default": defaultTimeout,
+		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
+		config.PongTimeout = defaultTimeout
 	}
 
 	return &SyncServer{
@@ -401,7 +416,7 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 	// Start a ticker to trigger periodic pings.  We send pings from their own goroutine so
 	// that, if the Encoder blocks, we don't prevent the main goroutine from checking the
 	// timer.
-	pingTicker := jitter.NewTicker(10*time.Second, 1*time.Second)
+	pingTicker := jitter.NewTicker(s.config.PingInterval, s.config.PingInterval/10)
 	defer pingTicker.Stop()
 
 	shutDownWG.Add(1)
@@ -415,23 +430,23 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 		for {
 			select {
 			case <-pingTicker.C:
+				logCxt.Debug("Sending ping.")
+				err := sendMsg(syncproto.MsgPing{
+					Timestamp: time.Now(),
+				})
+				if err != nil {
+					log.WithError(err).Info("Failed to send ping to client")
+					return
+				}
 			case <-connCxt.Done():
 				log.WithError(err).Info("Context was canceled.")
-				return
-			}
-			logCxt.Debug("Sending ping.")
-			err := sendMsg(syncproto.MsgPing{
-				Timestamp: time.Now(),
-			})
-			if err != nil {
-				log.WithError(err).Info("Failed to send ping to client")
 				return
 			}
 		}
 	}()
 
 	// Start a ticker to check that we receive pongs in a timely fashion.
-	pongTicker := jitter.NewTicker(10*time.Second, 1*time.Second)
+	pongTicker := jitter.NewTicker(s.config.PingInterval/2, s.config.PingInterval/10)
 	defer pongTicker.Stop()
 	lastPongReceived := time.Now()
 
@@ -453,7 +468,7 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 				return errors.New("Unknown message type")
 			}
 		case <-pongTicker.C:
-			if time.Since(lastPongReceived) > 60*time.Second {
+			if time.Since(lastPongReceived) > s.config.PongTimeout {
 				logCxt.Info("Too long since last pong from client, disconnecting")
 				return errors.New("No pong received from client")
 			}
