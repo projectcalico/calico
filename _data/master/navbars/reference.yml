@@ -115,6 +115,8 @@ toc:
   section:
   - title: RBAC for etcdv2
     path: /reference/advanced/etcd-rbac
+- title: System Requirements
+  path: /reference/requirements
 - title: Repo Structure
   path: /reference/repo-structure
 - title: Contribute
