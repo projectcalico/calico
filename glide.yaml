@@ -13,8 +13,10 @@ import:
 - package: github.com/ghodss/yaml
 - package: github.com/kelseyhightower/envconfig
 - package: golang.org/x/net
+  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
+  - idna/
 - package: gopkg.in/go-playground/validator.v8
 - package: github.com/satori/go.uuid
 - package: github.com/go-ini/ini
@@ -35,6 +37,10 @@ import:
   version: ^1.0.36
   subpackages:
   - trie/ctrie
+- package: golang.org/x/text
+  version: 4ee4af566555f5fbe026368b75596286a312663a
+  subpackages:
+  - secure/bidirule
 testImport:
 - package: github.com/onsi/gomega
   version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c

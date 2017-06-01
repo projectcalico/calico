@@ -1,5 +1,5 @@
-hash: 6ef38b659a1687e07fa108e8c87e3b212c86cdcadaf6871862f2a0a9a38e4698
-updated: 2017-06-01T15:48:13.678851768Z
+hash: 0b53be95ca15901b4a24af69caf0448e71835a3c8789f0bb489737f88f542027
+updated: 2017-06-01T16:14:22.130373544Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -211,13 +211,14 @@ imports:
   - blowfish
   - ssh/terminal
 - name: golang.org/x/net
-  version: c8c74377599bd978aee1cf3b9b63a8634051cec2
+  version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
   - context/ctxhttp
   - http2
   - http2/hpack
   - idna
+  - idna/
   - lex/httplex
 - name: golang.org/x/oauth2
   version: 3c3a985cb79f52a3190fbc056984415ca6763d01
@@ -231,9 +232,10 @@ imports:
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 2910a502d2bf9e43193af9d68ca516529614eed3
+  version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
   - cases
+  - internal
   - internal/tag
   - language
   - runes
