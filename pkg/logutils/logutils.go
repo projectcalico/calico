@@ -36,11 +36,11 @@ import (
 
 var (
 	counterDroppedLogs = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_logs_dropped",
+		Name: "typha_logs_dropped",
 		Help: "Number of logs dropped because the output stream was blocked.",
 	})
 	counterLogErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_log_errors",
+		Name: "typha_log_errors",
 		Help: "Number of errors encountered while logging.",
 	})
 )
@@ -55,7 +55,7 @@ func init() {
 const logQueueSize = 100
 
 // ConfigureEarlyLogging installs our logging adapters, and enables early logging to screen
-// if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
+// if it is enabled by either the TYPHA_EARLYLOGSEVERITYSCREEN or TYPHA_LOGSEVERITYSCREEN
 // environment variable.
 func ConfigureEarlyLogging() {
 	// Replace logrus' formatter with a custom one using our time format,
@@ -68,11 +68,11 @@ func ConfigureEarlyLogging() {
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config
 	// will override it once it's loaded.
-	rawLogLevel := os.Getenv("FELIX_EARLYLOGSEVERITYSCREEN")
+	rawLogLevel := os.Getenv("TYPHA_EARLYLOGSEVERITYSCREEN")
 	if rawLogLevel == "" {
 		// Early-only flag not set, look for the normal config-owned
 		// variable.
-		rawLogLevel = os.Getenv("FELIX_LOGSEVERITYSCREEN")
+		rawLogLevel = os.Getenv("TYPHA_LOGSEVERITYSCREEN")
 	}
 
 	// Default to logging errors.
@@ -152,7 +152,7 @@ func ConfigureLogging(configParams *config.Config) {
 		// severity is actually irrelevant because the hook always overrides
 		// it.
 		priority := syslog.LOG_USER | syslog.LOG_INFO
-		tag := "calico-felix"
+		tag := "calico-typha"
 		w, sysErr := syslog.Dial(net, addr, priority, tag)
 		if sysErr == nil {
 			syslogDest := NewSyslogDestination(
@@ -208,7 +208,7 @@ func filterLevels(maxLevel log.Level) []log.Level {
 }
 
 // Formatter is our custom log formatter, which mimics the style used by the Python version of
-// Felix.  In particular, it uses a sortable timestamp and it includes the level, PID, file and line
+// Typha.  In particular, it uses a sortable timestamp and it includes the level, PID, file and line
 // number.
 //
 //    2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of

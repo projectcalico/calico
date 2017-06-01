@@ -51,7 +51,7 @@ var _ = DescribeTable("Config parsing",
 		"https://127.0.0.1:1234/, https://host:2345",
 		[]string{"https://127.0.0.1:1234/", "https://host:2345/"}),
 
-	Entry("LogFilePath", "LogFilePath", "/tmp/felix.log", "/tmp/felix.log"),
+	Entry("LogFilePath", "LogFilePath", "/tmp/typha.log", "/tmp/typha.log"),
 
 	Entry("LogSeverityFile", "LogSeverityFile", "debug", "DEBUG"),
 	Entry("LogSeverityFile", "LogSeverityFile", "warning", "WARNING"),

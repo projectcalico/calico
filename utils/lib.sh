@@ -1,4 +1,4 @@
-# Library of functions for Felix process and release automation.
+# Library of functions for Typha process and release automation.
 
 # Get the root directory of the Git repository that we are in.
 function git_repo_root {

@@ -27,7 +27,7 @@ cd `git_repo_root`
 # commit messages - since the last release.
 last_tag=`git_last_tag`
 release_notes=./release-notes-${nextrel}
-echo "Felix version ${nextrel}" > ${release_notes}
+echo "Typha version ${nextrel}" > ${release_notes}
 echo >> ${release_notes}
 
 git cherry -v $last_tag | cut '-d ' -f 3- | sed 's/^/- /' >> ${release_notes}

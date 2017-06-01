@@ -1,4 +1,4 @@
-// The config package provides config inheritance for Felix.
+// The config package provides config inheritance for Typha.
 //
 // It supports loading config from various sources, parsing and validating the
 // config and merging the config according to the priority of the sources.
