@@ -112,9 +112,9 @@ vendor vendor/.up-to-date: glide.lock
 # We use -B to insert a build ID note into the executable, without which, the
 # RPM build tools complain.
 LDFLAGS:=-ldflags "\
-        -X github.com/projectcalico/typha/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-        -X github.com/projectcalico/typha/buildinfo.BuildDate=$(DATE) \
-        -X github.com/projectcalico/typha/buildinfo.GitRevision=$(GIT_COMMIT) \
+        -X github.com/projectcalico/typha/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
+        -X github.com/projectcalico/typha/pkg/buildinfo.BuildDate=$(DATE) \
+        -X github.com/projectcalico/typha/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
         -B 0x$(BUILD_ID)"
 
 bin/calico-typha: $(TYPHA_GO_FILES) vendor/.up-to-date
