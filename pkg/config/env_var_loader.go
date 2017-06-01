@@ -21,8 +21,8 @@ import (
 )
 
 // LoadConfigFromEnvironment extracts raw config parameters (identified by
-// case-insensitive prefix "felix_") from the given OS environment variables.
-// An environment entry of "FELIX_FOO=bar" is translated to "foo": "bar".
+// case-insensitive prefix "typha_") from the given OS environment variables.
+// An environment entry of "TYPHA_FOO=bar" is translated to "foo": "bar".
 func LoadConfigFromEnvironment(environ []string) map[string]string {
 	result := make(map[string]string)
 	for _, kv := range environ {
@@ -34,10 +34,10 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		}
 		key := strings.ToLower(splits[0])
 		value := splits[1]
-		if strings.Index(key, "felix_") == 0 {
+		if strings.HasPrefix(key, "typha_") {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			log.Infof("Found felix environment variable: %#v=%#v",
+			log.Infof("Found typha environment variable: %#v=%#v",
 				paramName, value)
 			result[paramName] = value
 		}

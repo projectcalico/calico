@@ -25,13 +25,13 @@ import (
 )
 
 const confFileSingleParamNoNewLine = `[ignored]
-FelixHostname=hostname`
+TyphaHostname=hostname`
 
 const confFileDefaultBlock = `[default]
-FelixHostname=hostname`
+TyphaHostname=hostname`
 
 const confFileMultiBlock = `[ignored]
-FelixHostname=hostname
+TyphaHostname=hostname
 [logging]
 LogSeverityScreen=INFO
 LogSeveritySys=DEBUG`
@@ -44,13 +44,13 @@ var _ = DescribeTable("File parameter parsing",
 	},
 	Entry("Empty", "", map[string]string{}),
 	Entry("Single param", confFileSingleParamNoNewLine, map[string]string{
-		"FelixHostname": "hostname",
+		"TyphaHostname": "hostname",
 	}),
 	Entry("Default block", confFileDefaultBlock, map[string]string{
-		"FelixHostname": "hostname",
+		"TyphaHostname": "hostname",
 	}),
 	Entry("Multi block", confFileMultiBlock, map[string]string{
-		"FelixHostname":     "hostname",
+		"TyphaHostname":     "hostname",
 		"LogSeverityScreen": "INFO",
 		"LogSeveritySys":    "DEBUG",
 	}),
@@ -71,7 +71,7 @@ var _ = DescribeTable("File load tests",
 	Entry("Missing", "missing.cfg", nil, false),
 	Entry("Empty", "empty.cfg", map[string]string{}, false),
 	Entry("Mainline", "mainline.cfg", map[string]string{
-		"FelixHostname":     "hostname",
+		"TyphaHostname":     "hostname",
 		"LogSeverityScreen": "INFO",
 		"LogSeveritySys":    "DEBUG",
 	}, false),

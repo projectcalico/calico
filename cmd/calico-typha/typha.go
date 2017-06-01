@@ -20,7 +20,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
@@ -52,7 +51,7 @@ Usage:
   calico-typha [options]
 
 Options:
-  -c --config-file=<filename>  Config file to load [default: /etc/calico/felix.cfg].
+  -c --config-file=<filename>  Config file to load [default: /etc/calico/typha.cfg].
   --version                    Print the version and exit.
 `
 
@@ -83,7 +82,6 @@ func main() {
 	// Go's RNG is not seeded by default.  Do that now.
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	// TODO Typha: This is all copied from Felix, need our own config etc...
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
 	logutils.ConfigureEarlyLogging()
@@ -103,7 +101,7 @@ func main() {
 		"gitCommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
-	buildInfoLogCxt.Info("Felix starting up")
+	buildInfoLogCxt.Info("Typha starting up")
 	log.Infof("Command line arguments: %v", arguments)
 
 	// Load the configuration from all the different sources including the
@@ -185,33 +183,31 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
-	// Now create the Syncer and fan-out proxy.
-
-	// Create the validator, which sits between the syncer and the cache.
-	validatorToCache := calc.NewSyncerCallbacksDecoupler()
-	validator := calc.NewValidationFilter(validatorToCache)
+	// Now create the Syncer; our caching layer and the TCP server.
 
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
 	syncer := datastore.Syncer(syncerToValidator)
 	log.Debugf("Created Syncer: %#v", syncer)
 
-	// Start the background processing threads.
-	log.Info("Starting the datastore Syncer/cache layer")
-	syncer.Start()
+	// Create the validator, which sits between the syncer and the cache.
+	validatorToCache := calc.NewSyncerCallbacksDecoupler()
+	validator := calc.NewValidationFilter(validatorToCache)
 
+	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	cache := snapcache.New()
 
+	// Create the server, which listens for connections from Felix.
+	server := syncserver.New(cache)
+
+	// Now we've connected everything up, start the background processing threads.
+	log.Info("Starting the datastore Syncer/cache layer")
+	syncer.Start()
 	go syncerToValidator.SendTo(validator)
 	go validatorToCache.SendTo(cache)
 	cache.Start(context.Background())
-
-	server := syncserver.New(cache)
 	go server.Serve(context.Background())
-
-	log.Info("Started the datastore Syncer/cache layer")
-
-	var stopSignalChans []chan<- bool
+	log.Info("Started the datastore Syncer/cache layer/server.")
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
@@ -230,7 +226,8 @@ configRetry:
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
-	monitorAndManageShutdown(nil, nil, stopSignalChans)
+	// TODO Managed shut down.
+	monitorAndManageShutdown(nil, nil)
 }
 
 // TODO Typha: Share with Felix.
@@ -295,72 +292,29 @@ func servePrometheusMetrics(configParams *config.Config) {
 }
 
 // TODO Typha: Clean this up (copy-paste from Felix)
-func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
+func monitorAndManageShutdown(failureReportChan <-chan string, stopSignalChans []chan<- bool) {
 	// Ask the runtime to tell us if we get a term signal.
 	termSignalChan := make(chan os.Signal, 1)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
 
-	// Start a background thread to tell us when the dataplane driver stops.
-	// If the driver stops unexpectedly, we'll terminate this process.
-	// If this process needs to stop, we'll kill the driver and then wait
-	// for the message from the background thread.
-	driverStoppedC := make(chan bool)
-	go func() {
-		if driverCmd == nil {
-			log.Info("No driver process to monitor")
-			return
-		}
-		err := driverCmd.Wait()
-		log.WithError(err).Warn("Driver process stopped")
-		driverStoppedC <- true
-	}()
-
 	// Wait for one of the channels to give us a reason to shut down.
-	driverAlreadyStopped := driverCmd == nil
 	receivedSignal := false
 	var reason string
 	select {
-	case <-driverStoppedC:
-		reason = "Driver stopped"
-		driverAlreadyStopped = true
 	case sig := <-termSignalChan:
 		reason = fmt.Sprintf("Received OS signal %v", sig)
 		receivedSignal = true
 	case reason = <-failureReportChan:
 	}
 	logCxt := log.WithField("reason", reason)
-	logCxt.Warn("Felix is shutting down")
+	logCxt.Warn("Typha is shutting down")
 
 	// Notify other components to stop.
+	// TODO Use Contexts.
 	for _, c := range stopSignalChans {
 		select {
 		case c <- true:
 		default:
-		}
-	}
-
-	if !driverAlreadyStopped {
-		// Driver may still be running, just in case the driver is
-		// unresponsive, start a thread to kill this process if we
-		// don't manage to kill the driver.
-		logCxt.Info("Driver still running, trying to shut it down...")
-		giveUpOnSigTerm := make(chan bool)
-		go func() {
-			time.Sleep(4 * time.Second)
-			giveUpOnSigTerm <- true
-			time.Sleep(1 * time.Second)
-			log.Fatal("Failed to wait for driver to exit, giving up.")
-		}()
-		// Signal to the driver to exit.
-		driverCmd.Process.Signal(syscall.SIGTERM)
-		select {
-		case <-driverStoppedC:
-			logCxt.Info("Driver shut down after SIGTERM")
-		case <-giveUpOnSigTerm:
-			logCxt.Error("Driver did not respond to SIGTERM, sending SIGKILL")
-			driverCmd.Process.Kill()
-			<-driverStoppedC
-			logCxt.Info("Driver shut down after SIGKILL")
 		}
 	}
 

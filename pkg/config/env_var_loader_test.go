@@ -30,8 +30,8 @@ var _ = DescribeTable("Environment parameter parsing",
 	Entry("Malformed", []string{"foobar"}, map[string]string{}),
 	Entry("Mainline",
 		[]string{
-			"FeLIX_LoGSEVERITYSCREEN=INFO",
-			"FeLIX_FOO=bar=baz",
+			"Typha_LoGSEVERITYSCREEN=INFO",
+			"TyPHA_FOO=bar=baz",
 			"PATH=/usr/bin:/bin/sbin",
 		},
 		map[string]string{
