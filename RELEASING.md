@@ -37,7 +37,11 @@ These steps are for creating a new major/minor release, with the expectation tha
        version: vX.Y
    ```
 
+4. Update the `RELEASE_STREAM` variable at the top of calico_node/Makefile to the new major/minor version.
+
 4. Test the changes locally then open a pull request, make sure it passes CI, then merge.
+
+5. run `make -C calico_node release` to create container images for calico/node. Push them by following the instructions that the make command prints.
 
 6. Edit the [Calico Docs Custom Search Engine](cse.google.com/).
 

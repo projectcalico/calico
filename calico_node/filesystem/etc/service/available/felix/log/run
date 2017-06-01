@@ -1,0 +1,4 @@
+#!/bin/sh
+LOGDIR=/var/log/calico/felix
+mkdir -p $LOGDIR
+exec svlogd $LOGDIR

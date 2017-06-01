@@ -5,7 +5,7 @@ layout: null
 # Calico Version {{site.data.versions[page.version].first.title}}
 # http://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 # This manifest includes the following component versions:
-#   calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+#   calico/node:{{site.data.versions[page.version].first.title}}
 ---
 coreos:
   update:
@@ -40,7 +40,7 @@ coreos:
         ExecStartPre=/usr/bin/chmod +x /etc/rkt/net.d/calico-ipam
         ExecStartPre=/usr/bin/chmod +x /opt/bin/calicoctl
         ExecStartPre=/usr/bin/rkt --insecure-options=image fetch docker://busybox
-        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+        ExecStartPre=/usr/bin/rkt --insecure-options=image fetch quay.io/calico/node:{{site.data.versions[page.version].first.title}}
         ExecStart=/usr/bin/true
         RemainAfterExit=yes
         Type=oneshot

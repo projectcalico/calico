@@ -4,7 +4,7 @@ layout: null
 # Calico Version {{site.data.versions[page.version].first.title}}
 # http://docs.projectcalico.org/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
 # This manifest includes the following component versions:
-#   calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+#   calico/node:{{site.data.versions[page.version].first.title}}
 #   calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
 #   calico/kube-policy-controller:{{site.data.versions[page.version].first.components["calico/kube-policy-controller"].version}}
 
@@ -156,7 +156,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+          image: quay.io/calico/node:{{site.data.versions[page.version].first.title}}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS

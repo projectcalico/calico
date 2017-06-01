@@ -11,9 +11,9 @@ source code.
 -  [bird and bird6](https://github.com/projectcalico/bird) (Calico specific fork)
 -  [libnetwork plugin](https://github.com/projectcalico/libnetwork-plugin)
 -  [calicoctl](https://github.com/projectcalico/calicoctl)
--  [calico/node](https://github.com/projectcalico/calicoctl)
+-  [calico/node](https://github.com/projectcalico/calico)
 
-See component repository for more details on the build process for that component.
+See each component repository for more details on the build process for that component.
 
 ## Requirements
 
@@ -40,7 +40,7 @@ mkdir -p $BASEDIR
 ```
 
 These instructions describe how to build a particular release or Calico.  This comprises
-of multiple sub components each indivudally versioned.  To determine which
+of multiple sub components each individually versioned.  To determine which
 particular tag (version) of code to checkout for each repo, consult the Releases page of the
 appropriate version of the [Calico documentation](http://docs.projectcalico.org)
 
@@ -56,19 +56,22 @@ VERSION_BIRD
 VERSION_BGP_DAEMON
 VERSION_LIBNETWORK
 VERSION_CALICOCTL
+VERSION_CALICO
 ```
 
 For example, the v2.3.0 release of Calico would define the following:
 
 ```
 export VERSION_TYPHA=v0.2.0
-export VERSION_FELIX=2.3.0-rc3
+export VERSION_FELIX=2.3.0
 export VERSION_CNI=v1.9.1
 export VERSION_CONFD=v0.12.1-calico0.1.0
 export VERSION_BIRD=v0.3.1
 export VERSION_BGP_DAEMON=v0.2.1
 export VERSION_LIBNETWORK=v1.1.0
-export VERSION_CALICOCTL=v1.3.0-rc1
+export VERSION_CALICOCTL=v1.3.0
+export VERSION_CALICO=v2.3.0
+
 ```
 
 ## Build instructions
@@ -82,9 +85,8 @@ To build typha, clone the typha repo and checkout the correct tag.
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/typha.git
+git clone --depth 1 --single-branch --branch $VERSION_TYPHA git@github.com:projectcalico/typha.git
 cd typha
-git checkout tags/$VERSION_TYPHA
 ```
 
 Build the `calico/typha` docker image (which also builds the associated binaries) and
@@ -109,9 +111,8 @@ To build felix, clone the felix repo and checkout the correct tag.
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/felix.git
+git clone --depth 1 --single-branch --branch $VERSION_FELIX git@github.com:projectcalico/felix.git
 cd felix
-git checkout tags/$VERSION_FELIX
 ```
 
 Build the `calico/felix` docker image (which also builds the associated binaries) and
@@ -136,9 +137,8 @@ To build Calico CNI plugins, clone the felix repo and checkout the correct tag.
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/cni-plugin.git
+git clone --depth 1 --single-branch --branch $VERSION_CNI git@github.com:projectcalico/cni-plugin.git
 cd cni-plugin
-git checkout tags/$VERSION_CNI
 ```
 
 Build the `calico/cni` docker image (which also builds the associated binaries) and
@@ -177,9 +177,8 @@ To build confd, clone the confd repo and checkout the correct tag.
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/confd.git
+git clone --depth 1 --single-branch --branch $VERSION_CONFD git@github.com:projectcalico/confd.git
 cd confd
-git checkout tags/$VERSION_CONFD
 ```
 
 Build the `confd` static binary.
@@ -200,9 +199,8 @@ To build the Calico BGP daemon, clone the calico-bgp-daemon repo and checkout th
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/calico-bgp-daemon.git
+git clone --depth 1 --single-branch --branch $VERSION_BGP_DAEMON git@github.com:projectcalico/calico-bgp-daemon.git
 cd calico-bgp-daemon
-git checkout tags/$VERSION_BGP_DAEMON
 ```
 
 Build the `calico-bgp-daemon` static binary.
@@ -225,9 +223,9 @@ To build the bird and bird6 binaries, clone the bird repo and checkout the corre
 
 ```
 cd $BASEDIR
+git clone --depth 1 --single-branch --branch $VERSION_BIRD git@github.com:projectcalico/bird.git
 git clone git@github.com:projectcalico/bird.git
 cd bird
-git checkout tags/$VERSION_BIRD
 ```
 
 Build the `bird`, `bird6` and `birdcl` static binaries.
@@ -250,9 +248,8 @@ To build the libnetwork-plugin binaries, clone the libnetwork-plugin repo and ch
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/libnetwork-plugin.git
+git clone --depth 1 --single-branch --branch $VERSION_LIBNETWORK_PLUGIN git@github.com:projectcalico/libnetwork-plugin.git
 cd libnetwork-plugin
-git checkout tags/$VERSION_LIBNETWORK
 ```
 
 Build the `calico/libnetwork-plugin` container.
@@ -269,16 +266,14 @@ This builds the following:
 -  The `calico/libnetwork-plugin` Docker image
 -  The `dist/libnetwork-plugin` binary
 
-### 8. calicoctl and calico/node
+### 8. calicoctl
 
-To build the calicoctl binary and calico/node container, clone the calicoctl repo and
-checkout the correct tag
+To build the calicoctl binary, clone the calicoctl repo and checkout the correct tag
 
 ```
 cd $BASEDIR
-git clone git@github.com:projectcalico/calicoctl.git
+git clone --depth 1 --single-branch --branch $VERSION_CALICOCTL git@github.com:projectcalico/calicoctl.git
 cd calicoctl
-git checkout tags/$VERSION_CALICOCTL
 ```
 
 Build the `calicoctl` binaries (available for different Linux, Mac and Windows) and the
@@ -289,25 +284,6 @@ make clean
 make ﻿dist/calicoctl dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe calico/ctl
 ```
 
-To build the calico/node image using the images built in the previous steps, start
-by copying the various binaries into the working directory:
-
-```
-mkdir -p calico_node/filesystem/bin
-cp $BASEDIR/confd/bin/confd $BASEDIR/calicoctl/calico_node/confd
-cp $BASEDIR/bird/dist/* $BASEDIR/calicoctl/calico_node/
-cp $BASEDIR/felix/bin/calico-felix $BASEDIR/calicoctl/calico_node/calico-felix
-cp $BASEDIR/calico-bgp-daemon/dist/* $BASEDIR/calicoctl/calico_node/
-cp $BASEDIR/libnetwork-plugin/dist/libnetwork-plugin $BASEDIR/calicoctl/calico_node/calico-bgp-daemon
-```
-
-Build the `calico/node` container:
-
-```
-make calico/node
-docker tag calico/node calico/node:$VERSION_CALICOCTL
-```
-
 #### Artifacts
 
 This builds the following:
@@ -316,4 +292,40 @@ This builds the following:
 -  The `dist/calicoctl-darwin-amd64` binary
 -  The `dist/calicoctl-windows-amd64.exe` binary
 -  The `calico/ctl` container image
+
+
+### 9. calico/node
+To build the calico/node container, clone the calico repo and
+checkout the correct tag
+
+```
+cd $BASEDIR
+git clone --depth 1 --single-branch --branch $VERSION_CALICO git@github.com:projectcalico/calico.git
+cd calico
+```
+
+
+To build the calico/node image using the images built in the previous steps, start
+by copying the various binaries into the working directory:
+
+```
+mkdir -p calico_node/filesystem/bin
+cp $BASEDIR/confd/bin/confd $BASEDIR/calico/calico_node/confd
+cp $BASEDIR/bird/dist/* $BASEDIR/calico/calico_node/
+cp $BASEDIR/felix/bin/calico-felix $BASEDIR/calico/calico_node/calico-felix
+cp $BASEDIR/calico-bgp-daemon/dist/* $BASEDIR/calico/calico_node/
+cp $BASEDIR/libnetwork-plugin/dist/libnetwork-plugin $BASEDIR/calico/calico_node/calico-bgp-daemon
+```
+
+Build the `calico/node` container:
+
+```
+make calico/node
+docker tag calico/node calico/node:$VERSION_CALICO
+```
+
+#### Artifacts
+
+This builds the following:
+
 -  The `calico/node` container image

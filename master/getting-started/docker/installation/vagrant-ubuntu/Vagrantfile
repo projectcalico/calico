@@ -12,7 +12,7 @@ calicoctl_url = "{{site.data.versions[page.version].first.components.calicoctl.d
 #
 # This version should match the version required by calicoctl installed from
 # calicoctl_url.
-calico_node_ver = "{{site.data.versions[page.version].first.components["calico/node"].version}}"
+calico_node_ver = "{{site.data.versions[page.version].first.title}}"
 
 # Size of the cluster created by Vagrant
 num_instances=2
