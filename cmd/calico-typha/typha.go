@@ -152,10 +152,8 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig, hostConfig := loadConfigFromDatastore(datastore,
-			configParams.FelixHostname)
+		globalConfig := loadConfigFromDatastore(datastore)
 		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
-		configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
 		configParams.Validate()
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).Error(
@@ -383,8 +381,7 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt.Fatal("Exiting immediately")
 }
 
-// TODO Typha: Share with Felix.
-func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConfig, hostConfig map[string]string) {
+func loadConfigFromDatastore(datastore bapi.Client) (globalConfig map[string]string) {
 	for {
 		log.Info("Waiting for the datastore to be ready")
 		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
@@ -410,23 +407,8 @@ func loadConfigFromDatastore(datastore bapi.Client, hostname string) (globalConf
 			value := kv.Value.(string)
 			globalConfig[key.Name] = value
 		}
-
-		log.Infof("Loading per-host config from datastore; hostname=%v", hostname)
-		kvs, err = datastore.List(
-			model.HostConfigListOptions{Hostname: hostname})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		hostConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.HostConfigKey)
-			value := kv.Value.(string)
-			hostConfig[key.Name] = value
-		}
 		log.Info("Loaded config from datastore")
 		break
 	}
-	return globalConfig, hostConfig
+	return globalConfig
 }

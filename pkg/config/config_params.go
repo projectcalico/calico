@@ -17,13 +17,10 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net"
-	"os"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -89,12 +86,8 @@ func (source Source) Local() bool {
 // We use tags to control the parsing and validation.
 type Config struct {
 	// Configuration parameters.
-	UseInternalDataplaneDriver bool   `config:"bool;true"`
-	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv2);etcdv2;non-zero,die-on-fail"`
-
-	FelixHostname string `config:"hostname;;local,non-zero"`
 
 	EtcdAddr      string   `config:"authority;127.0.0.1:2379;local"`
 	EtcdScheme    string   `config:"oneof(http,https);http;local"`
@@ -103,55 +96,16 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	TyphaAddr string `config:"authority;;"`
-
-	Ipv6Support    bool `config:"bool;true"`
-	IgnoreLooseRPF bool `config:"bool;false"`
-
-	IptablesRefreshInterval int `config:"int;10"`
-
-	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
-	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
-
-	InterfacePrefix string `config:"iface-list;cali;non-zero,die-on-fail"`
-
-	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
-	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
-	LogPrefix                   string `config:"string;calico-packet"`
-
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
 	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 
-	IpInIpEnabled    bool   `config:"bool;false"`
-	IpInIpMtu        int    `config:"int;1440;non-zero"`
-	IpInIpTunnelAddr net.IP `config:"ipv4;"`
-
-	ReportingIntervalSecs int `config:"int;30"`
-	ReportingTTLSecs      int `config:"int;90"`
-
-	EndpointReportingEnabled   bool    `config:"bool;false"`
-	EndpointReportingDelaySecs float64 `config:"float;1.0"`
-
-	MaxIpsetSize int `config:"int;1048576;non-zero"`
-
-	IptablesMarkMask uint32 `config:"mark-bitmask;0xff000000;non-zero,die-on-fail"`
-
-	DisableConntrackInvalidCheck bool `config:"bool;false"`
-
 	PrometheusMetricsEnabled        bool `config:"bool;false"`
-	PrometheusMetricsPort           int  `config:"int(0,65535);9091"`
+	PrometheusMetricsPort           int  `config:"int(0,65535);9093"`
 	PrometheusGoMetricsEnabled      bool `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool `config:"bool;true"`
-
-	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68;die-on-fail"`
-	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;tcp:2379,tcp:2380,tcp:4001,tcp:7001,udp:53,udp:67;die-on-fail"`
-
-	UsageReportingEnabled bool   `config:"bool;true"`
-	ClusterGUID           string `config:"string;baddecaf"`
-	ClusterType           string `config:"string;"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
@@ -194,57 +148,6 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 
 	changed, err = config.resolve()
 	return
-}
-
-func (c *Config) InterfacePrefixes() []string {
-	return strings.Split(c.InterfacePrefix, ",")
-}
-
-func (config *Config) OpenstackActive() bool {
-	if strings.Contains(strings.ToLower(config.ClusterType), "openstack") {
-		log.Debug("Cluster type contains OpenStack")
-		return true
-	}
-	if config.MetadataAddr != "127.0.0.1" {
-		log.Debug("OpenStack metadata IP set to non-default, assuming OpenStack active")
-		return true
-	}
-	if config.MetadataPort != 8775 {
-		log.Debug("OpenStack metadata port set to non-default, assuming OpenStack active")
-		return true
-	}
-	for _, prefix := range config.InterfacePrefixes() {
-		if prefix == "tap" {
-			log.Debug("Interface prefix list contains 'tap', assuming OpenStack")
-			return true
-		}
-	}
-	log.Debug("No evidence this is an OpenStack deployment; disabling OpenStack special-cases")
-	return false
-}
-
-func (config *Config) NextIptablesMark() uint32 {
-	mark := config.NthIPTablesMark(config.numIptablesBitsAllocated)
-	config.numIptablesBitsAllocated++
-	return mark
-}
-
-func (config *Config) NthIPTablesMark(n int) uint32 {
-	numBitsFound := 0
-	for shift := uint(0); shift < 32; shift++ {
-		candidate := uint32(1) << shift
-		if config.IptablesMarkMask&candidate > 0 {
-			if numBitsFound == n {
-				return candidate
-			}
-			numBitsFound += 1
-		}
-	}
-	log.WithFields(log.Fields{
-		"IptablesMarkMask": config.IptablesMarkMask,
-		"requestedMark":    n,
-	}).Panic("Not enough iptables mark bits available.")
-	return 0
 }
 
 func (config *Config) resolve() (changed bool, err error) {
@@ -330,10 +233,6 @@ func (config *Config) resolve() (changed bool, err error) {
 	return
 }
 
-func (config *Config) EndpointReportingDelay() time.Duration {
-	return time.Duration(config.EndpointReportingDelaySecs*1000000) * time.Microsecond
-}
-
 func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 	// Special case for etcdv2 datastore, where we want to honour established Felix-specific
 	// config mechanisms.
@@ -374,22 +273,11 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 	if cfg.Spec.DatastoreType == "etcdv2" {
 		cfg.Spec.DatastoreType = api.DatastoreType(config.DatastoreType)
 	}
-
-	if !config.IpInIpEnabled {
-		// Polling k8s for node updates is expensive (because we get many superfluous
-		// updates) so disable if we don't need it.
-		log.Info("IPIP disabled, disabling node poll (if KDD is in use).")
-		cfg.Spec.K8sDisableNodePoll = true
-	}
 	return *cfg
 }
 
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
-	if config.FelixHostname == "" {
-		err = errors.New("Failed to determine hostname")
-	}
-
 	if config.DatastoreType == "etcdv2" && len(config.EtcdEndpoints) == 0 {
 		if config.EtcdScheme == "" {
 			err = errors.New("EtcdEndpoints and EtcdScheme both missing")
@@ -537,13 +425,6 @@ func New() *Config {
 	for _, param := range knownParams {
 		param.setDefault(p)
 	}
-	hostname, err := os.Hostname()
-	if err != nil {
-		log.Warningf("Failed to get hostname from kernel, "+
-			"trying HOSTNAME variable: %v", err)
-		hostname = os.Getenv("HOSTNAME")
-	}
-	p.FelixHostname = hostname
 	return p
 }
 
