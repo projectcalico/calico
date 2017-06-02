@@ -35,6 +35,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -305,11 +309,64 @@ configRetry:
 
 	var syncer Startable
 	log.WithField("addr", configParams.TyphaAddr).Info("Connecting to Typha?")
-	if configParams.TyphaAddr != "" {
+	typhaAddr := configParams.TyphaAddr
+	if typhaAddr == "" && configParams.TyphaServiceEnvVarPfx != "" {
+		log.WithField("name", configParams.TyphaServiceEnvVarPfx).Info(
+			"Loading typha config from env vars")
+		pfx := configParams.TyphaServiceEnvVarPfx
+		hostVarName := pfx + "_HOST"
+		portVarName := pfx + "_PORT"
+		host := os.Getenv(hostVarName)
+		port := os.Getenv(portVarName)
+		if host == "" || port == "" {
+			log.WithFields(log.Fields{
+				"hostVarName": hostVarName,
+				"portVarName": portVarName,
+			}).Fatal("Typha environment variables not found")
+		}
+		typhaAddr = host + ":" + port
+	}
+	if typhaAddr == "" && configParams.TyphaK8sServiceName != "" {
+		// creates the in-cluster config
+		k8sconf, err := rest.InClusterConfig()
+		if err != nil {
+			log.WithError(err).Panic("Unable to reach Kubernetes")
+		}
+		// creates the clientset
+		clientset, err := kubernetes.NewForConfig(k8sconf)
+		if err != nil {
+			log.WithError(err).Panic("Unable to reach Kubernetes")
+		}
+		for {
+			svcAPI := clientset.CoreV1().Services("kube-system")
+			svc, err := svcAPI.Get(configParams.TyphaK8sServiceName, v1.GetOptions{})
+			if err != nil {
+				log.WithError(err).Error("Unable to get Typha endpoint from Kubernetes")
+				time.Sleep(1)
+				continue
+			}
+			host := svc.Spec.ClusterIP
+			log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
+			if host == "" {
+				log.WithError(err).Error("Unable to get Typha endpoint from Kubernetes")
+				time.Sleep(1)
+				continue
+			}
+			for _, p := range svc.Spec.Ports {
+				if p.Name == "calico-typha" {
+					log.WithField("port", p).Info("Found Typha service port.")
+					typhaAddr = fmt.Sprintf("%s:%v", host, p.Port)
+					break
+				}
+			}
+			break
+		}
+	}
+	if typhaAddr != "" {
 		// Use a remote Syncer, in the Typha server.
-		log.WithField("addr", configParams.TyphaAddr).Info("Connecting to Typha.")
+		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
 		syncer = syncclient.New(
-			configParams.TyphaAddr,
+			typhaAddr,
 			buildinfo.GitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s", buildinfo.GitRevision, buildinfo.BuildDate),
