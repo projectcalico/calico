@@ -36,7 +36,7 @@ import:
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: github.com/projectcalico/typha
-  version: v0.1.1
+  version: v0.1.2
   subpackages:
   - pkg/syncclient
 testImport:

@@ -1,5 +1,5 @@
-hash: 7804d1c1f14eadc1d89b6b9674521cc944cb2a07cac4ee0f3282424f393e09d0
-updated: 2017-06-01T17:42:31.237977617Z
+hash: 15b89c3bca0da0c70b1e2db6bbc6f8b8602af860c2fc26c35e6130d0506edca4
+updated: 2017-06-02T14:50:37.081879625Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 0c923bdf11e65e21e3c5e7cbd7b46a1809d76386
+  version: 44ca3968ecdd32391ce44c38d030a705d8884bf5
   subpackages:
   - client
   - pkg/pathutil
@@ -83,7 +83,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 6e4cc92cc905d5f4a73041c1b8228ea08f4c6147
+  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -171,9 +171,8 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: fb7e5c914e1758ce3ccb30c27497c3f938556788
+  version: 2946b3c00d4ef649064c43e3c1d416908de08a29
   subpackages:
-  - pkg/buildinfo
   - pkg/syncclient
   - pkg/syncproto
 - name: github.com/prometheus/client_golang

@@ -310,8 +310,9 @@ configRetry:
 		log.WithField("addr", configParams.TyphaAddr).Info("Connecting to Typha.")
 		syncer = syncclient.New(
 			configParams.TyphaAddr,
+			buildinfo.GitVersion,
 			configParams.FelixHostname,
-			"", // TODO Typha fill in more build info?
+			fmt.Sprintf("Revision: %s; Build date: %s", buildinfo.GitRevision, buildinfo.BuildDate),
 			syncerToValidator,
 		)
 	} else {
