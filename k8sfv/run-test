@@ -10,7 +10,7 @@
 : ${FELIX_VERSION:=latest}
 #
 # What version of the k8s API server to use.
-: ${K8S_VERSION:=1.5.3}
+: ${K8S_VERSION:=1.6.4}
 #
 # A string to insert into the container names that we use; a calling
 # script can set this to something to make the container names unique,
