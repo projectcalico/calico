@@ -114,6 +114,8 @@ type Config struct {
 	ServerMaxMessageSize              int           `config:"int(1,);100"`
 	ServerMaxFallBehindSecs           time.Duration `config:"seconds;90"`
 	ServerMinBatchingAgeThresholdSecs time.Duration `config:"seconds;0.01"`
+	ServerPingIntervalSecs            time.Duration `config:"seconds;10"`
+	ServerPongTimeoutSecs             time.Duration `config:"seconds;60"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`

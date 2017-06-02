@@ -29,7 +29,7 @@ help:
 # considerably.
 .SUFFIXES:
 
-all: bin/calico-typha calico/typha
+all: bin/calico-typha calico/typha bin/typha-client
 test: ut
 
 GO_BUILD_CONTAINER?=calico/go-build:v0.6
