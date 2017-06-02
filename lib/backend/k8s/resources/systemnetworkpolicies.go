@@ -29,24 +29,32 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func NewIPPools(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
-	return &ipPoolsClient{
+const (
+	SystemNetworkPolicyResourceName = "systemnetworkpolicies"
+	SystemNetworkPolicyTPRName      = "system-network-policy.projectcalico.org"
+	SystemNetworkPolicyNamePrefix   = "snp.projectcalico.org/"
+)
+
+func NewSystemNetworkPolicies(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
+	return &snpClient{
 		clientSet: c,
 		tprClient: r,
 	}
 }
 
-// Implements the api.Client interface for pools.
-type ipPoolsClient struct {
+// Implements the api.Client interface for System Network Policies.
+type snpClient struct {
 	clientSet *kubernetes.Clientset
 	tprClient *rest.RESTClient
 }
 
-func (c *ipPoolsClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
-	tpr := IPPoolToThirdParty(kvp)
-	res := thirdparty.IpPool{}
+// Create implements the Create method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
+	tpr := SystemNetworkPolicyToThirdParty(kvp)
+	res := thirdparty.SystemNetworkPolicy{}
 	req := c.tprClient.Post().
-		Resource("ippools").
+		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
 		Body(tpr)
 	err := req.Do().Into(&res)
@@ -57,11 +65,13 @@ func (c *ipPoolsClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-func (c *ipPoolsClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
-	tpr := IPPoolToThirdParty(kvp)
-	res := thirdparty.IpPool{}
+// Update implements the Update method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
+	tpr := SystemNetworkPolicyToThirdParty(kvp)
+	res := thirdparty.SystemNetworkPolicy{}
 	req := c.tprClient.Put().
-		Resource("ippools").
+		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
 		Body(tpr).
 		Name(tpr.Metadata.Name)
@@ -73,7 +83,9 @@ func (c *ipPoolsClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-func (c *ipPoolsClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+// Apply implements the Apply method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	updated, err := c.Update(kvp)
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -89,39 +101,45 @@ func (c *ipPoolsClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	return updated, nil
 }
 
-func (c *ipPoolsClient) Delete(kvp *model.KVPair) error {
+// Delete implements the Delete method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) Delete(kvp *model.KVPair) error {
 	result := c.tprClient.Delete().
-		Resource("ippools").
+		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
-		Name(ipPoolTprName(kvp.Key.(model.IPPoolKey))).
+		Name(systemNetworkPolicyTprName(kvp.Key)).
 		Do()
 	return K8sErrorToCalico(result.Error(), kvp.Key)
 }
 
-func (c *ipPoolsClient) Get(key model.Key) (*model.KVPair, error) {
-	tpr := thirdparty.IpPool{}
+// Get implements the Get method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) Get(key model.Key) (*model.KVPair, error) {
+	tpr := thirdparty.SystemNetworkPolicy{}
 	err := c.tprClient.Get().
-		Resource("ippools").
+		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
-		Name(ipPoolTprName(key.(model.IPPoolKey))).
+		Name(systemNetworkPolicyTprName(key)).
 		Do().Into(&tpr)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
 	}
 
-	return ThirdPartyToIPPool(&tpr), nil
+	return ThirdPartyToSystemNetworkPolicy(&tpr), nil
 }
 
-func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) {
+// List implements the List method for System Network Policies (exposed
+// through the libcalico-go API as standard Policy resources)
+func (c *snpClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 	kvps := []*model.KVPair{}
-	l := list.(model.IPPoolListOptions)
+	l := list.(model.PolicyListOptions)
 
-	// If the CIDR is specified, k8s will return a single resource
+	// If the Name is specified, k8s will return a single resource
 	// rather than a list, so handle this case separately, using our
 	// Get method to return the single result.
-	if l.CIDR.IP != nil {
-		log.Info("Performing IP pool List with name")
-		if kvp, err := c.Get(model.IPPoolKey{CIDR: l.CIDR}); err == nil {
+	if l.Name != "" {
+		log.Info("Performing System Network Policy List with name")
+		if kvp, err := c.Get(model.PolicyKey{Name: l.Name}); err == nil {
 			kvps = append(kvps, kvp)
 		} else {
 			if !kerrors.IsNotFound(err) {
@@ -133,16 +151,16 @@ func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) 
 
 	// Since are not performing an exact Get, Kubernetes will return a list
 	// of resources.
-	tprs := thirdparty.IpPoolList{}
+	tprs := thirdparty.SystemNetworkPolicyList{}
 
 	// Perform the request.
 	err := c.tprClient.Get().
-		Resource("ippools").
+		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
 		Do().Into(&tprs)
 	if err != nil {
 		// Don't return errors for "not found".  This just
-		// means there are no IPPools, and we should return
+		// means there are no SystemNetworkPolicies, and we should return
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
 			return nil, K8sErrorToCalico(err, l)
@@ -151,19 +169,21 @@ func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) 
 
 	// Convert them to KVPairs.
 	for _, tpr := range tprs.Items {
-		kvps = append(kvps, ThirdPartyToIPPool(&tpr))
+		kvps = append(kvps, ThirdPartyToSystemNetworkPolicy(&tpr))
 	}
 	return kvps, nil
 }
 
-func (c *ipPoolsClient) EnsureInitialized() error {
-	log.Info("Ensuring IP Pool ThirdPartyResource exists")
+// EnsureInitalized ensures Kubernetes is correctly configured to handle the
+// System Network Policy Third Party Resources.
+func (c *snpClient) EnsureInitialized() error {
+	log.Info("Ensuring System Network Policy ThirdPartyResource exists")
 	tpr := extensions.ThirdPartyResource{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "ip-pool.projectcalico.org",
+			Name:      SystemNetworkPolicyTPRName,
 			Namespace: "kube-system",
 		},
-		Description: "Calico IP Pools",
+		Description: "Calico System Network Policies",
 		Versions:    []extensions.APIVersion{{Name: "v1"}},
 	}
 	_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
@@ -176,10 +196,10 @@ func (c *ipPoolsClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *ipPoolsClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
+func (c *snpClient) EnsureCalicoNodeInitialized(node string) error {
 	return nil
 }
 
-func (c *ipPoolsClient) EnsureCalicoNodeInitialized(node string) error {
+func (c *snpClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return nil
 }

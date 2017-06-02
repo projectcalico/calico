@@ -50,7 +50,7 @@ func IPPoolToThirdParty(kvp *model.KVPair) *thirdparty.IpPool {
 	tpr := thirdparty.IpPool{
 		Metadata: metav1.ObjectMeta{
 			// Names in Kubernetes must be lower-case.
-			Name: tprName(kvp.Key.(model.IPPoolKey)),
+			Name: ipPoolTprName(kvp.Key.(model.IPPoolKey)),
 		},
 		Spec: thirdparty.IpPoolSpec{
 			Value: string(v),
@@ -62,9 +62,9 @@ func IPPoolToThirdParty(kvp *model.KVPair) *thirdparty.IpPool {
 	return &tpr
 }
 
-// tprName converts the given IPPool key into a unique third party resource
+// ipPoolTprName converts the given IPPool key into a unique third party resource
 // name.
-func tprName(key model.IPPoolKey) string {
+func ipPoolTprName(key model.IPPoolKey) string {
 	name := strings.Replace(key.CIDR.String(), ".", "-", 3)
 	name = strings.Replace(name, ":", "-", 7)
 	name = strings.Replace(name, "/", "-", 1)

@@ -15,19 +15,18 @@
 package k8s
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	goerrors "errors"
 	"fmt"
 	"strings"
 
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
-
 	log "github.com/Sirupsen/logrus"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	kapiv1 "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"

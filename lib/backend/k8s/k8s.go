@@ -22,24 +22,25 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	capi "github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-
 	"github.com/projectcalico/libcalico-go/lib/net"
-	"k8s.io/client-go/kubernetes"
-	clientapi "k8s.io/client-go/pkg/api"
+
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/client-go/pkg/api/v1"
-	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	clientapi "k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/api/v1"
+	kapiv1 "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -60,20 +61,10 @@ type KubeClient struct {
 	// Clients for interacting with Calico resources.
 	ipPoolClient api.Client
 	nodeClient   api.Client
+	snpClient    api.Client
 }
 
-type KubeConfig struct {
-	Kubeconfig               string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
-	K8sAPIEndpoint           string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
-	K8sKeyFile               string `json:"k8sKeyFile" envconfig:"K8S_KEY_FILE" default:""`
-	K8sCertFile              string `json:"k8sCertFile" envconfig:"K8S_CERT_FILE" default:""`
-	K8sCAFile                string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
-	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
-	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
-	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default""`
-}
-
-func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
+func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
 	log.Debugf("Building client for config: %+v", kc)
 	configOverrides := &clientcmd.ConfigOverrides{}
@@ -134,6 +125,7 @@ func NewKubeClient(kc *KubeConfig) (*KubeClient, error) {
 	// Create the Calico sub-clients.
 	kubeClient.ipPoolClient = resources.NewIPPools(cs, tprClient)
 	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClient)
+	kubeClient.snpClient = resources.NewSystemNetworkPolicies(cs, tprClient)
 
 	return kubeClient, nil
 }
@@ -194,8 +186,15 @@ func (c *KubeClient) createThirdPartyResources() error {
 		}
 	}
 
-	// Ensure the IP Pool TPR exists.
-	return c.ipPoolClient.EnsureInitialized()
+	// Ensure the IP Pool and System Network Policy TPRs exists.
+	if err := c.ipPoolClient.EnsureInitialized(); err != nil {
+		return err
+	}
+	if err := c.snpClient.EnsureInitialized(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // waitForClusterType polls until GlobalConfig is ready, or until 30 seconds have passed.
@@ -269,6 +268,8 @@ func buildTPRClient(baseConfig *rest.Config) (*rest.RESTClient, error) {
 				&thirdparty.GlobalConfigList{},
 				&thirdparty.IpPool{},
 				&thirdparty.IpPoolList{},
+				&thirdparty.SystemNetworkPolicy{},
+				&thirdparty.SystemNetworkPolicyList{},
 				&kapiv1.ListOptions{},
 				&kapiv1.DeleteOptions{},
 			)
@@ -606,6 +607,13 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 		ret = append(ret, kvp)
 	}
 
+	// List all System Network Policies.
+	snps, err := c.snpClient.List(l)
+	if err != nil {
+		return nil, err
+	}
+	ret = append(ret, snps...)
+
 	return ret, nil
 }
 
@@ -648,6 +656,9 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 			return nil, resources.K8sErrorToCalico(err, k)
 		}
 		return c.converter.namespaceToPolicy(ns)
+	} else if strings.HasPrefix(k.Name, resources.SystemNetworkPolicyNamePrefix) {
+		// This is backed by a System Network Policy TPR.
+		return c.snpClient.Get(k)
 	} else {
 		// Received a Get() for a Policy that doesn't exist.
 		return nil, errors.ErrorResourceDoesNotExist{Identifier: k}
@@ -742,7 +753,7 @@ func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model
 	err := req.Do().Into(&gcfg)
 	if err != nil {
 		// Don't return errors for "not found".  This just
-		// means thre are no GlobalConfigs, and we should return
+		// means there are no GlobalConfigs, and we should return
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
 			return nil, resources.K8sErrorToCalico(err, l)

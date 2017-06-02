@@ -26,9 +26,10 @@ import (
 
 	"errors"
 	"fmt"
-	"golang.org/x/net/context"
 	"os/exec"
 	"strings"
+
+	"golang.org/x/net/context"
 )
 
 // CreateNewIPPool takes a client.Client with a poolSubnet CIDR (in "192.168.1.0/24" format) with

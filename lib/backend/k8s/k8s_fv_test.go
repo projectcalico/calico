@@ -24,16 +24,41 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	capi "github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
-	k8sapi "k8s.io/client-go/pkg/api/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
+)
+
+var (
+	zeroOrder              = float64(0.0)
+	calicoAllowPolicyModel = model.Policy{
+		Order: &zeroOrder,
+		InboundRules: []model.Rule{
+			{
+				Action: "allow",
+			},
+		},
+		OutboundRules: []model.Rule{
+			{
+				Action: "allow",
+			},
+		},
+	}
+
+	// Use a back-off set of intervals for testing deletion of a namespace
+	// which can sometimes be slow.
+	slowCheck = []interface{}{
+		60 * time.Second,
+		1 * time.Second,
+	}
 )
 
 // cb implements the callback interface required for the
@@ -165,7 +190,21 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 	}
 }
 
-func CreateClientAndSyncer(cfg KubeConfig) (*KubeClient, *cb, api.Syncer) {
+// GetCheckEntryFunc returns a function that can be used to query an entry
+// in our state store.  It's useful for performing "Eventually" testing.
+func (c cb) GetCheckEntryFunc(key model.Key) func() interface{} {
+	return func() interface{} {
+		log.Infof("Checking entry in cache: %s")
+		c.Lock.Lock()
+		defer func() { c.Lock.Unlock() }()
+		if entry, ok := c.State[key.String()]; ok {
+			return entry
+		}
+		return nil
+	}
+}
+
+func CreateClientAndSyncer(cfg capi.KubeConfig) (*KubeClient, *cb, api.Syncer) {
 	// First create the client.
 	c, err := NewKubeClient(&cfg)
 	if err != nil {
@@ -201,7 +240,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		log.SetLevel(log.DebugLevel)
 
 		// Start the syncer.
-		cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+		cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 		c, cb, syncer = CreateClientAndSyncer(cfg)
 		syncer.Start()
 
@@ -218,40 +257,56 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		_, err := c.clientSet.Namespaces().Create(&ns)
 
-		// Make sure we clean up.
+		// Make sure we clean up.  Don't check for errors since we attempt
+		// to delete as part of the test below.
 		defer func() {
-			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 		}()
 
-		// Check to see if the create succeeded.
-		Expect(err).NotTo(HaveOccurred())
+		By("Creating a namespace", func() {
+			_, err := c.clientSet.Namespaces().Create(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		// Perform a List and ensure it shows up in the Calico API.
-		_, err = c.List(model.ProfileListOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		By("Performing a List of Profiles", func() {
+			_, err := c.List(model.ProfileListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		_, err = c.List(model.PolicyListOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		By("Performing a List of Policies", func() {
+			_, err := c.List(model.PolicyListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		// Perform a Get and ensure no error in the Calico API.
-		_, err = c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
-		Expect(err).NotTo(HaveOccurred())
+		By("Performing a Get on the Profile and ensure no error in the Calico API", func() {
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
-		Expect(err).NotTo(HaveOccurred())
+		By("Performing a Get on the Policy and ensure no error in the Calico API", func() {
+			_, err := c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+			Expect(err).NotTo(HaveOccurred())
+		})
 
-		// Expect corresponding Profile updates over the syncer for this Namespace.
-		expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
-		expectedKeys := []model.KVPair{
-			{Key: model.ProfileRulesKey{model.ProfileKey{Name: expectedName}}},
-			{Key: model.ProfileTagsKey{model.ProfileKey{Name: expectedName}}},
-			{Key: model.ProfileLabelsKey{model.ProfileKey{Name: expectedName}}},
-		}
-		time.Sleep(1 * time.Second)
-		cb.ExpectExists(expectedKeys)
+		By("Checking the correct entries are in our cache", func() {
+			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
+			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+		})
+
+		By("Deleting the namespace", func() {
+			err := c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking the correct entries are no longer in our cache", func() {
+			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
+			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
+		})
 	})
 
 	It("should handle a Namespace without DefaultDeny", func() {
@@ -263,37 +318,59 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				},
 			},
 		}
-		_, err := c.clientSet.Namespaces().Create(&ns)
 
-		// Make sure we clean up after ourselves.
+		// Make sure we clean up after ourselves.  Don't check for errors since we attempt
+		// to delete as part of the test below.
 		defer func() {
-			err = c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
 		}()
 
 		// Check to see if the create succeeded.
-		Expect(err).NotTo(HaveOccurred())
+		By("Creating a namespace", func() {
+			_, err := c.clientSet.Namespaces().Create(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
 
 		// Perform a List and ensure it shows up in the Calico API.
 		By("listing Profiles", func() {
-			_, err = c.List(model.ProfileListOptions{})
+			_, err := c.List(model.ProfileListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("listing Policies", func() {
-			_, err = c.List(model.PolicyListOptions{})
+			_, err := c.List(model.PolicyListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		// Perform a Get and ensure no error in the Calico API.
 		By("getting a Profile", func() {
-			_, err = c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("getting a Policy", func() {
-			_, err = c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.PolicyKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		// Expect corresponding Profile updates over the syncer for this Namespace.
+		By("Checking the correct entries are in our cache", func() {
+			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
+			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+		})
+
+		By("deleting a namespace", func() {
+			err := c.clientSet.Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking the correct entries are in no longer in our cache", func() {
+			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
+			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
 		})
 	})
 
@@ -386,6 +463,122 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	}()
 
+	It("should handle a CRUD of System Network Policy", func() {
+		// In the backend, the Policy name is prepended to indicate where
+		// the policy is derived from in KDD.  The System Network Policy
+		// is a TPR and in the backend the name is prepended with
+		// "snp.projectcalico.org/".  The SNP CRUD operations assume that
+		// the name is of the correct format (it's up to the calling code
+		// to fan-out Policy CRUD operations to the appropriate KDD client
+		// based on the prefix).
+		kvp1Name := "snp.projectcalico.org/my-test-snp"
+		kvp1 := &model.KVPair{
+			Key:   model.PolicyKey{Name: kvp1Name},
+			Value: &calicoAllowPolicyModel,
+		}
+		kvp2Name := "snp.projectcalico.org/my-test-snp2"
+		kvp2 := &model.KVPair{
+			Key:   model.PolicyKey{Name: kvp2Name},
+			Value: &calicoAllowPolicyModel,
+		}
+
+		// Make sure we clean up after ourselves.  We allow this to fail because
+		// part of our explicit testing below is to delete the resource.
+		defer func() {
+			c.snpClient.Delete(kvp1)
+			c.snpClient.Delete(kvp2)
+		}()
+
+		// Check our syncer has the correct SNP entries for the two
+		// System Network Protocols that this test manipulates.  Neither
+		// have been created yet.
+		By("Checking cache does not have System Network Policy entries", func() {
+			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+		})
+
+		By("Creating a System Network Policy", func() {
+			_, err := c.snpClient.Create(kvp1)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct System Network Policy entries", func() {
+			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+		})
+
+		By("Attempting to recreate an existing System Network Policy", func() {
+			_, err := c.snpClient.Create(kvp1)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing System Network Policy", func() {
+			_, err := c.snpClient.Update(kvp1)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Applying a non-existent existing System Network Policy", func() {
+			_, err := c.snpClient.Apply(kvp2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Updating the System Network Policy created by Apply", func() {
+			_, err := c.snpClient.Apply(kvp2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct System Network Policy entries", func() {
+			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).ShouldNot(BeNil())
+		})
+
+		By("Deleted the System Network Policy created by Apply", func() {
+			err := c.snpClient.Delete(kvp2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct System Network Policy entries", func() {
+			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
+			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+		})
+
+		// Perform Get operations directly on the main client - this
+		// will fan out requests to the appropriate Policy client
+		// (including the System Network Policy client).
+		By("Getting a missing System Network Policy", func() {
+			_, err := c.Get(model.PolicyKey{Name: "my-test-snp"})
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Getting an existing System Network Policy", func() {
+			kvp, err := c.Get(model.PolicyKey{Name: "snp.projectcalico.org/my-test-snp"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvp.Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
+			Expect(*kvp.Value.(*model.Policy)).To(Equal(calicoAllowPolicyModel))
+		})
+
+		By("Listing all policies (including a System Network Policy)", func() {
+
+			// We expect namespace entries for kube-system, kube-public
+			// and default.
+			kvps, err := c.List(model.PolicyListOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(4))
+			Expect(kvps[len(kvps)-1].Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
+			Expect(*kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(calicoAllowPolicyModel))
+		})
+
+		By("Deleting an existing System Network Policy", func() {
+			err := c.snpClient.Delete(kvp1)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has no System Network Policy entries", func() {
+			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).Should(BeNil())
+			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+		})
+	})
+
 	It("should handle a basic Pod", func() {
 		pod := k8sapi.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -466,13 +659,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		}
 
 		By("Expecting an update on the Syncer API", func() {
-			// Expect corresponding updates over the syncer for this Pod.
 			cb.ExpectExists(expectedKeys)
 		})
 
 		By("Expecting a Syncer snapshot to include the update", func() {
 			// Create a new syncer / callback pair so that it performs a snapshot.
-			cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
+			cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
@@ -753,7 +945,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Not syncing Nodes when K8sDisableNodePoll is enabled", func() {
-			cfg := KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
+			cfg := capi.KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
 
 			go snapshotCallbacks.ProcessUpdates()
