@@ -41,14 +41,17 @@ Options:
   --server=<ADDR>              Set the server to connect to [default: localhost:5473].
 `
 
-type syncerCallbacks struct{}
+type syncerCallbacks struct {
+	updateCount int
+}
 
 func (s *syncerCallbacks) OnStatusUpdated(status api.SyncStatus) {
 	log.WithField("status", status).Info("Status received")
 }
 
 func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
-	log.WithField("numUpdates", len(updates)).Info("Updates received")
+	s.updateCount += len(updates)
+	log.WithField("numUpdates", len(updates)).WithField("total", s.updateCount).Info("Updates received")
 }
 
 func main() {
@@ -58,7 +61,8 @@ func main() {
 	// Set up logging.
 	logutils.ConfigureEarlyLogging()
 	logutils.ConfigureLogging(&config.Config{
-		LogSeverityScreen: "info",
+		LogSeverityScreen:       "info",
+		DebugDisableLogDropping: true,
 	})
 
 	// Parse command-line args.

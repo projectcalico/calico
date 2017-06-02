@@ -33,6 +33,11 @@ import (
 )
 
 var (
+	ErrReadFailed          = errors.New("Failed to read from client")
+	ErrUnexpectedClientMsg = errors.New("Unexpected message from client")
+)
+
+var (
 	counterNumConnectionsAccepted = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "typha_connections_accepted",
 		Help: "Total number of connections accepted over time.",
@@ -40,6 +45,10 @@ var (
 	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "typha_connections_active",
 		Help: "Number of open client connections.",
+	})
+	summarySnapshotSendTime = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "typha_client_snapshot_send_secs",
+		Help: "How long it took to send the initial snapshot to each client.",
 	})
 	summaryClientLatency = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_client_latency_secs",
@@ -69,6 +78,7 @@ var (
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
 	prometheus.MustRegister(gaugeNumConnections)
+	prometheus.MustRegister(summarySnapshotSendTime)
 	prometheus.MustRegister(summaryClientLatency)
 	prometheus.MustRegister(summaryNextCatchupLatency)
 	prometheus.MustRegister(summaryWriteLatency)
@@ -83,11 +93,11 @@ const (
 	defaultPingInterval         = 10 * time.Second
 )
 
-type syncServerContextKey string
+type contextKey string
 
-const CxtKeyConnID = syncServerContextKey("ConnID")
+const CxtKeyConnID = contextKey("ConnID")
 
-type SyncServer struct {
+type Server struct {
 	config     Config
 	cache      BreadcrumbProvider
 	nextConnID uint64
@@ -105,7 +115,7 @@ type Config struct {
 	PongTimeout             time.Duration
 }
 
-func New(cache BreadcrumbProvider, config Config) *SyncServer {
+func New(cache BreadcrumbProvider, config Config) *Server {
 	if config.MaxMessageSize < 1 {
 		log.WithFields(log.Fields{
 			"value":   config.MaxMessageSize,
@@ -143,13 +153,13 @@ func New(cache BreadcrumbProvider, config Config) *SyncServer {
 		config.PongTimeout = defaultTimeout
 	}
 
-	return &SyncServer{
+	return &Server{
 		config: config,
 		cache:  cache,
 	}
 }
 
-func (s *SyncServer) Serve(cxt context.Context) {
+func (s *Server) Serve(cxt context.Context) {
 	logCxt := log.WithField("port", syncproto.DefaultPort)
 	logCxt.Info("Opening listen socket")
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: syncproto.DefaultPort})
@@ -169,241 +179,307 @@ func (s *SyncServer) Serve(cxt context.Context) {
 		s.nextConnID++
 		logCxt.WithField("connID", connID).Info("New connection")
 		counterNumConnectionsAccepted.Inc()
+
+		// Create a new connection-scoped context, which we'll use for signaling to our child
+		// goroutines to halt.
 		connCxt := context.WithValue(cxt, CxtKeyConnID, connID)
-		go s.handleConnection(connCxt, conn)
+		connCxt, cancel := context.WithCancel(connCxt)
+		connection := &connection{
+			config:    &s.config,
+			cache:     s.cache,
+			cxt:       connCxt,
+			cancelCxt: cancel,
+			conn:      conn,
+			logCxt: log.WithFields(log.Fields{
+				"client": conn.RemoteAddr(),
+				"connID": connID,
+			}),
+
+			encoder: gob.NewEncoder(conn),
+			readC:   make(chan interface{}),
+		}
+		go connection.handle()
 	}
 }
 
-// handleConnection is a goroutine that handles a single connection from a client.
-func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn) error {
-	connLogCxt := log.WithFields(log.Fields{
-		"client": conn.RemoteAddr(),
-		"connID": connCxt.Value(CxtKeyConnID),
-	})
-	logCxt := connLogCxt.WithFields(log.Fields{
-		"thread": "conn",
-	})
-	logCxt.Info("Per-connection goroutine started")
+type connection struct {
+	config *Config
 
-	// Create a new connection-scoped context, which we'll use for signaling to our child
-	// goroutines to halt.
-	connCxt, cancel := context.WithCancel(connCxt)
-	shutDownWG := &sync.WaitGroup{}
-	gaugeNumConnections.Inc()
+	// cxt is the per-connection context.
+	cxt context.Context
+	// cancelCxt is the cancel function for the above context.  We call this from any goroutine that's stopping
+	// to make sure that everything else gets shut down.
+	cancelCxt context.CancelFunc
+	// shutDownWG is used to wait for our background threads to finish.
+	shutDownWG sync.WaitGroup
+
+	cache BreadcrumbProvider
+	conn  *net.TCPConn
+
+	encoder *gob.Encoder
+	readC   chan interface{}
+
+	logCxt *log.Entry
+}
+
+func (h *connection) handle() (err error) {
+	// Ensure that stop gets called.  Stop will close the connection and context and wait for our background
+	// goroutines to finish.
 	defer func() {
-		// Cancel the context and close the connection, this will trigger our background
-		// threads to shut down.
-		cancel()
-		conn.Close()
-		// Wait for the background threads to shut down.
-		shutDownWG.Wait()
-		gaugeNumConnections.Dec()
-		logCxt.Info("Client connection shut down.")
-	}()
-
-	r := gob.NewDecoder(conn)
-	rC := make(chan interface{})
-
-	// Start goroutine to read messages from client and put them on a channel for this
-	// goroutine to process.
-	shutDownWG.Add(1)
-	go func() {
-		logCxt := connLogCxt.WithField("thread", "read")
-		defer func() {
-			cancel()
-			close(rC)
-			shutDownWG.Done()
-			logCxt.Info("Read goroutine finished")
-		}()
-		for {
-			var envelope syncproto.Envelope
-			err := r.Decode(&envelope)
-			if err != nil {
-				logCxt.WithError(err).Info("Failed to read from client")
-				break
-			}
-			if envelope.Message == nil {
-				log.Error("nil message from client")
-				break
-			}
-			select {
-			case rC <- envelope.Message:
-			case <-connCxt.Done():
-				return
-			}
-
-		}
-	}()
-
-	{
-		// Read the hello message from the client.
-		helloTimeout := time.NewTimer(60 * time.Second)
-		select {
-		case clientHello := <-rC:
-			if clientHello == nil {
-				logCxt.Warning("Failed to read hello from client")
-				return errors.New("Failed to read hello from client")
-			}
-			logCxt.WithField("msg", clientHello).Info("Received hello from client.")
-			helloTimeout.Stop()
-		case <-helloTimeout.C:
-			logCxt.Warning("Timed out waiting for hello from client")
-			return errors.New("Timed out waiting for hello from client")
-		}
-	}
-
-	// Create an Encoder to write our messages to the client.  The Encoder is thread-safe so
-	// we can send pings and KVs from separate goroutines.
-	w := gob.NewEncoder(conn)
-	sendMsg := func(msg interface{}) error {
-		if connCxt.Err() != nil {
-			// Optimisation, don't bother to send if we're being torn down.
-			return connCxt.Err()
-		}
-		envelope := syncproto.Envelope{
-			Message: msg,
-		}
-		startTime := time.Now()
-		err := w.Encode(&envelope)
+		// Cancel the context and close the connection, this will trigger our background threads to shut down.
+		// We need to do both because they may be blocked on IO or something else.
+		h.cancelCxt()
+		err := h.conn.Close()
 		if err != nil {
-			logCxt.WithError(err).Info("Failed to write to client")
-			return err
+			log.WithError(err).Error("Error when closing connection.  Ignoring!")
 		}
-		summaryWriteLatency.Observe(time.Since(startTime).Seconds())
-		return nil
+		// Wait for the background threads to shut down.
+		h.shutDownWG.Wait()
+		gaugeNumConnections.Dec()
+		h.logCxt.Info("Client connection shut down.")
+	}()
+
+	h.logCxt.Info("Per-connection goroutine started")
+	gaugeNumConnections.Inc()
+
+	// Start goroutine to read messages from client and put them on a channel for this goroutine to process.
+	h.shutDownWG.Add(1)
+	go h.readFromClient(h.logCxt.WithField("thread", "read"))
+
+	// Now do the (synchronous) handshake before we start our update-writing thread.
+	if err = h.doHandshake(); err != nil {
+		return // Error already logged.
 	}
+
+	// Start a goroutine to stream the snapshot and then the deltas to the client.
+	h.shutDownWG.Add(1)
+	go h.sendSnapshotAndUpdatesToClient(h.logCxt.WithField("thread", "kv-sender"))
+
+	// Start a goroutine to send periodic pings.  We send pings from their own goroutine so that, if the Encoder
+	// blocks, we don't prevent the main goroutine from checking the pongs.
+	h.shutDownWG.Add(1)
+	go h.sendPingsToClient(h.logCxt.WithField("thread", "pinger"))
+
+	// Start a ticker to check that we receive pongs in a timely fashion.
+	pongTicker := jitter.NewTicker(h.config.PingInterval/2, h.config.PingInterval/10)
+	defer pongTicker.Stop()
+	lastPongReceived := time.Now()
+
+	// Use this goroutine to wait for client messages and do the ping/pong liveness check.
+	h.logCxt.Info("Waiting for messages from client")
+	for {
+		select {
+		case msg := <-h.readC:
+			if msg == nil {
+				h.logCxt.Info("Read channel ended")
+				return h.cxt.Err()
+			}
+			switch msg := msg.(type) {
+			case syncproto.MsgPong:
+				h.logCxt.Debug("Pong from client")
+				lastPongReceived = time.Now()
+				summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
+			default:
+				h.logCxt.WithField("msg", msg).Error("Unknown message from client")
+				return errors.New("Unknown message type")
+			}
+		case <-pongTicker.C:
+			if time.Since(lastPongReceived) > h.config.PongTimeout {
+				h.logCxt.Info("Too long since last pong from client, disconnecting")
+				return errors.New("No pong received from client")
+			}
+		case <-h.cxt.Done():
+			h.logCxt.Info("Asked to stop by Context.")
+			return h.cxt.Err()
+		}
+	}
+}
+
+// readFromClient reads messages from the client and puts them on the h.readC channel.  It is responsible for closing the
+// channel.
+func (h *connection) readFromClient(logCxt *log.Entry) {
+	defer func() {
+		h.cancelCxt()
+		close(h.readC)
+		h.shutDownWG.Done()
+		logCxt.Info("Read goroutine finished")
+	}()
+	r := gob.NewDecoder(h.conn)
+	for {
+		var envelope syncproto.Envelope
+		err := r.Decode(&envelope)
+		if err != nil {
+			logCxt.WithError(err).Info("Failed to read from client")
+			break
+		}
+		if envelope.Message == nil {
+			log.Error("nil message from client")
+			break
+		}
+		select {
+		case h.readC <- envelope.Message:
+		case <-h.cxt.Done():
+			return
+		}
+
+	}
+}
+
+// waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
+func (h *connection) waitForMessage(logCxt *log.Entry) (interface{}, error) {
+	// Read the hello message from the client.
+	cxt, cancel := context.WithDeadline(h.cxt, time.Now().Add(60*time.Second))
+	defer cancel()
+	select {
+	case msg := <-h.readC:
+		if msg == nil {
+			logCxt.Warning("Failed to read hello from client")
+			return nil, ErrReadFailed
+		}
+		logCxt.WithField("msg", msg).Debug("Received message from client.")
+		return msg, nil
+	case <-cxt.Done():
+		logCxt.Info("Asked to stop by context.")
+		return nil, h.cxt.Err()
+	}
+}
+
+func (h *connection) doHandshake() error {
+	// Read the client's hello message.
+	msg, err := h.waitForMessage(h.logCxt)
+	if err != nil {
+		h.logCxt.WithError(err).Warn("Failed to read client hello.")
+		return err
+	}
+	hello, ok := msg.(syncproto.MsgClientHello)
+	if !ok {
+		h.logCxt.WithField("msg", msg).Error("Unexpected message from client.")
+		return ErrUnexpectedClientMsg
+	}
+	h.logCxt.WithField("msg", hello).Info("Received Hello message from client.")
 
 	// Respond to client's hello.
-	err := sendMsg(syncproto.MsgServerHello{
+	err = h.sendMsg(syncproto.MsgServerHello{
 		Version: buildinfo.GitVersion,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")
 		return err
 	}
+	return nil
+}
 
-	// Start a goroutine to stream the snapshot and then the deltas to the client.
-	shutDownWG.Add(1)
-	go func() {
-		logCxt := connLogCxt.WithField("thread", "kv-sender")
-		defer func() {
-			cancel()
-			shutDownWG.Done()
-			logCxt.Info("KV-sender goroutine finished")
-		}()
+// sendMsg sends a message to the client.  It may be called from multiple goroutines because the Encoder is thread-safe.
+func (h *connection) sendMsg(msg interface{}) error {
+	if h.cxt.Err() != nil {
+		// Optimisation, don't bother to send if we're being torn down.
+		return h.cxt.Err()
+	}
+	envelope := syncproto.Envelope{
+		Message: msg,
+	}
+	startTime := time.Now()
+	err := h.encoder.Encode(&envelope)
+	if err != nil {
+		h.logCxt.WithError(err).Info("Failed to write to client")
+		return err
+	}
+	summaryWriteLatency.Observe(time.Since(startTime).Seconds())
+	return nil
+}
 
-		// Get the current snapshot and stream it to the client...
-		breadcrumb := s.cache.CurrentBreadcrumb()
-		logCxt.WithFields(log.Fields{
-			"seqNo":  breadcrumb.SequenceNumber,
-			"status": breadcrumb.SyncStatus,
-		}).Info("Starting to send snapshot to client")
-		cancelC := make(chan struct{})
-		iter := breadcrumb.KVs.Iterator(cancelC)
+// sendSnapshotAndUpdatesToClient sends the snapshot from the current Breadcrumb and then follows the Breadcrumbs
+// sending deltas to the client.
+func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
+	defer func() {
+		h.cancelCxt()
+		h.shutDownWG.Done()
+		logCxt.Info("KV-sender goroutine finished")
+	}()
 
-		var kvs []syncproto.SerializedUpdate
-	snapLoop:
-		for {
-			select {
-			case <-connCxt.Done():
-				logCxt.Info("Asked to stop by Context")
-				close(cancelC)
+	// Get the current snapshot and stream it to the client...
+	breadcrumb := h.cache.CurrentBreadcrumb()
+	h.streamSnapshotToClient(logCxt, breadcrumb)
+
+	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
+	var lastSentStatus api.SyncStatus
+	maybeSendStatus := func() (err error) {
+		if lastSentStatus != breadcrumb.SyncStatus {
+			logCxt.WithField("newStatus", breadcrumb.SyncStatus).Info(
+				"Status update to send.")
+			err = h.sendMsg(syncproto.MsgSyncStatus{
+				SyncStatus: breadcrumb.SyncStatus,
+			})
+			if err != nil {
+				logCxt.WithError(err).Info("Failed to send status to client")
 				return
-			case entry := <-iter:
-				if len(kvs) >= s.config.MaxMessageSize || (len(kvs) > 0 && entry == nil) {
-					logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
-					summaryNumKVsPerMsg.Observe(float64(len(kvs)))
-					err := sendMsg(syncproto.MsgKVs{
-						KVs: kvs,
-					})
-					if err != nil {
-						close(cancelC)
-						logCxt.WithError(err).Info("Failed to send to client")
-						return
-					}
-					kvs = kvs[:0]
-				}
-				if entry == nil {
-					close(cancelC)
-					break snapLoop
-				}
-				kvs = append(kvs, entry.Value.(syncproto.SerializedUpdate))
 			}
+			lastSentStatus = breadcrumb.SyncStatus
 		}
+		return
+	}
 
-		var lastSentStatus api.SyncStatus
-		for connCxt.Err() == nil {
-			if lastSentStatus != breadcrumb.SyncStatus {
-				logCxt.WithField("newStatus", breadcrumb.SyncStatus).Info(
-					"Status update to send.")
-				err := sendMsg(syncproto.MsgSyncStatus{
-					SyncStatus: breadcrumb.SyncStatus,
-				})
-				if err != nil {
-					logCxt.WithError(err).Info(
-						"Failed to send status to client")
-					return
-				}
-				lastSentStatus = breadcrumb.SyncStatus
+	// The first Breadcrumb may have changed the status.  Send an update if so.
+	if err := maybeSendStatus(); err != nil {
+		return
+	}
+
+	for h.cxt.Err() == nil {
+		// Wait for new Breadcrumbs.  If we're behind, we'll coalesce the deltas from multiple Breadcrumbs
+		// before exiting the loop.
+		var deltas []syncproto.SerializedUpdate
+		for len(deltas) < h.config.MaxMessageSize {
+			// Get the next breadcrumb.  This may block.
+			nextStartTime := time.Now()
+			var err error
+			breadcrumb, err = breadcrumb.Next(h.cxt)
+			if err != nil {
+				logCxt.WithError(err).Error("Getting next Breadcrumb canceled")
+				return
+			}
+			timeSpentInNext := time.Since(nextStartTime)
+			logCxt.WithFields(log.Fields{
+				"seqNo":     breadcrumb.SequenceNumber,
+				"timestamp": breadcrumb.Timestamp,
+			}).Debug("New Breadcrumb")
+
+			// Take a peek at the very latest breadcrumb to see how far behind we are...
+			latestCrumb := h.cache.CurrentBreadcrumb()
+			crumbAge := latestCrumb.Timestamp.Sub(breadcrumb.Timestamp)
+			summaryClientLatency.Observe(crumbAge.Seconds())
+
+			// Check if we're too far behind the latest Breadcrumb.
+			if crumbAge > h.config.MaxFallBehind {
+				logCxt.WithFields(log.Fields{
+					"snapAge":     crumbAge,
+					"mySeqNo":     breadcrumb.SequenceNumber,
+					"latestSeqNo": latestCrumb.SequenceNumber,
+				}).Warn("Client fell behind. Disconnecting.")
+				return
 			}
 
-			// Wait for new Breadcrumbs.  If we're behind, we may coalesce the deltas
-			// from multiple Breadcrumbs before exiting the loop.
-			var deltas []syncproto.SerializedUpdate
-			for len(deltas) < s.config.MaxMessageSize {
-				nextStartTime := time.Now()
-				breadcrumb, err = breadcrumb.Next(connCxt)
-				if err != nil {
-					logCxt.WithError(err).Error(
-						"Getting next Breadcrumb canceled")
-					return
-				}
-				timeSpentInNext := time.Since(nextStartTime)
-				logCxt.WithFields(log.Fields{
-					"seqNo":     breadcrumb.SequenceNumber,
-					"timestamp": breadcrumb.Timestamp,
-				}).Debug("New snapshot")
-
-				latestCrumb := s.cache.CurrentBreadcrumb()
-				mySnapAge := latestCrumb.Timestamp.Sub(breadcrumb.Timestamp)
-
-				// Check if we're too far behind the latest snapshot.
-				summaryClientLatency.Observe(mySnapAge.Seconds())
-				if mySnapAge > s.config.MaxFallBehind {
-					logCxt.WithFields(log.Fields{
-						"snapAge":     mySnapAge,
-						"mySeqNo":     breadcrumb.SequenceNumber,
-						"latestSeqNo": latestCrumb.SequenceNumber,
-					}).Warn("Client fell behind. Disconnecting.")
-					return
-				}
-
-				if mySnapAge > s.config.MinBatchingAgeThreshold || deltas != nil {
-					// We're behind (or already batching) need to append the
-					// deltas.
-					deltas = append(deltas, breadcrumb.Updates...)
-					summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
-				}
-				if mySnapAge > s.config.MinBatchingAgeThreshold {
-					// Still behind, batch if we can.
-					continue
-				}
-				if deltas == nil {
-					// Optimisation, this is the first and only batch, avoid
-					// copying the deltas.
-					deltas = breadcrumb.Updates
-				}
+			if crumbAge < h.config.MinBatchingAgeThreshold && deltas == nil {
+				// We're not behind and we haven't already started to batch up updates.  Avoid
+				// copying the deltas and just send them
+				deltas = breadcrumb.Updates
 				break
 			}
 
-			if len(deltas) == 0 {
-				logCxt.Debug("Breadcrumb contained no deltas. Skipping sending updates to client.")
-				continue
-			}
+			// Either we're already batching up updates or we're behind.  Append the deltas to the
+			// buffer.
+			deltas = append(deltas, breadcrumb.Updates...)
+			summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
 
+			if crumbAge < h.config.MinBatchingAgeThreshold {
+				// Caught up, stop batching.
+				break
+			}
+		}
+
+		if len(deltas) > 0 {
 			// Send the deltas relative to the previous snapshot.
 			summaryNumKVsPerMsg.Observe(float64(len(deltas)))
-			err := sendMsg(syncproto.MsgKVs{
+			err := h.sendMsg(syncproto.MsgKVs{
 				KVs: deltas,
 			})
 			if err != nil {
@@ -411,70 +487,97 @@ func (s *SyncServer) handleConnection(connCxt context.Context, conn *net.TCPConn
 				return
 			}
 		}
-	}()
 
-	// Start a ticker to trigger periodic pings.  We send pings from their own goroutine so
-	// that, if the Encoder blocks, we don't prevent the main goroutine from checking the
-	// timer.
-	pingTicker := jitter.NewTicker(s.config.PingInterval, s.config.PingInterval/10)
-	defer pingTicker.Stop()
-
-	shutDownWG.Add(1)
-	go func() {
-		logCxt := connLogCxt.WithField("thread", "pinger")
-		defer func() {
-			cancel()
-			shutDownWG.Done()
-			logCxt.Info("Pinger goroutine shut down.")
-		}()
-		for {
-			select {
-			case <-pingTicker.C:
-				logCxt.Debug("Sending ping.")
-				err := sendMsg(syncproto.MsgPing{
-					Timestamp: time.Now(),
-				})
-				if err != nil {
-					log.WithError(err).Info("Failed to send ping to client")
-					return
-				}
-			case <-connCxt.Done():
-				log.WithError(err).Info("Context was canceled.")
-				return
-			}
+		// Newest breadcrumb may have updated the sync status, send an update if so.
+		if err := maybeSendStatus(); err != nil {
+			return
 		}
-	}()
+	}
+}
 
-	// Start a ticker to check that we receive pongs in a timely fashion.
-	pongTicker := jitter.NewTicker(s.config.PingInterval/2, s.config.PingInterval/10)
-	defer pongTicker.Stop()
-	lastPongReceived := time.Now()
+// streamSnapshotToClient takes the snapshot contained in the Breadcrumb and streams it to the client in chunks.
+func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) (err error) {
+	logCxt = logCxt.WithFields(log.Fields{
+		"seqNo":  breadcrumb.SequenceNumber,
+		"status": breadcrumb.SyncStatus,
+	})
+	logCxt.Info("Starting to send snapshot to client")
+	startTime := time.Now()
 
-	logCxt.Info("Waiting for messages from client")
+	// Get an iterator for the snapshot. cancelC is used to ensure that the iterator's goroutine gets cleaned up.
+	cancelC := make(chan struct{})
+	defer close(cancelC)
+	iter := breadcrumb.KVs.Iterator(cancelC)
+
+	// sendKVs is a utility function that sends the kvs buffer to the client and clears the buffer.
+	var kvs []syncproto.SerializedUpdate
+	var numKeys int
+	sendKVs := func() error {
+		if len(kvs) == 0 {
+			return nil
+		}
+		logCxt.WithField("numKVs", len(kvs)).Debug("Sending snapshot KVs to client.")
+		numKeys += len(kvs)
+		summaryNumKVsPerMsg.Observe(float64(len(kvs)))
+		err := h.sendMsg(syncproto.MsgKVs{
+			KVs: kvs,
+		})
+		if err != nil {
+			logCxt.WithError(err).Info("Failed to send to client")
+		}
+		kvs = kvs[:0]
+		return err
+	}
+
 	for {
 		select {
-		case msg := <-rC:
-			if msg == nil {
-				logCxt.Info("Read channel ended")
-				return connCxt.Err()
+		case entry := <-iter:
+			if entry == nil {
+				// End of the iterator.  Make sure we send the last batch, if there is one...
+				err = sendKVs()
+				logCxt.WithField("numKeys", numKeys).Info("Finished sending snapshot to client")
+				summarySnapshotSendTime.Observe(time.Since(startTime).Seconds())
+				return
 			}
-			switch msg := msg.(type) {
-			case syncproto.MsgPong:
-				logCxt.Debug("Pong from client")
-				lastPongReceived = time.Now()
-				summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
-			default:
-				logCxt.WithField("msg", msg).Error("Unknown message from client")
-				return errors.New("Unknown message type")
+			kvs = append(kvs, entry.Value.(syncproto.SerializedUpdate))
+			if len(kvs) >= h.config.MaxMessageSize {
+				// Buffer is full, send the next batch.
+				err = sendKVs()
+				if err != nil {
+					return
+				}
 			}
-		case <-pongTicker.C:
-			if time.Since(lastPongReceived) > s.config.PongTimeout {
-				logCxt.Info("Too long since last pong from client, disconnecting")
-				return errors.New("No pong received from client")
+		case <-h.cxt.Done():
+			err = h.cxt.Err()
+			logCxt.WithError(err).Info("Asked to stop by Context")
+			return
+		}
+	}
+}
+
+// sendPingsToClient loops, sending pings to the client at the configured interval.
+func (h *connection) sendPingsToClient(logCxt *log.Entry) {
+	defer func() {
+		h.cancelCxt()
+		h.shutDownWG.Done()
+		logCxt.Info("Pinger goroutine shut down.")
+	}()
+	pingTicker := jitter.NewTicker(h.config.PingInterval, h.config.PingInterval/10)
+	defer pingTicker.Stop()
+	for {
+		select {
+		case <-pingTicker.C:
+			logCxt.Debug("Sending ping.")
+			err := h.sendMsg(syncproto.MsgPing{
+				Timestamp: time.Now(),
+			})
+			if err != nil {
+				log.WithError(err).Info("Failed to send ping to client")
+				return
 			}
-		case <-connCxt.Done():
-			logCxt.Info("Asked to stop by Context.")
-			return connCxt.Err()
+		case <-h.cxt.Done():
+			log.WithError(h.cxt.Err()).Info("Context was canceled.")
+			return
 		}
 	}
 }
