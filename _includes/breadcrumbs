@@ -1,0 +1,18 @@
+{% assign crumbs = page.url | remove:'/index.html' | split: '/' | shift %}
+{% assign crumbs_version = page.url | split: '/' | first %}
+{% for crumb in crumbs offset: 1 %}
+    {% capture crumb_url %}{{crumbs_version}}{% assign crumb_limit = forloop.index | plus: 1 %}{% for crumb in crumbs limit: crumb_limit %}{{ crumb | append: '/' }}{% endfor %}{% endcapture %}
+
+    {% assign crumb_url_md = crumb_url | append: 'index.md' %}
+    {% assign crumb_url_html = crumb_url | append: 'index.html' %}
+    {% assign breadcrumb_exists = site.html_pages | where: "path", crumb_url_md %}
+    {% if breadcrumb_exists == '' or breadcrumb_exists == nil or breadcrumb_exists.size == 0 %}
+        {% assign breadcrumb_exists = site.html_pages | where: "path", crumb_url_html %}
+    {% endif %}
+    
+    {% if forloop.last %}
+        <li class="breadcrumb-item active">{{ crumb | replace:'-',' ' | remove:'.html' | capitalize }}</li>
+    {% elsif breadcrumb_exists != '' and breadcrumb_exists != nil and breadcrumb_exists.size > 0 %}
+        <li class="breadcrumb-item"><a href="{{site.baseurl}}/{{crumb_url}}">{{ crumb | replace:'-',' ' | remove:'.html' | capitalize }}</a></li>
+    {% endif %}
+{% endfor %}
