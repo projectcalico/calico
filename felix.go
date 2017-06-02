@@ -118,9 +118,9 @@ func main() {
 	}
 
 	// Parse command-line args.
-	version := ("Version:            " + buildinfo.GitVersion + "\n" +
+	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
-		"Build date:         " + buildinfo.BuildDate + "\n")
+		"Build date:         " + buildinfo.BuildDate + "\n"
 	arguments, err := docopt.Parse(usage, nil, true, version, false)
 	if err != nil {
 		println(usage)
@@ -342,14 +342,14 @@ configRetry:
 			svc, err := svcAPI.Get(configParams.TyphaK8sServiceName, v1.GetOptions{})
 			if err != nil {
 				log.WithError(err).Error("Unable to get Typha endpoint from Kubernetes")
-				time.Sleep(1)
+				time.Sleep(1 * time.Second)
 				continue
 			}
 			host := svc.Spec.ClusterIP
 			log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
 			if host == "" {
 				log.WithError(err).Error("Unable to get Typha endpoint from Kubernetes")
-				time.Sleep(1)
+				time.Sleep(1 * time.Second)
 				continue
 			}
 			for _, p := range svc.Spec.Ports {
