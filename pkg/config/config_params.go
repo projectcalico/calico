@@ -98,7 +98,7 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
+	LogFilePath string `config:"file;/var/log/calico/typha.log;die-on-fail"`
 
 	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`

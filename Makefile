@@ -125,6 +125,14 @@ bin/calico-typha: $(TYPHA_GO_FILES) vendor/.up-to-date
                ( ldd bin/calico-typha 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-typha was not statically linked"; false ) )'
 
+bin/typha-client: $(TYPHA_GO_FILES) vendor/.up-to-date
+	@echo Building typha client...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/typha/cmd/typha-client" && \
+               ( ldd bin/typha-client 2>&1 | grep -q "Not a valid dynamic program" || \
+	             ( echo "Error: bin/typha-client was not statically linked"; false ) )'
+
 # Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:

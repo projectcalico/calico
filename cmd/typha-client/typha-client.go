@@ -19,9 +19,27 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"math/rand"
+	"runtime"
+
+	"github.com/docopt/docopt-go"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/typha/pkg/buildinfo"
+	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
+
+const usage = `Test client for Typha, Calico's fan-out proxy.
+
+Usage:
+  typha-client [options]
+
+Options:
+  --version                    Print the version and exit.
+  --server=<ADDR>              Set the server to connect to [default: localhost:5473].
+`
 
 type syncerCallbacks struct{}
 
@@ -34,8 +52,36 @@ func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 }
 
 func main() {
+	// Go's RNG is not seeded by default.  Do that now.
+	rand.Seed(time.Now().UTC().UnixNano())
+
+	// Set up logging.
+	logutils.ConfigureEarlyLogging()
+	logutils.ConfigureLogging(&config.Config{
+		LogSeverityScreen: "info",
+	})
+
+	// Parse command-line args.
+	version := "Version:            " + buildinfo.GitVersion + "\n" +
+		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
+		"Build date:         " + buildinfo.BuildDate + "\n"
+	arguments, err := docopt.Parse(usage, nil, true, version, false)
+	if err != nil {
+		println(usage)
+		log.Fatalf("Failed to parse usage, exiting: %v", err)
+	}
+	buildInfoLogCxt := log.WithFields(log.Fields{
+		"version":    buildinfo.GitVersion,
+		"buildDate":  buildinfo.BuildDate,
+		"gitCommit":  buildinfo.GitRevision,
+		"GOMAXPROCS": runtime.GOMAXPROCS(0),
+	})
+	buildInfoLogCxt.Info("Typha starting up")
+	log.Infof("Command line arguments: %v", arguments)
+
 	callbacks := &syncerCallbacks{}
-	client := syncclient.New("127.0.0.1", "test-host", "some info", callbacks)
+	addr := arguments["--server"].(string)
+	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks)
 	client.Start()
 	for {
 		time.Sleep(10 * time.Second)
