@@ -49,6 +49,15 @@
 #
 # Only run the tests that complete in a minute or less.
 : ${JUST_A_MINUTE:=true}
+#
+# Whether to tell Felix to go via Typha.
+: ${USE_TYPHA:=true}
+#
+# What version of Typha (container image) to use.
+: ${TYPHA_VERSION:=latest}
+#
+# Typha logging level.
+: ${TYPHA_LOG_LEVEL:=info}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -59,6 +68,7 @@ prefix=k8sfv${UNIQUE}
 function cleanup {
     # Clean up the containers that this script generates.
     docker rm -f ${prefix}-felix || true
+    docker rm -f ${prefix}-typha || true
     docker rm -f ${prefix}-apiserver || true
     docker rm -f ${prefix}-etcd || true
     # List all remaining containers.
@@ -130,12 +140,32 @@ while ! docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/ou
     sleep 2
 done
 
+if ${USE_TYPHA}; then
+    # Run Typha.
+    docker run --detach --privileged --name ${prefix}-typha \
+	   -e CALICO_DATASTORE_TYPE=kubernetes \
+	   -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
+	   -e TYPHA_DATASTORETYPE=kubernetes \
+	   -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+	   -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
+	   -v ${PWD}:/testcode \
+	   -w /testcode/k8sfv/output \
+	   calico/typha:${TYPHA_VERSION} \
+	   /bin/sh -c "for n in 1 2; do calico-typha; done"
+    typha_ip=$(get_container_ip ${prefix}-typha)
+    typha_hostname=$(get_container_hostname ${prefix}-typha)
+    typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
+else
+    typha_felix_args=
+fi
+
 # Run Felix.
 #
 # Specifying CALICO_DATASTORE_TYPE as well as FELIX_DATASTORETYPE is
 # only needed for Felix 2.1 and earlier.  For 2.2, FELIX_DATASTORETYPE
 # is sufficient.
 docker run --detach --privileged --name ${prefix}-felix \
+       ${typha_felix_args} \
        -e CALICO_DATASTORE_TYPE=kubernetes \
        -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
        -e FELIX_DATASTORETYPE=kubernetes \
