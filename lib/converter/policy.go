@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,22 +25,19 @@ import (
 type PolicyConverter struct{}
 
 // ConvertMetadataToKey converts a PolicyMetadata to a PolicyKey
-func (p PolicyConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
+func (p PolicyConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) model.Key {
 	pm := m.(api.PolicyMetadata)
 	k := model.PolicyKey{
 		Name: pm.Name,
 	}
-	return k, nil
+	return k
 }
 
 // ConvertAPIToKVPair converts an API Policy structure to a KVPair containing a
 // backend Policy and PolicyKey.
-func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
+func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) *model.KVPair {
 	ap := a.(api.Policy)
-	k, err := p.ConvertMetadataToKey(ap.Metadata)
-	if err != nil {
-		return nil, err
-	}
+	k := p.ConvertMetadataToKey(ap.Metadata)
 
 	d := model.KVPair{
 		Key: k,
@@ -53,12 +50,12 @@ func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPa
 		},
 	}
 
-	return &d, nil
+	return &d
 }
 
 // ConvertKVPairToAPI converts a KVPair containing a backend Policy and PolicyKey
 // to an API Policy structure.
-func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
+func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) unversioned.Resource {
 	bp := d.Value.(*model.Policy)
 	bk := d.Key.(model.PolicyKey)
 
@@ -70,5 +67,5 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 	ap.Spec.Selector = bp.Selector
 	ap.Spec.DoNotTrack = bp.DoNotTrack
 
-	return ap, nil
+	return ap
 }

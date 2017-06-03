@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,13 @@ import (
 	"fmt"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/converter"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,7 +41,7 @@ func ThirdPartyToSystemNetworkPolicy(t *thirdparty.SystemNetworkPolicy) *model.K
 		},
 		Spec: t.Spec,
 	}
-	kvp, _ := converter.PolicyConverter{}.ConvertAPIToKVPair(r)
+	kvp := converter.PolicyConverter{}.ConvertAPIToKVPair(r)
 	kvp.Revision = t.Metadata.ResourceVersion
 
 	return kvp
@@ -47,9 +50,8 @@ func ThirdPartyToSystemNetworkPolicy(t *thirdparty.SystemNetworkPolicy) *model.K
 // SystemNetworkPolicyToThirdParty takes a Calico Policy and returns the equivalent
 // ThirdPartyResource representation.
 func SystemNetworkPolicyToThirdParty(kvp *model.KVPair) *thirdparty.SystemNetworkPolicy {
-	r, _ := converter.PolicyConverter{}.ConvertKVPairToAPI(kvp)
-
-	tprName := systemNetworkPolicyTprName(kvp.Key)
+	r := converter.PolicyConverter{}.ConvertKVPairToAPI(kvp)
+	tprName := systemNetworkPolicyTPRName(kvp.Key)
 	tpr := thirdparty.SystemNetworkPolicy{
 		Metadata: metav1.ObjectMeta{
 			Name: tprName,
@@ -62,13 +64,13 @@ func SystemNetworkPolicyToThirdParty(kvp *model.KVPair) *thirdparty.SystemNetwor
 	return &tpr
 }
 
-// systemNetworkPolicyTprName converts a Policy (specifically a System Network Policy)
+// systemNetworkPolicyTPRName converts a Policy (specifically a System Network Policy)
 // name to a TPR name.
-func systemNetworkPolicyTprName(key model.Key) string {
+func systemNetworkPolicyTPRName(key model.Key) string {
 	// The name should be policed before we get here.
 	pk := key.(model.PolicyKey)
 	if !strings.HasPrefix(pk.Name, SystemNetworkPolicyNamePrefix) {
-		panic("System Network Policy name is not correctly namespaced")
+		log.WithField("Key", key).Fatal("System Network Policy name is not correctly namespaced")
 	}
 	// Trim the namespace and ensure lowercase.
 	return strings.ToLower(strings.TrimPrefix(pk.Name, SystemNetworkPolicyNamePrefix))

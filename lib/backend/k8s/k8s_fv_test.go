@@ -52,6 +52,19 @@ var (
 			},
 		},
 	}
+	calicoDisallowPolicyModel = model.Policy{
+		Order: &zeroOrder,
+		InboundRules: []model.Rule{
+			{
+				Action: "deny",
+			},
+		},
+		OutboundRules: []model.Rule{
+			{
+				Action: "deny",
+			},
+		},
+	}
 
 	// Use a back-off set of intervals for testing deletion of a namespace
 	// which can sometimes be slow.
@@ -190,17 +203,39 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 	}
 }
 
-// GetCheckEntryFunc returns a function that can be used to query an entry
-// in our state store.  It's useful for performing "Eventually" testing.
-func (c cb) GetCheckEntryFunc(key model.Key) func() interface{} {
+// GetSyncerValueFunc returns a function that can be used to query the value of
+// an entry in our syncer state store.  It's useful for performing "Eventually" testing.
+//
+// The returned function returns the cached entry or nil if the entry does not
+// exist in the cache.
+func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 	return func() interface{} {
-		log.Infof("Checking entry in cache: %s")
+		log.Infof("Checking entry in cache: %s", key)
 		c.Lock.Lock()
-		defer func() { c.Lock.Unlock() }()
+		defer func() {
+			c.Lock.Unlock()
+		}()
 		if entry, ok := c.State[key.String()]; ok {
-			return entry
+			return entry.Value
 		}
 		return nil
+	}
+}
+
+// GetSyncerValuePresentFunc returns a function that can be used to query whether an entry
+// is in our syncer state store.  It's useful for performing "Eventually" testing.
+//
+// When checking for presence use this function rather than GetSyncerValueFunc() because
+// the Value may itself by nil.
+//
+// The returned function returns true if the entry is present.
+func (c cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
+	return func() interface{} {
+		log.Infof("Checking entry in cache: %s", key)
+		c.Lock.Lock()
+		defer func() { c.Lock.Unlock() }()
+		_, ok := c.State[key.String()]
+		return ok
 	}
 }
 
@@ -291,9 +326,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
-			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 		})
 
 		By("Deleting the namespace", func() {
@@ -303,9 +338,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Checking the correct entries are no longer in our cache", func() {
 			expectedName := "ns.projectcalico.org/test-syncer-namespace-default-deny"
-			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -356,9 +391,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Expect corresponding Profile updates over the syncer for this Namespace.
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).ShouldNot(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
 		})
 
 		By("deleting a namespace", func() {
@@ -368,9 +403,9 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		By("Checking the correct entries are in no longer in our cache", func() {
 			expectedName := "ns.projectcalico.org/test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetCheckEntryFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileTagsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -476,10 +511,18 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Key:   model.PolicyKey{Name: kvp1Name},
 			Value: &calicoAllowPolicyModel,
 		}
+		kvp1_2 := &model.KVPair{
+			Key:   model.PolicyKey{Name: kvp1Name},
+			Value: &calicoDisallowPolicyModel,
+		}
 		kvp2Name := "snp.projectcalico.org/my-test-snp2"
 		kvp2 := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp2Name},
 			Value: &calicoAllowPolicyModel,
+		}
+		kvp2_2 := &model.KVPair{
+			Key:   model.PolicyKey{Name: kvp2Name},
+			Value: &calicoDisallowPolicyModel,
 		}
 
 		// Make sure we clean up after ourselves.  We allow this to fail because
@@ -493,8 +536,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// System Network Protocols that this test manipulates.  Neither
 		// have been created yet.
 		By("Checking cache does not have System Network Policy entries", func() {
-			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
 		})
 
 		By("Creating a System Network Policy", func() {
@@ -503,8 +546,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
 		})
 
 		By("Attempting to recreate an existing System Network Policy", func() {
@@ -513,23 +556,33 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Updating an existing System Network Policy", func() {
-			_, err := c.snpClient.Update(kvp1)
+			_, err := c.snpClient.Update(kvp1_2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Applying a non-existent existing System Network Policy", func() {
-			_, err := c.snpClient.Apply(kvp2)
-			Expect(err).NotTo(HaveOccurred())
+		By("Checking cache has correct System Network Policy entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
 		})
 
-		By("Updating the System Network Policy created by Apply", func() {
+		By("Applying a non-existent System Network Policy", func() {
 			_, err := c.snpClient.Apply(kvp2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).ShouldNot(BeNil())
+			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp2.Key)).Should(Equal(kvp2.Value))
+		})
+
+		By("Updating the System Network Policy created by Apply", func() {
+			_, err := c.snpClient.Apply(kvp2_2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct System Network Policy entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp2.Key)).Should(Equal(kvp2_2.Value))
 		})
 
 		By("Deleted the System Network Policy created by Apply", func() {
@@ -538,8 +591,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).ShouldNot(BeNil())
-			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
 		})
 
 		// Perform Get operations directly on the main client - this
@@ -550,22 +603,27 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
+		By("Listing a missing System Network Policy", func() {
+			kvps, err := c.List(model.PolicyListOptions{Name: "my-test-snp"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(0))
+		})
+
 		By("Getting an existing System Network Policy", func() {
 			kvp, err := c.Get(model.PolicyKey{Name: "snp.projectcalico.org/my-test-snp"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvp.Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
-			Expect(*kvp.Value.(*model.Policy)).To(Equal(calicoAllowPolicyModel))
+			Expect(kvp.Value.(*model.Policy)).To(Equal(kvp1_2.Value))
 		})
 
 		By("Listing all policies (including a System Network Policy)", func() {
-
 			// We expect namespace entries for kube-system, kube-public
 			// and default.
 			kvps, err := c.List(model.PolicyListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(4))
 			Expect(kvps[len(kvps)-1].Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
-			Expect(*kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(calicoAllowPolicyModel))
+			Expect(kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(kvp1_2.Value))
 		})
 
 		By("Deleting an existing System Network Policy", func() {
@@ -574,8 +632,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Checking cache has no System Network Policy entries", func() {
-			Eventually(cb.GetCheckEntryFunc(kvp1.Key)).Should(BeNil())
-			Eventually(cb.GetCheckEntryFunc(kvp2.Key)).Should(BeNil())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
 		})
 	})
 

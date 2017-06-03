@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ type snpClient struct {
 // Create implements the Create method for System Network Policies (exposed
 // through the libcalico-go API as standard Policy resources)
 func (c *snpClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
+	log.WithField("KV", kvp).Debug("Performing System Network Policy Create")
 	tpr := SystemNetworkPolicyToThirdParty(kvp)
 	res := thirdparty.SystemNetworkPolicy{}
 	req := c.tprClient.Post().
@@ -68,6 +69,7 @@ func (c *snpClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 // Update implements the Update method for System Network Policies (exposed
 // through the libcalico-go API as standard Policy resources)
 func (c *snpClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
+	log.WithField("KV", kvp).Debug("Performing System Network Policy Update")
 	tpr := SystemNetworkPolicyToThirdParty(kvp)
 	res := thirdparty.SystemNetworkPolicy{}
 	req := c.tprClient.Put().
@@ -86,6 +88,7 @@ func (c *snpClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 // Apply implements the Apply method for System Network Policies (exposed
 // through the libcalico-go API as standard Policy resources)
 func (c *snpClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+	log.WithField("KV", kvp).Debug("Performing System Network Policy Apply")
 	updated, err := c.Update(kvp)
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -104,10 +107,11 @@ func (c *snpClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 // Delete implements the Delete method for System Network Policies (exposed
 // through the libcalico-go API as standard Policy resources)
 func (c *snpClient) Delete(kvp *model.KVPair) error {
+	log.WithField("KV", kvp).Debug("Performing System Network Policy Delete")
 	result := c.tprClient.Delete().
 		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
-		Name(systemNetworkPolicyTprName(kvp.Key)).
+		Name(systemNetworkPolicyTPRName(kvp.Key)).
 		Do()
 	return K8sErrorToCalico(result.Error(), kvp.Key)
 }
@@ -115,11 +119,12 @@ func (c *snpClient) Delete(kvp *model.KVPair) error {
 // Get implements the Get method for System Network Policies (exposed
 // through the libcalico-go API as standard Policy resources)
 func (c *snpClient) Get(key model.Key) (*model.KVPair, error) {
+	log.WithField("Key", key).Debug("Performing System Network Policy Delete")
 	tpr := thirdparty.SystemNetworkPolicy{}
 	err := c.tprClient.Get().
 		Resource(SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
-		Name(systemNetworkPolicyTprName(key)).
+		Name(systemNetworkPolicyTPRName(key)).
 		Do().Into(&tpr)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
@@ -138,18 +143,19 @@ func (c *snpClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 	// rather than a list, so handle this case separately, using our
 	// Get method to return the single result.
 	if l.Name != "" {
-		log.Info("Performing System Network Policy List with name")
+		log.Debug("Performing System Network Policy List with name")
 		if kvp, err := c.Get(model.PolicyKey{Name: l.Name}); err == nil {
 			kvps = append(kvps, kvp)
 		} else {
-			if !kerrors.IsNotFound(err) {
-				return nil, K8sErrorToCalico(err, l)
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				return nil, err
 			}
 		}
 		return kvps, nil
 	}
+	log.Debug("Performing System Network Policy List without name")
 
-	// Since are not performing an exact Get, Kubernetes will return a list
+	// Since we are not performing an exact Get, Kubernetes will return a list
 	// of resources.
 	tprs := thirdparty.SystemNetworkPolicyList{}
 
