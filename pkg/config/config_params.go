@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
@@ -255,7 +254,7 @@ func (config *Config) DatastoreConfig() api.CalicoAPIConfig {
 		} else {
 			etcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
 		}
-		etcdCfg := etcd.EtcdConfig{
+		etcdCfg := api.EtcdConfig{
 			EtcdEndpoints:  etcdEndpoints,
 			EtcdKeyFile:    config.EtcdKeyFile,
 			EtcdCertFile:   config.EtcdCertFile,
