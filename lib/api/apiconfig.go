@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,7 @@
 
 package api
 
-import (
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
-)
+import "github.com/projectcalico/libcalico-go/lib/api/unversioned"
 
 type DatastoreType string
 
@@ -44,10 +40,32 @@ type CalicoAPIConfigSpec struct {
 	DatastoreType DatastoreType `json:"datastoreType" envconfig:"DATASTORE_TYPE" default:"etcdv2"`
 
 	// Inline the ectd config fields
-	etcd.EtcdConfig
+	EtcdConfig
 
 	// Inline the k8s config fields.
-	k8s.KubeConfig
+	KubeConfig
+}
+
+type EtcdConfig struct {
+	EtcdScheme     string `json:"etcdScheme" envconfig:"ETCD_SCHEME" default:"http"`
+	EtcdAuthority  string `json:"etcdAuthority" envconfig:"ETCD_AUTHORITY" default:"127.0.0.1:2379"`
+	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
+	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
+	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
+	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
+	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
+	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+}
+
+type KubeConfig struct {
+	Kubeconfig               string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
+	K8sAPIEndpoint           string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
+	K8sKeyFile               string `json:"k8sKeyFile" envconfig:"K8S_KEY_FILE" default:""`
+	K8sCertFile              string `json:"k8sCertFile" envconfig:"K8S_CERT_FILE" default:""`
+	K8sCAFile                string `json:"k8sCAFile" envconfig:"K8S_CA_FILE" default:""`
+	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"K8S_API_TOKEN" default:""`
+	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
+	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default:""`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the

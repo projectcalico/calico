@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,27 +22,27 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
-	"k8s.io/client-go/kubernetes"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/rest"
 )
 
 func NewIPPools(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
-	return &client{
+	return &ipPoolsClient{
 		clientSet: c,
 		tprClient: r,
 	}
 }
 
 // Implements the api.Client interface for pools.
-type client struct {
+type ipPoolsClient struct {
 	clientSet *kubernetes.Clientset
 	tprClient *rest.RESTClient
 }
 
-func (c *client) Create(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *ipPoolsClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 	tpr := IPPoolToThirdParty(kvp)
 	res := thirdparty.IpPool{}
 	req := c.tprClient.Post().
@@ -57,7 +57,7 @@ func (c *client) Create(kvp *model.KVPair) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-func (c *client) Update(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *ipPoolsClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 	tpr := IPPoolToThirdParty(kvp)
 	res := thirdparty.IpPool{}
 	req := c.tprClient.Put().
@@ -73,7 +73,7 @@ func (c *client) Update(kvp *model.KVPair) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-func (c *client) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+func (c *ipPoolsClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	updated, err := c.Update(kvp)
 	if err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
@@ -89,21 +89,21 @@ func (c *client) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 	return updated, nil
 }
 
-func (c *client) Delete(kvp *model.KVPair) error {
+func (c *ipPoolsClient) Delete(kvp *model.KVPair) error {
 	result := c.tprClient.Delete().
 		Resource("ippools").
 		Namespace("kube-system").
-		Name(tprName(kvp.Key.(model.IPPoolKey))).
+		Name(ipPoolTprName(kvp.Key.(model.IPPoolKey))).
 		Do()
 	return K8sErrorToCalico(result.Error(), kvp.Key)
 }
 
-func (c *client) Get(key model.Key) (*model.KVPair, error) {
+func (c *ipPoolsClient) Get(key model.Key) (*model.KVPair, error) {
 	tpr := thirdparty.IpPool{}
 	err := c.tprClient.Get().
 		Resource("ippools").
 		Namespace("kube-system").
-		Name(tprName(key.(model.IPPoolKey))).
+		Name(ipPoolTprName(key.(model.IPPoolKey))).
 		Do().Into(&tpr)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, key)
@@ -112,7 +112,7 @@ func (c *client) Get(key model.Key) (*model.KVPair, error) {
 	return ThirdPartyToIPPool(&tpr), nil
 }
 
-func (c *client) List(list model.ListInterface) ([]*model.KVPair, error) {
+func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 	kvps := []*model.KVPair{}
 	l := list.(model.IPPoolListOptions)
 
@@ -156,7 +156,7 @@ func (c *client) List(list model.ListInterface) ([]*model.KVPair, error) {
 	return kvps, nil
 }
 
-func (c *client) EnsureInitialized() error {
+func (c *ipPoolsClient) EnsureInitialized() error {
 	log.Info("Ensuring IP Pool ThirdPartyResource exists")
 	tpr := extensions.ThirdPartyResource{
 		ObjectMeta: metav1.ObjectMeta{
@@ -176,16 +176,10 @@ func (c *client) EnsureInitialized() error {
 	return nil
 }
 
-// Syncer is not implemented for ip pools.
-func (c *client) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return fakeSyncer{}
+func (c *ipPoolsClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
+	return nil
 }
 
-type fakeSyncer struct{}
-
-func (f fakeSyncer) Start() {}
-
-// EnsureCalicoNodeInitialized in a no-op for ip pools.
-func (c *client) EnsureCalicoNodeInitialized(node string) error {
+func (c *ipPoolsClient) EnsureCalicoNodeInitialized(node string) error {
 	return nil
 }

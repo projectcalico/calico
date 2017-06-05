@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
-	"k8s.io/client-go/kubernetes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -138,9 +138,5 @@ func (c *nodeClient) EnsureCalicoNodeInitialized(node string) error {
 }
 
 func (c *nodeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
-	return nodeFakeSyncer{}
+	return nil
 }
-
-type nodeFakeSyncer struct{}
-
-func (f nodeFakeSyncer) Start() {}

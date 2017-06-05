@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/transport"
+	capi "github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -40,23 +41,12 @@ var (
 	clientTimeout        = 30 * time.Second
 )
 
-type EtcdConfig struct {
-	EtcdScheme     string `json:"etcdScheme" envconfig:"ETCD_SCHEME" default:"http"`
-	EtcdAuthority  string `json:"etcdAuthority" envconfig:"ETCD_AUTHORITY" default:"127.0.0.1:2379"`
-	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
-	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
-	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
-	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
-	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
-	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
-}
-
 type EtcdClient struct {
 	etcdClient  etcd.Client
 	etcdKeysAPI etcd.KeysAPI
 }
 
-func NewEtcdClient(config *EtcdConfig) (*EtcdClient, error) {
+func NewEtcdClient(config *capi.EtcdConfig) (*EtcdClient, error) {
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}

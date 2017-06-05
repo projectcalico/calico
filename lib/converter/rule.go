@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package client
+package converter
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/api"
@@ -20,24 +20,30 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
-// ruleActionAPIToBackend converts the rule action field value from the API
-// value to the equivalent backend value.
-func ruleActionAPIToBackend(action string) string {
-	if action == "pass" {
-		return "next-tier"
+// RulesAPIToBackend converts an API Rule structure slice to a Backend Rule structure slice.
+func RulesAPIToBackend(ars []api.Rule) []model.Rule {
+	if ars == nil {
+		return []model.Rule{}
 	}
-	return action
+
+	brs := make([]model.Rule, len(ars))
+	for idx, ar := range ars {
+		brs[idx] = ruleAPIToBackend(ar)
+	}
+	return brs
 }
 
-// ruleActionBackendToAPI converts the rule action field value from the backend
-// value to the equivalent API value.
-func ruleActionBackendToAPI(action string) string {
-	if action == "" {
-		return "allow"
-	} else if action == "next-tier" {
-		return "pass"
+// RulesBackendToAPI converts a Backend Rule structure slice to an API Rule structure slice.
+func RulesBackendToAPI(brs []model.Rule) []api.Rule {
+	if brs == nil {
+		return nil
 	}
-	return action
+
+	ars := make([]api.Rule, len(brs))
+	for idx, br := range brs {
+		ars[idx] = ruleBackendToAPI(br)
+	}
+	return ars
 }
 
 // ruleAPIToBackend converts an API Rule structure to a Backend Rule structure.
@@ -138,28 +144,22 @@ func ruleBackendToAPI(br model.Rule) api.Rule {
 	}
 }
 
-// rulesAPIToBackend converts an API Rule structure slice to a Backend Rule structure slice.
-func rulesAPIToBackend(ars []api.Rule) []model.Rule {
-	if ars == nil {
-		return []model.Rule{}
+// ruleActionAPIToBackend converts the rule action field value from the API
+// value to the equivalent backend value.
+func ruleActionAPIToBackend(action string) string {
+	if action == "pass" {
+		return "next-tier"
 	}
-
-	brs := make([]model.Rule, len(ars))
-	for idx, ar := range ars {
-		brs[idx] = ruleAPIToBackend(ar)
-	}
-	return brs
+	return action
 }
 
-// rulesBackendToAPI converts a Backend Rule structure slice to an API Rule structure slice.
-func rulesBackendToAPI(brs []model.Rule) []api.Rule {
-	if brs == nil {
-		return nil
+// ruleActionBackendToAPI converts the rule action field value from the backend
+// value to the equivalent API value.
+func ruleActionBackendToAPI(action string) string {
+	if action == "" {
+		return "allow"
+	} else if action == "next-tier" {
+		return "pass"
 	}
-
-	ars := make([]api.Rule, len(brs))
-	for idx, br := range brs {
-		ars[idx] = ruleBackendToAPI(br)
-	}
-	return ars
+	return action
 }

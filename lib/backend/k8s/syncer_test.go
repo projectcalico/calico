@@ -21,11 +21,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	k8sapi "k8s.io/client-go/pkg/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/watch"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 )
 
 type testWatch struct {
@@ -157,6 +158,13 @@ func (tc *testClient) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, 
 	err = nil
 	return
 }
+func (tc *testClient) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.Interface, error) {
+	return tc.newWatch("system network policy", make(chan watch.Event)), nil
+}
+
+func (tc *testClient) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error) {
+	return &thirdparty.SystemNetworkPolicyList{}, nil
+}
 
 func (tc *testClient) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, error) {
 	return &model.KVPair{Key: key, Value: true}, nil
@@ -234,9 +242,9 @@ var _ = Describe("Test Syncer", func() {
 			// Check that, after the resync, the old watchers are stopped.
 			tc.stateMutex.Lock()
 			defer tc.stateMutex.Unlock()
-			// We expect 6 old watchers and 6 new. If that changes, we'll assert here
+			// We expect 7 old watchers and 7 new. If that changes, we'll assert here
 			// so the maintainer can re-check the test still matches the logic.
-			Expect(tc.openWatchers).To(HaveLen(12))
+			Expect(tc.openWatchers).To(HaveLen(14))
 			for _, w := range tc.openWatchers[:len(tc.openWatchers)/2] {
 				w.stopMutex.Lock()
 				stopped := w.stopped

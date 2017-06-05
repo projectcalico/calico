@@ -17,8 +17,6 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 
 	. "github.com/onsi/ginkgo"
 )
@@ -47,7 +45,7 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 				body(api.CalicoAPIConfig{
 					Spec: api.CalicoAPIConfigSpec{
 						DatastoreType: api.EtcdV2,
-						EtcdConfig: etcd.EtcdConfig{
+						EtcdConfig: api.EtcdConfig{
 							EtcdEndpoints: "http://127.0.0.1:2379",
 						},
 					},
@@ -61,7 +59,7 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 				body(api.CalicoAPIConfig{
 					Spec: api.CalicoAPIConfigSpec{
 						DatastoreType: api.Kubernetes,
-						KubeConfig: k8s.KubeConfig{
+						KubeConfig: api.KubeConfig{
 							K8sAPIEndpoint: "http://localhost:8080",
 						},
 					},

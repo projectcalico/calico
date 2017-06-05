@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/converter"
 )
 
 // ProfileInterface has methods to work with Profile resources.
@@ -125,8 +126,8 @@ func (h *profiles) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 		Key: k,
 		Value: &model.Profile{
 			Rules: model.ProfileRules{
-				InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
-				OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
+				InboundRules:  converter.RulesAPIToBackend(ap.Spec.IngressRules),
+				OutboundRules: converter.RulesAPIToBackend(ap.Spec.EgressRules),
 			},
 			Tags:   tags,
 			Labels: labels,
@@ -151,8 +152,8 @@ func (h *profiles) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, er
 	} else {
 		ap.Metadata.Tags = bp.Tags
 	}
-	ap.Spec.IngressRules = rulesBackendToAPI(bp.Rules.InboundRules)
-	ap.Spec.EgressRules = rulesBackendToAPI(bp.Rules.OutboundRules)
+	ap.Spec.IngressRules = converter.RulesBackendToAPI(bp.Rules.InboundRules)
+	ap.Spec.EgressRules = converter.RulesBackendToAPI(bp.Rules.OutboundRules)
 
 	return ap, nil
 }

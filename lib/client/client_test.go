@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@ import (
 	"os"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/etcd"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
@@ -45,7 +43,7 @@ spec:
 	cfg1data := api.NewCalicoAPIConfig()
 	cfg1data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
-		EtcdConfig: etcd.EtcdConfig{
+		EtcdConfig: api.EtcdConfig{
 			EtcdEndpoints:  "https://1.2.3.4:1234,https://10.20.30.40:1234",
 			EtcdUsername:   "bar",
 			EtcdPassword:   "baz",
@@ -71,7 +69,7 @@ spec:
 	cfg2data := api.NewCalicoAPIConfig()
 	cfg2data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
-		KubeConfig: k8s.KubeConfig{
+		KubeConfig: api.KubeConfig{
 			Kubeconfig:     "filename",
 			K8sAPIEndpoint: "bar",
 			K8sCertFile:    "baz",
@@ -103,7 +101,7 @@ kind: notCalicoApiConfig
 	cfg1env := api.NewCalicoAPIConfig()
 	cfg1env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
-		EtcdConfig: etcd.EtcdConfig{
+		EtcdConfig: api.EtcdConfig{
 			EtcdScheme:     "http",
 			EtcdAuthority:  "127.0.0.1:2379",
 			EtcdEndpoints:  "https://1.2.3.4:1234,https://10.20.30.40:1234",
@@ -128,11 +126,11 @@ kind: notCalicoApiConfig
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.Kubernetes,
-		EtcdConfig: etcd.EtcdConfig{
+		EtcdConfig: api.EtcdConfig{
 			EtcdScheme:    "http",
 			EtcdAuthority: "127.0.0.1:2379",
 		},
-		KubeConfig: k8s.KubeConfig{
+		KubeConfig: api.KubeConfig{
 			Kubeconfig:     "filename",
 			K8sAPIEndpoint: "bar1",
 			K8sCertFile:    "baz1",
@@ -151,7 +149,7 @@ kind: notCalicoApiConfig
 	cfg3env := api.NewCalicoAPIConfig()
 	cfg3env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
-		EtcdConfig: etcd.EtcdConfig{
+		EtcdConfig: api.EtcdConfig{
 			EtcdScheme:    "http",
 			EtcdAuthority: "123.123.123.123:2344",
 			EtcdUsername:  "userbar",
@@ -168,11 +166,11 @@ kind: notCalicoApiConfig
 	cfg4env := api.NewCalicoAPIConfig()
 	cfg4env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.Kubernetes,
-		EtcdConfig: etcd.EtcdConfig{
+		EtcdConfig: api.EtcdConfig{
 			EtcdScheme:    "http",
 			EtcdAuthority: "127.0.0.1:2379",
 		},
-		KubeConfig: k8s.KubeConfig{
+		KubeConfig: api.KubeConfig{
 			Kubeconfig: "filename-preferred",
 		},
 	}

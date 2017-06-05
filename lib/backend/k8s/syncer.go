@@ -24,12 +24,12 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
-	k8sapi "k8s.io/client-go/pkg/api/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
+	k8sapi "k8s.io/client-go/pkg/api/v1"
+	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -40,6 +40,7 @@ type kubeAPI interface {
 	GlobalConfigWatch(metav1.ListOptions) (watch.Interface, error)
 	IPPoolWatch(metav1.ListOptions) (watch.Interface, error)
 	NodeWatch(metav1.ListOptions) (watch.Interface, error)
+	SystemNetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
 	NamespaceList(metav1.ListOptions) (*k8sapi.NamespaceList, error)
 	NetworkPolicyList() (extensions.NetworkPolicyList, error)
 	PodList(string, metav1.ListOptions) (*k8sapi.PodList, error)
@@ -47,6 +48,7 @@ type kubeAPI interface {
 	HostConfigList(model.HostConfigListOptions) ([]*model.KVPair, error)
 	IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, error)
 	NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error)
+	SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error)
 	getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error)
 }
 
@@ -114,6 +116,34 @@ func (k *realKubeAPI) NetworkPolicyList() (list extensions.NetworkPolicyList, er
 	return
 }
 
+func (k *realKubeAPI) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.Interface, error) {
+	watcher := cache.NewListWatchFromClient(
+		k.kc.tprClient,
+		resources.SystemNetworkPolicyResourceName,
+		"kube-system",
+		fields.Everything())
+	return watcher.WatchFunc(opts)
+}
+
+func (k *realKubeAPI) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error) {
+	// Perform the request.
+	tprs := &thirdparty.SystemNetworkPolicyList{}
+	err := k.kc.tprClient.Get().
+		Resource(resources.SystemNetworkPolicyResourceName).
+		Namespace("kube-system").
+		Do().Into(tprs)
+	if err != nil {
+		// Don't return errors for "not found".  This just
+		// means there are no SystemNetworkPolicies, and we should return
+		// an empty list.
+		if !kerrors.IsNotFound(err) {
+			return nil, err
+		}
+	}
+
+	return tprs, err
+}
+
 func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
 	list, err = k.kc.clientSet.Pods(namespace).List(opts)
 	return
@@ -164,12 +194,13 @@ type kubeSyncer struct {
 
 // Holds resource version information.
 type resourceVersions struct {
-	nodeVersion          string
-	podVersion           string
-	namespaceVersion     string
-	networkPolicyVersion string
-	globalConfigVersion  string
-	poolVersion          string
+	nodeVersion                string
+	podVersion                 string
+	namespaceVersion           string
+	networkPolicyVersion       string
+	systemNetworkPolicyVersion string
+	globalConfigVersion        string
+	poolVersion                string
 }
 
 func (syn *kubeSyncer) Start() {
@@ -245,7 +276,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	latestVersions := resourceVersions{}
 
 	// Other watcher vars.
-	var nsChan, poChan, npChan, gcChan, poolChan, noChan <-chan watch.Event
+	var nsChan, poChan, npChan, snpChan, gcChan, poolChan, noChan <-chan watch.Event
 	var event watch.Event
 	var kvp *model.KVPair
 	var opts metav1.ListOptions
@@ -320,6 +351,16 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 			openWatchers = append(openWatchers, npWatch)
 
+			// Create watcher for SystemNetworkPolicy objects.
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.systemNetworkPolicyVersion}
+			snpWatch, err := syn.kubeAPI.SystemNetworkPolicyWatch(opts)
+			if err != nil {
+				log.Warnf("Failed to watch SystemNetworkPolicies, retrying: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			openWatchers = append(openWatchers, snpWatch)
+
 			// Create watcher for Calico global config resources.
 			globalConfigWatch, err := syn.kubeAPI.GlobalConfigWatch(opts)
 			if err != nil {
@@ -353,6 +394,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			nsChan = nsWatch.ResultChan()
 			poChan = poWatch.ResultChan()
 			npChan = npWatch.ResultChan()
+			snpChan = snpWatch.ResultChan()
 			gcChan = globalConfigWatch.ResultChan()
 			poolChan = ipPoolWatch.ResultChan()
 
@@ -405,6 +447,18 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseNetworkPolicyEvent(event)
 			latestVersions.networkPolicyVersion = kvp.Revision.(string)
+			syn.sendUpdates([]model.KVPair{*kvp})
+		case event = <-snpChan:
+			log.Debugf("Incoming SystemNetworkPolicy watch event. Type=%s", event.Type)
+			if needsResync = syn.eventTriggersResync(event); needsResync {
+				// We need to resync.  Break out into the sync loop.
+				log.Warnf("Event triggered resync: %+v", event)
+				continue
+			}
+
+			// Event is OK - parse it and send it over the channel.
+			kvp = syn.parseSystemNetworkPolicyEvent(event)
+			latestVersions.systemNetworkPolicyVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
 		case event = <-gcChan:
 			log.Debugf("Incoming GlobalConfig watch event. Type=%s", event.Type)
@@ -526,6 +580,23 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 		versions.networkPolicyVersion = npList.ListMeta.ResourceVersion
 		for _, np := range npList.Items {
 			pol, _ := syn.converter.networkPolicyToPolicy(&np)
+			snap = append(snap, *pol)
+			keys[pol.Key.String()] = true
+		}
+
+		// Get SystemNetworkPolicies (Policies)
+		log.Info("Syncing SystemNetworkPolicy")
+		snpList, err := syn.kubeAPI.SystemNetworkPolicyList()
+		if err != nil {
+			log.Warnf("Error querying SystemNetworkPolicies during snapshot, retrying: %s", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		log.Info("Received NetworkPolicy List() response")
+
+		versions.systemNetworkPolicyVersion = snpList.Metadata.ResourceVersion
+		for _, np := range snpList.Items {
+			pol := resources.ThirdPartyToSystemNetworkPolicy(&np)
 			snap = append(snap, *pol)
 			keys[pol.Key.String()] = true
 		}
@@ -770,6 +841,24 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 	if err != nil {
 		log.Panicf("%s", err)
 	}
+
+	// For deletes, we need to nil out the Value part of the KVPair
+	if e.Type == watch.Deleted {
+		kvp.Value = nil
+	}
+	return kvp
+}
+
+func (syn *kubeSyncer) parseSystemNetworkPolicyEvent(e watch.Event) *model.KVPair {
+	log.Debug("Parsing SystemNetworkPolicy watch event")
+	// First, check the event type.
+	np, ok := e.Object.(*thirdparty.SystemNetworkPolicy)
+	if !ok {
+		log.Panicf("Invalid SystemNetworkPolicy event. Type: %s, Object: %+v", e.Type, e.Object)
+	}
+
+	// Convert the received SystemNetworkPolicy into a profile KVPair.
+	kvp := resources.ThirdPartyToSystemNetworkPolicy(np)
 
 	// For deletes, we need to nil out the Value part of the KVPair
 	if e.Type == watch.Deleted {

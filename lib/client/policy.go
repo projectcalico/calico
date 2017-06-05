@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/converter"
 )
 
 // PolicyInterface has methods to work with Policy resources.
@@ -32,12 +33,13 @@ type PolicyInterface interface {
 
 // policies implements PolicyInterface
 type policies struct {
+	converter.PolicyConverter
 	c *Client
 }
 
 // newPolicies returns a new PolicyInterface bound to the supplied client.
 func newPolicies(c *Client) *policies {
-	return &policies{c}
+	return &policies{c: c}
 }
 
 // Create creates a new policy.
@@ -88,53 +90,24 @@ func (h *policies) convertMetadataToListInterface(m unversioned.ResourceMetadata
 }
 
 // convertMetadataToKey converts a PolicyMetadata to a PolicyKey
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the policies struct).
 func (h *policies) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	pm := m.(api.PolicyMetadata)
-	k := model.PolicyKey{
-		Name: pm.Name,
-	}
-	return k, nil
+	return h.ConvertMetadataToKey(m), nil
 }
 
 // convertAPIToKVPair converts an API Policy structure to a KVPair containing a
 // backend Policy and PolicyKey.
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the policies struct).
 func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
-	ap := a.(api.Policy)
-	k, err := h.convertMetadataToKey(ap.Metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	d := model.KVPair{
-		Key: k,
-		Value: &model.Policy{
-			Order:         ap.Spec.Order,
-			InboundRules:  rulesAPIToBackend(ap.Spec.IngressRules),
-			OutboundRules: rulesAPIToBackend(ap.Spec.EgressRules),
-			Selector:      ap.Spec.Selector,
-			DoNotTrack:    ap.Spec.DoNotTrack,
-		},
-	}
-
-	return &d, nil
+	return h.ConvertAPIToKVPair(a), nil
 }
 
 // convertKVPairToAPI converts a KVPair containing a backend Policy and PolicyKey
 // to an API Policy structure.
-// This is part of the conversionHelper interface.
+// This is part of the conversionHelper interface.  Call through to the shared
+// converter (embedded in the policies struct).
 func (h *policies) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	bp := d.Value.(*model.Policy)
-	bk := d.Key.(model.PolicyKey)
-
-	ap := api.NewPolicy()
-	ap.Metadata.Name = bk.Name
-	ap.Spec.Order = bp.Order
-	ap.Spec.IngressRules = rulesBackendToAPI(bp.InboundRules)
-	ap.Spec.EgressRules = rulesBackendToAPI(bp.OutboundRules)
-	ap.Spec.Selector = bp.Selector
-	ap.Spec.DoNotTrack = bp.DoNotTrack
-
-	return ap, nil
+	return h.ConvertKVPairToAPI(d), nil
 }
