@@ -5,7 +5,6 @@ MAINTAINER Shaun Crampton <shaun@tigera.io>
 RUN apk add --update tini
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# TODO Typha: give it its own config file
 ADD typha.cfg /etc/calico/typha.cfg
 
 # Put out binary in /code rather than directly in /usr/bin.  This allows the downstream builds
