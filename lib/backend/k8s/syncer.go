@@ -304,16 +304,16 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	needsResync := true
 
 	watchEventContinue := func(event watch.Event, key string) bool {
-		if event.Object == nil {
+		if event.Type == watch.Error {
+			log.Warnf("Event requires resync: %+v", event)
+			needsResync = true
+			return true
+		} else if event.Object == nil {
 			log.Warnf("Need new %v watch: %+v", key, event)
 			w := openWatchers[key]
 			log.WithField("watcher", w).Debug("Closing old watcher.")
 			w.Stop()
 			delete(openWatchers, key)
-			return true
-		} else if event.Type == watch.Error {
-			log.Warnf("Event requires resync: %+v", event)
-			needsResync = true
 			return true
 		}
 		return false
