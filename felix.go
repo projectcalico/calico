@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -35,6 +36,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -50,6 +55,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
 const usage = `Felix, the Calico per-host daemon.
@@ -113,9 +119,9 @@ func main() {
 	}
 
 	// Parse command-line args.
-	version := ("Version:            " + buildinfo.GitVersion + "\n" +
+	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
-		"Build date:         " + buildinfo.BuildDate + "\n")
+		"Build date:         " + buildinfo.BuildDate + "\n"
 	arguments, err := docopt.Parse(usage, nil, true, version, false)
 	if err != nil {
 		println(usage)
@@ -136,6 +142,7 @@ func main() {
 	log.Infof("Loading configuration...")
 	var datastore bapi.Client
 	var configParams *config.Config
+	var typhaAddr string
 configRetry:
 	for {
 		// Load locally-defined config, including the datastore connection
@@ -196,6 +203,14 @@ configRetry:
 		datastore, err = backend.NewClient(datastoreConfig)
 		if err != nil {
 			log.WithError(err).Error("Failed to (re)connect to datastore")
+			time.Sleep(1 * time.Second)
+			continue configRetry
+		}
+
+		// If we're configured to discover Typha, do that now so we can retry if we fail.
+		typhaAddr, err = discoverTyphaAddr(configParams)
+		if err != nil {
+			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -301,8 +316,24 @@ configRetry:
 	// Get a Syncer from the datastore, which will feed the calculation
 	// graph with updates, bringing Felix into sync..
 	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	syncer := datastore.Syncer(syncerToValidator)
-	log.Debugf("Created Syncer: %#v", syncer)
+
+	var syncer Startable
+	if typhaAddr != "" {
+		// Use a remote Syncer, in the Typha server.
+		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
+		syncer = syncclient.New(
+			typhaAddr,
+			buildinfo.GitVersion,
+			configParams.FelixHostname,
+			fmt.Sprintf("Revision: %s; Build date: %s",
+				buildinfo.GitRevision, buildinfo.BuildDate),
+			syncerToValidator,
+		)
+	} else {
+		// Use the syncer locally.
+		syncer = datastore.Syncer(syncerToValidator)
+	}
+	log.WithField("syncer", syncer).Info("Created Syncer")
 
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies
@@ -777,4 +808,52 @@ func (fc *DataplaneConnector) Start() {
 
 	// Start background thread to read messages from dataplane driver.
 	go fc.readMessagesFromDataplane()
+}
+
+var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port.")
+
+func discoverTyphaAddr(configParams *config.Config) (string, error) {
+	if configParams.TyphaAddr != "" {
+		// Explicit address; trumps other sources of config.
+		return configParams.TyphaAddr, nil
+	}
+
+	if configParams.TyphaK8sServiceName == "" {
+		// No explicit address, and no service name, not using Typha.
+		return "", nil
+	}
+
+	// If we get here, we need to look up the Typha service using the k8s API.
+	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
+	k8sconf, err := rest.InClusterConfig()
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes config.")
+		return "", err
+	}
+	clientset, err := kubernetes.NewForConfig(k8sconf)
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes client set.")
+		return "", err
+	}
+	svcClient := clientset.CoreV1().Services(configParams.TyphaK8sNamespace)
+	svc, err := svcClient.Get(configParams.TyphaK8sServiceName, v1.GetOptions{})
+	if err != nil {
+		log.WithError(err).Error("Unable to get Typha service from Kubernetes.")
+		return "", err
+	}
+	host := svc.Spec.ClusterIP
+	log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
+	if host == "" {
+		log.WithError(err).Error("Typha service had no ClusterIP.")
+		return "", ErrServiceNotReady
+	}
+	for _, p := range svc.Spec.Ports {
+		if p.Name == "calico-typha" {
+			log.WithField("port", p).Info("Found Typha service port.")
+			typhaAddr := fmt.Sprintf("%s:%v", host, p.Port)
+			return typhaAddr, nil
+		}
+	}
+	log.Error("Didn't find Typha service port.")
+	return "", ErrServiceNotReady
 }

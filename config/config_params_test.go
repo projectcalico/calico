@@ -57,6 +57,14 @@ var _ = DescribeTable("Config parsing",
 		"https://127.0.0.1:1234/, https://host:2345",
 		[]string{"https://127.0.0.1:1234/", "https://host:2345/"}),
 
+	Entry("TyphaAddr empty", "TyphaAddr", "", ""),
+	Entry("TyphaAddr set", "TyphaAddr", "foo:1234", "foo:1234"),
+	Entry("TyphaK8sServiceName empty", "TyphaK8sServiceName", "", ""),
+	Entry("TyphaK8sServiceName set", "TyphaK8sServiceName", "calico-typha", "calico-typha"),
+	Entry("TyphaK8sNamespace empty", "TyphaK8sNamespace", "", "kube-system"),
+	Entry("TyphaK8sNamespace set", "TyphaK8sNamespace", "default", "default"),
+	Entry("TyphaK8sNamespace none", "TyphaK8sNamespace", "none", "kube-system", true),
+
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
 
