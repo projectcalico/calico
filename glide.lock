@@ -1,5 +1,5 @@
-hash: dac419685eaa59c0fb80de87c9d8a1220ded29b8e5025438bd2cfab838da2950
-updated: 2017-06-05T08:43:05.882201357Z
+hash: c4217f549c5305ae1af3672b978936141182d67b244d1fdb422c51a1c287da1f
+updated: 2017-06-05T14:51:47.72381566Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -85,7 +85,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -173,7 +173,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 2946b3c00d4ef649064c43e3c1d416908de08a29
+  version: efe2d396d89d89ea180b4a0a8fb7ee7aec338c6d
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -204,7 +204,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
+  version: 5e5dc898656f695e2a086b8e12559febbfc01562
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -238,7 +238,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: b90f89a1e7a9c1f6b918820b3daa7f08488c8594
   subpackages:
   - unix
 - name: golang.org/x/text
