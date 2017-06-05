@@ -1,5 +1,5 @@
-hash: 15b89c3bca0da0c70b1e2db6bbc6f8b8602af860c2fc26c35e6130d0506edca4
-updated: 2017-06-02T14:50:37.081879625Z
+hash: dac419685eaa59c0fb80de87c9d8a1220ded29b8e5025438bd2cfab838da2950
+updated: 2017-06-05T08:43:05.882201357Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -13,20 +13,19 @@ imports:
 - name: github.com/blang/semver
   version: 31b736133b98f26d5e078ec9eb591666edfd091f
 - name: github.com/containernetworking/cni
-  version: 73c65fbe839f99eb3494eb2471a49c609da89c53
+  version: 98826b72cc3abe31b787da49e6124afd59aa9a44
   subpackages:
   - pkg/ns
   - pkg/types
 - name: github.com/coreos/etcd
-  version: 44ca3968ecdd32391ce44c38d030a705d8884bf5
+  version: d267ca9c184e953554257d0acdd1dc9c47d38229
   subpackages:
   - client
+  - pkg/fileutil
   - pkg/pathutil
-  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
-  - version
 - name: github.com/coreos/go-oidc
   version: 5644a2f50e2d2d5ba0b474bc5bc55fea1925936d
   subpackages:
@@ -35,13 +34,16 @@ imports:
   - key
   - oauth2
   - oidc
-- name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+- name: github.com/coreos/go-systemd
+  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
   subpackages:
-  - semver
+  - daemon
+  - journal
+  - util
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
+  - capnslog
   - health
   - httputil
   - timeutil
@@ -66,7 +68,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 36da989cdc560b989d8f195aec46214d33665d20
+  version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -83,7 +85,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
+  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -186,13 +188,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: 65c1f6f8f0fc1e2185eb9863a3bc751496404259
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -202,7 +204,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: 5e5dc898656f695e2a086b8e12559febbfc01562
+  version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -236,7 +238,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: b90f89a1e7a9c1f6b918820b3daa7f08488c8594
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
