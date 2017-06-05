@@ -178,6 +178,7 @@ func newSyncer(kubeAPI kubeAPI, converter converter, callbacks api.SyncerCallbac
 		tracker:         map[string]model.Key{},
 		disableNodePoll: disableNodePoll,
 		stopChan:        make(chan int),
+		openWatchers:    map[string]watch.Interface{},
 	}
 	return syn
 }
@@ -190,6 +191,7 @@ type kubeSyncer struct {
 	tracker         map[string]model.Key
 	disableNodePoll bool
 	stopChan        chan int
+	openWatchers    map[string]watch.Interface
 }
 
 // Holds resource version information.
@@ -269,6 +271,17 @@ func (syn *kubeSyncer) getUpdateType(kvp model.KVPair) api.UpdateType {
 	}
 }
 
+// Watcher names.
+const (
+	KEY_NS  = "Namespace"
+	KEY_PO  = "Pod"
+	KEY_NP  = "NetworkPolicy"
+	KEY_SNP = "SystemNetworkPolicy"
+	KEY_GC  = "GlobalConfig"
+	KEY_IP  = "IPPool"
+	KEY_NO  = "Node"
+)
+
 func (syn *kubeSyncer) readFromKubernetesAPI() {
 	log.Info("Starting Kubernetes API read worker")
 
@@ -280,14 +293,6 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 	var event watch.Event
 	var kvp *model.KVPair
 	var opts metav1.ListOptions
-	var openWatchers []watch.Interface
-	closeWatchers := func() {
-		for _, w := range openWatchers {
-			log.WithField("watcher", w).Debug("Closing old watcher.")
-			w.Stop()
-		}
-		openWatchers = nil
-	}
 
 	// Always perform an initial snapshot.
 	needsResync := true
@@ -301,7 +306,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			syn.callbacks.OnStatusUpdated(api.ResyncInProgress)
 
 			// Get snapshot from datastore.
-			snap, existingKeys, latestVersions := syn.performSnapshot()
+			snap, existingKeys := syn.performSnapshot(&latestVersions)
 			log.Debugf("Snapshot: %+v, keys: %+v, versions: %+v", snap, existingKeys, latestVersions)
 
 			// Go through and delete anything that existed before, but doesn't anymore.
@@ -321,101 +326,125 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 
 			// Close the previous crop of watchers to avoid leaking resources when we
 			// recreate them below.
-			closeWatchers()
+			syn.closeAllWatchers()
+		}
 
-			// Create the Kubernetes API watchers.
+		// Create the Kubernetes API watchers.
+		if _, exists := syn.openWatchers[KEY_NS]; !exists {
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.namespaceVersion}
+			log.WithField("opts", opts).Debug("(Re)start Namespace watch")
 			nsWatch, err := syn.kubeAPI.NamespaceWatch(opts)
 			if err != nil {
 				log.Warn("Failed to watch Namespaces, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, nsWatch)
+			syn.openWatchers[KEY_NS] = nsWatch
+			nsChan = nsWatch.ResultChan()
+		}
+
+		if _, exists := syn.openWatchers[KEY_PO]; !exists {
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.podVersion}
+			log.WithField("opts", opts).Debug("(Re)start Pod watch")
 			poWatch, err := syn.kubeAPI.PodWatch("", opts)
 			if err != nil {
 				log.Warn("Failed to watch Pods, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, poWatch)
+			syn.openWatchers[KEY_PO] = poWatch
+			poChan = poWatch.ResultChan()
+		}
 
+		if _, exists := syn.openWatchers[KEY_NP]; !exists {
 			// Create watcher for NetworkPolicy objects.
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.networkPolicyVersion}
+			log.WithField("opts", opts).Debug("(Re)start NetworkPolicy watch")
 			npWatch, err := syn.kubeAPI.NetworkPolicyWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch NetworkPolicies, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, npWatch)
+			syn.openWatchers[KEY_NP] = npWatch
+			npChan = npWatch.ResultChan()
+		}
 
+		if _, exists := syn.openWatchers[KEY_SNP]; !exists {
 			// Create watcher for SystemNetworkPolicy objects.
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.systemNetworkPolicyVersion}
+			log.WithField("opts", opts).Debug("(Re)start SystemNetworkPolicy watch")
 			snpWatch, err := syn.kubeAPI.SystemNetworkPolicyWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch SystemNetworkPolicies, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, snpWatch)
+			syn.openWatchers[KEY_SNP] = snpWatch
+			snpChan = snpWatch.ResultChan()
+		}
 
+		if _, exists := syn.openWatchers[KEY_GC]; !exists {
 			// Create watcher for Calico global config resources.
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.globalConfigVersion}
+			log.WithField("opts", opts).Debug("(Re)start GlobalConfig watch")
 			globalConfigWatch, err := syn.kubeAPI.GlobalConfigWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch GlobalConfig, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, globalConfigWatch)
+			syn.openWatchers[KEY_GC] = globalConfigWatch
+			gcChan = globalConfigWatch.ResultChan()
+		}
 
+		if _, exists := syn.openWatchers[KEY_IP]; !exists {
 			// Watcher for Calico IP Pool resources.
+			opts = metav1.ListOptions{ResourceVersion: latestVersions.poolVersion}
+			log.WithField("opts", opts).Debug("(Re)start IPPool watch")
 			ipPoolWatch, err := syn.kubeAPI.IPPoolWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch IPPools, retrying: %s", err)
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			openWatchers = append(openWatchers, ipPoolWatch)
-
-			if !syn.disableNodePoll {
-				// Create watcher for Node objects
-				opts := metav1.ListOptions{ResourceVersion: latestVersions.nodeVersion}
-				nodeWatch, err := syn.kubeAPI.NodeWatch(opts)
-				if err != nil {
-					log.Warnf("Failed to watch Nodes, retrying: %s", err)
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				openWatchers = append(openWatchers, nodeWatch)
-				noChan = nodeWatch.ResultChan()
-			}
-			nsChan = nsWatch.ResultChan()
-			poChan = poWatch.ResultChan()
-			npChan = npWatch.ResultChan()
-			snpChan = snpWatch.ResultChan()
-			gcChan = globalConfigWatch.ResultChan()
+			syn.openWatchers[KEY_IP] = ipPoolWatch
 			poolChan = ipPoolWatch.ResultChan()
-
-			// Success - reset the flag.
-			needsResync = false
 		}
+
+		if _, exists := syn.openWatchers[KEY_NO]; !exists && !syn.disableNodePoll {
+			// Create watcher for Node objects
+			opts := metav1.ListOptions{ResourceVersion: latestVersions.nodeVersion}
+			log.WithField("opts", opts).Debug("(Re)start Node watch")
+			nodeWatch, err := syn.kubeAPI.NodeWatch(opts)
+			if err != nil {
+				log.Warnf("Failed to watch Nodes, retrying: %s", err)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			syn.openWatchers[KEY_NO] = nodeWatch
+			noChan = nodeWatch.ResultChan()
+		}
+
+		// We resynced if we needed to, and have a complete set of watchers, so reset the
+		// needsResync flag.
+		needsResync = false
 
 		// Select on the various watch channels.
 		select {
 		case <-syn.stopChan:
 			log.Info("Syncer told to stop reading")
-			closeWatchers()
+			syn.closeAllWatchers()
 			return
 		case event = <-nsChan:
 			log.Debugf("Incoming Namespace watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_NS) {
+				syn.closeWatcher(KEY_NS)
 				continue
 			}
-
 			// Event is OK - parse it.
 			kvps := syn.parseNamespaceEvent(event)
 			latestVersions.namespaceVersion = kvps[0].Revision.(string)
@@ -423,12 +452,13 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			continue
 		case event = <-poChan:
 			log.Debugf("Incoming Pod watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_PO) {
+				syn.closeWatcher(KEY_PO)
 				continue
 			}
-
 			// Event is OK - parse it.
 			if kvp = syn.parsePodEvent(event); kvp != nil {
 				// Only send the update if we care about it.  We filter
@@ -438,45 +468,50 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			}
 		case event = <-npChan:
 			log.Debugf("Incoming NetworkPolicy watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_NP) {
+				syn.closeWatcher(KEY_NP)
 				continue
 			}
-
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseNetworkPolicyEvent(event)
 			latestVersions.networkPolicyVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
 		case event = <-snpChan:
 			log.Debugf("Incoming SystemNetworkPolicy watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_SNP) {
+				syn.closeWatcher(KEY_SNP)
 				continue
 			}
-
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseSystemNetworkPolicyEvent(event)
 			latestVersions.systemNetworkPolicyVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
 		case event = <-gcChan:
 			log.Debugf("Incoming GlobalConfig watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_GC) {
+				syn.closeWatcher(KEY_GC)
 				continue
 			}
-
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseGlobalConfigEvent(event)
 			latestVersions.globalConfigVersion = kvp.Revision.(string)
 			syn.sendUpdates([]model.KVPair{*kvp})
 		case event = <-poolChan:
 			log.Debugf("Incoming IPPool watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out into the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_IP) {
+				syn.closeWatcher(KEY_IP)
 				continue
 			}
 			// Event is OK - parse it and send it over the channel.
@@ -485,12 +520,13 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 			syn.sendUpdates([]model.KVPair{*kvp})
 		case event = <-noChan:
 			log.Debugf("Incoming Node watch event. Type=%s", event.Type)
-			if needsResync = syn.eventTriggersResync(event); needsResync {
-				// We need to resync.  Break out of the sync loop.
-				log.Warnf("Event triggered resync: %+v", event)
+			if syn.eventNeedsResync(event) {
+				needsResync = true
+				continue
+			} else if syn.eventRestartsWatch(event, KEY_NO) {
+				syn.closeWatcher(KEY_NO)
 				continue
 			}
-
 			// Event is OK - parse it and send it over the channel.
 			kvp = syn.parseNodeEvent(event)
 			latestVersions.nodeVersion = kvp.Revision.(string)
@@ -519,9 +555,8 @@ func (syn *kubeSyncer) performSnapshotDeletes(exists map[string]bool) {
 // a mapping of model.Key objects representing the objects which exist in the datastore, and
 // populates the provided resourceVersions with the latest k8s resource version
 // for each.
-func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resourceVersions) {
+func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) ([]model.KVPair, map[string]bool) {
 	opts := metav1.ListOptions{}
-	versions := resourceVersions{}
 	var snap []model.KVPair
 	var keys map[string]bool
 
@@ -709,20 +744,44 @@ func (syn *kubeSyncer) performSnapshot() ([]model.KVPair, map[string]bool, resou
 
 		log.Infof("Snapshot resourceVersions: %+v", versions)
 		log.Debugf("Created snapshot: %+v", snap)
-		return snap, keys, versions
+		return snap, keys
 	}
 }
 
-// eventTriggersResync returns true of the given event requires a
-// full datastore resync to occur, and false otherwise.
-func (syn *kubeSyncer) eventTriggersResync(e watch.Event) bool {
-	// If we encounter an error, or if the event is nil (which can indicate
-	// an unexpected connection close).
-	if e.Type == watch.Error || e.Object == nil {
-		log.Warnf("Event requires snapshot: %+v", e)
+// Returns whether this event triggers a full resync.
+func (syn *kubeSyncer) eventNeedsResync(e watch.Event) bool {
+	if e.Type == watch.Error {
+		log.Warnf("Event requires resync: %+v", e)
 		return true
 	}
 	return false
+}
+
+// Returns whether this event requires a watch restart, but
+// not a full resync.
+func (syn *kubeSyncer) eventRestartsWatch(e watch.Event, k string) bool {
+	if e.Object == nil {
+		log.Warnf("Need new %v watch: %+v", k, e)
+		return true
+	}
+	return false
+}
+
+// Closes a specific watcher
+func (syn *kubeSyncer) closeWatcher(k string) {
+	w := syn.openWatchers[k]
+	log.WithField("watcher", w).Debug("Closing old watcher.")
+	w.Stop()
+	delete(syn.openWatchers, k)
+}
+
+// Closes all watchers (iterates over map and calls closeWatcher)
+func (syn *kubeSyncer) closeAllWatchers() {
+	for _, w := range syn.openWatchers {
+		log.WithField("watcher", w).Debug("Closing old watcher.")
+		w.Stop()
+	}
+	syn.openWatchers = map[string]watch.Interface{}
 }
 
 func (syn *kubeSyncer) parseNamespaceEvent(e watch.Event) []model.KVPair {
