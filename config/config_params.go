@@ -103,9 +103,9 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	TyphaServiceEnvVarPfx string `config:"string;"`
-	TyphaK8sServiceName   string `config:"string;"`
-	TyphaAddr             string `config:"authority;;"`
+	TyphaAddr           string `config:"authority;;"`
+	TyphaK8sServiceName string `config:"string;"`
+	TyphaK8sNamespace   string `config:"string;kube-system;non-zero"`
 
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
