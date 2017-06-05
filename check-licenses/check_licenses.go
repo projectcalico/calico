@@ -40,6 +40,8 @@ var (
 		// allowing us to distribute a binary based on them as long as we don't modify them.
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/juju/ratelimit",
 			license: "GNU Lesser General Public License v3.0 (94%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/gopkg.in/yaml.v2",
+			license: "GNU Lesser General Public License v3.0 (95%)"},
 
 		// Licensed under Apache + some files with MIT/BSD style.
 		{pkgName: "github.com/projectcalico/typha/vendor/gopkg.in/yaml.v2",
