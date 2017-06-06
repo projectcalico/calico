@@ -23,11 +23,11 @@ limitations under the License.
 package internalversion
 
 import (
+	"k8s.io/apimachinery/pkg/watch"
 	v1beta1 "k8s.io/client-go/kubernetes/typed/extensions/v1beta1"
 	scheme "k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions"
-	"k8s.io/client-go/pkg/watch"
 	"k8s.io/client-go/rest"
 )
 

@@ -36,8 +36,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/felix/buildinfo"

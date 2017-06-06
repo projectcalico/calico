@@ -20,11 +20,12 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/felix/k8sfv/internalversion"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/felix/k8sfv/internalversion"
 )
