@@ -53,6 +53,7 @@ func (tw *testWatch) ResultChan() <-chan watch.Event {
 type testClient struct {
 	openWatchers []*testWatch
 	podC         chan watch.Event
+	poolC        chan watch.Event
 	state        map[model.Key]interface{}
 	stateMutex   sync.Mutex
 	listCalls    int
@@ -115,7 +116,7 @@ func (tc *testClient) GlobalConfigWatch(opts metav1.ListOptions) (w watch.Interf
 }
 
 func (tc *testClient) IPPoolWatch(opts metav1.ListOptions) (w watch.Interface, err error) {
-	w = tc.newWatch("IP pool", make(chan watch.Event))
+	w = tc.newWatch("IP pool", tc.poolC)
 	err = nil
 	return
 }
@@ -187,6 +188,24 @@ func (tc *testClient) getReadyStatus(key model.ReadyFlagKey) (*model.KVPair, err
 	return &model.KVPair{Key: key, Value: true}, nil
 }
 
+// getNumListCalls returns the number of List() calls performed by the syncer
+// against the Kubernetes API throuout the test.
+func (tc *testClient) getNumListCalls() int {
+	tc.stateMutex.Lock()
+	defer tc.stateMutex.Unlock()
+	log.WithField("listCalls", tc.listCalls).Info("")
+	return tc.listCalls
+}
+
+// getNumWatchCalls returns the number of Watches performed by the syncer
+// against the Kubernetes API through the test.
+func (tc *testClient) getNumWatchCalls() int {
+	tc.stateMutex.Lock()
+	defer tc.stateMutex.Unlock()
+	log.WithField("watchCalls", tc.watchCalls).Info("")
+	return tc.watchCalls
+}
+
 var _ = Describe("Test Syncer", func() {
 	var (
 		tc  *testClient
@@ -196,6 +215,7 @@ var _ = Describe("Test Syncer", func() {
 	BeforeEach(func() {
 		tc = &testClient{
 			podC:  make(chan watch.Event),
+			poolC: make(chan watch.Event),
 			state: map[model.Key]interface{}{},
 		}
 		syn = newSyncer(tc, converter{}, tc, false)
@@ -216,31 +236,49 @@ var _ = Describe("Test Syncer", func() {
 		})
 
 		It("should not resync when one watch times out", func() {
-			getNumListCalls := func() interface{} {
-				tc.stateMutex.Lock()
-				defer tc.stateMutex.Unlock()
-				log.WithField("listCalls", tc.listCalls).Info("")
-				return tc.listCalls
-			}
-			getNumWatchCalls := func() interface{} {
-				tc.stateMutex.Lock()
-				defer tc.stateMutex.Unlock()
-				log.WithField("watchCalls", tc.watchCalls).Info("")
-				return tc.watchCalls
-			}
 			// Initial resync makes 8 list calls and 7 watch calls.
 			const (
 				LIST_CALLS  = 8
 				WATCH_CALLS = 7
 			)
-			Eventually(getNumListCalls).Should(BeNumerically("==", LIST_CALLS))
-			Eventually(getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS))
+			Eventually(tc.getNumListCalls).Should(BeNumerically("==", LIST_CALLS))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS))
+
 			// Simulate timeout of the pod watch.
 			tc.podC <- watch.Event{Object: nil}
+
 			// Expect a new watch call.
-			Eventually(getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+1))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+1))
 			// But no new list calls.
-			Expect(getNumListCalls()).To(BeNumerically("==", LIST_CALLS))
+			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS))
+		})
+
+		It("should resync resources individually", func() {
+			// Initial resync makes 8 list calls and 7 watch calls.
+			const (
+				LIST_CALLS  = 8
+				WATCH_CALLS = 7
+			)
+			Eventually(tc.getNumListCalls).Should(BeNumerically("==", LIST_CALLS))
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS))
+
+			// Simulate error on pod watch.
+			tc.podC <- watch.Event{Type: watch.Error, Object: nil}
+			// Expect a single new list call, but that each watcher is restarted.
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+7))
+			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+1))
+
+			// Simulate error on IP Pool watch.
+			tc.poolC <- watch.Event{Type: watch.Error, Object: nil}
+			// Expect a single new list call, but that each watcher is restarted.
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+14))
+			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+2))
+
+			// Simulate empty event on IP Pool watch (resourceVersion too old for TPRs)
+			tc.poolC <- watch.Event{Object: nil}
+			// Expect a single new list call, but that each watcher is restarted.
+			Eventually(tc.getNumWatchCalls).Should(BeNumerically("==", WATCH_CALLS+21))
+			Expect(tc.getNumListCalls()).To(BeNumerically("==", LIST_CALLS+3))
 		})
 
 		It("should correctly handle pod being deleted in resync", func() {
