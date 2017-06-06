@@ -763,7 +763,7 @@ func (syn *kubeSyncer) eventNeedsResync(e watch.Event) bool {
 // not a full resync.
 func (syn *kubeSyncer) eventRestartsWatch(e watch.Event, k string) bool {
 	if e.Object == nil {
-		log.Warnf("Need new %v watch: %+v", k, e)
+		log.Infof("Need to refresh %v watch: %+v", k, e)
 		return true
 	}
 	return false
