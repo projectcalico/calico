@@ -20,6 +20,10 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"reflect"
+
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
@@ -115,4 +119,26 @@ func (s SerializedUpdate) ToUpdate() api.Update {
 		},
 		UpdateType: s.UpdateType,
 	}
+}
+
+// WouldBeNoOp returns true if this update would be a no-op given that previous has already been sent.
+func (s SerializedUpdate) WouldBeNoOp(previous SerializedUpdate) bool {
+	// We don't care if the revision has changed so nil it out.  Note: we're using the fact that this is a
+	// value type so these changes won't be propagated to the caller!
+	s.Revision = nil
+	previous.Revision = nil
+
+	if previous.UpdateType == api.UpdateTypeKVNew {
+		// If the old update was a create, convert it to an update before the comparison since it's OK to
+		// squash an update to a new key if the value hasn't changed.
+		previous.UpdateType = api.UpdateTypeKVUpdated
+	}
+
+	// TODO Typha Add UT to make sure that the serialization is always the same (current JSON impl does make that guarantee)
+	return reflect.DeepEqual(s, previous)
+}
+
+func (s SerializedUpdate) String() string {
+	return fmt.Sprintf("SerializedUpdate<Key:%s, Value:%s, Revision:%v, TTL:%v, UpdateType:%v>",
+		s.Key, string(s.Value), s.Revision, s.TTL, s.UpdateType)
 }

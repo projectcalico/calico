@@ -18,16 +18,12 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/Workiva/go-datastructures/trie/ctrie"
-
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
-
-	"reflect"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/jitter"
@@ -248,6 +244,7 @@ func (c *SnapshotCache) publishBreadcrumbs() {
 // publishBreadcrumb updates the master Ctrie and publishes a new Breadcrumb containing a read-only
 // snapshot of the Ctrie and the deltas from this batch.
 func (c *SnapshotCache) publishBreadcrumb() {
+	var somethingChanged bool
 	var updates []api.Update
 	var lastUpdate bool
 	if len(c.pendingUpdates) > c.config.MaxBatchSize {
@@ -268,40 +265,53 @@ func (c *SnapshotCache) publishBreadcrumb() {
 		nextCond:       c.breadcrumbCond,
 		Updates:        make([]syncproto.SerializedUpdate, 0, len(updates)),
 	}
-	if lastUpdate {
+	if lastUpdate && c.pendingStatus != newCrumb.SyncStatus {
 		// Only update the status if this is the last message in the batch, otherwise
 		// we might tell the client that we're in sync too soon.
+		somethingChanged = true
 		newCrumb.SyncStatus = c.pendingStatus
 	}
 	// Update the main trie and record the updates in the new crumb.
-	for _, kv := range updates {
+	for _, upd := range updates {
 		// Pre-serialise the KV so that we only serialise once per update instead of once
 		// for each client.
-		newUpd, err := syncproto.SerializeUpdate(kv)
+		newUpd, err := syncproto.SerializeUpdate(upd)
 		if err != nil {
-			log.WithError(err).WithField("kv", kv).Error(
+			log.WithError(err).WithField("upd", upd).Error(
 				"Bug: dropping unserializable KV")
 			continue
 		}
 		// Update the master KV map.
 		keyAsBytes := []byte(newUpd.Key)
 		oldUpd, exists := c.kvs.Lookup(keyAsBytes)
-		if newUpd.Value == nil {
-			if !exists {
-				continue
-			}
+		log.WithFields(log.Fields{
+			"oldUpd": oldUpd,
+			"newUpd": newUpd,
+		}).Debug("Comparing update")
+		if upd.Value == nil {
+			// This is either a deletion or a validation failure.  We can't skip deletions even if we
+			// didn't have that key before because we need to pass through the UpdateType for Felix to
+			// correctly calculate its stats.
 			c.kvs.Remove(keyAsBytes)
 		} else {
-			if exists && reflect.DeepEqual(oldUpd, newUpd) {
+			if exists && newUpd.WouldBeNoOp(oldUpd.(syncproto.SerializedUpdate)) {
+				log.WithField("key", newUpd.Key).Debug("Skipping update to unchanged key")
 				continue
 			}
 			c.kvs.Insert(keyAsBytes, newUpd)
 		}
 
 		// Record the update in the new Breadcrumb so that clients following the chain of
-		// Breadcrumb can apply it as a delta.
+		// Breadcrumbs can apply it as a delta.
 		newCrumb.Updates = append(newCrumb.Updates, newUpd)
+		somethingChanged = true
 	}
+
+	if !somethingChanged {
+		log.Debug("Skipping Breadcrumb.  No updates to publish.")
+		return
+	}
+
 	summaryUpdateSize.Observe(float64(len(newCrumb.Updates)))
 	// Add the new read-only snapshot to the new crumb.
 	newCrumb.KVs = c.kvs.ReadOnlySnapshot()
