@@ -62,6 +62,9 @@ if [ -w "/host/opt/cni/bin/" ]; then
 	if [ ! -f /host/opt/cni/bin/host-local ]; then
 	    cp /opt/cni/bin/host-local /host/opt/cni/bin/
 	fi
+	if [ ! -f /host/opt/cni/bin/portmap ]; then
+	    cp /opt/cni/bin/portmap /host/opt/cni/bin/
+	fi
 	echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
 	echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
 fi
@@ -80,6 +83,9 @@ if [ -w "/host/secondary-bin-dir/" ]; then
 	fi
 	if [ ! -f /host/secondary-bin-dir/host-local ]; then
 	    cp /opt/cni/bin/host-local /host/secondary-bin-dir/
+	fi
+	if [ ! -f /host/secondary-bin-dir/portmap ]; then
+	    cp /opt/cni/bin/portmap /host/secondary-bin-dir/
 	fi
 	echo "Wrote Calico CNI binaries to /host/secondary-bin-dir/"
 	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"

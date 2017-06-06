@@ -6,3 +6,4 @@
 !dist/flannel
 !dist/loopback
 !dist/host-local
+!dist/portmap
