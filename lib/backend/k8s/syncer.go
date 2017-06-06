@@ -387,7 +387,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 		if _, exists := syn.openWatchers[KEY_GC]; !exists {
 			// Create watcher for Calico global config resources.
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.globalConfigVersion}
-			log.WithField("opts", opts).Debug("(Re)start GlobalConfig watch")
+			log.WithField("opts", opts).Info("(Re)start GlobalConfig watch")
 			globalConfigWatch, err := syn.kubeAPI.GlobalConfigWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch GlobalConfig, retrying: %s", err)
@@ -401,7 +401,7 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 		if _, exists := syn.openWatchers[KEY_IP]; !exists {
 			// Watcher for Calico IP Pool resources.
 			opts = metav1.ListOptions{ResourceVersion: latestVersions.poolVersion}
-			log.WithField("opts", opts).Debug("(Re)start IPPool watch")
+			log.WithField("opts", opts).Info("(Re)start IPPool watch")
 			ipPoolWatch, err := syn.kubeAPI.IPPoolWatch(opts)
 			if err != nil {
 				log.Warnf("Failed to watch IPPools, retrying: %s", err)
