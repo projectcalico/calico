@@ -44,10 +44,10 @@ type kubeAPI interface {
 	NamespaceList(metav1.ListOptions) (*k8sapi.NamespaceList, error)
 	NetworkPolicyList() (extensions.NetworkPolicyList, error)
 	PodList(string, metav1.ListOptions) (*k8sapi.PodList, error)
-	GlobalConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, error)
+	GlobalConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, string, error)
 	HostConfigList(model.HostConfigListOptions) ([]*model.KVPair, error)
-	IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, error)
-	NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error)
+	IPPoolList(model.IPPoolListOptions) ([]*model.KVPair, string, error)
+	NodeList(metav1.ListOptions) (list *k8sapi.NodeList, err error)
 	SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error)
 	getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error)
 }
@@ -149,7 +149,7 @@ func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *
 	return
 }
 
-func (k *realKubeAPI) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, error) {
+func (k *realKubeAPI) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
 	return k.kc.listGlobalConfig(l)
 }
 
@@ -157,8 +157,8 @@ func (k *realKubeAPI) HostConfigList(l model.HostConfigListOptions) ([]*model.KV
 	return k.kc.listHostConfig(l)
 }
 
-func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, error) {
-	return k.kc.List(l)
+func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, string, error) {
+	return resources.ListIPPoolsWithResourceVersion(k.kc.ipPoolClient, l)
 }
 
 func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
@@ -666,7 +666,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) ([]model.KVPa
 
 		// Sync GlobalConfig.
 		log.Info("Syncing GlobalConfig")
-		confList, err := syn.kubeAPI.GlobalConfigList(model.GlobalConfigListOptions{})
+		confList, resourceVersion, err := syn.kubeAPI.GlobalConfigList(model.GlobalConfigListOptions{})
 		if err != nil {
 			log.Warnf("Error querying GlobalConfig during snapshot, retrying: %s", err)
 			time.Sleep(1 * time.Second)
@@ -674,6 +674,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) ([]model.KVPa
 		}
 		log.Info("Received GlobalConfig List() response")
 
+		versions.globalConfigVersion = resourceVersion
 		for _, c := range confList {
 			snap = append(snap, *c)
 			keys[c.Key.String()] = true
@@ -696,7 +697,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) ([]model.KVPa
 
 		// Sync IP Pools.
 		log.Info("Syncing IP Pools")
-		poolList, err := syn.kubeAPI.IPPoolList(model.IPPoolListOptions{})
+		poolList, resourceVersion, err := syn.kubeAPI.IPPoolList(model.IPPoolListOptions{})
 		if err != nil {
 			log.Warnf("Error querying IP Pools during snapshot, retrying: %s", err)
 			time.Sleep(1 * time.Second)
@@ -704,6 +705,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) ([]model.KVPa
 		}
 		log.Info("Received IP Pools List() response")
 
+		versions.poolVersion = resourceVersion
 		for _, p := range poolList {
 			snap = append(snap, *p)
 			keys[p.Key.String()] = true
