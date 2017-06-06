@@ -36,6 +36,11 @@ func NewIPPools(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
 	}
 }
 
+func ListIPPoolsWithResourceVersion(client api.Client, list model.ListInterface) ([]*model.KVPair, string, error) {
+	c := client.(*ipPoolsClient)
+	return c.listWithResourceVersion(list)
+}
+
 // Implements the api.Client interface for pools.
 type ipPoolsClient struct {
 	clientSet *kubernetes.Clientset
@@ -113,8 +118,14 @@ func (c *ipPoolsClient) Get(key model.Key) (*model.KVPair, error) {
 }
 
 func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) {
+	kvps, _, err := c.listWithResourceVersion(list)
+	return kvps, err
+}
+
+func (c *ipPoolsClient) listWithResourceVersion(list model.ListInterface) ([]*model.KVPair, string, error) {
 	kvps := []*model.KVPair{}
 	l := list.(model.IPPoolListOptions)
+	resourceVersion := ""
 
 	// If the CIDR is specified, k8s will return a single resource
 	// rather than a list, so handle this case separately, using our
@@ -123,12 +134,13 @@ func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) 
 		log.Info("Performing IP pool List with name")
 		if kvp, err := c.Get(model.IPPoolKey{CIDR: l.CIDR}); err == nil {
 			kvps = append(kvps, kvp)
+			resourceVersion = kvp.Revision.(string)
 		} else {
 			if !kerrors.IsNotFound(err) {
-				return nil, K8sErrorToCalico(err, l)
+				return nil, resourceVersion, K8sErrorToCalico(err, l)
 			}
 		}
-		return kvps, nil
+		return kvps, resourceVersion, nil
 	}
 
 	// Since are not performing an exact Get, Kubernetes will return a list
@@ -145,15 +157,16 @@ func (c *ipPoolsClient) List(list model.ListInterface) ([]*model.KVPair, error) 
 		// means there are no IPPools, and we should return
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
-			return nil, K8sErrorToCalico(err, l)
+			return nil, resourceVersion, K8sErrorToCalico(err, l)
 		}
 	}
+	resourceVersion = tprs.Metadata.ResourceVersion
 
 	// Convert them to KVPairs.
 	for _, tpr := range tprs.Items {
 		kvps = append(kvps, ThirdPartyToIPPool(&tpr))
 	}
-	return kvps, nil
+	return kvps, resourceVersion, nil
 }
 
 func (c *ipPoolsClient) EnsureInitialized() error {
