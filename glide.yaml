@@ -19,9 +19,11 @@ import:
 - package: github.com/projectcalico/go-json
   subpackages:
   - json
+- package: github.com/coreos/etcd
+  version: v3.1.x
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: v1.2.1
+  version: v1.4.1
   subpackages:
   - lib/api
   - lib/api/unversioned
