@@ -2,12 +2,10 @@
 title: Installing Calico on OpenShift
 ---
 
-Installation of Calico in OpenShift is integrated into the openshift-ansible scripts.
+Installation of Calico in OpenShift is integrated in openshift-ansible v3.6.
 
-## Basic
-
-For a basic Calico installation in OpenShift that shares the etcd
-instance used by the apiserver, set the following `OSev3:vars` in your
+To enable an installation of Calico that shares the etcd
+instance used by the apiserver, set the following `OSEv3:vars` in your
 inventory file:
 
   - `os_sdn_network_plugin_name=cni`
@@ -42,23 +40,23 @@ etcd1
 ## Bring-your-own etcd
 
 Calico's OpenShift-ansible integration supports connection to a custom etcd which
-a user has set up.
+a user has already set up.
 
 **Requirements:**
 
   - The etcd instance must have SSL authentication enabled.
   - Certs must be present at the specified filepath on all nodes.
-  - Certs must be in the same `calico_etcd_cert_dir`
+  - All cert files must be in the same directory specified by `calico_etcd_cert_dir`.
 
 **Inventory Parameters:**
 
 | Key | Value     |
 | :------------- | :------------- |
-| `calico_etcd_endpoints` | Address of etcd. ex: `https://calico-etcd:2379` |
-| `calico_etcd_ca_cert_file` | Absolute filepath of etcd CA cert. |
-| `calico_etcd_cert_file` | Absolute filepath of etcd CA file. |
-| `calico_etcd_key_file` | Absolute filepath of etcd cert. |
-| `calico_etcd_cert_dir` | Absolute filepath of etcd key file. |
+| `calico_etcd_endpoints` | Address of etcd, e.g. `https://calico-etcd:2379` |
+| `calico_etcd_ca_cert_file` | Absolute filepath of the etcd CA file. |
+| `calico_etcd_cert_file` | Absolute filepath of the etcd client cert. |
+| `calico_etcd_key_file` | Absolute filepath of the etcd key file. |
+| `calico_etcd_cert_dir` | Absolute path to the directory containing the etcd certs. |
 
 **Sample Inventory File:**
 
