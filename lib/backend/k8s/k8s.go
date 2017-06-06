@@ -594,19 +594,6 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 		ret = append(ret, kvp)
 	}
 
-	// List all Namespaces and turn them into Policies as well.
-	namespaces, err := c.clientSet.Namespaces().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	for _, ns := range namespaces.Items {
-		kvp, err := c.converter.namespaceToPolicy(&ns)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(ret, kvp)
-	}
-
 	// List all System Network Policies.
 	snps, err := c.snpClient.List(l)
 	if err != nil {
@@ -644,18 +631,6 @@ func (c *KubeClient) getPolicy(k model.PolicyKey) (*model.KVPair, error) {
 			return nil, resources.K8sErrorToCalico(err, k)
 		}
 		return c.converter.networkPolicyToPolicy(&networkPolicy)
-	} else if strings.HasPrefix(k.Name, "ns.projectcalico.org/") {
-		// This is backed by a Namespace.
-		namespace, err := c.converter.parsePolicyNameNamespace(k.Name)
-		if err != nil {
-			return nil, errors.ErrorResourceDoesNotExist{Err: err, Identifier: k}
-		}
-
-		ns, err := c.clientSet.Namespaces().Get(namespace, metav1.GetOptions{})
-		if err != nil {
-			return nil, resources.K8sErrorToCalico(err, k)
-		}
-		return c.converter.namespaceToPolicy(ns)
 	} else if strings.HasPrefix(k.Name, resources.SystemNetworkPolicyNamePrefix) {
 		// This is backed by a System Network Policy TPR.
 		return c.snpClient.Get(k)
