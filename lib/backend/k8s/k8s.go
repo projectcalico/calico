@@ -410,7 +410,8 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 	case model.PolicyListOptions:
 		return c.listPolicies(l.(model.PolicyListOptions))
 	case model.GlobalConfigListOptions:
-		return c.listGlobalConfig(l.(model.GlobalConfigListOptions))
+		kvps, _, err := c.listGlobalConfig(l.(model.GlobalConfigListOptions))
+		return kvps, err
 	case model.HostConfigListOptions:
 		return c.listHostConfig(l.(model.HostConfigListOptions))
 	case model.IPPoolListOptions:
@@ -714,9 +715,10 @@ func (c *KubeClient) getGlobalConfig(k model.GlobalConfigKey) (*model.KVPair, er
 }
 
 // listGlobalConfig lists all global configs.
-func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model.KVPair, error) {
+func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
 	cfgs := []*model.KVPair{}
 	gcfg := thirdparty.GlobalConfigList{}
+	resourceVersion := ""
 
 	// Build the request.
 	req := c.tprClient.Get().Resource("globalconfigs").Namespace("kube-system")
@@ -731,16 +733,17 @@ func (c *KubeClient) listGlobalConfig(l model.GlobalConfigListOptions) ([]*model
 		// means there are no GlobalConfigs, and we should return
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
-			return nil, resources.K8sErrorToCalico(err, l)
+			return nil, resourceVersion, resources.K8sErrorToCalico(err, l)
 		}
 	}
+	resourceVersion = gcfg.Metadata.ResourceVersion
 
 	// Convert them to KVPairs.
 	for _, cfg := range gcfg.Items {
 		cfgs = append(cfgs, c.converter.tprToGlobalConfig(&cfg))
 	}
 
-	return cfgs, nil
+	return cfgs, resourceVersion, nil
 }
 
 // deleteGlobalConfig deletes the given global config.

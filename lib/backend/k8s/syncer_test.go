@@ -153,9 +153,9 @@ func (tc *testClient) PodList(namespace string, opts metav1.ListOptions) (list *
 	return
 }
 
-func (tc *testClient) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, error) {
+func (tc *testClient) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
 	tc.countList()
-	return []*model.KVPair{}, nil
+	return []*model.KVPair{}, "", nil
 }
 
 func (tc *testClient) HostConfigList(l model.HostConfigListOptions) ([]*model.KVPair, error) {
@@ -163,9 +163,9 @@ func (tc *testClient) HostConfigList(l model.HostConfigListOptions) ([]*model.KV
 	return []*model.KVPair{}, nil
 }
 
-func (tc *testClient) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, error) {
+func (tc *testClient) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, string, error) {
 	tc.countList()
-	return []*model.KVPair{}, nil
+	return []*model.KVPair{}, "", nil
 }
 
 func (tc *testClient) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
