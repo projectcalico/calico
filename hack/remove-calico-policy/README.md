@@ -1,62 +1,10 @@
-# Disabling and Removing Calico Policy
+# Disabling Calico Policy
 
-This guide explains how to disable and remove Calico policy from a running cluster. These steps are intended as a
-last resort should it appear that Calico policy is not functioning properly on a production system.
+The following two guides explain methods for disabling Calico policy on a running cluster. These steps are intended to be
+used in the event that Calico policy is not functioning properly on a production system.
 
-The steps in this directory are specific to clusters running on GCE using the
-Kubernetes `cluster/kube-up.sh` script, but can be generalized to other Calico deployments.
-
-Calico policy can be disabled and removed for troubleshooting purposes or in emergency situations using the following steps.
-
-### Requirements / Assumptions
-
-- Calico version v2.2 or higher
-- Kubernetes v1.6 or higher
-- These steps assume Calico is running in policy-only mode (without Calico networking)
-
-### Building
-
-To build the `calico/iptables-remover` Docker image used by the DaemonSet:
-
-```
-docker build -t calico/iptables-remover .
-```
-
-The image is hosted on DockerHub at `calico/iptables-remover:latest`
-
-### Instructions
-
-> **Note:** The following steps assume you're running [Calico on GCE via kube-up](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/calico-policy-controller)
-using the add-on manager.
-
-#### 1. Stop Felix on the nodes
-
-First, you must stop the Felix agent running on the nodes in question. You can do this by removing the
-`projectcalico.org/ds-ready: "true"` label from the nodes.
-
-To remove from all nodes:
-
-```
-kubectl label nodes --all projectcalico.org/ds-ready-
-```
-
-Then, wait until all the `calico-node-xxxx` pods in the `kube-system` Namespace have terminated.
-
-#### 2. Remove any programmed policy from the nodes
-
-To remove any programmed policy from the nodes, follow the steps below to deploy the DaemonSet using the manifest
-provided in this directory. The DaemonSet runs on all nodes without the
-`projectcalico.org/ds-ready: "true"` label, and removes any Calico iptables rules on the node.
-
-The DaemonSet relies on a ConfigMap containing [the script to execute](remove-calico-policy.sh) from this
-directory. First, create the ConfigMap:
-
-```
-kubectl create configmap remove-calico-policy-config --namespace=kube-system --from-file=./remove-calico-policy.sh
-```
-
-Then, deploy the DaemonSet:
-
-```
-kubectl apply -f iptables-remover-ds.yaml
-```
+- [Overriding Calico Policy](override-policy.md) describes how to add high-priority Calico System Network Policy to
+  override the configured Network Policy and allow all traffic.  We recommend using this approach first.
+- [Disabling and Removing Calico Policy](remove-policy.md) describes how to fully disable Calico policy (removing all 
+  Calico-programmed policy from each node.  We recommend only using this approach only as a last resort.
+  
