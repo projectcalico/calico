@@ -20,38 +20,6 @@ write_files:
           user: kubelet
         name: kubelet-context
       current-context: kubelet-context
-  - path: /load_k8s_binary.sh
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      k8s_ver=v1.6.2
-
-      binary=$1
-      ver_binary=${binary}-$k8s_ver
-      dl_path=/k8s
-      if [ ! -f $dl_path/${ver_binary}.downloaded ]; then
-        exit 1
-      fi
-      mkdir -p /opt/bin
-      cp $dl_path/${ver_binary} /opt/bin/$binary
-      /usr/bin/chmod +x /opt/bin/$binary
-  - path: /k8s_init_download.sh
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      k8s_ver=v1.6.2
-
-      binaries="kubelet kube-proxy"
-
-      for x in $binaries; do
-        if [ ! -f /k8s/${x}-$k8s_ver.downloaded ]; then
-          umount /k8s
-          mkdir -p /k8s
-          break;
-        fi
-      done
-      cd /
-      /tmp/fetch_k8s_binaries.sh kubelet kube-proxy
 
 coreos:
   update:
@@ -67,7 +35,7 @@ coreos:
         [Service]
         Type=oneshot
         TimeoutStartSec=1800
-        ExecStart=/k8s_init_download.sh
+        ExecStart=/opt/k8s/setup/k8s_binary_init.sh kubelet kube-proxy
         RemainAfterExit=true
     - name: etcd-member.service
       command: start
@@ -92,7 +60,6 @@ coreos:
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.5.1/cni-v0.5.1.tgz
         ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.5.1.tgz -C /opt/cni/bin
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
-        ExecStartPre=/load_k8s_binary.sh kubelet
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
         --allow-privileged=true \
@@ -118,7 +85,6 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://172.18.18.101:8080 \
