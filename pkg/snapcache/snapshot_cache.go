@@ -49,6 +49,14 @@ var (
 		Name: "typha_breadcrumb_block",
 		Help: "Count of the number of times Typha got the next Breadcrumb after blocking.",
 	})
+	counterUpdatesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_updates_total",
+		Help: "Total number of updates received from the Syncer.",
+	})
+	counterUpdatesSkipped = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_updates_skipped",
+		Help: "Total number of updates skipped as duplicates.",
+	})
 )
 
 func init() {
@@ -56,6 +64,8 @@ func init() {
 	prometheus.MustRegister(gaugeCurrentSequenceNumber)
 	prometheus.MustRegister(counterBreadcrumbNonBlock)
 	prometheus.MustRegister(counterBreadcrumbBlock)
+	prometheus.MustRegister(counterUpdatesTotal)
+	prometheus.MustRegister(counterUpdatesSkipped)
 }
 
 // SnapshotCache consumes updates from the Syncer API and caches them in the form of a series of
@@ -273,6 +283,8 @@ func (c *SnapshotCache) publishBreadcrumb() {
 	}
 	// Update the main trie and record the updates in the new crumb.
 	for _, upd := range updates {
+		// Update stats.
+		counterUpdatesTotal.Inc()
 		// Pre-serialise the KV so that we only serialise once per update instead of once
 		// for each client.
 		newUpd, err := syncproto.SerializeUpdate(upd)
@@ -296,6 +308,7 @@ func (c *SnapshotCache) publishBreadcrumb() {
 		} else {
 			if exists && newUpd.WouldBeNoOp(oldUpd.(syncproto.SerializedUpdate)) {
 				log.WithField("key", newUpd.Key).Debug("Skipping update to unchanged key")
+				counterUpdatesSkipped.Inc()
 				continue
 			}
 			c.kvs.Insert(keyAsBytes, newUpd)
