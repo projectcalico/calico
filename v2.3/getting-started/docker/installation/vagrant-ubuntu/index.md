@@ -65,7 +65,7 @@ it is time to launch `calico/node`.
 
 The Vagrant machines already have `calicoctl` installed. Use it to launch `calico/node`:
 
-    sudo ETCD_ENDPOINTS=http://172.17.8.101:2379 calicoctl node run
+    sudo ETCD_ENDPOINTS=http://172.17.8.101:2379 calicoctl node run --node-image=quay.io/calico/node{{site.data.versions[page.version].first.components["calico/node"].version}}
 
 This will start the `calico/node` container on this host. Check it is running:
 
