@@ -113,7 +113,8 @@ fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
 # this should pull from upstream releases.
 dist/portmap:
 	mkdir -p dist
-	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.8.3/portmap -o $@
+	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.9.0/portmap -o $@
+	chmod +x dist/portmap
 
 dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
