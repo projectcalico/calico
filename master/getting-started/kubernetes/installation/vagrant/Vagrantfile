@@ -28,16 +28,22 @@ Vagrant.configure("2") do |config|
     v.functional_vboxsf     = false
   end
 
-  # To speed up multiple 'vagrant up' commands or when experiencing failures
-  # of the systemd service 'user-data' a 'k8s' directory can be created to cache
-  # the Kubernetes binaries.  The binaries can be pre-downloaded but refer
-  # to the cloud-config's for the expected format of the downloaded files.
+  # To speed up multiple runs of 'vagrant up' or when experiencing failures
+  # of the systemd service 'user-data', the Kubernetes binaries can be
+  # pre-downloaded.  To download the binaries, downloaded the script
+  # {{site.url}}{{page.dir}}fetch_k8s_binaries.sh
+  # into the same directory as this Vagrantfile, make it executable with
+  # `chmod +x fetch_k8s_binaries.sh`, and then run it to create a k8s directory
+  # and download the needed k8s binaries.
   #
-  # If the directory exists in the same folder as the Vagrant file
-  # it will be mounted into each VM.  (This requires nfsd in Linux and
-  # may prompt for superuser permissions.)
-  if File.directory?(File.expand_path("./k8s"))
-    config.vm.synced_folder "./k8s", "/k8s", id: "core", :nfs => true,  :mount_options   => ['nolock,vers=3,udp,ro']
+  # If the environment variable K8S_CACHED is set to true and if the directory
+  # exists in the same folder as this Vagrantfile it will be mounted into
+  # each VM.  (This requires nfsd in Linux and may prompt for superuser
+  # permissions. This has only been tested on linux.)
+  if ENV['K8S_CACHED'] == "true"
+    if File.directory?(File.expand_path("./k8s"))
+      config.vm.synced_folder "./k8s", "/k8s", id: "core", :nfs => true,  :mount_options   => ['nolock,vers=3,udp,ro']
+    end
   end
 
   $fetch_k8s= <<SCRIPT
