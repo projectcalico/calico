@@ -11,25 +11,30 @@ import:
   - client
   - pkg/transport
 - package: github.com/docopt/docopt-go
+  version: ^0.6.2
 - package: github.com/ghodss/yaml
+  version: ^1.0.0
 - package: github.com/golang/glog
 - package: github.com/kelseyhightower/envconfig
+  version: ^1.3.0
 - package: golang.org/x/net
   subpackages:
   - context
 - package: gopkg.in/go-playground/validator.v8
 - package: github.com/satori/go.uuid
+  version: ^1.1.0
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: v1.4.0
+  version: v1.4.1
   subpackages:
   - lib
 - package: github.com/Sirupsen/logrus
+  version: ^0.11.5
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: ^0.8.0
 - package: github.com/gogo/protobuf
   version: ^0.3.0
 - package: github.com/vishvananda/netlink
@@ -39,9 +44,13 @@ import:
 - package: k8s.io/client-go
   version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
 - package: github.com/projectcalico/typha
-  version: v0.1.5
+  version: v0.1.7
   subpackages:
   - pkg/syncclient
+- package: github.com/emicklei/go-restful
+  version: v1.2
+- package: github.com/containernetworking/cni
+  version: ^0.5.2
 testImport:
 - package: github.com/onsi/gomega
   version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
