@@ -25,7 +25,7 @@ coreos:
   update:
     reboot-strategy: off
   units:
-    - name: runcmd.service
+    - name: k8s-binary-installation.service
       command: start
       content: |
         [Unit]
@@ -36,6 +36,8 @@ coreos:
         Type=oneshot
         TimeoutStartSec=1800
         ExecStart=/opt/k8s/setup/k8s_binary_init.sh kubelet kube-proxy
+        # Ensure that this service remains running so the dependent
+        # services are not blocked waiting for this service.
         RemainAfterExit=true
     - name: etcd-member.service
       command: start
