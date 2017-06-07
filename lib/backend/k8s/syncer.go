@@ -78,7 +78,7 @@ func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.I
 
 func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	globalConfigWatcher := cache.NewListWatchFromClient(
-		k.kc.tprClient,
+		k.kc.tprClientV1,
 		"globalconfigs",
 		"kube-system",
 		fields.Everything())
@@ -88,7 +88,7 @@ func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.In
 
 func (k *realKubeAPI) IPPoolWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	ipPoolWatcher := cache.NewListWatchFromClient(
-		k.kc.tprClient,
+		k.kc.tprClientV1,
 		"ippools",
 		"kube-system",
 		fields.Everything())
@@ -118,7 +118,7 @@ func (k *realKubeAPI) NetworkPolicyList() (list extensions.NetworkPolicyList, er
 
 func (k *realKubeAPI) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.Interface, error) {
 	watcher := cache.NewListWatchFromClient(
-		k.kc.tprClient,
+		k.kc.tprClientV1alpha,
 		resources.SystemNetworkPolicyResourceName,
 		"kube-system",
 		fields.Everything())
@@ -128,7 +128,7 @@ func (k *realKubeAPI) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.I
 func (k *realKubeAPI) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error) {
 	// Perform the request.
 	tprs := &thirdparty.SystemNetworkPolicyList{}
-	err := k.kc.tprClient.Get().
+	err := k.kc.tprClientV1alpha.Get().
 		Resource(resources.SystemNetworkPolicyResourceName).
 		Namespace("kube-system").
 		Do().Into(tprs)
@@ -140,8 +140,7 @@ func (k *realKubeAPI) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicy
 			return nil, err
 		}
 	}
-
-	return tprs, err
+	return tprs, nil
 }
 
 func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
