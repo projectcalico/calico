@@ -88,14 +88,29 @@ docker run --detach --name ${prefix}-etcd \
        --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 etcd_ip=$(get_container_ip ${prefix}-etcd)
 
-# Run k8s API server.
+# Run k8s API server.  The clients in this test - Felix, Typha, the
+# k8sfv test code, and individual commands in this script - all
+# connect anonymously to the API server, because (a) they aren't
+# running in pods in a proper Kubernetes cluster, and (b) they don't
+# provide client TLS certificates, and (c) they don't use any of the
+# other non-anonymous mechanisms that Kubernetes supports.  But, as of
+# 1.6, the API server doesn't allow anonymous users with the default
+# "AlwaysAllow" authorization mode.  So we specify the "RBAC"
+# authorization mode instead, and create a ClusterRoleBinding that
+# gives the "system:anonymous" user unlimited power (aka the
+# "cluster-admin" role).
 docker run --detach --name ${prefix}-apiserver \
        gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
        /hyperkube apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
-       --service-cluster-ip-range=10.101.0.0/16 -v=10
+       --service-cluster-ip-range=10.101.0.0/16 -v=10 \
+       --authorization-mode=RBAC
 k8s_ip=$(get_container_ip ${prefix}-apiserver)
 k8s_api_endpoint=https://${k8s_ip}:6443
+
+while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+    sleep 2
+done
 
 # Wait until the newly launched API server can respond to a request,
 # before continuing.
@@ -103,9 +118,13 @@ while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources;
     sleep 2
 done
 
-# Get the API server's (self-signed) TLS certificate.
+# Get the API server's (self-signed) TLS certificate.  (This is needed
+# for the clients to authenticate the _API_server_ - which is entirely
+# independent of the _client_ authorization discussed above.)
 mkdir -p k8sfv/output
-docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/
+while ! docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/; do
+    sleep 2
+done
 
 # Run Felix.
 #
