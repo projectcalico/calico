@@ -1,23 +1,6 @@
 #cloud-config
 ---
 
-write_files:
-  - path: /load_k8s_binary.sh
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      k8s_ver=v1.6.2
-
-      binary=$1
-      ver_binary=${binary}-$k8s_ver
-      dl_path=/k8s
-      if [ ! -f $dl_path/${ver_binary}.downloaded ]; then
-        exit 1
-      fi
-      mkdir -p /opt/bin
-      cp $dl_path/${ver_binary} /opt/bin/$binary
-      /usr/bin/chmod +x /opt/bin/$binary
-
 coreos:
   update:
     reboot-strategy: off
@@ -32,7 +15,7 @@ coreos:
         [Service]
         Type=oneshot
         TimeoutStartSec=1800
-        ExecStart=/bin/sh -c "cd /; /tmp/fetch_k8s_binaries.sh"
+        ExecStart=/opt/k8s/setup/k8s_binary_init.sh kubectl kube-apiserver kube-controller-manager kubelet kube-proxy kube-scheduler
         RemainAfterExit=true
     - name: etcd-member.service
       command: start
@@ -53,8 +36,6 @@ coreos:
         After=etcd-member.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kubectl
-        ExecStartPre=/load_k8s_binary.sh kube-apiserver
         ExecStart=/opt/bin/kube-apiserver \
         --allow-privileged=true \
         --etcd-servers=http://$private_ipv4:2379 \
@@ -77,7 +58,6 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kube-controller-manager
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-controller-manager \
         --master=$private_ipv4:8080 \
@@ -99,7 +79,6 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kube-scheduler
         ExecStart=/opt/bin/kube-scheduler --master=$private_ipv4:8080
         Restart=always
         RestartSec=10
@@ -116,7 +95,6 @@ coreos:
 
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kubelet
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
         --allow-privileged=true \
@@ -143,7 +121,6 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/load_k8s_binary.sh kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://$private_ipv4:8080 \

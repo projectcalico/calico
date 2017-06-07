@@ -1,3 +1,7 @@
+---
+layout: null
+---
+
 # Size of the cluster created by Vagrant
 num_instances=3
 
@@ -33,8 +37,15 @@ Vagrant.configure("2") do |config|
   # it will be mounted into each VM.  (This requires nfsd in Linux and
   # may prompt for superuser permissions.)
   if File.directory?(File.expand_path("./k8s"))
-    config.vm.synced_folder "./k8s", "/k8s", id: "core", :nfs => true,  :mount_options   => ['nolock,vers=3,udp']
+    config.vm.synced_folder "./k8s", "/k8s", id: "core", :nfs => true,  :mount_options   => ['nolock,vers=3,udp,ro']
   end
+
+  $fetch_k8s= <<SCRIPT
+{% include {{page.version}}/kubernetes/fetch_k8s_binaries.sh %}
+SCRIPT
+  $init_k8s= <<SCRIPT
+{% include {{page.version}}/kubernetes/k8s_binary_init.sh %}
+SCRIPT
 
   # Set up each box
   (1..num_instances).each do |i|
@@ -53,7 +64,11 @@ Vagrant.configure("2") do |config|
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr flush dev eth1"
       host.vm.provision :shell, :inline => "sudo /usr/bin/ip addr add #{ip}/24 dev eth1"
 
-      host.vm.provision :file, :source => "fetch_k8s_binaries.sh", :destination => "/tmp/fetch_k8s_binaries.sh"
+      host.vm.provision :shell, :inline => "sudo mkdir -p /opt/k8s/setup"
+      host.vm.provision :shell, :inline => "echo '#{$fetch_k8s}' > /opt/k8s/setup/fetch_k8s_binaries.sh"
+      host.vm.provision :shell, :inline => "echo '#{$init_k8s}' > /opt/k8s/setup/k8s_binary_init.sh"
+      host.vm.provision :shell, :inline => "sudo chmod +x /opt/k8s/setup/*"
+
 
       if i == 1
         # Configure the master.
