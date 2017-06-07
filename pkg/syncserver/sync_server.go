@@ -434,7 +434,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 			var err error
 			breadcrumb, err = breadcrumb.Next(h.cxt)
 			if err != nil {
-				logCxt.WithError(err).Error("Getting next Breadcrumb canceled")
+				logCxt.WithError(err).Info("Getting next Breadcrumb canceled by context.")
 				return
 			}
 			timeSpentInNext := time.Since(nextStartTime)
