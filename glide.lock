@@ -1,15 +1,16 @@
-hash: faed9e15b38db13dd6513d9562965686ad6601989e241915037a0604f829a86c
-updated: 2017-06-06T19:15:58.86318712-07:00
+hash: dfc574266330b6ea1ec67a9211710340139d3b5359728e2ae76f538d1b3ecce9
+updated: 2017-06-07T13:53:45.992620854Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
+  version: 9d7ed0e63a4e9907c04396d0a9a7a01ba08d2852
   subpackages:
   - client
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -30,14 +31,14 @@ imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/emicklei/go-restful
-  version: 09691a3b6378b740595c1002f40c34dd5f218a22
+  version: 777bb3f19bcafe2575ffb2a3e46af92509ae9594
   subpackages:
   - log
   - swagger
 - name: github.com/gavv/monotime
   version: 47d58efa69556a936a3c15eb2ed42706d968ab01
 - name: github.com/ghodss/yaml
-  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
+  version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
   version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
 - name: github.com/go-openapi/jsonpointer
@@ -56,7 +57,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -70,7 +71,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -113,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: b2f24e8a9d01bd21fc066f4bae71fd953921108a
+  version: 73241603bc62d6e7a94582f06327ac661bb6ecdc
   subpackages:
   - lib
   - lib/api
@@ -164,7 +165,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
@@ -194,7 +195,7 @@ imports:
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: b90f89a1e7a9c1f6b918820b3daa7f08488c8594
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -220,7 +221,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/yaml.v2
-  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
+  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 - name: k8s.io/apimachinery
   version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
   subpackages:

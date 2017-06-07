@@ -6,12 +6,16 @@ owners:
   email: shaun@tigera.io
 import:
 - package: github.com/coreos/etcd
+  version: ^3.2.0-rc.1
   subpackages:
   - client
   - pkg/transport
 - package: github.com/docopt/docopt-go
+  version: ^0.6.2
 - package: github.com/ghodss/yaml
+  version: ^1.0.0
 - package: github.com/kelseyhightower/envconfig
+  version: ^1.3.0
 - package: golang.org/x/net
   version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
@@ -19,13 +23,15 @@ import:
   - idna/
 - package: gopkg.in/go-playground/validator.v8
 - package: github.com/satori/go.uuid
+  version: ^1.1.0
 - package: github.com/go-ini/ini
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
-  version: v1.4.0
+  version: v1.4.1
   subpackages:
   - lib
 - package: github.com/Sirupsen/logrus
+  version: ^0.11.5
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/prometheus/client_golang
@@ -41,6 +47,8 @@ import:
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
   - secure/bidirule
+- package: github.com/emicklei/go-restful
+  version: v1.2
 testImport:
 - package: github.com/onsi/gomega
   version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
