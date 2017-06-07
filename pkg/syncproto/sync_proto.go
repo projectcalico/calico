@@ -16,13 +16,12 @@ package syncproto
 
 import (
 	"encoding/gob"
+	"errors"
+	"fmt"
+	"reflect"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
-	"reflect"
-
-	"fmt"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -104,9 +103,15 @@ type SerializedUpdate struct {
 	UpdateType api.UpdateType
 }
 
-func (s SerializedUpdate) ToUpdate() api.Update {
+var ErrBadKey = errors.New("Unable to parse key.")
+
+func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 	// Parse the key.
 	parsedKey := model.KeyFromDefaultPath(s.Key)
+	if parsedKey == nil {
+		log.WithField("key", s.Key).Error("BUG: cannot parse key.")
+		return api.Update{}, ErrBadKey
+	}
 	var parsedValue interface{}
 	if s.Value != nil {
 		var err error
@@ -124,7 +129,7 @@ func (s SerializedUpdate) ToUpdate() api.Update {
 			TTL:      s.TTL,
 		},
 		UpdateType: s.UpdateType,
-	}
+	}, nil
 }
 
 // WouldBeNoOp returns true if this update would be a no-op given that previous has already been sent.

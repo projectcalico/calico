@@ -100,13 +100,18 @@ func (s *SyncerClient) loop() {
 			}
 			log.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
-			updates := make([]api.Update, len(msg.KVs))
-			for i, kv := range msg.KVs {
-				updates[i] = kv.ToUpdate()
+			updates := make([]api.Update, 0, len(msg.KVs))
+			for _, kv := range msg.KVs {
+				update, err := kv.ToUpdate()
+				if err != nil {
+					log.WithError(err).Error("Failed to deserialize update, skipping.")
+					continue
+				}
 				log.WithFields(log.Fields{
 					"serialized":   kv,
-					"deserialized": updates[i],
+					"deserialized": update,
 				}).Debug("Decoded update from Typha")
+				updates = append(updates, update)
 			}
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
