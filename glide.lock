@@ -1,5 +1,5 @@
-hash: 3ca990cfd38b922b4535467e7011c424e828cd121a43d3fa659e2a5aa35dd3b2
-updated: 2017-06-06T19:37:04.831860082-07:00
+hash: 9ba5bbe02b8beeffb9702fe08a9b9a0dacfaac9e3cf2a74e3d4be9acc0f9e1f3
+updated: 2017-06-07T15:44:29.13966987Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -43,14 +43,14 @@ imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/emicklei/go-restful
-  version: 09691a3b6378b740595c1002f40c34dd5f218a22
+  version: 777bb3f19bcafe2575ffb2a3e46af92509ae9594
   subpackages:
   - log
   - swagger
 - name: github.com/gavv/monotime
   version: 47d58efa69556a936a3c15eb2ed42706d968ab01
 - name: github.com/ghodss/yaml
-  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
+  version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
   version: d3de07a94d22b4a0972deb4b96d790c2c0ce8333
 - name: github.com/go-openapi/jsonpointer
@@ -69,7 +69,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 8616e8ee5e20a1704615e6c8d7afcdac06087a67
+  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -83,7 +83,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -126,7 +126,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: b2f24e8a9d01bd21fc066f4bae71fd953921108a
+  version: 73241603bc62d6e7a94582f06327ac661bb6ecdc
   subpackages:
   - lib
   - lib/api
@@ -154,7 +154,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 1c1ada9b59be34f5eab3272198ae615849d3be78
+  version: f898a49820203008748425069e3f38199593fe2e
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -169,13 +169,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 49fee292b27bfff7f354ee0f64e1bc4850462edf
+  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a1dba9ce8baed984a2495b658c82687f8157b98f
+  version: fdb70a78745a8df006f953b8bab85597d96b2e0e
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -183,7 +183,7 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
@@ -193,11 +193,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: fe3b5664d23a11b52ba59bece4ff29c52772a56b
+  version: bd6d5de5ccef2d66b0a26177928d0d8895d7f969
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -211,7 +211,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  version: b9e8d468b01f806830d387bd9a1fe96dc68129d1
   subpackages:
   - unix
 - name: golang.org/x/text
