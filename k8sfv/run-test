@@ -46,6 +46,9 @@
 #
 # k8sfv logging level.
 : ${K8SFV_LOG_LEVEL:=info}
+#
+# Only run the tests that complete in a minute or less.
+: ${JUST_A_MINUTE:=false}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -131,6 +134,14 @@ run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v"
 if test -n "${GINKGO_FOCUS}"; then
     docker exec ${prefix}-felix /bin/sh -c \
 	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+elif ${JUST_A_MINUTE}; then
+    # Run all the tests that are _not_ marked as "[slow]", and fail
+    # the test if any of those takes longer than 2 minutes.  A k8sfv
+    # test should be marked as "[slow]" if it normally takes longer
+    # than 1 minute - so this allows a buffer of 1 extra minute to
+    # allow for executor slowness.
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120 ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\"" | perl -pe 'END { exit $status } $status=1 if /SLOW TEST|FAIL!/;'
 else
     docker exec ${prefix}-felix /bin/sh -c \
 	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
