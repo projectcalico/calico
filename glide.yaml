@@ -20,7 +20,7 @@ import:
   subpackages:
   - json
 - package: github.com/coreos/etcd
-  version: v3.1.x
+  version: v3.2.0-rc.1
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
   version: v1.4.1
