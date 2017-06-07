@@ -1,29 +1,23 @@
-hash: e6ab1487475e8922e46786882266448807d004c6e83b4079d0f5ea39a4e53cf7
-updated: 2017-06-05T15:55:16.060857028-07:00
+hash: faed9e15b38db13dd6513d9562965686ad6601989e241915037a0604f829a86c
+updated: 2017-06-06T19:15:58.86318712-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: d267ca9c184e953554257d0acdd1dc9c47d38229
+  version: 17ae440991da3bdb2df4309936dd2074f66ec394
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
-- name: github.com/coreos/go-systemd
-  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
+  - version
+- name: github.com/coreos/go-semver
+  version: 568e959cd89871e61434c1143528d9162da89ef2
   subpackages:
-  - daemon
-  - journal
-  - util
-- name: github.com/coreos/pkg
-  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
-  subpackages:
-  - capnslog
+  - semver
 - name: github.com/davecgh/go-spew
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
@@ -119,7 +113,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 050be2ca2d8a88e2d429b4684b8666a48c42f7ae
+  version: b2f24e8a9d01bd21fc066f4bae71fd953921108a
   subpackages:
   - lib
   - lib/api
