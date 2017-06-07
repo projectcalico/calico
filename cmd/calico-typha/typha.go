@@ -182,6 +182,10 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
+	// Make sure the datastore is initialized, otherwise the Syncer may spin, looking for
+	// non-existent resources.
+	datastore.EnsureInitialized()
+
 	// Now create the Syncer; our caching layer and the TCP server.
 
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
