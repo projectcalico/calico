@@ -1,5 +1,5 @@
 #!/bin/bash
-k8s_ver="v1.6.2"
+k8s_ver="v1.7.0-alpha.4"
 
 if [ $# -eq 0 ]; then
     binaries="kubectl kube-apiserver kube-controller-manager kubelet kube-proxy kube-scheduler"

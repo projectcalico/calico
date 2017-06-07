@@ -1,5 +1,5 @@
 #!/bin/bash
-k8s_ver="v1.6.2"
+k8s_ver="v1.7.0-alpha.4"
 
 if [ ! -d /k8s ]; then
   mkdir /k8s
