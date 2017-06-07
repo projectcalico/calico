@@ -31,7 +31,7 @@ import (
 
 const (
 	SystemNetworkPolicyResourceName = "systemnetworkpolicies"
-	SystemNetworkPolicyTPRName      = "system-network-policy.projectcalico.org"
+	SystemNetworkPolicyTPRName      = "system-network-policy.alpha.projectcalico.org"
 	SystemNetworkPolicyNamePrefix   = "snp.projectcalico.org/"
 )
 
