@@ -104,7 +104,7 @@ type SerializedUpdate struct {
 
 func (s SerializedUpdate) ToUpdate() api.Update {
 	// Parse the key.
-	parsedKey := model.KeyFromDefaultPath(string(s.Key))
+	parsedKey := model.KeyFromDefaultPath(s.Key)
 	parsedValue, err := model.ParseValue(parsedKey, s.Value)
 	if err != nil {
 		log.WithField("rawValue", string(s.Value)).Error(

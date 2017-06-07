@@ -84,25 +84,29 @@ func (s *SyncerClient) loop() {
 		if err != nil {
 			log.WithError(err).Panic("Failed to read from server")
 		}
-
+		log.WithField("envelope", envelope).Debug("New message from Typha.")
 		switch msg := envelope.Message.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info(
 				"Status update from Typha.")
 			s.callbacks.OnStatusUpdated(msg.SyncStatus)
 		case syncproto.MsgPing:
-			log.Info("Ping received from Typha")
+			log.Debug("Ping received from Typha")
 			err := w.Encode(syncproto.Envelope{Message: syncproto.MsgPong{
 				PingTimestamp: msg.Timestamp,
 			}})
 			if err != nil {
 				log.WithError(err).Panic("Failed to write to server")
 			}
-			log.Info("Pong sent to Typha")
+			log.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, len(msg.KVs))
 			for i, kv := range msg.KVs {
 				updates[i] = kv.ToUpdate()
+				log.WithFields(log.Fields{
+					"serialized":   kv,
+					"deserialized": updates[i],
+				}).Debug("Decoded update from Typha")
 			}
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
