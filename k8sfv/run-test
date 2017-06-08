@@ -48,7 +48,7 @@
 : ${K8SFV_LOG_LEVEL:=info}
 #
 # Only run the tests that complete in a minute or less.
-: ${JUST_A_MINUTE:=false}
+: ${JUST_A_MINUTE:=true}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
