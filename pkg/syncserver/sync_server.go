@@ -93,14 +93,14 @@ const (
 	defaultPingInterval         = 10 * time.Second
 )
 
-type contextKey string
-
-const CxtKeyConnID = contextKey("ConnID")
-
 type Server struct {
 	config     Config
 	cache      BreadcrumbProvider
 	nextConnID uint64
+	maxConnsC  chan int
+
+	connIDToConnL sync.Mutex
+	connIDToConn  map[uint64]*connection
 }
 
 type BreadcrumbProvider interface {
@@ -154,12 +154,24 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 	}
 
 	return &Server{
-		config: config,
-		cache:  cache,
+		config:    config,
+		cache:     cache,
+		maxConnsC: make(chan int),
+
+		connIDToConn: map[uint64]*connection{},
 	}
 }
 
-func (s *Server) Serve(cxt context.Context) {
+func (s *Server) Start(cxt context.Context) {
+	go s.serve(cxt)
+	go s.governNumberOfConnections(cxt)
+}
+
+func (s *Server) SetMaxConns(numConns int) {
+	s.maxConnsC <- numConns
+}
+
+func (s *Server) serve(cxt context.Context) {
 	logCxt := log.WithField("port", syncproto.DefaultPort)
 	logCxt.Info("Opening listen socket")
 	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: syncproto.DefaultPort})
@@ -182,9 +194,9 @@ func (s *Server) Serve(cxt context.Context) {
 
 		// Create a new connection-scoped context, which we'll use for signaling to our child
 		// goroutines to halt.
-		connCxt := context.WithValue(cxt, CxtKeyConnID, connID)
-		connCxt, cancel := context.WithCancel(connCxt)
+		connCxt, cancel := context.WithCancel(cxt)
 		connection := &connection{
+			ID:        connID,
 			config:    &s.config,
 			cache:     s.cache,
 			cxt:       connCxt,
@@ -198,11 +210,74 @@ func (s *Server) Serve(cxt context.Context) {
 			encoder: gob.NewEncoder(conn),
 			readC:   make(chan interface{}),
 		}
+
+		// Record the active connection so we can close it later if we need to.
+		s.connIDToConnL.Lock()
+		s.connIDToConn[connID] = connection
+		s.connIDToConnL.Unlock()
+		// Queue up the cleanup of our tracking map when the connection gets closed.
+		go func() {
+			<-connCxt.Done()
+			s.connIDToConnL.Lock()
+			delete(s.connIDToConn, connID)
+			s.connIDToConnL.Unlock()
+		}()
 		go connection.handle()
 	}
 }
 
+func (s *Server) governNumberOfConnections(cxt context.Context) {
+	logCxt := log.WithField("thread", "numConnsGov")
+	maxConns := <-s.maxConnsC
+	ticker := jitter.NewTicker(time.Second, 100*time.Millisecond)
+	for {
+		select {
+		case newMax := <-s.maxConnsC:
+			if newMax == maxConns {
+				continue
+			}
+			s.connIDToConnL.Lock()
+			currentNum := len(s.connIDToConn)
+			s.connIDToConnL.Unlock()
+			logCxt.WithFields(log.Fields{
+				"oldMax":     maxConns,
+				"newMax":     newMax,
+				"currentNum": currentNum,
+			}).Info("New target number of connections")
+			maxConns = newMax
+		case <-ticker.C:
+			if maxConns < 100 {
+				log.Warn("Sanity check: max connections was <100, defaulting")
+				maxConns = 100
+			}
+			s.connIDToConnL.Lock()
+			numConns := len(s.connIDToConn)
+			var cancelFn context.CancelFunc
+			if numConns > maxConns {
+				for _, conn := range s.connIDToConn {
+					logCxt.WithFields(log.Fields{
+						"max":     maxConns,
+						"current": numConns,
+						"connID":  conn.ID,
+					}).Warn("Currently have too many connections, terminating one at random.")
+					cancelFn = conn.cancelCxt
+					break
+				}
+			}
+			s.connIDToConnL.Unlock()
+			if cancelFn != nil {
+				// Drop locks before we invoke the cancel function, just to avoid any kind of hierarchy.
+				cancelFn()
+			}
+		case <-cxt.Done():
+			logCxt.Info("Context asked us to stop")
+			return
+		}
+	}
+}
+
 type connection struct {
+	ID     uint64
 	config *Config
 
 	// cxt is the per-connection context.

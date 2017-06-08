@@ -33,11 +33,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"math"
+
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/typha/pkg/jitter"
+	"github.com/projectcalico/typha/pkg/k8s"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncserver"
@@ -205,7 +209,8 @@ configRetry:
 	go syncerToValidator.SendTo(validator)
 	go validatorToCache.SendTo(cache)
 	cache.Start(context.Background())
-	go server.Serve(context.Background())
+	server.Start(context.Background())
+	go watchK8s(server)
 	log.Info("Started the datastore Syncer/cache layer/server.")
 
 	if configParams.PrometheusMetricsEnabled {
@@ -225,6 +230,51 @@ configRetry:
 		case <-usr1SignalChan:
 			log.Info("Received SIGUSR1, emitting heap profile")
 			dumpHeapMemoryProfile(configParams)
+		}
+	}
+}
+
+func watchK8s(server *syncserver.Server) {
+	const enoughForAnyone = math.MaxInt32
+	ticker := jitter.NewTicker(time.Minute, 10*time.Second)
+	activeTarget := enoughForAnyone
+	for {
+		<-ticker.C
+		numTyphas, err := k8s.GetNumTyphas("kube-system", "calico-typha", "calico-typha")
+		if err != nil || numTyphas <= 0 {
+			log.WithError(err).Warn("Failed to get number of Typhas, removing connection limit")
+			server.SetMaxConns(enoughForAnyone)
+			time.Sleep(30 * time.Second)
+		}
+		numNodes, err := k8s.GetNumNodes()
+		if err != nil || numNodes < 0 {
+			log.WithError(err).Warn("Failed to get number of nodes, removing connection limit")
+			server.SetMaxConns(enoughForAnyone)
+			time.Sleep(30 * time.Second)
+		}
+		target := 100
+		if numTyphas <= 1 {
+			target = enoughForAnyone
+		} else {
+			// Make sure we can accept the load if one of the other Typhas dies.
+			candidate := int(1.2 * float64(numNodes) / float64(numTyphas-1))
+			if candidate > target {
+				target = candidate
+			}
+			candidate = numNodes/(numTyphas-1) + 50
+			if candidate > target {
+				target = candidate
+			}
+		}
+
+		if target != activeTarget {
+			log.WithFields(log.Fields{
+				"numTyphas": numTyphas,
+				"numNodes":  numNodes,
+				"newTarget": target,
+			}).Info("Calculated new target number of max connections.")
+			server.SetMaxConns(target)
+			activeTarget = target
 		}
 	}
 }
