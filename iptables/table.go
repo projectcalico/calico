@@ -17,6 +17,7 @@ package iptables
 import (
 	"bytes"
 	"fmt"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
@@ -548,7 +549,11 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 		output, err := cmd.Output()
 		if err != nil {
 			countNumSaveErrors.Inc()
-			t.logCxt.WithError(err).Warnf("%s command failed", t.iptablesSaveCmd)
+			var stderr string
+			if ee, ok := err.(*exec.ExitError); ok {
+				stderr = string(ee.Stderr)
+			}
+			t.logCxt.WithError(err).WithField("stderr", stderr).Warnf("%s command failed", t.iptablesSaveCmd)
 			if retries > 0 {
 				retries--
 				t.timeSleep(retryDelay)
