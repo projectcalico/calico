@@ -154,6 +154,25 @@ func (d *restoreCmd) Output() ([]byte, error) {
 	return nil, errors.New("Not implemented")
 }
 
+func (d *restoreCmd) StdoutPipe() (io.ReadCloser, error) {
+	Fail("Not implemented")
+	return nil, errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Start() error {
+	Fail("Not implemented")
+	return errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Wait() error {
+	Fail("Not implemented")
+	return errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Kill() error {
+	return nil
+}
+
 func (d *restoreCmd) String() string {
 	return fmt.Sprintf("restoreCmd %#v", d.CapturedStdin)
 }
@@ -301,6 +320,18 @@ func (d *saveCmd) SetStderr(w io.Writer) {
 	Fail("Not implemented")
 }
 
+func (d *saveCmd) Start() error {
+	return nil
+}
+
+func (d *saveCmd) Wait() error {
+	return nil
+}
+
+func (d *saveCmd) Kill() error {
+	return nil
+}
+
 func (d *saveCmd) Output() ([]byte, error) {
 	if d.Dataplane.FailNextSave {
 		d.Dataplane.FailNextSave = false
@@ -328,6 +359,24 @@ func (d *saveCmd) Output() ([]byte, error) {
 	log.Debugf("Calculated save output:\n%v", buf.String())
 
 	return buf.Bytes(), nil
+}
+
+func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
+	buf, err := d.Output()
+	if err != nil {
+		return nil, err
+	}
+	return (*withDummyClose)(bytes.NewBuffer(buf)), nil
+}
+
+type withDummyClose bytes.Buffer
+
+func (b *withDummyClose) Read(p []byte) (n int, err error) {
+	return (*bytes.Buffer)(b).Read(p)
+}
+
+func (b *withDummyClose) Close() error {
+	return nil
 }
 
 func (d *saveCmd) Run() error {

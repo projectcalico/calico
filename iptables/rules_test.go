@@ -78,16 +78,18 @@ var _ = Describe("Hash extraction tests", func() {
 	})
 
 	It("should extract an old felix rule by prefix", func() {
-		hashes := table.getHashesFromBuffer(bytes.NewBufferString("-A FORWARD -j felix-FORWARD\n"))
+		hashes, err := table.readHashesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"OLD INSERT RULE"},
 		}))
 	})
 	It("should extract an old felix rule by special case", func() {
-		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+		hashes, err := table.readHashesFrom(newClosableBuf(
 			"-A FORWARD -j an-old-rule\n" +
 				"-A FORWARD -j ignore-me\n",
 		))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{
 				"OLD INSERT RULE",
@@ -96,18 +98,20 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 	It("should extract a hash", func() {
-		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+		hashes, err := table.readHashesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
 		}))
 	})
 	It("should extract a hash or a gap from each rule", func() {
-		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+		hashes, err := table.readHashesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{
 				"wUHhoiAYhphO9Mso",
@@ -118,11 +122,12 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 	It("should handle multiple chains", func() {
-		hashes := table.getHashesFromBuffer(bytes.NewBufferString(
+		hashes, err := table.readHashesFrom(newClosableBuf(
 			"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD\n"))
+		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"cali-abcd": []string{
 				"wUHhoiAYhphO9Mso",
@@ -135,6 +140,20 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 	})
 })
+
+func newClosableBuf(s string) *withDummyClose {
+	return (*withDummyClose)(bytes.NewBufferString(s))
+}
+
+type withDummyClose bytes.Buffer
+
+func (b *withDummyClose) Read(p []byte) (n int, err error) {
+	return (*bytes.Buffer)(b).Read(p)
+}
+
+func (b *withDummyClose) Close() error {
+	return nil
+}
 
 func calculateHashes(chainName string, rules []Rule) []string {
 	chain := &Chain{
