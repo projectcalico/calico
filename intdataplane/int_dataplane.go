@@ -96,8 +96,9 @@ type Config struct {
 
 	MaxIPSetSize int
 
-	IptablesRefreshInterval time.Duration
-	IptablesInsertMode      string
+	IptablesRefreshInterval        time.Duration
+	IptablesPostWriteCheckInterval time.Duration
+	IptablesInsertMode             string
 
 	RulesConfig rules.Config
 
@@ -203,6 +204,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
 			InsertMode:               config.IptablesInsertMode,
 			RefreshInterval:          config.IptablesRefreshInterval,
+			PostWriteInterval:        config.IptablesPostWriteCheckInterval,
 		},
 	)
 	rawTableV4 := iptables.NewTable(
@@ -213,6 +215,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 			InsertMode:            config.IptablesInsertMode,
 			RefreshInterval:       config.IptablesRefreshInterval,
+			PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		})
 	filterTableV4 := iptables.NewTable(
 		"filter",
@@ -222,6 +225,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 			InsertMode:            config.IptablesInsertMode,
 			RefreshInterval:       config.IptablesRefreshInterval,
+			PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		})
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
@@ -262,6 +266,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
 				InsertMode:               config.IptablesInsertMode,
 				RefreshInterval:          config.IptablesRefreshInterval,
+				PostWriteInterval:        config.IptablesPostWriteCheckInterval,
 			},
 		)
 		rawTableV6 := iptables.NewTable(
@@ -272,6 +277,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				InsertMode:            config.IptablesInsertMode,
 				RefreshInterval:       config.IptablesRefreshInterval,
+				PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 			},
 		)
 		filterTableV6 := iptables.NewTable(
@@ -282,6 +288,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				InsertMode:            config.IptablesInsertMode,
 				RefreshInterval:       config.IptablesRefreshInterval,
+				PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 			},
 		)
 

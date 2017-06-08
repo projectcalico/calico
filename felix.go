@@ -276,12 +276,13 @@ configRetry:
 
 				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
 			},
-			IPIPMTU:                 configParams.IpInIpMtu,
-			IptablesRefreshInterval: time.Duration(configParams.IptablesRefreshInterval) * time.Second,
-			IptablesInsertMode:      configParams.ChainInsertMode,
-			MaxIPSetSize:            configParams.MaxIpsetSize,
-			IgnoreLooseRPF:          configParams.IgnoreLooseRPF,
-			IPv6Enabled:             configParams.Ipv6Support,
+			IPIPMTU:                        configParams.IpInIpMtu,
+			IptablesRefreshInterval:        time.Duration(configParams.IptablesRefreshInterval) * time.Second,
+			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
+			IptablesInsertMode:             configParams.ChainInsertMode,
+			MaxIPSetSize:                   configParams.MaxIpsetSize,
+			IgnoreLooseRPF:                 configParams.IgnoreLooseRPF,
+			IPv6Enabled:                    configParams.Ipv6Support,
 			StatusReportingInterval: time.Duration(configParams.ReportingIntervalSecs) *
 				time.Second,
 

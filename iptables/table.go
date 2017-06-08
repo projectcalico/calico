@@ -29,7 +29,8 @@ import (
 )
 
 const (
-	MaxChainNameLength = 28
+	MaxChainNameLength       = 28
+	defaultPostWriteInterval = 50 * time.Millisecond
 )
 
 var (
@@ -216,10 +217,11 @@ type Table struct {
 
 	// Record when we did our most recent reads and writes of the table.  We use these to
 	// calculate the next time we should force a refresh.
-	lastReadTime      time.Time
-	lastWriteTime     time.Time
-	postWriteInterval time.Duration
-	refreshInterval   time.Duration
+	lastReadTime             time.Time
+	lastWriteTime            time.Time
+	initialPostWriteInterval time.Duration
+	postWriteInterval        time.Duration
+	refreshInterval          time.Duration
 
 	logCxt *log.Entry
 
@@ -239,6 +241,7 @@ type TableOptions struct {
 	ExtraCleanupRegexPattern string
 	InsertMode               string
 	RefreshInterval          time.Duration
+	PostWriteInterval        time.Duration
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdFactory
@@ -291,6 +294,14 @@ func NewTable(
 		log.WithField("insertMode", options.InsertMode).Panic("Unknown insert mode")
 	}
 
+	if options.PostWriteInterval <= defaultPostWriteInterval {
+		log.WithFields(log.Fields{
+			"setValue": options.PostWriteInterval,
+			"default":  defaultPostWriteInterval,
+		}).Info("Defaulting PostWriteInterval.")
+		options.PostWriteInterval = defaultPostWriteInterval
+	}
+
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
 	newCmd := newRealCmd
 	if options.NewCmdOverride != nil {
@@ -327,8 +338,9 @@ func NewTable(
 		// us to recheck the dataplane at exponentially increasing intervals at startup.
 		// Note: if we didn't do this, the calculation logic would need to be modified
 		// to cope with zero values for these fields.
-		lastWriteTime:     now(),
-		postWriteInterval: 50 * time.Millisecond,
+		lastWriteTime:            now(),
+		initialPostWriteInterval: options.PostWriteInterval,
+		postWriteInterval:        options.PostWriteInterval,
 
 		refreshInterval: options.RefreshInterval,
 
@@ -894,7 +906,7 @@ func (t *Table) applyUpdates() error {
 			return err
 		}
 		t.lastWriteTime = t.timeNow()
-		t.postWriteInterval = 50 * time.Millisecond
+		t.postWriteInterval = t.initialPostWriteInterval
 	}
 
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we

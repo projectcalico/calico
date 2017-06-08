@@ -19,6 +19,7 @@ import (
 
 	"net"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -30,7 +31,10 @@ var _ = DescribeTable("Config parsing",
 		config := New()
 		config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
-		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
+		configPtr := reflect.ValueOf(config)
+		configElem := configPtr.Elem()
+		fieldRef := configElem.FieldByName(key)
+		newVal := fieldRef.Interface()
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
 			Expect(config.Err).To(HaveOccurred())
@@ -69,6 +73,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
+
+	Entry("IptablesPostWriteCheckIntervalSecs", "IptablesPostWriteCheckIntervalSecs",
+		"1.5", 1500*time.Millisecond),
 
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"RETURN", "RETURN"),
