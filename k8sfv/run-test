@@ -169,3 +169,18 @@ else
     docker exec ${prefix}-felix /bin/sh -c \
 	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
 fi
+
+# Save the status of the test run.
+STATUS=$?
+
+# Check that the Felix container is still running.  It's important to
+# do this check, because the test run just above can exit with a
+# successful status (0) if Felix dies prematurely.
+if docker ps | grep ${prefix}-felix; then
+    # Good, still running.
+    exit ${STATUS}
+else
+    # No, it has died.  Dump logs and exit with a failure status.
+    docker logs ${prefix}-felix
+    exit 1
+fi
