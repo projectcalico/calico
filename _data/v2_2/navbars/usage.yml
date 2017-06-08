@@ -29,6 +29,8 @@ toc:
   path: /usage/configuration/ip-in-ip
 - title: Configuring a Node IP Address and Subnet
   path: /usage/configuration/node
+- title: Configuring MTU
+  path: /usage/configuration/mtu
 - title: Decommissioning a Node
   path: /usage/decommissioning-a-node
 - title: Configuring Conntrack

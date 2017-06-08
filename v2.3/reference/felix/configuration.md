@@ -37,6 +37,7 @@ The full list of parameters which can be set is as follows.
 | FailsafeOutboundHostPorts               | FELIX_FAILSAFEOUTBOUNDHOSTPORTS         | tcp:2379, tcp:2380, tcp:4001, tcp:7001, udp:53, udp:67  | Comma-delimited list of UDP/TCP ports that Felix will allow outgoing traffic from host endpoints to irrespective of the security policy. This is useful to avoid accidently cutting off a host with incorrect configuration.  Each port should be specified as `tcp:<port-number>` or `udp:<port-number>`.  For back-compatibility, if the protocol is not specified, it defaults to "tcp".  To disable all outbound host ports, use the value "none".  The default value opens etcd's standard ports to ensure that Felix does not get cut off from etcd as well as allowing DHCP and DNS.  |
 | ReportingIntervalSecs                   | FELIX_REPORTINGINTERVALSECS             | 30                                   | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments.  |
 | ReportingTTLSecs                        | FELIX_REPORTINGTTLSECS                  | 90                                   | Time-to-live setting for process-wide status reports. |
+| IpInIpMtu                               | FELIX_IPINIPMTU                         | 1440                                 | The MTU to set on the tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/usage/configuration/mtu) |
 
 #### etcdv2 datastore configuration
 
