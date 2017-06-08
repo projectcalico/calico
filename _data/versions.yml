@@ -309,6 +309,7 @@ v2.3:
     calico/node:
       version: v1.3.0-rc1
       url: https://github.com/projectcalico/calicoctl/releases/tag/v1.3.0-rc1
+      img: quay.io/calico/node:v1.3.0-rc1
     calico/cni:
       version: v1.9.1
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v1.9.1
@@ -707,6 +708,7 @@ master:
      calico/node:
       version: master
       url: ""
+      img: quay.io/calico/node:master
      calico/cni:
       version: master
       url: ""
