@@ -25,6 +25,8 @@ toc:
         path: /getting-started/kubernetes/installation/hosted/kubernetes-datastore/
     - title: Integration Guide
       path: /getting-started/kubernetes/installation/integration
+    - title: Version Differences
+      path: /getting-started/kubernetes/installation/version-differences
     - title: AWS
       path: /getting-started/kubernetes/installation/aws
     - title: GCE
