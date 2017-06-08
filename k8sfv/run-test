@@ -82,7 +82,7 @@ cleanup
 
 # Ensure that ip6_tables module is loaded.  The ip6tables-save command
 # needs this.
-#sudo modprobe ip6_tables
+sudo modprobe ip6_tables
 
 # Run etcd.
 docker run --detach --name ${prefix}-etcd \
