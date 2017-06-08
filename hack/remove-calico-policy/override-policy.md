@@ -10,7 +10,8 @@ ingress and egress traffic, overriding any other Network Policy that has been co
 
 - Calico version v2.3 or higher
 - Kubernetes v1.6 or higher
-- These steps assume Calico is running in policy-only mode (without Calico networking)
+- Calico is running in policy-only mode (without Calico networking)
+- Calico is using using the Kubernetes API as the datastore
 
 ### Instructions
 
