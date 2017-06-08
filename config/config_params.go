@@ -109,7 +109,7 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
-	IptablesRefreshInterval            int           `config:"int;10"`
+	IptablesRefreshInterval            time.Duration `config:"seconds;10"`
 	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
@@ -131,11 +131,11 @@ type Config struct {
 	IpInIpMtu        int    `config:"int;1440;non-zero"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
 
-	ReportingIntervalSecs int `config:"int;30"`
-	ReportingTTLSecs      int `config:"int;90"`
+	ReportingIntervalSecs time.Duration `config:"seconds;30"`
+	ReportingTTLSecs      time.Duration `config:"seconds;90"`
 
-	EndpointReportingEnabled   bool    `config:"bool;false"`
-	EndpointReportingDelaySecs float64 `config:"float;1.0"`
+	EndpointReportingEnabled   bool          `config:"bool;false"`
+	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
 
 	MaxIpsetSize int `config:"int;1048576;non-zero"`
 
@@ -330,10 +330,6 @@ func (config *Config) resolve() (changed bool, err error) {
 	changed = !reflect.DeepEqual(newRawValues, config.rawValues)
 	config.rawValues = newRawValues
 	return
-}
-
-func (config *Config) EndpointReportingDelay() time.Duration {
-	return time.Duration(config.EndpointReportingDelaySecs*1000000) * time.Microsecond
 }
 
 func (config *Config) DatastoreConfig() api.CalicoAPIConfig {

@@ -107,15 +107,15 @@ var _ = DescribeTable("Config parsing",
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
 		"10.0.0.1", net.ParseIP("10.0.0.1")),
 
-	Entry("ReportingIntervalSecs", "ReportingIntervalSecs", "31", int(31)),
-	Entry("ReportingTTLSecs", "ReportingTTLSecs", "91", int(91)),
+	Entry("ReportingIntervalSecs", "ReportingIntervalSecs", "31", 31*time.Second),
+	Entry("ReportingTTLSecs", "ReportingTTLSecs", "91", 91*time.Second),
 
 	Entry("EndpointReportingEnabled", "EndpointReportingEnabled",
 		"true", true),
 	Entry("EndpointReportingEnabled", "EndpointReportingEnabled",
 		"yes", true),
 	Entry("EndpointReportingDelaySecs", "EndpointReportingDelaySecs",
-		"10", float64(10)),
+		"10", 10*time.Second),
 
 	Entry("MaxIpsetSize", "MaxIpsetSize", "12345", int(12345)),
 	Entry("IptablesMarkMask", "IptablesMarkMask", "0xf0f0", uint32(0xf0f0)),

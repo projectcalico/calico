@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	MaxChainNameLength       = 28
-	defaultPostWriteInterval = 50 * time.Millisecond
+	MaxChainNameLength   = 28
+	minPostWriteInterval = 50 * time.Millisecond
 )
 
 var (
@@ -294,12 +294,12 @@ func NewTable(
 		log.WithField("insertMode", options.InsertMode).Panic("Unknown insert mode")
 	}
 
-	if options.PostWriteInterval <= defaultPostWriteInterval {
+	if options.PostWriteInterval <= minPostWriteInterval {
 		log.WithFields(log.Fields{
 			"setValue": options.PostWriteInterval,
-			"default":  defaultPostWriteInterval,
-		}).Info("Defaulting PostWriteInterval.")
-		options.PostWriteInterval = defaultPostWriteInterval
+			"default":  minPostWriteInterval,
+		}).Info("PostWriteInterval too small, defaulting.")
+		options.PostWriteInterval = minPostWriteInterval
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
