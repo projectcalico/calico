@@ -461,13 +461,13 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 			if crumbAge < h.config.MinBatchingAgeThreshold && deltas == nil {
 				// We're not behind and we haven't already started to batch up updates.  Avoid
 				// copying the deltas and just send them
-				deltas = breadcrumb.Updates
+				deltas = breadcrumb.Deltas
 				break
 			}
 
 			// Either we're already batching up updates or we're behind.  Append the deltas to the
 			// buffer.
-			deltas = append(deltas, breadcrumb.Updates...)
+			deltas = append(deltas, breadcrumb.Deltas...)
 			summaryNextCatchupLatency.Observe(timeSpentInNext.Seconds())
 
 			if crumbAge < h.config.MinBatchingAgeThreshold {
