@@ -484,6 +484,8 @@ var _ = Describe("IP sets dataplane", func() {
 
 		Describe("with a failure to create the ipset restore pipe", describeRetryTests("pipe"))
 		Describe("with a failure to start ipset restore", describeRetryTests("start"))
+		Describe("with a failure to start ipset restore and a close failure", describeRetryTests(
+			"close" /* needs to be queued up before the start */, "start"))
 		Describe("with a write failure to the pipe (immediately)", describeRetryTests("write"))
 		Describe("with a write failure to the pipe when writing an IP", describeRetryTests("write-ip"))
 		Describe("with an update failure before any upates succeed", describeRetryTests("pre-update"))
