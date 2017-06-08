@@ -41,13 +41,14 @@ const (
 	TokRParen
 	TokAnd
 	TokOr
-	TokEof
+	TokEOF
 )
 
 const tokenizerDebug = false
 
 var whitespace = " \t"
 
+// Token has a kind and a value
 type Token struct {
 	Kind  tokenKind
 	Value interface{}
@@ -70,6 +71,7 @@ var (
 	inRegex         = regexp.MustCompile("^" + inExpr)
 )
 
+// Tokenize transforms string to token slice
 func Tokenize(input string) (tokens []Token, err error) {
 	for {
 		if tokenizerDebug {
@@ -78,7 +80,7 @@ func Tokenize(input string) (tokens []Token, err error) {
 		startLen := len(input)
 		input = strings.TrimLeft(input, whitespace)
 		if len(input) == 0 {
-			tokens = append(tokens, Token{TokEof, nil})
+			tokens = append(tokens, Token{TokEOF, nil})
 			return
 		}
 		switch input[0] {
