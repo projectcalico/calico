@@ -69,6 +69,8 @@ toc:
         path: /getting-started/mesos/installation/dc-os/framework
       - title: Customize Universe Package Install
         path: /getting-started/mesos/installation/dc-os/custom
+    - title: 'Vagrant/VirtualBox: CentOS'
+      path: /getting-started/mesos/installation/vagrant-centos/
   - title: Tutorials
     section:
     - title: Launching Tasks
@@ -81,10 +83,6 @@ toc:
         path: /getting-started/mesos/tutorials/policy/universal-containerizer
       - title: Docker Containerizer
         path: /getting-started/mesos/tutorials/policy/docker-containerizer
-  - title: Demos
-    section:
-    - title: Vagrant Quickstart - Docker Containerizer
-      path: /getting-started/mesos/vagrant/
 
 - title: Docker
   section:

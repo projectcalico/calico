@@ -9,7 +9,7 @@ This guide requires a host machine with:
 
  * [VirtualBox][virtualbox] to host the virtual machines.
  * [Vagrant][vagrant] to install and configure the machines in Virtual Box.
- * [Curl][curl]
+ * [curl][curl]
 
 ### 1.2 Download the source files
 
@@ -25,8 +25,9 @@ This guide requires a host machine with:
 vagrant up
 ```
 
-That's it! Your Mesos Cluster is ready to use! Access it's services at the
-following URLs:
+This starts a two node cluster with the cluster layout described below.
+
+Access the Mesos and Marathon services at the following URLs:
 
 | Service         | URL                        |
 | :-------------- | :------------------------- |
@@ -35,30 +36,28 @@ following URLs:
 
 ### Cluster Layout
 
-<pre>
-.-----------------------------------------------------------------------------------.
-| Machine Type | OS     | Hostname        | IP Address     | Services               |
-|--------------|--------|-----------------|----------------|------------------------|
-| Master       | Centos | calico-mesos-01 | 172.24.197.101 | mesos-master           |
-|              |        |                 |                | etcd                   |
-|              |        |                 |                | docker                 |
-|              |        |                 |                | zookeeper              |
-|              |        |                 |                | marathon               |
-|              |        |                 |                | marathon load-balancer |
-|              |        |                 |                | calico-node            |
-|--------------|--------|-----------------|----------------|------------------------|
-| Agents       | Centos | calico-mesos-02 | 172.24.197.102 | mesos-agent            |
-|              |        | calico-mesos-03 | 172.24.197.103 | docker                 |
-|              |        |                 |                | calico-node            |
-'-----------------------------------------------------------------------------------'
-</pre>
+| Machine Type | OS     | Hostname  | IP Address     | Services               |
+| :----------- | :----- | :-------- | :------------- | :--------------------- |
+| Master       | Centos | calico-01 | 172.24.197.101 | mesos-master           |
+|              |        |           |                | etcd                   |
+|              |        |           |                | docker                 |
+|              |        |           |                | zookeeper              |
+|              |        |           |                | marathon               |
+|              |        |           |                | marathon load-balancer |
+|              |        |           |                | calico-node            |
+|--------------|--------|-----------|----------------|------------------------|
+| Agents       | Centos | calico-01 | 172.24.197.102 | mesos-agent            |
+|              |        | calico-02 | 172.24.197.103 | docker                 |
+|              |        |           |                | calico-node            |
 
 ## 4. SSH
+
 To connect to your Vagrant boxes on OSX / Linux, see
 [Vagrant's SSH command](https://www.vagrantup.com/docs/cli/ssh.html).
 For Windows, see <https://github.com/nickryand/vagrant-multi-putty>.
 
 ## 5. Next Steps
+
 With your cluster deployed, you can follow the
 [tutorials on using Calico with Mesos]({{site.baseurl}}/{{page.version}}/getting-started/mesos#tutorials).
 

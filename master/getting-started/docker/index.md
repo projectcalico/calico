@@ -25,7 +25,7 @@ Learn the two-step process for launching Calico for Docker.
 Follow this guide to launch a local 2-node CoreOS Container Linux cluster with everything
 you need to install and use Calico.
 
-#### [Vagrant Ubuntu](installation/vagrant-ubuntu)
+#### [Vagrant/VirtualBox: Ubuntu](installation/vagrant-ubuntu)
 
 Follow this guide to launch a local 2-node Ubuntu cluster with everything
 you need to install and use Calico.
