@@ -27,6 +27,13 @@ This install can be customized to lessen service impact
 and improve reliability. See additional information on
 [Customizing Calico's DC/OS Installation Framework](installation/dc-os/custom).
 
+## Quickstart with "Calico-Ready" Clusters
+
+#### [Vagrant/VirtualBox: CentOS](installation/vagrant-centos)
+
+Follow this guide to launch a local 2-node Mesos cluster on CentOS VMs with everything
+you need to install and use Calico.
+
 ## Tutorials
 
 - [Launching Tasks](tutorials/launching-tasks)

@@ -9,7 +9,11 @@ This document will demonstrate how to manipulate policy for Calico using
 - Configure policy based off these labels
 
 To demonstrate this, we will use Marathon to launch an nginx webserver using the Universal Containerizer.
-Then, we will launch basic curl task which will repeatedly curl the webserver.
+Then, we will launch basic curl task which will repeatedly curl the webserver.  
+
+> Note: This example assumes you are running in a DC/OS environment since it uses the DC/OS DNS to access the
+> webserver.  It is easy enough to adjust this demo for non-DC/OS environments by replacing the 
+> `webserver.marathon.containerip.dcos.thisdcos.directory` DNS name with the IP address of the webserver container.
 
 ## Setting Labels
 
@@ -34,7 +38,8 @@ Labels field of the corresponding
         "deployment": "production",
         "tenant": "3"
       }
-  }
+  },
+  "cpu": 0.25
 }
 ```
 
@@ -49,7 +54,8 @@ Labels field of the corresponding
         "deployment": "production",
         "tenant": "3"
       }
-  }
+  },
+  "cpu": 0.25
 }
 ```
 
