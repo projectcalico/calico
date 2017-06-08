@@ -24,6 +24,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/vishvananda/netlink"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 
@@ -65,7 +66,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		ip = GetNextPodAddr()
 	}
 	pod_in := &v1.Pod{
-		ObjectMeta: v1.ObjectMeta{Name: name},
+		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: v1.PodSpec{Containers: []v1.Container{{
 			Name:  fmt.Sprintf("container-%s", name),
 			Image: "ignore",
@@ -201,7 +202,7 @@ var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
 
 func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("nsPrefix", nsPrefix).Info("Cleaning up all pods...")
-	nsList, err := clientset.Namespaces().List(v1.ListOptions{})
+	nsList, err := clientset.Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +216,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 		go func() {
 			admission <- 1
 			if strings.HasPrefix(nsName, nsPrefix) {
-				podList, err := clientset.Pods(nsName).List(v1.ListOptions{})
+				podList, err := clientset.Pods(nsName).List(metav1.ListOptions{})
 				if err != nil {
 					panic(err)
 				}
@@ -239,7 +240,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 
 var zeroGracePeriod int64 = 0
 
-var deleteImmediately = &v1.DeleteOptions{GracePeriodSeconds: &zeroGracePeriod}
+var deleteImmediately = &metav1.DeleteOptions{GracePeriodSeconds: &zeroGracePeriod}
 
 func runCommand(command string, args ...string) error {
 	cmd := exec.Command(command, args...)

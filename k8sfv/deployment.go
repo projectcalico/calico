@@ -20,8 +20,9 @@ import (
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
+	v1 "k8s.io/client-go/pkg/api/v1"
 )
 
 type host struct {
@@ -79,7 +80,7 @@ func (d *localPlusRemotes) ensureNodeDefined(
 			hostCIDR = GetNextRemoteHostCIDR()
 		}
 		node_in := &v1.Node{
-			ObjectMeta: v1.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name: hostName,
 				Annotations: map[string]string{
 					"projectcalico.org/IPv4Address": hostCIDR,
@@ -111,7 +112,7 @@ func (d *localPlusRemotes) ChooseHost(clientset *kubernetes.Clientset) (h host) 
 
 func cleanupAllNodes(clientset *kubernetes.Clientset) {
 	log.Info("Cleaning up all nodes...")
-	nodeList, err := clientset.Nodes().List(v1.ListOptions{})
+	nodeList, err := clientset.Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
