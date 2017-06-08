@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM alpine:3.4
+FROM alpine:latest
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
 # Set the minimum Docker API version required for libnetwork.
