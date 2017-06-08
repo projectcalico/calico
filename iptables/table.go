@@ -630,6 +630,11 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err error) {
 	hashes = map[string][]string{}
 	scanner := bufio.NewScanner(r)
+
+	// Figure out is debug logging is enabled so we can disable some WithFields() calls in the
+	// tight loop below if the log wouldn't be emitted anyway.
+	debug := log.GetLevel() >= log.DebugLevel
+
 	for scanner.Scan() {
 		// Read the next line of the output.
 		line := scanner.Bytes()
@@ -637,7 +642,7 @@ func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
 		// for (possibly empty) chains.
 		logCxt := t.logCxt
-		if log.GetLevel() >= log.DebugLevel {
+		if debug {
 			// Avoid stringifying the line (and hence copying it) unless we're at debug
 			// level.
 			logCxt = logCxt.WithField("line", string(line))
@@ -647,7 +652,9 @@ func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err
 		if captures != nil {
 			// Chain forward-reference, make sure the chain exists.
 			chainName := string(captures[1])
-			logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+			if debug {
+				logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+			}
 			hashes[chainName] = []string{}
 			continue
 		}
@@ -670,7 +677,9 @@ func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err
 		captures = t.hashCommentRegexp.FindSubmatch(line)
 		if captures != nil {
 			hash = string(captures[1])
-			logCxt.WithField("hash", hash).Debug("Found hash in rule")
+			if debug {
+				logCxt.WithField("hash", hash).Debug("Found hash in rule")
+			}
 		} else if t.oldInsertRegexp.Find(line) != nil {
 			logCxt.WithFields(log.Fields{
 				"rule":      line,
