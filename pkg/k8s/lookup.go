@@ -15,8 +15,6 @@
 package k8s
 
 import (
-	"errors"
-
 	log "github.com/Sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -25,23 +23,39 @@ import (
 	"github.com/projectcalico/typha/pkg/set"
 )
 
-var ErrServiceNotReady = errors.New("service not ready")
+func NewK8sAPI() *RealK8sAPI {
+	return &RealK8sAPI{}
+}
 
-func GetNumTyphas(namespace, serviceName, portName string) (int, error) {
-	// If we get here, we need to look up the Typha service using the k8s API.
-	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-	k8sconf, err := rest.InClusterConfig()
+type RealK8sAPI struct {
+	cachedClientSet *kubernetes.Clientset
+}
+
+func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
+	if r.cachedClientSet == nil {
+		// TODO Typha: support Typha lookup without using rest.InClusterConfig().
+		k8sconf, err := rest.InClusterConfig()
+		if err != nil {
+			log.WithError(err).Error("Unable to create Kubernetes config.")
+			return nil, err
+		}
+		clientSet, err := kubernetes.NewForConfig(k8sconf)
+		if err != nil {
+			log.WithError(err).Error("Unable to create Kubernetes client set.")
+			return nil, err
+		}
+		r.cachedClientSet = clientSet
+	}
+	return r.cachedClientSet, nil
+}
+
+func (r *RealK8sAPI) GetNumTyphas(namespace, serviceName, portName string) (int, error) {
+	clientSet, err := r.clientSet()
 	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes config.")
 		return 0, err
 	}
-	clientset, err := kubernetes.NewForConfig(k8sconf)
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes client set.")
-		return 0, err
-	}
 
-	epClient := clientset.CoreV1().Endpoints(namespace)
+	epClient := clientSet.CoreV1().Endpoints(namespace)
 	ep, err := epClient.Get(serviceName, v1.GetOptions{})
 	if err != nil {
 		log.WithError(err).Error("Failed to get Typha endpoint from Kubernetes")
@@ -65,21 +79,13 @@ func GetNumTyphas(namespace, serviceName, portName string) (int, error) {
 	return ips.Len(), nil
 }
 
-func GetNumNodes() (int, error) {
-	// If we get here, we need to look up the Typha service using the k8s API.
-	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-	k8sconf, err := rest.InClusterConfig()
+func (r *RealK8sAPI) GetNumNodes() (int, error) {
+	clientSet, err := r.clientSet()
 	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes config.")
-		return 0, err
-	}
-	clientset, err := kubernetes.NewForConfig(k8sconf)
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes client set.")
 		return 0, err
 	}
 
-	noClient := clientset.CoreV1().Nodes()
+	noClient := clientSet.CoreV1().Nodes()
 	list, err := noClient.List(v1.ListOptions{})
 	if err != nil {
 		return 0, err

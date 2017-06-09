@@ -17,66 +17,88 @@ package k8s
 import (
 	log "github.com/Sirupsen/logrus"
 
+	"context"
+	"time"
+
 	"github.com/projectcalico/typha/pkg/config"
-	"github.com/projectcalico/typha/pkg/jitter"
 )
 
-type maxConnsAPI interface {
+type MaxConnsAPI interface {
 	SetMaxConns(numConns int)
 }
 
-func PollK8sForConnectionLimit(configParams *config.Config, server maxConnsAPI) {
+type K8sAPI interface {
+	GetNumTyphas(namespace, serviceName, portName string) (int, error)
+	GetNumNodes() (int, error)
+}
+
+func PollK8sForConnectionLimit(
+	cxt context.Context,
+	configParams *config.Config,
+	tickerC <-chan time.Time,
+	k8sAPI K8sAPI,
+	server MaxConnsAPI,
+) {
 	logCxt := log.WithField("thread", "k8s-poll")
 	logCxt.Info("Kubernetes poll goroutine started.")
-	ticker := jitter.NewTicker(configParams.K8sServicePollIntervalSecs, configParams.K8sServicePollIntervalSecs/10)
 	activeTarget := configParams.MaxConnectionsUpperLimit
 	for {
-		<-ticker.C
-		// Get the number of Typhas in the service.
-		numTyphas, err := GetNumTyphas(
-			configParams.K8sNamespace,
-			configParams.K8sServiceName,
-			configParams.K8sPortName,
-		)
-		if err != nil || numTyphas <= 0 {
-			logCxt.WithError(err).Warn("Failed to get number of Typhas, removing connection limit")
-			server.SetMaxConns(configParams.MaxConnectionsUpperLimit)
-			continue
-		}
-		// Get the number of nodes as an estimate for the number of Felix connections we should expect.
-		numNodes, err := GetNumNodes()
-		if err != nil || numNodes <= 0 {
-			logCxt.WithError(err).Warn("Failed to get number of nodes, removing connection limit")
-			server.SetMaxConns(configParams.MaxConnectionsUpperLimit)
-			continue
-		}
-
-		reason := "configured lower limit"
-		target := configParams.MaxConnectionsLowerLimit
-		if numTyphas <= 1 {
-			reason = "lone typha"
-			target = configParams.MaxConnectionsUpperLimit
-		} else {
-			candidate := 1 + numNodes*120/(numTyphas-1)/100
-			if candidate > target {
-				reason = "fraction+20%"
-				target = candidate
+		select {
+		case <-tickerC:
+			// Get the number of Typhas in the service.
+			numTyphas, tErr := k8sAPI.GetNumTyphas(
+				configParams.K8sNamespace,
+				configParams.K8sServiceName,
+				configParams.K8sPortName,
+			)
+			if tErr != nil || numTyphas <= 0 {
+				logCxt.WithError(tErr).Warn("Failed to get number of Typhas")
 			}
-		}
-		if target > configParams.MaxConnectionsUpperLimit {
-			reason = "configured upper limit"
-			target = configParams.MaxConnectionsUpperLimit
-		}
+			// Get the number of nodes as an estimate for the number of Felix connections we should expect.
+			numNodes, nErr := k8sAPI.GetNumNodes()
+			if nErr != nil || numNodes <= 0 {
+				logCxt.WithError(nErr).Warn("Failed to get number of nodes")
+			}
 
-		if target != activeTarget {
-			logCxt.WithFields(log.Fields{
-				"numTyphas": numTyphas,
-				"numNodes":  numNodes,
-				"newLimit":  target,
-				"reason":    reason,
-			}).Info("Calculated new connection limit.")
-			server.SetMaxConns(target)
-			activeTarget = target
+			target := configParams.MaxConnectionsUpperLimit
+			reason := "error"
+			if tErr == nil && nErr == nil {
+				target, reason = CalculateMaxConnLimit(configParams, numTyphas, numNodes)
+			}
+
+			if target != activeTarget {
+				logCxt.WithFields(log.Fields{
+					"numTyphas": numTyphas,
+					"numNodes":  numNodes,
+					"newLimit":  target,
+					"reason":    reason,
+				}).Info("Calculated new connection limit.")
+				server.SetMaxConns(target)
+				activeTarget = target
+			}
+		case <-cxt.Done():
+			logCxt.Info("Context finished")
+			return
 		}
 	}
+}
+
+func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes int) (target int, reason string) {
+	reason = "configured lower limit"
+	target = configParams.MaxConnectionsLowerLimit
+	if numTyphas <= 1 {
+		reason = "lone typha"
+		target = configParams.MaxConnectionsUpperLimit
+		return
+	}
+	candidate := 1 + numNodes*120/(numTyphas-1)/100
+	if candidate > target {
+		reason = "fraction+20%"
+		target = candidate
+	}
+	if target > configParams.MaxConnectionsUpperLimit {
+		reason = "configured upper limit"
+		target = configParams.MaxConnectionsUpperLimit
+	}
+	return
 }
