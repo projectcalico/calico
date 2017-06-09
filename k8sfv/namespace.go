@@ -24,6 +24,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions"
+
+	"github.com/projectcalico/felix/k8sfv/internalversion"
 )
 
 var nsPrefixNum = 0
