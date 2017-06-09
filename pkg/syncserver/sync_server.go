@@ -220,7 +220,7 @@ func (s *Server) serve(cxt context.Context) {
 			logCxt.WithError(err).Panic("Failed to accept connection")
 		}
 
-		if s.overConnLimit() {
+		if s.atConnLimit() {
 			logCxt.WithField("conn", conn.RemoteAddr()).Warn(
 				"Too many active connections, dropping incoming connection.")
 			counterNumConnectionsRejected.Inc()
@@ -251,18 +251,19 @@ func (s *Server) serve(cxt context.Context) {
 			encoder: gob.NewEncoder(conn),
 			readC:   make(chan interface{}),
 		}
-
+		// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
+		s.recordConnection(connection)
+		// Defer to the connection-handler.
+		go connection.handle()
+		// Clean up the entry in connIDToConn as soon as the context is canceled.
 		go func() {
-			// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
-			s.recordConnection(connection)
-			defer s.discardConnection(connection)
-			// Defer to the connection to do the handling.
-			connection.handle()
+			<-connCxt.Done()
+			s.discardConnection(connection)
 		}()
 	}
 }
 
-func (s *Server) overConnLimit() bool {
+func (s *Server) atConnLimit() bool {
 	s.connTrackingLock.Lock()
 	defer s.connTrackingLock.Unlock()
 	return len(s.connIDToConn) >= s.maxConns
@@ -314,9 +315,6 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 					}).Warn("Currently have too many connections, terminating one at random.")
 					conn.cancelCxt()
 					counterNumConnectionsDropped.Inc()
-					// Remove from the map now so that the connection count immediately drops;
-					// otherwise we might drop too many connections.
-					delete(s.connIDToConn, connID)
 					break
 				}
 			}

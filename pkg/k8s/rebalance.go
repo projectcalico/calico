@@ -52,12 +52,14 @@ func PollK8sForConnectionLimit(
 				configParams.K8sPortName,
 			)
 			if tErr != nil || numTyphas <= 0 {
-				logCxt.WithError(tErr).Warn("Failed to get number of Typhas")
+				logCxt.WithError(tErr).WithField("numTyphas", numTyphas).Warn(
+					"Failed to get number of Typhas")
 			}
 			// Get the number of nodes as an estimate for the number of Felix connections we should expect.
 			numNodes, nErr := k8sAPI.GetNumNodes()
 			if nErr != nil || numNodes <= 0 {
-				logCxt.WithError(nErr).Warn("Failed to get number of nodes")
+				logCxt.WithError(nErr).WithField("numNodes", numNodes).Warn(
+					"Failed to get number of nodes")
 			}
 
 			target := configParams.MaxConnectionsUpperLimit
@@ -91,6 +93,9 @@ func CalculateMaxConnLimit(configParams *config.Config, numTyphas, numNodes int)
 		target = configParams.MaxConnectionsUpperLimit
 		return
 	}
+	// We subtract 1 from the number of Typhas when calculating the fraction to allow for one Typha
+	// dying during a rolling upgrade, for example.  That does mean our load will be less even but
+	// it reduces the number of expensive disconnections.  We add 20% to give some further headroom.
 	candidate := 1 + numNodes*120/(numTyphas-1)/100
 	if candidate > target {
 		reason = "fraction+20%"
