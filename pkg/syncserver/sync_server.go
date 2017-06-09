@@ -25,6 +25,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"math"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/jitter"
@@ -41,6 +43,14 @@ var (
 	counterNumConnectionsAccepted = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "typha_connections_accepted",
 		Help: "Total number of connections accepted over time.",
+	})
+	counterNumConnectionsRejected = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_connections_rejected",
+		Help: "Total number of connections rejected due to throttling.",
+	})
+	counterNumConnectionsDropped = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "typha_connections_dropped",
+		Help: "Total number of connections dropped due to rebalancing.",
 	})
 	gaugeNumConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "typha_connections_active",
@@ -77,6 +87,8 @@ var (
 
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
+	prometheus.MustRegister(counterNumConnectionsRejected)
+	prometheus.MustRegister(counterNumConnectionsDropped)
 	prometheus.MustRegister(gaugeNumConnections)
 	prometheus.MustRegister(summarySnapshotSendTime)
 	prometheus.MustRegister(summaryClientLatency)
@@ -91,6 +103,8 @@ const (
 	defaultMaxFallBehind        = 90 * time.Second
 	defaultBatchingAgeThreshold = 100 * time.Millisecond
 	defaultPingInterval         = 10 * time.Second
+	defaultDropInterval         = 1 * time.Second
+	defaultMaxConns             = math.MaxInt32
 )
 
 type Server struct {
@@ -99,8 +113,10 @@ type Server struct {
 	nextConnID uint64
 	maxConnsC  chan int
 
-	connIDToConnL sync.Mutex
-	connIDToConn  map[uint64]*connection
+	dropInterval     time.Duration
+	connTrackingLock sync.Mutex
+	maxConns         int
+	connIDToConn     map[uint64]*connection
 }
 
 type BreadcrumbProvider interface {
@@ -113,6 +129,8 @@ type Config struct {
 	MinBatchingAgeThreshold time.Duration
 	PingInterval            time.Duration
 	PongTimeout             time.Duration
+	DropInterval            time.Duration
+	MaxConns                int
 }
 
 func New(cache BreadcrumbProvider, config Config) *Server {
@@ -152,12 +170,27 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
 		config.PongTimeout = defaultTimeout
 	}
+	if config.DropInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   config.DropInterval,
+			"default": defaultDropInterval,
+		}).Info("Defaulting DropInterval.")
+		config.DropInterval = defaultDropInterval
+	}
+	if config.MaxConns <= 0 {
+		log.WithFields(log.Fields{
+			"value":   config.MaxConns,
+			"default": defaultMaxConns,
+		}).Info("Defaulting MaxConns.")
+		config.MaxConns = defaultMaxConns
+	}
 
 	return &Server{
-		config:    config,
-		cache:     cache,
-		maxConnsC: make(chan int),
-
+		config:       config,
+		cache:        cache,
+		maxConnsC:    make(chan int),
+		dropInterval: config.DropInterval,
+		maxConns:     config.MaxConns,
 		connIDToConn: map[uint64]*connection{},
 	}
 }
@@ -187,6 +220,14 @@ func (s *Server) serve(cxt context.Context) {
 			logCxt.WithError(err).Panic("Failed to accept connection")
 		}
 
+		if s.overConnLimit() {
+			logCxt.WithField("conn", conn.RemoteAddr()).Warn(
+				"Too many active connections, dropping incoming connection.")
+			counterNumConnectionsRejected.Inc()
+			conn.Close()
+			continue
+		}
+
 		connID := s.nextConnID
 		s.nextConnID++
 		logCxt.WithField("connID", connID).Info("New connection")
@@ -211,64 +252,75 @@ func (s *Server) serve(cxt context.Context) {
 			readC:   make(chan interface{}),
 		}
 
-		// Record the active connection so we can close it later if we need to.
-		s.connIDToConnL.Lock()
-		s.connIDToConn[connID] = connection
-		s.connIDToConnL.Unlock()
-		// Queue up the cleanup of our tracking map when the connection gets closed.
 		go func() {
-			<-connCxt.Done()
-			s.connIDToConnL.Lock()
-			delete(s.connIDToConn, connID)
-			s.connIDToConnL.Unlock()
+			// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
+			s.recordConnection(connection)
+			defer s.discardConnection(connection)
+			// Defer to the connection to do the handling.
+			connection.handle()
 		}()
-		go connection.handle()
 	}
+}
+
+func (s *Server) overConnLimit() bool {
+	s.connTrackingLock.Lock()
+	defer s.connTrackingLock.Unlock()
+	return len(s.connIDToConn) >= s.maxConns
+}
+
+func (s *Server) recordConnection(conn *connection) {
+	s.connTrackingLock.Lock()
+	s.connIDToConn[conn.ID] = conn
+	s.connTrackingLock.Unlock()
+}
+
+func (s *Server) discardConnection(conn *connection) {
+	s.connTrackingLock.Lock()
+	delete(s.connIDToConn, conn.ID)
+	s.connTrackingLock.Unlock()
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
 	logCxt := log.WithField("thread", "numConnsGov")
-	maxConns := <-s.maxConnsC
-	ticker := jitter.NewTicker(time.Second, 100*time.Millisecond)
+	maxConns := s.maxConns
+	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
 	for {
 		select {
 		case newMax := <-s.maxConnsC:
 			if newMax == maxConns {
 				continue
 			}
-			s.connIDToConnL.Lock()
+			s.connTrackingLock.Lock()
 			currentNum := len(s.connIDToConn)
-			s.connIDToConnL.Unlock()
+			s.connTrackingLock.Unlock()
 			logCxt.WithFields(log.Fields{
 				"oldMax":     maxConns,
 				"newMax":     newMax,
 				"currentNum": currentNum,
 			}).Info("New target number of connections")
 			maxConns = newMax
+			s.connTrackingLock.Lock()
+			s.maxConns = maxConns
+			s.connTrackingLock.Unlock()
 		case <-ticker.C:
-			if maxConns < 100 {
-				log.Warn("Sanity check: max connections was <100, defaulting")
-				maxConns = 100
-			}
-			s.connIDToConnL.Lock()
+			s.connTrackingLock.Lock()
 			numConns := len(s.connIDToConn)
-			var cancelFn context.CancelFunc
 			if numConns > maxConns {
-				for _, conn := range s.connIDToConn {
+				for connID, conn := range s.connIDToConn {
 					logCxt.WithFields(log.Fields{
 						"max":     maxConns,
 						"current": numConns,
-						"connID":  conn.ID,
+						"connID":  connID,
 					}).Warn("Currently have too many connections, terminating one at random.")
-					cancelFn = conn.cancelCxt
+					conn.cancelCxt()
+					counterNumConnectionsDropped.Inc()
+					// Remove from the map now so that the connection count immediately drops;
+					// otherwise we might drop too many connections.
+					delete(s.connIDToConn, connID)
 					break
 				}
 			}
-			s.connIDToConnL.Unlock()
-			if cancelFn != nil {
-				// Drop locks before we invoke the cancel function, just to avoid any kind of hierarchy.
-				cancelFn()
-			}
+			s.connTrackingLock.Unlock()
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
 			return
