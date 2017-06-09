@@ -58,7 +58,7 @@ if [ -w "/host/opt/cni/bin/" ]; then
 	do
 		filename=$(basename $path)
 		tmp=",$filename,"
-		if [ ! "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
+		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
 			cp /opt/cni/bin/$filename /host/opt/cni/bin/
 		fi
 	done
@@ -73,7 +73,7 @@ if [ -w "/host/secondary-bin-dir/" ]; then
 	do
 		filename=$(basename $path)
 		tmp=",$filename,"
-		if [ ! "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
+		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
 			cp /opt/cni/bin/$filename /host/secondary-bin-dir/
 		fi
 	done
