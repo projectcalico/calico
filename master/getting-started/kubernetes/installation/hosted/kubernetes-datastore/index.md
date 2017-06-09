@@ -50,7 +50,7 @@ other routers - future releases of Calico are expected to bring feature parity w
 
 To install Calico with Calico networking, run one of the following commands based on your Kubernetes version:
 
-For **Kubernetes 1.6** clusters:
+For **Kubernetes 1.6+** clusters:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.6/calico.yaml

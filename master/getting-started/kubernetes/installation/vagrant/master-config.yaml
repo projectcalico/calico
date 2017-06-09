@@ -1,9 +1,22 @@
 #cloud-config
 ---
+
 coreos:
   update:
     reboot-strategy: off
   units:
+    - name: runcmd.service
+      command: start
+      content: |
+        [Unit]
+        Description=Downloads Kubernetes binaries
+        Before=kube-apiserver.service kube-controller-manager.service kube-scheduler.service kubelet.service kube-proxy.service
+
+        [Service]
+        Type=oneshot
+        TimeoutStartSec=1800
+        ExecStart=/opt/k8s/setup/k8s_binary_init.sh kubectl kube-apiserver kube-controller-manager kubelet kube-proxy kube-scheduler
+        RemainAfterExit=true
     - name: etcd-member.service
       command: start
       drop-ins:
@@ -23,10 +36,6 @@ coreos:
         After=etcd-member.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kubectl
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kube-apiserver
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubectl
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-apiserver
         ExecStart=/opt/bin/kube-apiserver \
         --allow-privileged=true \
         --etcd-servers=http://$private_ipv4:2379 \
@@ -49,8 +58,6 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kube-controller-manager
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-controller-manager
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-controller-manager \
         --master=$private_ipv4:8080 \
@@ -72,8 +79,6 @@ coreos:
         After=kube-apiserver.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kube-scheduler
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-scheduler
         ExecStart=/opt/bin/kube-scheduler --master=$private_ipv4:8080
         Restart=always
         RestartSec=10
@@ -90,8 +95,6 @@ coreos:
 
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kubelet
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStart=/opt/bin/kubelet \
         --address=0.0.0.0 \
         --allow-privileged=true \
@@ -118,8 +121,6 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.6.2/bin/linux/amd64/kube-proxy
-        ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
         --master=http://$private_ipv4:8080 \
