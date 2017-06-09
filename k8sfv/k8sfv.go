@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 
 	capi "github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
 
@@ -155,7 +154,7 @@ func initializeCalicoDeployment(k8sServerEndpoint string) {
 	c, err := client.New(capi.CalicoAPIConfig{
 		Spec: capi.CalicoAPIConfigSpec{
 			DatastoreType: capi.Kubernetes,
-			KubeConfig: k8s.KubeConfig{
+			KubeConfig: capi.KubeConfig{
 				K8sAPIEndpoint:           k8sServerEndpoint,
 				K8sInsecureSkipTLSVerify: true,
 			},

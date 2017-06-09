@@ -64,12 +64,14 @@ var _ = Context("with a k8s clientset", func() {
 			d = NewDeployment(clientset, 1, false)
 		})
 
-		It("should create 10k endpoints", func() {
+		// Slow: takes about 3 minutes.
+		It("should create 10k endpoints [slow]", func() {
 			addNamespaces(clientset, nsPrefix)
 			addEndpoints(clientset, nsPrefix, d, 10000)
 		})
 
-		It("should not leak memory", func() {
+		// Slow: takes more than 1 hour.
+		It("should not leak memory [slow]", func() {
 			const (
 				cycles = 20
 				ignore = 12
@@ -203,7 +205,8 @@ var _ = Context("with a k8s clientset", func() {
 			d = NewDeployment(clientset, 9, true)
 		})
 
-		It("should add and remove 1000 pods, of which about 100 on local node", func() {
+		// Slow: takes about 15 minutes.
+		It("should add and remove 1000 pods, of which about 100 on local node [slow]", func() {
 			createNamespace(clientset, nsPrefix+"scale", nil)
 			for cycle := 0; cycle < 10; cycle++ {
 				for ii := 0; ii < 1000; ii++ {

@@ -178,6 +178,12 @@ func (c *restoreCmd) StdinPipe() (WriteCloserFlusher, error) {
 			FirstWriteFailRegexp: regexp.MustCompile(`\s*\d+\.\d+\.\d+\.\d+\s*`),
 		}, nil
 	}
+	if c.Dataplane.popRestoreFailure("close") {
+		log.Warn("Returning a bad pipe that will fail when closedP")
+		return &badPipe{
+			CloseFail: true,
+		}, nil
+	}
 	pipeR, pipeW := io.Pipe()
 	c.Stdin = pipeR
 	buf := bufio.NewWriter(pipeW)
