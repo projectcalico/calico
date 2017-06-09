@@ -1,9 +1,9 @@
 #!/bin/sh
 
-get_calicoctl() {
+get_templates() {
     echo "Getting latest confd templates from calicoctl repo"
-    git clone https://github.com/projectcalico/calicoctl.git /calicoctl > /dev/null 2>&1
-    ln -s /calicoctl/calico_node/filesystem/etc/calico/ /etc/calico > /dev/null 2>&1
+    git clone https://github.com/projectcalico/calicoctl.git /calicoctl
+    ln -s /calicoctl/calico_node/filesystem/etc/calico/ /etc/calico
 
     echo "Building initial toml files"
     # This is pulled from the calico_node rc.local script, it generates these three

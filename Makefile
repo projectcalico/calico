@@ -1,16 +1,18 @@
-
 # Disable make's implicit rules, which are not useful for golang, and slow down the build
 # considerably.
 .SUFFIXES:
 
-all: bin/confd
-
-ETCDCTL_VER=v3.1.8
+all: clean test
 
 GO_BUILD_CONTAINER?=calico/go-build:v0.4
-K8S_VERSION=1.6.4
-TEST_CONTAINER=heschlie/confd-test
+
+K8S_VERSION=v1.6.4
+ETCDCTL_VER=v3.1.8
+BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+
+# Ensure that the bin directory is always created
+MAKE_SURE_BIN_EXIST := $(shell mkdir -p bin)
 
 # All go files.
 GO_FILES:=$(shell find . -type f -name '*.go')
@@ -49,7 +51,6 @@ vendor vendor/.up-to-date: glide.lock
 
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
-	mkdir -p bin
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ "github.com/kelseyhightower/confd" && \
                ( ldd bin/confd 2>&1 | grep -q "Not a valid dynamic program" || \
@@ -61,24 +62,24 @@ test: test-kdd test-etcd
 
 .PHONY: test-kdd
 ## Run template tests against KDD
-test-kdd: bin/confd fetch-bins run-etcd-host run-k8s-apiserver
+test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 run-k8s-apiserver
 	docker run --rm --net=host \
-	    -v $(CURDIR)/tests/:/tests/ \
+		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e LOCAL_USER_ID=0 \
 		$(GO_BUILD_CONTAINER) /tests/test_kdd.sh
 
 .PHONY: test-etcd
 ## Run template tests against etcd
-test-etcd: bin/confd fetch-bins run-etcd-host run-k8s-apiserver
+test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 run-etcd
 	docker run --rm --net=host \
-	    -v $(CURDIR)/tests/:/tests/ \
+		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e LOCAL_USER_ID=0 \
 		$(GO_BUILD_CONTAINER) /tests/test_etcd.sh
 
 ## Etcd is used by the kubernetes
-run-etcd-host: stop-etcd
+run-etcd: stop-etcd
 	docker run --detach \
 	--net=host \
 	--name calico-etcd quay.io/coreos/etcd \
@@ -91,10 +92,10 @@ stop-etcd:
 	@-docker rm -f calico-etcd
 
 ## Kubernetes apiserver used for tests
-run-k8s-apiserver: stop-k8s-apiserver
+run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-  	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+  	gcr.io/google_containers/hyperkube-amd64:$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 
 
@@ -102,20 +103,21 @@ run-k8s-apiserver: stop-k8s-apiserver
 stop-k8s-apiserver:
 	@-docker rm -f calico-k8s-apiserver
 
-.PHONY: fetch-bins
-## Fetch our binary files for testing
-fetch-bins: bin/kubectl bin/bird bin/bird6 bin/etcdctl
+bin/kubectl:
+	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/amd64/kubectl -o $@
+	chmod +x $@
 
-bin/kubectl bin/bird bin/bird6 bin/etcdctl:
-	mkdir -p bin/ tmp/
-	wget -q https://storage.googleapis.com/kubernetes-release/release/v1.6.4/bin/linux/amd64/kubectl -O bin/kubectl
-	wget -q https://github.com/projectcalico/bird/releases/download/v0.3.1/bird -O bin/bird
-	wget -q https://github.com/projectcalico/bird/releases/download/v0.3.1/bird6 -O bin/bird6
-	wget -q https://github.com/coreos/etcd/releases/download/v3.1.8/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz -O tmp/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz
-	tar -zxvf tmp/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz --strip=1 -C bin/ etcd-$(ETCDCTL_VER)-linux-amd64/etcdctl
-	rm tmp/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz
-	chmod +x bin/kubectl bin/bird bin/bird6 bin/etcdctl
+bin/bird:
+	curl -sSf -L --retry 5 https://github.com/projectcalico/bird/releases/download/$(BIRD_VER)/bird -o $@
+	chmod +x $@
+
+bin/bird6:
+	curl -sSf -L --retry 5 https://github.com/projectcalico/bird/releases/download/$(BIRD_VER)/bird6 -o $@
+	chmod +x $@
+
+bin/etcdctl:
+	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCDCTL_VER)/etcd-$(ETCDCTL_VER)-linux-amd64.tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCDCTL_VER)-linux-amd64/etcdctl 
 
 .PHONY: clean
 clean:
-	rm -rf bin/ tmp/
+	rm -rf bin/*

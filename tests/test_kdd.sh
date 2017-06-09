@@ -7,11 +7,11 @@ script_dir="$(dirname "$0")"
 source "$script_dir/utils.sh"
 
 # This is needed for use in the keys for our templates, both the sed commands
-# below use them as well as the templates confd uses.
+# in utils.sh use them as well as the templates confd uses.
 export NODENAME="kube-master"
 
-echo "Waiting for API server to come online"
-until kubectl version > /dev/null 2>&1; do
+until kubectl version; do
+  echo "Waiting for API server to come online"
   sleep 1
 done
 
@@ -27,7 +27,7 @@ until kubectl apply -f /tests/tpr_data.yaml > /dev/null 2>&1; do
   sleep 1
 done
 
-get_calicoctl
+get_templates
 
 echo "Running confd against KDD"
 confd -kubeconfig=/tests/confd_kubeconfig -onetime -backend=k8s -confdir=/etc/calico/confd -log-level=debug >/dev/null 2>&1 || true

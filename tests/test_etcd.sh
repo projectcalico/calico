@@ -7,7 +7,7 @@ script_dir="$(dirname "$0")"
 source "$script_dir/utils.sh"
 
 # This is needed for use in the keys of our templates, and the sed commands
-# below use them to create the toml files.
+# in utils.sh use them to create the toml files.
 export NODENAME="kube-master"
 
 echo "Populating etcd with test data"
@@ -27,7 +27,7 @@ while read dir; do
   etcdctl mkdir $dir > /dev/null 2>&1
 done < /tests/etcd_dirs
 
-get_calicoctl
+get_templates
 
 # Use ETCD_ENDPOINTS in preferences to ETCD_AUTHORITY
 ETCD_NODE=http://127.0.0.1:2379
