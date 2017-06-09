@@ -35,7 +35,6 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
@@ -149,8 +148,7 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		globalConfig := loadConfigFromDatastore(datastore)
-		configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
+
 		configParams.Validate()
 		if configParams.Err != nil {
 			log.WithError(configParams.Err).Error(
@@ -158,19 +156,6 @@ configRetry:
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-
-		// We now have some config flags that affect how we configure the syncer.
-		// After loading the config from the datastore, reconnect, possibly with new
-		// config.  We don't need to re-load the configuration _again_ because the
-		// calculation graph will spot if the config has changed since we were initialised.
-		datastoreConfig = configParams.DatastoreConfig()
-		datastore, err = backend.NewClient(datastoreConfig)
-		if err != nil {
-			log.WithError(err).Error("Failed to (re)connect to datastore")
-			time.Sleep(1 * time.Second)
-			continue configRetry
-		}
-
 		break configRetry
 	}
 
@@ -228,20 +213,20 @@ configRetry:
 		go servePrometheusMetrics(configParams)
 	}
 
-	// On receipt of SIGUSR1, write out heap profile.
+	// Hook and process the signals we care about
 	usr1SignalChan := make(chan os.Signal, 1)
 	signal.Notify(usr1SignalChan, syscall.SIGUSR1)
-	go func() {
-		for {
-			<-usr1SignalChan
+	termChan := make(chan os.Signal, 1)
+	signal.Notify(termChan, syscall.SIGTERM)
+	for {
+		select {
+		case <-termChan:
+			log.Fatal("Received SIGTERM, shutting down")
+		case <-usr1SignalChan:
+			log.Info("Received SIGUSR1, emitting heap profile")
 			dumpHeapMemoryProfile(configParams)
 		}
-	}()
-
-	// Now monitor the worker process and our worker threads and shut
-	// down the process gracefully if they fail.
-	// TODO Managed shut down.
-	monitorAndManageShutdown(nil, nil)
+	}
 }
 
 // TODO Typha: Share with Felix.
@@ -303,80 +288,4 @@ func servePrometheusMetrics(configParams *config.Config) {
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
 	}
-}
-
-// TODO Typha: Clean this up (copy-paste from Felix)
-func monitorAndManageShutdown(failureReportChan <-chan string, stopSignalChans []chan<- bool) {
-	// Ask the runtime to tell us if we get a term signal.
-	termSignalChan := make(chan os.Signal, 1)
-	signal.Notify(termSignalChan, syscall.SIGTERM)
-
-	// Wait for one of the channels to give us a reason to shut down.
-	receivedSignal := false
-	var reason string
-	select {
-	case sig := <-termSignalChan:
-		reason = fmt.Sprintf("Received OS signal %v", sig)
-		receivedSignal = true
-	case reason = <-failureReportChan:
-	}
-	logCxt := log.WithField("reason", reason)
-	logCxt.Warn("Typha is shutting down")
-
-	// Notify other components to stop.
-	// TODO Use Contexts.
-	for _, c := range stopSignalChans {
-		select {
-		case c <- true:
-		default:
-		}
-	}
-
-	if !receivedSignal {
-		// We're exiting due to a failure or a config change, wait
-		// a couple of seconds to ensure that we don't go into a tight
-		// restart loop (which would make the init daemon give up trying
-		// to restart us).
-		logCxt.Info("Shutdown wasn't caused by signal, pausing to avoid tight restart loop")
-		go func() {
-			time.Sleep(2 * time.Second)
-			logCxt.Fatal("Exiting.")
-		}()
-		// But, if we get a signal while we're waiting quit immediately.
-		<-termSignalChan
-	}
-
-	logCxt.Fatal("Exiting immediately")
-}
-
-func loadConfigFromDatastore(datastore bapi.Client) (globalConfig map[string]string) {
-	for {
-		log.Info("Waiting for the datastore to be ready")
-		if kv, err := datastore.Get(model.ReadyFlagKey{}); err != nil {
-			log.WithError(err).Error("Failed to read global datastore 'Ready' flag, will retry...")
-			time.Sleep(1 * time.Second)
-			continue
-		} else if kv.Value != true {
-			log.Warning("Global datastore 'Ready' flag set to false, waiting...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		log.Info("Loading global config from datastore")
-		kvs, err := datastore.List(model.GlobalConfigListOptions{})
-		if err != nil {
-			log.WithError(err).Error("Failed to load config from datastore")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		globalConfig = make(map[string]string)
-		for _, kv := range kvs {
-			key := kv.Key.(model.GlobalConfigKey)
-			value := kv.Value.(string)
-			globalConfig[key.Name] = value
-		}
-		log.Info("Loaded config from datastore")
-		break
-	}
-	return globalConfig
 }
