@@ -42,12 +42,23 @@ represented by a single node in the graph.
 
 ### 2) Enable isolation
 
+The following will prevent all access to the frontend, backend, and client Services.
+
+#### When using the etcd datastore
+
 ```shell
 kubectl annotate ns stars "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
 kubectl annotate ns client "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
 ```
 
-This will prevent all access to the frontend, backend, and client Services.
+#### When using the Kubernetes API datastore
+
+```shell
+kubectl create -n stars -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
+kubectl create -n client -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
+```
+
+#### Confirm isolation
 
 Refresh the management UI (it may take up to 10 seconds for changes to be reflected in the UI).
 Now that we've enabled isolation, the UI can no longer access the pods, and so they will no longer show up in the UI.
