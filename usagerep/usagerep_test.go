@@ -27,7 +27,7 @@ import (
 
 var _ = Describe("Usagerep", func() {
 	It("should calculate correct URL mainline", func() {
-		rawURL := calculateURL("myhost", "theguid", "atype", calc.StatsUpdate{
+		rawURL := calculateURL("theguid", "atype", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -35,8 +35,7 @@ var _ = Describe("Usagerep", func() {
 		url, err := url.Parse(rawURL)
 		Expect(err).NotTo(HaveOccurred())
 		q := url.Query()
-		Expect(len(q)).To(Equal(8))
-		Expect(q.Get("hostname")).To(Equal("myhost"))
+		Expect(len(q)).To(Equal(7))
 		Expect(q.Get("guid")).To(Equal("theguid"))
 		Expect(q.Get("type")).To(Equal("atype"))
 		Expect(q.Get("size")).To(Equal("10"))
@@ -50,7 +49,7 @@ var _ = Describe("Usagerep", func() {
 		Expect(url.Path).To(Equal("/UsageCheck/calicoVersionCheck"))
 	})
 	It("should default cluster type and GUID", func() {
-		rawURL := calculateURL("myhost", "", "", calc.StatsUpdate{
+		rawURL := calculateURL("", "", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -58,7 +57,7 @@ var _ = Describe("Usagerep", func() {
 		url, err := url.Parse(rawURL)
 		Expect(err).NotTo(HaveOccurred())
 		q := url.Query()
-		Expect(len(q)).To(Equal(8))
+		Expect(len(q)).To(Equal(7))
 		Expect(q.Get("guid")).To(Equal("baddecaf"))
 		Expect(q.Get("type")).To(Equal("unknown"))
 	})
