@@ -13,6 +13,8 @@ exclude:
   - Makefile
   - README.md
   - RELEASING.md
+  - BUILDING_CALICO.md
+  - hack
 
 # Markdown Processors
 # TODO - we're not entirely sure what these are for
