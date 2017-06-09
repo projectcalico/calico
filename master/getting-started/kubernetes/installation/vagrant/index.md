@@ -80,14 +80,14 @@ Let's configure `kubectl` so you can access the cluster from your local machine.
 For Mac:
 
 ```shell
-wget http://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/darwin/amd64/kubectl
+wget http://storage.googleapis.com/kubernetes-release/release/v1.7.0-beta.1/bin/darwin/amd64/kubectl
 chmod +x ./kubectl
 ```
 
 For Linux:
 
 ```shell
-wget http://storage.googleapis.com/kubernetes-release/release/v1.6.0/bin/linux/amd64/kubectl
+wget http://storage.googleapis.com/kubernetes-release/release/v1.7.0-beta.1/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 ```
 

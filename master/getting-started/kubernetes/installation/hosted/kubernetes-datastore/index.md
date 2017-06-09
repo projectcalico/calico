@@ -50,7 +50,7 @@ other routers - future releases of Calico are expected to bring feature parity w
 
 To install Calico with Calico networking, run one of the following commands based on your Kubernetes version:
 
-For **Kubernetes 1.6** clusters:
+For **Kubernetes 1.6+** clusters:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.6/calico.yaml
@@ -82,7 +82,7 @@ CIDR allocations, either through static routes, a Kubernetes cloud-provider inte
 
 To install Calico in policy-only mode, run one of the following commands based on your Kubernetes version:
 
-For **Kubernetes 1.6** clusters:
+For **Kubernetes 1.6+** clusters:
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.6/calico.yaml
@@ -111,7 +111,7 @@ in the Canal project for details on installing Calico with flannel.
 If your Kubernetes cluster has RBAC enabled, you'll need to create RBAC roles for Calico.
 Apply the following manifest to create these RBAC roles.
 
->Note: The following RBAC policy is compatible with the Kubernetes v1.6 manifest only.
+>Note: The following RBAC policy is compatible with the Kubernetes v1.6+ manifest only.
 
 ```
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac.yaml
