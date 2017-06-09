@@ -17,8 +17,19 @@ ingress and egress traffic, overriding any other Network Policy that has been co
 
 > **Note:** The following steps assume you have permissions to create resources in the `kube-system` namespace.
 
-Create a `SystemNetworkPolicy` resource by running the following commands:
+#### Override Calico policy to allow all traffic
+
+Create a `SystemNetworkPolicy` resource by running the following command:
 
 ```
 kubectl create -n=kube-system -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/system-network-policy-override.yaml
+```
+
+#### Revert override to enable Calico policy
+
+To revert the override of Calico policy, delete the `SystemNetworkPolicy` resource 
+responsible for the override by running the following command:
+
+```
+kubectl delete -n=kube-system -f=https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/system-network-policy-override.yaml
 ```
