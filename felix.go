@@ -377,7 +377,6 @@ configRetry:
 
 		go usagerep.PeriodicallyReportUsage(
 			24*time.Hour,
-			configParams.FelixHostname,
 			configParams.ClusterGUID,
 			configParams.ClusterType,
 			statsChanOut,

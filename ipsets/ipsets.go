@@ -55,6 +55,16 @@ type IPSets struct {
 	gaugeNumIpsets prometheus.Gauge
 
 	logCxt *log.Entry
+
+	// restoreInCopy holds a copy of the stdin that we send to ipset restore.  It is reset
+	// after each use.
+	restoreInCopy bytes.Buffer
+	// stdoutCopy holds a copy of the the stdout emitted by ipset restore. It is reset after
+	// each use.
+	stdoutCopy bytes.Buffer
+	// stderrCopy holds a copy of the the stderr emitted by ipset restore. It is reset after
+	// each use.
+	stderrCopy bytes.Buffer
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig) *IPSets {
@@ -235,14 +245,17 @@ func (s *IPSets) ApplyUpdates() {
 		s.sleep(retryDelay)
 		retryDelay *= 2
 	}
-	for attempts := 0; attempts < 10; attempts++ {
+	for attempt := 0; attempt < 10; attempt++ {
+		if attempt > 0 {
+			s.logCxt.Info("Retrying after an ipsets update failure...")
+		}
 		if s.resyncRequired {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
 			s.logCxt.Info("Resyncing ipsets with dataplane.")
 			numProblems, err := s.tryResync()
 			if err != nil {
-				s.logCxt.WithError(err).Error("Failed to resync with dataplane")
+				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
 				backOff()
 				continue
 			}
@@ -254,7 +267,8 @@ func (s *IPSets) ApplyUpdates() {
 		}
 
 		if err := s.tryUpdates(); err != nil {
-			s.logCxt.WithError(err).Error("Failed to update IP sets.")
+			s.logCxt.WithError(err).Warning(
+				"Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
 			countNumIPSetErrors.Inc()
 			backOff()
@@ -329,6 +343,12 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
 	ipSetName := ""
+
+	// Figure out if debug logging is enabled so we can disable some expensive-to-calculate logs
+	// in the tight loop below if they're not going to be emitted.  This speeds up the loop
+	// by a factor of 3-4x!
+	debug := log.GetLevel() >= log.DebugLevel
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "Name:") {
@@ -371,10 +391,12 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 				}
 				canonMember := ipSet.Type.CanonicaliseMember(line)
 				dataplaneMembers.Add(canonMember)
-				logCxt.WithFields(log.Fields{
-					"member": line,
-					"canon":  canonMember,
-				}).Debug("Found member in dataplane")
+				if debug {
+					logCxt.WithFields(log.Fields{
+						"member": line,
+						"canon":  canonMember,
+					}).Debug("Found member in dataplane")
+				}
 			}
 			ipSetName = ""
 			if scanner.Err() != nil {
@@ -538,23 +560,33 @@ func (s *IPSets) tryUpdates() error {
 	// Set up an ipset restore session.
 	countNumIPSetCalls.Inc()
 	cmd := s.newCmd("ipset", "restore")
-	// Get the pipe for stdin and wrap it in a buffered writer.  This gives a small performance
-	// improvement.
-	stdin, err := cmd.StdinPipe()
+	// Get the pipe for stdin.
+	rawStdin, err := cmd.StdinPipe()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to create pipe for ipset restore.")
 		return err
 	}
+	// "Tee" the data that we write to stdin to a buffer so we can dump it to the log on
+	// failure.
+	stdin := io.MultiWriter(&s.restoreInCopy, rawStdin)
+	defer s.restoreInCopy.Reset()
+
 	// Channel stdout/err to buffers so we can include them in the log on failure.
-	var stdout, stderr bytes.Buffer
-	cmd.SetStderr(&stderr)
-	cmd.SetStdout(&stdout)
+	cmd.SetStderr(&s.stderrCopy)
+	defer s.stderrCopy.Reset()
+	cmd.SetStdout(&s.stdoutCopy)
+	defer s.stdoutCopy.Reset()
 
 	// Actually start the child process.
 	startTime := monotime.Now()
 	err = cmd.Start()
 	if err != nil {
 		s.logCxt.WithError(err).Error("Failed to start ipset restore.")
+		closeErr := rawStdin.Close()
+		if closeErr != nil {
+			s.logCxt.WithError(closeErr).Error(
+				"Error closing stdin while handling start error")
+		}
 		return err
 	}
 	summaryExecStart.Observe(float64(monotime.Since(startTime).Nanoseconds()) / 1000.0)
@@ -573,8 +605,8 @@ func (s *IPSets) tryUpdates() error {
 	// We need to close and wait whether we hit a write error or not so we defer the error
 	// handling.
 	_, commitErr := stdin.Write([]byte("COMMIT\n"))
-	flushErr := stdin.Flush()
-	closeErr := stdin.Close()
+	flushErr := rawStdin.Flush()
+	closeErr := rawStdin.Close()
 	processErr := cmd.Wait()
 	if err = firstNonNilErr(writeErr, commitErr, flushErr, closeErr, processErr); err != nil {
 		s.logCxt.WithFields(log.Fields{
@@ -583,9 +615,10 @@ func (s *IPSets) tryUpdates() error {
 			"flushErr":   flushErr,
 			"closeErr":   closeErr,
 			"processErr": processErr,
-			"stdout":     stdout.String(),
-			"stderr":     stderr.String(),
-		}).Error("Failed to complete ipset restore, IP sets may be out-of-sync.")
+			"stdout":     s.stdoutCopy.String(),
+			"stderr":     s.stderrCopy.String(),
+			"input":      s.restoreInCopy.String(),
+		}).Warning("Failed to complete ipset restore, IP sets may be out-of-sync.")
 		return err
 	}
 
@@ -658,7 +691,6 @@ func (s *IPSets) writeUpdates(ipSet *ipSet, w io.Writer) error {
 func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldLogger) (err error) {
 	// writeLine until an error occurs, writeLine writes a line to the output, after an error,
 	// it is a no-op.
-	var inputCopy bytes.Buffer
 	writeLine := func(format string, a ...interface{}) {
 		if err != nil {
 			return
@@ -666,12 +698,10 @@ func (s *IPSets) writeFullRewrite(ipSet *ipSet, out io.Writer, logCxt log.FieldL
 		line := fmt.Sprintf(format, a...) + "\n"
 		logCxt.WithField("line", line).Debug("Writing line to ipset restore")
 		lineBytes := []byte(line)
-		inputCopy.Write(lineBytes)
 		_, err = out.Write(lineBytes)
 		if err != nil {
 			logCxt.WithError(err).WithFields(log.Fields{
-				"line":  lineBytes,
-				"input": inputCopy.String(),
+				"line": lineBytes,
 			}).Error("Failed to write to ipset restore")
 			return
 		}

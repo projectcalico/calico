@@ -46,6 +46,18 @@
 #
 # k8sfv logging level.
 : ${K8SFV_LOG_LEVEL:=info}
+#
+# Only run the tests that complete in a minute or less.
+: ${JUST_A_MINUTE:=true}
+#
+# Whether to tell Felix to go via Typha.
+: ${USE_TYPHA:=true}
+#
+# What version of Typha (container image) to use.
+: ${TYPHA_VERSION:=latest}
+#
+# Typha logging level.
+: ${TYPHA_LOG_LEVEL:=info}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.
@@ -56,6 +68,7 @@ prefix=k8sfv${UNIQUE}
 function cleanup {
     # Clean up the containers that this script generates.
     docker rm -f ${prefix}-felix || true
+    docker rm -f ${prefix}-typha || true
     docker rm -f ${prefix}-apiserver || true
     docker rm -f ${prefix}-etcd || true
     # List all remaining containers.
@@ -77,6 +90,10 @@ function get_container_hostname {
 # them up.
 cleanup
 
+# Ensure that ip6_tables module is loaded.  The ip6tables-save command
+# needs this.
+sudo modprobe ip6_tables
+
 # Run etcd.
 docker run --detach --name ${prefix}-etcd \
        quay.io/coreos/etcd \
@@ -85,14 +102,29 @@ docker run --detach --name ${prefix}-etcd \
        --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 etcd_ip=$(get_container_ip ${prefix}-etcd)
 
-# Run k8s API server.
+# Run k8s API server.  The clients in this test - Felix, Typha, the
+# k8sfv test code, and individual commands in this script - all
+# connect anonymously to the API server, because (a) they aren't
+# running in pods in a proper Kubernetes cluster, and (b) they don't
+# provide client TLS certificates, and (c) they don't use any of the
+# other non-anonymous mechanisms that Kubernetes supports.  But, as of
+# 1.6, the API server doesn't allow anonymous users with the default
+# "AlwaysAllow" authorization mode.  So we specify the "RBAC"
+# authorization mode instead, and create a ClusterRoleBinding that
+# gives the "system:anonymous" user unlimited power (aka the
+# "cluster-admin" role).
 docker run --detach --name ${prefix}-apiserver \
        gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
        /hyperkube apiserver \
        --etcd-servers=http://${etcd_ip}:2379 \
-       --service-cluster-ip-range=10.101.0.0/16 -v=10
+       --service-cluster-ip-range=10.101.0.0/16 -v=10 \
+       --authorization-mode=RBAC
 k8s_ip=$(get_container_ip ${prefix}-apiserver)
 k8s_api_endpoint=https://${k8s_ip}:6443
+
+while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+    sleep 2
+done
 
 # Wait until the newly launched API server can respond to a request,
 # before continuing.
@@ -100,9 +132,32 @@ while ! curl -k ${k8s_api_endpoint}/apis/extensions/v1beta1/thirdpartyresources;
     sleep 2
 done
 
-# Get the API server's (self-signed) TLS certificate.
+# Get the API server's (self-signed) TLS certificate.  (This is needed
+# for the clients to authenticate the _API_server_ - which is entirely
+# independent of the _client_ authorization discussed above.)
 mkdir -p k8sfv/output
-docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/
+while ! docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/; do
+    sleep 2
+done
+
+if ${USE_TYPHA}; then
+    # Run Typha.
+    docker run --detach --privileged --name ${prefix}-typha \
+	   -e CALICO_DATASTORE_TYPE=kubernetes \
+	   -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
+	   -e TYPHA_DATASTORETYPE=kubernetes \
+	   -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
+	   -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
+	   -v ${PWD}:/testcode \
+	   -w /testcode/k8sfv/output \
+	   calico/typha:${TYPHA_VERSION} \
+	   /bin/sh -c "for n in 1 2; do calico-typha; done"
+    typha_ip=$(get_container_ip ${prefix}-typha)
+    typha_hostname=$(get_container_hostname ${prefix}-typha)
+    typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
+else
+    typha_felix_args=
+fi
 
 # Run Felix.
 #
@@ -110,6 +165,7 @@ docker cp ${prefix}-apiserver:/var/run/kubernetes/apiserver.crt k8sfv/output/
 # only needed for Felix 2.1 and earlier.  For 2.2, FELIX_DATASTORETYPE
 # is sufficient.
 docker run --detach --privileged --name ${prefix}-felix \
+       ${typha_felix_args} \
        -e CALICO_DATASTORE_TYPE=kubernetes \
        -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
        -e FELIX_DATASTORETYPE=kubernetes \
@@ -131,7 +187,30 @@ run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v"
 if test -n "${GINKGO_FOCUS}"; then
     docker exec ${prefix}-felix /bin/sh -c \
 	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+elif ${JUST_A_MINUTE}; then
+    # Run all the tests that are _not_ marked as "[slow]", and fail
+    # the test if any of those takes longer than 2 minutes.  A k8sfv
+    # test should be marked as "[slow]" if it normally takes longer
+    # than 1 minute - so this allows a buffer of 1 extra minute to
+    # allow for executor slowness.
+    docker exec ${prefix}-felix /bin/sh -c \
+	   "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120 ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\"" | perl -pe 'END { exit $status } $status=1 if /SLOW TEST|FAIL!/;'
 else
     docker exec ${prefix}-felix /bin/sh -c \
 	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+fi
+
+# Save the status of the test run.
+STATUS=$?
+
+# Check that the Felix container is still running.  It's important to
+# do this check, because the test run just above can exit with a
+# successful status (0) if Felix dies prematurely.
+if docker ps | grep ${prefix}-felix; then
+    # Good, still running.
+    exit ${STATUS}
+else
+    # No, it has died.  Dump logs and exit with a failure status.
+    docker logs ${prefix}-felix
+    exit 1
 fi

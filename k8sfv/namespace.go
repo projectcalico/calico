@@ -20,10 +20,8 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/felix/k8sfv/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/pkg/apis/extensions"
 
@@ -59,7 +57,7 @@ func createNamespaceInt(
 	isolation string,
 ) {
 	ns_in := &v1.Namespace{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
 			Labels: labels,
 		},
@@ -82,7 +80,7 @@ func createNamespaceInt(
 
 func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.Info("Cleaning up all namespaces...")
-	nsList, err := clientset.Namespaces().List(v1.ListOptions{})
+	nsList, err := clientset.Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +103,7 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
 	npInterface := internalversion.NewNetworkPolicies(clientset.ExtensionsV1beta1Client, namespace)
 	np := extensions.NetworkPolicy{
-		ObjectMeta: api.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      "test-syncer-basic-net-policy",
 		},
