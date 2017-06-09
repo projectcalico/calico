@@ -300,6 +300,9 @@ func populateNodeDetails(kNode *kapiv1.Node, kvps map[string]string) error {
 		kvps[nodeKey+"/network_v4"] = node.BGPIPv4Net.String()
 	}
 
+	// Some empty defaults for ipv6
+	kvps[nodeKey+"/ip_addr_v6"] = ""
+
 	return nil
 }
 

@@ -1,4 +1,5 @@
 bin/
+tmp/
 .idea
 vendor
 .go-pkg-cache
