@@ -343,6 +343,12 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 	// Use a scanner to chunk the input into lines.
 	scanner := bufio.NewScanner(out)
 	ipSetName := ""
+
+	// Figure out if debug logging is enabled so we can disable some expensive-to-calculate logs
+	// in the tight loop below if they're not going to be emitted.  This speeds up the loop
+	// by a factor of 3-4x!
+	debug := log.GetLevel() >= log.DebugLevel
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "Name:") {
@@ -385,10 +391,12 @@ func (s *IPSets) tryResync() (numProblems int, err error) {
 				}
 				canonMember := ipSet.Type.CanonicaliseMember(line)
 				dataplaneMembers.Add(canonMember)
-				logCxt.WithFields(log.Fields{
-					"member": line,
-					"canon":  canonMember,
-				}).Debug("Found member in dataplane")
+				if debug {
+					logCxt.WithFields(log.Fields{
+						"member": line,
+						"canon":  canonMember,
+					}).Debug("Found member in dataplane")
+				}
 			}
 			ipSetName = ""
 			if scanner.Err() != nil {
