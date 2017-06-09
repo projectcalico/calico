@@ -30,7 +30,10 @@ import (
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
-const defaultMaxBatchSize = 100
+const (
+	defaultMaxBatchSize   = 100
+	defaultWakeUpInterval = time.Second
+)
 
 var (
 	summaryUpdateSize = prometheus.NewSummary(prometheus.SummaryOpts{
@@ -103,7 +106,7 @@ func init() {
 // to one slow client) and keep track of what we'd sent to each channel.  All doable but, I think,
 // more fiddly than using a non-blocking linked list and a condition variable and letting each
 // client look after itself.
-type SnapshotCache struct {
+type Cache struct {
 	config Config
 
 	inputC chan interface{}
@@ -125,10 +128,11 @@ type SnapshotCache struct {
 }
 
 type Config struct {
-	MaxBatchSize int
+	MaxBatchSize   int
+	WakeUpInterval time.Duration
 }
 
-func New(config Config) *SnapshotCache {
+func (config *Config) ApplyDefaults() {
 	if config.MaxBatchSize <= 0 {
 		log.WithFields(log.Fields{
 			"value":   config.MaxBatchSize,
@@ -136,6 +140,17 @@ func New(config Config) *SnapshotCache {
 		}).Info("Defaulting MaxBatchSize.")
 		config.MaxBatchSize = defaultMaxBatchSize
 	}
+	if config.WakeUpInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   config.WakeUpInterval,
+			"default": defaultWakeUpInterval,
+		}).Info("Defaulting WakeUpInterval.")
+		config.WakeUpInterval = defaultWakeUpInterval
+	}
+}
+
+func New(config Config) *Cache {
+	config.ApplyDefaults()
 	kvs := ctrie.New(nil /*default hash factory*/)
 	cond := sync.NewCond(&sync.Mutex{})
 	snap := &Breadcrumb{
@@ -143,30 +158,30 @@ func New(config Config) *SnapshotCache {
 		nextCond:  cond,
 		KVs:       kvs.ReadOnlySnapshot(),
 	}
-	return &SnapshotCache{
+	return &Cache{
 		config:            config,
 		inputC:            make(chan interface{}, config.MaxBatchSize*2),
 		breadcrumbCond:    cond,
 		kvs:               kvs,
 		currentBreadcrumb: (unsafe.Pointer)(snap),
-		wakeUpTicker:      jitter.NewTicker(10*time.Second, time.Second),
+		wakeUpTicker:      jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
 	}
 }
 
 // CurrentBreadcrumb returns the current Breadcrumb, which contains a snapshot of the datastore
 // at the time it was created and a method to wait for the next Breadcrumb to be dropped. It is
 // safe to call from any goroutine.
-func (c *SnapshotCache) CurrentBreadcrumb() *Breadcrumb {
+func (c *Cache) CurrentBreadcrumb() *Breadcrumb {
 	return (*Breadcrumb)(atomic.LoadPointer(&c.currentBreadcrumb))
 }
 
 // OnStatusUpdated implements the SyncerCallbacks API.  It shouldn't be called directly.
-func (c *SnapshotCache) OnStatusUpdated(status api.SyncStatus) {
+func (c *Cache) OnStatusUpdated(status api.SyncStatus) {
 	c.inputC <- status
 }
 
 // OnUpdates implements the SyncerCallbacks API.  It shouldn't be called directly.
-func (c *SnapshotCache) OnUpdates(updates []api.Update) {
+func (c *Cache) OnUpdates(updates []api.Update) {
 	if len(updates) == 0 {
 		log.Debug("Ignoring 0-length update")
 		return
@@ -175,11 +190,11 @@ func (c *SnapshotCache) OnUpdates(updates []api.Update) {
 }
 
 // Start starts the cache's main loop in a background goroutine.
-func (c *SnapshotCache) Start(ctx context.Context) {
+func (c *Cache) Start(ctx context.Context) {
 	go c.loop(ctx)
 }
 
-func (c *SnapshotCache) loop(ctx context.Context) {
+func (c *Cache) loop(ctx context.Context) {
 	for {
 		// First, block, waiting for updates and batch them up in our pendingXXX fields.
 		// This will opportunistically slurp up a limited number of pending updates.
@@ -195,7 +210,7 @@ func (c *SnapshotCache) loop(ctx context.Context) {
 // fillBatchFromInputQueue waits for some input on the input channel, then opportunistically
 // pulls as much as possible from the channel.  Input is stored in the pendingXXX fields for
 // the next stage of processing.
-func (c *SnapshotCache) fillBatchFromInputQueue(ctx context.Context) error {
+func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 	batchSize := 0
 	storePendingUpdate := func(obj interface{}) {
 		switch obj := obj.(type) {
@@ -242,7 +257,7 @@ func (c *SnapshotCache) fillBatchFromInputQueue(ctx context.Context) error {
 }
 
 // publishBreadcrumbs sends a series of Breadcrumbs, draining the pending updates list.
-func (c *SnapshotCache) publishBreadcrumbs() {
+func (c *Cache) publishBreadcrumbs() {
 	for {
 		c.publishBreadcrumb()
 		if len(c.pendingUpdates) == 0 {
@@ -253,7 +268,7 @@ func (c *SnapshotCache) publishBreadcrumbs() {
 
 // publishBreadcrumb updates the master Ctrie and publishes a new Breadcrumb containing a read-only
 // snapshot of the Ctrie and the deltas from this batch.
-func (c *SnapshotCache) publishBreadcrumb() {
+func (c *Cache) publishBreadcrumb() {
 	var somethingChanged bool
 	var updates []api.Update
 	var lastUpdate bool
@@ -273,7 +288,7 @@ func (c *SnapshotCache) publishBreadcrumb() {
 		Timestamp:      time.Now(),
 		SyncStatus:     oldCrumb.SyncStatus,
 		nextCond:       c.breadcrumbCond,
-		Updates:        make([]syncproto.SerializedUpdate, 0, len(updates)),
+		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)),
 	}
 	if lastUpdate && c.pendingStatus != newCrumb.SyncStatus {
 		// Only update the status if this is the last message in the batch, otherwise
@@ -316,7 +331,7 @@ func (c *SnapshotCache) publishBreadcrumb() {
 
 		// Record the update in the new Breadcrumb so that clients following the chain of
 		// Breadcrumbs can apply it as a delta.
-		newCrumb.Updates = append(newCrumb.Updates, newUpd)
+		newCrumb.Deltas = append(newCrumb.Deltas, newUpd)
 		somethingChanged = true
 	}
 
@@ -325,7 +340,7 @@ func (c *SnapshotCache) publishBreadcrumb() {
 		return
 	}
 
-	summaryUpdateSize.Observe(float64(len(newCrumb.Updates)))
+	summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
 	// Add the new read-only snapshot to the new crumb.
 	newCrumb.KVs = c.kvs.ReadOnlySnapshot()
 
@@ -349,7 +364,7 @@ type Breadcrumb struct {
 	Timestamp      time.Time
 
 	KVs        *ctrie.Ctrie
-	Updates    []syncproto.SerializedUpdate
+	Deltas     []syncproto.SerializedUpdate
 	SyncStatus api.SyncStatus
 
 	nextCond *sync.Cond
