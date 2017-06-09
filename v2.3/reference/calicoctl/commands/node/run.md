@@ -78,7 +78,7 @@ Options:
                            [default: /var/log/calico]
      --node-image=<DOCKER_IMAGE_NAME>
                            Docker image to use for Calico's per-node container.
-                           [default: quay.io/calico/node:%s]
+                           [default: quay.io/calico/node:latest]
      --backend=(bird|gobgp|none)
                            Specify which networking backend to use.  When set
                            to "none", Calico node runs in policy only mode.
@@ -278,7 +278,7 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.
                          [default: /var/log/calico]
    --node-image=<DOCKER_IMAGE_NAME>
                          Docker image to use for Calico's per-node container.
-                         [default: quay.io/calico/node:%s]
+                         [default: quay.io/calico/node:latest]
    --backend=(bird|gobgp|none)
                          Specify which networking backend to use.  When set
                          to "none", Calico node runs in policy only mode.
