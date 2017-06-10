@@ -1,12 +1,12 @@
-hash: dfc574266330b6ea1ec67a9211710340139d3b5359728e2ae76f538d1b3ecce9
-updated: 2017-06-07T13:53:45.992620854Z
+hash: 1107018e1fea5ae117b16c9ca760c33803acb8ba6570c68720ae8c53b93406d0
+updated: 2017-06-10T16:30:35.040901587Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: 9d7ed0e63a4e9907c04396d0a9a7a01ba08d2852
+  version: 66722b1ada68fcd5227db853ee92003169a975c8
   subpackages:
   - client
   - pkg/pathutil
@@ -16,7 +16,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -114,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 73241603bc62d6e7a94582f06327ac661bb6ecdc
+  version: ca60d993a3e39248b4201a6040ccb19d68dcb292
   subpackages:
   - lib
   - lib/api
@@ -169,7 +169,7 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: ba1b36c82c5e05c4f912a88eab0dcd91a171688f
 - name: github.com/spf13/pflag
-  version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
+  version: 9ff6c6923cfffbcd502984b8e0c80539a94968b7
 - name: github.com/ugorji/go
   version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
   subpackages:
@@ -180,10 +180,8 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
-  - bcrypt
-  - blowfish
   - ssh/terminal
 - name: golang.org/x/net
   version: 3da985ce5951d99de868be4385f21ea6c2b22f24
@@ -195,7 +193,7 @@ imports:
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: b90f89a1e7a9c1f6b918820b3daa7f08488c8594
+  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -221,7 +219,7 @@ imports:
   subpackages:
   - patricia
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/apimachinery
   version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
   subpackages:
@@ -289,10 +287,7 @@ imports:
   - kubernetes/typed/storage/v1
   - kubernetes/typed/storage/v1beta1
   - pkg/api
-  - pkg/api/errors
   - pkg/api/install
-  - pkg/api/meta
-  - pkg/api/unversioned
   - pkg/api/v1
   - pkg/apis/apps
   - pkg/apis/apps/install
@@ -333,15 +328,9 @@ imports:
   - pkg/apis/storage/install
   - pkg/apis/storage/v1
   - pkg/apis/storage/v1beta1
-  - pkg/fields
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
   - pkg/util
   - pkg/util/parsers
-  - pkg/util/wait
   - pkg/version
-  - pkg/watch
   - rest
   - rest/watch
   - tools/auth
