@@ -44,10 +44,6 @@ var (
 		Name: "typha_connections_accepted",
 		Help: "Total number of connections accepted over time.",
 	})
-	counterNumConnectionsRejected = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "typha_connections_rejected",
-		Help: "Total number of connections rejected due to throttling.",
-	})
 	counterNumConnectionsDropped = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "typha_connections_dropped",
 		Help: "Total number of connections dropped due to rebalancing.",
@@ -87,7 +83,6 @@ var (
 
 func init() {
 	prometheus.MustRegister(counterNumConnectionsAccepted)
-	prometheus.MustRegister(counterNumConnectionsRejected)
 	prometheus.MustRegister(counterNumConnectionsDropped)
 	prometheus.MustRegister(gaugeNumConnections)
 	prometheus.MustRegister(summarySnapshotSendTime)
@@ -218,14 +213,6 @@ func (s *Server) serve(cxt context.Context) {
 		conn, err := l.AcceptTCP()
 		if err != nil {
 			logCxt.WithError(err).Panic("Failed to accept connection")
-		}
-
-		if s.atConnLimit() {
-			logCxt.WithField("conn", conn.RemoteAddr()).Warn(
-				"Too many active connections, dropping incoming connection.")
-			counterNumConnectionsRejected.Inc()
-			conn.Close()
-			continue
 		}
 
 		connID := s.nextConnID
