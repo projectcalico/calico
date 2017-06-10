@@ -38,6 +38,8 @@ import (
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/typha/pkg/jitter"
+	"github.com/projectcalico/typha/pkg/k8s"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncserver"
@@ -196,6 +198,8 @@ configRetry:
 			MaxFallBehind:           configParams.ServerMaxFallBehindSecs,
 			PingInterval:            configParams.ServerPingIntervalSecs,
 			PongTimeout:             configParams.ServerPongTimeoutSecs,
+			DropInterval:            configParams.ConnectionDropIntervalSecs,
+			MaxConns:                configParams.MaxConnectionsUpperLimit,
 		},
 	)
 
@@ -205,7 +209,13 @@ configRetry:
 	go syncerToValidator.SendTo(validator)
 	go validatorToCache.SendTo(cache)
 	cache.Start(context.Background())
-	go server.Serve(context.Background())
+	server.Start(context.Background())
+	if configParams.ConnectionRebalancingMode == "kubernetes" {
+		log.Info("Kubernetes connection rebalancing is enabled, starting k8s poll goroutine.")
+		k8sAPI := k8s.NewK8sAPI()
+		ticker := jitter.NewTicker(configParams.K8sServicePollIntervalSecs, configParams.K8sServicePollIntervalSecs/10)
+		go k8s.PollK8sForConnectionLimit(context.Background(), configParams, ticker.C, k8sAPI, server)
+	}
 	log.Info("Started the datastore Syncer/cache layer/server.")
 
 	if configParams.PrometheusMetricsEnabled {
