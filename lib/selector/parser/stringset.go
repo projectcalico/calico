@@ -18,6 +18,7 @@ import "sort"
 
 type StringSet []string
 
+// Contains returns true if a given string in current set
 func (ss StringSet) Contains(s string) bool {
 	if len(ss) == 0 {
 		// Empty set or nil.
@@ -61,7 +62,7 @@ func ConvertToStringSetInPlace(s []string) StringSet {
 			continue
 		}
 		s[j] = v
-		j += 1
+		j++
 		last = v
 	}
 	s = s[:j]

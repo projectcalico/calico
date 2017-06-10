@@ -24,14 +24,14 @@ import (
 
 const parserDebug = false
 
-// Parse a string representation of a selector expression into a Selector.
+// Parse parses a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
 	log.Debugf("Parsing %#v", selector)
 	tokens, err := tokenizer.Tokenize(selector)
 	if err != nil {
 		return
 	}
-	if tokens[0].Kind == tokenizer.TokEof {
+	if tokens[0].Kind == tokenizer.TokEOF {
 		return selectorRoot{root: AllNode{}}, nil
 	}
 	log.Debugf("Tokens %v", tokens)

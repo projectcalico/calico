@@ -221,7 +221,7 @@ var _ = Describe("Parser", func() {
 				}
 			})
 			It("should give same UID on each call", func() {
-				Expect(sel.UniqueId()).To(Equal(sel.UniqueId()))
+				Expect(sel.UniqueID()).To(Equal(sel.UniqueID()))
 			})
 		})
 	}
@@ -245,8 +245,8 @@ var _ = Describe("Parser", func() {
 			roundTripped, err := parser.Parse(canon)
 			Expect(err).To(BeNil())
 			Expect(roundTripped.String()).To(Equal(canon))
-			uid := sel.UniqueId()
-			Expect(roundTripped.UniqueId()).To(Equal(uid))
+			uid := sel.UniqueID()
+			Expect(roundTripped.UniqueID()).To(Equal(uid))
 		})
 	}
 
@@ -258,9 +258,9 @@ var _ = Describe("Parser", func() {
 		It(fmt.Sprintf("should calculate the correct UID for %s", test.input), func() {
 			sel, err := parser.Parse(test.input)
 			Expect(err).To(BeNil())
-			Expect(sel.UniqueId()).To(Equal(test.expectedUid),
+			Expect(sel.UniqueID()).To(Equal(test.expectedUid),
 				"incorrect UID for "+test.input)
-			Expect(sel.UniqueId()).To(Equal(sel.UniqueId()),
+			Expect(sel.UniqueID()).To(Equal(sel.UniqueID()),
 				"inconsistent UID for "+test.input)
 		})
 	}

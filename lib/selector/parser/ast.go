@@ -15,31 +15,38 @@
 package parser
 
 import (
-	_ "crypto/sha256"
+	_ "crypto/sha256" // register hash func
 	"strings"
 
 	"github.com/projectcalico/libcalico-go/lib/hash"
 )
 
+// Labels defines the interface of labels that can be used by selector
 type Labels interface {
+	// Get returns value and presence of the given labelName
 	Get(labelName string) (value string, present bool)
 }
 
+// MapAsLabels allows you use map as labels
 type MapAsLabels map[string]string
 
+// Get returns the value and presence of the given labelName key in the MapAsLabels
 func (l MapAsLabels) Get(labelName string) (value string, present bool) {
 	value, present = l[labelName]
 	return
 }
 
+// Selector represents a label selector.
 type Selector interface {
 	// Evaluate evaluates the selector against the given labels expressed as a concrete map.
 	Evaluate(labels map[string]string) bool
 	// EvaluateLabels evaluates the selector against the given labels expressed as an interface.
 	// This allows for labels that are calculated on the fly.
 	EvaluateLabels(labels Labels) bool
+	// String returns a string that represents this selector.
 	String() string
-	UniqueId() string
+	// UniqueID returns the unique ID that represents this selector.
+	UniqueID() string
 }
 
 type selectorRoot struct {
@@ -65,7 +72,7 @@ func (sel selectorRoot) String() string {
 	return *sel.cachedString
 }
 
-func (sel selectorRoot) UniqueId() string {
+func (sel selectorRoot) UniqueID() string {
 	if sel.cachedHash == nil {
 		hash := hash.MakeUniqueID("s", sel.String())
 		sel.cachedHash = &hash
@@ -86,11 +93,11 @@ type LabelEqValueNode struct {
 }
 
 func (node LabelEqValueNode) Evaluate(labels Labels) bool {
-	if val, ok := labels.Get(node.LabelName); ok {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
 		return val == node.Value
-	} else {
-		return false
 	}
+	return false
 }
 
 func (node LabelEqValueNode) collectFragments(fragments []string) []string {
@@ -109,11 +116,11 @@ type LabelInSetNode struct {
 }
 
 func (node LabelInSetNode) Evaluate(labels Labels) bool {
-	if val, ok := labels.Get(node.LabelName); ok {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
 		return node.Value.Contains(val)
-	} else {
-		return false
 	}
+	return false
 }
 
 func (node LabelInSetNode) collectFragments(fragments []string) []string {
@@ -126,11 +133,11 @@ type LabelNotInSetNode struct {
 }
 
 func (node LabelNotInSetNode) Evaluate(labels Labels) bool {
-	if val, ok := labels.Get(node.LabelName); ok {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
 		return !node.Value.Contains(val)
-	} else {
-		return true
 	}
+	return true
 }
 
 func (node LabelNotInSetNode) collectFragments(fragments []string) []string {
@@ -166,11 +173,11 @@ type LabelNeValueNode struct {
 }
 
 func (node LabelNeValueNode) Evaluate(labels Labels) bool {
-	if val, ok := labels.Get(node.LabelName); ok {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
 		return val != node.Value
-	} else {
-		return true
 	}
+	return true
 }
 
 func (node LabelNeValueNode) collectFragments(fragments []string) []string {
@@ -188,11 +195,11 @@ type HasNode struct {
 }
 
 func (node HasNode) Evaluate(labels Labels) bool {
-	if _, ok := labels.Get(node.LabelName); ok {
+	_, ok := labels.Get(node.LabelName)
+	if ok {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func (node HasNode) collectFragments(fragments []string) []string {

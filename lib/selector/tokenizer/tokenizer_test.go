@@ -31,20 +31,20 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "a"},
 		{tokenizer.TokEq, nil},
 		{tokenizer.TokStringLiteral, "b"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 
 	{`a=="b"`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
 		{tokenizer.TokEq, nil},
 		{tokenizer.TokStringLiteral, "b"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`label == "value"`, []tokenizer.Token{
 		{tokenizer.TokLabel, "label"},
 		{tokenizer.TokEq, nil},
 		{tokenizer.TokStringLiteral, "value"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a not in "bar" && !has(foo) || b in c`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
@@ -57,19 +57,19 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "b"},
 		{tokenizer.TokIn, nil},
 		{tokenizer.TokLabel, "c"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`has(calico/k8s_ns)`, []tokenizer.Token{
 		{tokenizer.TokHas, "calico/k8s_ns"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`has(calico/k8s_ns/role)`, []tokenizer.Token{
 		{tokenizer.TokHas, "calico/k8s_ns/role"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`has(calico/k8s_NS-.1/role)`, []tokenizer.Token{
 		{tokenizer.TokHas, "calico/k8s_NS-.1/role"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`calico/k8s_ns == "kube-system" && k8s-app == "kube-dns"`, []tokenizer.Token{
 		{tokenizer.TokLabel, "calico/k8s_ns"},
@@ -79,7 +79,7 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "k8s-app"},
 		{tokenizer.TokEq, nil},
 		{tokenizer.TokStringLiteral, "kube-dns"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a  not  in  "bar"  &&  ! has( foo )  ||  b  in  c `, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
@@ -92,7 +92,7 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "b"},
 		{tokenizer.TokIn, nil},
 		{tokenizer.TokLabel, "c"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a notin"bar"&&!has(foo)||b in"c"`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
@@ -105,14 +105,14 @@ var tokenTests = []struct {
 		{tokenizer.TokLabel, "b"},
 		{tokenizer.TokIn, nil},
 		{tokenizer.TokStringLiteral, "c"},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a not in {}`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
 		{tokenizer.TokNotIn, nil},
 		{tokenizer.TokLBrace, nil},
 		{tokenizer.TokRBrace, nil},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a not in {"a"}`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
@@ -120,7 +120,7 @@ var tokenTests = []struct {
 		{tokenizer.TokLBrace, nil},
 		{tokenizer.TokStringLiteral, "a"},
 		{tokenizer.TokRBrace, nil},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 	{`a not in {"a","B"}`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
@@ -130,7 +130,7 @@ var tokenTests = []struct {
 		{tokenizer.TokComma, nil},
 		{tokenizer.TokStringLiteral, "B"},
 		{tokenizer.TokRBrace, nil},
-		{tokenizer.TokEof, nil},
+		{tokenizer.TokEOF, nil},
 	}},
 }
 
