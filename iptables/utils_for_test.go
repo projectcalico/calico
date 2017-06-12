@@ -49,20 +49,25 @@ type chainMod struct {
 }
 
 type mockDataplane struct {
-	Table           string
-	Chains          map[string][]string
-	FlushedChains   set.Set
-	ChainMods       set.Set
-	DeletedChains   set.Set
-	Cmds            []CmdIface
-	CmdNames        []string
-	FailNextRestore bool
-	FailAllRestores bool
-	OnPreRestore    func()
-	FailNextSave    bool
-	FailAllSaves    bool
-	CumulativeSleep time.Duration
-	Time            time.Time
+	Table                  string
+	Chains                 map[string][]string
+	FlushedChains          set.Set
+	ChainMods              set.Set
+	DeletedChains          set.Set
+	Cmds                   []CmdIface
+	CmdNames               []string
+	FailNextRestore        bool
+	FailAllRestores        bool
+	OnPreRestore           func()
+	FailNextSaveRead       bool
+	FailNextSaveStdoutPipe bool
+	FailNextKill           bool
+	FailAllSaves           bool
+	FailNextPipeClose      bool
+	FailNextStart          bool
+	PipeBuffers            []*closableBuffer
+	CumulativeSleep        time.Duration
+	Time                   time.Time
 }
 
 func (d *mockDataplane) ResetCmds() {
@@ -72,12 +77,16 @@ func (d *mockDataplane) ResetCmds() {
 
 func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	log.WithFields(log.Fields{
-		"name":            name,
-		"args":            arg,
-		"FailNextRestore": d.FailNextRestore,
-		"FailNextSave":    d.FailNextSave,
-		"FailAllRestores": d.FailAllRestores,
-		"FailAllSaves":    d.FailAllSaves,
+		"name":                   name,
+		"args":                   arg,
+		"FailNextRestore":        d.FailNextRestore,
+		"FailNextSaveRead":       d.FailNextSaveRead,
+		"FailNextStart":          d.FailNextStart,
+		"FailNextKill":           d.FailNextKill,
+		"FailNextSaveStdoutPipe": d.FailNextSaveStdoutPipe,
+		"FailNextPipeClose":      d.FailNextPipeClose,
+		"FailAllRestores":        d.FailAllRestores,
+		"FailAllSaves":           d.FailAllSaves,
 	}).Info("Simulating new command.")
 
 	var cmd CmdIface
@@ -152,6 +161,25 @@ func (d *restoreCmd) SetStderr(w io.Writer) {
 func (d *restoreCmd) Output() ([]byte, error) {
 	Fail("Not implemented")
 	return nil, errors.New("Not implemented")
+}
+
+func (d *restoreCmd) StdoutPipe() (io.ReadCloser, error) {
+	Fail("Not implemented")
+	return nil, errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Start() error {
+	Fail("Not implemented")
+	return errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Wait() error {
+	Fail("Not implemented")
+	return errors.New("Not implemented")
+}
+
+func (d *restoreCmd) Kill() error {
+	return nil
 }
 
 func (d *restoreCmd) String() string {
@@ -282,7 +310,8 @@ func (d *restoreCmd) Run() error {
 }
 
 type saveCmd struct {
-	Dataplane *mockDataplane
+	Dataplane  *mockDataplane
+	stdoutPipe *closableBuffer
 }
 
 func (d *saveCmd) String() string {
@@ -301,9 +330,32 @@ func (d *saveCmd) SetStderr(w io.Writer) {
 	Fail("Not implemented")
 }
 
+func (d *saveCmd) Start() error {
+	if d.Dataplane.FailNextStart {
+		d.Dataplane.FailNextStart = false
+		return errors.New("dummy start failure")
+	}
+	return nil
+}
+
+func (d *saveCmd) Wait() error {
+	if d.stdoutPipe != nil {
+		return d.stdoutPipe.Close()
+	}
+	return nil
+}
+
+func (d *saveCmd) Kill() error {
+	if d.Dataplane.FailNextKill {
+		d.Dataplane.FailNextKill = false
+		return errors.New("kill failed")
+	}
+	return nil
+}
+
 func (d *saveCmd) Output() ([]byte, error) {
-	if d.Dataplane.FailNextSave {
-		d.Dataplane.FailNextSave = false
+	if d.Dataplane.FailNextSaveRead {
+		d.Dataplane.FailNextSaveRead = false
 		return nil, errors.New("Simulated failure")
 	}
 	if d.Dataplane.FailAllSaves {
@@ -328,6 +380,61 @@ func (d *saveCmd) Output() ([]byte, error) {
 	log.Debugf("Calculated save output:\n%v", buf.String())
 
 	return buf.Bytes(), nil
+}
+
+func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
+	var readErr error
+	if d.Dataplane.FailNextSaveRead {
+		d.Dataplane.FailNextSaveRead = false
+		readErr = errors.New("Simulated Read() failure.")
+	}
+
+	if d.Dataplane.FailNextSaveStdoutPipe {
+		d.Dataplane.FailNextSaveStdoutPipe = false
+		return nil, errors.New("Simulated StdoutPipe() failure.")
+	}
+
+	buf, err := d.Output()
+	if err != nil {
+		return nil, err
+	}
+	var closeErr error
+	if d.Dataplane.FailNextPipeClose {
+		closeErr = errors.New("Dummy deferred flush error")
+		d.Dataplane.FailNextPipeClose = false
+	}
+	cb := &closableBuffer{
+		b:        bytes.NewBuffer(buf),
+		ReadErr:  readErr,
+		CloseErr: closeErr,
+	}
+	d.Dataplane.PipeBuffers = append(d.Dataplane.PipeBuffers, cb)
+	if d.stdoutPipe != nil {
+		Fail("StdoutPipe() called more than once")
+	}
+	d.stdoutPipe = cb
+	return cb, nil
+}
+
+type closableBuffer struct {
+	b                 *bytes.Buffer
+	Closed            bool
+	CloseErr, ReadErr error
+}
+
+func (b *closableBuffer) Read(p []byte) (n int, err error) {
+	if b.ReadErr != nil {
+		return 0, b.ReadErr
+	}
+	return b.b.Read(p)
+}
+
+func (b *closableBuffer) Close() error {
+	if b.Closed {
+		Fail("Already closed")
+	}
+	b.Closed = true
+	return b.CloseErr
 }
 
 func (d *saveCmd) Run() error {

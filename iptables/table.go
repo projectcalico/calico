@@ -15,8 +15,10 @@
 package iptables
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -553,12 +555,11 @@ func (t *Table) expectedHashesForInsertChain(
 func (t *Table) getHashesFromDataplane() map[string][]string {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
+
 	// Retry a few times before we panic.  This deals with any transient errors and it prevents
 	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
 	for {
-		cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
-		countNumSaveCalls.Inc()
-		output, err := cmd.Output()
+		hashes, err := t.attemptToGetHashesFromDataplane()
 		if err != nil {
 			countNumSaveErrors.Inc()
 			var stderr string
@@ -575,69 +576,129 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 			}
 			continue
 		}
-		buf := bytes.NewBuffer(output)
-		return t.getHashesFromBuffer(buf)
+
+		return hashes
 	}
 }
 
-// getHashesFromBuffer parses a buffer containing iptables-save output for this table, extracting
+// attemptToGetHashesFromDataplane starts an iptables-save subprocess and feeds its output to
+// readHashesFrom() via a pipe.  It handles the various error cases.
+func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, err error) {
+	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
+	countNumSaveCalls.Inc()
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.WithError(err).Warnf("Failed to get stdout pipe for %s", t.iptablesSaveCmd)
+		return
+	}
+	err = cmd.Start()
+	if err != nil {
+		// Failed even before we started, close the pipe.  (This would normally be done
+		// by Wait().
+		log.WithError(err).Warnf("Failed to start %s", t.iptablesSaveCmd)
+		closeErr := stdout.Close()
+		if closeErr != nil {
+			log.WithError(closeErr).Warn("Error closing stdout after Start() failed.")
+		}
+		return
+	}
+	hashes, err = t.readHashesFrom(stdout)
+	if err != nil {
+		// In case readHashesFrom() returned due to an error that didn't cause the
+		// process to exit, kill it now.
+		log.WithError(err).Warnf("Killing %s process after a failure", t.iptablesSaveCmd)
+		killErr := cmd.Kill()
+		if killErr != nil {
+			// If we don't know what state the process is in, we can't Wait() on it.
+			log.WithError(killErr).Panic(
+				"Failed to kill %s process after failure.", t.iptablesSaveCmd)
+		}
+	}
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		log.WithError(waitErr).Warn("iptables save failed")
+		if err == nil {
+			err = waitErr
+		}
+	}
+	return
+}
+
+// readHashesFrom scans the given reader containing iptables-save output for this table, extracting
 // our rule hashes.  Entries in the returned map are indexed by chain name.  For rules that we
 // wrote, the hash is extracted from a comment that we added to the rule.  For rules written by
 // previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
 // returns a zero string.  Hence, the lengths of the returned values are the lengths of the chains
 // whether written by Felix or not.
-func (t *Table) getHashesFromBuffer(buf *bytes.Buffer) map[string][]string {
-	newHashes := map[string][]string{}
-	for {
+func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err error) {
+	hashes = map[string][]string{}
+	scanner := bufio.NewScanner(r)
+
+	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
+	// tight loop below if the log wouldn't be emitted anyway.
+	debug := log.GetLevel() >= log.DebugLevel
+
+	for scanner.Scan() {
 		// Read the next line of the output.
-		line, err := buf.ReadString('\n')
-		if err != nil { // EOF
-			break
-		}
+		line := scanner.Bytes()
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
 		// for (possibly empty) chains.
-		logCxt := t.logCxt.WithField("line", line)
-		logCxt.Debug("Parsing line")
-		captures := chainCreateRegexp.FindStringSubmatch(line)
+		logCxt := t.logCxt
+		if debug {
+			// Avoid stringifying the line (and hence copying it) unless we're at debug
+			// level.
+			logCxt = logCxt.WithField("line", string(line))
+			logCxt.Debug("Parsing line")
+		}
+		captures := chainCreateRegexp.FindSubmatch(line)
 		if captures != nil {
 			// Chain forward-reference, make sure the chain exists.
-			chainName := captures[1]
-			logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
-			newHashes[chainName] = []string{}
+			chainName := string(captures[1])
+			if debug {
+				logCxt.WithField("chainName", chainName).Debug("Found forward-reference")
+			}
+			hashes[chainName] = []string{}
 			continue
 		}
 
 		// Look for append lines, such as "-A chain-name -m foo --foo bar"; these are the
 		// actual rules.
-		captures = appendRegexp.FindStringSubmatch(line)
+		captures = appendRegexp.FindSubmatch(line)
 		if captures == nil {
 			// Skip any non-append lines.
 			logCxt.Debug("Not an append, skipping")
 			continue
 		}
-		chainName := captures[1]
+		chainName := string(captures[1])
 
 		// Look for one of our hashes on the rule.  We record a zero hash for unknown rules
 		// so that they get cleaned up.  Note: we're implicitly capturing the first match
 		// of the regex.  When writing the rules, we ensure that the hash is written as the
 		// first comment.
 		hash := ""
-		captures = t.hashCommentRegexp.FindStringSubmatch(line)
+		captures = t.hashCommentRegexp.FindSubmatch(line)
 		if captures != nil {
-			hash = captures[1]
-			logCxt.WithField("hash", hash).Debug("Found hash in rule")
-		} else if t.oldInsertRegexp.FindString(line) != "" {
+			hash = string(captures[1])
+			if debug {
+				logCxt.WithField("hash", hash).Debug("Found hash in rule")
+			}
+		} else if t.oldInsertRegexp.Find(line) != nil {
 			logCxt.WithFields(log.Fields{
 				"rule":      line,
 				"chainName": chainName,
 			}).Info("Found inserted rule from previous Felix version, marking for cleanup.")
 			hash = "OLD INSERT RULE"
 		}
-		newHashes[chainName] = append(newHashes[chainName], hash)
+		hashes[chainName] = append(hashes[chainName], hash)
 	}
-	t.logCxt.Debugf("Read hashes from dataplane: %#v", newHashes)
-	return newHashes
+	if scanner.Err() != nil {
+		log.WithError(scanner.Err()).Error("Failed to read hashes from dataplane")
+		return nil, scanner.Err()
+	}
+	t.logCxt.Debugf("Read hashes from dataplane: %#v", hashes)
+	return hashes, nil
 }
 
 func (t *Table) InvalidateDataplaneCache(reason string) {
