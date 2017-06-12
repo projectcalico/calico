@@ -102,7 +102,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		parsed, allSels := ruleToParsedRule(&rule)
 		parsedInbound[ii] = parsed
 		for _, sel := range allSels {
-			currentUIDToSel[sel.UniqueId()] = sel
+			currentUIDToSel[sel.UniqueID()] = sel
 		}
 	}
 	parsedOutbound := make([]*ParsedRule, len(outbound))
@@ -110,7 +110,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		parsed, allSels := ruleToParsedRule(&rule)
 		parsedOutbound[ii] = parsed
 		for _, sel := range allSels {
-			currentUIDToSel[sel.UniqueId()] = sel
+			currentUIDToSel[sel.UniqueID()] = sel
 		}
 	}
 	parsedRules = &ParsedRules{
@@ -308,7 +308,7 @@ func (ss selectors) ToUIDs() []string {
 	}
 	uids := make([]string, len(ss))
 	for i, sel := range ss {
-		uids[i] = sel.UniqueId()
+		uids[i] = sel.UniqueID()
 	}
 	return uids
 }
