@@ -131,14 +131,14 @@ func NewCalculationGraph(callbacks PipelineCallbacks, hostname string) (allUpdDi
 
 	ruleScanner.OnSelectorActive = func(sel selector.Selector) {
 		log.Infof("Selector %v now active", sel)
-		callbacks.OnIPSetAdded(sel.UniqueId())
-		activeSelectorIndex.UpdateSelector(sel.UniqueId(), sel)
+		callbacks.OnIPSetAdded(sel.UniqueID())
+		activeSelectorIndex.UpdateSelector(sel.UniqueID(), sel)
 		gaugeNumActiveSelectors.Inc()
 	}
 	ruleScanner.OnSelectorInactive = func(sel selector.Selector) {
 		log.Infof("Selector %v now inactive", sel)
-		activeSelectorIndex.DeleteSelector(sel.UniqueId())
-		callbacks.OnIPSetRemoved(sel.UniqueId())
+		activeSelectorIndex.DeleteSelector(sel.UniqueID())
+		callbacks.OnIPSetRemoved(sel.UniqueID())
 		gaugeNumActiveSelectors.Dec()
 	}
 	activeSelectorIndex.RegisterWith(allUpdDispatcher)

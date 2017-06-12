@@ -25,5 +25,5 @@ func selectorId(selStr string) string {
 	if err != nil {
 		log.Fatalf("Failed to parse %v: %v", selStr, err)
 	}
-	return sel.UniqueId()
+	return sel.UniqueID()
 }

@@ -1,5 +1,5 @@
-hash: 9ba5bbe02b8beeffb9702fe08a9b9a0dacfaac9e3cf2a74e3d4be9acc0f9e1f3
-updated: 2017-06-07T15:44:29.13966987Z
+hash: 670688a25907362236984921bcbbcbb48bc29ab70f9691d72c7157bf0b49e287
+updated: 2017-06-12T14:17:30.452844557Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -126,7 +126,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 73241603bc62d6e7a94582f06327ac661bb6ecdc
+  version: e40a090d7d025f7ab60f7a5e5bc362f875116754
   subpackages:
   - lib
   - lib/api
@@ -154,7 +154,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: f898a49820203008748425069e3f38199593fe2e
+  version: cdd0e68bed2ad9641e40f78091ec447593900691
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -175,7 +175,7 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: fdb70a78745a8df006f953b8bab85597d96b2e0e
+  version: a3bfc74126ea9e45ee5d5c6f7fc86191b7d488fb
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -211,7 +211,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: b9e8d468b01f806830d387bd9a1fe96dc68129d1
+  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
   subpackages:
   - unix
 - name: golang.org/x/text
