@@ -18,13 +18,18 @@ import "github.com/projectcalico/libcalico-go/lib/selector/parser"
 
 // Selector represents a label selector.
 type Selector interface {
+	// Evaluate evaluates the selector against the given labels expressed as a concrete map.
 	Evaluate(labels map[string]string) bool
+	// EvaluateLabels evaluates the selector against the given labels expressed as an interface.
+	// This allows for labels that are calculated on the fly.
 	EvaluateLabels(labels parser.Labels) bool
+	// String returns a string that represents this selector.
 	String() string
-	UniqueId() string
+	// UniqueID returns the unique ID that represents this selector.
+	UniqueID() string
 }
 
 // Parse a string representation of a selector expression into a Selector.
-func Parse(selector string) (sel parser.Selector, err error) {
+func Parse(selector string) (sel Selector, err error) {
 	return parser.Parse(selector)
 }
