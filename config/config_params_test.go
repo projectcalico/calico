@@ -19,6 +19,7 @@ import (
 
 	"net"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -30,7 +31,10 @@ var _ = DescribeTable("Config parsing",
 		config := New()
 		config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
-		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
+		configPtr := reflect.ValueOf(config)
+		configElem := configPtr.Elem()
+		fieldRef := configElem.FieldByName(key)
+		newVal := fieldRef.Interface()
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
 			Expect(config.Err).To(HaveOccurred())
@@ -70,6 +74,9 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 
+	Entry("IptablesPostWriteCheckIntervalSecs", "IptablesPostWriteCheckIntervalSecs",
+		"1.5", 1500*time.Millisecond),
+
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"RETURN", "RETURN"),
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
@@ -100,15 +107,15 @@ var _ = DescribeTable("Config parsing",
 	Entry("IpInIpTunnelAddr", "IpInIpTunnelAddr",
 		"10.0.0.1", net.ParseIP("10.0.0.1")),
 
-	Entry("ReportingIntervalSecs", "ReportingIntervalSecs", "31", int(31)),
-	Entry("ReportingTTLSecs", "ReportingTTLSecs", "91", int(91)),
+	Entry("ReportingIntervalSecs", "ReportingIntervalSecs", "31", 31*time.Second),
+	Entry("ReportingTTLSecs", "ReportingTTLSecs", "91", 91*time.Second),
 
 	Entry("EndpointReportingEnabled", "EndpointReportingEnabled",
 		"true", true),
 	Entry("EndpointReportingEnabled", "EndpointReportingEnabled",
 		"yes", true),
 	Entry("EndpointReportingDelaySecs", "EndpointReportingDelaySecs",
-		"10", float64(10)),
+		"10", 10*time.Second),
 
 	Entry("MaxIpsetSize", "MaxIpsetSize", "12345", int(12345)),
 	Entry("IptablesMarkMask", "IptablesMarkMask", "0xf0f0", uint32(0xf0f0)),

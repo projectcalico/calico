@@ -276,14 +276,14 @@ configRetry:
 
 				DisableConntrackInvalid: configParams.DisableConntrackInvalidCheck,
 			},
-			IPIPMTU:                 configParams.IpInIpMtu,
-			IptablesRefreshInterval: time.Duration(configParams.IptablesRefreshInterval) * time.Second,
-			IptablesInsertMode:      configParams.ChainInsertMode,
-			MaxIPSetSize:            configParams.MaxIpsetSize,
-			IgnoreLooseRPF:          configParams.IgnoreLooseRPF,
-			IPv6Enabled:             configParams.Ipv6Support,
-			StatusReportingInterval: time.Duration(configParams.ReportingIntervalSecs) *
-				time.Second,
+			IPIPMTU:                        configParams.IpInIpMtu,
+			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
+			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
+			IptablesInsertMode:             configParams.ChainInsertMode,
+			MaxIPSetSize:                   configParams.MaxIpsetSize,
+			IgnoreLooseRPF:                 configParams.IgnoreLooseRPF,
+			IPv6Enabled:                    configParams.Ipv6Support,
+			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 
 			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
 		}
@@ -402,7 +402,7 @@ configRetry:
 	log.Infof("Started the datastore Syncer/processing graph")
 	var stopSignalChans []chan<- bool
 	if configParams.EndpointReportingEnabled {
-		delay := configParams.EndpointReportingDelay()
+		delay := configParams.EndpointReportingDelaySecs
 		log.WithField("delay", delay).Info(
 			"Endpoint status reporting enabled, starting status reporter")
 		dpConnector.statusReporter = statusrep.NewEndpointStatusReporter(
@@ -732,7 +732,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(msg *proto.ProcessStatus
 	kv := model.KVPair{
 		Key:   model.ActiveStatusReportKey{Hostname: fc.config.FelixHostname},
 		Value: &statusReport,
-		TTL:   time.Duration(fc.config.ReportingTTLSecs) * time.Second,
+		TTL:   fc.config.ReportingTTLSecs,
 	}
 	_, err := fc.datastore.Apply(&kv)
 	if err != nil {
