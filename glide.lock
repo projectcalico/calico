@@ -1,5 +1,5 @@
-hash: 1107018e1fea5ae117b16c9ca760c33803acb8ba6570c68720ae8c53b93406d0
-updated: 2017-06-10T16:30:35.040901587Z
+hash: a596e45b0d5327504869aa74af31f14fb626ca028f243ece7d506c10f45cb78c
+updated: 2017-06-12T13:35:54.137659275Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -114,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ca60d993a3e39248b4201a6040ccb19d68dcb292
+  version: 3cfe5e8e5098611579da4d1cbc7457b8035c176e
   subpackages:
   - lib
   - lib/api
