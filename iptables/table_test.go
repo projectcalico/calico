@@ -529,10 +529,10 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 	})
 }
 
-var _ = Describe("Table with a dirty datatplane in append mode", func() {
+var _ = Describe("Table with a dirty dataplane in append mode", func() {
 	describeDirtyDataplaneTests(true)
 })
-var _ = Describe("Table with a dirty datatplane in insert mode", func() {
+var _ = Describe("Table with a dirty dataplane in insert mode", func() {
 	describeDirtyDataplaneTests(false)
 })
 
@@ -723,11 +723,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 			table.Apply()
 			Expect(dataplane.CumulativeSleep).To(BeZero())
 		})
-		Describe("With a transient iptables-save failure", func() {
-			BeforeEach(func() {
-				dataplane.FailNextSave = true
-				table.Apply()
-			})
+		assertOneRetry := func() {
 			It("it should get to correct final state", func() {
 				checkFinalState()
 			})
@@ -736,6 +732,58 @@ func describeDirtyDataplaneTests(appendMode bool) {
 			})
 			It("it should sleep", func() {
 				Expect(dataplane.CumulativeSleep).To(Equal(100 * time.Millisecond))
+			})
+		}
+		Describe("With a transient iptables-save failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextSaveRead = true
+				table.Apply()
+			})
+			assertOneRetry()
+		})
+		Describe("With a transient iptables-save failure and a kill failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextSaveRead = true
+				dataplane.FailNextKill = true
+			})
+			It("should panic", func() {
+				Expect(func() {
+					table.Apply()
+				}).To(Panic())
+			})
+		})
+		Describe("With a transient iptables-save pipe-close failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextPipeClose = true
+				table.Apply()
+			})
+			assertOneRetry()
+		})
+		Describe("With a transient iptables-save start failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextStart = true
+				table.Apply()
+			})
+			assertOneRetry()
+			It("should close the pipes", func() {
+				Expect(dataplane.PipeBuffers).To(HaveLen(2))
+				for _, pb := range dataplane.PipeBuffers {
+					Expect(pb.Closed).To(BeTrue())
+				}
+			})
+		})
+		Describe("With a transient iptables-save start and pipe-close failure", func() {
+			BeforeEach(func() {
+				dataplane.FailNextStart = true
+				dataplane.FailNextPipeClose = true
+				table.Apply()
+			})
+			assertOneRetry()
+			It("should close the pipes", func() {
+				Expect(dataplane.PipeBuffers).To(HaveLen(2))
+				for _, pb := range dataplane.PipeBuffers {
+					Expect(pb.Closed).To(BeTrue())
+				}
 			})
 		})
 		Describe("With a persistent iptables-save failure", func() {

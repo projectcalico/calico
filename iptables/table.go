@@ -589,10 +589,14 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		log.WithError(err).Warnf("Failed to get stdout pipe for %s", t.iptablesSaveCmd)
 		return
 	}
 	err = cmd.Start()
 	if err != nil {
+		// Failed even before we started, close the pipe.  (This would normally be done
+		// by Wait().
+		log.WithError(err).Warnf("Failed to start %s", t.iptablesSaveCmd)
 		closeErr := stdout.Close()
 		if closeErr != nil {
 			log.WithError(closeErr).Warn("Error closing stdout after Start() failed.")
@@ -603,12 +607,12 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 	if err != nil {
 		// In case readHashesFrom() returned due to an error that didn't cause the
 		// process to exit, kill it now.
-		log.WithError(err).Warn(
-			"Killing iptables save process after a failure")
+		log.WithError(err).Warnf("Killing %s process after a failure", t.iptablesSaveCmd)
 		killErr := cmd.Kill()
 		if killErr != nil {
-			log.WithError(killErr).Error(
-				"Failed to kill iptables save process after failure.")
+			// If we don't know what state the process is in, we can't Wait() on it.
+			log.WithError(killErr).Panic(
+				"Failed to kill %s process after failure.", t.iptablesSaveCmd)
 		}
 	}
 	waitErr := cmd.Wait()
@@ -631,7 +635,7 @@ func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err
 	hashes = map[string][]string{}
 	scanner := bufio.NewScanner(r)
 
-	// Figure out is debug logging is enabled so we can disable some WithFields() calls in the
+	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
 	// tight loop below if the log wouldn't be emitted anyway.
 	debug := log.GetLevel() >= log.DebugLevel
 
