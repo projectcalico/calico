@@ -30,7 +30,11 @@ The image is hosted on DockerHub at `calico/iptables-remover:latest`
 > **Note:** The following steps assume you're running [Calico on GCE via kube-up](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/calico-policy-controller)
 using the add-on manager and that you have permissions to create resources in the `kube-system` namespace.
 
-#### 1. Stop Felix on the nodes
+#### Disabling and Removing Calico Policy
+
+To fully disable and remove Calico policy from your cluster, follow the steps below.
+
+##### 1. Stop Felix on the nodes
 
 First, you must stop the Felix agent running on the nodes in question. You can do this by removing the
 `projectcalico.org/ds-ready: "true"` label from the nodes.
@@ -43,7 +47,7 @@ kubectl label nodes --all projectcalico.org/ds-ready-
 
 Then, wait until all the `calico-node-xxxx` pods in the `kube-system` Namespace have terminated.
 
-#### 2. Remove any programmed policy from the nodes
+##### 2. Remove any programmed policy from the nodes
 
 To remove any programmed policy from the nodes, follow the steps below to deploy the DaemonSet using the manifest
 provided in this directory. The DaemonSet runs on all nodes without the
@@ -62,3 +66,26 @@ Then, deploy the DaemonSet:
 ```
 kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/iptables-remover-ds.yaml
 ```
+
+#### Revert: Re-enabling Calico Policy
+
+To revert the disabling and removal of Calico policy, follow the steps below.
+
+##### 1. Delete the policy-removal DaemonSet and ConfigMap
+
+Remove the policy-removal Daemonset and the ConfigMap:
+
+```
+kubectl delete -f https://raw.githubusercontent.com/projectcalico/calico/master/hack/remove-calico-policy/iptables-remover-ds.yaml
+kubectl delete configmap remove-calico-policy-config -n=kube-system
+```
+
+##### 2. Restart Felix on the nodes
+
+To restart the Felix agent on each node, label the nodes with 
+`projectcalico.org/ds-ready: "true"`.
+
+```
+kubectl label nodes --all projectcalico.org/ds-ready=true
+```
+
