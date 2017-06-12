@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	k8sapi "k8s.io/client-go/pkg/api/v1"
@@ -223,6 +224,64 @@ var _ = Describe("Test Syncer", func() {
 
 	It("should create a syncer", func() {
 		Expect(syn).NotTo(BeNil())
+	})
+
+	Describe("without starting the syncer", func() {
+		// These tests reach in and test individual methods.
+		It("should parse a node event with a nil IPs", func() {
+			kv1, kv2 := syn.parseNodeEvent(watch.Event{
+				Object: &k8sapi.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "some-host",
+						ResourceVersion: "1234",
+					},
+				},
+			})
+			Expect(kv1).To(Equal(&model.KVPair{
+				Key:      model.HostIPKey{Hostname: "some-host"},
+				Revision: "1234",
+			}))
+			Expect(kv2).To(Equal(&model.KVPair{
+				Key: model.HostConfigKey{
+					Hostname: "some-host",
+					Name:     "IpInIpTunnelAddr",
+				},
+				Revision: "1234",
+			}))
+		})
+		It("should parse a node event with IPs set", func() {
+			kv1, kv2 := syn.parseNodeEvent(watch.Event{
+				Object: &k8sapi.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:            "some-host",
+						ResourceVersion: "1234",
+						Annotations: map[string]string{
+							"projectcalico.org/IPv4Address": "11.0.0.1/24",
+						},
+					},
+					Spec: k8sapi.NodeSpec{
+						PodCIDR: "10.0.10.0/24",
+					},
+				},
+			})
+			// Using ParseCIDR here so that we get the same format of IP address as
+			// K8sNodeToCalico.
+			ip, _, err := net.ParseCIDR("11.0.0.1/24")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kv1).To(Equal(&model.KVPair{
+				Key:      model.HostIPKey{Hostname: "some-host"},
+				Value:    ip,
+				Revision: "1234",
+			}))
+			Expect(kv2).To(Equal(&model.KVPair{
+				Key: model.HostConfigKey{
+					Hostname: "some-host",
+					Name:     "IpInIpTunnelAddr",
+				},
+				Value:    "10.0.10.1",
+				Revision: "1234",
+			}))
+		})
 	})
 
 	Context("with a running syncer", func() {
