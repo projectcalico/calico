@@ -48,23 +48,20 @@ then
 	CNI_CONF_ETCD_CERT=${HOST_SECRETS_DIR}/etcd-cert
 fi
 
+# Choose which default cni binaries should be copied
+SKIP_CNI_BINARIES=${SKIP_CNI_BINARIES:-""}
+SKIP_CNI_BINARIES=",$SKIP_CNI_BINARIES,"
+
 # Place the new binaries if the directory is writeable.
 if [ -w "/host/opt/cni/bin/" ]; then
-	cp /opt/cni/bin/calico /host/opt/cni/bin/
-	cp /opt/cni/bin/calico-ipam /host/opt/cni/bin/
-	# Copy over the 3rd party CNI binaries, but do not clobber if they exist
-	if [ ! -f /host/opt/cni/bin/flannel ]; then
-	    cp /opt/cni/bin/flannel /host/opt/cni/bin/
-	fi
-	if [ ! -f /host/opt/cni/bin/loopback ]; then
-	    cp /opt/cni/bin/loopback /host/opt/cni/bin/
-	fi
-	if [ ! -f /host/opt/cni/bin/host-local ]; then
-	    cp /opt/cni/bin/host-local /host/opt/cni/bin/
-	fi
-	if [ ! -f /host/opt/cni/bin/portmap ]; then
-	    cp /opt/cni/bin/portmap /host/opt/cni/bin/
-	fi
+	for path in /opt/cni/bin/*
+	do
+		filename=$(basename $path)
+		tmp=",$filename,"
+		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
+			cp /opt/cni/bin/$filename /host/opt/cni/bin/
+		fi
+	done
 	echo "Wrote Calico CNI binaries to /host/opt/cni/bin/"
 	echo "CNI plugin version: $(/host/opt/cni/bin/calico -v)"
 fi
@@ -72,21 +69,14 @@ fi
 # Place them in the secondary location if it exists and
 # is writeable.
 if [ -w "/host/secondary-bin-dir/" ]; then
-	cp /opt/cni/bin/calico /host/secondary-bin-dir/
-	cp /opt/cni/bin/calico-ipam /host/secondary-bin-dir/
-	# Copy over the 3rd party CNI binaries, but do not clobber if they exist
-	if [ ! -f /host/secondary-bin-dir/flannel ]; then
-	    cp /opt/cni/bin/flannel /host/secondary-bin-dir/
-	fi
-	if [ ! -f /host/secondary-bin-dir/loopback ]; then
-	    cp /opt/cni/bin/loopback /host/secondary-bin-dir/
-	fi
-	if [ ! -f /host/secondary-bin-dir/host-local ]; then
-	    cp /opt/cni/bin/host-local /host/secondary-bin-dir/
-	fi
-	if [ ! -f /host/secondary-bin-dir/portmap ]; then
-	    cp /opt/cni/bin/portmap /host/secondary-bin-dir/
-	fi
+	for path in /opt/cni/bin/*
+	do
+		filename=$(basename $path)
+		tmp=",$filename,"
+		if [ "${SKIP_CNI_BINARIES#*$tmp}" = "$SKIP_CNI_BINARIES" ] && [ ! -f /host/opt/cni/bin/$filename ]; then
+			cp /opt/cni/bin/$filename /host/secondary-bin-dir/
+		fi
+	done
 	echo "Wrote Calico CNI binaries to /host/secondary-bin-dir/"
 	echo "CNI plugin version: $(/host/secondary-bin-dir/calico -v)"
 fi
