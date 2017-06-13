@@ -100,6 +100,7 @@ const (
 	defaultPingInterval         = 10 * time.Second
 	defaultDropInterval         = 1 * time.Second
 	defaultMaxConns             = math.MaxInt32
+	PortRandom                  = -1
 )
 
 type Server struct {
@@ -107,11 +108,15 @@ type Server struct {
 	cache      BreadcrumbProvider
 	nextConnID uint64
 	maxConnsC  chan int
+	chosenPort int
+	listeningC chan struct{}
 
 	dropInterval     time.Duration
 	connTrackingLock sync.Mutex
 	maxConns         int
 	connIDToConn     map[uint64]*connection
+
+	Finished sync.WaitGroup
 }
 
 type BreadcrumbProvider interface {
@@ -119,6 +124,7 @@ type BreadcrumbProvider interface {
 }
 
 type Config struct {
+	Port                    int
 	MaxMessageSize          int
 	MaxFallBehind           time.Duration
 	MinBatchingAgeThreshold time.Duration
@@ -179,6 +185,19 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		}).Info("Defaulting MaxConns.")
 		config.MaxConns = defaultMaxConns
 	}
+	if config.Port == 0 {
+		// We use 0 to mean "use the default port".
+		log.WithFields(log.Fields{
+			"value":   config.Port,
+			"default": syncproto.DefaultPort,
+		}).Info("Defaulting Port.")
+		config.Port = syncproto.DefaultPort
+	}
+	if config.Port == PortRandom {
+		// Ask the kernel to choose a random port.
+		log.Info("Choosing random port")
+		config.Port = 0
+	}
 
 	return &Server{
 		config:       config,
@@ -187,10 +206,12 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		dropInterval: config.DropInterval,
 		maxConns:     config.MaxConns,
 		connIDToConn: map[uint64]*connection{},
+		listeningC:   make(chan struct{}),
 	}
 }
 
 func (s *Server) Start(cxt context.Context) {
+	s.Finished.Add(2)
 	go s.serve(cxt)
 	go s.governNumberOfConnections(cxt)
 }
@@ -199,20 +220,42 @@ func (s *Server) SetMaxConns(numConns int) {
 	s.maxConnsC <- numConns
 }
 
+func (s *Server) Port() int {
+	<-s.listeningC
+	return s.chosenPort
+}
+
 func (s *Server) serve(cxt context.Context) {
-	logCxt := log.WithField("port", syncproto.DefaultPort)
+	defer s.Finished.Done()
+	var cancelFn context.CancelFunc
+	cxt, cancelFn = context.WithCancel(cxt)
+	defer cancelFn()
+
+	logCxt := log.WithField("port", s.config.Port)
 	logCxt.Info("Opening listen socket")
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: syncproto.DefaultPort})
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.Port})
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to open listen socket")
 	}
 	logCxt.Info("Opened listen socket")
-	defer l.Close()
+	s.Finished.Add(1)
+	go func() {
+		<-cxt.Done()
+		l.Close()
+		s.Finished.Done()
+	}()
+	s.chosenPort = l.Addr().(*net.TCPAddr).Port
+	close(s.listeningC)
 	for {
 		logCxt.Debug("About to accept connection")
 		conn, err := l.AcceptTCP()
 		if err != nil {
+			if cxt.Err() != nil {
+				logCxt.WithError(cxt.Err()).Info("Shutting down...")
+				return
+			}
 			logCxt.WithError(err).Panic("Failed to accept connection")
+			return
 		}
 
 		connID := s.nextConnID
@@ -269,6 +312,7 @@ func (s *Server) discardConnection(conn *connection) {
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
+	defer s.Finished.Done()
 	logCxt := log.WithField("thread", "numConnsGov")
 	maxConns := s.maxConns
 	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
