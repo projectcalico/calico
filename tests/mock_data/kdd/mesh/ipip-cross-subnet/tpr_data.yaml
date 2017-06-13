@@ -1,0 +1,18 @@
+apiVersion: projectcalico.org/v1
+kind: IpPool
+metadata:
+  name: 192-168-0-0-16
+  namespace: kube-system
+spec:
+  value: '{"cidr":"192.168.0.0/16","ipip":"tunl0","ipip_mode":"cross-subnet","masquerade":true,"ipam":true,"disabled":false}'
+
+---
+
+apiVersion: projectcalico.org/v1
+kind: GlobalConfig
+metadata:
+  name: ipinipenabled
+  namespace: kube-system
+spec:
+  name: IpInIpEnabled
+  value: "true"
