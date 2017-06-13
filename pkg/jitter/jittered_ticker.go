@@ -24,7 +24,7 @@ import (
 // Ticker tries to emit events on channel C at minDuration intervals plus up to maxJitter.
 type Ticker struct {
 	C           <-chan time.Time
-	stop        chan bool
+	stop        chan struct{}
 	MinDuration time.Duration
 	MaxJitter   time.Duration
 }
@@ -39,7 +39,7 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 	c := make(chan time.Time, 1)
 	ticker := &Ticker{
 		C:           c,
-		stop:        make(chan bool),
+		stop:        make(chan struct{}),
 		MinDuration: minDuration,
 		MaxJitter:   maxJitter,
 	}
@@ -48,17 +48,21 @@ func NewTicker(minDuration time.Duration, maxJitter time.Duration) *Ticker {
 }
 
 func (t *Ticker) loop(c chan time.Time) {
+	timer := time.NewTimer(t.calculateDelay())
+	var outCOrNil chan time.Time
 tickLoop:
 	for {
-		time.Sleep(t.calculateDelay())
-		// Send best-effort then go back to sleep.
 		select {
 		case <-t.stop:
 			log.Info("Stopping jittered ticker")
 			close(c)
+			timer.Stop()
 			break tickLoop
-		case c <- time.Now():
-		default:
+		case <-timer.C:
+			outCOrNil = c
+			timer.Reset(t.calculateDelay())
+		case outCOrNil <- time.Now():
+			outCOrNil = nil
 		}
 	}
 }
@@ -70,5 +74,5 @@ func (t *Ticker) calculateDelay() time.Duration {
 }
 
 func (t *Ticker) Stop() {
-	t.stop <- true
+	close(t.stop)
 }
