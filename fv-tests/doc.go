@@ -12,22 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_tests_test
-
-import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"testing"
-)
-
-import "github.com/projectcalico/libcalico-go/lib/testutils"
-
-func init() {
-	testutils.HookLogrusForGinkgo()
-}
-
-func TestFvTests(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "FV Tests Suite")
-}
+// fv_tests contains a suite of tests that test multiple packaged together.  In particular, we
+// start a real server and snapshot cache in-process and make loop-back connections to it.
+package fv_tests
