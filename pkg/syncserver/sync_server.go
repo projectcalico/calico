@@ -284,11 +284,13 @@ func (s *Server) serve(cxt context.Context) {
 		// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
 		s.recordConnection(connection)
 		// Defer to the connection-handler.
-		go connection.handle()
+		s.Finished.Add(2)
+		go connection.handle(&s.Finished)
 		// Clean up the entry in connIDToConn as soon as the context is canceled.
 		go func() {
 			<-connCxt.Done()
 			s.discardConnection(connection)
+			s.Finished.Done()
 		}()
 	}
 }
@@ -378,12 +380,13 @@ type connection struct {
 	logCxt *log.Entry
 }
 
-func (h *connection) handle() (err error) {
+func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	// Ensure that stop gets called.  Stop will close the connection and context and wait for our background
 	// goroutines to finish.
 	defer func() {
 		// Cancel the context and close the connection, this will trigger our background threads to shut down.
 		// We need to do both because they may be blocked on IO or something else.
+		h.logCxt.Info("Client connection shutting down.")
 		h.cancelCxt()
 		err := h.conn.Close()
 		if err != nil {
@@ -393,6 +396,7 @@ func (h *connection) handle() (err error) {
 		h.shutDownWG.Wait()
 		gaugeNumConnections.Dec()
 		h.logCxt.Info("Client connection shut down.")
+		finishedWG.Done()
 	}()
 
 	h.logCxt.Info("Per-connection goroutine started")
@@ -418,12 +422,16 @@ func (h *connection) handle() (err error) {
 
 	// Start a ticker to check that we receive pongs in a timely fashion.
 	pongTicker := jitter.NewTicker(h.config.PingInterval/2, h.config.PingInterval/10)
-	defer pongTicker.Stop()
+	defer func() {
+		h.logCxt.Info("Stopping pong check ticker.")
+		pongTicker.Stop()
+	}()
 	lastPongReceived := time.Now()
 
 	// Use this goroutine to wait for client messages and do the ping/pong liveness check.
 	h.logCxt.Info("Waiting for messages from client")
 	for {
+
 		select {
 		case msg := <-h.readC:
 			if msg == nil {
@@ -548,6 +556,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 // sending deltas to the client.
 func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 	defer func() {
+		logCxt.Info("KV-sender goroutine shutting down")
 		h.cancelCxt()
 		h.shutDownWG.Done()
 		logCxt.Info("KV-sender goroutine finished")
@@ -594,15 +603,17 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 				return
 			}
 			timeSpentInNext := time.Since(nextStartTime)
-			logCxt.WithFields(log.Fields{
-				"seqNo":     breadcrumb.SequenceNumber,
-				"timestamp": breadcrumb.Timestamp,
-			}).Debug("New Breadcrumb")
 
 			// Take a peek at the very latest breadcrumb to see how far behind we are...
 			latestCrumb := h.cache.CurrentBreadcrumb()
 			crumbAge := latestCrumb.Timestamp.Sub(breadcrumb.Timestamp)
 			summaryClientLatency.Observe(crumbAge.Seconds())
+			logCxt.WithFields(log.Fields{
+				"seqNo":     breadcrumb.SequenceNumber,
+				"timestamp": breadcrumb.Timestamp,
+				"state":     breadcrumb.SyncStatus,
+				"age":       crumbAge,
+			}).Debug("New Breadcrumb")
 
 			// Check if we're too far behind the latest Breadcrumb.
 			if crumbAge > h.config.MaxFallBehind {
@@ -634,6 +645,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 
 		if len(deltas) > 0 {
 			// Send the deltas relative to the previous snapshot.
+			logCxt.WithField("num", len(deltas)).Debug("Sending deltas")
 			summaryNumKVsPerMsg.Observe(float64(len(deltas)))
 			err := h.sendMsg(syncproto.MsgKVs{
 				KVs: deltas,
@@ -719,7 +731,10 @@ func (h *connection) sendPingsToClient(logCxt *log.Entry) {
 		logCxt.Info("Pinger goroutine shut down.")
 	}()
 	pingTicker := jitter.NewTicker(h.config.PingInterval, h.config.PingInterval/10)
-	defer pingTicker.Stop()
+	defer func() {
+		logCxt.Info("Stopping ping ticker")
+		pingTicker.Stop()
+	}()
 	for {
 		select {
 		case <-pingTicker.C:

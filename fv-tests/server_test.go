@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -35,6 +37,8 @@ import (
 // We driver the server via a real snapshot cache usnig the snapshot cache's function
 // API.
 var _ = Describe("With an in-process Server", func() {
+	var cacheCxt context.Context
+	var cacheCancel context.CancelFunc
 	var cache *snapcache.Cache
 	var server *syncserver.Server
 	var serverCxt context.Context
@@ -42,16 +46,18 @@ var _ = Describe("With an in-process Server", func() {
 
 	BeforeEach(func() {
 		cache = snapcache.New(snapcache.Config{
+			// Set the batch size small so we can force new Breadcrumbs easily.
 			MaxBatchSize: 10,
 			// Reduce the wake up interval from the default to give us faster tear down.
 			WakeUpInterval: 50 * time.Millisecond,
 		})
 		server = syncserver.New(cache, syncserver.Config{
-			DropInterval: 100 * time.Millisecond,
+			PingInterval: 20 * time.Second,
 			Port:         syncserver.PortRandom,
 		})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
-		cache.Start(serverCxt)
 		server.Start(serverCxt)
 	})
 
@@ -64,6 +70,7 @@ var _ = Describe("With an in-process Server", func() {
 		var clientCancel context.CancelFunc
 		var client *syncclient.SyncerClient
 		var recorder *stateRecorder
+
 		BeforeEach(func() {
 			clientCxt, clientCancel = context.WithCancel(context.Background())
 			recorder = &stateRecorder{
@@ -79,6 +86,7 @@ var _ = Describe("With an in-process Server", func() {
 			err := client.StartContext(clientCxt)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		AfterEach(func() {
 			clientCancel()
 			if client != nil {
@@ -104,12 +112,41 @@ var _ = Describe("With an in-process Server", func() {
 			}))
 			Eventually(recorder.status).Should(Equal(api.InSync))
 		})
+
+		It("should pass through many KVs", func() {
+			expectedEndState := map[string]api.Update{}
+			cache.OnStatusUpdated(api.ResyncInProgress)
+			for i := 0; i < 100; i++ {
+				update := api.Update{
+					KVPair: model.KVPair{
+						Key: model.GlobalConfigKey{
+							Name: fmt.Sprintf("foo%v", i),
+						},
+						Value:    fmt.Sprintf("baz%v", i),
+						Revision: fmt.Sprintf("%v", i),
+					},
+					UpdateType: api.UpdateTypeKVNew,
+				}
+				path, err := model.KeyToDefaultPath(update.Key)
+				Expect(err).NotTo(HaveOccurred())
+				expectedEndState[path] = update
+				cache.OnUpdates([]api.Update{update})
+			}
+			cache.OnStatusUpdated(api.InSync)
+			Eventually(recorder.Status, time.Second).Should(Equal(api.InSync))
+			Eventually(recorder.KVs).Should(Equal(expectedEndState))
+		})
 	})
 
 	AfterEach(func() {
-		serverCancel()
 		if server != nil {
+			serverCancel()
+			log.Info("Waiting for server to shut down")
 			server.Finished.Wait()
+			log.Info("Done waiting for server to shut down")
+		}
+		if cache != nil {
+			cacheCancel()
 		}
 	})
 })

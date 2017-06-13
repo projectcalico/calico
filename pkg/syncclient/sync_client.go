@@ -106,8 +106,9 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 }
 
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
+	defer s.Finished.Done()
 	defer cancelFn()
-	s.Finished.Done()
+
 	logCxt := log.WithField("address", s.addr)
 	logCxt.Info("Started Typha client main loop")
 

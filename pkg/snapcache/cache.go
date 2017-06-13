@@ -195,6 +195,7 @@ func (c *Cache) Start(ctx context.Context) {
 }
 
 func (c *Cache) loop(ctx context.Context) {
+	defer c.breadcrumbCond.Broadcast()
 	for {
 		// First, block, waiting for updates and batch them up in our pendingXXX fields.
 		// This will opportunistically slurp up a limited number of pending updates.

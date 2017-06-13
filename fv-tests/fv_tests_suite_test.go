@@ -21,10 +21,14 @@ import (
 	"testing"
 )
 
-import "github.com/projectcalico/libcalico-go/lib/testutils"
+import (
+	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/typha/pkg/logutils"
+)
 
 func init() {
 	testutils.HookLogrusForGinkgo()
+	logutils.ConfigureEarlyLogging()
 }
 
 func TestFvTests(t *testing.T) {
