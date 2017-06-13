@@ -1,4 +1,5 @@
 [![Build Status](https://semaphoreci.com/api/v1/calico/typha/branches/master/shields_badge.svg)](https://semaphoreci.com/calico/typha)
+[![Coverage Status](https://coveralls.io/repos/github/projectcalico/typha/badge.svg?branch=master)](https://coveralls.io/github/projectcalico/typha?branch=master)
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
 # Project Calico
