@@ -88,6 +88,7 @@ var _ = Describe("With an in-process Server", func() {
 		server = syncserver.New(cache, syncserver.Config{
 			PingInterval: 20 * time.Second,
 			Port:         syncserver.PortRandom,
+			DropInterval: 50 * time.Millisecond,
 		})
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		cache.Start(cacheCxt)
@@ -262,6 +263,7 @@ var _ = Describe("With an in-process Server", func() {
 					"test-info",
 					recorder,
 				)
+				client.PanicOnFailure = false
 				err := client.StartContext(clientCxt)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -294,6 +296,29 @@ var _ = Describe("With an in-process Server", func() {
 				Eventually(s.recorder.KVs, 5*time.Second).Should(Equal(kvs))
 			}
 		}
+
+		It("should drop expected number of connections", func() {
+			finishedC := make(chan int)
+			for _, s := range clientStates {
+				go func(s clientState) {
+					s.client.Finished.Wait()
+					finishedC <- 1
+				}(s)
+			}
+			server.SetMaxConns(40)
+			timeout := time.NewTimer(5 * time.Second)
+			numFinished := 0
+		loop:
+			for {
+				select {
+				case <-timeout.C:
+					break loop
+				case c := <-finishedC:
+					numFinished += c
+				}
+			}
+			Expect(numFinished).To(Equal(60))
+		})
 
 		It("should pass through a KV and status", func() {
 			cache.OnStatusUpdated(api.ResyncInProgress)
