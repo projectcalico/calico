@@ -270,6 +270,7 @@ release-once-tagged:
 	@echo
 	$(MAKE) bin/calico-typha calico/typha
 	docker tag calico/typha calico/typha:$(VERSION)
+	docker tag calico/typha quay.io/calico/typha:latest
 	docker tag calico/typha:$(VERSION) quay.io/calico/typha:$(VERSION)
 	@echo
 	@echo "Checking built typha has correct version..."
