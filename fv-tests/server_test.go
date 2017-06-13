@@ -26,10 +26,14 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	gob "encoding/gob"
+	"net"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncclient"
+	"github.com/projectcalico/typha/pkg/syncproto"
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
 
@@ -77,6 +81,7 @@ var _ = Describe("With an in-process Server", func() {
 	var server *syncserver.Server
 	var serverCxt context.Context
 	var serverCancel context.CancelFunc
+	var serverAddr string
 
 	BeforeEach(func() {
 		cache = snapcache.New(snapcache.Config{
@@ -86,7 +91,7 @@ var _ = Describe("With an in-process Server", func() {
 			WakeUpInterval: 50 * time.Millisecond,
 		})
 		server = syncserver.New(cache, syncserver.Config{
-			PingInterval: 20 * time.Second,
+			PingInterval: 10 * time.Second,
 			Port:         syncserver.PortRandom,
 			DropInterval: 50 * time.Millisecond,
 		})
@@ -94,6 +99,7 @@ var _ = Describe("With an in-process Server", func() {
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
+		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
 	})
 
 	It("should choose a port", func() {
@@ -135,7 +141,7 @@ var _ = Describe("With an in-process Server", func() {
 				kvs: map[string]api.Update{},
 			}
 			client = syncclient.New(
-				fmt.Sprintf("127.0.0.1:%d", server.Port()),
+				serverAddr,
 				"test-version",
 				"test-host",
 				"test-info",
@@ -168,7 +174,7 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			newClientCxt, cancelNewClient := context.WithCancel(context.Background())
 			newClient := syncclient.New(
-				fmt.Sprintf("127.0.0.1:%d", server.Port()),
+				serverAddr,
 				"test-version",
 				"test-host-sampler",
 				"test-info",
@@ -292,12 +298,13 @@ var _ = Describe("With an in-process Server", func() {
 		expectClientStates := func(status api.SyncStatus, kvs map[string]api.Update) {
 			for _, s := range clientStates {
 				// Wait until we reach that state.
-				Eventually(s.recorder.Status, 5*time.Second).Should(Equal(status))
-				Eventually(s.recorder.KVs, 5*time.Second).Should(Equal(kvs))
+				Eventually(s.recorder.Status, 10*time.Second, 200*time.Millisecond).Should(Equal(status))
+				Eventually(s.recorder.KVs, 10*time.Second).Should(Equal(kvs))
 			}
 		}
 
 		It("should drop expected number of connections", func() {
+			// Start a goroutine to watch each client and send us a message on the channel when it stops.
 			finishedC := make(chan int)
 			for _, s := range clientStates {
 				go func(s clientState) {
@@ -305,8 +312,14 @@ var _ = Describe("With an in-process Server", func() {
 					finishedC <- 1
 				}(s)
 			}
-			server.SetMaxConns(40)
-			timeout := time.NewTimer(5 * time.Second)
+
+			// We start with 100 connections, set the max to 60 so we kill 40 connections.
+			server.SetMaxConns(60)
+
+			// We set the srop interval to 50ms so it should take 2-2.2 seconds (due to jitter) to drop the
+			// connections.  Wait 3 seconds so that we verify that the server doesn't go on to kill any
+			// more than the target.
+			timeout := time.NewTimer(3 * time.Second)
 			oneSec := time.NewTimer(1 * time.Second)
 			numFinished := 0
 		loop:
@@ -315,14 +328,16 @@ var _ = Describe("With an in-process Server", func() {
 				case <-timeout.C:
 					break loop
 				case <-oneSec.C:
-					// After one second we should have dropped approximately 20 clients.
+					// Check the rate is in the right ballpark: after one second we should have
+					// dropped approximately 20 clients.
 					Expect(numFinished).To(BeNumerically(">", 10))
 					Expect(numFinished).To(BeNumerically("<", 30))
 				case c := <-finishedC:
 					numFinished += c
 				}
 			}
-			Expect(numFinished).To(Equal(60))
+			// After the timeout we should have dropped exactly the right number of connections.
+			Expect(numFinished).To(Equal(40))
 		})
 
 		It("should pass through a KV and status", func() {
@@ -352,6 +367,90 @@ var _ = Describe("With an in-process Server", func() {
 		}
 		if cache != nil {
 			cacheCancel()
+		}
+	})
+})
+
+var _ = Describe("With an in-process Server with short ping timeout", func() {
+	var cacheCxt context.Context
+	var cacheCancel context.CancelFunc
+	var cache *snapcache.Cache
+	var server *syncserver.Server
+	var serverCxt context.Context
+	var serverCancel context.CancelFunc
+	var serverAddr string
+
+	BeforeEach(func() {
+		cache = snapcache.New(snapcache.Config{
+			// Set the batch size small so we can force new Breadcrumbs easily.
+			MaxBatchSize: 10,
+			// Reduce the wake up interval from the default to give us faster tear down.
+			WakeUpInterval: 50 * time.Millisecond,
+		})
+		server = syncserver.New(cache, syncserver.Config{
+			PingInterval: 100 * time.Millisecond,
+			PongTimeout:  500 * time.Millisecond,
+			Port:         syncserver.PortRandom,
+			DropInterval: 50 * time.Millisecond,
+		})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		cache.Start(cacheCxt)
+		serverCxt, serverCancel = context.WithCancel(context.Background())
+		server.Start(serverCxt)
+		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+	})
+
+	AfterEach(func() {
+		if server != nil {
+			serverCancel()
+			log.Info("Waiting for server to shut down")
+			server.Finished.Wait()
+			log.Info("Done waiting for server to shut down")
+		}
+		if cache != nil {
+			cacheCancel()
+		}
+	})
+
+	It("should disconnect an unresponsive client", func() {
+		rawConn, err := net.DialTimeout("tcp", serverAddr, 10*time.Second)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			err := rawConn.Close()
+			if err != nil {
+				log.WithError(err).Info("Error recorded while closing conn.")
+			}
+		}()
+		w := gob.NewEncoder(rawConn)
+		err = w.Encode(syncproto.Envelope{
+			Message: syncproto.MsgClientHello{
+				Hostname: "me",
+				Version:  "test",
+				Info:     "test info",
+			},
+		})
+		r := gob.NewDecoder(rawConn)
+		Expect(err).NotTo(HaveOccurred())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				var envelope syncproto.Envelope
+				err := r.Decode(&envelope)
+				if err != nil {
+					return
+				}
+			}
+		}()
+		timeout := time.NewTimer(1 * time.Second)
+		startTime := time.Now()
+		select {
+		case <-done:
+			// Check we didn't get dropped too soon.
+			Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
+			timeout.Stop()
+		case <-timeout.C:
+			Fail("timed out waiting for unresponsive client to be dropped")
 		}
 	})
 })
