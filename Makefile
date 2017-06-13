@@ -21,7 +21,7 @@ st: docker-image run-etcd run-k8s-apiserver
 	$(MAKE) stop-k8s-apiserver stop-etcd
 
 GET_CONTAINER_IP := docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
-K8S_VERSION=1.5.3
+K8S_VERSION=1.6.4
 .PHONY: run-k8s-apiserver stop-k8s-apiserver run-etcd stop-etcd
 run-k8s-apiserver: stop-k8s-apiserver
 	ETCD_IP=`$(GET_CONTAINER_IP) st-etcd` && \
@@ -29,7 +29,8 @@ run-k8s-apiserver: stop-k8s-apiserver
 	  --name st-apiserver \
 	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$${ETCD_IP}:2379 \
-		  --service-cluster-ip-range=10.101.0.0/16 -v=10
+		  --service-cluster-ip-range=10.101.0.0/16 -v=10 \
+		  --authorization-mode=RBAC
 
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
