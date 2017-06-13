@@ -99,6 +99,29 @@ var _ = Describe("With an in-process Server", func() {
 		Expect(server.Port()).ToNot(BeZero())
 	})
 
+	sendNUpdatesThenInSync := func(n int) map[string]api.Update {
+		expectedEndState := map[string]api.Update{}
+		cache.OnStatusUpdated(api.ResyncInProgress)
+		for i := 0; i < n; i++ {
+			update := api.Update{
+				KVPair: model.KVPair{
+					Key: model.GlobalConfigKey{
+						Name: fmt.Sprintf("foo%v", i),
+					},
+					Value:    fmt.Sprintf("baz%v", i),
+					Revision: fmt.Sprintf("%v", i),
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			path, err := model.KeyToDefaultPath(update.Key)
+			Expect(err).NotTo(HaveOccurred())
+			expectedEndState[path] = update
+			cache.OnUpdates([]api.Update{update})
+		}
+		cache.OnStatusUpdated(api.InSync)
+		return expectedEndState
+	}
+
 	Describe("with a client connection", func() {
 		var clientCxt context.Context
 		var clientCancel context.CancelFunc
@@ -211,26 +234,82 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through many KVs", func() {
-			expectedEndState := map[string]api.Update{}
-			cache.OnStatusUpdated(api.ResyncInProgress)
-			for i := 0; i < 1000; i++ {
-				update := api.Update{
-					KVPair: model.KVPair{
-						Key: model.GlobalConfigKey{
-							Name: fmt.Sprintf("foo%v", i),
-						},
-						Value:    fmt.Sprintf("baz%v", i),
-						Revision: fmt.Sprintf("%v", i),
-					},
-					UpdateType: api.UpdateTypeKVNew,
-				}
-				path, err := model.KeyToDefaultPath(update.Key)
-				Expect(err).NotTo(HaveOccurred())
-				expectedEndState[path] = update
-				cache.OnUpdates([]api.Update{update})
-			}
-			cache.OnStatusUpdated(api.InSync)
+			expectedEndState := sendNUpdatesThenInSync(1000)
 			expectClientState(api.InSync, expectedEndState)
+		})
+	})
+
+	Describe("with 100 client connections", func() {
+		type clientState struct {
+			clientCxt    context.Context
+			clientCancel context.CancelFunc
+			client       *syncclient.SyncerClient
+			recorder     *stateRecorder
+		}
+		var clientStates []clientState
+
+		BeforeEach(func() {
+			clientStates = nil
+			for i := 0; i < 100; i++ {
+				clientCxt, clientCancel := context.WithCancel(context.Background())
+				recorder := &stateRecorder{
+					kvs: map[string]api.Update{},
+				}
+				client := syncclient.New(
+					fmt.Sprintf("127.0.0.1:%d", server.Port()),
+					"test-version",
+					"test-host",
+					"test-info",
+					recorder,
+				)
+				err := client.StartContext(clientCxt)
+				Expect(err).NotTo(HaveOccurred())
+
+				clientStates = append(clientStates, clientState{
+					clientCxt:    clientCxt,
+					client:       client,
+					clientCancel: clientCancel,
+					recorder:     recorder,
+				})
+			}
+		})
+
+		AfterEach(func() {
+			for _, c := range clientStates {
+				c.clientCancel()
+				if c.client != nil {
+					log.Info("Waiting for client to shut down.")
+					c.client.Finished.Wait()
+					log.Info("Done waiting for client to shut down.")
+				}
+			}
+		})
+
+		// expectClientState asserts that the client eventually reaches the given state.  Then, it
+		// simulates a second connection and check that that also converges to the given state.
+		expectClientStates := func(status api.SyncStatus, kvs map[string]api.Update) {
+			for _, s := range clientStates {
+				// Wait until we reach that state.
+				Eventually(s.recorder.Status, 5*time.Second).Should(Equal(status))
+				Eventually(s.recorder.KVs, 5*time.Second).Should(Equal(kvs))
+			}
+		}
+
+		It("should pass through a KV and status", func() {
+			cache.OnStatusUpdated(api.ResyncInProgress)
+			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
+			cache.OnStatusUpdated(api.InSync)
+			expectClientStates(
+				api.InSync,
+				map[string]api.Update{
+					"/calico/v1/config/foobar": configFoobarBazzBiff,
+				},
+			)
+		})
+
+		It("should pass through many KVs", func() {
+			expectedEndState := sendNUpdatesThenInSync(1000)
+			expectClientStates(api.InSync, expectedEndState)
 		})
 	})
 

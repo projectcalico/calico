@@ -24,6 +24,8 @@ import (
 	"context"
 	"sync"
 
+	"fmt"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
@@ -42,6 +44,8 @@ func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallba
 		myVersion:  myVersion,
 		myHostname: myHostname,
 		myInfo:     myInfo,
+
+		PanicOnFailure: true,
 	}
 }
 
@@ -53,6 +57,8 @@ type SyncerClient struct {
 	myHostname, myVersion, myInfo string
 	c                             net.Conn
 	Finished                      sync.WaitGroup
+
+	PanicOnFailure bool
 }
 
 func (s *SyncerClient) Start() {
@@ -114,6 +120,18 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 	return nil
 }
 
+func (s *SyncerClient) onConnectionFailed(cxt context.Context, logCxt *log.Entry, err error, operation string) {
+	if cxt.Err() != nil {
+		log.WithError(err).Warn("Connection failed while being shut down by context.")
+		return
+	}
+	msg := fmt.Sprintf("Failed to %s", operation)
+	if s.PanicOnFailure {
+		logCxt.WithError(err).Panic(msg)
+	}
+	logCxt.WithError(err).Error(msg)
+}
+
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	defer s.Finished.Done()
 	defer cancelFn()
@@ -132,22 +150,16 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		},
 	})
 	if err != nil {
-		if cxt.Err() != nil {
-			log.WithError(err).Warn("Connection failed while being shut down by context.")
-			return
-		}
-		logCxt.WithError(err).Panic("Failed to write hello to server")
+		s.onConnectionFailed(cxt, logCxt, err, "write hello to server")
+		return
 	}
 
 	for cxt.Err() == nil {
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
-			if cxt.Err() != nil {
-				logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
-				return
-			}
-			logCxt.WithError(err).Panic("Failed to read from server")
+			s.onConnectionFailed(cxt, logCxt, err, "read from server")
+			return
 		}
 		logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
 		switch msg := envelope.Message.(type) {
@@ -161,11 +173,8 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 				PingTimestamp: msg.Timestamp,
 			}})
 			if err != nil {
-				if cxt.Err() != nil {
-					logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
-					return
-				}
-				logCxt.WithError(err).Panic("Failed to write to server")
+				s.onConnectionFailed(cxt, logCxt, err, "write pong to server")
+				return
 			}
 			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
