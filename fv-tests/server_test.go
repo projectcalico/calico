@@ -116,7 +116,7 @@ var _ = Describe("With an in-process Server", func() {
 		It("should pass through many KVs", func() {
 			expectedEndState := map[string]api.Update{}
 			cache.OnStatusUpdated(api.ResyncInProgress)
-			for i := 0; i < 100; i++ {
+			for i := 0; i < 1000; i++ {
 				update := api.Update{
 					KVPair: model.KVPair{
 						Key: model.GlobalConfigKey{
