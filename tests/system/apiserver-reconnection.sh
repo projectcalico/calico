@@ -1,13 +1,19 @@
 #!/bin/bash -ex
 
-# Utilities.
 function get_container_ip {
     docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $1
 }
 
+ETCD_IP=`get_container_ip st-etcd`
+K8S_IP=`get_container_ip st-apiserver`
+
+while ! docker exec st-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
+    sleep 2
+done
+
 function create_namespace {
     name=$1
-    curl -k -H "Content-Type: application/yaml" -XPOST --data-binary @- https://172.17.0.3:6443/api/v1/namespaces <<EOF
+    curl -k -H "Content-Type: application/yaml" -XPOST --data-binary @- https://${K8S_IP}:6443/api/v1/namespaces <<EOF
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -15,9 +21,6 @@ metadata:
 EOF
     sleep 1
 }
-
-ETCD_IP=`get_container_ip st-etcd`
-K8S_IP=`get_container_ip st-apiserver`
 
 # Run policy controller.
 docker rm -f calico-policy-controller || true
