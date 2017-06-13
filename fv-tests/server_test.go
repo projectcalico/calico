@@ -307,12 +307,17 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			server.SetMaxConns(40)
 			timeout := time.NewTimer(5 * time.Second)
+			oneSec := time.NewTimer(1 * time.Second)
 			numFinished := 0
 		loop:
 			for {
 				select {
 				case <-timeout.C:
 					break loop
+				case <-oneSec.C:
+					// After one second we should have dropped approximately 20 clients.
+					Expect(numFinished).To(BeNumerically(">", 10))
+					Expect(numFinished).To(BeNumerically("<", 30))
 				case c := <-finishedC:
 					numFinished += c
 				}
