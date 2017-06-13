@@ -198,7 +198,7 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		log.Info("Choosing random port")
 		config.Port = 0
 	}
-
+	log.WithField("config", config).Info("Creating server")
 	return &Server{
 		config:       config,
 		cache:        cache,
