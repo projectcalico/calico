@@ -1,5 +1,6 @@
 ---
 title: calicoctl apply
+redirect_from: latest/reference/calicoctl/commands/apply
 ---
 
 This sections describes the `calicoctl apply` command.

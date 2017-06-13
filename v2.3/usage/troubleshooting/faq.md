@@ -1,5 +1,6 @@
 ---
 title: Frequently Asked Questions
+redirect_from: latest/usage/troubleshooting/faq
 layout: docwithnav
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Verifying your Calico on OpenStack deployment
+redirect_from: latest/getting-started/openstack/verification
 ---
 
 This document takes you through the steps you can perform to verify that

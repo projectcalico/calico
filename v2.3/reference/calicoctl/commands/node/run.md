@@ -1,5 +1,6 @@
 ---
 title: calicoctl node run
+redirect_from: latest/reference/calicoctl/commands/node/run
 ---
 
 This sections describes the `calicoctl node run` command.

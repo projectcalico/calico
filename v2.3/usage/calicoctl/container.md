@@ -1,5 +1,6 @@
 ---
 title: calico/ctl container
+redirect_from: latest/usage/calicoctl/container
 ---
 
 With each release of calicoctl the docker container `calico/ctl` is released to
