@@ -143,7 +143,7 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		}).Info("Defaulting MaxFallBehind.")
 		config.MaxFallBehind = defaultMaxFallBehind
 	}
-	if config.MaxFallBehind <= 0 {
+	if config.MinBatchingAgeThreshold <= 0 {
 		log.WithFields(log.Fields{
 			"value":   config.MinBatchingAgeThreshold,
 			"default": defaultBatchingAgeThreshold,
@@ -158,7 +158,7 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		config.PingInterval = defaultPingInterval
 	}
 	if config.PongTimeout <= config.PingInterval*2 {
-		defaultTimeout := config.PongTimeout * 6
+		defaultTimeout := config.PingInterval * 6
 		log.WithFields(log.Fields{
 			"value":   config.PongTimeout,
 			"default": defaultTimeout,
