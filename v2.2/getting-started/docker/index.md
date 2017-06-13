@@ -1,6 +1,5 @@
 ---
 title: Calico with Docker
-redirect_from: latest/getting-started/docker/index
 ---
 
 Calico implements a Docker network plugin that can be used to provide routing and advanced network policy for Docker containers.

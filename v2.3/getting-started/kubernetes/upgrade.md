@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico for Kubernetes
+redirect_from: latest/getting-started/kubernetes/upgrade
 ---
 
 This document covers upgrading the Calico components in a Kubernetes deployment.  This

@@ -1,6 +1,5 @@
 ---
 title: Installing Felix as a static binary
-redirect_from: latest/getting-started/bare-metal/bare-metal-install
 ---
 
 These instructions will take you through a first-time install of
