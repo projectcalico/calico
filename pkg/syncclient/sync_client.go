@@ -28,8 +28,14 @@ import (
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
+var nextID uint64
+
 func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallbacks) *SyncerClient {
+	id := nextID
+	nextID++
 	return &SyncerClient{
+		ID:        id,
+		logCxt:    log.WithField("connID", id),
 		callbacks: cbs,
 		addr:      addr,
 
@@ -40,6 +46,8 @@ func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallba
 }
 
 type SyncerClient struct {
+	ID                            uint64
+	logCxt                        *log.Entry
 	callbacks                     api.SyncerCallbacks
 	addr                          string
 	myHostname, myVersion, myInfo string
@@ -50,7 +58,7 @@ type SyncerClient struct {
 func (s *SyncerClient) Start() {
 	err := s.StartContext(context.Background())
 	if err != nil {
-		log.WithError(err).Panic("Failed to connect to Typha")
+		s.logCxt.WithError(err).Panic("Failed to connect to Typha")
 	}
 }
 
@@ -72,6 +80,7 @@ func (s *SyncerClient) StartContext(cxt context.Context) error {
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
 		<-cxt.Done()
+		s.logCxt.Info("Typha client Context asked us to exit")
 		// Close the connection.  This will trigger the main loop to exit if it hasn't
 		// already.
 		s.c.Close()
@@ -84,7 +93,7 @@ func (s *SyncerClient) StartContext(cxt context.Context) error {
 func (s *SyncerClient) connect(cxt context.Context) error {
 	log.Info("Starting Typha client")
 	var err error
-	logCxt := log.WithField("address", s.addr)
+	logCxt := s.logCxt.WithField("address", s.addr)
 	for cxt.Err() == nil {
 		logCxt.Info("Connecting to Typha.")
 		s.c, err = net.DialTimeout("tcp", s.addr, 10*time.Second)
@@ -109,7 +118,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	defer s.Finished.Done()
 	defer cancelFn()
 
-	logCxt := log.WithField("address", s.addr)
+	logCxt := s.logCxt.WithField("address", s.addr)
 	logCxt.Info("Started Typha client main loop")
 
 	w := gob.NewEncoder(s.c)
@@ -127,7 +136,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			log.WithError(err).Warn("Connection failed while being shut down by context.")
 			return
 		}
-		log.WithError(err).Panic("Failed to write hello to server")
+		logCxt.WithError(err).Panic("Failed to write hello to server")
 	}
 
 	for cxt.Err() == nil {
@@ -135,39 +144,39 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 		err := r.Decode(&envelope)
 		if err != nil {
 			if cxt.Err() != nil {
-				log.WithError(err).Warn("Connection failed while being shut down by context.")
+				logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
 				return
 			}
-			log.WithError(err).Panic("Failed to read from server")
+			logCxt.WithError(err).Panic("Failed to read from server")
 		}
-		log.WithField("envelope", envelope).Debug("New message from Typha.")
+		logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
 		switch msg := envelope.Message.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info(
 				"Status update from Typha.")
 			s.callbacks.OnStatusUpdated(msg.SyncStatus)
 		case syncproto.MsgPing:
-			log.Debug("Ping received from Typha")
+			logCxt.Debug("Ping received from Typha")
 			err := w.Encode(syncproto.Envelope{Message: syncproto.MsgPong{
 				PingTimestamp: msg.Timestamp,
 			}})
 			if err != nil {
 				if cxt.Err() != nil {
-					log.WithError(err).Warn("Connection failed while being shut down by context.")
+					logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
 					return
 				}
-				log.WithError(err).Panic("Failed to write to server")
+				logCxt.WithError(err).Panic("Failed to write to server")
 			}
-			log.Debug("Pong sent to Typha")
+			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, 0, len(msg.KVs))
 			for _, kv := range msg.KVs {
 				update, err := kv.ToUpdate()
 				if err != nil {
-					log.WithError(err).Error("Failed to deserialize update, skipping.")
+					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
 					continue
 				}
-				log.WithFields(log.Fields{
+				logCxt.WithFields(log.Fields{
 					"serialized":   kv,
 					"deserialized": update,
 				}).Debug("Decoded update from Typha")
@@ -175,7 +184,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			}
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
-			log.WithField("serverVersion", msg.Version).Info(
+			logCxt.WithField("serverVersion", msg.Version).Info(
 				"Server hello message received")
 		}
 	}

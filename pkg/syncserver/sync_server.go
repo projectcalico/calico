@@ -245,6 +245,7 @@ func (s *Server) serve(cxt context.Context) {
 		s.Finished.Done()
 	}()
 	s.chosenPort = l.Addr().(*net.TCPAddr).Port
+	logCxt = log.WithField("port", s.chosenPort)
 	close(s.listeningC)
 	for {
 		logCxt.Debug("About to accept connection")
