@@ -448,8 +448,12 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 				return errors.New("Unknown message type")
 			}
 		case <-pongTicker.C:
-			if time.Since(lastPongReceived) > h.config.PongTimeout {
-				h.logCxt.Info("Too long since last pong from client, disconnecting")
+			since := time.Since(lastPongReceived)
+			if since > h.config.PongTimeout {
+				h.logCxt.WithFields(log.Fields{
+					"pongTimeout":       h.config.PongTimeout,
+					"timeSinceLastPong": since,
+				}).Info("Too long since last pong from client, disconnecting")
 				return errors.New("No pong received from client")
 			}
 		case <-h.cxt.Done():
