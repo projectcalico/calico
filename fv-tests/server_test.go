@@ -21,37 +21,145 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"fmt"
+	"sync"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/typha/pkg/snapcache"
+	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
 
+// Tests that rely on starting a real Server (on a real TCP port) in this process.
+// We driver the server via a real snapshot cache usnig the snapshot cache's function
+// API.
 var _ = Describe("With an in-process Server", func() {
-	var snapCache *snapcache.Cache
+	var cache *snapcache.Cache
 	var server *syncserver.Server
-	var cxt context.Context
-	var cancel context.CancelFunc
+	var serverCxt context.Context
+	var serverCancel context.CancelFunc
 
 	BeforeEach(func() {
-		snapCache = snapcache.New(snapcache.Config{
+		cache = snapcache.New(snapcache.Config{
 			MaxBatchSize: 10,
 			// Reduce the wake up interval from the default to give us faster tear down.
 			WakeUpInterval: 50 * time.Millisecond,
 		})
-		server = syncserver.New(snapCache, syncserver.Config{
+		server = syncserver.New(cache, syncserver.Config{
 			DropInterval: 100 * time.Millisecond,
 			Port:         syncserver.PortRandom,
 		})
-		cxt, cancel = context.WithCancel(context.Background())
-		snapCache.Start(cxt)
-		server.Start(cxt)
+		serverCxt, serverCancel = context.WithCancel(context.Background())
+		cache.Start(serverCxt)
+		server.Start(serverCxt)
 	})
 
 	It("should choose a port", func() {
 		Expect(server.Port()).ToNot(BeZero())
 	})
 
+	Describe("with a client connection", func() {
+		var clientCxt context.Context
+		var clientCancel context.CancelFunc
+		var client *syncclient.SyncerClient
+		var recorder *stateRecorder
+		BeforeEach(func() {
+			clientCxt, clientCancel = context.WithCancel(context.Background())
+			recorder = &stateRecorder{
+				kvs: map[string]api.Update{},
+			}
+			client = syncclient.New(
+				fmt.Sprintf("127.0.0.1:%d", server.Port()),
+				"test-version",
+				"test-host",
+				"test-info",
+				recorder,
+			)
+			err := client.StartContext(clientCxt)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		AfterEach(func() {
+			clientCancel()
+			if client != nil {
+				client.Finished.Wait()
+			}
+		})
+
+		It("should pass through a KV and status", func() {
+			update := api.Update{
+				KVPair: model.KVPair{
+					Key:      model.GlobalConfigKey{Name: "foobar"},
+					Value:    "bazzbiff",
+					Revision: "1234",
+					TTL:      12,
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}
+			cache.OnStatusUpdated(api.ResyncInProgress)
+			cache.OnUpdates([]api.Update{update})
+			cache.OnStatusUpdated(api.InSync)
+			Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
+				"/calico/v1/config/foobar": update,
+			}))
+			Eventually(recorder.status).Should(Equal(api.InSync))
+		})
+	})
+
 	AfterEach(func() {
-		cancel()
-		server.Finished.Wait()
+		serverCancel()
+		if server != nil {
+			server.Finished.Wait()
+		}
 	})
 })
+
+type stateRecorder struct {
+	L      sync.Mutex
+	status api.SyncStatus
+	kvs    map[string]api.Update
+	err    error
+}
+
+func (r *stateRecorder) KVs() map[string]api.Update {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	kvsCpy := map[string]api.Update{}
+	for k, v := range r.kvs {
+		kvsCpy[k] = v
+	}
+	return kvsCpy
+}
+
+func (r *stateRecorder) Status() api.SyncStatus {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	return r.status
+}
+
+func (r *stateRecorder) OnUpdates(updates []api.Update) {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	for _, u := range updates {
+		path, err := model.KeyToDefaultPath(u.Key)
+		if err != nil {
+			r.err = err
+			continue
+		}
+		if u.Value == nil {
+			delete(r.kvs, path)
+		} else {
+			r.kvs[path] = u
+		}
+	}
+}
+
+func (r *stateRecorder) OnStatusUpdated(status api.SyncStatus) {
+	r.L.Lock()
+	defer r.L.Unlock()
+
+	r.status = status
+}
