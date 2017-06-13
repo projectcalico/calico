@@ -33,6 +33,40 @@ import (
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
 
+var (
+	configFoobarBazzBiff = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.GlobalConfigKey{Name: "foobar"},
+			Value:    "bazzbiff",
+			Revision: "1234",
+			TTL:      12,
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	configFoobarDeleted = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.GlobalConfigKey{Name: "foobar"},
+			Revision: "1235",
+		},
+		UpdateType: api.UpdateTypeKVDeleted,
+	}
+	configFoobar2BazzBiff = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.GlobalConfigKey{Name: "foobar2"},
+			Value:    "bazzbiff",
+			Revision: "1234",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	configFoobar2Deleted = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.GlobalConfigKey{Name: "foobar2"},
+			Revision: "1235",
+		},
+		UpdateType: api.UpdateTypeKVDeleted,
+	}
+)
+
 // Tests that rely on starting a real Server (on a real TCP port) in this process.
 // We driver the server via a real snapshot cache usnig the snapshot cache's function
 // API.
@@ -90,27 +124,90 @@ var _ = Describe("With an in-process Server", func() {
 		AfterEach(func() {
 			clientCancel()
 			if client != nil {
+				log.Info("Waiting for client to shut down.")
 				client.Finished.Wait()
+				log.Info("Done waiting for client to shut down.")
 			}
 		})
 
-		It("should pass through a KV and status", func() {
-			update := api.Update{
+		// expectClientState asserts that the client eventually reaches the given state.  Then, it
+		// simulates a second connection and check that that also converges to the given state.
+		expectClientState := func(status api.SyncStatus, kvs map[string]api.Update) {
+			// Wait until we reach that state.
+			Eventually(recorder.Status).Should(Equal(status))
+			Eventually(recorder.KVs).Should(Equal(kvs))
+
+			// Now, a newly-connecting client should also reach the same state.
+			log.Info("Starting transient client to read snapshot.")
+			newRecorder := &stateRecorder{
+				kvs: map[string]api.Update{},
+			}
+			newClientCxt, cancelNewClient := context.WithCancel(context.Background())
+			newClient := syncclient.New(
+				fmt.Sprintf("127.0.0.1:%d", server.Port()),
+				"test-version",
+				"test-host-sampler",
+				"test-info",
+				newRecorder,
+			)
+			err := newClient.StartContext(newClientCxt)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				log.Info("Stopping transient client.")
+				cancelNewClient()
+				newClient.Finished.Wait()
+				log.Info("Stopped transient client.")
+			}()
+			Eventually(newRecorder.Status).Should(Equal(status))
+			Eventually(newRecorder.KVs).Should(Equal(kvs))
+		}
+
+		It("should drop a bad KV", func() {
+			cache.OnStatusUpdated(api.ResyncInProgress)
+			cache.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
-					Key:      model.GlobalConfigKey{Name: "foobar"},
+					// NodeKeys can't be serialized right now.
+					Key:      model.NodeKey{Hostname: "foobar"},
 					Value:    "bazzbiff",
 					Revision: "1234",
 					TTL:      12,
 				},
 				UpdateType: api.UpdateTypeKVNew,
-			}
-			cache.OnStatusUpdated(api.ResyncInProgress)
-			cache.OnUpdates([]api.Update{update})
+			}})
 			cache.OnStatusUpdated(api.InSync)
-			Eventually(recorder.KVs).Should(Equal(map[string]api.Update{
-				"/calico/v1/config/foobar": update,
-			}))
-			Eventually(recorder.status).Should(Equal(api.InSync))
+			expectClientState(api.InSync, map[string]api.Update{})
+		})
+
+		It("should pass through a KV and status", func() {
+			cache.OnStatusUpdated(api.ResyncInProgress)
+			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
+			cache.OnStatusUpdated(api.InSync)
+			Eventually(recorder.Status).Should(Equal(api.InSync))
+			expectClientState(
+				api.InSync,
+				map[string]api.Update{
+					"/calico/v1/config/foobar": configFoobarBazzBiff,
+				},
+			)
+		})
+
+		It("should handle deletions", func() {
+			// Create two keys then delete in reverse order.  One of the keys happens to have
+			// a default path that is the prefix of the other, just to make sure the Ctrie doesn't
+			// accidentally delete the whole prefix.
+			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
+			cache.OnUpdates([]api.Update{configFoobar2BazzBiff})
+			cache.OnStatusUpdated(api.InSync)
+			expectClientState(api.InSync, map[string]api.Update{
+				"/calico/v1/config/foobar":  configFoobarBazzBiff,
+				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
+			})
+			cache.OnUpdates([]api.Update{configFoobarDeleted})
+			expectClientState(api.InSync, map[string]api.Update{
+				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
+			})
+			cache.OnUpdates([]api.Update{configFoobar2Deleted})
+			expectClientState(api.InSync, map[string]api.Update{})
 		})
 
 		It("should pass through many KVs", func() {
@@ -133,8 +230,7 @@ var _ = Describe("With an in-process Server", func() {
 				cache.OnUpdates([]api.Update{update})
 			}
 			cache.OnStatusUpdated(api.InSync)
-			Eventually(recorder.Status, time.Second).Should(Equal(api.InSync))
-			Eventually(recorder.KVs).Should(Equal(expectedEndState))
+			expectClientState(api.InSync, expectedEndState)
 		})
 	})
 
