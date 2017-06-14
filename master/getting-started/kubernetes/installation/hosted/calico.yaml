@@ -32,6 +32,7 @@ data:
         "etcd_cert_file": "__ETCD_CERT_FILE__",
         "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
         "log_level": "info",
+        "mtu": 1500,
         "ipam": {
             "type": "calico-ipam"
         },
@@ -134,6 +135,9 @@ spec:
             # Set Felix logging to "info"
             - name: FELIX_LOGSEVERITYSCREEN
               value: "info"
+            # Set MTU for tunnel device used if ipip is enabled
+            - name: FELIX_IPINIPMTU
+              value: 1440
             # Location of the CA certificate for etcd.
             - name: ETCD_CA_CERT_FILE
               valueFrom:
