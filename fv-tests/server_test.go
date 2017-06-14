@@ -78,7 +78,7 @@ var (
 )
 
 // Tests that rely on starting a real Server (on a real TCP port) in this process.
-// We driver the server via a real snapshot cache usnig the snapshot cache's function
+// We drive the server via a real snapshot cache using the snapshot cache's function
 // API.
 var _ = Describe("With an in-process Server", func() {
 	// We'll create this pipeline for updates to flow through:
@@ -86,15 +86,17 @@ var _ = Describe("With an in-process Server", func() {
 	//    This goroutine -> callback -chan-> validation -> snapshot -> server
 	//                      decoupler        filter        cache
 	//
-	var decoupler *calc.SyncerCallbacksDecoupler
-	var valFilter *calc.ValidationFilter
-	var cacheCxt context.Context
-	var cacheCancel context.CancelFunc
-	var cache *snapcache.Cache
-	var server *syncserver.Server
-	var serverCxt context.Context
-	var serverCancel context.CancelFunc
-	var serverAddr string
+	var (
+		decoupler    *calc.SyncerCallbacksDecoupler
+		valFilter    *calc.ValidationFilter
+		cacheCxt     context.Context
+		cacheCancel  context.CancelFunc
+		cache        *snapcache.Cache
+		server       *syncserver.Server
+		serverCxt    context.Context
+		serverCancel context.CancelFunc
+		serverAddr   string
+	)
 
 	// Each client we create gets recorded here for cleanup.
 	type clientState struct {
@@ -316,9 +318,9 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should handle deletions", func() {
-			// Create two keys then delete in reverse order.  One of the keys happens to have
-			// a default path that is the prefix of the other, just to make sure the Ctrie doesn't
-			// accidentally delete the whole prefix.
+			// Create two keys, then delete them.  One of the keys happens to have a
+			// default path that is the prefix of the other, just to make sure the Ctrie
+			// doesn't accidentally delete the whole prefix.
 			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
 			decoupler.OnUpdates([]api.Update{configFoobar2BazzBiff})
 			decoupler.OnStatusUpdated(api.InSync)
@@ -354,8 +356,7 @@ var _ = Describe("With an in-process Server", func() {
 			createClients(100)
 		})
 
-		// expectClientState asserts that the client eventually reaches the given state.  Then, it
-		// simulates a second connection and check that that also converges to the given state.
+		// expectClientState asserts that every client eventually reaches the given state.
 		expectClientStates := func(status api.SyncStatus, kvs map[string]api.Update) {
 			for _, s := range clientStates {
 				// Wait until we reach that state.
@@ -377,7 +378,7 @@ var _ = Describe("With an in-process Server", func() {
 			// We start with 100 connections, set the max to 60 so we kill 40 connections.
 			server.SetMaxConns(60)
 
-			// We set the srop interval to 50ms so it should take 2-2.2 seconds (due to jitter) to drop the
+			// We set the drop interval to 50ms so it should take 2-2.2 seconds (due to jitter) to drop the
 			// connections.  Wait 3 seconds so that we verify that the server doesn't go on to kill any
 			// more than the target.
 			timeout := time.NewTimer(3 * time.Second)
@@ -449,13 +450,15 @@ var _ = Describe("With an in-process Server", func() {
 })
 
 var _ = Describe("With an in-process Server with short ping timeout", func() {
-	var cacheCxt context.Context
-	var cacheCancel context.CancelFunc
-	var cache *snapcache.Cache
-	var server *syncserver.Server
-	var serverCxt context.Context
-	var serverCancel context.CancelFunc
-	var serverAddr string
+	var (
+		cacheCxt     context.Context
+		cacheCancel  context.CancelFunc
+		cache        *snapcache.Cache
+		server       *syncserver.Server
+		serverCxt    context.Context
+		serverCancel context.CancelFunc
+		serverAddr   string
+	)
 
 	BeforeEach(func() {
 		cache = snapcache.New(snapcache.Config{
