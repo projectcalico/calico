@@ -15,8 +15,10 @@
 package syncclient
 
 import (
+	"context"
 	"encoding/gob"
 	"net"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -25,8 +27,14 @@ import (
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
+var nextID uint64
+
 func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallbacks) *SyncerClient {
+	id := nextID
+	nextID++
 	return &SyncerClient{
+		ID:        id,
+		logCxt:    log.WithField("connID", id),
 		callbacks: cbs,
 		addr:      addr,
 
@@ -37,23 +45,50 @@ func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallba
 }
 
 type SyncerClient struct {
+	ID                            uint64
+	logCxt                        *log.Entry
 	callbacks                     api.SyncerCallbacks
 	addr                          string
 	myHostname, myVersion, myInfo string
+	c                             net.Conn
+	Finished                      sync.WaitGroup
 }
 
-func (s *SyncerClient) Start() {
-	go s.loop()
+func (s *SyncerClient) Start(cxt context.Context) error {
+	// Connect synchronously.
+	err := s.connect(cxt)
+	if err != nil {
+		return err
+	}
+
+	// Then start our background goroutines.  We start the main loop and a second goroutine to
+	// manage shutdown.
+	cxt, cancelFn := context.WithCancel(cxt)
+	s.Finished.Add(1)
+	go s.loop(cxt, cancelFn)
+
+	s.Finished.Add(1)
+	go func() {
+		// Wait for the context to finish, either due to external cancel or our own loop
+		// exiting.
+		<-cxt.Done()
+		s.logCxt.Info("Typha client Context asked us to exit")
+		// Close the connection.  This will trigger the main loop to exit if it hasn't
+		// already.
+		s.c.Close()
+		// Broadcast that we're finished.
+		s.Finished.Done()
+	}()
+	return nil
 }
 
-func (s *SyncerClient) loop() {
+func (s *SyncerClient) connect(cxt context.Context) error {
 	log.Info("Starting Typha client")
 	var err error
-	var c net.Conn
-	logCxt := log.WithField("address", s.addr)
-	for {
+	logCxt := s.logCxt.WithField("address", s.addr)
+	for cxt.Err() == nil {
 		logCxt.Info("Connecting to Typha.")
-		c, err = net.DialTimeout("tcp", s.addr, 10*time.Second)
+		s.c, err = net.DialTimeout("tcp", s.addr, 10*time.Second)
 		if err != nil {
 			log.WithError(err).Error("Failed to connect to Typha, retrying...")
 			time.Sleep(2 * time.Second)
@@ -61,13 +96,35 @@ func (s *SyncerClient) loop() {
 		}
 		break
 	}
-	defer c.Close()
+	if cxt.Err() != nil {
+		if s.c != nil {
+			s.c.Close()
+		}
+		return cxt.Err()
+	}
 	logCxt.Info("Connected to Typha.")
+	return nil
+}
 
-	w := gob.NewEncoder(c)
-	r := gob.NewDecoder(c)
+func (s *SyncerClient) onConnectionFailed(cxt context.Context, logCxt *log.Entry, err error, operation string) {
+	if cxt.Err() != nil {
+		logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
+		return
+	}
+	logCxt.WithError(err).Errorf("Failed to %s", operation)
+}
 
-	err = w.Encode(syncproto.Envelope{
+func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
+	defer s.Finished.Done()
+	defer cancelFn()
+
+	logCxt := s.logCxt.WithField("address", s.addr)
+	logCxt.Info("Started Typha client main loop")
+
+	w := gob.NewEncoder(s.c)
+	r := gob.NewDecoder(s.c)
+
+	err := w.Encode(syncproto.Envelope{
 		Message: syncproto.MsgClientHello{
 			Hostname: s.myHostname,
 			Version:  s.myVersion,
@@ -75,39 +132,42 @@ func (s *SyncerClient) loop() {
 		},
 	})
 	if err != nil {
-		log.WithError(err).Panic("Failed to write hello to server")
+		s.onConnectionFailed(cxt, logCxt, err, "write hello to server")
+		return
 	}
 
-	for {
+	for cxt.Err() == nil {
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
-			log.WithError(err).Panic("Failed to read from server")
+			s.onConnectionFailed(cxt, logCxt, err, "read from server")
+			return
 		}
-		log.WithField("envelope", envelope).Debug("New message from Typha.")
+		logCxt.WithField("envelope", envelope).Debug("New message from Typha.")
 		switch msg := envelope.Message.(type) {
 		case syncproto.MsgSyncStatus:
 			logCxt.WithField("newStatus", msg.SyncStatus).Info(
 				"Status update from Typha.")
 			s.callbacks.OnStatusUpdated(msg.SyncStatus)
 		case syncproto.MsgPing:
-			log.Debug("Ping received from Typha")
+			logCxt.Debug("Ping received from Typha")
 			err := w.Encode(syncproto.Envelope{Message: syncproto.MsgPong{
 				PingTimestamp: msg.Timestamp,
 			}})
 			if err != nil {
-				log.WithError(err).Panic("Failed to write to server")
+				s.onConnectionFailed(cxt, logCxt, err, "write pong to server")
+				return
 			}
-			log.Debug("Pong sent to Typha")
+			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, 0, len(msg.KVs))
 			for _, kv := range msg.KVs {
 				update, err := kv.ToUpdate()
 				if err != nil {
-					log.WithError(err).Error("Failed to deserialize update, skipping.")
+					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
 					continue
 				}
-				log.WithFields(log.Fields{
+				logCxt.WithFields(log.Fields{
 					"serialized":   kv,
 					"deserialized": update,
 				}).Debug("Decoded update from Typha")
@@ -115,7 +175,7 @@ func (s *SyncerClient) loop() {
 			}
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
-			log.WithField("serverVersion", msg.Version).Info(
+			logCxt.WithField("serverVersion", msg.Version).Info(
 				"Server hello message received")
 		}
 	}

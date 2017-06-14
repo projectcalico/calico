@@ -100,6 +100,7 @@ const (
 	defaultPingInterval         = 10 * time.Second
 	defaultDropInterval         = 1 * time.Second
 	defaultMaxConns             = math.MaxInt32
+	PortRandom                  = -1
 )
 
 type Server struct {
@@ -107,11 +108,15 @@ type Server struct {
 	cache      BreadcrumbProvider
 	nextConnID uint64
 	maxConnsC  chan int
+	chosenPort int
+	listeningC chan struct{}
 
 	dropInterval     time.Duration
 	connTrackingLock sync.Mutex
 	maxConns         int
 	connIDToConn     map[uint64]*connection
+
+	Finished sync.WaitGroup
 }
 
 type BreadcrumbProvider interface {
@@ -119,6 +124,7 @@ type BreadcrumbProvider interface {
 }
 
 type Config struct {
+	Port                    int
 	MaxMessageSize          int
 	MaxFallBehind           time.Duration
 	MinBatchingAgeThreshold time.Duration
@@ -128,58 +134,77 @@ type Config struct {
 	MaxConns                int
 }
 
-func New(cache BreadcrumbProvider, config Config) *Server {
-	if config.MaxMessageSize < 1 {
+func (c *Config) ApplyDefaults() {
+	if c.MaxMessageSize < 1 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxMessageSize,
+			"value":   c.MaxMessageSize,
 			"default": defaultMaxMessageSize,
 		}).Info("Defaulting MaxMessageSize.")
-		config.MaxMessageSize = defaultMaxMessageSize
+		c.MaxMessageSize = defaultMaxMessageSize
 	}
-	if config.MaxFallBehind <= 0 {
+	if c.MaxFallBehind <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxFallBehind,
+			"value":   c.MaxFallBehind,
 			"default": defaultMaxFallBehind,
 		}).Info("Defaulting MaxFallBehind.")
-		config.MaxFallBehind = defaultMaxFallBehind
+		c.MaxFallBehind = defaultMaxFallBehind
 	}
-	if config.MinBatchingAgeThreshold <= 0 {
+	if c.MinBatchingAgeThreshold <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MinBatchingAgeThreshold,
+			"value":   c.MinBatchingAgeThreshold,
 			"default": defaultBatchingAgeThreshold,
 		}).Info("Defaulting MinBatchingAgeThreshold.")
-		config.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
+		c.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
 	}
-	if config.PingInterval <= 0 {
+	if c.PingInterval <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.PingInterval,
+			"value":   c.PingInterval,
 			"default": defaultPingInterval,
 		}).Info("Defaulting PingInterval.")
-		config.PingInterval = defaultPingInterval
+		c.PingInterval = defaultPingInterval
 	}
-	if config.PongTimeout <= config.PingInterval*2 {
-		defaultTimeout := config.PingInterval * 6
+	if c.PongTimeout <= c.PingInterval*2 {
+		defaultTimeout := c.PingInterval * 6
 		log.WithFields(log.Fields{
-			"value":   config.PongTimeout,
+			"value":   c.PongTimeout,
 			"default": defaultTimeout,
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
-		config.PongTimeout = defaultTimeout
+		c.PongTimeout = defaultTimeout
 	}
-	if config.DropInterval <= 0 {
+	if c.DropInterval <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.DropInterval,
+			"value":   c.DropInterval,
 			"default": defaultDropInterval,
 		}).Info("Defaulting DropInterval.")
-		config.DropInterval = defaultDropInterval
+		c.DropInterval = defaultDropInterval
 	}
-	if config.MaxConns <= 0 {
+	if c.MaxConns <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxConns,
+			"value":   c.MaxConns,
 			"default": defaultMaxConns,
 		}).Info("Defaulting MaxConns.")
-		config.MaxConns = defaultMaxConns
+		c.MaxConns = defaultMaxConns
 	}
+	if c.Port == 0 {
+		// We use 0 to mean "use the default port".
+		log.WithFields(log.Fields{
+			"value":   c.Port,
+			"default": syncproto.DefaultPort,
+		}).Info("Defaulting Port.")
+		c.Port = syncproto.DefaultPort
+	}
+}
 
+func (c *Config) ListenPort() int {
+	if c.Port == PortRandom {
+		return 0
+	}
+	return c.Port
+}
+
+func New(cache BreadcrumbProvider, config Config) *Server {
+	config.ApplyDefaults()
+	log.WithField("config", config).Info("Creating server")
 	return &Server{
 		config:       config,
 		cache:        cache,
@@ -187,10 +212,12 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		dropInterval: config.DropInterval,
 		maxConns:     config.MaxConns,
 		connIDToConn: map[uint64]*connection{},
+		listeningC:   make(chan struct{}),
 	}
 }
 
 func (s *Server) Start(cxt context.Context) {
+	s.Finished.Add(2)
 	go s.serve(cxt)
 	go s.governNumberOfConnections(cxt)
 }
@@ -199,20 +226,43 @@ func (s *Server) SetMaxConns(numConns int) {
 	s.maxConnsC <- numConns
 }
 
+func (s *Server) Port() int {
+	<-s.listeningC
+	return s.chosenPort
+}
+
 func (s *Server) serve(cxt context.Context) {
-	logCxt := log.WithField("port", syncproto.DefaultPort)
+	defer s.Finished.Done()
+	var cancelFn context.CancelFunc
+	cxt, cancelFn = context.WithCancel(cxt)
+	defer cancelFn()
+
+	logCxt := log.WithField("port", s.config.Port)
 	logCxt.Info("Opening listen socket")
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: syncproto.DefaultPort})
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to open listen socket")
 	}
 	logCxt.Info("Opened listen socket")
-	defer l.Close()
+	s.Finished.Add(1)
+	go func() {
+		<-cxt.Done()
+		l.Close()
+		s.Finished.Done()
+	}()
+	s.chosenPort = l.Addr().(*net.TCPAddr).Port
+	logCxt = log.WithField("port", s.chosenPort)
+	close(s.listeningC)
 	for {
 		logCxt.Debug("About to accept connection")
 		conn, err := l.AcceptTCP()
 		if err != nil {
+			if cxt.Err() != nil {
+				logCxt.WithError(cxt.Err()).Info("Shutting down...")
+				return
+			}
 			logCxt.WithError(err).Panic("Failed to accept connection")
+			return
 		}
 
 		connID := s.nextConnID
@@ -241,11 +291,13 @@ func (s *Server) serve(cxt context.Context) {
 		// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
 		s.recordConnection(connection)
 		// Defer to the connection-handler.
-		go connection.handle()
+		s.Finished.Add(2)
+		go connection.handle(&s.Finished)
 		// Clean up the entry in connIDToConn as soon as the context is canceled.
 		go func() {
 			<-connCxt.Done()
 			s.discardConnection(connection)
+			s.Finished.Done()
 		}()
 	}
 }
@@ -269,6 +321,7 @@ func (s *Server) discardConnection(conn *connection) {
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
+	defer s.Finished.Done()
 	logCxt := log.WithField("thread", "numConnsGov")
 	maxConns := s.maxConns
 	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
@@ -334,12 +387,13 @@ type connection struct {
 	logCxt *log.Entry
 }
 
-func (h *connection) handle() (err error) {
+func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	// Ensure that stop gets called.  Stop will close the connection and context and wait for our background
 	// goroutines to finish.
 	defer func() {
 		// Cancel the context and close the connection, this will trigger our background threads to shut down.
 		// We need to do both because they may be blocked on IO or something else.
+		h.logCxt.Info("Client connection shutting down.")
 		h.cancelCxt()
 		err := h.conn.Close()
 		if err != nil {
@@ -349,6 +403,7 @@ func (h *connection) handle() (err error) {
 		h.shutDownWG.Wait()
 		gaugeNumConnections.Dec()
 		h.logCxt.Info("Client connection shut down.")
+		finishedWG.Done()
 	}()
 
 	h.logCxt.Info("Per-connection goroutine started")
@@ -374,12 +429,16 @@ func (h *connection) handle() (err error) {
 
 	// Start a ticker to check that we receive pongs in a timely fashion.
 	pongTicker := jitter.NewTicker(h.config.PingInterval/2, h.config.PingInterval/10)
-	defer pongTicker.Stop()
+	defer func() {
+		h.logCxt.Info("Stopping pong check ticker.")
+		pongTicker.Stop()
+	}()
 	lastPongReceived := time.Now()
 
 	// Use this goroutine to wait for client messages and do the ping/pong liveness check.
 	h.logCxt.Info("Waiting for messages from client")
 	for {
+
 		select {
 		case msg := <-h.readC:
 			if msg == nil {
@@ -396,8 +455,12 @@ func (h *connection) handle() (err error) {
 				return errors.New("Unknown message type")
 			}
 		case <-pongTicker.C:
-			if time.Since(lastPongReceived) > h.config.PongTimeout {
-				h.logCxt.Info("Too long since last pong from client, disconnecting")
+			since := time.Since(lastPongReceived)
+			if since > h.config.PongTimeout {
+				h.logCxt.WithFields(log.Fields{
+					"pongTimeout":       h.config.PongTimeout,
+					"timeSinceLastPong": since,
+				}).Info("Too long since last pong from client, disconnecting")
 				return errors.New("No pong received from client")
 			}
 		case <-h.cxt.Done():
@@ -504,6 +567,7 @@ func (h *connection) sendMsg(msg interface{}) error {
 // sending deltas to the client.
 func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 	defer func() {
+		logCxt.Info("KV-sender goroutine shutting down")
 		h.cancelCxt()
 		h.shutDownWG.Done()
 		logCxt.Info("KV-sender goroutine finished")
@@ -550,15 +614,17 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 				return
 			}
 			timeSpentInNext := time.Since(nextStartTime)
-			logCxt.WithFields(log.Fields{
-				"seqNo":     breadcrumb.SequenceNumber,
-				"timestamp": breadcrumb.Timestamp,
-			}).Debug("New Breadcrumb")
 
 			// Take a peek at the very latest breadcrumb to see how far behind we are...
 			latestCrumb := h.cache.CurrentBreadcrumb()
 			crumbAge := latestCrumb.Timestamp.Sub(breadcrumb.Timestamp)
 			summaryClientLatency.Observe(crumbAge.Seconds())
+			logCxt.WithFields(log.Fields{
+				"seqNo":     breadcrumb.SequenceNumber,
+				"timestamp": breadcrumb.Timestamp,
+				"state":     breadcrumb.SyncStatus,
+				"age":       crumbAge,
+			}).Debug("New Breadcrumb")
 
 			// Check if we're too far behind the latest Breadcrumb.
 			if crumbAge > h.config.MaxFallBehind {
@@ -590,6 +656,7 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 
 		if len(deltas) > 0 {
 			// Send the deltas relative to the previous snapshot.
+			logCxt.WithField("num", len(deltas)).Debug("Sending deltas")
 			summaryNumKVsPerMsg.Observe(float64(len(deltas)))
 			err := h.sendMsg(syncproto.MsgKVs{
 				KVs: deltas,
@@ -675,7 +742,10 @@ func (h *connection) sendPingsToClient(logCxt *log.Entry) {
 		logCxt.Info("Pinger goroutine shut down.")
 	}()
 	pingTicker := jitter.NewTicker(h.config.PingInterval, h.config.PingInterval/10)
-	defer pingTicker.Stop()
+	defer func() {
+		logCxt.Info("Stopping ping ticker")
+		pingTicker.Stop()
+	}()
 	for {
 		select {
 		case <-pingTicker.C:
