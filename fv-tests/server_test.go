@@ -91,7 +91,6 @@ var _ = Describe("With an in-process Server", func() {
 		server       *syncserver.Server
 		serverCxt    context.Context
 		serverCancel context.CancelFunc
-		serverAddr   string
 	)
 
 	// Each client we create gets recorded here for cleanup.
@@ -158,8 +157,6 @@ var _ = Describe("With an in-process Server", func() {
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
-		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
-
 	})
 
 	AfterEach(func() {
