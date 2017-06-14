@@ -12,6 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// fv_tests contains a suite of tests that test multiple packages together.  In particular, we
-// start a real server and snapshot cache in-process and make loop-back connections to it.
-package fvtests
+package daemon_test
+
+import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"testing"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
+)
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
+
+func TestDaemon(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Daemon Suite")
+}

@@ -222,6 +222,23 @@ func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+type PortParam struct {
+	Metadata
+}
+
+func (p *PortParam) Parse(raw string) (interface{}, error) {
+	port, err := strconv.Atoi(strings.Trim(raw, " "))
+	if err != nil {
+		err = p.parseFailed(raw, "ports should be integers")
+		return nil, err
+	}
+	if port < 0 || port > 65535 {
+		err = p.parseFailed(raw, "ports must be in range 0-65535")
+		return nil, err
+	}
+	return port, nil
+}
+
 type PortListParam struct {
 	Metadata
 }
