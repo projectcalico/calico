@@ -15,6 +15,10 @@
 package calc
 
 import (
+	"context"
+
+	"github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
 
@@ -37,12 +41,22 @@ func (a *SyncerCallbacksDecoupler) OnUpdates(updates []api.Update) {
 }
 
 func (a *SyncerCallbacksDecoupler) SendTo(sink api.SyncerCallbacks) {
-	for obj := range a.c {
-		switch obj := obj.(type) {
-		case api.SyncStatus:
-			sink.OnStatusUpdated(obj)
-		case []api.Update:
-			sink.OnUpdates(obj)
+	a.SendToContext(context.Background(), sink)
+}
+
+func (a *SyncerCallbacksDecoupler) SendToContext(cxt context.Context, sink api.SyncerCallbacks) {
+	for {
+		select {
+		case obj := <-a.c:
+			switch obj := obj.(type) {
+			case api.SyncStatus:
+				sink.OnStatusUpdated(obj)
+			case []api.Update:
+				sink.OnUpdates(obj)
+			}
+		case <-cxt.Done():
+			logrus.WithError(cxt.Err()).Info("Context asked us to stop")
+			return
 		}
 	}
 }

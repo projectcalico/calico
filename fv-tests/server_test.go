@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/typha/pkg/syncproto"
@@ -79,6 +80,8 @@ var (
 // We driver the server via a real snapshot cache usnig the snapshot cache's function
 // API.
 var _ = Describe("With an in-process Server", func() {
+	var decoupler *calc.SyncerCallbacksDecoupler
+	var valFilter *calc.ValidationFilter
 	var cacheCxt context.Context
 	var cacheCancel context.CancelFunc
 	var cache *snapcache.Cache
@@ -88,22 +91,39 @@ var _ = Describe("With an in-process Server", func() {
 	var serverAddr string
 
 	BeforeEach(func() {
+		// Set up a pipeline:
+		//
+		//    This goroutine -> callback -chan-> validation -> snapshot -> server
+		//                      decoupler        filter        cache
+		//
+		decoupler = calc.NewSyncerCallbacksDecoupler()
 		cache = snapcache.New(snapcache.Config{
 			// Set the batch size small so we can force new Breadcrumbs easily.
 			MaxBatchSize: 10,
 			// Reduce the wake up interval from the default to give us faster tear down.
 			WakeUpInterval: 50 * time.Millisecond,
 		})
+		cacheCxt, cacheCancel = context.WithCancel(context.Background())
+		valFilter = calc.NewValidationFilter(cache)
+		go decoupler.SendToContext(cacheCxt, valFilter)
 		server = syncserver.New(cache, syncserver.Config{
 			PingInterval: 10 * time.Second,
 			Port:         syncserver.PortRandom,
 			DropInterval: 50 * time.Millisecond,
 		})
-		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
 		serverAddr = fmt.Sprintf("127.0.0.1:%d", server.Port())
+
+	})
+
+	AfterEach(func() {
+		serverCancel()
+		log.Info("Waiting for server to shut down")
+		server.Finished.Wait()
+		log.Info("Done waiting for server to shut down")
+		cacheCancel()
 	})
 
 	It("should choose a port", func() {
@@ -112,7 +132,7 @@ var _ = Describe("With an in-process Server", func() {
 
 	sendNUpdatesThenInSync := func(n int) map[string]api.Update {
 		expectedEndState := map[string]api.Update{}
-		cache.OnStatusUpdated(api.ResyncInProgress)
+		decoupler.OnStatusUpdated(api.ResyncInProgress)
 		for i := 0; i < n; i++ {
 			update := api.Update{
 				KVPair: model.KVPair{
@@ -127,9 +147,9 @@ var _ = Describe("With an in-process Server", func() {
 			path, err := model.KeyToDefaultPath(update.Key)
 			Expect(err).NotTo(HaveOccurred())
 			expectedEndState[path] = update
-			cache.OnUpdates([]api.Update{update})
+			decoupler.OnUpdates([]api.Update{update})
 		}
-		cache.OnStatusUpdated(api.InSync)
+		decoupler.OnStatusUpdated(api.InSync)
 		return expectedEndState
 	}
 
@@ -197,6 +217,7 @@ var _ = Describe("With an in-process Server", func() {
 		}
 
 		It("should drop a bad KV", func() {
+			// Bypass the validation filter and send a bad key directly...
 			cache.OnStatusUpdated(api.ResyncInProgress)
 			cache.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
@@ -213,9 +234,9 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through a KV and status", func() {
-			cache.OnStatusUpdated(api.ResyncInProgress)
-			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
-			cache.OnStatusUpdated(api.InSync)
+			decoupler.OnStatusUpdated(api.ResyncInProgress)
+			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			decoupler.OnStatusUpdated(api.InSync)
 			Eventually(recorder.Status).Should(Equal(api.InSync))
 			expectClientState(
 				api.InSync,
@@ -229,18 +250,18 @@ var _ = Describe("With an in-process Server", func() {
 			// Create two keys then delete in reverse order.  One of the keys happens to have
 			// a default path that is the prefix of the other, just to make sure the Ctrie doesn't
 			// accidentally delete the whole prefix.
-			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
-			cache.OnUpdates([]api.Update{configFoobar2BazzBiff})
-			cache.OnStatusUpdated(api.InSync)
+			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			decoupler.OnUpdates([]api.Update{configFoobar2BazzBiff})
+			decoupler.OnStatusUpdated(api.InSync)
 			expectClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/config/foobar":  configFoobarBazzBiff,
 				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
 			})
-			cache.OnUpdates([]api.Update{configFoobarDeleted})
+			decoupler.OnUpdates([]api.Update{configFoobarDeleted})
 			expectClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
 			})
-			cache.OnUpdates([]api.Update{configFoobar2Deleted})
+			decoupler.OnUpdates([]api.Update{configFoobar2Deleted})
 			expectClientState(api.InSync, map[string]api.Update{})
 		})
 
@@ -355,9 +376,9 @@ var _ = Describe("With an in-process Server", func() {
 		})
 
 		It("should pass through a KV and status", func() {
-			cache.OnStatusUpdated(api.ResyncInProgress)
-			cache.OnUpdates([]api.Update{configFoobarBazzBiff})
-			cache.OnStatusUpdated(api.InSync)
+			decoupler.OnStatusUpdated(api.ResyncInProgress)
+			decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
+			decoupler.OnStatusUpdated(api.InSync)
 			expectClientStates(
 				api.InSync,
 				map[string]api.Update{
@@ -397,18 +418,6 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			expectGaugeValue("typha_connections_active", 0.0)
 		})
-	})
-
-	AfterEach(func() {
-		if server != nil {
-			serverCancel()
-			log.Info("Waiting for server to shut down")
-			server.Finished.Wait()
-			log.Info("Done waiting for server to shut down")
-		}
-		if cache != nil {
-			cacheCancel()
-		}
 	})
 })
 
