@@ -81,6 +81,11 @@ var (
 // We driver the server via a real snapshot cache usnig the snapshot cache's function
 // API.
 var _ = Describe("With an in-process Server", func() {
+	// We'll create this pipeline for updates to flow through:
+	//
+	//    This goroutine -> callback -chan-> validation -> snapshot -> server
+	//                      decoupler        filter        cache
+	//
 	var decoupler *calc.SyncerCallbacksDecoupler
 	var valFilter *calc.ValidationFilter
 	var cacheCxt context.Context
@@ -90,6 +95,42 @@ var _ = Describe("With an in-process Server", func() {
 	var serverCxt context.Context
 	var serverCancel context.CancelFunc
 	var serverAddr string
+
+	// Each client we create gets recorded here for cleanup.
+	type clientState struct {
+		clientCxt    context.Context
+		clientCancel context.CancelFunc
+		client       *syncclient.SyncerClient
+		recorder     *stateRecorder
+	}
+	var clientStates []clientState
+
+	createClients := func(n int) {
+		clientStates = nil
+		for i := 0; i < n; i++ {
+			clientCxt, clientCancel := context.WithCancel(context.Background())
+			recorder := &stateRecorder{
+				kvs: map[string]api.Update{},
+			}
+			client := syncclient.New(
+				fmt.Sprintf("127.0.0.1:%d", server.Port()),
+				"test-version",
+				"test-host",
+				"test-info",
+				recorder,
+			)
+			client.PanicOnFailure = false
+			err := client.StartContext(clientCxt)
+			Expect(err).NotTo(HaveOccurred())
+
+			clientStates = append(clientStates, clientState{
+				clientCxt:    clientCxt,
+				client:       client,
+				clientCancel: clientCancel,
+				recorder:     recorder,
+			})
+		}
+	}
 
 	BeforeEach(func() {
 		// Set up a pipeline:
@@ -120,6 +161,15 @@ var _ = Describe("With an in-process Server", func() {
 	})
 
 	AfterEach(func() {
+		for _, c := range clientStates {
+			c.clientCancel()
+			if c.client != nil {
+				log.Info("Waiting for client to shut down.")
+				c.client.Finished.Wait()
+				log.Info("Done waiting for client to shut down.")
+			}
+		}
+
 		serverCancel()
 		log.Info("Waiting for server to shut down")
 		server.Finished.Wait()
@@ -155,34 +205,13 @@ var _ = Describe("With an in-process Server", func() {
 	}
 
 	Describe("with a client connection", func() {
-		var clientCxt context.Context
 		var clientCancel context.CancelFunc
-		var client *syncclient.SyncerClient
 		var recorder *stateRecorder
 
 		BeforeEach(func() {
-			clientCxt, clientCancel = context.WithCancel(context.Background())
-			recorder = &stateRecorder{
-				kvs: map[string]api.Update{},
-			}
-			client = syncclient.New(
-				serverAddr,
-				"test-version",
-				"test-host",
-				"test-info",
-				recorder,
-			)
-			err := client.StartContext(clientCxt)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			clientCancel()
-			if client != nil {
-				log.Info("Waiting for client to shut down.")
-				client.Finished.Wait()
-				log.Info("Done waiting for client to shut down.")
-			}
+			createClients(1)
+			clientCancel = clientStates[0].clientCancel
+			recorder = clientStates[0].recorder
 		})
 
 		// expectClientState asserts that the client eventually reaches the given state.  Then, it
@@ -321,50 +350,8 @@ var _ = Describe("With an in-process Server", func() {
 	})
 
 	Describe("with 100 client connections", func() {
-		type clientState struct {
-			clientCxt    context.Context
-			clientCancel context.CancelFunc
-			client       *syncclient.SyncerClient
-			recorder     *stateRecorder
-		}
-		var clientStates []clientState
-
 		BeforeEach(func() {
-			clientStates = nil
-			for i := 0; i < 100; i++ {
-				clientCxt, clientCancel := context.WithCancel(context.Background())
-				recorder := &stateRecorder{
-					kvs: map[string]api.Update{},
-				}
-				client := syncclient.New(
-					fmt.Sprintf("127.0.0.1:%d", server.Port()),
-					"test-version",
-					"test-host",
-					"test-info",
-					recorder,
-				)
-				client.PanicOnFailure = false
-				err := client.StartContext(clientCxt)
-				Expect(err).NotTo(HaveOccurred())
-
-				clientStates = append(clientStates, clientState{
-					clientCxt:    clientCxt,
-					client:       client,
-					clientCancel: clientCancel,
-					recorder:     recorder,
-				})
-			}
-		})
-
-		AfterEach(func() {
-			for _, c := range clientStates {
-				c.clientCancel()
-				if c.client != nil {
-					log.Info("Waiting for client to shut down.")
-					c.client.Finished.Wait()
-					log.Info("Done waiting for client to shut down.")
-				}
-			}
+			createClients(100)
 		})
 
 		// expectClientState asserts that the client eventually reaches the given state.  Then, it
@@ -503,8 +490,8 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 	})
 
 	It("should not disconnect a responsive client", func() {
+		// Start a real client, which will respond correctly to pings.
 		clientCxt, clientCancel := context.WithCancel(context.Background())
-
 		recorder := &stateRecorder{
 			kvs: map[string]api.Update{},
 		}
@@ -541,15 +528,6 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			w = gob.NewEncoder(rawConn)
-			err = w.Encode(syncproto.Envelope{
-				Message: syncproto.MsgClientHello{
-					Hostname: "me",
-					Version:  "test",
-					Info:     "test info",
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
 			r = gob.NewDecoder(rawConn)
 		})
 
@@ -575,70 +553,93 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			expectGaugeValue("typha_connections_active", 0.0)
 		}
 
-		It("should disconnect a client that sends a nil update", func() {
-			var envelope syncproto.Envelope
-			err := w.Encode(envelope)
-			Expect(err).NotTo(HaveOccurred())
-			expectDisconnection(100 * time.Millisecond)
+		It("should clean up if the hello doesn't get sent", func() {
+			expectGaugeValue("typha_connections_active", 1.0)
+			rawConn.Close()
+			expectGaugeValue("typha_connections_active", 0.0)
 		})
 
-		It("should disconnect a client that sends an unexpected update", func() {
-			var envelope syncproto.Envelope
-			envelope.Message = 42
-			err := w.Encode(envelope)
-			Expect(err).NotTo(HaveOccurred())
-			expectDisconnection(100 * time.Millisecond)
-		})
+		Describe("After sending Hello", func() {
+			BeforeEach(func() {
+				err := w.Encode(syncproto.Envelope{
+					Message: syncproto.MsgClientHello{
+						Hostname: "me",
+						Version:  "test",
+						Info:     "test info",
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
 
-		It("should disconnect a client that sends a garbage update", func() {
-			rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
-			// We get dropped by the pong timeout since the gob decoder is confused.
-			expectDisconnection(time.Second)
-		})
+			It("should disconnect a client that sends a nil update", func() {
+				var envelope syncproto.Envelope
+				err := w.Encode(envelope)
+				Expect(err).NotTo(HaveOccurred())
+				expectDisconnection(100 * time.Millisecond)
+			})
 
-		It("should disconnect an unresponsive client", func() {
-			done := make(chan struct{})
-			pings := make(chan *syncproto.MsgPing)
-			go func() {
-				defer close(done)
-				defer close(pings)
+			It("should disconnect a client that sends an unexpected update", func() {
+				var envelope syncproto.Envelope
+				envelope.Message = 42
+				err := w.Encode(envelope)
+				Expect(err).NotTo(HaveOccurred())
+				expectDisconnection(100 * time.Millisecond)
+			})
+
+			It("should disconnect a client that sends a garbage update", func() {
+				rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
+				// We get dropped by the pong timeout since the gob decoder is confused.
+				expectDisconnection(time.Second)
+			})
+
+			It("should disconnect an unresponsive client", func() {
+				done := make(chan struct{})
+				pings := make(chan *syncproto.MsgPing)
+				go func() {
+					defer close(done)
+					defer close(pings)
+					for {
+						var envelope syncproto.Envelope
+						err := r.Decode(&envelope)
+						if err != nil {
+							return
+						}
+						if m, ok := envelope.Message.(syncproto.MsgPing); ok {
+							pings <- &m
+						}
+					}
+				}()
+				timeout := time.NewTimer(1 * time.Second)
+				startTime := time.Now()
+				gotPing := false
 				for {
-					var envelope syncproto.Envelope
-					err := r.Decode(&envelope)
-					if err != nil {
+					select {
+					case m := <-pings:
+						if m == nil {
+							pings = nil
+							continue
+						}
+						Expect(time.Since(m.Timestamp)).To(BeNumerically("<", time.Second))
+						gotPing = true
+					case <-done:
+						// Check we didn't get dropped too soon.
+						Expect(gotPing).To(BeTrue())
+						Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
+						timeout.Stop()
 						return
-					}
-					if m, ok := envelope.Message.(syncproto.MsgPing); ok {
-						pings <- &m
+					case <-timeout.C:
+						Fail("timed out waiting for unresponsive client to be dropped")
 					}
 				}
-			}()
-			timeout := time.NewTimer(1 * time.Second)
-			startTime := time.Now()
-			gotPing := false
-			for {
-				select {
-				case m := <-pings:
-					if m == nil {
-						pings = nil
-						continue
-					}
-					Expect(time.Since(m.Timestamp)).To(BeNumerically("<", time.Second))
-					gotPing = true
-				case <-done:
-					// Check we didn't get dropped too soon.
-					Expect(gotPing).To(BeTrue())
-					Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
-					timeout.Stop()
-					return
-				case <-timeout.C:
-					Fail("timed out waiting for unresponsive client to be dropped")
-				}
-			}
+			})
 		})
 	})
 })
 
+// stateRecorded is our mock client callback, it records the updates it receives in a map.  When accessed via methods,
+// all fields are protected by a mutex so it can be used with this construction:
+//
+//     Eventually(recorder.State).Should(Equal(...))
 type stateRecorder struct {
 	L      sync.Mutex
 	status api.SyncStatus
