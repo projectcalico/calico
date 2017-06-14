@@ -560,7 +560,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			}
 		})
 
-		expectDisconnection := func() {
+		expectDisconnection := func(after time.Duration) {
 			var envelope syncproto.Envelope
 			startTime := time.Now()
 			for {
@@ -568,17 +568,18 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				if err != nil {
 					return // Success!
 				}
-				if time.Since(startTime) > 100*time.Millisecond {
+				if time.Since(startTime) > after {
 					Fail("Client should have been disconnected by now")
 				}
 			}
+			expectGaugeValue("typha_connections_active", 0.0)
 		}
 
 		It("should disconnect a client that sends a nil update", func() {
 			var envelope syncproto.Envelope
 			err := w.Encode(envelope)
 			Expect(err).NotTo(HaveOccurred())
-			expectDisconnection()
+			expectDisconnection(100 * time.Millisecond)
 		})
 
 		It("should disconnect a client that sends an unexpected update", func() {
@@ -586,7 +587,13 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			envelope.Message = 42
 			err := w.Encode(envelope)
 			Expect(err).NotTo(HaveOccurred())
-			expectDisconnection()
+			expectDisconnection(100 * time.Millisecond)
+		})
+
+		It("should disconnect a client that sends a garbage update", func() {
+			rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
+			// We get dropped by the pong timeout since the gob decoder is confused.
+			expectDisconnection(time.Second)
 		})
 
 		It("should disconnect an unresponsive client", func() {
