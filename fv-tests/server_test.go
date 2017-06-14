@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncclient"
@@ -217,7 +218,7 @@ var _ = Describe("With an in-process Server", func() {
 		}
 
 		It("should drop a bad KV", func() {
-			// Bypass the validation filter and send a bad key directly...
+			// Bypass the validation filter (which also converts Nodes to HostIPs).
 			cache.OnStatusUpdated(api.ResyncInProgress)
 			cache.OnUpdates([]api.Update{{
 				KVPair: model.KVPair{
@@ -231,6 +232,45 @@ var _ = Describe("With an in-process Server", func() {
 			}})
 			cache.OnStatusUpdated(api.InSync)
 			expectClientState(api.InSync, map[string]api.Update{})
+		})
+
+		It("validation should drop a bad Node", func() {
+			valFilter.OnStatusUpdated(api.ResyncInProgress)
+			valFilter.OnUpdates([]api.Update{{
+				KVPair: model.KVPair{
+					Key:      model.NodeKey{Hostname: "foobar"},
+					Value:    "bazzbiff",
+					Revision: "1234",
+					TTL:      12,
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}})
+			valFilter.OnStatusUpdated(api.InSync)
+			expectClientState(api.InSync, map[string]api.Update{})
+		})
+
+		It("validation should convert a valid Node", func() {
+			valFilter.OnStatusUpdated(api.ResyncInProgress)
+			valFilter.OnUpdates([]api.Update{{
+				KVPair: model.KVPair{
+					Key: model.NodeKey{Hostname: "foobar"},
+					Value: &model.Node{
+						FelixIPv4: calinet.ParseIP("10.0.0.1"),
+					},
+					Revision: "1234",
+				},
+				UpdateType: api.UpdateTypeKVNew,
+			}})
+			valFilter.OnStatusUpdated(api.InSync)
+			expectClientState(api.InSync, map[string]api.Update{
+				"/calico/v1/host/foobar/bird_ip": {
+					KVPair: model.KVPair{
+						Key:      model.HostIPKey{Hostname: "foobar"},
+						Value:    calinet.ParseIP("10.0.0.1"),
+						Revision: "1234",
+					},
+					UpdateType: api.UpdateTypeKVNew,
+				}})
 		})
 
 		It("should pass through a KV and status", func() {

@@ -67,7 +67,14 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 				// about the host metadata anyway.  Extract the Host IP.
 				update.Key = model.HostIPKey{Hostname: k.Hostname}
 				if update.Value != nil {
-					update.Value = update.Value.(*model.Node).FelixIPv4
+					node, ok := update.Value.(*model.Node)
+					if ok {
+						update.Value = node.FelixIPv4
+					} else {
+						logCxt.WithField("value", update.Value).Warn(
+							"NodeKey value wasn't a *Node; treating as missing")
+						update.Value = nil
+					}
 				}
 			}
 
