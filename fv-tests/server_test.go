@@ -29,6 +29,10 @@ import (
 	gob "encoding/gob"
 	"net"
 
+	"errors"
+
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -244,6 +248,15 @@ var _ = Describe("With an in-process Server", func() {
 			expectedEndState := sendNUpdatesThenInSync(1000)
 			expectClientState(api.InSync, expectedEndState)
 		})
+
+		It("should report the correct number of connections", func() {
+			expectGaugeValue("typha_connections_active", 1.0)
+		})
+
+		It("should report the correct number of connections after killing the client", func() {
+			clientCancel()
+			expectGaugeValue("typha_connections_active", 0.0)
+		})
 	})
 
 	Describe("with 100 client connections", func() {
@@ -338,6 +351,7 @@ var _ = Describe("With an in-process Server", func() {
 			}
 			// After the timeout we should have dropped exactly the right number of connections.
 			Expect(numFinished).To(Equal(40))
+			expectGaugeValue("typha_connections_active", 60.0)
 		})
 
 		It("should pass through a KV and status", func() {
@@ -355,6 +369,33 @@ var _ = Describe("With an in-process Server", func() {
 		It("should pass through many KVs", func() {
 			expectedEndState := sendNUpdatesThenInSync(1000)
 			expectClientStates(api.InSync, expectedEndState)
+		})
+
+		It("should report the correct number of connections", func() {
+			expectGaugeValue("typha_connections_active", 100.0)
+		})
+
+		It("should report the correct number of connections after killing the clients", func() {
+			for _, c := range clientStates {
+				c.clientCancel()
+			}
+			expectGaugeValue("typha_connections_active", 0.0)
+		})
+
+		It("with churn, it should report the correct number of connections after killing the clients", func() {
+			// Generate some churn while we disconnect the clients.
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				sendNUpdatesThenInSync(1000)
+				wg.Done()
+			}()
+			defer wg.Wait()
+			for _, c := range clientStates {
+				c.clientCancel()
+				time.Sleep(100 * time.Microsecond)
+			}
+			expectGaugeValue("typha_connections_active", 0.0)
 		})
 	})
 
@@ -503,4 +544,23 @@ func (r *stateRecorder) OnStatusUpdated(status api.SyncStatus) {
 	defer r.L.Unlock()
 
 	r.status = status
+}
+
+func getGauge(name string) (float64, error) {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return 0, err
+	}
+	for _, mf := range mfs {
+		if mf.GetName() == name {
+			return mf.Metric[0].GetGauge().GetValue(), nil
+		}
+	}
+	return 0, errors.New("not found")
+}
+
+func expectGaugeValue(name string, value float64) {
+	Eventually(func() (float64, error) {
+		return getGauge(name)
+	}).Should(Equal(value))
 }
