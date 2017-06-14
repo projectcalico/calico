@@ -92,7 +92,7 @@ can disable modification of the docker daemon altogether.
 
 To perform networking on Unified Containerizer tasks, Calico's CNI binaries and
 configuration file must be installed on every agent, and the slave process must
-be restarted to pick up the change. This step of the Framework performs the following steps:
+be restarted to pick up the change. The Framework then performs the following steps:
 
 1. Download [`calico`](https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico) to `/opt/mesosphere/active/cni/`
 2. Download [`calico-ipam`](https://github.com/projectcalico/calico-cni/releases/download/v1.5.6/calico-ipam) to `/opt/mesosphere/active/cni/`

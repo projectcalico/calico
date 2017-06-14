@@ -52,19 +52,19 @@ set `network` to `USER`, and set `networkName` to the name of your Calico networ
 }
 ```
 
-## Enabling Healthchecks
+## Enabling Health Checks
 
-Marathon supports Healthchecks for IP per container applications. Healthchecks
+Marathon supports Health Checks for IP per container applications. Health Checks
 should specify a `port` (instead of the `portIndex` field which is commonly used
 for port-mapped applications).
 
-For the Healthcheck to succeed, the following conditions must be met:
+For the Health Check to succeed, the following conditions must be met:
 
 1. The host running Marathon will need routes to Calico tasks. If you are running
 Marathon as a Mesos task, and have already installed Calico on each Agent,
 you have met this requirement.
 
-2. Calico Networking Policy should permit the healthcheck from Marathon to the
+2. Calico Networking Policy should permit the health check from Marathon to the
 target application.
 
 The following sample application launches a nginx webserver with healtchecks:
@@ -90,7 +90,7 @@ The following sample application launches a nginx webserver with healtchecks:
 }
 ```
 
-The following Calico Profile yaml will allow the healthcheck from an instance
+The following Calico Profile yaml will allow the health check from an instance
 of Marathon running at 172.24.197.101:
 
 ```yaml
