@@ -530,64 +530,105 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		Eventually(recorder.Status).Should(Equal(api.InSync))
 	})
 
-	It("should disconnect an unresponsive client", func() {
-		rawConn, err := net.DialTimeout("tcp", serverAddr, 10*time.Second)
-		Expect(err).NotTo(HaveOccurred())
-		defer func() {
+	Describe("with a raw connection", func() {
+		var rawConn net.Conn
+		var w *gob.Encoder
+		var r *gob.Decoder
+
+		BeforeEach(func() {
+			var err error
+			rawConn, err = net.DialTimeout("tcp", serverAddr, 10*time.Second)
+			Expect(err).NotTo(HaveOccurred())
+
+			w = gob.NewEncoder(rawConn)
+			err = w.Encode(syncproto.Envelope{
+				Message: syncproto.MsgClientHello{
+					Hostname: "me",
+					Version:  "test",
+					Info:     "test info",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			r = gob.NewDecoder(rawConn)
+		})
+
+		AfterEach(func() {
 			err := rawConn.Close()
 			if err != nil {
 				log.WithError(err).Info("Error recorded while closing conn.")
 			}
-		}()
-		w := gob.NewEncoder(rawConn)
-		err = w.Encode(syncproto.Envelope{
-			Message: syncproto.MsgClientHello{
-				Hostname: "me",
-				Version:  "test",
-				Info:     "test info",
-			},
 		})
-		Expect(err).NotTo(HaveOccurred())
 
-		r := gob.NewDecoder(rawConn)
-		done := make(chan struct{})
-		pings := make(chan *syncproto.MsgPing)
-		go func() {
-			defer close(done)
-			defer close(pings)
+		expectDisconnection := func() {
+			var envelope syncproto.Envelope
+			startTime := time.Now()
 			for {
-				var envelope syncproto.Envelope
 				err := r.Decode(&envelope)
 				if err != nil {
-					return
+					return // Success!
 				}
-				if m, ok := envelope.Message.(syncproto.MsgPing); ok {
-					pings <- &m
+				if time.Since(startTime) > 100*time.Millisecond {
+					Fail("Client should have been disconnected by now")
 				}
-			}
-		}()
-		timeout := time.NewTimer(1 * time.Second)
-		startTime := time.Now()
-		gotPing := false
-		for {
-			select {
-			case m := <-pings:
-				if m == nil {
-					pings = nil
-					continue
-				}
-				Expect(time.Since(m.Timestamp)).To(BeNumerically("<", time.Second))
-				gotPing = true
-			case <-done:
-				// Check we didn't get dropped too soon.
-				Expect(gotPing).To(BeTrue())
-				Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
-				timeout.Stop()
-				return
-			case <-timeout.C:
-				Fail("timed out waiting for unresponsive client to be dropped")
 			}
 		}
+
+		It("should disconnect a client that sends a nil update", func() {
+			var envelope syncproto.Envelope
+			err := w.Encode(envelope)
+			Expect(err).NotTo(HaveOccurred())
+			expectDisconnection()
+		})
+
+		It("should disconnect a client that sends an unexpected update", func() {
+			var envelope syncproto.Envelope
+			envelope.Message = 42
+			err := w.Encode(envelope)
+			Expect(err).NotTo(HaveOccurred())
+			expectDisconnection()
+		})
+
+		It("should disconnect an unresponsive client", func() {
+			done := make(chan struct{})
+			pings := make(chan *syncproto.MsgPing)
+			go func() {
+				defer close(done)
+				defer close(pings)
+				for {
+					var envelope syncproto.Envelope
+					err := r.Decode(&envelope)
+					if err != nil {
+						return
+					}
+					if m, ok := envelope.Message.(syncproto.MsgPing); ok {
+						pings <- &m
+					}
+				}
+			}()
+			timeout := time.NewTimer(1 * time.Second)
+			startTime := time.Now()
+			gotPing := false
+			for {
+				select {
+				case m := <-pings:
+					if m == nil {
+						pings = nil
+						continue
+					}
+					Expect(time.Since(m.Timestamp)).To(BeNumerically("<", time.Second))
+					gotPing = true
+				case <-done:
+					// Check we didn't get dropped too soon.
+					Expect(gotPing).To(BeTrue())
+					Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
+					timeout.Stop()
+					return
+				case <-timeout.C:
+					Fail("timed out waiting for unresponsive client to be dropped")
+				}
+			}
+		})
 	})
 })
 
