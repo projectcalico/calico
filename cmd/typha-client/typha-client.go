@@ -24,6 +24,8 @@ import (
 
 	"github.com/docopt/docopt-go"
 
+	"context"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/config"
@@ -86,8 +88,10 @@ func main() {
 	callbacks := &syncerCallbacks{}
 	addr := arguments["--server"].(string)
 	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks)
-	client.Start()
-	for {
-		time.Sleep(10 * time.Second)
+	err = client.Start(context.Background())
+	if err != nil {
+		log.WithError(err).Panic("Client failed")
 	}
+	client.Finished.Wait()
+	log.Panic("Client failed")
 }
