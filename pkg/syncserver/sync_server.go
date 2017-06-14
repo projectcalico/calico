@@ -134,70 +134,76 @@ type Config struct {
 	MaxConns                int
 }
 
-func New(cache BreadcrumbProvider, config Config) *Server {
-	if config.MaxMessageSize < 1 {
+func (c *Config) ApplyDefaults() {
+	if c.MaxMessageSize < 1 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxMessageSize,
+			"value":   c.MaxMessageSize,
 			"default": defaultMaxMessageSize,
 		}).Info("Defaulting MaxMessageSize.")
-		config.MaxMessageSize = defaultMaxMessageSize
+		c.MaxMessageSize = defaultMaxMessageSize
 	}
-	if config.MaxFallBehind <= 0 {
+	if c.MaxFallBehind <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxFallBehind,
+			"value":   c.MaxFallBehind,
 			"default": defaultMaxFallBehind,
 		}).Info("Defaulting MaxFallBehind.")
-		config.MaxFallBehind = defaultMaxFallBehind
+		c.MaxFallBehind = defaultMaxFallBehind
 	}
-	if config.MinBatchingAgeThreshold <= 0 {
+	if c.MinBatchingAgeThreshold <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MinBatchingAgeThreshold,
+			"value":   c.MinBatchingAgeThreshold,
 			"default": defaultBatchingAgeThreshold,
 		}).Info("Defaulting MinBatchingAgeThreshold.")
-		config.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
+		c.MinBatchingAgeThreshold = defaultBatchingAgeThreshold
 	}
-	if config.PingInterval <= 0 {
+	if c.PingInterval <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.PingInterval,
+			"value":   c.PingInterval,
 			"default": defaultPingInterval,
 		}).Info("Defaulting PingInterval.")
-		config.PingInterval = defaultPingInterval
+		c.PingInterval = defaultPingInterval
 	}
-	if config.PongTimeout <= config.PingInterval*2 {
-		defaultTimeout := config.PingInterval * 6
+	if c.PongTimeout <= c.PingInterval*2 {
+		defaultTimeout := c.PingInterval * 6
 		log.WithFields(log.Fields{
-			"value":   config.PongTimeout,
+			"value":   c.PongTimeout,
 			"default": defaultTimeout,
 		}).Info("PongTimeout < PingInterval * 2; Defaulting PongTimeout.")
-		config.PongTimeout = defaultTimeout
+		c.PongTimeout = defaultTimeout
 	}
-	if config.DropInterval <= 0 {
+	if c.DropInterval <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.DropInterval,
+			"value":   c.DropInterval,
 			"default": defaultDropInterval,
 		}).Info("Defaulting DropInterval.")
-		config.DropInterval = defaultDropInterval
+		c.DropInterval = defaultDropInterval
 	}
-	if config.MaxConns <= 0 {
+	if c.MaxConns <= 0 {
 		log.WithFields(log.Fields{
-			"value":   config.MaxConns,
+			"value":   c.MaxConns,
 			"default": defaultMaxConns,
 		}).Info("Defaulting MaxConns.")
-		config.MaxConns = defaultMaxConns
+		c.MaxConns = defaultMaxConns
 	}
-	if config.Port == 0 {
+	if c.Port == 0 {
 		// We use 0 to mean "use the default port".
 		log.WithFields(log.Fields{
-			"value":   config.Port,
+			"value":   c.Port,
 			"default": syncproto.DefaultPort,
 		}).Info("Defaulting Port.")
-		config.Port = syncproto.DefaultPort
+		c.Port = syncproto.DefaultPort
 	}
-	if config.Port == PortRandom {
-		// Ask the kernel to choose a random port.
-		log.Info("Choosing random port")
-		config.Port = 0
+}
+
+func (c *Config) ListenPort() int {
+	if c.Port == PortRandom {
+		return 0
 	}
+	return c.Port
+}
+
+func New(cache BreadcrumbProvider, config Config) *Server {
+	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
 	return &Server{
 		config:       config,
@@ -233,7 +239,7 @@ func (s *Server) serve(cxt context.Context) {
 
 	logCxt := log.WithField("port", s.config.Port)
 	logCxt.Info("Opening listen socket")
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.Port})
+	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to open listen socket")
 	}
