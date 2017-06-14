@@ -21,6 +21,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -79,7 +80,7 @@ var _ = Describe("CalicoCni", func() {
 
 				// Create a K8s pod w/o any special params
 				_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-					ObjectMeta: v1.ObjectMeta{Name: name},
+					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{Containers: []v1.Container{{
 						Name:  fmt.Sprintf("container-%s", name),
 						Image: "ignore",
@@ -213,7 +214,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a K8s pod w/o any special params
 					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{Name: name},
+						ObjectMeta: metav1.ObjectMeta{Name: name},
 						Spec: v1.PodSpec{Containers: []v1.Container{{
 							Name:  fmt.Sprintf("container-%s", name),
 							Image: "ignore",
@@ -267,7 +268,7 @@ var _ = Describe("CalicoCni", func() {
 					// Now create a K8s pod passing in an IP pool.
 					name := fmt.Sprintf("run%d-pool", rand.Uint32())
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
 							Annotations: map[string]string{
 								"cni.projectcalico.org/ipv4pools": "[\"172.16.0.0/16\"]",
@@ -323,7 +324,7 @@ var _ = Describe("CalicoCni", func() {
 					// Now create a K8s pod passing in an IP address.
 					name := fmt.Sprintf("run%d-ip", rand.Uint32())
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
 							Annotations: map[string]string{
 								"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\"]",
@@ -419,7 +420,7 @@ var _ = Describe("CalicoCni", func() {
 					// Now create a K8s pod passing in an IP address.
 					name := fmt.Sprintf("run%d-ip", rand.Uint32())
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
 							Annotations: map[string]string{
 								"cni.projectcalico.org/ipAddrs": "[\"20.0.0.111\"]",
@@ -513,7 +514,7 @@ var _ = Describe("CalicoCni", func() {
 					// Now create a K8s pod passing in an IP address.
 					name := fmt.Sprintf("run%d-ip", rand.Uint32())
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
 							Annotations: map[string]string{
 								"cni.projectcalico.org/ipAddrs": "[\"20.0.0.111\"]",
@@ -597,7 +598,7 @@ var _ = Describe("CalicoCni", func() {
 
 					// Create a K8s Node object with PodCIDR and name equal to hostname.
 					_, err = clientset.Nodes().Create(&v1.Node{
-						ObjectMeta: v1.ObjectMeta{Name: hostname},
+						ObjectMeta: metav1.ObjectMeta{Name: hostname},
 						Spec: v1.NodeSpec{
 							PodCIDR: "10.0.0.0/24",
 						},
@@ -607,7 +608,7 @@ var _ = Describe("CalicoCni", func() {
 					By("Creating a pod with a specific IP address")
 					name := fmt.Sprintf("run%d", rand.Uint32())
 					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{Name: name},
+						ObjectMeta: metav1.ObjectMeta{Name: name},
 						Spec: v1.PodSpec{Containers: []v1.Container{{
 							Name:  fmt.Sprintf("container-%s", name),
 							Image: "ignore",
@@ -634,7 +635,7 @@ var _ = Describe("CalicoCni", func() {
 					By("Creating a second pod with the same IP address as the first pod")
 					name2 := fmt.Sprintf("run2%d", rand.Uint32())
 					_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{Name: name2},
+						ObjectMeta: metav1.ObjectMeta{Name: name2},
 						Spec: v1.PodSpec{Containers: []v1.Container{{
 							Name:  fmt.Sprintf("container-%s", name2),
 							Image: "ignore",
@@ -691,7 +692,7 @@ var _ = Describe("CalicoCni", func() {
 
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(
 						&v1.Pod{
-							ObjectMeta: v1.ObjectMeta{
+							ObjectMeta: metav1.ObjectMeta{
 								Name: name,
 							},
 							Spec: v1.PodSpec{Containers: []v1.Container{{
@@ -827,7 +828,7 @@ var _ = Describe("CalicoCni", func() {
 
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(
 						&v1.Pod{
-							ObjectMeta: v1.ObjectMeta{
+							ObjectMeta: metav1.ObjectMeta{
 								Name: name,
 							},
 							Spec: v1.PodSpec{Containers: []v1.Container{{
@@ -910,7 +911,7 @@ var _ = Describe("CalicoCni", func() {
 					// Now create a K8s pod passing in more than one IPv4 address.
 					name := fmt.Sprintf("run%d-ip", rand.Uint32())
 					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: v1.ObjectMeta{
+						ObjectMeta: metav1.ObjectMeta{
 							Name: name,
 							Annotations: map[string]string{
 								"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\", \"10.0.0.2\"]",
