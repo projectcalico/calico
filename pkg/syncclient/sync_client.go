@@ -15,16 +15,13 @@
 package syncclient
 
 import (
+	"context"
 	"encoding/gob"
 	"net"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-
-	"context"
-	"sync"
-
-	"fmt"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/syncproto"
@@ -44,8 +41,6 @@ func New(addr string, myVersion, myHostname, myInfo string, cbs api.SyncerCallba
 		myVersion:  myVersion,
 		myHostname: myHostname,
 		myInfo:     myInfo,
-
-		PanicOnFailure: true,
 	}
 }
 
@@ -57,18 +52,9 @@ type SyncerClient struct {
 	myHostname, myVersion, myInfo string
 	c                             net.Conn
 	Finished                      sync.WaitGroup
-
-	PanicOnFailure bool
 }
 
-func (s *SyncerClient) Start() {
-	err := s.StartContext(context.Background())
-	if err != nil {
-		s.logCxt.WithError(err).Panic("Failed to connect to Typha")
-	}
-}
-
-func (s *SyncerClient) StartContext(cxt context.Context) error {
+func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously.
 	err := s.connect(cxt)
 	if err != nil {
@@ -122,14 +108,10 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 
 func (s *SyncerClient) onConnectionFailed(cxt context.Context, logCxt *log.Entry, err error, operation string) {
 	if cxt.Err() != nil {
-		log.WithError(err).Warn("Connection failed while being shut down by context.")
+		logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
 		return
 	}
-	msg := fmt.Sprintf("Failed to %s", operation)
-	if s.PanicOnFailure {
-		logCxt.WithError(err).Panic(msg)
-	}
-	logCxt.WithError(err).Error(msg)
+	logCxt.WithError(err).Errorf("Failed to %s", operation)
 }
 
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {

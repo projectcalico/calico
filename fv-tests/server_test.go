@@ -16,21 +16,17 @@ package fv_tests_test
 
 import (
 	"context"
+	"encoding/gob"
+	"errors"
+	"fmt"
+	"net"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"fmt"
-	"sync"
-
 	log "github.com/Sirupsen/logrus"
-
-	gob "encoding/gob"
-	"net"
-
-	"errors"
-
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -64,22 +60,22 @@ var (
 		KVPair: model.KVPair{
 			Key:      model.GlobalConfigKey{Name: "foobar2"},
 			Value:    "bazzbiff",
-			Revision: "1234",
+			Revision: "1237",
 		},
 		UpdateType: api.UpdateTypeKVNew,
 	}
-	configFoobar2Deleted = api.Update{
+	// Simulates an invalid key, which we treat as a deletion.
+	configFoobar2Invalid = api.Update{
 		KVPair: model.KVPair{
 			Key:      model.GlobalConfigKey{Name: "foobar2"},
-			Revision: "1235",
+			Revision: "1238",
 		},
-		UpdateType: api.UpdateTypeKVDeleted,
+		UpdateType: api.UpdateTypeKVUpdated,
 	}
 )
 
-// Tests that rely on starting a real Server (on a real TCP port) in this process.
-// We drive the server via a real snapshot cache using the snapshot cache's function
-// API.
+// Tests that rely on starting a real Typha syncserver.Server (on a real TCP port) in this process.
+// We drive the server via a real snapshot cache using the snapshot cache's function API.
 var _ = Describe("With an in-process Server", func() {
 	// We'll create this pipeline for updates to flow through:
 	//
@@ -107,30 +103,34 @@ var _ = Describe("With an in-process Server", func() {
 	}
 	var clientStates []clientState
 
+	createClient := func(id interface{}) clientState {
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+		recorder := &stateRecorder{
+			kvs: map[string]api.Update{},
+		}
+		client := syncclient.New(
+			fmt.Sprintf("127.0.0.1:%d", server.Port()),
+			"test-version",
+			fmt.Sprintf("test-host-%v", id),
+			"test-info",
+			recorder,
+		)
+		err := client.Start(clientCxt)
+		Expect(err).NotTo(HaveOccurred())
+		cs := clientState{
+			clientCxt:    clientCxt,
+			client:       client,
+			clientCancel: clientCancel,
+			recorder:     recorder,
+		}
+		return cs
+	}
+
 	createClients := func(n int) {
 		clientStates = nil
 		for i := 0; i < n; i++ {
-			clientCxt, clientCancel := context.WithCancel(context.Background())
-			recorder := &stateRecorder{
-				kvs: map[string]api.Update{},
-			}
-			client := syncclient.New(
-				fmt.Sprintf("127.0.0.1:%d", server.Port()),
-				"test-version",
-				"test-host",
-				"test-info",
-				recorder,
-			)
-			client.PanicOnFailure = false
-			err := client.StartContext(clientCxt)
-			Expect(err).NotTo(HaveOccurred())
-
-			clientStates = append(clientStates, clientState{
-				clientCxt:    clientCxt,
-				client:       client,
-				clientCancel: clientCancel,
-				recorder:     recorder,
-			})
+			cs := createClient(i)
+			clientStates = append(clientStates, cs)
 		}
 	}
 
@@ -225,27 +225,16 @@ var _ = Describe("With an in-process Server", func() {
 
 			// Now, a newly-connecting client should also reach the same state.
 			log.Info("Starting transient client to read snapshot.")
-			newRecorder := &stateRecorder{
-				kvs: map[string]api.Update{},
-			}
-			newClientCxt, cancelNewClient := context.WithCancel(context.Background())
-			newClient := syncclient.New(
-				serverAddr,
-				"test-version",
-				"test-host-sampler",
-				"test-info",
-				newRecorder,
-			)
-			err := newClient.StartContext(newClientCxt)
-			Expect(err).NotTo(HaveOccurred())
+
+			transientClient := createClient("transient")
 			defer func() {
 				log.Info("Stopping transient client.")
-				cancelNewClient()
-				newClient.Finished.Wait()
+				transientClient.clientCancel()
+				transientClient.client.Finished.Wait()
 				log.Info("Stopped transient client.")
 			}()
-			Eventually(newRecorder.Status).Should(Equal(status))
-			Eventually(newRecorder.KVs).Should(Equal(kvs))
+			Eventually(transientClient.recorder.Status).Should(Equal(status))
+			Eventually(transientClient.recorder.KVs).Should(Equal(kvs))
 		}
 
 		It("should drop a bad KV", func() {
@@ -332,7 +321,7 @@ var _ = Describe("With an in-process Server", func() {
 			expectClientState(api.InSync, map[string]api.Update{
 				"/calico/v1/config/foobar2": configFoobar2BazzBiff,
 			})
-			decoupler.OnUpdates([]api.Update{configFoobar2Deleted})
+			decoupler.OnUpdates([]api.Update{configFoobar2Invalid})
 			expectClientState(api.InSync, map[string]api.Update{})
 		})
 
@@ -505,14 +494,15 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			"test-info",
 			recorder,
 		)
-		err := client.StartContext(clientCxt)
+		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			clientCancel()
 			client.Finished.Wait()
 		}()
 
-		// Wait until we should have been dropped if we were unresponsive.
+		// Wait until we should have been dropped if we were unresponsive.  I.e. 1 pong timeout + 1 ping
+		// interval for the check to take place.
 		time.Sleep(1 * time.Second)
 
 		// Then send an update.
@@ -591,7 +581,9 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 			It("should disconnect a client that sends a garbage update", func() {
 				rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
-				// We get dropped by the pong timeout since the gob decoder is confused.
+				// We don't get dropped as quickly as above because the gob decoder doesn't raise an
+				// error for the above data (presumably, it's still waiting for more data to decode).
+				// We should still get dropped byt he ping timeout though...
 				expectDisconnection(time.Second)
 			})
 
@@ -627,7 +619,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 					case <-done:
 						// Check we didn't get dropped too soon.
 						Expect(gotPing).To(BeTrue())
-						Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
+						Expect(time.Since(startTime)).To(BeNumerically(">=", 500*time.Millisecond))
 						timeout.Stop()
 						return
 					case <-timeout.C:
