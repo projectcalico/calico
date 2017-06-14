@@ -247,7 +247,10 @@ func (s *Server) serve(cxt context.Context) {
 	s.Finished.Add(1)
 	go func() {
 		<-cxt.Done()
-		l.Close()
+		err := l.Close()
+		if err != nil {
+			log.WithError(err).Warn("Ignoring error from socket Close during shut-down.")
+		}
 		s.Finished.Done()
 	}()
 	s.chosenPort = l.Addr().(*net.TCPAddr).Port
@@ -292,7 +295,12 @@ func (s *Server) serve(cxt context.Context) {
 		s.recordConnection(connection)
 		// Defer to the connection-handler.
 		s.Finished.Add(2)
-		go connection.handle(&s.Finished)
+		go func() {
+			err := connection.handle(&s.Finished)
+			if err != nil {
+				log.WithError(err).Info("Connection handler finished")
+			}
+		}()
 		// Clean up the entry in connIDToConn as soon as the context is canceled.
 		go func() {
 			<-connCxt.Done()
@@ -575,7 +583,11 @@ func (h *connection) sendSnapshotAndUpdatesToClient(logCxt *log.Entry) {
 
 	// Get the current snapshot and stream it to the client...
 	breadcrumb := h.cache.CurrentBreadcrumb()
-	h.streamSnapshotToClient(logCxt, breadcrumb)
+	err := h.streamSnapshotToClient(logCxt, breadcrumb)
+	if err != nil {
+		log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
+		return
+	}
 
 	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
 	var lastSentStatus api.SyncStatus

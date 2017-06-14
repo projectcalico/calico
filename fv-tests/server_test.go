@@ -544,7 +544,8 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 		It("should clean up if the hello doesn't get sent", func() {
 			expectGaugeValue("typha_connections_active", 1.0)
-			rawConn.Close()
+			err := rawConn.Close()
+			Expect(err).ToNot(HaveOccurred())
 			expectGaugeValue("typha_connections_active", 0.0)
 		})
 
@@ -576,7 +577,8 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			})
 
 			It("should disconnect a client that sends a garbage update", func() {
-				rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
+				_, err := rawConn.Write([]byte("dsjfkldjsklfajdskjfk;dajskfjaoirefmuweioufijsdkfjkdsjkfjasd;"))
+				log.WithError(err).Info("Sent garbage to server")
 				// We don't get dropped as quickly as above because the gob decoder doesn't raise an
 				// error for the above data (presumably, it's still waiting for more data to decode).
 				// We should still get dropped byt he ping timeout though...

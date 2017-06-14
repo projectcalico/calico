@@ -379,7 +379,7 @@ func NewSyslogDestination(
 		channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
-				writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
+				_ = writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
 					ql.NumSkippedLogs))
 			}
 			err := writeToSyslog(writer, ql)

@@ -154,16 +154,22 @@ configRetry:
 			continue configRetry
 		}
 		// Parse and merge the local config.
-		configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).WithField("configFile", t.ConfigFilePath).Error(
+		_, err = configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
+		if err != nil {
+			log.WithError(err).Warn("Error parsing environment variables. Checking if it's fatal.")
+		}
+		if configParams.FatalErr != nil {
+			log.WithError(configParams.FatalErr).WithField("configFile", t.ConfigFilePath).Error(
 				"Failed to parse configuration environment variable")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		configParams.UpdateFrom(fileConfig, config.ConfigFile)
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).WithField("configFile", t.ConfigFilePath).Error(
+		_, err = configParams.UpdateFrom(fileConfig, config.ConfigFile)
+		if err != nil {
+			log.WithError(err).Warn("Error parsing config file. Checking if it's fatal.")
+		}
+		if configParams.FatalErr != nil {
+			log.WithError(configParams.FatalErr).WithField("configFile", t.ConfigFilePath).Error(
 				"Failed to parse configuration file")
 			time.Sleep(1 * time.Second)
 			continue configRetry
@@ -179,9 +185,9 @@ configRetry:
 			continue configRetry
 		}
 
-		configParams.Validate()
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).Error(
+		err = configParams.Validate()
+		if err != nil || configParams.FatalErr != nil {
+			log.WithError(configParams.FatalErr).Error(
 				"Failed to parse/validate configuration from datastore.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
@@ -199,7 +205,15 @@ configRetry:
 
 	// Make sure the datastore is initialized, otherwise the Syncer may spin, looking for
 	// non-existent resources.
-	t.DatastoreClient.EnsureInitialized()
+	for {
+		err := t.DatastoreClient.EnsureInitialized()
+		if err != nil {
+			log.WithError(err).Error("Failed to ensure datastore was initialized")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
 	t.ConfigParams = configParams
 }
 
@@ -320,13 +334,18 @@ func dumpHeapMemoryProfile(configParams *config.Config) {
 			logCxt.WithError(err).Fatal("Could not create memory profile file")
 			memProfFile = nil
 		} else {
-			defer memProfFile.Close()
+			defer func() {
+				err := memProfFile.Close()
+				if err != nil {
+					log.WithError(err).Error("Error while closing memory profile file.")
+				}
+			}()
 			logCxt.Info("Writing memory profile...")
 			// The initial resync uses a lot of scratch space so now is
 			// a good time to force a GC and return any RAM that we can.
 			debug.FreeOSMemory()
 			if err := pprof.WriteHeapProfile(memProfFile); err != nil {
-				logCxt.WithError(err).Fatal("Could not write memory profile")
+				logCxt.WithError(err).Error("Could not write memory profile")
 			}
 			logCxt.Info("Finished writing memory profile")
 		}
