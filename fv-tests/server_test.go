@@ -502,6 +502,34 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		}
 	})
 
+	It("should not disconnect a responsive client", func() {
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+
+		recorder := &stateRecorder{
+			kvs: map[string]api.Update{},
+		}
+		client := syncclient.New(
+			serverAddr,
+			"test-version",
+			"test-host",
+			"test-info",
+			recorder,
+		)
+		err := client.StartContext(clientCxt)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			clientCancel()
+			client.Finished.Wait()
+		}()
+
+		// Wait until we should have been dropped if we were unresponsive.
+		time.Sleep(1 * time.Second)
+
+		// Then send an update.
+		cache.OnStatusUpdated(api.InSync)
+		Eventually(recorder.Status).Should(Equal(api.InSync))
+	})
+
 	It("should disconnect an unresponsive client", func() {
 		rawConn, err := net.DialTimeout("tcp", serverAddr, 10*time.Second)
 		Expect(err).NotTo(HaveOccurred())
@@ -519,28 +547,46 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				Info:     "test info",
 			},
 		})
-		r := gob.NewDecoder(rawConn)
 		Expect(err).NotTo(HaveOccurred())
+
+		r := gob.NewDecoder(rawConn)
 		done := make(chan struct{})
+		pings := make(chan *syncproto.MsgPing)
 		go func() {
 			defer close(done)
+			defer close(pings)
 			for {
 				var envelope syncproto.Envelope
 				err := r.Decode(&envelope)
 				if err != nil {
 					return
 				}
+				if m, ok := envelope.Message.(syncproto.MsgPing); ok {
+					pings <- &m
+				}
 			}
 		}()
 		timeout := time.NewTimer(1 * time.Second)
 		startTime := time.Now()
-		select {
-		case <-done:
-			// Check we didn't get dropped too soon.
-			Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
-			timeout.Stop()
-		case <-timeout.C:
-			Fail("timed out waiting for unresponsive client to be dropped")
+		gotPing := false
+		for {
+			select {
+			case m := <-pings:
+				if m == nil {
+					pings = nil
+					continue
+				}
+				Expect(time.Since(m.Timestamp)).To(BeNumerically("<", time.Second))
+				gotPing = true
+			case <-done:
+				// Check we didn't get dropped too soon.
+				Expect(gotPing).To(BeTrue())
+				Expect(time.Since(startTime) >= 500*time.Millisecond).To(BeTrue())
+				timeout.Stop()
+				return
+			case <-timeout.C:
+				Fail("timed out waiting for unresponsive client to be dropped")
+			}
 		}
 	})
 })
