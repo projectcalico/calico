@@ -4,7 +4,7 @@ redirect_from: latest/getting-started/mesos/installation/integration
 ---
 
 This guide explains how to integrate Calico networking and policy on an existing
-Mesos cluster. These instruction should be followed on each **Agent**.
+Mesos cluster. These instructions should be followed on each **Agent**.
 
 Ensure you've met the [prerequisites](prerequisites) before continuing, namely that
 you have etcd running.

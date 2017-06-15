@@ -7,7 +7,7 @@ title: Requirements for Calico with Mesos
 Calico uses etcd as its datastore. Ensure you have an instance of etcd running,
 and that it is accessible from all Agents in your cluster.
 
-For maximize availability, use [etcd's clustering guide](https://coreos.com/os/docs/latest/cluster-architectures.html)
+In order to maximize availability, use [etcd's clustering guide](https://coreos.com/os/docs/latest/cluster-architectures.html)
 and run etcd across the masters or other dedicated hosts.
 
 For simplicity, you can quickly get started by running a single instance of etcd
