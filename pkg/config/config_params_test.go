@@ -32,10 +32,8 @@ var _ = DescribeTable("Config parsing",
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
 			Expect(err).To(HaveOccurred())
-			Expect(config.FatalErr).To(HaveOccurred())
 		} else {
 			Expect(err).NotTo(HaveOccurred())
-			Expect(config.FatalErr).NotTo(HaveOccurred())
 		}
 	},
 

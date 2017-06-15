@@ -30,11 +30,9 @@
 //
 // Then feed it to the config object:
 //
-//    config.UpdateFrom(envConfig, config.EnvironmentVariable)
-//    config.UpdateFrom(fileConfig, config.ConfigFile)
-//
-// The UpdateFrom() method returns an error, but, as a convenience, it also
-// stores the error in config.FatalErr.
+//    changed, err := config.UpdateFrom(envConfig, config.EnvironmentVariable)
+//    ...
+//    changed, err = config.UpdateFrom(fileConfig, config.ConfigFile)
 //
 // Config inheritance
 //

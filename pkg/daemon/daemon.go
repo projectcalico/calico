@@ -156,20 +156,14 @@ configRetry:
 		// Parse and merge the local config.
 		_, err = configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
 		if err != nil {
-			log.WithError(err).Warn("Error parsing environment variables. Checking if it's fatal.")
-		}
-		if configParams.FatalErr != nil {
-			log.WithError(configParams.FatalErr).WithField("configFile", t.ConfigFilePath).Error(
+			log.WithError(err).WithField("configFile", t.ConfigFilePath).Error(
 				"Failed to parse configuration environment variable")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
 		_, err = configParams.UpdateFrom(fileConfig, config.ConfigFile)
 		if err != nil {
-			log.WithError(err).Warn("Error parsing config file. Checking if it's fatal.")
-		}
-		if configParams.FatalErr != nil {
-			log.WithError(configParams.FatalErr).WithField("configFile", t.ConfigFilePath).Error(
+			log.WithError(err).WithField("configFile", t.ConfigFilePath).Error(
 				"Failed to parse configuration file")
 			time.Sleep(1 * time.Second)
 			continue configRetry
@@ -186,8 +180,8 @@ configRetry:
 		}
 
 		err = configParams.Validate()
-		if err != nil || configParams.FatalErr != nil {
-			log.WithError(configParams.FatalErr).Error(
+		if err != nil {
+			log.WithError(err).Error(
 				"Failed to parse/validate configuration from datastore.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
