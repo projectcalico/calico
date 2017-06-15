@@ -16,9 +16,15 @@ package syncserver
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/gob"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -33,6 +39,7 @@ import (
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncproto"
+	"github.com/projectcalico/typha/pkg/tlsutils"
 )
 
 var (
@@ -134,6 +141,11 @@ type Config struct {
 	DropInterval            time.Duration
 	MaxConns                int
 	HealthAggregator        *health.HealthAggregator
+	KeyFile                 string
+	CertFile                string
+	CAFile                  string
+	ClientCN                string
+	ClientURISAN            string
 }
 
 const (
@@ -209,6 +221,11 @@ func (c *Config) ListenPort() int {
 	return c.Port
 }
 
+func (c *Config) requiringTLS() bool {
+	// True if any of the TLS parameters are set.  This must match config.Config.requiringTLS().
+	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
+}
+
 func New(cache BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
@@ -256,12 +273,53 @@ func (s *Server) serve(cxt context.Context) {
 	defer cancelFn()
 
 	logCxt := log.WithField("port", s.config.Port)
-	logCxt.Info("Opening listen socket")
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
+	var (
+		l   net.Listener
+		err error
+	)
+	if s.config.requiringTLS() {
+		pwd, _ := os.Getwd()
+		logCxt.WithField("pwd", pwd).Info("Opening TLS listen socket")
+		cert, tlsErr := tls.LoadX509KeyPair(s.config.CertFile, s.config.KeyFile)
+		if tlsErr != nil {
+			logCxt.WithFields(log.Fields{
+				"certFile": s.config.CertFile,
+				"keyFile":  s.config.KeyFile,
+			}).WithError(tlsErr).Panic("Failed to load certificate and key")
+		}
+		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
+		tlsConfig.Rand = rand.Reader
+
+		// Arrange for server to verify the clients' certificates.
+		logCxt.Info("Will verify client certificates")
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		caPEMBlock, tlsErr := ioutil.ReadFile(s.config.CAFile)
+		if tlsErr != nil {
+			logCxt.WithError(tlsErr).Panic("Failed to read CA data")
+		}
+		tlsConfig.ClientCAs = x509.NewCertPool()
+		ok := tlsConfig.ClientCAs.AppendCertsFromPEM(caPEMBlock)
+		if !ok {
+			logCxt.Panic("Failed to add CA data to pool")
+		}
+		tlsConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
+			logCxt,
+			tlsConfig.ClientCAs,
+			s.config.ClientCN,
+			s.config.ClientURISAN,
+		)
+
+		laddr := fmt.Sprintf("0.0.0.0:%v", s.config.ListenPort())
+		l, err = tls.Listen("tcp", laddr, &tlsConfig)
+	} else {
+		logCxt.Info("Opening listen socket")
+		l, err = net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
+	}
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to open listen socket")
 	}
 	logCxt.Info("Opened listen socket")
+
 	s.Finished.Add(1)
 	go func() {
 		<-cxt.Done()
@@ -276,7 +334,7 @@ func (s *Server) serve(cxt context.Context) {
 	close(s.listeningC)
 	for {
 		logCxt.Debug("About to accept connection")
-		conn, err := l.AcceptTCP()
+		conn, err := l.Accept()
 		if err != nil {
 			if cxt.Err() != nil {
 				logCxt.WithError(cxt.Err()).Info("Shutting down...")
@@ -284,6 +342,29 @@ func (s *Server) serve(cxt context.Context) {
 			}
 			logCxt.WithError(err).Panic("Failed to accept connection")
 			return
+		}
+
+		logCxt.Infof("Accepted from %s", conn.RemoteAddr())
+		if s.config.requiringTLS() {
+			// Doing TLS, we must do the handshake...
+			tlsConn := conn.(*tls.Conn)
+			logCxt.Debug("TLS connection")
+			err = tlsConn.Handshake()
+			if err != nil {
+				logCxt.WithError(err).Error("TLS handshake error")
+				err = conn.Close()
+				if err != nil {
+					logCxt.WithError(err).Warning("Error closing failed TLS connection")
+				}
+				continue
+			}
+			state := tlsConn.ConnectionState()
+			for _, v := range state.PeerCertificates {
+				bytes, _ := x509.MarshalPKIXPublicKey(v.PublicKey)
+				logCxt.Debugf("%#v", bytes)
+				logCxt.Debugf("%#v", v.Subject)
+				logCxt.Debugf("%#v", v.URIs)
+			}
 		}
 
 		connID := s.nextConnID
@@ -415,7 +496,7 @@ type connection struct {
 	shutDownWG sync.WaitGroup
 
 	cache BreadcrumbProvider
-	conn  *net.TCPConn
+	conn  net.Conn
 
 	encoder *gob.Encoder
 	readC   chan interface{}

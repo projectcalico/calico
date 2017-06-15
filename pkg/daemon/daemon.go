@@ -331,6 +331,11 @@ func (t *TyphaDaemon) CreateServer() {
 			MaxConns:                t.ConfigParams.MaxConnectionsUpperLimit,
 			Port:                    t.ConfigParams.ServerPort,
 			HealthAggregator:        t.healthAggregator,
+			KeyFile:                 t.ConfigParams.ServerKeyFile,
+			CertFile:                t.ConfigParams.ServerCertFile,
+			CAFile:                  t.ConfigParams.CAFile,
+			ClientCN:                t.ConfigParams.ClientCN,
+			ClientURISAN:            t.ConfigParams.ClientURISAN,
 		},
 	)
 }
