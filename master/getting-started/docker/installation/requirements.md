@@ -23,10 +23,10 @@ Follow the [instructions for installing Docker][docker].
 To use Calico as a Docker network plugin, the Docker daemon must be configured
 with a cluster store.  If using etcd as a cluster store,
 configure the `cluster-store` on the Docker daemon to `etcd://<ETCD_IP>:<ETCD_PORT>`,
-replacing `<ETCD IP>` and <ETCD_PORT> with the appropriate address and client
+replacing `<ETCD_IP>` and `<ETCD_PORT>` with the appropriate address and client
 port for your etcd cluster.  If your etcd is configured with TLS then you must
-also add [configuration to the Docker daemon][daemon-cert-config] to allow
-access.
+also [configure the Docker daemon][daemon-cert-config] with the correct
+certificates to allow access.
 
 > For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
 > or for 1.9 see the appropriate 'Configuring Docker' section in [configuring docker][configuring-docker-1.9].
