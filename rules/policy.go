@@ -193,19 +193,21 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if pRule.SrcNet != "" {
-		isV6 := strings.Index(pRule.SrcNet, ":") >= 0
-		wantV6 := ipVersion == 6
-		if wantV6 != isV6 {
-			// We're rendering for one IP version but the rule has an CIDR for the other
-			// IP version, skip the rule.
-			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil, SkipRule
+	var containsV4, containsV6 bool
+	scanIPVersions := func(nets []string) {
+		for _, n := range nets {
+			if strings.Contains(n, ":") {
+				containsV6 = true
+			} else {
+				containsV4 = true
+			}
 		}
-		// Only include the address if it matches the IP version that we're
-		// rendering.
+	}
+
+	if len(pRule.SrcNet) > 0 {
+		scanIPVersions(pRule.SrcNet)
 		logCxt.WithField("cidr", pRule.SrcNet).Debug("Adding src CIDR match")
-		match = match.SourceNet(pRule.SrcNet)
+		match = match.SourceNets(pRule.SrcNet...)
 	}
 
 	for _, ipsetID := range pRule.SrcIpSetIds {
@@ -229,19 +231,10 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourcePortRanges(pRule.SrcPorts)
 	}
 
-	if pRule.DstNet != "" {
-		isV6 := strings.Index(pRule.DstNet, ":") >= 0
-		wantV6 := ipVersion == 6
-		if wantV6 != isV6 {
-			// We're rendering for one IP version but the rule has an CIDR for the other
-			// IP version, skip the rule.
-			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil, SkipRule
-		}
-		// Only include the address if it matches the IP version that we're
-		// rendering.
+	if len(pRule.DstNet) > 0 {
+		scanIPVersions(pRule.DstNet)
 		logCxt.WithField("cidr", pRule.DstNet).Debug("Adding dst CIDR match")
-		match = match.DestNet(pRule.DstNet)
+		match = match.DestNets(pRule.DstNet...)
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -300,19 +293,10 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if pRule.NotSrcNet != "" {
-		isV6 := strings.Index(pRule.NotSrcNet, ":") >= 0
-		wantV6 := ipVersion == 6
-		if wantV6 != isV6 {
-			// We're rendering for one IP version but the rule has an CIDR for the other
-			// IP version, skip the rule.
-			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil, SkipRule
-		}
-		// Only include the address if it matches the IP version that we're
-		// rendering.
+	if len(pRule.NotSrcNet) > 0 {
+		scanIPVersions(pRule.NotSrcNet)
 		logCxt.WithField("cidr", pRule.NotSrcNet).Debug("Adding src CIDR match")
-		match = match.NotSourceNet(pRule.NotSrcNet)
+		match = match.NotSourceNets(pRule.NotSrcNet...)
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -338,19 +322,10 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if pRule.NotDstNet != "" {
-		isV6 := strings.Index(pRule.NotDstNet, ":") >= 0
-		wantV6 := ipVersion == 6
-		if wantV6 != isV6 {
-			// We're rendering for one IP version but the rule has an CIDR for the other
-			// IP version, skip the rule.
-			logCxt.Debug("Skipping rule because it has a CIDR for a different IP version.")
-			return nil, SkipRule
-		}
-		// Only include the address if it matches the IP version that we're
-		// rendering.
+	if len(pRule.NotDstNet) > 0 {
+		scanIPVersions(pRule.NotDstNet)
 		logCxt.WithField("cidr", pRule.NotDstNet).Debug("Adding dst CIDR match")
-		match = match.NotDestNet(pRule.NotDstNet)
+		match = match.NotDestNets(pRule.NotDstNet...)
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
@@ -397,6 +372,17 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
+
+	if containsV4 && containsV6 {
+		return nil, SkipRule
+	}
+	if ipVersion == 4 && containsV6 {
+		return nil, SkipRule
+	}
+	if ipVersion == 6 && containsV4 {
+		return nil, SkipRule
+	}
+
 	return match, nil
 }
 

@@ -39,7 +39,7 @@ var ruleTestData = []TableEntry{
 		"-p 8"),
 
 	Entry("Source net", 4,
-		proto.Rule{SrcNet: "10.0.0.0/16"},
+		proto.Rule{SrcNet: []string{"10.0.0.0/16"}},
 		"--source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
 		proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
@@ -71,7 +71,7 @@ var ruleTestData = []TableEntry{
 		"-m icmp6 --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{DstNet: "10.0.0.0/16"},
+		proto.Rule{DstNet: []string{"10.0.0.0/16"}},
 		"--destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
@@ -100,7 +100,7 @@ var ruleTestData = []TableEntry{
 		"! -p 8"),
 
 	Entry("Source net", 4,
-		proto.Rule{NotSrcNet: "10.0.0.0/16"},
+		proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
 		"! --source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
@@ -147,7 +147,7 @@ var ruleTestData = []TableEntry{
 		"-m icmp6 ! --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{NotDstNet: "10.0.0.0/16"},
+		proto.Rule{NotDstNet: []string{"10.0.0.0/16"}},
 		"! --destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
@@ -296,42 +296,42 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 

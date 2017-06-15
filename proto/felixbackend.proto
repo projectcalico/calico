@@ -162,9 +162,9 @@ message Rule {
 
   Protocol protocol = 3;
 
-  string src_net = 4;
+  repeated string src_net = 4;
   repeated PortRange src_ports = 5;
-  string dst_net = 6;
+  repeated string dst_net = 6;
   repeated PortRange dst_ports = 7;
   oneof icmp {
     // Distinguish between a match on type only and type+code.  We can't use
@@ -178,9 +178,9 @@ message Rule {
 
   Protocol not_protocol = 102;
 
-  string not_src_net = 103;
+  repeated string not_src_net = 103;
   repeated PortRange not_src_ports = 104;
-  string not_dst_net = 105;
+  repeated string not_dst_net = 105;
   repeated PortRange not_dst_ports = 106;
   oneof not_icmp {
     int32 not_icmp_type = 107;

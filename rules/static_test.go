@@ -301,7 +301,7 @@ var _ = Describe("Static", func() {
 				{
 					Match: Match().
 						Protocol("tcp").
-						DestNet("10.0.0.1").
+						DestNets("10.0.0.1").
 						DestPorts(1234),
 					Action: AcceptAction{},
 				},
@@ -357,7 +357,7 @@ var _ = Describe("Static", func() {
 							Match: Match().
 								Protocol("tcp").
 								DestPorts(80).
-								DestNet("169.254.169.254/32"),
+								DestNets("169.254.169.254/32"),
 							Action: DNATAction{
 								DestAddr: "10.0.0.1",
 								DestPort: 1234,

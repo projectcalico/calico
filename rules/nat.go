@@ -53,7 +53,7 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 	for _, extIp := range sortedExtIps {
 		intIp := dnats[extIp]
 		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNet(extIp),
+			Match:  iptables.Match().DestNets(extIp),
 			Action: iptables.DNATAction{DestAddr: intIp},
 		})
 	}
@@ -75,7 +75,7 @@ func (r *DefaultRuleRenderer) SNATsToIptablesChains(snats map[string]string) []*
 	for _, intIp := range sortedIntIps {
 		extIp := snats[intIp]
 		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNet(intIp).SourceNet(intIp),
+			Match:  iptables.Match().DestNets(intIp).SourceNets(intIp),
 			Action: iptables.SNATAction{ToAddr: extIp},
 		})
 	}

@@ -140,7 +140,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 			rules = append(rules, Rule{
 				Match: Match().
 					Protocol("tcp").
-					DestNet(r.OpenStackMetadataIP.String()).
+					DestNets(r.OpenStackMetadataIP.String()).
 					DestPorts(r.OpenStackMetadataPort),
 				Action: AcceptAction{},
 			})
@@ -380,7 +380,7 @@ func (r *DefaultRuleRenderer) StaticNATPreroutingChains(ipVersion uint8) []*Chai
 			Match: Match().
 				Protocol("tcp").
 				DestPorts(80).
-				DestNet("169.254.169.254/32"),
+				DestNets("169.254.169.254/32"),
 			Action: DNATAction{
 				DestAddr: r.OpenStackMetadataIP.String(),
 				DestPort: r.OpenStackMetadataPort,

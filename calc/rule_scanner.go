@@ -21,7 +21,6 @@ import (
 	"github.com/projectcalico/felix/multidict"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -193,9 +192,9 @@ type ParsedRule struct {
 
 	Protocol *numorstring.Protocol
 
-	SrcNet      *net.IPNet
+	SrcNet      model.IPNets
 	SrcPorts    []numorstring.Port
-	DstNet      *net.IPNet
+	DstNet      model.IPNets
 	DstPorts    []numorstring.Port
 	ICMPType    *int
 	ICMPCode    *int
@@ -203,9 +202,9 @@ type ParsedRule struct {
 	DstIPSetIDs []string
 
 	NotProtocol    *numorstring.Protocol
-	NotSrcNet      *net.IPNet
+	NotSrcNet      model.IPNets
 	NotSrcPorts    []numorstring.Port
-	NotDstNet      *net.IPNet
+	NotDstNet      model.IPNets
 	NotDstPorts    []numorstring.Port
 	NotICMPType    *int
 	NotICMPCode    *int

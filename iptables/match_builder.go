@@ -109,20 +109,20 @@ func (m MatchCriteria) NotProtocolNum(num uint8) MatchCriteria {
 	return append(m, fmt.Sprintf("! -p %d", num))
 }
 
-func (m MatchCriteria) SourceNet(net string) MatchCriteria {
-	return append(m, fmt.Sprintf("--source %s", net))
+func (m MatchCriteria) SourceNets(net ...string) MatchCriteria {
+	return append(m, fmt.Sprintf("--source %s", strings.Join(net, ",")))
 }
 
-func (m MatchCriteria) NotSourceNet(net string) MatchCriteria {
-	return append(m, fmt.Sprintf("! --source %s", net))
+func (m MatchCriteria) NotSourceNets(net ...string) MatchCriteria {
+	return append(m, fmt.Sprintf("! --source %s", strings.Join(net, ",")))
 }
 
-func (m MatchCriteria) DestNet(net string) MatchCriteria {
-	return append(m, fmt.Sprintf("--destination %s", net))
+func (m MatchCriteria) DestNets(net ...string) MatchCriteria {
+	return append(m, fmt.Sprintf("--destination %s", strings.Join(net, ",")))
 }
 
-func (m MatchCriteria) NotDestNet(net string) MatchCriteria {
-	return append(m, fmt.Sprintf("! --destination %s", net))
+func (m MatchCriteria) NotDestNets(net ...string) MatchCriteria {
+	return append(m, fmt.Sprintf("! --destination %s", strings.Join(net, ",")))
 }
 
 func (m MatchCriteria) SourceIPSet(name string) MatchCriteria {

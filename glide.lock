@@ -1,5 +1,5 @@
-hash: aafcc9f46c3998881e27db8c9ace72c1fbb76c6d10a90976ca84945f2939be9d
-updated: 2017-06-16T10:55:07.180304087Z
+hash: 26e14e6d31d839178e174e8b424efdd29138f1afd2641bf7e08d74ea582bd900
+updated: 2017-06-19T10:20:40.154937171Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -126,7 +126,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e40a090d7d025f7ab60f7a5e5bc362f875116754
+  version: 04610d06fcf13c3cd8fd2ae533b7a0cef59d5b15
+  repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
   - lib/api
@@ -169,7 +170,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 94eb3fe3a55f1b5d12d335b27a4f6e37cd73ed7e
+  version: 0d0c3d572886e0f2323ed376557f9eb99b97d25b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg

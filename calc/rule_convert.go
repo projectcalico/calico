@@ -21,7 +21,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -182,9 +182,11 @@ func protocolToProtoProtocol(in *numorstring.Protocol) (out *proto.Protocol) {
 	return
 }
 
-func ipNetToProtoString(in *net.IPNet) (out string) {
-	if in != nil {
-		out = in.String()
+func ipNetToProtoString(in model.IPNets) (out []string) {
+	for _, n := range in {
+		if n != nil {
+			out = append(out, n.String())
+		}
 	}
 	return
 }
