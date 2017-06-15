@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fv_tests_test
+package fvtests_test
 
 import (
 	"context"
@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
+	. "github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncclient"
@@ -98,15 +99,13 @@ var _ = Describe("With an in-process Server", func() {
 		clientCxt    context.Context
 		clientCancel context.CancelFunc
 		client       *syncclient.SyncerClient
-		recorder     *stateRecorder
+		recorder     *StateRecorder
 	}
 	var clientStates []clientState
 
 	createClient := func(id interface{}) clientState {
 		clientCxt, clientCancel := context.WithCancel(context.Background())
-		recorder := &stateRecorder{
-			kvs: map[string]api.Update{},
-		}
+		recorder := NewRecorder()
 		client := syncclient.New(
 			fmt.Sprintf("127.0.0.1:%d", server.Port()),
 			"test-version",
@@ -114,8 +113,10 @@ var _ = Describe("With an in-process Server", func() {
 			"test-info",
 			recorder,
 		)
+
 		err := client.Start(clientCxt)
 		Expect(err).NotTo(HaveOccurred())
+
 		cs := clientState{
 			clientCxt:    clientCxt,
 			client:       client,
@@ -205,7 +206,7 @@ var _ = Describe("With an in-process Server", func() {
 
 	Describe("with a client connection", func() {
 		var clientCancel context.CancelFunc
-		var recorder *stateRecorder
+		var recorder *StateRecorder
 
 		BeforeEach(func() {
 			createClients(1)
@@ -481,9 +482,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 	It("should not disconnect a responsive client", func() {
 		// Start a real client, which will respond correctly to pings.
 		clientCxt, clientCancel := context.WithCancel(context.Background())
-		recorder := &stateRecorder{
-			kvs: map[string]api.Update{},
-		}
+		recorder := NewRecorder()
 		client := syncclient.New(
 			serverAddr,
 			"test-version",
@@ -627,60 +626,6 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		})
 	})
 })
-
-// stateRecorded is our mock client callback, it records the updates it receives in a map.  When accessed via methods,
-// all fields are protected by a mutex so it can be used with this construction:
-//
-//     Eventually(recorder.State).Should(Equal(...))
-type stateRecorder struct {
-	L      sync.Mutex
-	status api.SyncStatus
-	kvs    map[string]api.Update
-	err    error
-}
-
-func (r *stateRecorder) KVs() map[string]api.Update {
-	r.L.Lock()
-	defer r.L.Unlock()
-
-	kvsCpy := map[string]api.Update{}
-	for k, v := range r.kvs {
-		kvsCpy[k] = v
-	}
-	return kvsCpy
-}
-
-func (r *stateRecorder) Status() api.SyncStatus {
-	r.L.Lock()
-	defer r.L.Unlock()
-
-	return r.status
-}
-
-func (r *stateRecorder) OnUpdates(updates []api.Update) {
-	r.L.Lock()
-	defer r.L.Unlock()
-
-	for _, u := range updates {
-		path, err := model.KeyToDefaultPath(u.Key)
-		if err != nil {
-			r.err = err
-			continue
-		}
-		if u.Value == nil {
-			delete(r.kvs, path)
-		} else {
-			r.kvs[path] = u
-		}
-	}
-}
-
-func (r *stateRecorder) OnStatusUpdated(status api.SyncStatus) {
-	r.L.Lock()
-	defer r.L.Unlock()
-
-	r.status = status
-}
 
 func getGauge(name string) (float64, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()

@@ -115,6 +115,7 @@ type Config struct {
 	ServerMinBatchingAgeThresholdSecs time.Duration `config:"seconds;0.01"`
 	ServerPingIntervalSecs            time.Duration `config:"seconds;10"`
 	ServerPongTimeoutSecs             time.Duration `config:"seconds;60"`
+	ServerPort                        int           `config:"port;0"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
@@ -380,6 +381,8 @@ func loadParams() {
 			param = &Ipv4Param{}
 		case "endpoint-list":
 			param = &EndpointListParam{}
+		case "port":
+			param = &PortParam{}
 		case "port-list":
 			param = &PortListParam{}
 		case "hostname":
