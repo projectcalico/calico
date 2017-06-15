@@ -190,10 +190,17 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 }
 
 func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
-	log.Infof("Updating selector %v", id)
 	if sel == nil {
 		log.WithField("id", id).Panic("Selector should not be nil")
 	}
+	oldSel := idx.selectorsById[id]
+	// Since the selectorRoot struct has cache fields, the easiest way to compare two
+	// selectors is to compare their IDs.
+	if oldSel != nil && oldSel.UniqueID() == sel.UniqueID() {
+		log.WithField("selID", id).Info("Skipping unchanged selector")
+		return
+	}
+	log.WithField("selID", id).Info("Updating selector")
 	idx.scanAllLabels(id, sel)
 	idx.selectorsById[id] = sel
 }
