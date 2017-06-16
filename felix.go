@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -35,7 +36,6 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -313,15 +313,15 @@ configRetry:
 	// Syncer -chan-> Validator -chan-> Calc graph -chan->   dataplane
 	//        KVPair            KVPair             protobufs
 
-	// Get a Syncer from the datastore, which will feed the calculation
-	// graph with updates, bringing Felix into sync..
-	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-
+	// Get a Syncer from the datastore, or a connection to our remote sync daemon, Typha,
+	// which will feed the calculation graph with updates, bringing Felix into sync.
 	var syncer Startable
+	var typhaConnection *syncclient.SyncerClient
+	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
 	if typhaAddr != "" {
-		// Use a remote Syncer, in the Typha server.
+		// Use a remote Syncer, via the Typha server.
 		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
-		syncer = syncclient.New(
+		typhaConnection = syncclient.New(
 			typhaAddr,
 			buildinfo.GitVersion,
 			configParams.FelixHostname,
@@ -395,11 +395,23 @@ configRetry:
 	validator := calc.NewValidationFilter(asyncCalcGraph)
 
 	// Start the background processing threads.
-	log.Infof("Starting the datastore Syncer/processing graph")
-	syncer.Start()
+	if syncer != nil {
+		log.Infof("Starting the datastore Syncer")
+		syncer.Start()
+	} else {
+		log.Infof("Starting the Typha connection")
+		err := typhaConnection.Start(context.Background())
+		if err != nil {
+			log.WithError(err).Fatal("Failed to connect to Typha")
+		}
+		go func() {
+			typhaConnection.Finished.Wait()
+			failureReportChan <- "Connection to Typha failed"
+		}()
+	}
 	go syncerToValidator.SendTo(validator)
 	asyncCalcGraph.Start()
-	log.Infof("Started the datastore Syncer/processing graph")
+	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- bool
 	if configParams.EndpointReportingEnabled {
 		delay := configParams.EndpointReportingDelaySecs
