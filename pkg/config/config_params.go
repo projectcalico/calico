@@ -134,7 +134,6 @@ type Config struct {
 	// nameToSource tracks where we loaded each config param from.
 	sourceToRawConfig map[Source]map[string]string
 	rawValues         map[string]string
-	Err               error
 
 	numIptablesBitsAllocated int
 }
@@ -210,7 +209,6 @@ func (config *Config) resolve() (changed bool, err error) {
 					log.Errorf(
 						"Failed to parse value for %v: %v from source %v. %v",
 						name, rawValue, source, err)
-					config.Err = err
 					return
 				}
 				value = metadata.ZeroValue
@@ -222,7 +220,6 @@ func (config *Config) resolve() (changed bool, err error) {
 					logCxt := log.WithError(err).WithField("source", source)
 					if metadata.DieOnParseFailure {
 						logCxt.Error("Invalid (required) config value.")
-						config.Err = err
 						return
 					} else {
 						logCxt.WithField("default", metadata.Default).Warn(
@@ -304,10 +301,6 @@ func (config *Config) Validate() (err error) {
 		if config.EtcdAddr == "" {
 			err = errors.New("EtcdEndpoints and EtcdAddr both missing")
 		}
-	}
-
-	if err != nil {
-		config.Err = err
 	}
 	return
 }

@@ -26,14 +26,14 @@ import (
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
 		config := New()
-		config.UpdateFrom(map[string]string{key: value},
+		_, err := config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
 		newVal := reflect.ValueOf(config).Elem().FieldByName(key).Interface()
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
-			Expect(config.Err).To(HaveOccurred())
+			Expect(err).To(HaveOccurred())
 		} else {
-			Expect(config.Err).NotTo(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		}
 	},
 

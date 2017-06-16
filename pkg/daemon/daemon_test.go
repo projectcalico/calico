@@ -98,7 +98,8 @@ var _ = Describe("Daemon", func() {
 			Expect(loggingConfigured).To(BeTrue())
 		})
 		AfterEach(func() {
-			os.Remove(configFile.Name())
+			err := os.Remove(configFile.Name())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should load the configuration and connect to the datastore", func() {
@@ -141,7 +142,8 @@ var _ = Describe("Daemon", func() {
 				clientCancelFn()
 				client.Finished.Wait()
 			}()
-			client.Start(clientCxt)
+			err := client.Start(clientCxt)
+			Expect(err).NotTo(HaveOccurred())
 
 			// Send in an update at the top of the processing pipeline.
 			d.SyncerToValidator.OnStatusUpdated(bapi.InSync)

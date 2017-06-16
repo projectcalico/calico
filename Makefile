@@ -172,6 +172,7 @@ go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 	                                --deadline=300s \
 	                                --disable-all \
 	                                --enable=goimports \
+	                                --enable=errcheck \
 	                                --vendor ./...
 
 .PHONY: static-checks

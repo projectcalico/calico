@@ -75,7 +75,10 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		s.logCxt.Info("Typha client Context asked us to exit")
 		// Close the connection.  This will trigger the main loop to exit if it hasn't
 		// already.
-		s.c.Close()
+		err := s.c.Close()
+		if err != nil {
+			log.WithError(err).Warn("Ignoring error from Close during shut-down of client.")
+		}
 		// Broadcast that we're finished.
 		s.Finished.Done()
 	}()
@@ -98,7 +101,10 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 	}
 	if cxt.Err() != nil {
 		if s.c != nil {
-			s.c.Close()
+			err := s.c.Close()
+			if err != nil {
+				log.WithError(err).Warn("Ignoring error from Close during shut-down of client.")
+			}
 		}
 		return cxt.Err()
 	}
