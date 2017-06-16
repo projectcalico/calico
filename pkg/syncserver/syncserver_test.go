@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// These low-level tests complement the FV tests (in typha/fv-tests), which spin up the server on a real port.
 var _ = Describe("With zero config", func() {
 	var config Config
 	BeforeEach(func() {
