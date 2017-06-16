@@ -156,14 +156,54 @@ static-checks: vendor
 			cd /go/src/$(PACKAGE_NAME) && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
 
+
+SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
+SOURCE_DIR:=$(abspath $(SOURCE_DIR))
+LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+ST_TO_RUN?=tests/st/calicoctl/test_crud.py
+# Can exclude the slower tests with "-a '!slow'"
+ST_OPTIONS?=
+
+## Run the STs in a container
+.PHONY: st
+st: dist/calicoctl run-etcd-host
+	# Use the host, PID and network namespaces from the host.
+	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
+	# Map the docker socket in so docker can be used from inside the container
+	# All of code under test is mounted into the container.
+	#   - This also provides access to calicoctl and the docker client
+	docker run --net=host --privileged \
+	           -e MY_IP=$(LOCAL_IP_ENV) \
+	           --rm -ti \
+	           -v $(SOURCE_DIR):/code \
+	           calico/test \
+	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+
+	$(MAKE) stop-etcd
+
+## Etcd is used by the STs
+.PHONY: run-etcd-host
+run-etcd-host:
+	@-docker rm -f calico-etcd
+	docker run --detach \
+	--net=host \
+	--name calico-etcd quay.io/coreos/etcd \
+	etcd \
+	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379" \
+	--listen-client-urls "http://0.0.0.0:2379"
+
+.PHONY: stop-etcd
+stop-etcd:
+	@-docker rm -f calico-etcd
+
 # This depends on clean to ensure that dependent images get untagged and repulled
 .PHONY: semaphore
 semaphore: clean
 	# Clean up unwanted files to free disk space.
 	bash -c 'rm -rf /home/runner/{.npm,.phpbrew,.phpunit,.kerl,.kiex,.lein,.nvm,.npm,.phpbrew,.rbenv} /usr/local/golang /var/lib/mongodb'
 
-	# Run the containerized UTs first.
-	$(MAKE) test-containerized
+	# Run the containerized tests first.
+	$(MAKE) test-containerized st
 
 	$(MAKE) calico/ctl
 
