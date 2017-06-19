@@ -287,6 +287,129 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		ruleTestData...,
 	)
 
+	const (
+		clearBothMarksRule      = "-A test --jump MARK --set-mark 0x0/0x60"
+		preSetAllBlocksMarkRule = "-A test --jump MARK --set-mark 0x20/0x60"
+		allowIfAllMarkRule      = "-A test -m mark --mark 0x20/0x20 --jump MARK --set-mark 0x8/0x8"
+		returnRule              = "-A test -m mark --mark 0x8/0x8 --jump RETURN"
+	)
+	DescribeTable(
+		"CIDR split tests",
+		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
+			renderer := NewRenderer(rrConfigNormal)
+			pRule := proto.Rule{
+				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
+				NotSrcNet: []string{"11.0.0.0/24", "11.0.1.0/24"}[:numNotSrc],
+				DstNet:    []string{"12.0.0.0/24", "12.0.1.0/24"}[:numDst],
+				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
+				Action:    "allow",
+			}
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := ir.RenderAppend("test", "")
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+		// Simple overflow of each match criteria...
+
+		Entry("2 src, 0 !src, 0 dst, 0 !dst", 2, 0, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x20/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 2 !src, 0 dst, 0 !dst", 0, 2, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 0 !dst", 0, 0, 2, 0, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x20/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 0 dst, 2 !dst", 0, 0, 0, 2, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// Overflow of source even though each type would fit.
+		Entry("1 src, 1 !src, 0 dst, 0 !dst", 1, 1, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --source 10.0.0.0/24 -m mark --mark 0x20/0x20 --jump MARK --set-mark 0x8/0x8",
+			returnRule,
+		}),
+		Entry("2 src, 1 !src, 0 dst, 0 !dst", 2, 1, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// Ditto for dest.
+		Entry("0 src, 0 !src, 1 dst, 1 !dst", 0, 0, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --destination 12.0.0.0/24 -m mark --mark 0x20/0x20 --jump MARK --set-mark 0x8/0x8",
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 1 !dst", 0, 0, 2, 1, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// One of everything; only !src and !dst should overflow
+		Entry("1 src, 1 !src, 1 dst, 1 !dst", 1, 1, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --source 10.0.0.0/24 --destination 12.0.0.0/24 -m mark --mark 0x20/0x20 --jump MARK --set-mark 0x8/0x8",
+			returnRule,
+		}),
+
+		// Two of everything; everything overflows.
+		Entry("1 src, 1 !src, 1 dst, 1 !dst", 2, 2, 2, 2, []string{
+			// Both marks start as 0.
+			clearBothMarksRule,
+
+			// Source match directly sets the AllBlocks bit.
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x20/0x20",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x20/0x20",
+
+			// Then the Dest match sets a scratch bit.
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x40/0x40",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x40/0x40",
+			// If the scratch bit isn't set then we clear the AllBlocks bit.
+			"-A test -m mark --mark 0/0x40 --jump MARK --set-mark 0/0x20",
+
+			// The negated matches clear the AllBlocks bit directly if they match.
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x20",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x20",
+
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+	)
+
 	var renderer *DefaultRuleRenderer
 	BeforeEach(func() {
 		renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)

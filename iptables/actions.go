@@ -164,6 +164,20 @@ func (c SetMarkAction) String() string {
 	return fmt.Sprintf("Set:%#x", c.Mark)
 }
 
+type SetMaskedMarkAction struct {
+	Mark              uint32
+	Mask              uint32
+	TypeSetMaskedMark struct{}
+}
+
+func (c SetMaskedMarkAction) ToFragment() string {
+	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mask)
+}
+
+func (c SetMaskedMarkAction) String() string {
+	return fmt.Sprintf("Set:%#x", c.Mark)
+}
+
 type NoTrackAction struct {
 	TypeNoTrack struct{}
 }

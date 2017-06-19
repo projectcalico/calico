@@ -35,4 +35,8 @@ var _ = DescribeTable("Actions",
 	Entry("MasqAction", MasqAction{}, "--jump MASQUERADE"),
 	Entry("ClearMarkAction", ClearMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0/0x1000"),
 	Entry("SetMarkAction", SetMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0x1000/0x1000"),
+	Entry("SetMaskedMarkAction", SetMaskedMarkAction{
+		Mark: 0x1000,
+		Mask: 0xf000,
+	}, "--jump MARK --set-mark 0x1000/0xf000"),
 )
