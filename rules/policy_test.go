@@ -184,13 +184,15 @@ var ruleTestData = []TableEntry{
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	var rrConfigNormal = Config{
-		IPIPEnabled:        true,
-		IPIPTunnelAddress:  nil,
-		IPSetConfigV4:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept: 0x8,
-		IptablesMarkPass:   0x10,
-		IptablesLogPrefix:  "calico-packet",
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x8,
+		IptablesMarkPass:     0x10,
+		IptablesMarkScratch0: 0x20,
+		IptablesMarkScratch1: 0x40,
+		IptablesLogPrefix:    "calico-packet",
 	}
 
 	DescribeTable(
