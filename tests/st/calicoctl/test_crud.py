@@ -19,8 +19,8 @@ from netaddr import IPNetwork
 from nose_parameterized import parameterized
 
 from tests.st.test_base import TestBase
-from tests.st.utils.docker_host import DockerHost
 from tests.st.utils.exceptions import CommandExecError
+from tests.st.utils.utils import log_and_run, calicoctl
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -39,49 +39,46 @@ class TestPool(TestBase):
         """
         Test that a basic CRUD flow for pool commands works.
         """
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            # Set up the ipv4 and ipv6 pools to use
-            ipv4_net = IPNetwork("10.0.1.0/24")
-            ipv6_net = IPNetwork("fed0:8001::/64")
+        # Set up the ipv4 and ipv6 pools to use
+        ipv4_net = IPNetwork("10.0.1.0/24")
+        ipv6_net = IPNetwork("fed0:8001::/64")
 
-            ipv4_pool_dict = {'apiVersion': 'v1',
-                              'kind': 'ipPool',
-                              'metadata': {'cidr': str(ipv4_net.cidr)},
-                              'spec': {'ipip': {'enabled': True}}
-                              }
+        ipv4_pool_dict = {'apiVersion': 'v1',
+                          'kind': 'ipPool',
+                          'metadata': {'cidr': str(ipv4_net.cidr)},
+                          'spec': {'ipip': {'enabled': True}}
+                          }
 
-            ipv6_pool_dict = {'apiVersion': 'v1',
-                              'kind': 'ipPool',
-                              'metadata': {'cidr': str(ipv6_net.cidr)},
-                              'spec': {}
-                              }
+        ipv6_pool_dict = {'apiVersion': 'v1',
+                          'kind': 'ipPool',
+                          'metadata': {'cidr': str(ipv6_net.cidr)},
+                          'spec': {}
+                          }
 
-            # Write out some yaml files to load in through calicoctl-go
-            # We could have sent these via stdout into calicoctl, but this
-            # seemed easier.
-            self.writeyaml('/tmp/ipv4.yaml', ipv4_pool_dict)
-            self.writeyaml('/tmp/ipv6.yaml', ipv6_pool_dict)
+        # Write out some yaml files to load in through calicoctl-go
+        # We could have sent these via stdout into calicoctl, but this
+        # seemed easier.
+        self.writeyaml('/tmp/ipv4.yaml', ipv4_pool_dict)
+        self.writeyaml('/tmp/ipv6.yaml', ipv6_pool_dict)
 
-            # Create the ipv6 network using calicoctl
-            host.calicoctl("create -f /tmp/ipv6.yaml")
-            # Now read it out (yaml format) with calicoctl:
-            self.check_data_in_datastore(host, [ipv6_pool_dict], "ipPool")
+        # Create the ipv6 network using calicoctl
+        calicoctl("create -f /tmp/ipv6.yaml")
+        # Now read it out (yaml format) with calicoctl:
+        self.check_data_in_datastore([ipv6_pool_dict], "ipPool")
 
-            # Add in the ipv4 network with calicoctl
-            host.calicoctl("create -f /tmp/ipv4.yaml")
-            # Now read it out with the calicoctl:
-            self.check_data_in_datastore(
-                host, [ipv4_pool_dict, ipv6_pool_dict], "ipPool")
+        # Add in the ipv4 network with calicoctl
+        calicoctl("create -f /tmp/ipv4.yaml")
+        # Now read it out with the calicoctl:
+        self.check_data_in_datastore([ipv4_pool_dict, ipv6_pool_dict], "ipPool")
 
-            # Remove both the ipv4 pool and ipv6 pool
-            host.calicoctl("delete -f /tmp/ipv6.yaml")
-            host.calicoctl("delete -f /tmp/ipv4.yaml")
-            # Assert output contains neither network
-            self.check_data_in_datastore(host, [], "ipPool")
+        # Remove both the ipv4 pool and ipv6 pool
+        calicoctl("delete -f /tmp/ipv6.yaml")
+        calicoctl("delete -f /tmp/ipv4.yaml")
+        # Assert output contains neither network
+        self.check_data_in_datastore([], "ipPool")
 
-            # Assert that deleting the pool again fails.
-            self.assertRaises(CommandExecError,
-                              host.calicoctl, "delete -f /tmp/ipv4.yaml")
+        # Assert that deleting the pool again fails.
+        self.assertRaises(CommandExecError, calicoctl, "delete -f /tmp/ipv4.yaml")
 
 
 class TestCreateFromFile(TestBase):
@@ -247,110 +244,94 @@ class TestCreateFromFile(TestBase):
     @parameterized.expand(testdata)
     def test_create_from_file_yaml(self, name, data):
         self._check_data_save_load(data)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            res_type = data['kind']
-            logger.debug("Testing %s" % res_type)
-            # Write out the files to load later
-            self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
+        res_type = data['kind']
+        logger.debug("Testing %s" % res_type)
+        # Write out the files to load later
+        self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
 
-            host.calicoctl("create -f /tmp/%s-1.yaml" % res_type)
-            # Test use of create with stdin
+        calicoctl("create -f /tmp/%s-1.yaml" % res_type)
+        # Test use of create with stdin
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data], res_type)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data], res_type)
 
-            # Check both come out OK in json:
-            self.check_data_in_datastore(
-                host, [data], res_type, yaml_format=False)
+        # Check both come out OK in json:
+        self.check_data_in_datastore([data], res_type, yaml_format=False)
 
-            # Tidy up
-            host.calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
+        # Tidy up
+        calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
 
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res_type)
+        # Check it deleted
+        self.check_data_in_datastore([], res_type)
 
     @parameterized.expand(testdata)
     def test_create_from_file_json(self, name, data):
         self._check_data_save_load(data)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            res_type = data['kind']
-            logger.debug("Testing %s" % res_type)
-            # Write out the files to load later
-            self.writejson('/tmp/%s-1.json' % res_type, data)
+        res_type = data['kind']
+        logger.debug("Testing %s" % res_type)
+        # Write out the files to load later
+        self.writejson('/tmp/%s-1.json' % res_type, data)
 
-            host.calicoctl("create -f /tmp/%s-1.json" % res_type)
-            # Test use of create with stdin
+        calicoctl("create -f /tmp/%s-1.json" % res_type)
+        # Test use of create with stdin
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data], res_type)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data], res_type)
 
-            # Check both come out OK in json:
-            self.check_data_in_datastore(
-                host, [data], res_type, yaml_format=False)
+        # Check both come out OK in json:
+        self.check_data_in_datastore([data], res_type, yaml_format=False)
 
-            # Tidy up
-            host.calicoctl("delete -f /tmp/%s-1.json" % res_type)
+        # Tidy up
+        calicoctl("delete -f /tmp/%s-1.json" % res_type)
 
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res_type)
+        # Check it deleted
+        self.check_data_in_datastore([], res_type)
 
     @parameterized.expand(testdata)
     def test_create_from_stdin_json(self, name, data):
         self._check_data_save_load(data)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            res_type = data['kind']
-            logger.debug("Testing %s" % res_type)
-            # Write out the files to load later
-            self.writejson('/tmp/%s-1.json' % res_type, data)
+        res_type = data['kind']
+        logger.debug("Testing %s" % res_type)
+        # Write out the files to load later
+        self.writejson('/tmp/%s-1.json' % res_type, data)
 
-            # Test use of create with stdin
-            host.execute(
-                "cat /tmp/%s-1.json | /code/dist/calicoctl create -f -" %
-                res_type)
+        # Test use of create with stdin
+        log_and_run("cat /tmp/%s-1.json | /code/dist/calicoctl create -f -" % res_type)
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data], res_type)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data], res_type)
 
-            # Check both come out OK in json:
-            self.check_data_in_datastore(
-                host, [data], res_type, yaml_format=False)
+        # Check both come out OK in json:
+        self.check_data_in_datastore([data], res_type, yaml_format=False)
 
-            # Tidy up
-            host.calicoctl("delete -f /tmp/%s-1.json" % res_type)
+        # Tidy up
+        calicoctl("delete -f /tmp/%s-1.json" % res_type)
 
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res_type)
+        # Check it deleted
+        self.check_data_in_datastore([], res_type)
 
     @parameterized.expand(testdata)
     def test_create_from_stdin_yaml(self, name, data):
         self._check_data_save_load(data)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            res_type = data['kind']
-            logger.debug("Testing %s" % res_type)
-            # Write out the files to load later
-            self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
+        res_type = data['kind']
+        logger.debug("Testing %s" % res_type)
+        # Write out the files to load later
+        self.writeyaml('/tmp/%s-1.yaml' % res_type, data)
 
-            # Test use of create with stdin
-            host.execute(
-                "cat /tmp/%s-1.yaml | /code/dist/calicoctl create -f -" %
-                res_type)
+        # Test use of create with stdin
+        log_and_run("cat /tmp/%s-1.yaml | /code/dist/calicoctl create -f -" % res_type)
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data], res_type)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data], res_type)
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data], res_type, yaml_format=False)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data], res_type, yaml_format=False)
 
-            # Tidy up
-            host.calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
+        # Tidy up
+        calicoctl("delete -f /tmp/%s-1.yaml" % res_type)
 
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res_type)
+        # Check it deleted
+        self.check_data_in_datastore([], res_type)
 
     @parameterized.expand([
         ("bgpPeer",
@@ -510,31 +491,28 @@ class TestCreateFromFile(TestBase):
     def test_create_from_file(self, res, data1, data2):
         self._check_data_save_load(data1)
         self._check_data_save_load(data2)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            logger.debug("Testing %s" % res)
-            # Write out the files to load later
-            self.writeyaml('/tmp/%s-1.yaml' % res, data1)
-            self.writejson('/tmp/%s-2.json' % res, data2)
+        logger.debug("Testing %s" % res)
+        # Write out the files to load later
+        self.writeyaml('/tmp/%s-1.yaml' % res, data1)
+        self.writejson('/tmp/%s-2.json' % res, data2)
 
-            host.calicoctl("create -f /tmp/%s-1.yaml" % res)
-            # Test use of create with stdin
-            host.execute(
-                "cat /tmp/%s-2.json | /code/dist/calicoctl create -f -" % res)
+        calicoctl("create -f /tmp/%s-1.yaml" % res)
+        # Test use of create with stdin
+        #TODO - There shouldn't be a hardcoded path here
+        log_and_run("cat /tmp/%s-2.json | /code/dist/calicoctl create -f -" % res)
 
-            # Check both come out OK in yaml:
-            self.check_data_in_datastore(
-                host, [data1, data2], res)
+        # Check both come out OK in yaml:
+        self.check_data_in_datastore([data1, data2], res)
 
-            # Check both come out OK in json:
-            self.check_data_in_datastore(
-                host, [data1, data2], res, yaml_format=False)
+        # Check both come out OK in json:
+        self.check_data_in_datastore([data1, data2], res, yaml_format=False)
 
-            # Tidy up
-            host.calicoctl("delete -f /tmp/%s-1.yaml" % res)
-            host.calicoctl("delete -f /tmp/%s-2.json" % res)
+        # Tidy up
+        calicoctl("delete -f /tmp/%s-1.yaml" % res)
+        calicoctl("delete -f /tmp/%s-2.json" % res)
 
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res)
+        # Check it deleted
+        self.check_data_in_datastore([], res)
 
     @parameterized.expand([
         ("bgpPeer",
@@ -732,37 +710,36 @@ class TestCreateFromFile(TestBase):
         """
         self._check_data_save_load(data1)
         self._check_data_save_load(data2)
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            logger.debug("Testing %s" % res)
+        logger.debug("Testing %s" % res)
 
-            # Write test data files for loading later
-            self.writeyaml('/tmp/data1.yaml', data1)
-            self.writejson('/tmp/data2.json', data2)
+        # Write test data files for loading later
+        self.writeyaml('/tmp/data1.yaml', data1)
+        self.writejson('/tmp/data2.json', data2)
 
-            # apply - create when not present
-            host.calicoctl("apply -f /tmp/data1.yaml")
-            # Check it went in OK
-            self.check_data_in_datastore(host, [data1], res)
+        # apply - create when not present
+        calicoctl("apply -f /tmp/data1.yaml")
+        # Check it went in OK
+        self.check_data_in_datastore([data1], res)
 
-            # create - skip overwrite with data2
-            host.calicoctl("create -f /tmp/data2.json --skip-exists")
-            # Check that nothing's changed
-            self.check_data_in_datastore(host, [data1], res)
+        # create - skip overwrite with data2
+        calicoctl("create -f /tmp/data2.json --skip-exists")
+        # Check that nothing's changed
+        self.check_data_in_datastore([data1], res)
 
-            # replace - overwrite with data2
-            host.calicoctl("replace -f /tmp/data2.json")
-            # Check that we now have data2 in the datastore
-            self.check_data_in_datastore(host, [data2], res)
+        # replace - overwrite with data2
+        calicoctl("replace -f /tmp/data2.json")
+        # Check that we now have data2 in the datastore
+        self.check_data_in_datastore([data2], res)
 
-            # apply - overwrite with data1
-            host.calicoctl("apply -f /tmp/data1.yaml")
-            # Check that we now have data1 in the datastore
-            self.check_data_in_datastore(host, [data1], res)
+        # apply - overwrite with data1
+        calicoctl("apply -f /tmp/data1.yaml")
+        # Check that we now have data1 in the datastore
+        self.check_data_in_datastore([data1], res)
 
-            # delete
-            host.calicoctl("delete --filename=/tmp/data1.yaml")
-            # Check it deleted
-            self.check_data_in_datastore(host, [], res)
+        # delete
+        calicoctl("delete --filename=/tmp/data1.yaml")
+        # Check it deleted
+        self.check_data_in_datastore([], res)
 
     def _check_data_save_load(self, data):
         """
@@ -1095,30 +1072,29 @@ class InvalidData(TestBase):
     @parameterized.expand(testdata)
     def test_invalid_profiles_rejected(self, name, testdata):
 
-        with DockerHost('host', dind=False, start_calico=False) as host:
-            commanderror = False
-            def check_no_data_in_store(testdata):
-                out = host.calicoctl(
-                    "get %s --output=yaml" % testdata['kind'])
-                output = yaml.safe_load(out)
-                assert output == [], "Testdata has left data in datastore " \
-                                     "instead of being completely " \
-                                     "rejected:\n" \
-                                     "Injected: %s\n" \
-                                     "Got back: %s" % (testdata, output)
+        commanderror = False
+        def check_no_data_in_store(testdata):
+            out = calicoctl(
+                "get %s --output=yaml" % testdata['kind'])
+            output = yaml.safe_load(out)
+            assert output == [], "Testdata has left data in datastore " \
+                                 "instead of being completely " \
+                                 "rejected:\n" \
+                                 "Injected: %s\n" \
+                                 "Got back: %s" % (testdata, output)
 
-            host.writefile("/tmp/testfile.yaml", testdata)
-            try:
-                host.calicoctl("create -f /tmp/testfile.yaml")
-            except CommandExecError:
-                logger.debug("calicoctl error hit, as expected")
-                commanderror = True
+        log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
+        try:
+            calicoctl("create -f /tmp/testfile.yaml")
+        except CommandExecError:
+            logger.debug("calicoctl error hit, as expected")
+            commanderror = True
 
-            if name.startswith('compound'):
-                for data in testdata:
-                    check_no_data_in_store(data)
-            else:
-                check_no_data_in_store(testdata)
+        if name.startswith('compound'):
+            for data in testdata:
+                check_no_data_in_store(data)
+        else:
+            check_no_data_in_store(testdata)
 
-            # Cover the case where no data got stored, but calicoctl didn't fail:
-            assert commanderror is True, "Failed - calicoctl did not fail to add invalid config"
+        # Cover the case where no data got stored, but calicoctl didn't fail:
+        assert commanderror is True, "Failed - calicoctl did not fail to add invalid config"

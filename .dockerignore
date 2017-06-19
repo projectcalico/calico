@@ -1,6 +1,2 @@
 .git
-venv
-build
-*.tar
-default.etcd
 .semaphore-cache
