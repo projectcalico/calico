@@ -302,17 +302,6 @@ run-kube-proxy:
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:v$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
 ci: clean static-checks test-containerized-cni-versions docker-image
-# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
-	set -e; \
-	if [ -z $$PULL_REQUEST_NUMBER ]; then \
-		docker tag calico/cni calico/cni:$$BRANCH_NAME && docker push calico/cni:$$BRANCH_NAME; \
-		docker tag calico/cni quay.io/calico/cni:$$BRANCH_NAME && docker push quay.io/calico/cni:$$BRANCH_NAME; \
-		if [ "$$BRANCH_NAME" = "master" ]; then \
-			export VERSION=`git describe --tags --dirty`; \
-			docker tag calico/cni calico/cni:$$VERSION && docker push calico/cni:$$VERSION; \
-			docker tag calico/cni quay.io/calico/cni:$$VERSION && docker push quay.io/calico/cni:$$VERSION; \
-		fi; \
-	fi
 
 .PHONY: help
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
