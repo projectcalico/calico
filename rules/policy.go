@@ -16,10 +16,9 @@ package rules
 
 import (
 	"errors"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
-
-	"strings"
 
 	"github.com/projectcalico/felix/hashutils"
 	"github.com/projectcalico/felix/iptables"
@@ -84,9 +83,9 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	//
 	// We do that by rendering the rule, filtered to only have CIDRs of the right version,
 	// unless filtering the rule would completely remove one of its match fields.  That handles
-	// the mainline case, where the IP version is missing but the rule is otherwise consistent
-	//  well since we'll render the rule only for the matching version.  It also handles rules
-	// like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only rules of the form
+	// the mainline cas well, where the IP version is missing but the rule is otherwise
+	// consistent since we'll render the rule only for the matching version.  It also handles
+	// rules like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only rules of the form
 	// "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out, and only for IPv6,
 	// where there's no obvious meaning to the rule.
 	ruleCopy := *pRule

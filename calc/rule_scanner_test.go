@@ -26,10 +26,13 @@ import (
 
 	"fmt"
 
+	"sort"
+
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hash"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 )
@@ -96,13 +99,13 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 	Entry("action", model.Rule{Action: "deny"}, ParsedRule{Action: "deny"}),
 	Entry("IP version", model.Rule{IPVersion: &ipv4}, ParsedRule{IPVersion: &ipv4}),
 	Entry("protocol", model.Rule{Protocol: &protocol}, ParsedRule{Protocol: &protocol}),
-	Entry("source net", model.Rule{SrcNet: model.IPNets{&cidr}}, ParsedRule{SrcNet: model.IPNets{&cidr}}),
-	Entry("dest net", model.Rule{DstNet: model.IPNets{&cidr}}, ParsedRule{DstNet: model.IPNets{&cidr}}),
+	Entry("source net", model.Rule{SrcNet: &cidr}, ParsedRule{SrcNets: []*net.IPNet{&cidr}}),
+	Entry("dest net", model.Rule{DstNet: &cidr}, ParsedRule{DstNets: []*net.IPNet{&cidr}}),
 	Entry("source Ports", model.Rule{SrcPorts: ports}, ParsedRule{SrcPorts: ports}),
 	Entry("dest Ports", model.Rule{DstPorts: ports}, ParsedRule{DstPorts: ports}),
 	Entry("!protocol", model.Rule{NotProtocol: &protocol}, ParsedRule{NotProtocol: &protocol}),
-	Entry("!source net", model.Rule{NotSrcNet: model.IPNets{&cidr}}, ParsedRule{NotSrcNet: model.IPNets{&cidr}}),
-	Entry("!dest net", model.Rule{NotDstNet: model.IPNets{&cidr}}, ParsedRule{NotDstNet: model.IPNets{&cidr}}),
+	Entry("!source net", model.Rule{NotSrcNet: &cidr}, ParsedRule{NotSrcNets: []*net.IPNet{&cidr}}),
+	Entry("!dest net", model.Rule{NotDstNet: &cidr}, ParsedRule{NotDstNets: []*net.IPNet{&cidr}}),
 	Entry("!source Ports", model.Rule{NotSrcPorts: ports}, ParsedRule{NotSrcPorts: ports}),
 	Entry("!dest Ports", model.Rule{NotDstPorts: ports}, ParsedRule{NotDstPorts: ports}),
 
@@ -161,6 +164,10 @@ var _ = Describe("ParsedRule", func() {
 				strings.Index(name, "Selector") >= 0 {
 				continue
 			}
+			if strings.HasSuffix(name, "Net") {
+				// Deprecated XXXNet fields.
+				continue
+			}
 			mrFields.Add(name)
 		}
 		Expect(prFields.Len()).To(BeNumerically(">", 0))
@@ -171,7 +178,7 @@ var _ = Describe("ParsedRule", func() {
 		// ICMP, which differ in structure.
 		prType := reflect.TypeOf(ParsedRule{})
 		numPRFields := prType.NumField()
-		prFields := set.New()
+		prFields := []string{}
 		for i := 0; i < numPRFields; i++ {
 			name := strings.ToLower(prType.Field(i).Name)
 			if strings.Index(name, "icmptype") >= 0 ||
@@ -179,11 +186,16 @@ var _ = Describe("ParsedRule", func() {
 				// ICMP fields expected to differ.
 				continue
 			}
-			prFields.Add(name)
+			if strings.HasSuffix(name, "nets") {
+				// The ParsedRule Nets fields map to the proto-rule, repeated Net
+				// fields.
+				name = name[:len(name)-1]
+			}
+			prFields = append(prFields, name)
 		}
 		protoType := reflect.TypeOf(proto.Rule{})
 		numMRFields := protoType.NumField()
-		protoFields := set.New()
+		protoFields := []string{}
 		for i := 0; i < numMRFields; i++ {
 			name := strings.ToLower(protoType.Field(i).Name)
 			if strings.Contains(name, "icmp") {
@@ -194,9 +206,11 @@ var _ = Describe("ParsedRule", func() {
 				// RuleId only in proto rule.
 				continue
 			}
-			protoFields.Add(name)
+			protoFields = append(protoFields, name)
 		}
-		Expect(prFields.Len()).To(BeNumerically(">", 0))
+		Expect(len(prFields)).To(BeNumerically(">", 0))
+		sort.Strings(prFields)
+		sort.Strings(protoFields)
 		Expect(prFields).To(Equal(protoFields))
 	})
 })

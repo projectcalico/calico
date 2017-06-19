@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
@@ -43,9 +42,9 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	Protocol: &proto123,
 
-	SrcNet:   model.IPNets{mustParseCalicoIPNet("10.0.0.0/8")},
+	SrcNets:  []*net.IPNet{mustParseCalicoIPNet("10.0.0.0/8")},
 	SrcPorts: []numorstring.Port{numorstring.SinglePort(10)},
-	DstNet:   model.IPNets{mustParseCalicoIPNet("11.0.0.0/16")},
+	DstNets:  []*net.IPNet{mustParseCalicoIPNet("11.0.0.0/16")},
 	DstPorts: []numorstring.Port{portFromRange(123, 456)},
 
 	ICMPType: &icmpType10,
@@ -56,9 +55,9 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	NotProtocol: &protoTCP,
 
-	NotSrcNet:   model.IPNets{mustParseCalicoIPNet("12.0.0.0/8")},
+	NotSrcNets:  []*net.IPNet{mustParseCalicoIPNet("12.0.0.0/8")},
 	NotSrcPorts: []numorstring.Port{numorstring.SinglePort(11)},
-	NotDstNet:   model.IPNets{mustParseCalicoIPNet("13.0.0.0/16")},
+	NotDstNets:  []*net.IPNet{mustParseCalicoIPNet("13.0.0.0/16")},
 	NotDstPorts: []numorstring.Port{portFromRange(678, 910)},
 
 	NotICMPType: &icmpType11,

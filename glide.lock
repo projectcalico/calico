@@ -1,5 +1,5 @@
-hash: 26e14e6d31d839178e174e8b424efdd29138f1afd2641bf7e08d74ea582bd900
-updated: 2017-06-19T10:20:40.154937171Z
+hash: cd1a6c9583bffce90dee08a18ae34181b7c360bb0c97a1b8c789d3fd04f99c1d
+updated: 2017-07-06T14:43:46.048376752Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -69,7 +69,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: e325f446bebc2998605911c0a2650d9920361d4a
+  version: 6a1fa9404c0aebf36c879bc50152edcc953910d2
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -95,7 +95,7 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/mipearson/rfw
-  version: b66ec87bd85055de3f749a8640e9e4c8053052e4
+  version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
@@ -126,7 +126,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 04610d06fcf13c3cd8fd2ae533b7a0cef59d5b15
+  version: d22bc15766f568e3ce3afa8c5f5837dd988587cb
   repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
@@ -170,13 +170,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 0d0c3d572886e0f2323ed376557f9eb99b97d25b
+  version: fb369f752a7f8b880c4a5199af7bfcb8aaaabaa4
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a3bfc74126ea9e45ee5d5c6f7fc86191b7d488fb
+  version: e645f4e5aaa8506fc71d6edbc5c4ff02c04c46f2
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell
@@ -194,7 +194,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 4e28683688429fdf8413cc610d59fb1841986300
+  version: b1eba2e91649a362960311a447af7fc080427e78
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -212,7 +212,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: fb4cac33e3196ff7f507ab9b2d2a44b0142f5b5a
+  version: 6faef541c73732f438fb660a212750a9ba9f9362
   subpackages:
   - unix
 - name: golang.org/x/text

@@ -27,7 +27,7 @@ import:
   version: ^1.21.0
 - package: github.com/projectcalico/libcalico-go
   repo: https://github.com/fasaxc/libcalico-go.git
-  version: multi-nets
+  version: multi-nets-2
   subpackages:
   - lib
 - package: github.com/Sirupsen/logrus
