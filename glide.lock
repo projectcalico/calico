@@ -1,5 +1,5 @@
-hash: 670688a25907362236984921bcbbcbb48bc29ab70f9691d72c7157bf0b49e287
-updated: 2017-06-12T14:17:30.452844557Z
+hash: aafcc9f46c3998881e27db8c9ace72c1fbb76c6d10a90976ca84945f2939be9d
+updated: 2017-06-16T10:55:07.180304087Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -69,7 +69,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 5a0f697c9ed9d68fef0116532c6e05cfeae00e55
+  version: e325f446bebc2998605911c0a2650d9920361d4a
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -154,7 +154,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: cdd0e68bed2ad9641e40f78091ec447593900691
+  version: 1259fa7110789a4f5b08da8406f17a3f2dbd06a2
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -169,7 +169,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 13ba4ddd0caa9c28ca7b7bffe1dfa9ed8d5ef207
+  version: 94eb3fe3a55f1b5d12d335b27a4f6e37cd73ed7e
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -193,7 +193,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: bd6d5de5ccef2d66b0a26177928d0d8895d7f969
+  version: 4e28683688429fdf8413cc610d59fb1841986300
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -211,7 +211,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 0b25a408a50076fbbcae6b7ac0ea5fbb0b085e79
+  version: fb4cac33e3196ff7f507ab9b2d2a44b0142f5b5a
   subpackages:
   - unix
 - name: golang.org/x/text
