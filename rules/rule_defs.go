@@ -180,9 +180,10 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept       uint32
-	IptablesMarkPass         uint32
-	IptablesMarkFromWorkload uint32
+	IptablesMarkAccept   uint32
+	IptablesMarkPass     uint32
+	IptablesMarkScratch0 uint32
+	IptablesMarkScratch1 uint32
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16

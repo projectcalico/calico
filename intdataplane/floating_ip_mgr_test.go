@@ -38,7 +38,7 @@ func expectedDNATChain(dnats ...dnat) *iptables.Chain {
 	rules := []iptables.Rule{}
 	for _, dnat := range dnats {
 		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNets(dnat.extIP),
+			Match:  iptables.Match().DestNet(dnat.extIP),
 			Action: iptables.DNATAction{DestAddr: dnat.intIP},
 		})
 	}
@@ -52,7 +52,7 @@ func expectedSNATChain(snats ...snat) *iptables.Chain {
 	rules := []iptables.Rule{}
 	for _, snat := range snats {
 		rules = append(rules, iptables.Rule{
-			Match:  iptables.Match().DestNets(snat.intIP).SourceNets(snat.intIP),
+			Match:  iptables.Match().DestNet(snat.intIP).SourceNet(snat.intIP),
 			Action: iptables.SNATAction{ToAddr: snat.extIP},
 		})
 	}

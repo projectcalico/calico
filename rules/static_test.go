@@ -48,9 +48,9 @@ var _ = Describe("Static", func() {
 					{Protocol: "tcp", Port: 23},
 					{Protocol: "tcp", Port: 1023},
 				},
-				IptablesMarkAccept:       0x10,
-				IptablesMarkPass:         0x20,
-				IptablesMarkFromWorkload: 0x40,
+				IptablesMarkAccept:   0x10,
+				IptablesMarkPass:     0x20,
+				IptablesMarkScratch0: 0x40,
 			}
 		})
 
@@ -290,7 +290,7 @@ var _ = Describe("Static", func() {
 				OpenStackMetadataPort:        1234,
 				IptablesMarkAccept:           0x10,
 				IptablesMarkPass:             0x20,
-				IptablesMarkFromWorkload:     0x40,
+				IptablesMarkScratch0:         0x40,
 			}
 		})
 
@@ -301,7 +301,7 @@ var _ = Describe("Static", func() {
 				{
 					Match: Match().
 						Protocol("tcp").
-						DestNets("10.0.0.1").
+						DestNet("10.0.0.1").
 						DestPorts(1234),
 					Action: AcceptAction{},
 				},
@@ -357,7 +357,7 @@ var _ = Describe("Static", func() {
 							Match: Match().
 								Protocol("tcp").
 								DestPorts(80).
-								DestNets("169.254.169.254/32"),
+								DestNet("169.254.169.254/32"),
 							Action: DNATAction{
 								DestAddr: "10.0.0.1",
 								DestPort: 1234,
@@ -382,13 +382,13 @@ var _ = Describe("Static", func() {
 	Describe("with IPIP enabled", func() {
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes:    []string{"cali"},
-				IPIPEnabled:              true,
-				IPIPTunnelAddress:        net.ParseIP("10.0.0.1"),
-				IPSetConfigV4:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IptablesMarkAccept:       0x10,
-				IptablesMarkPass:         0x20,
-				IptablesMarkFromWorkload: 0x40,
+				WorkloadIfacePrefixes: []string{"cali"},
+				IPIPEnabled:           true,
+				IPIPTunnelAddress:     net.ParseIP("10.0.0.1"),
+				IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IptablesMarkAccept:    0x10,
+				IptablesMarkPass:      0x20,
+				IptablesMarkScratch0:  0x40,
 			}
 		})
 

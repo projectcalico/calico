@@ -60,8 +60,101 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule
 }
 
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
-	rules := []iptables.Rule{}
+	rs := []iptables.Rule{}
 	ruleCopy := *pRule
+
+	// iptables only supports one source and one destination match in a rule (irrespective of
+	// negation).  If we have more than one of either, we'll render blocks of rules for the
+	// ones that won't fit.
+	numSrcMatches := len(pRule.SrcNet) + len(pRule.NotSrcNet)
+	numDstMatches := len(pRule.DstNet) + len(pRule.NotDstNet)
+	var usingCIDRBlocks bool
+	markAllBlocksPass := r.IptablesMarkScratch0
+	markThisBlockPass := r.IptablesMarkScratch1
+	if numSrcMatches > 1 || numDstMatches > 1 {
+		// We need to render CIDR match blocks.  Set the mark bit that we're going to use
+		// to signal that all the CIDR matches passed.  We'll unset it if one of the
+		// blocks of matches fails.
+		rs = append(rs,
+			iptables.Rule{
+				Action: iptables.SetMarkAction{Mark: markAllBlocksPass},
+			},
+		)
+		usingCIDRBlocks = true
+
+		appendCIDRMatchBlock := func(cidrs []string, srcOrDst srcOrDst) {
+			// To implement a positive match, we use a scratch bit to record whether
+			// any CIDR in the block matches the packet.  Then at the end, we clear the
+			// AllBlocks bit if non of them matched.
+
+			// Clear the scratch bit.
+			rs = append(rs, iptables.Rule{
+				Action: iptables.ClearMarkAction{Mark: markThisBlockPass},
+			})
+			// Render the per-CIDR rules.
+			for _, cidr := range cidrs {
+				rule := iptables.Rule{
+					Match:  srcOrDst.MatchNet(cidr),
+					Action: iptables.SetMarkAction{Mark: markThisBlockPass},
+				}
+				rs = append(rs, rule)
+			}
+			// Copy the result to the AllBlocks bit.
+			rs = append(rs, iptables.Rule{
+				Match:  iptables.Match().MarkClear(markThisBlockPass),
+				Action: iptables.ClearMarkAction{Mark: markAllBlocksPass},
+			})
+		}
+
+		appendNegatedCIDRMatchBlock := func(cidrs []string, srcOrDst srcOrDst) {
+			// To implement a negated match we emit a rule per CIDR that does a positive
+			// match on the CIDR and *clears* the AllMatches bit if the packet matches.
+			// This gives the desired "not any" behaviour.
+			for _, cidr := range cidrs {
+				rule := iptables.Rule{
+					Match:  srcOrDst.MatchNet(cidr),
+					Action: iptables.ClearMarkAction{Mark: markAllBlocksPass},
+				}
+				rs = append(rs, rule)
+			}
+		}
+
+		if len(pRule.SrcNet) > 1 {
+			// More than one positive match on source IP, need to render a block.  We
+			// prioritise the positive match over the negative match and avoid
+			// rendering a block if it'd only contain one IP.
+			appendCIDRMatchBlock(pRule.SrcNet, src)
+			// Since we're using a block for this, nil out the match.
+			ruleCopy.SrcNet = nil
+		}
+
+		if len(pRule.NotSrcNet) > 0 && numSrcMatches > 1 {
+			// We have some negated source CIDR matches and the total number of source
+			// CIDR matches won't fit in the rule.  Render a block of rules to do the
+			// negated match.
+			appendNegatedCIDRMatchBlock(pRule.NotSrcNet, src)
+			// Since we're using a block for this, nil out the match.
+			ruleCopy.NotSrcNet = nil
+		}
+
+		if len(pRule.DstNet) > 1 {
+			// More than one positive match on dest IP, need to render a block.  We
+			// prioritise the positive match over the negative match and avoid
+			// rendering a block if it'd only contain one IP.
+			appendCIDRMatchBlock(pRule.DstNet, dst)
+			// Since we're using a block for this, nil out the match.
+			ruleCopy.DstNet = nil
+		}
+
+		if len(pRule.NotDstNet) > 0 && numDstMatches > 1 {
+			// We have some negated dest CIDR matches and the total number of dest
+			// CIDR matches won't fit in the rule.  Render a block of rules to do the
+			// negated match.
+			appendNegatedCIDRMatchBlock(pRule.NotDstNet, dst)
+			// Since we're using a block for this, nil out the match.
+			ruleCopy.NotDstNet = nil
+		}
+	}
 
 	// iptables has a 15-port limit on the number of ports that can be in a single multiport
 	// match.  In case a user has supplied a longer port list, break up the source and dest port
@@ -83,28 +176,45 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 				logCxt.Debug("Rule skipped.")
 				return nil
 			}
-
-			markBit, actions := r.CalculateActions(match, &ruleCopy, ipVersion)
+			if usingCIDRBlocks {
+				match = match.MarkSet(markAllBlocksPass)
+			}
+			markBit, actions := r.CalculateActions(&ruleCopy, ipVersion)
 			if markBit != 0 {
-				// An accept or next-tier rule say, which needs to set a mark bit.  We render one
-				// with the full match criteria, which sets the mark.
-				rules = append(rules, iptables.Rule{
+				// The rule needs to do more than one action. Render a rule that
+				// executes the match criteria and sets the given mark bit if it
+				// matches, then render the actions as separate rules below.
+				rs = append(rs, iptables.Rule{
 					Match:  match,
 					Action: iptables.SetMarkAction{Mark: markBit},
 				})
-				// Then we render the subsequent actions using a match on the mark bit (which should
-				// be a lot faster than re-doing the match.
 				match = iptables.Match().MarkSet(markBit)
 			}
 			for _, action := range actions {
-				rules = append(rules, iptables.Rule{
+				rs = append(rs, iptables.Rule{
 					Match:  match,
 					Action: action,
 				})
 			}
 		}
 	}
-	return rules
+	return rs
+}
+
+// srcOrDst is an enum for selecting source or destination rule rendering.
+type srcOrDst int
+
+const (
+	src srcOrDst = iota
+	dst
+)
+
+// MatchNet returns a new SourceNet or DestNet MatchCriteria for the given CIDR.
+func (sod srcOrDst) MatchNet(cidr string) iptables.MatchCriteria {
+	if sod == src {
+		return iptables.Match().SourceNet(cidr)
+	}
+	return iptables.Match().DestNet(cidr)
 }
 
 // SplitPortList splits the input list of ports into groups containing up to 15 port numbers.
@@ -137,7 +247,7 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	return
 }
 
-func (r *DefaultRuleRenderer) CalculateActions(match iptables.MatchCriteria, pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
+func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []iptables.Action) {
 	actions = []iptables.Action{}
 
 	switch pRule.Action {
@@ -207,7 +317,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if len(pRule.SrcNet) > 0 {
 		scanIPVersions(pRule.SrcNet)
 		logCxt.WithField("cidr", pRule.SrcNet).Debug("Adding src CIDR match")
-		match = match.SourceNets(pRule.SrcNet...)
+		match = match.SourceNet(pRule.SrcNet[0])
 	}
 
 	for _, ipsetID := range pRule.SrcIpSetIds {
@@ -234,7 +344,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if len(pRule.DstNet) > 0 {
 		scanIPVersions(pRule.DstNet)
 		logCxt.WithField("cidr", pRule.DstNet).Debug("Adding dst CIDR match")
-		match = match.DestNets(pRule.DstNet...)
+		match = match.DestNet(pRule.DstNet[0])
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -296,7 +406,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if len(pRule.NotSrcNet) > 0 {
 		scanIPVersions(pRule.NotSrcNet)
 		logCxt.WithField("cidr", pRule.NotSrcNet).Debug("Adding src CIDR match")
-		match = match.NotSourceNets(pRule.NotSrcNet...)
+		match = match.NotSourceNet(pRule.NotSrcNet[0])
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -325,7 +435,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	if len(pRule.NotDstNet) > 0 {
 		scanIPVersions(pRule.NotDstNet)
 		logCxt.WithField("cidr", pRule.NotDstNet).Debug("Adding dst CIDR match")
-		match = match.NotDestNets(pRule.NotDstNet...)
+		match = match.NotDestNet(pRule.NotDstNet[0])
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
