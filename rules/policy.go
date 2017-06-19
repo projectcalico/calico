@@ -16,9 +16,10 @@ package rules
 
 import (
 	"errors"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
+
+	"strings"
 
 	"github.com/projectcalico/felix/hashutils"
 	"github.com/projectcalico/felix/iptables"
@@ -59,22 +60,68 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule
 	return rules
 }
 
+func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
+	if len(mixedCIDRs) == 0 {
+		return nil, false
+	}
+	wantV6 := ipVersion == 6
+	filteredAll = true
+	for _, net := range mixedCIDRs {
+		isV6 := strings.Contains(net, ":")
+		if isV6 != wantV6 {
+			continue
+		}
+		filtered = append(filtered, net)
+		filteredAll = false
+	}
+	return
+}
+
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
-	rs := []iptables.Rule{}
+	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
+	// explicit IP version in the rule and all CIDRs should match it.  However, we try to handle
+	// a rule gracefully if it's missing a version.
+	//
+	// We do that by rendering the rule, filtered to only have CIDRs of the right version,
+	// unless filtering the rule would completely remove one of its match fields.  That handles
+	// the mainline case, where the IP version is missing but the rule is otherwise consistent
+	//  well since we'll render the rule only for the matching version.  It also handles rules
+	// like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only rules of the form
+	// "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out, and only for IPv6,
+	// where there's no obvious meaning to the rule.
 	ruleCopy := *pRule
+	var filteredAll bool
+	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
+	if filteredAll {
+		return nil
+	}
+	ruleCopy.NotSrcNet, filteredAll = filterNets(pRule.NotSrcNet, ipVersion)
+	if filteredAll {
+		return nil
+	}
+	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion)
+	if filteredAll {
+		return nil
+	}
+	ruleCopy.NotDstNet, filteredAll = filterNets(pRule.NotDstNet, ipVersion)
+	if filteredAll {
+		return nil
+	}
+
+	rs := []iptables.Rule{}
 
 	// iptables only supports one source and one destination match in a rule (irrespective of
 	// negation).  If we have more than one of either, we'll render blocks of rules for the
 	// ones that won't fit.
-	numSrcMatches := len(pRule.SrcNet) + len(pRule.NotSrcNet)
-	numDstMatches := len(pRule.DstNet) + len(pRule.NotDstNet)
+	numSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
+	numDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
 	var usingCIDRBlocks bool
 	markAllBlocksPass := r.IptablesMarkScratch0
 	markThisBlockPass := r.IptablesMarkScratch1
 	if numSrcMatches > 1 || numDstMatches > 1 {
 		// We need to render CIDR match blocks.
 		var markBitsToSetInitially uint32
-		if len(pRule.SrcNet) <= 1 && len(pRule.DstNet) <= 1 {
+		if len(ruleCopy.SrcNet) <= 1 && len(ruleCopy.DstNet) <= 1 {
 			// All of the positive CIDR matches fit in the final rule so we're only
 			// using the blocks to render negative matches.  Pre-set the AllBlocks
 			// bit; then the negative rules will unset it if they match.
@@ -150,38 +197,38 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 			}
 		}
 
-		if len(pRule.SrcNet) > 1 {
+		if len(ruleCopy.SrcNet) > 1 {
 			// More than one positive match on source IP, need to render a block.  We
 			// prioritise the positive match over the negative match and avoid
 			// rendering a block if it'd only contain one IP.
-			appendCIDRMatchBlock(pRule.SrcNet, src)
+			appendCIDRMatchBlock(ruleCopy.SrcNet, src)
 			// Since we're using a block for this, nil out the match.
 			ruleCopy.SrcNet = nil
 		}
 
-		if len(pRule.DstNet) > 1 {
+		if len(ruleCopy.DstNet) > 1 {
 			// More than one positive match on dest IP, need to render a block.  We
 			// prioritise the positive match over the negative match and avoid
 			// rendering a block if it'd only contain one IP.
-			appendCIDRMatchBlock(pRule.DstNet, dst)
+			appendCIDRMatchBlock(ruleCopy.DstNet, dst)
 			// Since we're using a block for this, nil out the match.
 			ruleCopy.DstNet = nil
 		}
 
-		if len(pRule.NotSrcNet) > 0 && numSrcMatches > 1 {
+		if len(ruleCopy.NotSrcNet) > 0 && numSrcMatches > 1 {
 			// We have some negated source CIDR matches and the total number of source
 			// CIDR matches won't fit in the rule.  Render a block of rules to do the
 			// negated match.
-			appendNegatedCIDRMatchBlock(pRule.NotSrcNet, src)
+			appendNegatedCIDRMatchBlock(ruleCopy.NotSrcNet, src)
 			// Since we're using a block for this, nil out the match.
 			ruleCopy.NotSrcNet = nil
 		}
 
-		if len(pRule.NotDstNet) > 0 && numDstMatches > 1 {
+		if len(ruleCopy.NotDstNet) > 0 && numDstMatches > 1 {
 			// We have some negated dest CIDR matches and the total number of dest
 			// CIDR matches won't fit in the rule.  Render a block of rules to do the
 			// negated match.
-			appendNegatedCIDRMatchBlock(pRule.NotDstNet, dst)
+			appendNegatedCIDRMatchBlock(ruleCopy.NotDstNet, dst)
 			// Since we're using a block for this, nil out the match.
 			ruleCopy.NotDstNet = nil
 		}
@@ -337,21 +384,12 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	var containsV4, containsV6 bool
-	scanIPVersions := func(nets []string) {
-		for _, n := range nets {
-			if strings.Contains(n, ":") {
-				containsV6 = true
-			} else {
-				containsV4 = true
-			}
-		}
-	}
-
-	if len(pRule.SrcNet) > 0 {
-		scanIPVersions(pRule.SrcNet)
-		logCxt.WithField("cidr", pRule.SrcNet).Debug("Adding src CIDR match")
+	if len(pRule.SrcNet) == 1 {
+		logCxt.WithField("cidr", pRule.SrcNet[0]).Debug("Adding src CIDR match")
 		match = match.SourceNet(pRule.SrcNet[0])
+	} else if len(pRule.SrcNet) > 1 {
+		log.WithField("rule", pRule).Panic(
+			"CalculateRuleMatch() passed more than one CIDR in SrcNet.")
 	}
 
 	for _, ipsetID := range pRule.SrcIpSetIds {
@@ -375,10 +413,12 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		match = match.SourcePortRanges(pRule.SrcPorts)
 	}
 
-	if len(pRule.DstNet) > 0 {
-		scanIPVersions(pRule.DstNet)
-		logCxt.WithField("cidr", pRule.DstNet).Debug("Adding dst CIDR match")
+	if len(pRule.DstNet) == 1 {
+		logCxt.WithField("cidr", pRule.DstNet[0]).Debug("Adding dest CIDR match")
 		match = match.DestNet(pRule.DstNet[0])
+	} else if len(pRule.DstNet) > 1 {
+		log.WithField("rule", pRule).Panic(
+			"CalculateRuleMatch() passed more than one CIDR in DstNet.")
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
@@ -437,10 +477,11 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if len(pRule.NotSrcNet) > 0 {
-		scanIPVersions(pRule.NotSrcNet)
-		logCxt.WithField("cidr", pRule.NotSrcNet).Debug("Adding src CIDR match")
+	if len(pRule.NotSrcNet) == 1 {
+		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding !src CIDR match")
 		match = match.NotSourceNet(pRule.NotSrcNet[0])
+	} else if len(pRule.NotSrcNet) > 1 {
+		log.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
@@ -466,10 +507,11 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		}
 	}
 
-	if len(pRule.NotDstNet) > 0 {
-		scanIPVersions(pRule.NotDstNet)
-		logCxt.WithField("cidr", pRule.NotDstNet).Debug("Adding dst CIDR match")
+	if len(pRule.NotDstNet) == 1 {
+		logCxt.WithField("cidr", pRule.NotDstNet[0]).Debug("Adding !dst CIDR match")
 		match = match.NotDestNet(pRule.NotDstNet[0])
+	} else if len(pRule.NotDstNet) > 1 {
+		log.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotDstNet.")
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
@@ -516,17 +558,6 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 			match = match.NotICMPV6Type(uint8(icmp.NotIcmpType))
 		}
 	}
-
-	if containsV4 && containsV6 {
-		return nil, SkipRule
-	}
-	if ipVersion == 4 && containsV6 {
-		return nil, SkipRule
-	}
-	if ipVersion == 6 && containsV4 {
-		return nil, SkipRule
-	}
-
 	return match, nil
 }
 
