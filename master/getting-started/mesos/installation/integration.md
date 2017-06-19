@@ -20,7 +20,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 3. Launch `calico/node`:
 
    ```
-   sudo ETCD_ENDPOINTS=http://$ETCD_IP:$ETCD_PORT calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}
+   sudo ETCD_ENDPOINTS=http://$ETCD_IP:$ETCD_PORT calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
    ```
 
    >Note: Ensure you've set or replaced `$ETCD_IP` and `$ETCD_PORT` to point to
@@ -31,7 +31,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    ```
    vagrant@calico-01:~$ docker ps
    CONTAINER ID        IMAGE                        COMMAND             CREATED             STATUS              PORTS               NAMES
-   408bd2b9ba53        quay.io/calico/node:{{site.data.versions[page.version].first.components["calico/node"].version}}   "start_runit"       3 seconds ago       Up 2 seconds                            calico-node
+   408bd2b9ba53        quay.io/calico/node:{{site.data.versions[page.version].first.title}}   "start_runit"       3 seconds ago       Up 2 seconds                            calico-node
    ```
 
    Furthermore, check that the `calico/node` container is functioning properly

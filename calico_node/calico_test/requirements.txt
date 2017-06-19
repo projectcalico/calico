@@ -1,0 +1,7 @@
+nose
+nose-timer
+nose-parameterized
+netaddr
+pyyaml
+simplejson
+deepdiff

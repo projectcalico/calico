@@ -15,6 +15,7 @@ exclude:
   - RELEASING.md
   - BUILDING_CALICO.md
   - hack
+  - calico_node
 
 # Markdown Processors
 # TODO - we're not entirely sure what these are for

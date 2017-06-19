@@ -1,0 +1,16 @@
+#!/bin/sh
+# From https://github.com/faisyl/alpine-runit
+env > /etc/envvars
+
+/etc/rc.local
+retval=$?
+if [ $retval -ne 0 ];
+then
+    echo >&2 "Calico node failed to start"
+    exit $retval
+fi
+
+# Source any additional environment that was added by the startup script
+. startup.env
+
+exec /sbin/runsvdir -P /etc/service/enabled

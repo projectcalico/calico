@@ -1,16 +1,26 @@
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+[![Docker Pulls](https://img.shields.io/docker/pulls/calico/node.svg)](https://hub.docker.com/r/calico/node/)
+[![](https://badge.imagelayers.io/calico/node:latest.svg)](https://imagelayers.io/?images=calico/node:latest)
 
-# Project Calico Documentation
+# Project Calico Documentation and `calico/node`
 
-This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos.  
+This repository contains the source code for [Project Calico](https://www.projectcalico.org/)'s documentation and demos as well as the source for the `calico/node` container.
 
 <blockquote>
 Note that the README in this repo is targeted at Calico docs contributors.
 <h1>Documentation for Calico users is here:<br><a href="http://docs.projectcalico.org">http://docs.projectcalico.org</a></h1>
 </blockquote>
 
+
+For information on `calico/node`, see the [documentation on calico/node architecture](http://docs.projectcalico.org/master/reference/architecture/components).
+
+### Developing
+
+Print useful actions with `make help`.
+
 ![Project Calico logo](http://docs.projectcalico.org/images/felix.png)
+
 
 **If you are looking for the repository formerly known as `projectcalico/calico`,
 it has been renamed to [`projectcalico/felix`](https://github.com/projectcalico/felix).**
@@ -20,7 +30,32 @@ You can find archives of the previous documentation at:
 - https://docs-archive.projectcalico.org (for general information and OpenStack), and
 - https://github.com/projectcalico/calico-containers/tree/v0.22.0 (for container integrations)
 
-## Building
+
+### Building `calico/node`
+
+To build the `calico/node` container, run the following build step from
+the root of the repository:
+
+```
+make -C calico_node calico/node
+```
+
+Use the build variables listed in the `Calico binaries` variable section
+at the top of the Makefile to modify which components are included in the resulting image.
+For example, the following command will produce a docker image called `calico/node:custom`
+which uses custom Felix and Libnetwork binaries:
+
+```
+FELIX_CONTAINER_NAME=calico/felix:1.4.3 \
+LIBNETWORK_PLUGIN_CONTAINER_NAME=calico/libnetwork-plugin:v1.0.0-beta \
+BUILD_CONTAINER_NAME=calico/node:custom \
+make calico/node
+```
+
+The canonical source for which versions are included in the `calico/node` image come from the `_date/versions.yml` file.
+
+
+## Building the docs
 
 The docs require jekyll, a ruby gem. Install the `github-pages` gem which includes
 `jekyll` to ensure you are using the exact version of jekyll that github pages
@@ -45,7 +80,7 @@ make serve
 
 As the output states, docs should then be viewable at http://localhost:4000/ .
 
-## Versioning & Branches
+### Versioning & Branches
 The live site is generated from the master branch of this repository.
 
 Documentation for past releases is maintained as a folder in the root of this repository.
@@ -154,6 +189,12 @@ See [RELEASING.md](RELEASING.md)
 ## Testing
 
 Print all broken links: `make htmlproofer`
+
+Calico/node system tests run in a container to ensure all build dependencies are met.
+```
+make -C calico_node st
+```
+
 
 ## License
 
