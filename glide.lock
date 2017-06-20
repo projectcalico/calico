@@ -1,5 +1,5 @@
-hash: aafcc9f46c3998881e27db8c9ace72c1fbb76c6d10a90976ca84945f2939be9d
-updated: 2017-06-16T10:55:07.180304087Z
+hash: 0966f925d544db3f678bec1d03fa4983e0a5f4f5428b6eb264e6d4fca6d008a5
+updated: 2017-06-20T12:36:49.603319668Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -95,7 +95,7 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/mipearson/rfw
-  version: b66ec87bd85055de3f749a8640e9e4c8053052e4
+  version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
   subpackages:
@@ -126,7 +126,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e40a090d7d025f7ab60f7a5e5bc362f875116754
+  version: 241d14c64023a36611dc7199c31ec9dc86aa732f
+  repo: http://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib
   - lib/api
@@ -169,13 +170,13 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 94eb3fe3a55f1b5d12d335b27a4f6e37cd73ed7e
+  version: 0d0c3d572886e0f2323ed376557f9eb99b97d25b
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: a3bfc74126ea9e45ee5d5c6f7fc86191b7d488fb
+  version: 822d4a1f8edcbcbc71e8d1fd6527b12331a6d0ad
   subpackages:
   - xfs
 - name: github.com/PuerkitoBio/purell

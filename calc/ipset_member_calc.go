@@ -60,6 +60,7 @@ func NewMemberCalculator() *MemberCalculator {
 func (calc *MemberCalculator) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.WorkloadEndpointKey{}, calc.OnUpdate)
 	allUpdDispatcher.Register(model.HostEndpointKey{}, calc.OnUpdate)
+	allUpdDispatcher.Register(model.NetworkSetKey{}, calc.OnUpdate)
 }
 
 // MatchStarted tells this object that an endpoint now belongs to an IP set.
@@ -80,7 +81,7 @@ func (calc *MemberCalculator) MatchStopped(key model.Key, ipSetID string) {
 
 func (calc *MemberCalculator) OnUpdate(update api.Update) (filterOut bool) {
 	if update.Value == nil {
-		calc.updateEndpointCIDRs(update.Key, []ip.CIDR{})
+		calc.updateCIDRsForKey(update.Key, []ip.CIDR{})
 		return
 	}
 	switch update.Key.(type) {
@@ -93,7 +94,14 @@ func (calc *MemberCalculator) OnUpdate(update api.Update) (filterOut bool) {
 		for _, net := range ep.IPv6Nets {
 			cidrs = append(cidrs, ip.CIDRFromCalicoNet(net))
 		}
-		calc.updateEndpointCIDRs(update.Key, cidrs)
+		calc.updateCIDRsForKey(update.Key, cidrs)
+	case model.NetworkSetKey:
+		ns := update.Value.(*model.NetworkSet)
+		cidrs := make([]ip.CIDR, 0, len(ns.Nets))
+		for _, net := range ns.Nets {
+			cidrs = append(cidrs, ip.CIDRFromCalicoNet(net))
+		}
+		calc.updateCIDRsForKey(update.Key, cidrs)
 	case model.HostEndpointKey:
 		ep := update.Value.(*model.HostEndpoint)
 		cidrs := make([]ip.CIDR, 0,
@@ -104,19 +112,19 @@ func (calc *MemberCalculator) OnUpdate(update api.Update) (filterOut bool) {
 		for _, netIP := range ep.ExpectedIPv6Addrs {
 			cidrs = append(cidrs, ip.CIDRFromNetIP(netIP.IP))
 		}
-		calc.updateEndpointCIDRs(update.Key, cidrs)
+		calc.updateCIDRsForKey(update.Key, cidrs)
 	}
 	return
 }
 
 // UpdateEndpointIPs tells this object that an endpoint has a new set of IP addresses.
-func (calc *MemberCalculator) updateEndpointCIDRs(endpointKey model.Key, cidrs []ip.CIDR) {
-	log.Debugf("Endpoint %v CIDRs updated to %v", endpointKey, cidrs)
-	oldCIDRs := calc.keyToCIDRs[endpointKey]
+func (calc *MemberCalculator) updateCIDRsForKey(key model.Key, cidrs []ip.CIDR) {
+	log.Debugf("Endpoint %v CIDRs updated to %v", key, cidrs)
+	oldCIDRs := calc.keyToCIDRs[key]
 	if len(cidrs) == 0 {
-		delete(calc.keyToCIDRs, endpointKey)
+		delete(calc.keyToCIDRs, key)
 	} else {
-		calc.keyToCIDRs[endpointKey] = cidrs
+		calc.keyToCIDRs[key] = cidrs
 	}
 
 	oldCIDRsSet := set.New()
@@ -142,10 +150,10 @@ func (calc *MemberCalculator) updateEndpointCIDRs(endpointKey model.Key, cidrs [
 		}
 	}
 
-	calc.keyToMatchingIPSetIDs.Iter(endpointKey, func(ipSetID string) {
+	calc.keyToMatchingIPSetIDs.Iter(key, func(ipSetID string) {
 		log.Debugf("Updating matching IP set: %v", ipSetID)
-		calc.addMatchToIndex(ipSetID, endpointKey, addedCIDRs)
-		calc.removeMatchFromIndex(ipSetID, endpointKey, removedCIDRs)
+		calc.addMatchToIndex(ipSetID, key, addedCIDRs)
+		calc.removeMatchFromIndex(ipSetID, key, removedCIDRs)
 	})
 }
 
