@@ -50,7 +50,7 @@ encapsulation is only required for container traffic that crosses a VPC subnet b
 configure Calico to perform ipip encapsulation only across VPC subnet boundaries. To do this, you must
 modify Calico's BIRD config.
 
-Modify bird_ipam.cfg.template [found here](https://github.com/projectcalico/calicoctl/blob/master/calico_node/filesystem/etc/calico/confd/templates/bird_ipam.cfg.template).
+Modify bird_ipam.cfg.template [found here](https://github.com/projectcalico/calicoctl/blob/v1.0.2/calico_node/filesystem/etc/calico/confd/templates/bird_ipam.cfg.template).
 
 Configure the calico_ipip filter as shown below:
 
