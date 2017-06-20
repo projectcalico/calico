@@ -181,6 +181,22 @@ func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
 	}
 }
 
+// CIDRFromNetIP converts the given IP into our CIDR representation as a /32 or /128.
+func CIDRFromNetIP(netIP net.IP) CIDR {
+	ip := FromNetIP(netIP)
+	if ip.Version() == 4 {
+		return V4CIDR{
+			addr:   ip.(V4Addr),
+			prefix: 32,
+		}
+	} else {
+		return V6CIDR{
+			addr:   ip.(V6Addr),
+			prefix: 128,
+		}
+	}
+}
+
 func MustParseCIDR(s string) CIDR {
 	_, ipNet, err := net.ParseCIDR(s)
 	if err != nil {

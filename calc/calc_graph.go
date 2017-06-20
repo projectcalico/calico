@@ -45,8 +45,8 @@ func init() {
 
 type ipSetUpdateCallbacks interface {
 	OnIPSetAdded(setID string)
-	OnIPAdded(setID string, ip ip.Addr)
-	OnIPRemoved(setID string, ip ip.Addr)
+	OnCIDRAdded(setID string, ip ip.CIDR)
+	OnCIDRRemoved(setID string, ip ip.CIDR)
 	OnIPSetRemoved(setID string)
 }
 

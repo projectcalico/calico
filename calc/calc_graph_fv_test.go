@@ -1020,7 +1020,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 
 	BeforeEach(func() {
 		tracker = newStateTracker()
-		eventBuf = NewEventBuffer(tracker)
+		eventBuf = NewEventSequencer(tracker)
 		eventBuf.Callback = tracker.onEvent
 		calcGraph = NewCalculationGraph(eventBuf, localHostname)
 		validationFilter = NewValidationFilter(calcGraph)
