@@ -249,6 +249,44 @@ var profileLabelsTag1 = map[string]string{
 var tag1LabelID = ipSetIDForTag("tag-1")
 var tag2LabelID = ipSetIDForTag("tag-2")
 
+var netSet1Key = NetworkSetKey{Name: "netset-1"}
+var netSet1 = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"),
+		mustParseNet("12.0.0.0/24"), // A dupe, why not!
+		mustParseNet("12.1.0.0/24"),
+		mustParseNet("10.0.0.1/32"), // Overlaps with host endpoint.
+		mustParseNet("feed:beef::/32"),
+		mustParseNet("feed:beef:0::/32"), // Non-canonical dupe.
+	},
+	Labels: map[string]string{
+		"a": "b",
+	},
+}
+var netSet1WithBEqB = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"),
+		mustParseNet("12.0.0.0/24"), // A dupe, why not!
+		mustParseNet("12.1.0.0/24"),
+		mustParseNet("10.0.0.1/32"), // Overlaps with host endpoint.
+	},
+	Labels: map[string]string{
+		"foo": "bar",
+		"b":   "b",
+	},
+}
+
+var netSet2Key = NetworkSetKey{Name: "netset-2"}
+var netSet2 = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
+		mustParseNet("13.1.0.0/24"),
+	},
+	Labels: map[string]string{
+		"a": "b",
+	},
+}
+
 // Pre-defined datastore states.  Each State object wraps up the complete state
 // of the datastore as well as the expected state of the dataplane.  The state
 // of the dataplane *should* depend only on the current datastore state, not on
@@ -326,6 +364,59 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 		{"default", []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
+
+var hostEp1WithPolicyAndANetworkSet = hostEp1WithPolicy.withKVUpdates(
+	KVPair{Key: netSet1Key, Value: &netSet1},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1 and net set.
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+	"feed:beef::/32",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+})
+
+var hostEp1WithPolicyAndTwoNetworkSets = hostEp1WithPolicyAndANetworkSet.withKVUpdates(
+	KVPair{Key: netSet2Key, Value: &netSet2},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+	"12.0.0.0/24", // Shared by both net sets.
+	"12.1.0.0/24",
+	"feed:beef::/32",
+	"13.1.0.0/24", // Unique to netset-2
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+})
+
+var hostEp1WithPolicyAndANetworkSetMatchingBEqB = hostEp1WithPolicy.withKVUpdates(
+	KVPair{Key: netSet1Key, Value: &netSet1WithBEqB},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1 and net set.
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+	"12.0.0.0/24",
+	"12.1.0.0/24",
+})
 
 var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
@@ -717,18 +808,30 @@ var baseTests = []StateList{
 		localEpsWithTagInheritProfile,
 		localEpsWithPolicy,
 		localEpsWithPolicyUpdatedIPs,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
 		hostEp1WithPolicy,
 		localEpsWithUpdatedProfile,
 		withProfileTagInherit,
+		hostEp1WithPolicyAndTwoNetworkSets,
 		localEpsWithNonMatchingProfile,
 		localEpsWithUpdatedProfileNegatedTags,
 		hostEp1WithUntrackedPolicy,
 		localEpsWithTagInheritProfile,
 		localEp1WithPolicy,
-		localEpsWithProfile},
+		localEpsWithProfile,
+		hostEp1WithPolicyAndANetworkSet,
+	},
 
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy},
+
+	// Network set tests.
+	{hostEp1WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndANetworkSetMatchingBEqB,
+		hostEp2WithPolicy,
+		hostEp1WithPolicyAndANetworkSet,
+		hostEp1WithPolicyAndTwoNetworkSets},
 
 	// Untracked policy on its own.
 	{hostEp1WithUntrackedPolicy},
