@@ -885,6 +885,9 @@ var _ = Describe("Calculation graph state sequencing tests:", func() {
 				Describe(desc+" flushing after each KV", func() {
 					doStateSequenceTest(expandedTest, afterEachKV)
 				})
+				Describe(desc+" flushing after each KV and duplicating each update", func() {
+					doStateSequenceTest(expandedTest, afterEachKVAndDupe)
+				})
 				Describe(desc+" flushing after each state", func() {
 					doStateSequenceTest(expandedTest, afterEachState)
 				})
@@ -1005,6 +1008,7 @@ type flushStrategy int
 
 const (
 	afterEachKV flushStrategy = iota
+	afterEachKVAndDupe
 	afterEachState
 	atEnd
 )
@@ -1042,11 +1046,15 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 				for _, kv := range kvDeltas {
 					fmt.Fprintf(GinkgoWriter, "       -> Injecting KV: %v\n", kv)
 					validationFilter.OnUpdates([]api.Update{kv})
-					if flushStrategy == afterEachKV {
+					if flushStrategy == afterEachKV || flushStrategy == afterEachKVAndDupe {
 						if !sentInSync {
 							validationFilter.OnStatusUpdated(api.InSync)
 							sentInSync = true
 						}
+						eventBuf.Flush()
+					}
+					if flushStrategy == afterEachKVAndDupe {
+						validationFilter.OnUpdates([]api.Update{kv})
 						eventBuf.Flush()
 					}
 				}
@@ -1058,7 +1066,9 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 					}
 					eventBuf.Flush()
 				}
-				if flushStrategy == afterEachState || flushStrategy == afterEachKV {
+				if flushStrategy == afterEachState ||
+					flushStrategy == afterEachKV ||
+					flushStrategy == afterEachKVAndDupe {
 					expectation()
 				}
 				lastState = state

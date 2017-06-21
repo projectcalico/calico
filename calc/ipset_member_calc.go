@@ -149,19 +149,6 @@ func (calc *MemberCalculator) updateEndpointIPs(endpointKey model.Key, ips []ip.
 	})
 }
 
-func (calc *MemberCalculator) Empty() bool {
-	if len(calc.keyToIPs) != 0 {
-		return false
-	}
-	if !calc.keyToMatchingIPSetIDs.Empty() {
-		return false
-	}
-	if len(calc.ipSetIDToIPToKey) != 0 {
-		return false
-	}
-	return true
-}
-
 func (calc *MemberCalculator) addMatchToIndex(ipSetID string, key model.Key, ips []ip.Addr) {
 	log.Debugf("IP set %v now matches IPs %v via %v", ipSetID, ips, key)
 	ipToKeys, ok := calc.ipSetIDToIPToKey[ipSetID]
