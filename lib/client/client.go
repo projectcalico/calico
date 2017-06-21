@@ -152,7 +152,12 @@ func LoadClientConfig(filename string) (*api.CalicoAPIConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		return LoadClientConfigFromBytes(b)
+
+		c, err := LoadClientConfigFromBytes(b)
+		if err != nil {
+			return nil, fmt.Errorf("syntax error in %s: %s", filename, err)
+		}
+		return c, nil
 	} else {
 		return LoadClientConfigFromEnvironment()
 	}
