@@ -69,7 +69,7 @@ type EnvItem struct {
 }
 
 var _ = Describe("FV tests against a real etcd", func() {
-	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP"}
+	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING"}
 
 	BeforeEach(func() {
 		for _, envName := range changedEnvVars {
@@ -83,7 +83,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 	})
 
 	DescribeTable("Test IP pool env variables",
-		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string) {
+		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string, expectedIPV4NATOutgoing bool, expectedIPV6NATOutgoing bool) {
 			// Create a new client.
 			cfg, _ := client.LoadClientConfigFromEnvironment()
 			c := testutils.CreateCleanClient(*cfg)
@@ -106,6 +106,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			// Look through the pool for the expected data.
 			foundv4Expected := false
 			foundv6Expected := false
+
 			for _, pool := range poolList.Items {
 				if pool.Metadata.CIDR.String() == expectedIPv4 {
 					foundv4Expected = true
@@ -118,6 +119,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 					if pool.Spec.IPIP != nil {
 						Expect(pool.Spec.IPIP.Enabled).To(BeFalse())
 					}
+
+					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV6NATOutgoing), "Expected IPv6 to be %t but was %t", expectedIPV6NATOutgoing, pool.Spec.NATOutgoing)
+
 				} else {
 					// off is not a real mode value but use it instead of empty string
 					if expectIpv4IpipMode == "off" {
@@ -128,6 +132,9 @@ var _ = Describe("FV tests against a real etcd", func() {
 						Expect(pool.Spec.IPIP.Enabled).To(BeTrue())
 						Expect(pool.Spec.IPIP.Mode).To(Equal(ipip.Mode(expectIpv4IpipMode)))
 					}
+
+					Expect(pool.Spec.NATOutgoing).To(Equal(expectedIPV4NATOutgoing), "Expected IPv4 to be %t but was %t", expectedIPV4NATOutgoing, pool.Spec.NATOutgoing)
+
 				}
 			}
 			Expect(foundv4Expected).To(BeTrue(),
@@ -137,31 +144,49 @@ var _ = Describe("FV tests against a real etcd", func() {
 		},
 
 		Entry("No env variables set", []EnvItem{},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off"),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
 		Entry("IPv4 Pool env var set",
 			[]EnvItem{{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"}},
-			"172.16.0.0/24", "fd80:24e2:f998:72d6::/64", "off"),
+			"172.16.0.0/24", "fd80:24e2:f998:72d6::/64", "off", true, false),
 		Entry("IPv6 Pool env var set",
 			[]EnvItem{{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"}},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "off"),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "off", true, false),
 		Entry("Both IPv4 and IPv6 Pool env var set",
 			[]EnvItem{
 				{"CALICO_IPV4POOL_CIDR", "172.16.0.0/24"},
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 			},
-			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "off"),
+			"172.16.0.0/24", "fdff:ffff:ffff:ffff:ffff::/80", "off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set off", []EnvItem{{"CALICO_IPV4POOL_IPIP", "off"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off"),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set always", []EnvItem{{"CALICO_IPV4POOL_IPIP", "always"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "always"),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "always", true, false),
 		Entry("CALICO_IPV4POOL_IPIP set cross-subnet", []EnvItem{{"CALICO_IPV4POOL_IPIP", "cross-subnet"}},
-			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "cross-subnet"),
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "cross-subnet", true, false),
 		Entry("IPv6 Pool and IPIP set",
 			[]EnvItem{
 				{"CALICO_IPV6POOL_CIDR", "fdff:ffff:ffff:ffff:ffff::/80"},
 				{"CALICO_IPV4POOL_IPIP", "always"},
 			},
-			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "always"),
+			"192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", "always", true, false),
+		Entry("IPv6 NATOutgoing Set Enabled",
+			[]EnvItem{
+				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, true),
+		Entry("IPv6 NATOutgoing Set Disabled",
+			[]EnvItem{
+				{"CALICO_IPV6POOL_NAT_OUTGOING", "false"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", true, false),
+		Entry("IPv4 NATOutgoing Set Disabled",
+			[]EnvItem{
+				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"}},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", false, false),
+		Entry("IPv6 NAT OUTGOING and IPV4 NAT OUTGOING SET",
+			[]EnvItem{
+				{"CALICO_IPV4POOL_NAT_OUTGOING", "false"},
+				{"CALICO_IPV6POOL_NAT_OUTGOING", "true"},
+			},
+			"192.168.0.0/16", "fd80:24e2:f998:72d6::/64", "off", false, true),
 	)
 
 	Describe("Test NO_DEFAULT_POOLS env variable", func() {
