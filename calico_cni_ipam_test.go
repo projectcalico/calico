@@ -153,8 +153,8 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
                     }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
-				_, error, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
-				Expect(error.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
+				_, err, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 
 			It("fails to get an IP", func() {
@@ -171,8 +171,8 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
                     }`, cniVersion, os.Getenv("ETCD_IP"), plugin)
-				_, error, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
-				Expect(error.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
+				_, err, _ := RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 		})
 
