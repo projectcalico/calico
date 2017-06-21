@@ -332,6 +332,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, 
 		pool2 := testutils.MustParseNetwork("20.0.0.0/24")
 		pool3 := testutils.MustParseNetwork("30.0.0.0/24")
 		pool4_v6 := testutils.MustParseNetwork("fe80::11/120")
+		pool5_doesnot_exist := testutils.MustParseNetwork("40.0.0.0/24")
 
 		testutils.CreateNewIPPool(*c, "10.0.0.0/24", false, false, true)
 		testutils.CreateNewIPPool(*c, "20.0.0.0/24", false, false, true)
@@ -429,6 +430,25 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV2, 
 			It("should have returned the remaining 209 IPs", func() {
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).NotTo(Equal(209))
+			})
+		})
+
+		// Step-6: AutoAssign an IPv4 address. Request the IP from 2 IP Pools one of which doesn't exist.
+		// This should return an error.
+		Context("AutoAssign an IP from two pools - one valid one doesn't exist", func() {
+			args := client.AutoAssignArgs{
+				Num4:      1,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1, pool5_doesnot_exist},
+			}
+
+			v4, _, err := ic.AutoAssign(args)
+			log.Println("v4: %d IPs", len(v4))
+
+			It("should return an error and no IPs", func() {
+				Expect(err.Error()).Should(Equal("The given pool (40.0.0.0/24) does not exist"))
+				Expect(len(v4)).To(Equal(0))
 			})
 		})
 	})

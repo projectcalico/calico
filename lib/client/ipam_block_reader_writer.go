@@ -22,6 +22,8 @@ import (
 	"net"
 	"reflect"
 
+	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -71,8 +73,7 @@ func (rw blockReaderWriter) getAffineBlocks(host string, ver ipVersion, pools []
 	return ids, nil
 }
 
-func (rw blockReaderWriter) claimNewAffineBlock(
-	host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) claimNewAffineBlock(host string, version ipVersion, requestedPools []cnet.IPNet, config IPAMConfig) (*cnet.IPNet, error) {
 
 	// If requestedPools is not empty, use it.  Otherwise, default to
 	// all configured pools.
@@ -89,6 +90,20 @@ func (rw blockReaderWriter) claimNewAffineBlock(
 		// Only include pools that are not disabled and are the correct version.
 		if !p.Spec.Disabled && version.Number == p.Metadata.CIDR.Version() && isPoolInRequestedPools(p.Metadata.CIDR, requestedPools) {
 			pools = append(pools, p.Metadata.CIDR)
+		}
+	}
+
+	// Build a map so we can lookup existing pools.
+	pm := map[string]bool{}
+	for _, ap := range allPools.Items {
+		pm[ap.Metadata.CIDR.String()] = true
+	}
+
+	// Make sure each requested pool exists.
+	for _, rp := range requestedPools {
+		if _, ok := pm[rp.String()]; !ok {
+			// The requested pool doesn't exist.
+			return nil, fmt.Errorf("The given pool (%s) does not exist", rp.IPNet.String())
 		}
 	}
 
