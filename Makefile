@@ -211,24 +211,6 @@ semaphore: clean
 	# Make sure that calicoctl builds cross-platform.
 	$(MAKE) dist/calicoctl-darwin-amd64 dist/calicoctl-windows-amd64.exe
 
-	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
-	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICOCTL_VERSION
-	# tagged images to Dockerhub and quay for both calico/ctl.
-	set -e; \
-	if [ -z $$PULL_REQUEST_NUMBER ]; then \
-		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push quay.io/$(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
-		\
-		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push $(CTL_CONTAINER_NAME):$$BRANCH_NAME; \
-		\
-		docker tag $(CTL_CONTAINER_NAME) quay.io/$(CTL_CONTAINER_NAME):$(CALICOCTL_VERSION) && \
-		docker push quay.io/$(CTL_CONTAINER_NAME):$(CALICOCTL_VERSION); \
-		\
-		docker tag $(CTL_CONTAINER_NAME) $(CTL_CONTAINER_NAME):$(CALICOCTL_VERSION) && \
-		docker push $(CTL_CONTAINER_NAME):$(CALICOCTL_VERSION); \
-	fi
-
 release: clean
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
