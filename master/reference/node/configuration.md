@@ -27,6 +27,8 @@ The `calico/node` container is primarily configured through environment variable
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. | IPv4 CIDR | 192.168.0.0/16 |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. | IPv6 CIDR | fd80:24e2:f998:72d6::/64 |
 | CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. | off, always, cross-subnet | off |
+| CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. | boolean | true |
+| CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. | boolean | false |
 | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional) | string | http://127.0.0.1:2379 |
 | ETCD_KEY_FILE     | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)       | string | |
 | ETCD_CERT_FILE    | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)    | string | |
