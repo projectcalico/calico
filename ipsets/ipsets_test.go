@@ -57,6 +57,9 @@ var _ = Describe("IPSetType", func() {
 	It("should treat hash:net as valid", func() {
 		Expect(IPSetType("hash:net").IsValid()).To(BeTrue())
 	})
+})
+
+var _ = Describe("IPSetTypeHashIP", func() {
 	It("should canonicalise an IPv4", func() {
 		Expect(IPSetTypeHashIP.CanonicaliseMember("10.0.0.1")).
 			To(Equal(ip.FromString("10.0.0.1")))
@@ -65,16 +68,27 @@ var _ = Describe("IPSetType", func() {
 		Expect(IPSetTypeHashIP.CanonicaliseMember("feed:0::beef")).
 			To(Equal(ip.FromString("feed::beef")))
 	})
+	It("should panic on bad IP", func() {
+		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+	})
+})
+
+var _ = Describe("IPSetTypeHashNet", func() {
 	It("should canonicalise an IPv4 CIDR", func() {
 		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1/24")).
-			To(Equal(ip.MustParseCIDR("10.0.0.0/24")))
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.0/24")))
 	})
 	It("should canonicalise an IPv6 CIDR", func() {
 		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef/24")).
-			To(Equal(ip.MustParseCIDR("feed::/24")))
+			To(Equal(ip.MustParseCIDROrIP("feed::/24")))
 	})
-	It("should panic on bad IP", func() {
-		Expect(func() { IPSetTypeHashIP.CanonicaliseMember("foobar") }).To(Panic())
+	It("should canonicalise an IPv4 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("10.0.0.1")).
+			To(Equal(ip.MustParseCIDROrIP("10.0.0.1/32")))
+	})
+	It("should canonicalise an IPv6 IP as a CIDR", func() {
+		Expect(IPSetTypeHashNet.CanonicaliseMember("feed::beef")).
+			To(Equal(ip.MustParseCIDROrIP("feed::beef/128")))
 	})
 	It("should panic on bad CIDR", func() {
 		Expect(func() { IPSetTypeHashNet.CanonicaliseMember("foobar") }).To(Panic())

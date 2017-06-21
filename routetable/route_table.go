@@ -40,7 +40,7 @@ var (
 	IfaceNotPresent = errors.New("interface not present")
 	IfaceDown       = errors.New("interface down")
 
-	ipV6LinkLocalCIDR = ip.MustParseCIDR("fe80::/64")
+	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
 	listIfaceTime = prometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_route_table_list_seconds",
