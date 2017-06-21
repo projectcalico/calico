@@ -3,9 +3,10 @@
 RELEASE_STREAM?=v2.3
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
-YAML_CMD?=$(shell which yaml || echo docker run -i calico/go-build yaml)
 # For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
+YAML_CMD?=$(shell which yaml || echo docker run -i calico/go-build yaml)
 CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
+CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
 BIRD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
 GOBGPD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
 FELIX_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
@@ -435,15 +436,18 @@ semaphore:
 		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
 		docker push $(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
 		\
-		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER) && \
-		docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER); \
+		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_GIT_VER) && \
+		docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_GIT_VER); \
 		\
-		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICO_VER) && \
-		docker push $(NODE_CONTAINER_NAME):$(CALICO_VER); \
+		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICO_GIT_VER) && \
+		docker push $(NODE_CONTAINER_NAME):$(CALICO_GIT_VER); \
 	fi
 
 release: clean
+	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
+
 	git tag $(CALICO_VER)
+
 	# Build the calico/node images.
 	$(MAKE) $(NODE_CONTAINER_NAME)
 
@@ -459,15 +463,16 @@ release: clean
 	# Check that the images container the right sub-components
 	docker run $(NODE_CONTAINER_NAME) calico-felix --version
 	docker run $(NODE_CONTAINER_NAME) libnetwork-plugin -v
-
-	@echo "Now push the tag and images."
-	@echo "git push origin $(CALICO_VER)"
-
+	
+	@echo "See RELEASING.md for detailed instructions."
+	@echo "Now push images."
 	@echo "docker push $(NODE_CONTAINER_NAME):$(CALICO_VER)"
 	@echo "docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)"
 	@echo "docker push $(NODE_CONTAINER_NAME):latest"
 	@echo "docker push quay.io/$(NODE_CONTAINER_NAME):latest"
-	@echo "See RELEASING.md for detailed instructions."
+	
+	@echo "Only push the tag AFTER this branch is merged to origin/master"
+	@echo "git push origin $(CALICO_VER)"
 
 ## Clean enough that a new release build will be clean
 clean:
