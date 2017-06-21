@@ -90,14 +90,3 @@ clean:
 	-docker rmi $(CONTAINER_NAME)
 
 ci: clean docker-image ut st
-# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
-	set -e; \
-	if [ -z $$PULL_REQUEST_NUMBER ]; then \
-		docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$$BRANCH_NAME && docker push $(CONTAINER_NAME):$$BRANCH_NAME; \
-		docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$$BRANCH_NAME && docker push quay.io/$(CONTAINER_NAME):$$BRANCH_NAME; \
-		if [ "$$BRANCH_NAME" = "master" ]; then \
-			export VERSION=`git describe --tags --dirty`; \
-			docker tag $(CONTAINER_NAME) $(CONTAINER_NAME):$$VERSION && docker push $(CONTAINER_NAME):$$VERSION; \
-			docker tag $(CONTAINER_NAME) quay.io/$(CONTAINER_NAME):$$VERSION && docker push quay.io/$(CONTAINER_NAME):$$VERSION; \
-		fi; \
-	fi
