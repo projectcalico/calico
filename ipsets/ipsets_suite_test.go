@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -34,5 +35,6 @@ func init() {
 
 func TestCalculationGraph(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "IP sets Suite")
+	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "IP sets Suite", []Reporter{junitReporter})
 }

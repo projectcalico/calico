@@ -43,6 +43,7 @@ htmlcov/
 /python/
 /version.txt
 /.dir-locals.el
+junit.xml
 # Old go sub-dir, used to be where we kept go source.
 /go/
 

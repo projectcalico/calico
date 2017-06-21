@@ -88,6 +88,7 @@ gofmt_failed=false
 go_apache_check_failed=false
 logrus_hook_check_failed=false
 focussing_check_failed=false
+junit_hook_check_failed=false
 
 for filename in $changed_go_files; do
   if [ ! -e  "${filename}" ]; then
@@ -105,6 +106,10 @@ for filename in $changed_go_files; do
     if ! grep -q 'HookLogrus' "$filename"; then
       echo "  Test suite doesn't call HookLogrusForGinkgo(): $filename"
       logrus_hook_check_failed=true
+    fi
+    if ! grep -q 'NewJUnitReporter' "$filename"; then
+      echo "  Test suite doesn't call NewJUnitReporter(): $filename"
+      junit_hook_check_failed=true
     fi
   fi
   if echo $filename | grep -q '_test.go'; then
@@ -152,7 +157,19 @@ if $logrus_hook_check_failed; then
   echo '	testutils.HookLogrusForGinkgo()'
   echo '}'
 fi
-
+if $junit_hook_check_failed; then
+  echo
+  echo "One or more test suites don't call NewJUnitReporter()."
+  echo "If a suite doesn't call NewJUnitReporter() then it won't generate "
+  echo "a junit report during UT runs.  Example:"
+  echo
+  echo 'import "github.com/onsi/ginkgo/reporters"'
+  echo 'func TestFoo(t *testing.T) {'
+  echo '	RegisterFailHandler(Fail)'
+  echo '	junitReporter := reporters.NewJUnitReporter("junit.xml")'
+  echo '	RunSpecsWithDefaultAndCustomReporters(t, "Foo Suite", []Reporter{junitReporter})'
+  echo '}'
+fi
 if $go_copyright_check_failed; then
   echo
   echo "Copyright statement should match"
@@ -186,7 +203,8 @@ fi
 
 if $go_apache_check_failed || $go_copyright_check_failed || \
    $py_apache_check_failed || $py_copyright_check_failed || \
-   $logrus_hook_check_failed || $focussing_check_failed; then
+   $logrus_hook_check_failed || $focussing_check_failed || \
+   $junit_hook_check_failed ; then
   exit 1
 fi
 
