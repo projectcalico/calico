@@ -425,24 +425,6 @@ semaphore:
 	$(MAKE) $(NODE_CONTAINER_NAME) st
 	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
-	# Assumes that a few environment variables exist - BRANCH_NAME PULL_REQUEST_NUMBER
-	# If this isn't a PR, then push :BRANCHNAME tagged and :CALICO_VER
-	# tagged images to Dockerhub and quay for calico/node
-	set -e; \
-	if [ -z $$PULL_REQUEST_NUMBER ]; then \
-		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push quay.io/$(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
-		\
-		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$$BRANCH_NAME && \
-		docker push $(NODE_CONTAINER_NAME):$$BRANCH_NAME; \
-		\
-		docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_GIT_VER) && \
-		docker push quay.io/$(NODE_CONTAINER_NAME):$(CALICO_GIT_VER); \
-		\
-		docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICO_GIT_VER) && \
-		docker push $(NODE_CONTAINER_NAME):$(CALICO_GIT_VER); \
-	fi
-
 release: clean
 	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
 
