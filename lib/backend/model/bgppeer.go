@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
 var (
@@ -33,111 +32,68 @@ var (
 	typeBGPPeer        = reflect.TypeOf(BGPPeer{})
 )
 
-type BGPPeerKey struct {
-	Scope    scope.Scope `json:"-" validate:"omitempty"`
-	Hostname string      `json:"-" validate:"omitempty"`
-	PeerIP   net.IP      `json:"-" validate:"required"`
+type NodeBGPPeerKey struct {
+	Nodename string `json:"-" validate:"omitempty"`
+	PeerIP   net.IP `json:"-" validate:"required"`
 }
 
-func (key BGPPeerKey) defaultPath() (string, error) {
+func (key NodeBGPPeerKey) defaultPath() (string, error) {
 	if key.PeerIP.IP == nil {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "peerIP"}
 	}
-	switch key.Scope {
-	case scope.Undefined:
-		return "", errors.ErrorInsufficientIdentifiers{Name: "scope"}
-	case scope.Global:
-		if key.Hostname != "" {
-			return "", fmt.Errorf("hostname should not be specified when BGP peer scope is global")
-		}
-		e := fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
-			key.PeerIP.Version(), key.PeerIP)
-		return e, nil
-	case scope.Node:
-		if key.Hostname == "" {
-			return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
-		}
-		e := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-			key.Hostname, key.PeerIP.Version(), key.PeerIP)
-		return e, nil
-	default:
-		return "", fmt.Errorf("invalid scope value: %d", key.Scope)
+	if key.Nodename == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
+	e := fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
+		key.Nodename, key.PeerIP.Version(), key.PeerIP)
+	return e, nil
 }
 
-func (key BGPPeerKey) defaultDeletePath() (string, error) {
+func (key NodeBGPPeerKey) defaultDeletePath() (string, error) {
 	return key.defaultPath()
 }
 
-func (key BGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
+func (key NodeBGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key BGPPeerKey) valueType() reflect.Type {
+func (key NodeBGPPeerKey) valueType() reflect.Type {
 	return typeBGPPeer
 }
 
-func (key BGPPeerKey) String() string {
-	if key.Scope == scope.Global {
-		return fmt.Sprintf("BGPPeer(global, ip=%s)", key.PeerIP)
-	} else {
-		return fmt.Sprintf("BGPPeer(node=%s, ip=%s)", key.Hostname, key.PeerIP)
-	}
+func (key NodeBGPPeerKey) String() string {
+	return fmt.Sprintf("BGPPeer(node=%s, ip=%s)", key.Nodename, key.PeerIP)
 }
 
-type BGPPeerListOptions struct {
-	Scope    scope.Scope `json:"-" validate:"omitempty"`
+type NodeBGPPeerListOptions struct {
 	Hostname string
 	PeerIP   net.IP
 }
 
-func (options BGPPeerListOptions) defaultPathRoot() string {
-	switch options.Scope {
-	case scope.Undefined:
-		if options.Hostname == "" {
-			return "/calico/bgp/v1"
-		} else if options.PeerIP.IP == nil {
-			return fmt.Sprintf("/calico/bgp/v1/host/%s",
-				options.Hostname)
-		} else {
-			return fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-				options.Hostname, options.PeerIP.Version(), options.PeerIP)
-		}
-	case scope.Global:
-		if options.PeerIP.IP == nil {
-			return "/calico/bgp/v1/global"
-		} else {
-			return fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
-				options.PeerIP.Version(), options.PeerIP)
-		}
-	case scope.Node:
-		if options.Hostname == "" {
-			return "/calico/bgp/v1/host"
-		} else if options.PeerIP.IP == nil {
-			return fmt.Sprintf("/calico/bgp/v1/host/%s",
-				options.Hostname)
-		} else {
-			return fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-				options.Hostname, options.PeerIP.Version(), options.PeerIP)
-		}
+func (options NodeBGPPeerListOptions) defaultPathRoot() string {
+	if options.Hostname == "" {
+		return "/calico/bgp/v1/host"
+	} else if options.PeerIP.IP == nil {
+		return fmt.Sprintf("/calico/bgp/v1/host/%s",
+			options.Hostname)
+	} else {
+		return fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
+			options.Hostname, options.PeerIP.Version(), options.PeerIP)
 	}
-	panic(fmt.Errorf("Unexpected scope value: %d", options.Scope))
 }
 
-func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
+func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
 	hostname := ""
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
-	var peerScope scope.Scope
 
-	if r := matchGlobalBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
-		_ = peerIP.UnmarshalText(r[0][1])
-		peerScope = scope.Global
-	} else if r := matchHostBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
+	if r := matchHostBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
 		hostname = string(r[0][1])
-		_ = peerIP.UnmarshalText(r[0][2])
-		peerScope = scope.Node
+		if err := peerIP.UnmarshalText(r[0][2]); err != nil {
+			log.WithError(err).WithField("PeerIP", r[0][2]).Error("Error unmarshalling GlobalBGPPeer IP address")
+			return nil
+		}
 	} else {
 		log.Debugf("%s didn't match regex", path)
 		return nil
@@ -151,7 +107,71 @@ func (options BGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
 	}
-	return BGPPeerKey{Scope: peerScope, PeerIP: peerIP, Hostname: hostname}
+	return NodeBGPPeerKey{PeerIP: peerIP, Nodename: hostname}
+}
+
+type GlobalBGPPeerKey struct {
+	PeerIP net.IP `json:"-" validate:"required"`
+}
+
+func (key GlobalBGPPeerKey) defaultPath() (string, error) {
+	if key.PeerIP.IP == nil {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "peerIP"}
+	}
+	e := fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
+		key.PeerIP.Version(), key.PeerIP)
+	return e, nil
+}
+
+func (key GlobalBGPPeerKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
+}
+
+func (key GlobalBGPPeerKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
+func (key GlobalBGPPeerKey) valueType() reflect.Type {
+	return typeBGPPeer
+}
+
+func (key GlobalBGPPeerKey) String() string {
+	return fmt.Sprintf("BGPPeer(global, ip=%s)", key.PeerIP)
+}
+
+type GlobalBGPPeerListOptions struct {
+	PeerIP net.IP
+}
+
+func (options GlobalBGPPeerListOptions) defaultPathRoot() string {
+	if options.PeerIP.IP == nil {
+		return "/calico/bgp/v1/global"
+	} else {
+		return fmt.Sprintf("/calico/bgp/v1/global/peer_v%d/%s",
+			options.PeerIP.Version(), options.PeerIP)
+	}
+}
+
+func (options GlobalBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
+	log.Debugf("Get BGPPeer key from %s", path)
+	peerIP := net.IP{}
+	ekeyb := []byte(path)
+
+	if r := matchGlobalBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
+		if err := peerIP.UnmarshalText(r[0][1]); err != nil {
+			log.WithError(err).WithField("PeerIP", r[0][1]).Error("Error unmarshalling GlobalBGPPeer IP address")
+			return nil
+		}
+	} else {
+		log.Debugf("%s didn't match regex", path)
+		return nil
+	}
+
+	if options.PeerIP.IP != nil && !options.PeerIP.Equal(peerIP.IP) {
+		log.Debugf("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
+		return nil
+	}
+	return GlobalBGPPeerKey{PeerIP: peerIP}
 }
 
 type BGPPeer struct {
