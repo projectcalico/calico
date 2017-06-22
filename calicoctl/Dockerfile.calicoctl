@@ -17,4 +17,5 @@ RUN apk add --no-cache --update wget openssl ca-certificates && \
   rm -f glibc-${GLIBC_VERSION}.apk glibc-bin-${GLIBC_VERSION}.apk && \
   apk del openssl ca-certificates wget
 
-ENTRYPOINT ["./calicoctl"]
+WORKDIR /root
+ENTRYPOINT ["/calicoctl"]
