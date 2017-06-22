@@ -12,6 +12,9 @@ GOBGPD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STRE
 FELIX_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
 CALICOCTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
 LIBNETWORK_PLUGIN_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
+TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+K8S_POLICY_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
+CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
 CONFD_VER := v0.12.1-calico0.1.0
 
@@ -456,6 +459,80 @@ release: clean
 	@echo "Only push the tag AFTER this branch is merged to origin/master"
 	@echo "git push origin $(CALICO_VER)"
 
+
+RELEASE_DIR:=release-$(CALICO_VER)
+RELEASE_DIR_K8S_MANIFESTS:=$(RELEASE_DIR)/k8s-manifests
+RELEASE_DIR_IMAGES:=$(RELEASE_DIR)/images
+RELEASE_DIR_BIN:=$(RELEASE_DIR)/bin
+MANIFEST_SRC := ../_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
+
+## Create an archive that contains a complete "Calico" release
+release-archive: $(RELEASE_DIR).tgz
+
+$(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
+	tar -czvf $(RELEASE_DIR).tgz $(RELEASE_DIR)/*
+
+$(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-policy-controller.tar
+$(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-windows-amd64.exe $(RELEASE_DIR_BIN)/calicoctl-darwin-amd64
+
+$(RELEASE_DIR)/README:
+	@echo "This directory contains a complete release of Calico $(CALICO_VER)" >> $@
+	@echo "Documentation for this release can be found at http://docs.projectcalico.org/$(RELEASE_STREAM)" >> $@
+	@echo "" >> $@
+	@echo "Docker images (under 'images'). Load them with 'docker load'" >> $@
+	@echo "* The calico/node docker image  (version $(CALICO_VER))" >> $@
+	@echo "* The calico/typha docker image  (version $(TYPHA_VER))" >> $@
+	@echo "* The calico/cni docker image  (version $(CNI_VER))" >> $@
+	@echo "* The calico/kube-policy-controller docker image (version $(K8S_POLICY_VER))" >> $@
+	@echo "" >> $@
+	@echo "Binaries (for amd64) (under 'bin')" >> $@
+	@echo "* The calicoctl binary (for Linux) (version $(CALICOCTL_VER))" >> $@
+	@echo "* The calicoctl-windows-amd64.exe binary (for Windows) (version $(CALICOCTL_VER))" >> $@
+	@echo "* The calicoctl-darwin-amd64 binary (for Mac) (version $(CALICOCTL_VER))" >> $@
+	@echo "" >> $@
+	@echo "Kubernetes manifests (under 'k8s-manifests directory')" >> $@
+
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)
+
+$(RELEASE_DIR_K8S_MANIFESTS):
+	# Ensure that the docs site is generated
+	$(MAKE) -C .. _site
+
+	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
+	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
+	find $(MANIFEST_SRC)/hosted -name  '*.yaml' -printf "%P\n" | \
+	  xargs -I FILE sh -c \
+	    'mkdir -p $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;\
+	    cp $(MANIFEST_SRC)/hosted/FILE $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;'
+
+	# Copy the non-hosted manifets too
+	cp $(MANIFEST_SRC)/*.yaml $(RELEASE_DIR_K8S_MANIFESTS)
+
+$(RELEASE_DIR_IMAGES)/calico-node.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker save --output $@ $(NODE_CONTAINER_NAME)
+
+$(RELEASE_DIR_IMAGES)/calico-typha.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/typha:$(TYPHA_VER)
+	docker save --output $@ calico/typha:$(TYPHA_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-cni.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/cni:$(CNI_VER)
+	docker save --output $@ calico/cni:$(CNI_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-kube-policy-controller.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/kube-policy-controller:$(K8S_POLICY_VER)
+	docker save --output $@ calico/kube-policy-controller:$(K8S_POLICY_VER)
+
+$(RELEASE_DIR_BIN)/%:
+	mkdir -p $(RELEASE_DIR_BIN)
+	wget https://github.com/projectcalico/calicoctl/releases/download/$(CALICOCTL_VER)/$(@F) -O $@
+	chmod +x $@
+
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created' -exec rm -f {} +
@@ -469,6 +546,8 @@ clean:
 	# Retag and remove external images so that they will be pulled again
 	# We avoid just deleting the image. We didn't build them here so it would be impolite to delete it.
 	docker tag $(FELIX_CONTAINER_NAME) $(FELIX_CONTAINER_NAME)-backup && docker rmi $(FELIX_CONTAINER_NAME) || true
+
+	rm -rf $(RELEASE_DIR)
 
 .PHONY: help
 ## Display this help text
