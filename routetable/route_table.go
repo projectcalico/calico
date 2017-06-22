@@ -27,11 +27,15 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"time"
+
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
+
+const cleanupGracePeriod = 10 * time.Second
 
 var (
 	GetFailed       = errors.New("netlink get operation failed")
@@ -73,6 +77,7 @@ type RouteTable struct {
 	ifacePrefixRegexp *regexp.Regexp
 
 	ifaceNameToTargets        map[string][]Target
+	ifaceNameToFirstSeen      map[string]time.Time
 	pendingIfaceNameToTargets map[string][]Target
 
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
@@ -82,14 +87,16 @@ type RouteTable struct {
 	// dataplane is our shim for the netlink/arp interface.  In production, it maps directly
 	// through to calls to the netlink package and the arp command.
 	dataplane dataplaneIface
+	// time is our shim for the time package, allowing it to be mocked for UT.
+	time timeIface
 }
 
 func New(interfacePrefixes []string, ipVersion uint8) *RouteTable {
-	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()})
+	return NewWithShims(interfacePrefixes, ipVersion, realDataplane{conntrack: conntrack.New()}, realTime{})
 }
 
 // NewWithShims is a test constructor, which allows netlink to be replaced by a shim.
-func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl dataplaneIface) *RouteTable {
+func NewWithShims(interfacePrefixes []string, ipVersion uint8, dpShim dataplaneIface, timeShim timeIface) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
 	for _, prefix := range interfacePrefixes {
@@ -116,10 +123,12 @@ func NewWithShims(interfacePrefixes []string, ipVersion uint8, nl dataplaneIface
 		ifacePrefixes:             prefixSet,
 		ifacePrefixRegexp:         regexp.MustCompile(ifaceNamePattern),
 		ifaceNameToTargets:        map[string][]Target{},
+		ifaceNameToFirstSeen:      map[string]time.Time{},
 		pendingIfaceNameToTargets: map[string][]Target{},
 		dirtyIfaces:               set.New(),
-		dataplane:                 nl,
 		pendingConntrackCleanups:  map[ip.Addr]chan struct{}{},
+		dataplane:                 dpShim,
+		time:                      timeShim,
 	}
 }
 
@@ -132,7 +141,15 @@ func (r *RouteTable) OnIfaceStateChanged(ifaceName string, state ifacemonitor.St
 	if state == ifacemonitor.StateUp {
 		logCxt.Debug("Interface up, marking for route sync")
 		r.dirtyIfaces.Add(ifaceName)
+		r.onIfaceSeen(ifaceName)
 	}
+}
+
+func (r *RouteTable) onIfaceSeen(ifaceName string) {
+	if _, ok := r.ifaceNameToFirstSeen[ifaceName]; ok {
+		return
+	}
+	r.ifaceNameToFirstSeen[ifaceName] = r.time.Now()
 }
 
 func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
@@ -166,7 +183,20 @@ func (r *RouteTable) Apply() error {
 				r.logCxt.WithField("ifaceName", ifaceName).Debug(
 					"Resync: found calico-owned interface")
 				r.dirtyIfaces.Add(ifaceName)
+				r.onIfaceSeen(ifaceName)
 			}
+		}
+		// Clean up first-seen timestamps for old interfaces.
+		for name, t := range r.ifaceNameToFirstSeen {
+			if r.dirtyIfaces.Contains(name) {
+				continue
+			}
+			if time.Since(t) < cleanupGracePeriod {
+				continue
+			}
+			log.WithField("ifaceName", name).Debug(
+				"Cleaning up timestamp for removed interface.")
+			delete(r.ifaceNameToFirstSeen, name)
 		}
 		r.inSync = true
 
@@ -221,9 +251,17 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 	logCxt.Debug("Syncing interface routes")
 
+	// In order to allow Calico to run without Felix in an emergency, the CNI plugin pre-adds
+	// the route to the interface.  To avoid flapping the route, we give each interface a
+	// grace period after we first see it before we remove routes that we're not expecting.
+	// Check whether the grace period applies to this interface.
+	inGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < cleanupGracePeriod
+
 	// If this is a modify or delete, grab a copy of the existing targets so we can clean up
 	// conntrack entries even if the routes have been removed.  We'll remove any still-required
-	// CIDRs from this set below.
+	// CIDRs from this set below.  We don't apply the grace period to this calculation because
+	// it only removes routes that the datamodel previously said were there and then were
+	// removed.  In that case, we know we're in sync.
 	oldCIDRs := set.New()
 	if updatedTargets, ok := r.pendingIfaceNameToTargets[ifaceName]; ok {
 		logCxt.Debug("Have updated targets.")
@@ -298,22 +336,28 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		if route.Dst != nil {
 			dest = ip.CIDRFromIPNet(route.Dst)
 		}
-		if !expectedCIDRs.Contains(dest) {
-			logCxt := logCxt.WithField("dest", dest)
-			logCxt.Info("Syncing routes: removing old route.")
-			if err := r.dataplane.RouteDel(&route); err != nil {
-				// Probably a race with the interface being deleted.
-				logCxt.WithError(err).Info(
-					"Route deletion failed, assuming someone got there first.")
-				updatesFailed = true
-			}
-			if dest != nil {
-				// Collect any old route CIDRs that we find in the dataplane so we
-				// can remove their conntrack entries later.
-				oldCIDRs.Add(dest)
-			}
-		}
+		logCxt := logCxt.WithField("dest", dest)
 		seenCIDRs.Add(dest)
+		if expectedCIDRs.Contains(dest) {
+			logCxt.Debug("Syncing routes: Found expected route.")
+			continue
+		}
+		if inGracePeriod {
+			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
+			continue
+		}
+		logCxt.Info("Syncing routes: removing old route.")
+		if err := r.dataplane.RouteDel(&route); err != nil {
+			// Probably a race with the interface being deleted.
+			logCxt.WithError(err).Info(
+				"Route deletion failed, assuming someone got there first.")
+			updatesFailed = true
+		}
+		if dest != nil {
+			// Collect any old route CIDRs that we find in the dataplane so we
+			// can remove their conntrack entries later.
+			oldCIDRs.Add(dest)
+		}
 	}
 	for _, target := range expectedTargets {
 		cidr := target.CIDR

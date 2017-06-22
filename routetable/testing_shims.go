@@ -20,6 +20,8 @@ import (
 
 	. "github.com/vishvananda/netlink"
 
+	"time"
+
 	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ip"
 )
@@ -70,3 +72,22 @@ func (r realDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 }
 
 var _ dataplaneIface = realDataplane{}
+
+// timeIface is our shim interface the time package.
+type timeIface interface {
+	Now() time.Time
+	Since(t time.Time) time.Duration
+}
+
+// realTime is the real implementation of timeIface, which calls through to the real time package.
+type realTime struct{}
+
+func (_ realTime) Now() time.Time {
+	return time.Now()
+}
+
+func (_ realTime) Since(t time.Time) time.Duration {
+	return time.Since(t)
+}
+
+var _ timeIface = realTime{}

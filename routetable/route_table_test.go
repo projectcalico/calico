@@ -34,6 +34,12 @@ import (
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/testutils"
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"strings"
+
+	"time"
+
+	"github.com/projectcalico/felix/ifacemonitor"
 )
 
 var (
@@ -53,6 +59,7 @@ var (
 
 var _ = Describe("RouteTable", func() {
 	var dataplane *mockDataplane
+	var t *mockTime
 	var rt *RouteTable
 
 	BeforeEach(func() {
@@ -62,7 +69,15 @@ var _ = Describe("RouteTable", func() {
 			addedRouteKeys:   set.New(),
 			deletedRouteKeys: set.New(),
 		}
-		rt = NewWithShims([]string{"cali"}, 4, dataplane)
+		startTime, err := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+		Expect(err).NotTo(HaveOccurred())
+		t = &mockTime{
+			currentTime: startTime,
+			// Setting a large auto-increment effectively disables the grace period
+			// for these tests.
+			autoIncrement: 11 * time.Second,
+		}
+		rt = NewWithShims([]string{"cali"}, 4, dataplane, t)
 	})
 
 	It("should be constructable", func() {
@@ -580,4 +595,18 @@ func (l *mockLink) Attrs() *netlink.LinkAttrs {
 
 func (l *mockLink) Type() string {
 	return "not-implemented"
+}
+
+type mockTime struct {
+	currentTime   time.Time
+	autoIncrement time.Duration
+}
+
+func (m *mockTime) Now() time.Time {
+	t := m.currentTime
+	m.currentTime = m.currentTime.Add(m.autoIncrement)
+	return t
+}
+func (m *mockTime) Since(t time.Time) time.Duration {
+	return m.Now().Sub(t)
 }
