@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -168,8 +169,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 1: Pass two fully populated IPPoolSpecs and expect the series of operations to succeed.
 		Entry("Two fully populated IPPoolSpecs",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -185,8 +186,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 2: Pass one partially populated IPPoolSpec and another fully populated IPPoolSpec and expect the series of operations to succeed.
 		Entry("One partially populated IPPoolSpec and another fully populated IPPoolSpec",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -200,8 +201,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 3: Pass one fully populated IPPoolSpec and another empty IPPoolSpec and expect the series of operations to succeed.
 		Entry("One fully populated IPPoolSpec and another empty IPPoolSpec",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("192.168.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("192.168.0.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -214,8 +215,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 4: Pass two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6) and expect the series of operations to succeed.
 		Entry("Two fully populated IPPoolSpecs with two IPPoolMetadata (one IPv4 and another IPv6)",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("2001::/120")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("2001::/120")},
 			api.IPPoolSpec{
 				NATOutgoing: true,
 				Disabled:    true,
@@ -228,8 +229,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 5: Test starting with IPIP (cross subnet mode) and moving to no IPIP
 		Entry("IPIP (cross subnet mode) and moving to no IPIP",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("2001::/120")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("2001::/120")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -241,8 +242,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 		// Test 6: Test starting with IPIP (cross subnet mode) and moving to IPIP disabled (keeping IPIP mode)
 		Entry("IPIP (cross subnet mode) and moving to IPIP disabled (keeping IPIP mode)",
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.0.0.0/24")},
-			api.IPPoolMetadata{CIDR: testutils.MustParseNetwork("10.10.10.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.0.0.0/24")},
+			api.IPPoolMetadata{CIDR: net.MustParseNetwork("10.10.10.0/24")},
 			api.IPPoolSpec{
 				IPIP: &api.IPIPConfiguration{
 					Enabled: true,
@@ -269,7 +270,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		It("should invoke validation failure", func() {
 			By("Creating a pool with small CIDR (< /26)")
 			_, err = c.IPPools().Create(&api.IPPool{
-				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.10.10.0/30")},
+				Metadata: api.IPPoolMetadata{CIDR: net.MustParseCIDR("10.10.10.0/30")},
 				Spec:     api.IPPoolSpec{},
 			})
 
@@ -281,7 +282,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		It("should invoke validation failure", func() {
 			By("Applying a pool with small CIDR (< /122)")
 			_, err = c.IPPools().Apply(&api.IPPool{
-				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("aa:bb::c8/125")},
+				Metadata: api.IPPoolMetadata{CIDR: net.MustParseCIDR("aa:bb::c8/125")},
 				Spec:     api.IPPoolSpec{},
 			})
 			Expect(err).To(HaveOccurred())
@@ -292,14 +293,14 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		It("should invoke validation failure", func() {
 			By("Creating a pool with a valid CIDR")
 			_, err = c.IPPools().Create(&api.IPPool{
-				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("aa:bb::/120")},
+				Metadata: api.IPPoolMetadata{CIDR: net.MustParseCIDR("aa:bb::/120")},
 				Spec:     api.IPPoolSpec{},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Updating the pool using invalid settings (IPIP on IPv6 pool)")
 			_, err = c.IPPools().Update(&api.IPPool{
-				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("aa:bb::/120")},
+				Metadata: api.IPPoolMetadata{CIDR: net.MustParseCIDR("aa:bb::/120")},
 				Spec:     api.IPPoolSpec{IPIP: &api.IPIPConfiguration{Enabled: true}},
 			})
 			Expect(err).To(HaveOccurred())
@@ -310,7 +311,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 		It("should invoke validation failure", func() {
 			By("Creating a pool with unstrict masked CIDR")
 			_, err = c.IPPools().Create(&api.IPPool{
-				Metadata: api.IPPoolMetadata{CIDR: testutils.MustParseCIDR("10.10.10.0/16")},
+				Metadata: api.IPPoolMetadata{CIDR: net.MustParseCIDR("10.10.10.0/16")},
 				Spec:     api.IPPoolSpec{},
 			})
 

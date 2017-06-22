@@ -37,13 +37,14 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
-	cidrv4 := testutils.MustParseCIDR("1.2.3.5/24")
-	cidrv6 := testutils.MustParseCIDR("aa::bb00:0001/104")
+	cidrv4 := net.MustParseCIDR("1.2.3.5/24")
+	cidrv6 := net.MustParseCIDR("aa::bb00:0001/104")
 	asn := numorstring.ASNumber(12345)
 
 	DescribeTable("Node e2e tests",

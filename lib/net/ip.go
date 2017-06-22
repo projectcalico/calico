@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,4 +74,14 @@ func (i *IP) Network() *IPNet {
 		n.Mask = net.CIDRMask(net.IPv6len*8, net.IPv6len*8)
 	}
 	return n
+}
+
+// MustParseIP parses the string into a IP.
+func MustParseIP(i string) IP {
+	var ip IP
+	err := ip.UnmarshalText([]byte(i))
+	if err != nil {
+		panic(err)
+	}
+	return ip
 }

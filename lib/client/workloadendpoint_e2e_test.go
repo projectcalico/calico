@@ -23,20 +23,19 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.DatastoreEtcdV2, func(apiConfig api.CalicoAPIConfig) {
-	cidr1 := testutils.MustParseNetwork("10.0.0.0/32")
-	cidr2 := testutils.MustParseNetwork("20.0.0.0/32")
-	cidr3 := testutils.MustParseNetwork("192.168.0.0/32")
-	cidr4 := testutils.MustParseNetwork("172.56.0.0/32")
+	cidr1 := cnet.MustParseNetwork("10.0.0.0/32")
+	cidr2 := cnet.MustParseNetwork("20.0.0.0/32")
+	cidr3 := cnet.MustParseNetwork("192.168.0.0/32")
+	cidr4 := cnet.MustParseNetwork("172.56.0.0/32")
 	mac1, _ := net.ParseMAC("01:23:45:67:89:ab")
 	mac2, _ := net.ParseMAC("CA:FE:00:01:02:03")
-	ipv41 := testutils.MustParseIP("10.0.0.0")
-	ipv61 := testutils.MustParseIP("fe80::33")
+	ipv41 := cnet.MustParseIP("10.0.0.0")
+	ipv61 := cnet.MustParseIP("fe80::33")
 
 	DescribeTable("WorkloadEndpoint e2e tests",
 		func(meta1, meta2 api.WorkloadEndpointMetadata, spec1, spec2 api.WorkloadEndpointSpec) {
@@ -177,8 +176,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				IPNetworks: []cnet.IPNet{cidr1, cidr2},
 				IPNATs: []api.IPNAT{
 					{
-						InternalIP: testutils.MustParseIP("10.0.0.0"),
-						ExternalIP: testutils.MustParseIP("20.0.0.0"),
+						InternalIP: cnet.MustParseIP("10.0.0.0"),
+						ExternalIP: cnet.MustParseIP("20.0.0.0"),
 					},
 				},
 
@@ -192,8 +191,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				IPNetworks: []cnet.IPNet{cidr3, cidr4},
 				IPNATs: []api.IPNAT{
 					{
-						InternalIP: testutils.MustParseIP("192.168.0.0"),
-						ExternalIP: testutils.MustParseIP("192.168.1.1"),
+						InternalIP: cnet.MustParseIP("192.168.0.0"),
+						ExternalIP: cnet.MustParseIP("192.168.1.1"),
 					},
 				},
 
@@ -228,8 +227,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				IPNetworks: []cnet.IPNet{cidr1, cidr2},
 				IPNATs: []api.IPNAT{
 					{
-						InternalIP: testutils.MustParseIP("10.0.0.0"),
-						ExternalIP: testutils.MustParseIP("192.168.0.0"),
+						InternalIP: cnet.MustParseIP("10.0.0.0"),
+						ExternalIP: cnet.MustParseIP("192.168.0.0"),
 					},
 				},
 				InterfaceName: "eth1",
@@ -239,8 +238,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				IPNetworks: []cnet.IPNet{cidr3, cidr4},
 				IPNATs: []api.IPNAT{
 					{
-						InternalIP: testutils.MustParseIP("192.168.0.0"),
-						ExternalIP: testutils.MustParseIP("192.168.1.1"),
+						InternalIP: cnet.MustParseIP("192.168.0.0"),
+						ExternalIP: cnet.MustParseIP("192.168.1.1"),
 					},
 				},
 
@@ -275,8 +274,8 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				IPNetworks: []cnet.IPNet{cidr1, cidr2},
 				IPNATs: []api.IPNAT{
 					{
-						InternalIP: testutils.MustParseIP("10.0.0.0"),
-						ExternalIP: testutils.MustParseIP("20.0.0.0"),
+						InternalIP: cnet.MustParseIP("10.0.0.0"),
+						ExternalIP: cnet.MustParseIP("20.0.0.0"),
 					},
 				},
 

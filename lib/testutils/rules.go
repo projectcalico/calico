@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package testutils
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -28,10 +29,10 @@ var numProtocol1 = numorstring.ProtocolFromInt(240)
 var icmpType1 = 100
 var icmpCode1 = 200
 
-var cidr1 = MustParseNetwork("10.0.0.1/24")
-var cidr2 = MustParseNetwork("20.0.0.1/24")
-var cidrv61 = MustParseNetwork("abcd:5555::/120")
-var cidrv62 = MustParseNetwork("abcd:2345::/120")
+var cidr1 = net.MustParseNetwork("10.0.0.1/24")
+var cidr2 = net.MustParseNetwork("20.0.0.1/24")
+var cidrv61 = net.MustParseNetwork("abcd:5555::/120")
+var cidrv62 = net.MustParseNetwork("abcd:2345::/120")
 
 var icmp1 = api.ICMPFields{
 	Type: &icmpType1,

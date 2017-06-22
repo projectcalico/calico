@@ -43,9 +43,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
@@ -182,12 +181,12 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				}},
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("10.0.0.0"), testutils.MustParseIP("20.0.0.0")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("10.0.0.0"), cnet.MustParseIP("20.0.0.0")},
 				Profiles:      []string{"profile1", "profile2"},
 			},
 			api.HostEndpointSpec{
 				InterfaceName: "eth1",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("192.168.0.0"), testutils.MustParseIP("192.168.1.1")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("192.168.0.0"), cnet.MustParseIP("192.168.1.1")},
 				Profiles:      []string{"profile3", "profile4"},
 			}),
 
@@ -212,7 +211,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			},
 			api.HostEndpointSpec{
 				InterfaceName: "eth1",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("192.168.0.0"), testutils.MustParseIP("192.168.1.1")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("192.168.0.0"), cnet.MustParseIP("192.168.1.1")},
 				Profiles:      []string{"profile3", "profile4"},
 			}),
 
@@ -234,7 +233,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				}},
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("10.0.0.0"), testutils.MustParseIP("20.0.0.0")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("10.0.0.0"), cnet.MustParseIP("20.0.0.0")},
 				Profiles:      []string{"profile1", "profile2"},
 			},
 			api.HostEndpointSpec{
@@ -259,12 +258,12 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				}},
 			api.HostEndpointSpec{
 				InterfaceName: "eth0",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("10.0.0.0"), testutils.MustParseIP("192.168.1.1")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("10.0.0.0"), cnet.MustParseIP("192.168.1.1")},
 				Profiles:      []string{"profile1", "profile2"},
 			},
 			api.HostEndpointSpec{
 				InterfaceName: "eth1",
-				ExpectedIPs:   []cnet.IP{testutils.MustParseIP("fe80::00"), testutils.MustParseIP("fe80::33")},
+				ExpectedIPs:   []cnet.IP{cnet.MustParseIP("fe80::00"), cnet.MustParseIP("fe80::33")},
 				Profiles:      []string{"profile3", "profile4"},
 			}),
 	)

@@ -169,7 +169,7 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(ip).To(BeNil())
 
 		By("checking address set to 1.2.3.4")
-		ipv4 := testutils.MustParseIP("1.2.3.4")
+		ipv4 := net.MustParseIP("1.2.3.4")
 		err = config.SetNodeIPIPTunnelAddress("node1", &ipv4)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -178,7 +178,7 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(*ip).To(Equal(ipv4))
 
 		By("checking address set to aa::ff")
-		ipv6 := testutils.MustParseIP("aa::ff")
+		ipv6 := net.MustParseIP("aa::ff")
 		err = config.SetNodeIPIPTunnelAddress("node1", &ipv6)
 		Expect(err).NotTo(HaveOccurred())
 
