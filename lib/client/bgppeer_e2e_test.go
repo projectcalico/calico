@@ -41,6 +41,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -161,11 +162,11 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV
 			api.BGPPeerMetadata{
 				Scope:  scope.Scope("node"),
 				Node:   "node1",
-				PeerIP: testutils.MustParseIP("10.0.0.1"),
+				PeerIP: net.MustParseIP("10.0.0.1"),
 			},
 			api.BGPPeerMetadata{
 				Scope:  scope.Scope("global"),
-				PeerIP: testutils.MustParseIP("20.0.0.1"),
+				PeerIP: net.MustParseIP("20.0.0.1"),
 			},
 			api.BGPPeerSpec{
 				ASNumber: numorstring.ASNumber(6512),
@@ -179,11 +180,11 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV
 			api.BGPPeerMetadata{
 				Scope:  scope.Scope("node"),
 				Node:   "node1",
-				PeerIP: testutils.MustParseIP("10.0.0.1"),
+				PeerIP: net.MustParseIP("10.0.0.1"),
 			},
 			api.BGPPeerMetadata{
 				Scope:  scope.Scope("global"),
-				PeerIP: testutils.MustParseIP("20.0.0.1"),
+				PeerIP: net.MustParseIP("20.0.0.1"),
 			},
 			api.BGPPeerSpec{
 				ASNumber: numorstring.ASNumber(6512),

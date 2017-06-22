@@ -21,6 +21,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -36,10 +37,10 @@ var _ = testutils.E2eDatastoreDescribe("Backend tests", testutils.DatastoreEtcdV
 		client = c.Backend
 		block = model.KVPair{
 			Key: model.BlockKey{
-				CIDR: testutils.MustParseNetwork("10.0.0.0/26"),
+				CIDR: net.MustParseNetwork("10.0.0.0/26"),
 			},
 			Value: &model.AllocationBlock{
-				CIDR: testutils.MustParseNetwork("10.0.0.0/26"),
+				CIDR: net.MustParseNetwork("10.0.0.0/26"),
 			},
 		}
 
@@ -72,7 +73,7 @@ var _ = testutils.E2eDatastoreDescribe("Backend tests", testutils.DatastoreEtcdV
 
 		It("updates a kv pair", func() {
 			block.Value = &model.AllocationBlock{
-				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
+				CIDR: net.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := client.Update(&block)
@@ -103,7 +104,7 @@ var _ = testutils.E2eDatastoreDescribe("Backend tests", testutils.DatastoreEtcdV
 
 		It("updates a kv pair", func() {
 			block.Value = &model.AllocationBlock{
-				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
+				CIDR: net.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := client.Apply(&block)
@@ -117,7 +118,7 @@ var _ = testutils.E2eDatastoreDescribe("Backend tests", testutils.DatastoreEtcdV
 
 		It("creates a kv pair", func() {
 			block.Key = model.BlockKey{
-				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
+				CIDR: net.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := client.Apply(&block)
@@ -131,7 +132,7 @@ var _ = testutils.E2eDatastoreDescribe("Backend tests", testutils.DatastoreEtcdV
 
 		It("sets revision field", func() {
 			block.Value = &model.AllocationBlock{
-				CIDR: testutils.MustParseNetwork("192.168.0.0/26"),
+				CIDR: net.MustParseNetwork("192.168.0.0/26"),
 			}
 
 			kv, err := client.Apply(&block)

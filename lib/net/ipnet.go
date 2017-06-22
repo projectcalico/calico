@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -103,4 +103,27 @@ func ParseCIDR(c string) (*IP, *IPNet, error) {
 func (i IPNet) String() string {
 	ip := &i.IPNet
 	return ip.String()
+}
+
+// MustParseNetwork parses the string into a IPNet.  The IP address in the
+// IPNet is masked.
+func MustParseNetwork(c string) IPNet {
+	_, cidr, err := net.ParseCIDR(c)
+	if err != nil {
+		panic(err)
+	}
+	return IPNet{*cidr}
+}
+
+// MustParseCIDR parses the string into a IPNet.  The IP address in the
+// IPNet is not masked.
+func MustParseCIDR(c string) IPNet {
+	ip, cidr, err := net.ParseCIDR(c)
+	if err != nil {
+		panic(err)
+	}
+	n := IPNet{}
+	n.IP = ip
+	n.Mask = cidr.Mask
+	return n
 }
