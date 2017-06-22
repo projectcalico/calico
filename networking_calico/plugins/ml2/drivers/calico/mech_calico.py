@@ -1313,7 +1313,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.warning("Extra groups: %s", extra_groups)
 
         # First, create the missing security profiles.
-        self._resync_missing_profiles(context, missing_groups)
+        if missing_groups:
+            self._resync_missing_profiles(context, missing_groups)
 
         # Next, reconcile existing security profiles. This involves looping
         # over them, grabbing their data, and then comparing that to what
@@ -1340,7 +1341,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         with self._txn_from_context(context, tag="resync-prof-missing"):
             rules = self.db.get_security_group_rules(
-                context, filters={'security_group_id': missing_group_ids}
+                context, filters={'security_group_id': list(missing_group_ids)}
             )
 
             profiles_to_write = (

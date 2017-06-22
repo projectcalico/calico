@@ -51,6 +51,7 @@ r="$r|(?:tempest\.scenario\.test_network_v6\.TestGettingAddress.*)"
 r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_network_basic_ops.*)"
 r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_router_rescheduling.*)"
 r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_update_router_admin_state.*)"
+r="$r|(?:tempest\.scenario\.test_network_basic_ops\.TestNetworkBasicOps\.test_hotplug_nic.*)"
 r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_multiple_security_groups.*)"
 r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBasicOps\.test_port_security_disable_security_group.*)"
 
@@ -70,3 +71,25 @@ fi
 
 # Don't run Tempest tests in parallel.
 export TEMPEST_CONCURRENCY=1
+
+# Customize the gate hook so that we can see Felix logs.
+function gate_hook {
+    echo "Hi, this is networking-calico's gate hook"
+
+    # Run the normal gate hook and record its status.
+    $BASE/new/devstack-gate/devstack-vm-gate.sh
+    status=$?
+
+    # Do things to get at the Felix logs.
+    ls -lrt /var/log/calico
+    cat /var/log/calico/felix.log
+
+    # Return the normal gate hook's status.
+    return $status
+}
+export -f gate_hook
+
+
+# Local variables:
+# mode: sh
+# End:

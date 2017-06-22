@@ -567,6 +567,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
             dhcp.DictModel({'device_id': 'tap2'}),
             dhcp.DictModel({'device_id': 'tap3'}),
         ]
+        network.non_local_subnets = []
         device_mgr_cls.return_value.driver.bridged = False
         dhcp_driver = DnsmasqRouted(cfg.CONF, network, None)
         with mock.patch.object(dhcp_driver, '_get_value_from_conf_file') as gv:
@@ -586,7 +587,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
             '--dhcp-match=set:ipxe,175',
             '--bind-dynamic',
             '--interface=ns-dhcp',
-            '--dhcp-range=set:tag0,10.28.0.0,static,86400s',
+            '--dhcp-range=set:tag0,10.28.0.0,static,255.255.255.0,86400s',
             '--dhcp-lease-max=16777216',
             '--conf-file=',
             '--domain=openstacklocal',

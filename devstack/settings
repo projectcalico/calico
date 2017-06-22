@@ -20,6 +20,10 @@ if $CALICO_COMPUTE_ONLY; then
     # Explicitly enable the services that we need for compute only.
     ENABLED_SERVICES=n-cpu,neutron,calico-dhcp,n-api-meta,calico-bird
 else
+    # Disable the Devstack base etcd3 service, because this plugin
+    # does its own etcd installation.
+    disable_service etcd3
+
     # Disable services that Devstack starts by default, but that we
     # don't need for Calico networking demonstration: 'dstat' is a
     # rolling display of memory and CPU usage by the various OpenStack
