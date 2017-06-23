@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
@@ -29,7 +30,9 @@ import (
 var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
 	var dpConfig intdataplane.Config
-	BeforeEach(func() {
+	var healthAggregator *health.HealthAggregator
+
+	JustBeforeEach(func() {
 		configParams = config.New()
 		dpConfig = intdataplane.Config{
 			RulesConfig: rules.Config{
@@ -61,12 +64,25 @@ var _ = Describe("Constructor test", func() {
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				IptablesAllowAction:  configParams.IptablesAllowAction,
 			},
-			IPIPMTU: configParams.IpInIpMtu,
+			IPIPMTU:          configParams.IpInIpMtu,
+			HealthAggregator: healthAggregator,
 		}
 	})
 
 	It("should be constructable", func() {
 		var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
 		Expect(dp).ToNot(BeNil())
+	})
+
+	Context("with health aggregator", func() {
+
+		BeforeEach(func() {
+			healthAggregator = health.NewHealthAggregator()
+		})
+
+		It("should be constructable", func() {
+			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp).ToNot(BeNil())
+		})
 	})
 })

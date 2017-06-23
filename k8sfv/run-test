@@ -167,6 +167,7 @@ fi
 docker run --detach --privileged --name ${prefix}-felix \
        ${typha_felix_args} \
        -e CALICO_DATASTORE_TYPE=kubernetes \
+       -e FELIX_HEALTHENABLED=true \
        -e FELIX_LOGSEVERITYSCREEN=${FELIX_LOG_LEVEL} \
        -e FELIX_DATASTORETYPE=kubernetes \
        -e FELIX_PROMETHEUSMETRICSENABLED=true \
@@ -178,7 +179,7 @@ docker run --detach --privileged --name ${prefix}-felix \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
        calico/felix:${FELIX_VERSION} \
-       /bin/sh -c "for n in 1 2; do calico-felix; done"
+       /bin/sh -c "while true; do calico-felix; done"
 felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 

@@ -24,7 +24,7 @@
 // package, which are ready to be marshaled directly to the felix front-end.
 //
 // 	// Using the async API.
-// 	asyncCalcGraph := calc.NewAsyncCalcGraph("hostname", outputChannel)
+// 	asyncCalcGraph := calc.NewAsyncCalcGraph("hostname", outputChannel, nil)
 // 	syncer := fc.datastore.Syncer(asyncCalcGraph)
 // 	syncer.Start()
 // 	asyncCalcGraph.Start()

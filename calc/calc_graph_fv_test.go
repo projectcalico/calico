@@ -16,6 +16,7 @@ package calc_test
 
 import (
 	. "github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/health"
 
 	"fmt"
 	"reflect"
@@ -924,7 +925,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf := config.New()
 					conf.FelixHostname = localHostname
 					outputChan := make(chan interface{})
-					asyncGraph := NewAsyncCalcGraph(conf, outputChan)
+					asyncGraph := NewAsyncCalcGraph(conf, outputChan, nil)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph)
@@ -1241,3 +1242,16 @@ type hostEpId proto.HostEndpointID
 func (i *hostEpId) String() string {
 	return i.EndpointId
 }
+
+var _ = Describe("calc graph with health state", func() {
+
+	It("should be constructable", func() {
+		// Create the calculation graph.
+		conf := config.New()
+		conf.FelixHostname = localHostname
+		outputChan := make(chan interface{})
+		healthAggregator := health.NewHealthAggregator()
+		asyncGraph := NewAsyncCalcGraph(conf, outputChan, healthAggregator)
+		Expect(asyncGraph).NotTo(BeNil())
+	})
+})
