@@ -28,11 +28,16 @@ This has many advantages:
 
 ## How can I try Typha?
 
-We're still in the process of adding Typha to our documentation.  In the meantime, if you're using the
-Kubernetes Datastore Driver (KDD) with Kubernetes 1.6+ and you'd like to try it out, follow the instructions below.
+We're still in the process of adding Typha to our documentation.  In the meantime, if you're
+
+- using the Kubernetes Datastore Driver (KDD)
+- with Kubernetes 1.6+
+- with RBAC disabled (or you're comfortable adding a service account for Typha!)
+
+and you'd like to try it out, follow the instructions below...
 
 Since Typha has the most impact when using the KDD, we're focusing on that to begin with.  Install the Kubernetes
-specs below to creates a 3-node deployment of Typha and expose them as a service called `calico-typha`.  A three-node
+specs below to create a 3-node deployment of Typha and expose them as a service called `calico-typha`.  A three-node
 deployment is enough for ~600 Felix instances.  Typha scales horizontally so feel free to reduce/increase
 the number of replicas.  If you're running a small cluster, you may wish to reduce the CPU reservation
 proportionately.
