@@ -111,6 +111,7 @@ func init() {
 	registerStructValidator(validateRule, api.Rule{})
 	registerStructValidator(validateBackendRule, model.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
+	registerStructValidator(validateBGPPeerMeta, api.BGPPeerMetadata{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -470,5 +471,14 @@ func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel)
 			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv6Address),
 				"BGP.IPv6Address", "", reason("invalid IPv6 address and subnet specified"))
 		}
+	}
+}
+
+func validateBGPPeerMeta(v *validator.Validate, structLevel *validator.StructLevel) {
+	m := structLevel.CurrentStruct.Interface().(api.BGPPeerMetadata)
+
+	if m.Scope == scope.Global && m.Node != "" {
+		structLevel.ReportError(reflect.ValueOf(m.Node),
+			"Metadata.Node", "", reason("no BGP Peer node name should be specified when scope is global"))
 	}
 }

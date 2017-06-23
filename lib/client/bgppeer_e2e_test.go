@@ -35,12 +35,14 @@ package client_test
 import (
 	"errors"
 	"log"
+	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
@@ -192,4 +194,54 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV
 			api.BGPPeerSpec{}),
 	)
 
+	Describe("Checking operations perform data validation", func() {
+		c := testutils.CreateCleanClient(config)
+		var err error
+		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})
+
+		It("should invoke validation failure", func() {
+			By("Creating a BGPPeer with invalid combination of scope and node")
+			_, err = c.BGPPeers().Create(&api.BGPPeer{
+				Metadata: api.BGPPeerMetadata{
+					Scope:  scope.Scope("global"),
+					Node:   "node1",
+					PeerIP: net.MustParseIP("10.0.0.1"),
+				},
+				Spec: api.BGPPeerSpec{},
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields).To(HaveLen(1))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields[0].Name).To(Equal("Metadata.Node"))
+		})
+
+		It("should invoke validation failure", func() {
+			By("Listing BGPPeers with invalid combination of scope and node")
+			_, err = c.BGPPeers().List(api.BGPPeerMetadata{
+				Scope:  scope.Scope("global"),
+				Node:   "node1",
+				PeerIP: net.MustParseIP("10.0.0.1"),
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields).To(HaveLen(1))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields[0].Name).To(Equal("Metadata.Node"))
+		})
+
+		It("should invoke validation failure", func() {
+			By("Getting a BGPPeer with invalid combination of scope and node")
+			_, err = c.BGPPeers().Get(api.BGPPeerMetadata{
+				Scope:  scope.Scope("global"),
+				Node:   "node1",
+				PeerIP: net.MustParseIP("10.0.0.1"),
+			})
+
+			Expect(err).To(HaveOccurred())
+			Expect(reflect.TypeOf(err)).To(Equal(valErrorType))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields).To(HaveLen(1))
+			Expect(err.(cerrors.ErrorValidation).ErroredFields[0].Name).To(Equal("Metadata.Node"))
+		})
+	})
 })

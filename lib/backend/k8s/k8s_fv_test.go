@@ -747,7 +747,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	}()
 
 	It("should not error on unsupported List() calls", func() {
-		objs, err := c.List(model.BGPPeerListOptions{})
+		objs, err := c.List(model.NodeBGPPeerListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(objs)).To(Equal(0))
 	})
