@@ -41,7 +41,7 @@ func IPToResourceName(ip net.IP) string {
 
 // ResourceNameToIP converts a name used for a k8s resource to an IP address.
 func ResourceNameToIP(name string) (*net.IP, error) {
-	ip := net.ParseIP(ResourceNameToIPString(name))
+	ip := net.ParseIP(resourceNameToIPString(name))
 	if ip == nil {
 		return nil, fmt.Errorf("invalid resource name %s: does not follow Calico IP name format", name)
 	}
@@ -69,7 +69,7 @@ func ResourceNameToIPNet(name string) (*net.IPNet, error) {
 	if idx == -1 {
 		return nil, fmt.Errorf("invalid resource name: %s: does not follow Calico IPNet name format", name)
 	}
-	ipstr := ResourceNameToIPString(name[:idx])
+	ipstr := resourceNameToIPString(name[:idx])
 	size := name[idx+1:]
 
 	_, cidr, err := net.ParseCIDR(ipstr + "/" + size)
@@ -79,10 +79,10 @@ func ResourceNameToIPNet(name string) (*net.IPNet, error) {
 	return cidr, nil
 }
 
-// ResourceNameToIPString converts a name used for a k8s resource to an IP address string.
+// resourceNameToIPString converts a name used for a k8s resource to an IP address string.
 // This function does not check the validity of the result - it merely reverses the
 // character conversion used to convert an IP address to a k8s compatible name.
-func ResourceNameToIPString(name string) string {
+func resourceNameToIPString(name string) string {
 	// The IP address is stored in the name with periods and colons replaced
 	// by dashes.  To determine if this is IPv4 or IPv6 count the dashes.  If
 	// either of the following are true, it's IPv6:

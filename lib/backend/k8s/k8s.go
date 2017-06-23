@@ -211,6 +211,7 @@ func (c *KubeClient) createThirdPartyResources() error {
 	var lastErr error
 	for i := 0; i < 4; i++ {
 		if err := <- done; err != nil {
+			log.WithError(err).Error("Hit error initializing TPR")
 			lastErr = err
 		}
 	}

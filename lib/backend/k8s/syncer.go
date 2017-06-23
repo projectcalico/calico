@@ -1053,10 +1053,10 @@ func (syn *kubeSyncer) parseCustomK8sResourceEvent(
 
 	// Error converting resource.  Attempt to determine the Key and treat as
 	// a delete (Value will be nil).
-	logContext.WithError(err).Info("Error in resource data - may treat as delete")
+	logContext.WithError(err).Info("Failed to parse resource - may treat as delete")
 	key, err := converter.NameToKey(tpr.GetObjectMeta().GetName())
 	if err == nil {
-		log.WithField("Key", key).WithError(err).Error("Error in resource data, treating as deleted")
+		log.WithField("Key", key).WithError(err).Error("Failed to parse resource, treating as deleted")
 		return &model.KVPair{
 			Key: key,
 		}
@@ -1064,6 +1064,6 @@ func (syn *kubeSyncer) parseCustomK8sResourceEvent(
 
 	// Could not determine the Key from the resource name - all we can do is
 	// ignore this event.
-	logContext.WithError(err).Error("Error in resource data, ignoring event")
+	logContext.WithError(err).Error("Failed to parse resource spec and metadata, ignoring event")
 	return nil
 }
