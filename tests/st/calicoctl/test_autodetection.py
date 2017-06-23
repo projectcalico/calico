@@ -74,7 +74,9 @@ class TestAutodetection(TestBase):
             # method using a bogus interface name.  This should fail.
             try:
                 host3.start_calico_node(
-                    "--ip=autodetect --ip-autodetection-method=interface=BogusInterface")
+                    "--ip=autodetect --ip-autodetection-method=interface=BogusInterface",
+                    with_ipv4pool_cidr_env_var=False
+                )
             except CommandExecError:
                 pass
             else:
@@ -83,7 +85,9 @@ class TestAutodetection(TestBase):
             # Start the node on host2 using can-reach auto-detection method
             # using the IP address of host1.  This should succeed.
             host3.start_calico_node(
-                "--ip=autodetect --ip-autodetection-method=interface=eth0")
+                "--ip=autodetect --ip-autodetection-method=interface=eth0",
+                    with_ipv4pool_cidr_env_var=False
+                )
 
             # Create a network and a workload on each host.
             network1 = host1.create_network("subnet1")

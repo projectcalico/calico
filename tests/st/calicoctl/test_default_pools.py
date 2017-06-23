@@ -150,7 +150,8 @@ class TestDefaultPools(TestBase):
         Test that NO_DEFAULT_POOLS works correctly
         """
         # Start calico-docker
-        self.host.start_calico_node(options="--no-default-ippools")
+        self.host.start_calico_node(options="--no-default-ippools",
+                                    with_ipv4pool_cidr_env_var=False)
         self.wait_for_node_log("Calico node started successfully")
         # check the expected pool is present
         pools_output = self.host.calicoctl("get ippool -o yaml")
