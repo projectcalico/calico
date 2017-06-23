@@ -62,7 +62,6 @@ func (_ GlobalBGPPeerConverter) ListInterfaceToKey(l model.ListInterface) model.
 }
 
 func (_ GlobalBGPPeerConverter) KeyToName(k model.Key) (string, error) {
-	// The name should be policed before we get here.
 	pk := k.(model.GlobalBGPPeerKey)
 
 	// Convert the IP address to a k8s compatible name by replacing periods
