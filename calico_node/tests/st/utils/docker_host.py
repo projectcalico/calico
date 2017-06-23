@@ -14,6 +14,7 @@
 import logging
 import json
 import os
+import re
 import uuid
 import yaml
 from functools import partial
@@ -21,6 +22,7 @@ from subprocess import CalledProcessError, Popen, PIPE
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
 from network import DockerNetwork
+from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.exceptions import CommandExecError
 from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
     ETCD_CA, ETCD_KEY, ETCD_CERT, ETCD_HOSTNAME_SSL
@@ -259,12 +261,14 @@ class DockerHost(object):
 
         return self.execute(calicoctl + " " + command)
 
-    def start_calico_node(self, options=""):
+    def start_calico_node(self, options="", with_ipv4pool_cidr_env_var=True):
         """
         Start calico in a container inside a host by calling through to the
         calicoctl node command.
         """
         args = ['node', 'run']
+        if with_ipv4pool_cidr_env_var:
+            args.append('--dryrun')
         if "--node-image" not in options:
             args.append('--node-image=%s' % NODE_CONTAINER_NAME)
 
@@ -278,7 +282,39 @@ class DockerHost(object):
         args.append(options)
 
         cmd = ' '.join(args)
-        self.calicoctl(cmd)
+
+        if with_ipv4pool_cidr_env_var:
+            # Run the dryrun command, then modify and execute the command that
+            # that tells us.
+            assert "--dryrun" in cmd
+            output = self.calicoctl(cmd)
+
+            # Look for the line in the output that includes "docker run",
+            # "--net=host" and "--name=calico-node".
+            for line in output.split('\n'):
+                if re.match(r'docker run .*--net=host .*--name=calico-node', line):
+                    # This is the line we want to modify.
+                    break
+            else:
+                raise AssertionError("No node run line in %s" % output)
+
+            # Break the line at the first occurrence of " -e ".
+            prefix, _, suffix = line.rstrip().partition(" -e ")
+
+            # Construct the calicoctl command that we want, including the
+            # CALICO_IPV4POOL_CIDR setting.
+            modified_cmd = (
+                prefix +
+                " -e CALICO_IPV4POOL_CIDR=%s -e " % DEFAULT_IPV4_POOL_CIDR +
+                suffix
+            )
+
+            # Now run that.
+            self.execute(modified_cmd)
+        else:
+            # Run the non-dryrun calicoctl node run command.
+            self.calicoctl(cmd)
+
         self.attach_log_analyzer()
 
     def set_ipip_enabled(self, enabled):
