@@ -36,15 +36,16 @@ const (
 )
 
 func NewSystemNetworkPoliciesClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
-	return newCustomK8sResourceClient(
-		c, r,
-		SystemNetworkPolicyTPRName,
-		SystemNetworkPolicyResourceName,
-		"Calico System Network Policies",
-		reflect.TypeOf(thirdparty.SystemNetworkPolicy{}),
-		reflect.TypeOf(thirdparty.SystemNetworkPolicyList{}),
-		SystemNetworkPolicyConverter{},
-	)
+	return &customK8sResourceClient{
+		clientSet:       c,
+		restClient:      r,
+		name:            SystemNetworkPolicyTPRName,
+		resource:        SystemNetworkPolicyResourceName,
+		description:     "Calico System Network Policies",
+		k8sResourceType: reflect.TypeOf(thirdparty.SystemNetworkPolicy{}),
+		k8sListType:     reflect.TypeOf(thirdparty.SystemNetworkPolicyList{}),
+		converter:       SystemNetworkPolicyConverter{},
+	}
 }
 
 // SystemNetworkPolicyConverter implements the K8sResourceConverter interface.

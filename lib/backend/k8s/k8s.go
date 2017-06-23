@@ -175,36 +175,46 @@ func (c *KubeClient) ensureThirdPartyResources() error {
 // createThirdPartyResources creates the necessary third party resources if they
 // do not already exist.
 func (c *KubeClient) createThirdPartyResources() error {
+	// We can check registration of the different custom resources in
+	// parallel.
+	done := make(chan error)
+
 	// Ensure a resource exists for Calico global configuration.
-	log.Info("Ensuring GlobalConfig ThirdPartyResource exists")
-	tpr := extensions.ThirdPartyResource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "global-config.projectcalico.org",
-			Namespace: "kube-system",
-		},
-		Description: "Calico Global Configuration",
-		Versions:    []extensions.APIVersion{{Name: "v1"}},
-	}
-	_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
-	if err != nil {
-		// Don't care if it already exists.
-		if !kerrors.IsAlreadyExists(err) {
-			return resources.K8sErrorToCalico(err, tpr)
+	go func() {
+		log.Info("Ensuring GlobalConfig ThirdPartyResource exists")
+		tpr := extensions.ThirdPartyResource{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "global-config.projectcalico.org",
+				Namespace: "kube-system",
+			},
+			Description: "Calico Global Configuration",
+			Versions:    []extensions.APIVersion{{Name: "v1"}},
+		}
+		_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
+		if err != nil {
+			// Don't care if it already exists.
+			if !kerrors.IsAlreadyExists(err) {
+				done <- resources.K8sErrorToCalico(err, tpr)
+				return
+			}
+		}
+		done <- nil
+		return
+	}()
+
+	go func() { done <- c.ipPoolClient.EnsureInitialized() }()
+	go func() { done <- c.snpClient.EnsureInitialized() }()
+	go func() { done <- c.globalBgpClient.EnsureInitialized() }()
+
+	// Wait for all 4 registrations to complete and keep track of the last
+	// error to return.
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		if err := <- done; err != nil {
+			lastErr = err
 		}
 	}
-
-	// Ensure the IP Pool and System Network Policy TPRs exists.
-	if err := c.ipPoolClient.EnsureInitialized(); err != nil {
-		return err
-	}
-	if err := c.snpClient.EnsureInitialized(); err != nil {
-		return err
-	}
-	if err := c.globalBgpClient.EnsureInitialized(); err != nil {
-		return err
-	}
-
-	return nil
+	return lastErr
 }
 
 // waitForClusterType polls until GlobalConfig is ready, or until 30 seconds have passed.

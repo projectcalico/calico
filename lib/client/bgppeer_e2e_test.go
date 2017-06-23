@@ -30,8 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-// Perform CRUD operations on BGP Peer Resources
-
+// Perform CRUD operations on Global and Node-specific BGP Peer Resources.
 var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("BGPPeer e2e tests",
@@ -188,6 +187,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreEtcdV
 	})
 })
 
+// Perform CRUD operations on Global BGP Peer Resources
 var _ = testutils.E2eDatastoreDescribe("Global BGPPeer tests", testutils.DatastoreAll, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("Global BGPPeer e2e tests",
@@ -291,5 +291,4 @@ var _ = testutils.E2eDatastoreDescribe("Global BGPPeer tests", testutils.Datasto
 			},
 			api.BGPPeerSpec{}),
 	)
-
 })

@@ -31,15 +31,16 @@ const (
 )
 
 func NewIPPoolsClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
-	return newCustomK8sResourceClient(
-		c, r,
-		IPPoolsTPRName,
-		IPPoolsResourceName,
-		"Calico IP Pools",
-		reflect.TypeOf(thirdparty.IpPool{}),
-		reflect.TypeOf(thirdparty.IpPoolList{}),
-		IPPoolConverter{},
-	)
+	return &customK8sResourceClient{
+		clientSet:       c,
+		restClient:      r,
+		name:            IPPoolsTPRName,
+		resource:        IPPoolsResourceName,
+		description:     "Calico IP Pools",
+		k8sResourceType: reflect.TypeOf(thirdparty.IpPool{}),
+		k8sListType:     reflect.TypeOf(thirdparty.IpPoolList{}),
+		converter:       IPPoolConverter{},
+	}
 }
 
 // IPPoolConverter implements the K8sResourceConverter interface.

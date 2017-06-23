@@ -34,15 +34,16 @@ const (
 )
 
 func NewGlobalBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
-	return newCustomK8sResourceClient(
-		c, r,
-		GlobalBGPPeerTPRName,
-		GlobalBGPPeerResourceName,
-		"Calico Global BGP Peers",
-		reflect.TypeOf(thirdparty.GlobalBGPPeer{}),
-		reflect.TypeOf(thirdparty.GlobalBGPPeerList{}),
-		GlobalBGPPeerConverter{},
-	)
+	return &customK8sResourceClient{
+		clientSet:       c,
+		restClient:      r,
+		name:            GlobalBGPPeerTPRName,
+		resource:        GlobalBGPPeerResourceName,
+		description:     "Calico Global BGP Peers",
+		k8sResourceType: reflect.TypeOf(thirdparty.GlobalBGPPeer{}),
+		k8sListType:     reflect.TypeOf(thirdparty.GlobalBGPPeerList{}),
+		converter:       GlobalBGPPeerConverter{},
+	}
 }
 
 // GlobalBGPPeerConverter implements the K8sResourceConverter interface.

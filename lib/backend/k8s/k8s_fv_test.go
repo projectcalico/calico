@@ -669,43 +669,43 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			c.Delete(kvp2)
 		}()
 
-		By("Creating a Global BPGP Peer", func() {
+		By("Creating a Global BGP Peer", func() {
 			_, err := c.Create(kvp1)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Attempting to recreate an existing Global BPGP Peer", func() {
+		By("Attempting to recreate an existing Global BGP Peer", func() {
 			_, err := c.Create(kvp1)
 			Expect(err).To(HaveOccurred())
 		})
 
-		By("Updating an existing Global BPGP Peer", func() {
+		By("Updating an existing Global BGP Peer", func() {
 			_, err := c.Update(kvp1_2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Applying a non-existent Global BPGP Peer", func() {
+		By("Applying a non-existent Global BGP Peer", func() {
 			_, err := c.Apply(kvp2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Updating the Global BPGP Peer created by Apply", func() {
+		By("Updating the Global BGP Peer created by Apply", func() {
 			_, err := c.Apply(kvp2_2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Getting a missing Global BPGP Peer", func() {
+		By("Getting a missing Global BGP Peer", func() {
 			_, err := c.Get(model.GlobalBGPPeerKey{PeerIP: cnet.MustParseIP("1.1.1.1")})
 			Expect(err).To(HaveOccurred())
 		})
 
-		By("Listing a missing Global BPGP Peer", func() {
+		By("Listing a missing Global BGP Peer", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{PeerIP: cnet.MustParseIP("aa:bb:cc:dd::ee")})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(0))
 		})
 
-		By("Listing an explicit Global BPGP Peer", func() {
+		By("Listing an explicit Global BGP Peer", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{PeerIP: cnet.MustParseIP("10.0.0.1")})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
@@ -713,7 +713,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(kvps[0].Value).To(Equal(kvp1_2.Value))
 		})
 
-		By("Listing all Global BPGP Peers (should be 2)", func() {
+		By("Listing all Global BGP Peers (should be 2)", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(2))
@@ -723,12 +723,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(kvps[01].Value).To(Equal(kvp2_2.Value))
 		})
 
-		By("Deleting the Global BPGP Peer created by Apply", func() {
+		By("Deleting the Global BGP Peer created by Apply", func() {
 			err := c.Delete(kvp2)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		By("Listing all Global BPGP Peers (should now be 1)", func() {
+		By("Listing all Global BGP Peers (should now be 1)", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
@@ -736,7 +736,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(kvps[0].Value).To(Equal(kvp1_2.Value))
 		})
 
-		By("Deleting an existing Global BPGP Peer", func() {
+		By("Deleting an existing Global BGP Peer", func() {
 			err := c.Delete(kvp1)
 			Expect(err).NotTo(HaveOccurred())
 		})

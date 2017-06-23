@@ -75,24 +75,6 @@ type customK8sResourceClient struct {
 	converter       CustomK8sResourceConverter
 }
 
-// newCustomK8sResourceClient creates a new customK8sResourceClient.
-func newCustomK8sResourceClient(c *kubernetes.Clientset, r *rest.RESTClient,
-	name, resource, description string,
-	k8sResourceType, k8sListType reflect.Type,
-	converter CustomK8sResourceConverter,
-) K8sResourceClient {
-	return &customK8sResourceClient{
-		clientSet:       c,
-		restClient:      r,
-		name:            name,
-		resource:        resource,
-		description:     description,
-		k8sResourceType: k8sResourceType,
-		k8sListType:     k8sListType,
-		converter:       converter,
-	}
-}
-
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
 func (c *customK8sResourceClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
