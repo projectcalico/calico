@@ -93,7 +93,7 @@ func (h *policies) convertMetadataToListInterface(m unversioned.ResourceMetadata
 // This is part of the conversionHelper interface.  Call through to the shared
 // converter (embedded in the policies struct).
 func (h *policies) convertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
-	return h.ConvertMetadataToKey(m), nil
+	return h.ConvertMetadataToKey(m)
 }
 
 // convertAPIToKVPair converts an API Policy structure to a KVPair containing a
@@ -101,7 +101,7 @@ func (h *policies) convertMetadataToKey(m unversioned.ResourceMetadata) (model.K
 // This is part of the conversionHelper interface.  Call through to the shared
 // converter (embedded in the policies struct).
 func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error) {
-	return h.ConvertAPIToKVPair(a), nil
+	return h.ConvertAPIToKVPair(a)
 }
 
 // convertKVPairToAPI converts a KVPair containing a backend Policy and PolicyKey
@@ -109,5 +109,5 @@ func (h *policies) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, er
 // This is part of the conversionHelper interface.  Call through to the shared
 // converter (embedded in the policies struct).
 func (h *policies) convertKVPairToAPI(d *model.KVPair) (unversioned.Resource, error) {
-	return h.ConvertKVPairToAPI(d), nil
+	return h.ConvertKVPairToAPI(d)
 }

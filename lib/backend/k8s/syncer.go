@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/watch"
@@ -35,20 +34,20 @@ import (
 
 type kubeAPI interface {
 	NamespaceWatch(metav1.ListOptions) (watch.Interface, error)
-	PodWatch(string, metav1.ListOptions) (watch.Interface, error)
-	NetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
-	GlobalConfigWatch(metav1.ListOptions) (watch.Interface, error)
-	IPPoolWatch(metav1.ListOptions) (watch.Interface, error)
-	NodeWatch(metav1.ListOptions) (watch.Interface, error)
-	SystemNetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
 	NamespaceList(metav1.ListOptions) (*k8sapi.NamespaceList, error)
-	NetworkPolicyList() (extensions.NetworkPolicyList, error)
+	PodWatch(string, metav1.ListOptions) (watch.Interface, error)
 	PodList(string, metav1.ListOptions) (*k8sapi.PodList, error)
+	NetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
+	NetworkPolicyList() (extensions.NetworkPolicyList, error)
+	GlobalConfigWatch(metav1.ListOptions) (watch.Interface, error)
 	GlobalConfigList(model.GlobalConfigListOptions) ([]*model.KVPair, string, error)
-	HostConfigList(model.HostConfigListOptions) ([]*model.KVPair, error)
+	IPPoolWatch(metav1.ListOptions) (watch.Interface, error)
 	IPPoolList(model.IPPoolListOptions) ([]*model.KVPair, string, error)
+	NodeWatch(metav1.ListOptions) (watch.Interface, error)
 	NodeList(metav1.ListOptions) (list *k8sapi.NodeList, err error)
-	SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error)
+	SystemNetworkPolicyWatch(metav1.ListOptions) (watch.Interface, error)
+	SystemNetworkPolicyList() ([]*model.KVPair, string, error)
+	HostConfigList(model.HostConfigListOptions) ([]*model.KVPair, error)
 	getReadyStatus(k model.ReadyFlagKey) (*model.KVPair, error)
 }
 
@@ -89,7 +88,7 @@ func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.In
 func (k *realKubeAPI) IPPoolWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	ipPoolWatcher := cache.NewListWatchFromClient(
 		k.kc.tprClientV1,
-		"ippools",
+		resources.IPPoolsResourceName,
 		"kube-system",
 		fields.Everything())
 	watch, err = ipPoolWatcher.WatchFunc(opts)
@@ -125,22 +124,8 @@ func (k *realKubeAPI) SystemNetworkPolicyWatch(opts metav1.ListOptions) (watch.I
 	return watcher.WatchFunc(opts)
 }
 
-func (k *realKubeAPI) SystemNetworkPolicyList() (*thirdparty.SystemNetworkPolicyList, error) {
-	// Perform the request.
-	tprs := &thirdparty.SystemNetworkPolicyList{}
-	err := k.kc.tprClientV1alpha.Get().
-		Resource(resources.SystemNetworkPolicyResourceName).
-		Namespace("kube-system").
-		Do().Into(tprs)
-	if err != nil {
-		// Don't return errors for "not found".  This just
-		// means there are no SystemNetworkPolicies, and we should return
-		// an empty list.
-		if !kerrors.IsNotFound(err) {
-			return nil, err
-		}
-	}
-	return tprs, nil
+func (k *realKubeAPI) SystemNetworkPolicyList() ([]*model.KVPair, string, error) {
+	return k.kc.snpClient.List(model.PolicyListOptions{})
 }
 
 func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *k8sapi.PodList, err error) {
@@ -157,7 +142,7 @@ func (k *realKubeAPI) HostConfigList(l model.HostConfigListOptions) ([]*model.KV
 }
 
 func (k *realKubeAPI) IPPoolList(l model.IPPoolListOptions) ([]*model.KVPair, string, error) {
-	return resources.ListIPPoolsWithResourceVersion(k.kc.ipPoolClient, l)
+	return k.kc.ipPoolClient.List(l)
 }
 
 func (k *realKubeAPI) NodeList(opts metav1.ListOptions) (list *k8sapi.NodeList, err error) {
@@ -519,9 +504,10 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 			// Event is OK - parse it and send it over the channel.
-			kvp := syn.parseSystemNetworkPolicyEvent(event)
-			latestVersions.systemNetworkPolicyVersion = kvp.Revision.(string)
-			syn.sendUpdates([]model.KVPair{*kvp}, KEY_SNP)
+			if kvp := syn.parseSystemNetworkPolicyEvent(event); kvp != nil {
+				latestVersions.systemNetworkPolicyVersion = kvp.Revision.(string)
+				syn.sendUpdates([]model.KVPair{*kvp}, KEY_SNP)
+			}
 		case event = <-gcChan:
 			log.Debugf("Incoming GlobalConfig watch event. Type=%s", event.Type)
 			if syn.eventNeedsResync(event) {
@@ -549,9 +535,10 @@ func (syn *kubeSyncer) readFromKubernetesAPI() {
 				continue
 			}
 			// Event is OK - parse it and send it over the channel.
-			kvp := syn.parseIPPoolEvent(event)
-			latestVersions.poolVersion = kvp.Revision.(string)
-			syn.sendUpdates([]model.KVPair{*kvp}, KEY_IP)
+			if kvp := syn.parseIPPoolEvent(event); kvp != nil {
+				latestVersions.poolVersion = kvp.Revision.(string)
+				syn.sendUpdates([]model.KVPair{*kvp}, KEY_IP)
+			}
 		case event = <-noChan:
 			log.Debugf("Incoming Node watch event. Type=%s", event.Type)
 			if syn.eventNeedsResync(event) {
@@ -673,7 +660,7 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 		// Resync SystemNetworkPolicy only if needed.
 		if syn.needsResync[KEY_SNP] {
 			log.Info("Syncing SystemNetworkPolicy")
-			snpList, err := syn.kubeAPI.SystemNetworkPolicyList()
+			snpList, resourceVersion, err := syn.kubeAPI.SystemNetworkPolicyList()
 			if err != nil {
 				log.Warnf("Error querying SystemNetworkPolicies during snapshot, retrying: %s", err)
 				time.Sleep(1 * time.Second)
@@ -685,11 +672,10 @@ func (syn *kubeSyncer) performSnapshot(versions *resourceVersions) (map[string][
 			snap[KEY_SNP] = []model.KVPair{}
 			keys[KEY_SNP] = map[string]bool{}
 
-			versions.systemNetworkPolicyVersion = snpList.Metadata.ResourceVersion
-			for _, np := range snpList.Items {
-				pol := resources.ThirdPartyToSystemNetworkPolicy(&np)
-				snap[KEY_SNP] = append(snap[KEY_SNP], *pol)
-				keys[KEY_SNP][pol.Key.String()] = true
+			versions.systemNetworkPolicyVersion = resourceVersion
+			for _, p := range snpList {
+				snap[KEY_SNP] = append(snap[KEY_IP], *p)
+				keys[KEY_SNP][p.Key.String()] = true
 			}
 		}
 
@@ -1011,24 +997,6 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 	return kvp
 }
 
-func (syn *kubeSyncer) parseSystemNetworkPolicyEvent(e watch.Event) *model.KVPair {
-	log.Debug("Parsing SystemNetworkPolicy watch event")
-	// First, check the event type.
-	np, ok := e.Object.(*thirdparty.SystemNetworkPolicy)
-	if !ok {
-		log.Panicf("Invalid SystemNetworkPolicy event. Type: %s, Object: %+v", e.Type, e.Object)
-	}
-
-	// Convert the received SystemNetworkPolicy into a profile KVPair.
-	kvp := resources.ThirdPartyToSystemNetworkPolicy(np)
-
-	// For deletes, we need to nil out the Value part of the KVPair
-	if e.Type == watch.Deleted {
-		kvp.Value = nil
-	}
-	return kvp
-}
-
 func (syn *kubeSyncer) parseGlobalConfigEvent(e watch.Event) *model.KVPair {
 	log.Debug("Parsing GlobalConfig watch event")
 	// First, check the event type.
@@ -1047,20 +1015,55 @@ func (syn *kubeSyncer) parseGlobalConfigEvent(e watch.Event) *model.KVPair {
 	return kvp
 }
 
+func (syn *kubeSyncer) parseSystemNetworkPolicyEvent(e watch.Event) *model.KVPair {
+	return syn.parseCustomK8sResourceEvent(e, resources.SystemNetworkPolicyConverter{}, "SystemNetworkPolicy")
+}
+
 func (syn *kubeSyncer) parseIPPoolEvent(e watch.Event) *model.KVPair {
-	log.Debug("Parsing IPPool watch event")
+	return syn.parseCustomK8sResourceEvent(e, resources.IPPoolConverter{}, "IPPool")
+}
+
+func (syn *kubeSyncer) parseCustomK8sResourceEvent(
+	e watch.Event,
+	converter resources.CustomK8sResourceConverter,
+	resourceType string,
+) *model.KVPair {
 	// First, check the event type.
-	tpr, ok := e.Object.(*thirdparty.IpPool)
+	logContext := log.WithFields(log.Fields{
+		"ResourceType": resourceType,
+		"EventType":    e.Type,
+	})
+	tpr, ok := e.Object.(resources.CustomK8sResource)
 	if !ok {
-		log.Panicf("Invalid IPPool event. Type: %s, Object: %+v", e.Type, e.Object)
+		logContext.Panicf("Invalid custom resource event. Object: %+v", e.Object)
 	}
 
-	// Convert the received IPPool into a KVPair.
-	kvp := resources.ThirdPartyToIPPool(tpr)
+	logContext = logContext.WithField("Name", tpr.GetObjectMeta().GetName())
+	logContext.Debug("Parsing watch event")
 
-	// For deletes, we need to nil out the Value part of the KVPair
-	if e.Type == watch.Deleted {
-		kvp.Value = nil
+	// Convert the received resource into a KVPair.
+	kvp, err := converter.ToKVPair(tpr)
+	if err == nil {
+		// For deletes, we need to nil out the Value part of the KVPair
+		if e.Type == watch.Deleted {
+			kvp.Value = nil
+		}
+		return kvp
 	}
-	return kvp
+
+	// Error converting resource.  Attempt to determine the Key and treat as
+	// a delete (Value will be nil).
+	logContext.WithError(err).Info("Failed to parse resource - may treat as delete")
+	key, err := converter.NameToKey(tpr.GetObjectMeta().GetName())
+	if err == nil {
+		logContext.WithField("Key", key).WithError(err).Error("Failed to parse resource, treating as deleted")
+		return &model.KVPair{
+			Key: key,
+		}
+	}
+
+	// Could not determine the Key from the resource name - all we can do is
+	// ignore this event.
+	logContext.WithError(err).Error("Failed to parse resource spec and metadata, ignoring event")
+	return nil
 }

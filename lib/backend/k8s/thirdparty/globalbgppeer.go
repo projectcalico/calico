@@ -17,50 +17,43 @@ package thirdparty
 import (
 	"encoding/json"
 
+	"github.com/projectcalico/libcalico-go/lib/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// IpPoolSpec is the specification of an IP Pool as represented in the Kubernetes
-// ThirdPartyResource API.
-type IpPoolSpec struct {
-	// Value is a json encoded string which can be unmarshalled into a model.IPPool struct.
-	Value string `json:"value"`
-}
-
-// IpPool is the ThirdPartyResource definition of an IPPool in the Kubernetes API.
-type IpPool struct {
+// GlobalBGPPeer is the ThirdPartyResource definition of a Calico Global BGP Peer resource in
+// the Kubernetes API.
+type GlobalBGPPeer struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ObjectMeta `json:"metadata"`
-
-	Spec IpPoolSpec `json:"spec"`
+	Spec            api.BGPPeerSpec   `json:"spec"`
 }
 
-// IpPoolList is a list of IpPool resources.
-type IpPoolList struct {
+// GlobalBGPPeer is a list of Calico Global BGP Peer resources.
+type GlobalBGPPeerList struct {
 	metav1.TypeMeta `json:",inline"`
 	Metadata        metav1.ListMeta `json:"metadata"`
-
-	Items []IpPool `json:"items"`
+	Items           []GlobalBGPPeer `json:"items"`
 }
 
 // GetObjectKind returns the kind of this object.  Required to satisfy Object interface
-func (e *IpPool) GetObjectKind() schema.ObjectKind {
+func (e *GlobalBGPPeer) GetObjectKind() schema.ObjectKind {
 	return &e.TypeMeta
 }
 
-// GetOjbectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
-func (e *IpPool) GetObjectMeta() metav1.Object {
+// GetObjectMeta returns the object metadata of this object. Required to satisfy ObjectMetaAccessor interface
+func (e *GlobalBGPPeer) GetObjectMeta() metav1.Object {
 	return &e.Metadata
 }
 
 // GetObjectKind returns the kind of this object. Required to satisfy Object interface
-func (el *IpPoolList) GetObjectKind() schema.ObjectKind {
+func (el *GlobalBGPPeerList) GetObjectKind() schema.ObjectKind {
 	return &el.TypeMeta
 }
 
 // GetListMeta returns the list metadata of this object. Required to satisfy ListMetaAccessor interface
-func (el *IpPoolList) GetListMeta() metav1.List {
+func (el *GlobalBGPPeerList) GetListMeta() metav1.List {
 	return &el.Metadata
 }
 
@@ -68,27 +61,27 @@ func (el *IpPoolList) GetListMeta() metav1.List {
 // resources and ugorji. If/when these issues are resolved, the code below
 // should no longer be required.
 
-type IpPoolListCopy IpPoolList
-type IpPoolCopy IpPool
+type GlobalBGPPeerListCopy GlobalBGPPeerList
+type GlobalBGPPeerCopy GlobalBGPPeer
 
-func (g *IpPool) UnmarshalJSON(data []byte) error {
-	tmp := IpPoolCopy{}
+func (g *GlobalBGPPeer) UnmarshalJSON(data []byte) error {
+	tmp := GlobalBGPPeerCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := IpPool(tmp)
+	tmp2 := GlobalBGPPeer(tmp)
 	*g = tmp2
 	return nil
 }
 
-func (l *IpPoolList) UnmarshalJSON(data []byte) error {
-	tmp := IpPoolListCopy{}
+func (l *GlobalBGPPeerList) UnmarshalJSON(data []byte) error {
+	tmp := GlobalBGPPeerListCopy{}
 	err := json.Unmarshal(data, &tmp)
 	if err != nil {
 		return err
 	}
-	tmp2 := IpPoolList(tmp)
+	tmp2 := GlobalBGPPeerList(tmp)
 	*l = tmp2
 	return nil
 }

@@ -59,9 +59,10 @@ type KubeClient struct {
 	converter converter
 
 	// Clients for interacting with Calico resources.
-	ipPoolClient api.Client
-	nodeClient   api.Client
-	snpClient    api.Client
+	globalBgpClient resources.K8sResourceClient
+	ipPoolClient    resources.K8sResourceClient
+	snpClient       resources.K8sResourceClient
+	nodeClient      api.Client
 }
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
@@ -128,9 +129,10 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	}
 
 	// Create the Calico sub-clients.
-	kubeClient.ipPoolClient = resources.NewIPPools(cs, tprClientV1)
+	kubeClient.ipPoolClient = resources.NewIPPoolsClient(cs, tprClientV1)
 	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClientV1)
-	kubeClient.snpClient = resources.NewSystemNetworkPolicies(cs, tprClientV1alpha)
+	kubeClient.snpClient = resources.NewSystemNetworkPoliciesClient(cs, tprClientV1alpha)
+	kubeClient.globalBgpClient = resources.NewGlobalBGPPeerClient(cs, tprClientV1)
 
 	return kubeClient, nil
 }
@@ -173,33 +175,47 @@ func (c *KubeClient) ensureThirdPartyResources() error {
 // createThirdPartyResources creates the necessary third party resources if they
 // do not already exist.
 func (c *KubeClient) createThirdPartyResources() error {
+	// We can check registration of the different custom resources in
+	// parallel.
+	done := make(chan error)
+
 	// Ensure a resource exists for Calico global configuration.
-	log.Info("Ensuring GlobalConfig ThirdPartyResource exists")
-	tpr := extensions.ThirdPartyResource{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "global-config.projectcalico.org",
-			Namespace: "kube-system",
-		},
-		Description: "Calico Global Configuration",
-		Versions:    []extensions.APIVersion{{Name: "v1"}},
-	}
-	_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
-	if err != nil {
-		// Don't care if it already exists.
-		if !kerrors.IsAlreadyExists(err) {
-			return resources.K8sErrorToCalico(err, tpr)
+	go func() {
+		log.Info("Ensuring GlobalConfig ThirdPartyResource exists")
+		tpr := extensions.ThirdPartyResource{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "global-config.projectcalico.org",
+				Namespace: "kube-system",
+			},
+			Description: "Calico Global Configuration",
+			Versions:    []extensions.APIVersion{{Name: "v1"}},
+		}
+		_, err := c.clientSet.Extensions().ThirdPartyResources().Create(&tpr)
+		if err != nil {
+			// Don't care if it already exists.
+			if !kerrors.IsAlreadyExists(err) {
+				done <- resources.K8sErrorToCalico(err, tpr)
+				return
+			}
+		}
+		done <- nil
+		return
+	}()
+
+	go func() { done <- c.ipPoolClient.EnsureInitialized() }()
+	go func() { done <- c.snpClient.EnsureInitialized() }()
+	go func() { done <- c.globalBgpClient.EnsureInitialized() }()
+
+	// Wait for all 4 registrations to complete and keep track of the last
+	// error to return.
+	var lastErr error
+	for i := 0; i < 4; i++ {
+		if err := <-done; err != nil {
+			log.WithError(err).Error("Hit error initializing TPR")
+			lastErr = err
 		}
 	}
-
-	// Ensure the IP Pool and System Network Policy TPRs exists.
-	if err := c.ipPoolClient.EnsureInitialized(); err != nil {
-		return err
-	}
-	if err := c.snpClient.EnsureInitialized(); err != nil {
-		return err
-	}
-
-	return nil
+	return lastErr
 }
 
 // waitForClusterType polls until GlobalConfig is ready, or until 30 seconds have passed.
@@ -325,6 +341,8 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Create(d)
 	case model.NodeKey:
 		return c.nodeClient.Create(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Create(d)
 	default:
 		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -345,6 +363,8 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Update(d)
 	case model.NodeKey:
 		return c.nodeClient.Update(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Update(d)
 	default:
 		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -367,6 +387,8 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return c.ipPoolClient.Apply(d)
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Apply(d)
 	case model.ActiveStatusReportKey, model.LastStatusReportKey,
 		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
 		// Felix periodically reports status to the datastore.  This isn't supported
@@ -392,6 +414,8 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 		return c.ipPoolClient.Delete(d)
 	case model.NodeKey:
 		return c.nodeClient.Delete(d)
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Delete(d)
 	default:
 		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
 		return errors.ErrorOperationNotSupported{
@@ -418,9 +442,11 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 	case model.ReadyFlagKey:
 		return c.getReadyStatus(k.(model.ReadyFlagKey))
 	case model.IPPoolKey:
-		return c.ipPoolClient.Get(k.(model.IPPoolKey))
+		return c.ipPoolClient.Get(k)
 	case model.NodeKey:
 		return c.nodeClient.Get(k.(model.NodeKey))
+	case model.GlobalBGPPeerKey:
+		return c.globalBgpClient.Get(k)
 	default:
 		return nil, errors.ErrorOperationNotSupported{
 			Identifier: k,
@@ -446,9 +472,13 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 	case model.HostConfigListOptions:
 		return c.listHostConfig(l.(model.HostConfigListOptions))
 	case model.IPPoolListOptions:
-		return c.ipPoolClient.List(l.(model.IPPoolListOptions))
+		k, _, err := c.ipPoolClient.List(l)
+		return k, err
 	case model.NodeListOptions:
 		return c.nodeClient.List(l.(model.NodeListOptions))
+	case model.GlobalBGPPeerListOptions:
+		k, _, err := c.globalBgpClient.List(l)
+		return k, err
 	default:
 		return []*model.KVPair{}, nil
 	}
@@ -627,7 +657,7 @@ func (c *KubeClient) listPolicies(l model.PolicyListOptions) ([]*model.KVPair, e
 	}
 
 	// List all System Network Policies.
-	snps, err := c.snpClient.List(l)
+	snps, _, err := c.snpClient.List(l)
 	if err != nil {
 		return nil, err
 	}
