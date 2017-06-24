@@ -26,16 +26,16 @@ import (
 )
 
 const (
-	IPPoolsResourceName = "ippools"
-	IPPoolsTPRName      = "ip-pool.projectcalico.org"
+	IPPoolResourceName = "ippools"
+	IPPoolTPRName      = "ip-pool.projectcalico.org"
 )
 
-func NewIPPoolsClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPPoolClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
-		name:            IPPoolsTPRName,
-		resource:        IPPoolsResourceName,
+		name:            IPPoolTPRName,
+		resource:        IPPoolResourceName,
 		description:     "Calico IP Pools",
 		k8sResourceType: reflect.TypeOf(thirdparty.IpPool{}),
 		k8sListType:     reflect.TypeOf(thirdparty.IpPoolList{}),

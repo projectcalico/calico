@@ -27,15 +27,13 @@ import (
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
 	extensions "k8s.io/client-go/pkg/apis/extensions/v1beta1"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 var (
-	policyAnnotation = "net.beta.kubernetes.io/network-policy"
-	protoTCP         = kapiv1.ProtocolTCP
+	protoTCP = kapiv1.ProtocolTCP
 )
 
 type converter struct {
@@ -117,34 +115,6 @@ func (c converter) namespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		Revision: ns.ObjectMeta.ResourceVersion,
 	}
 	return &kvp, nil
-}
-
-func (c converter) tprToGlobalConfig(tpr *thirdparty.GlobalConfig) *model.KVPair {
-	kvp := &model.KVPair{
-		Key: model.GlobalConfigKey{
-			Name: tpr.Spec.Name,
-		},
-		Value:    tpr.Spec.Value,
-		Revision: tpr.Metadata.ResourceVersion,
-	}
-	return kvp
-}
-
-func (c converter) globalConfigToTPR(kvp *model.KVPair) thirdparty.GlobalConfig {
-	tpr := thirdparty.GlobalConfig{
-		Metadata: metav1.ObjectMeta{
-			// Names in Kubernetes must be lower-case.
-			Name: strings.ToLower(kvp.Key.(model.GlobalConfigKey).Name),
-		},
-		Spec: thirdparty.GlobalConfigSpec{
-			Name:  kvp.Key.(model.GlobalConfigKey).Name,
-			Value: kvp.Value.(string),
-		},
-	}
-	if kvp.Revision != nil {
-		tpr.Metadata.ResourceVersion = kvp.Revision.(string)
-	}
-	return tpr
 }
 
 // isReadyCalicoPod returns true if the pod should be shown as a workloadEndpoint
