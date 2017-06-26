@@ -885,6 +885,12 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		var updGC *model.KVPair
 		var err error
 
+		defer func() {
+			// Always make sure we tidy up after ourselves.  Ignore
+			// errors since the test itself should delete what it created.
+			_ = c.Delete(gc)
+		}()
+
 		By("creating a new object", func() {
 			updGC, err = c.Create(gc)
 			Expect(err).NotTo(HaveOccurred())
@@ -936,6 +942,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		By("deleting a non-existing object", func() {
+			err = c.Delete(gc)
+			Expect(err).To(HaveOccurred())
+		})
+
 		By("getting a non-existing object", func() {
 			updGC, err = c.Get(gc.Key)
 			Expect(err).To(HaveOccurred())
@@ -956,6 +967,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))
 			Expect(updGC.Key.(model.GlobalConfigKey).Name).To(Equal("ClusterGUID"))
 			Expect(updGC.Revision).NotTo(BeNil())
+		})
+
+		By("deleting the existing object", func() {
+			err = c.Delete(updGC)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -1020,6 +1036,20 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			// Get the hostname so we can make a Get call
 			kvp = *nodes[0]
 			nodeHostname = kvp.Key.(model.NodeKey).Hostname
+		})
+
+		By("Listing a specific Node", func() {
+			nodes, err := c.List(model.NodeListOptions{Hostname: nodeHostname})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodes).To(HaveLen(1))
+			Expect(nodes[0].Key).To(Equal(kvp.Key))
+			Expect(nodes[0].Value).To(Equal(kvp.Value))
+		})
+
+		By("Listing a specific invalid Node", func() {
+			nodes, err := c.List(model.NodeListOptions{Hostname: "foobarbaz-node"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nodes).To(HaveLen(0))
 		})
 
 		By("Getting a specific nodeHostname", func() {

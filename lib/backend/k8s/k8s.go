@@ -62,7 +62,7 @@ type KubeClient struct {
 	globalConfigClient resources.K8sResourceClient
 	ipPoolClient       resources.K8sResourceClient
 	snpClient          resources.K8sResourceClient
-	nodeClient         api.Client
+	nodeClient         resources.K8sResourceClient
 }
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
@@ -446,18 +446,19 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listWorkloadEndpoints(l.(model.WorkloadEndpointListOptions))
 	case model.PolicyListOptions:
 		return c.listPolicies(l.(model.PolicyListOptions))
-	case model.GlobalConfigListOptions:
-		k, _, err := c.globalConfigClient.List(l)
-		return k, err
 	case model.HostConfigListOptions:
 		return c.listHostConfig(l.(model.HostConfigListOptions))
 	case model.IPPoolListOptions:
 		k, _, err := c.ipPoolClient.List(l)
 		return k, err
 	case model.NodeListOptions:
-		return c.nodeClient.List(l.(model.NodeListOptions))
+		k, _, err := c.nodeClient.List(l)
+		return k, err
 	case model.GlobalBGPPeerListOptions:
 		k, _, err := c.globalBgpClient.List(l)
+		return k, err
+	case model.GlobalConfigListOptions:
+		k, _, err := c.globalConfigClient.List(l)
 		return k, err
 	default:
 		return []*model.KVPair{}, nil
