@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/onsi/ginkgo/reporters"
 
 	"github.com/projectcalico/felix/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
@@ -28,7 +29,8 @@ import (
 
 func TestIp(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Ip Suite")
+	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "IP Suite", []Reporter{junitReporter})
 }
 
 func init() {

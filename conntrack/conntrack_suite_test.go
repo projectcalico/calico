@@ -20,6 +20,8 @@ import (
 
 	"testing"
 
+	"github.com/onsi/ginkgo/reporters"
+
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -29,5 +31,6 @@ func init() {
 
 func TestConntrack(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Conntrack Suite")
+	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Conntrack Suite", []Reporter{junitReporter})
 }

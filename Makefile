@@ -410,6 +410,7 @@ clean:
 	       .go-pkg-cache \
 	       check-licenses/dependency-licenses.txt \
 	       release-notes-*
+	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
