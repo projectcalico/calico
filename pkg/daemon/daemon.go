@@ -39,9 +39,11 @@ import (
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
+	"github.com/projectcalico/typha/pkg/health"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/k8s"
 	"github.com/projectcalico/typha/pkg/logutils"
+	"github.com/projectcalico/typha/pkg/set"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
@@ -77,6 +79,11 @@ type TyphaDaemon struct {
 	NewBackendClient      func(config api.CalicoAPIConfig) (BackendClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
+
+	// Health monitoring.
+	healthChannel  chan health.HealthIndicator
+	neededForReady set.Set
+	neededForLive  set.Set
 }
 
 func New() *TyphaDaemon {
@@ -215,6 +222,15 @@ configRetry:
 func (t *TyphaDaemon) CreateServer() {
 	// Now create the Syncer; our caching layer and the TCP server.
 
+	// Health monitoring: as we create Typha components after this point, we'll add health
+	// sources that we expect those components to report, to feed into the determination of
+	// Typha's liveness and readiness.
+	t.neededForReady = set.New()
+	t.neededForLive = set.New()
+	if t.ConfigParams.HealthEnabled {
+		t.healthChannel = make(chan health.HealthIndicator)
+	}
+
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
 	t.Syncer = t.DatastoreClient.Syncer(t.SyncerToValidator)
@@ -267,6 +283,16 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	if t.ConfigParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
 		go servePrometheusMetrics(t.ConfigParams)
+	}
+
+	if t.ConfigParams.HealthEnabled {
+		log.Info("Health enabled.  Starting server.")
+		go health.ServeHealth(
+			t.ConfigParams.HealthPort,
+			t.neededForReady,
+			t.neededForLive,
+			t.healthChannel,
+		)
 	}
 }
 

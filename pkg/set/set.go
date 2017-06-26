@@ -31,6 +31,7 @@ type Set interface {
 	Iter(func(item interface{}) error)
 	Copy() Set
 	Equals(Set) bool
+	ContainsAll(Set) bool
 }
 
 type empty struct{}
@@ -130,4 +131,16 @@ func (set mapSet) Equals(other Set) bool {
 		}
 	}
 	return true
+}
+
+func (set mapSet) ContainsAll(other Set) bool {
+	result := true
+	other.Iter(func(item interface{}) error {
+		if !set.Contains(item) {
+			result = false
+			return StopIteration
+		}
+		return nil
+	})
+	return result
 }
