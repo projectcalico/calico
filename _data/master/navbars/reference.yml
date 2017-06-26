@@ -113,8 +113,21 @@ toc:
     path: /reference/architecture/data-path
 - title: Advanced
   section:
-  - title: RBAC for etcdv2
-    path: /reference/advanced/etcd-rbac
+  - title: Configuring etcd RBAC
+    path: /reference/advanced/etcd-rbac/overview
+    section:
+      - title: Overview
+        path: /reference/advanced/etcd-rbac/
+      - title: Certificate Generation
+        path: /reference/advanced/etcd-rbac/certificate-generation
+      - title: User and Role Creations
+        path: /reference/advanced/etcd-rbac/users-and-roles
+      - title: Kubernetes
+        path: /reference/advanced/etcd-rbac/kubernetes
+      - title: Advanced Kubernetes
+        path: /reference/advanced/etcd-rbac/kubernetes-advanced
+      - title: Etcd paths for Calico components
+        path: /reference/advanced/etcd-rbac/calico-etcdv2-paths
 - title: System Requirements
   path: /reference/requirements
 - title: Repo Structure
