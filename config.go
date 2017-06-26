@@ -135,9 +135,9 @@ func initConfig() error {
 	}
 	// Update config from the TOML configuration file.
 	if configFile == "" {
-		log.Debug("Skipping confd config file.")
+		log.Info("Skipping confd config file.")
 	} else {
-		log.Debug("Loading " + configFile)
+		log.Info("Loading " + configFile)
 		configBytes, err := ioutil.ReadFile(configFile)
 		if err != nil {
 			return err
