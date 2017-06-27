@@ -1,12 +1,12 @@
-hash: 1847cdf106df6e8085d241e5910354da8346074adbb0dda7033ad4708701a92e
-updated: 2017-07-19T10:15:13.551306815Z
+hash: bf35a63bb5c663298d6bc89a2682099a7d0abbc895f71d84a4d76d55e009e3de
+updated: 2017-07-20T08:42:22.874117758Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: ae23b0ef2f1f6708f9a34d287a28ab02767c2a16
+  version: c31bec0f29facff13f7c3e3d948e55dd6689ed42
   subpackages:
   - client
   - pkg/pathutil
@@ -114,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 639aa7b2d33b94419143a2e6987d2d77aa395f2f
+  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
   subpackages:
   - lib
   - lib/api
@@ -131,6 +131,7 @@ imports:
   - lib/converter
   - lib/errors
   - lib/hash
+  - lib/health
   - lib/hwm
   - lib/ipip
   - lib/net
@@ -139,6 +140,7 @@ imports:
   - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
+  - lib/set
   - lib/testutils
   - lib/validator
 - name: github.com/prometheus/client_golang
@@ -194,7 +196,7 @@ imports:
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: cd2c276457edda6df7fb04895d3fd6a6add42926
+  version: 7a4fde3fda8ef580a89dbae8138c26041be14299
   subpackages:
   - unix
 - name: golang.org/x/text
