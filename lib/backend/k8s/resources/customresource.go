@@ -142,7 +142,6 @@ func (c *customK8sResourceClient) Update(kvp *model.KVPair) (*model.KVPair, erro
 
 	// Update the revision information from the response.
 	kvp.Revision = resOut.GetObjectMeta().GetResourceVersion()
-
 	return kvp, nil
 }
 

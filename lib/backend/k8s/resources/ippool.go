@@ -71,7 +71,13 @@ func (_ IPPoolConverter) NameToKey(name string) (model.Key, error) {
 func (_ IPPoolConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
 	t := r.(*thirdparty.IpPool)
 	v := model.IPPool{}
-	err := json.Unmarshal([]byte(t.Spec.Value), &v)
+
+	_, err := ResourceNameToIPNet(t.Metadata.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(t.Spec.Value), &v)
 	if err != nil {
 		return nil, err
 	}
