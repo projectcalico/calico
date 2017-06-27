@@ -97,9 +97,14 @@ type Config struct {
 
 	MaxIPSetSize int
 
+	IPSetsRefreshInterval          time.Duration
+	RouteRefreshInterval           time.Duration
 	IptablesRefreshInterval        time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
+	IptablesLockFilePath           string
+	IptablesLockTimeout            time.Duration
+	IptablesLockProbeInterval      time.Duration
 
 	RulesConfig rules.Config
 
@@ -163,10 +168,18 @@ type InternalDataplane struct {
 
 	routeTables []*routetable.RouteTable
 
-	dataplaneNeedsSync    bool
-	forceDataplaneRefresh bool
-	cleanupPending        bool
-	doneFirstApply        bool
+	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
+	// call apply().
+	dataplaneNeedsSync bool
+	// forceIPSetsRefresh is set by the IP sets refresh timer to indicate that we should
+	// check the IP sets in the dataplane.
+	forceIPSetsRefresh bool
+	// forceRouteRefresh is set by the route refresh timer to indicate that we should
+	// check the routes in the dataplane.
+	forceRouteRefresh bool
+	// doneFirstApply is set after we finish the first update to the dataplane. It indicates
+	// that the dataplane should now be in sync.
+	doneFirstApply bool
 
 	reschedTimer *time.Timer
 	reschedC     <-chan time.Time
@@ -192,7 +205,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fromDataplane:     make(chan interface{}, 100),
 		ruleRenderer:      ruleRenderer,
 		interfacePrefixes: config.RulesConfig.WorkloadIfacePrefixes,
-		cleanupPending:    true,
 		ifaceMonitor:      ifacemonitor.New(),
 		ifaceUpdates:      make(chan *ifaceUpdate, 100),
 		ifaceAddrUpdates:  make(chan *ifaceAddrsUpdate, 100),
@@ -203,38 +215,46 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
+	// Most iptables tables need the same options.
+	iptablesOptions := iptables.TableOptions{
+		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		InsertMode:            config.IptablesInsertMode,
+		RefreshInterval:       config.IptablesRefreshInterval,
+		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
+	}
+
+	// However, the NAT tables need an extra cleanup regex.
+	iptablesNATOptions := iptablesOptions
+	iptablesNATOptions.ExtraCleanupRegexPattern = rules.HistoricInsertedNATRuleRegex
+
+	// Create the shared iptables lock.  This allows us to block other processes from
+	// manipulating iptables while we make our updates.  We use a shared lock because we
+	// actually do multiple updates in parallel (but to different tables), which is safe.
+	iptablesLock := iptables.NewSharedLock(
+		config.IptablesLockFilePath,
+		config.IptablesLockTimeout,
+		config.IptablesLockProbeInterval,
+	)
+
 	natTableV4 := iptables.NewTable(
 		"nat",
 		4,
 		rules.RuleHashPrefix,
-		iptables.TableOptions{
-			HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
-			ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
-			InsertMode:               config.IptablesInsertMode,
-			RefreshInterval:          config.IptablesRefreshInterval,
-			PostWriteInterval:        config.IptablesPostWriteCheckInterval,
-		},
+		iptablesLock,
+		iptablesNATOptions,
 	)
 	rawTableV4 := iptables.NewTable(
 		"raw",
 		4,
 		rules.RuleHashPrefix,
-		iptables.TableOptions{
-			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-			InsertMode:            config.IptablesInsertMode,
-			RefreshInterval:       config.IptablesRefreshInterval,
-			PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-		})
+		iptablesLock,
+		iptablesOptions)
 	filterTableV4 := iptables.NewTable(
 		"filter",
 		4,
 		rules.RuleHashPrefix,
-		iptables.TableOptions{
-			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-			InsertMode:            config.IptablesInsertMode,
-			RefreshInterval:       config.IptablesRefreshInterval,
-			PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-		})
+		iptablesLock,
+		iptablesOptions)
 	ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
@@ -269,35 +289,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"nat",
 			6,
 			rules.RuleHashPrefix,
-			iptables.TableOptions{
-				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
-				ExtraCleanupRegexPattern: rules.HistoricInsertedNATRuleRegex,
-				InsertMode:               config.IptablesInsertMode,
-				RefreshInterval:          config.IptablesRefreshInterval,
-				PostWriteInterval:        config.IptablesPostWriteCheckInterval,
-			},
+			iptablesLock,
+			iptablesNATOptions,
 		)
 		rawTableV6 := iptables.NewTable(
 			"raw",
 			6,
 			rules.RuleHashPrefix,
-			iptables.TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-				InsertMode:            config.IptablesInsertMode,
-				RefreshInterval:       config.IptablesRefreshInterval,
-				PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-			},
+			iptablesLock,
+			iptablesOptions,
 		)
 		filterTableV6 := iptables.NewTable(
 			"filter",
 			6,
 			rules.RuleHashPrefix,
-			iptables.TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
-				InsertMode:            config.IptablesInsertMode,
-				RefreshInterval:       config.IptablesRefreshInterval,
-				PostWriteInterval:     config.IptablesPostWriteCheckInterval,
-			},
+			iptablesLock,
+			iptablesOptions,
 		)
 
 		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
@@ -483,13 +490,27 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 
 	// Retry any failed operations every 10s.
 	retryTicker := time.NewTicker(10 * time.Second)
-	var refreshC <-chan time.Time
-	if d.config.IptablesRefreshInterval > 0 {
+
+	// If configured, start tickers to refresh the IP sets and routing table entries.
+	var ipSetsRefreshC <-chan time.Time
+	if d.config.IPSetsRefreshInterval > 0 {
+		log.WithField("interval", d.config.IptablesRefreshInterval).Info(
+			"Will refresh IP sets on timer")
 		refreshTicker := jitter.NewTicker(
-			d.config.IptablesRefreshInterval,
-			d.config.IptablesRefreshInterval/10,
+			d.config.IPSetsRefreshInterval,
+			d.config.IPSetsRefreshInterval/10,
 		)
-		refreshC = refreshTicker.C
+		ipSetsRefreshC = refreshTicker.C
+	}
+	var routeRefreshC <-chan time.Time
+	if d.config.RouteRefreshInterval > 0 {
+		log.WithField("interval", d.config.RouteRefreshInterval).Info(
+			"Will refresh routes on timer")
+		refreshTicker := jitter.NewTicker(
+			d.config.RouteRefreshInterval,
+			d.config.RouteRefreshInterval/10,
+		)
+		routeRefreshC = refreshTicker.C
 	}
 
 	// Fill the apply throttle leaky bucket.
@@ -584,9 +605,13 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			}
 			summaryAddrBatchSize.Observe(float64(batchSize))
 			d.dataplaneNeedsSync = true
-		case <-refreshC:
-			log.Debug("Refreshing dataplane state")
-			d.forceDataplaneRefresh = true
+		case <-ipSetsRefreshC:
+			log.Debug("Refreshing IP sets state")
+			d.forceIPSetsRefresh = true
+			d.dataplaneNeedsSync = true
+		case <-routeRefreshC:
+			log.Debug("Refreshing routes")
+			d.forceRouteRefresh = true
 			d.dataplaneNeedsSync = true
 		case <-d.reschedC:
 			log.Debug("Reschedule kick received")
@@ -727,17 +752,22 @@ func (d *InternalDataplane) apply() {
 		}
 	}
 
-	if d.forceDataplaneRefresh {
-		// Refresh timer popped, ask the dataplane to resync as part of its update.
+	if d.forceRouteRefresh {
+		// Refresh timer popped.
 		for _, r := range d.routeTables {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
+		d.forceRouteRefresh = false
+	}
+
+	if d.forceIPSetsRefresh {
+		// Refresh timer popped.
 		for _, r := range d.ipSets {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
-		d.forceDataplaneRefresh = false
+		d.forceIPSetsRefresh = false
 	}
 
 	// Next, create/update IP sets.  We defer deletions of IP sets until after we update
