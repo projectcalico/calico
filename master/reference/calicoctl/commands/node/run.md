@@ -68,6 +68,12 @@ Options:
                            > interface=<IFACE NAME REGEX>
                              Use the first valid IP address found on interfaces
                              named as per the supplied interface name regex.
+			   > skip-interface=<IFACE NAME REGEX LIST>
+			     Use the first valid IP address on the first
+			     enumerated interface (same logic as first-found
+			     above) that does NOT match with any of the
+			     specified interface name regexes. Regexes are
+			     separated by commas (e.g. eth.*,enp0s.*).
                            [default: first-found]
      --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
                            Specify the autodetection method for detecting the
@@ -228,6 +234,19 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth0
 sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.*
 ```
 
+**skip-interface=INTERFACE-REGEX,INTERFACE-REGEX,...**
+
+The `skip-interface` method uses the supplied interface regular expressions (golang
+syntax) to enumerate all interface IP addresses and returns the first valid IP address
+(based on IP version and type of address) that does not match the listed regular
+expressions.  Like the `first-found` option, it also skips by default certain known
+"local" interfaces such as the docker bridge.  The order that both the interfaces
+and the IP addresses are listed is system dependent.
+
+This method has the ability to take in multiple regular expressions separated by `,`.
+Specifying only one regular expression for interfaces to skip will also work and a
+terminating `,` character does not need to be specified for those cases.
+
 ### Options
 
 ```
@@ -268,6 +287,12 @@ sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.
                          > interface=<IFACE NAME REGEX>
                            Use the first valid IP address found on interfaces
                            named as per the supplied interface name regex.
+			 > skip-interface=<IFACE NAME REGEX LIST>
+			   Use the first valid IP address on the first
+			   enumerated interface (same logic as first-found
+			   above) that does NOT match with any of the
+			   specified interface name regexes. Regexes are
+			   separated by commas (e.g. eth.*,enp0s.*).
                          [default: first-found]
    --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
                          Specify the autodetection method for detecting the

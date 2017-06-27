@@ -33,11 +33,12 @@ import (
 )
 
 const (
-	DEFAULT_IPV4_POOL_CIDR         = "192.168.0.0/16"
-	DEFAULT_IPV6_POOL_CIDR         = "fd80:24e2:f998:72d6::/64"
-	AUTODETECTION_METHOD_FIRST     = "first-found"
-	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
-	AUTODETECTION_METHOD_INTERFACE = "interface="
+	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
+	DEFAULT_IPV6_POOL_CIDR              = "fd80:24e2:f998:72d6::/64"
+	AUTODETECTION_METHOD_FIRST          = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE      = "interface="
+	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
 )
 
 // For testing purposes we define an exit function that we can override.
@@ -379,6 +380,18 @@ func autoDetectCIDR(method string, version int) *net.IPNet {
 		// Autodetect the IP by connecting a UDP socket to a supplied address.
 		destStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
 		return autoDetectCIDRByReach(destStr, version)
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
+		// Autodetect the Ip by enumerating all interfaces (excluding
+		// known internal interfaces and any interfaces whose name
+		// matches the given regexes).
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE)
+		// regexes are passed in as a string separated by ","
+		ifRegexes := strings.Split(ifStr, ",")
+		// Trim all the excess whitespace
+		for i, ifRegex := range ifRegexes {
+			ifRegexes[i] = strings.TrimSpace(ifRegex)
+		}
+		return autoDetectCIDRBySkipInterface(ifRegexes, version)
 	}
 
 	// The autodetection method is not recognised and is required.  Exit.
@@ -432,6 +445,28 @@ func autoDetectCIDRByReach(dest string, version int) *net.IPNet {
 		message("Using autodetected IPv%d address %s, detected by connecting to %s", version, cidr.String(), dest)
 		return cidr
 	}
+}
+
+// autoDetectCIDRBySkipInterface auto-detects the first valid Network on the interfaces
+// matching the supplied interface regexes.
+func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *net.IPNet {
+	incl := []string{}
+	excl := []string{
+		"docker.*", "cbr.*", "dummy.*",
+		"virbr.*", "lxcbr.*", "veth.*", "lo",
+		"cali.*", "tunl.*", "flannel.*",
+	}
+	excl = append(excl, ifaceRegexes...)
+
+	iface, cidr, err := autodetection.FilteredEnumeration(incl, excl, version)
+	if err != nil {
+		warning("Unable to auto-detect an IPv%d address while excluding %v: %s", version, ifaceRegexes, err)
+		return nil
+	}
+
+	message("Using autodetected IPv%d address on interface %s: %s while skipping matching interfaces", version, iface.Name, cidr.String())
+
+	return cidr
 }
 
 // configureASNumber configures the Node resource with the AS number specified

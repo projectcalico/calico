@@ -48,7 +48,10 @@ class TestAutodetection(TestBase):
                         start_calico=False) as host2, \
              DockerHost('host3',
                         additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
-                        start_calico=False) as host3:
+                        start_calico=False) as host3, \
+             DockerHost('host4',
+                        additional_docker_options=ADDITIONAL_DOCKER_OPTIONS,
+                        start_calico=False) as host4:
 
             # Start the node on host1 using first-found auto-detection
             # method.
@@ -88,6 +91,25 @@ class TestAutodetection(TestBase):
                 "--ip=autodetect --ip-autodetection-method=interface=eth0",
                     with_ipv4pool_cidr_env_var=False
                 )
+
+            # Attempt to start the node on host4 using interface auto-detection
+            # method skipping the only working interface name. This should fail.
+            try:
+                host4.start_calico_node(
+                    "--ip=autodetect --ip-autodetection-method=skip-interface=eth.*,enp0s.*",
+                    with_ipv4pool_cidr_env_var=False
+                )
+            except CommandExecError:
+                pass
+            else:
+                raise AssertionError("Command to skip eth0 expected to fail but did not")
+
+            # Start the node on host4 using skip-interface auto-detection method
+            # using a bogus interface to skip. This should succeed.
+            host4.start_calico_node(
+                "--ip=autodetect --ip-autodetection-method=skip-interface=bogus",
+                with_ipv4pool_cidr_env_var=False
+            )
 
             # Create a network and a workload on each host.
             network1 = host1.create_network("subnet1")
