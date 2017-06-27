@@ -29,6 +29,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/typha/pkg/buildinfo"
+	"github.com/projectcalico/typha/pkg/health"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncproto"
@@ -132,6 +133,7 @@ type Config struct {
 	PongTimeout             time.Duration
 	DropInterval            time.Duration
 	MaxConns                int
+	HealthChannel           chan<- health.HealthIndicator
 }
 
 func (c *Config) ApplyDefaults() {
@@ -320,12 +322,14 @@ func (s *Server) recordConnection(conn *connection) {
 	s.connTrackingLock.Lock()
 	s.connIDToConn[conn.ID] = conn
 	s.connTrackingLock.Unlock()
+	s.reportHealth()
 }
 
 func (s *Server) discardConnection(conn *connection) {
 	s.connTrackingLock.Lock()
 	delete(s.connIDToConn, conn.ID)
 	s.connTrackingLock.Unlock()
+	s.reportHealth()
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
@@ -333,6 +337,11 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 	logCxt := log.WithField("thread", "numConnsGov")
 	maxConns := s.maxConns
 	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
+	var healthTicks <-chan time.Time
+	if s.config.HealthChannel != nil {
+		healthTicks = time.NewTicker(10 * time.Second).C
+	}
+	s.reportHealth()
 	for {
 		select {
 		case newMax := <-s.maxConnsC:
@@ -370,6 +379,37 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
 			return
+		case <-healthTicks:
+			s.reportHealth()
+		}
+	}
+}
+
+type healthSource string
+
+var (
+	SERVER_RUNNING = healthSource("running")
+	SERVER_READY   = healthSource("ready")
+)
+
+func (s *Server) ReadySources() []health.HealthSource {
+	return []health.HealthSource{SERVER_READY}
+}
+
+func (s *Server) LiveSources() []health.HealthSource {
+	return []health.HealthSource{SERVER_RUNNING}
+}
+
+func (s *Server) reportHealth() {
+	if s.config.HealthChannel != nil {
+		s.config.HealthChannel <- health.HealthIndicator{SERVER_RUNNING, 20 * time.Second}
+		if !s.atConnLimit() {
+			// Ready to accept more connections.
+			s.config.HealthChannel <- health.HealthIndicator{SERVER_READY, 20 * time.Second}
+		} else {
+			// Immediately report that we're now out of capacity - rather than waiting
+			// for a previous 'ready' indication to expire.
+			s.config.HealthChannel <- health.HealthIndicator{SERVER_READY, 0}
 		}
 	}
 }

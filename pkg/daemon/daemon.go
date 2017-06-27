@@ -29,6 +29,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	docopt "github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -256,8 +257,11 @@ func (t *TyphaDaemon) CreateServer() {
 			DropInterval:            t.ConfigParams.ConnectionDropIntervalSecs,
 			MaxConns:                t.ConfigParams.MaxConnectionsUpperLimit,
 			Port:                    t.ConfigParams.ServerPort,
+			HealthChannel:           t.healthChannel,
 		},
 	)
+	t.neededForReady.AddAll(t.Server.ReadySources())
+	t.neededForLive.AddAll(t.Server.LiveSources())
 }
 
 // Start starts all the server components in background goroutines.
