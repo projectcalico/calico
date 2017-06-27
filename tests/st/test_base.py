@@ -43,7 +43,6 @@ class TestBase(TestCase):
     """
     Base class for test-wide methods.
     """
-
     def setUp(self):
         """
         Clean up before every test.
@@ -303,3 +302,6 @@ class TestBase(TestCase):
                    banner + "\n"
                             "| " + msg + " |\n" +
                    banner)
+
+# Add a default batch number to all tests (used for running tests in parallel)
+TestBase.batchnumber = 0

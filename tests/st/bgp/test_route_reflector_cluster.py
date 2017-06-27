@@ -84,3 +84,5 @@ class TestRouteReflectorCluster(TestBase):
     @attr('slow')
     def test_gobgp_route_reflector_cluster(self):
         self._test_route_reflector_cluster(backend='gobgp')
+
+TestRouteReflectorCluster.batchnumber = 3  # Adds a batch number for parallel testing

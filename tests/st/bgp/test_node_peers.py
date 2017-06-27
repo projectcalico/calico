@@ -79,3 +79,5 @@ class TestNodePeers(TestBase):
     @attr('slow')
     def test_gobgp_node_peers(self):
         self._test_node_peers(backend='gobgp')
+
+TestNodePeers.batchnumber = 1  # Adds a batch number for parallel testing

@@ -223,3 +223,5 @@ class MultiHostIpam(TestBase):
         host.calicoctl("ipam release --ip=%s" % workload.ip)
         host.execute("docker rm -f %s" % workload.name)
         host.workloads.remove(workload)
+
+MultiHostIpam.batchnumber = 2  # Adds a batch number for parallel testing
