@@ -24,7 +24,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/ifacemonitor"
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

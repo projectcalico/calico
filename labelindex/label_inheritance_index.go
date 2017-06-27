@@ -53,11 +53,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/felix/dispatcher"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/selector/parser"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // itemData holds the data that we know about a particular item (i.e. a workload or host endpoint).

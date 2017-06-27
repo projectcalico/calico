@@ -19,9 +19,9 @@ import (
 	"reflect"
 
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // A state represents a particular state of the datastore and the expected

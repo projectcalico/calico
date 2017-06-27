@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var _ = Describe("IP Sets manager", func() {

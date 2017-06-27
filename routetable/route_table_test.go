@@ -32,8 +32,8 @@ import (
 
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/felix/testutils"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var (

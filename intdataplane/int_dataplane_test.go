@@ -21,10 +21,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 var _ = Describe("Constructor test", func() {

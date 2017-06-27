@@ -28,7 +28,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/felix/iptables"
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // This file contains shared test infrastructure for testing the iptables package.

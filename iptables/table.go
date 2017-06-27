@@ -30,7 +30,7 @@ import (
 
 	"sync"
 
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (

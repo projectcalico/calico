@@ -33,7 +33,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/docopt/docopt-go"
+	docopt "github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,7 +45,6 @@ import (
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/extdataplane"
-	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -56,6 +55,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
