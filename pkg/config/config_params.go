@@ -104,7 +104,7 @@ type Config struct {
 	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 
 	HealthEnabled                   bool `config:"bool;false"`
-	HealthPort                      int  `config:"int(0,65535);9099"`
+	HealthPort                      int  `config:"int(0,65535);9098"`
 	PrometheusMetricsEnabled        bool `config:"bool;false"`
 	PrometheusMetricsPort           int  `config:"int(0,65535);9093"`
 	PrometheusGoMetricsEnabled      bool `config:"bool;true"`
