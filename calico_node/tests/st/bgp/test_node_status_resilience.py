@@ -145,3 +145,5 @@ class TestNodeStatusResilience(TestBase):
                                                               new_workload.ip])
                     delete_workload(hosts[index], new_workload)
                     index += 1
+
+TestNodeStatusResilience.batchnumber = 2  # Adds a batch number for parallel testing
