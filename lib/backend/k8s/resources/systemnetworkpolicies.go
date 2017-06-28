@@ -35,7 +35,7 @@ const (
 	SystemNetworkPolicyNamePrefix   = "snp.projectcalico.org/"
 )
 
-func NewSystemNetworkPoliciesClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewSystemNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

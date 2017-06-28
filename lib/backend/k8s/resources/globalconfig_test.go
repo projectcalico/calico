@@ -15,11 +15,9 @@
 package resources_test
 
 import (
-	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -27,56 +25,37 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Global BGP conversion methods", func() {
+var _ = Describe("Global Felix config conversion methods", func() {
 
-	converter := resources.GlobalBGPPeerConverter{}
+	converter := resources.GlobalConfigConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.GlobalBGPPeerListOptions{}
-	nameInvalid := "11-22-fail--23"
+	listIncomplete := model.GlobalConfigListOptions{}
 
-	// Compatible set of list, key and name
-	list1 := model.GlobalBGPPeerListOptions{
-		PeerIP: net.MustParseIP("1.2.3.4"),
+	// Compatible set of list, key and name (used for Key to Name conversion)
+	list1 := model.GlobalConfigListOptions{
+		Name: "AbCd",
 	}
-	key1 := model.GlobalBGPPeerKey{
-		PeerIP: net.MustParseIP("1.2.3.4"),
+	key1 := model.GlobalConfigKey{
+		Name: "AbCd",
 	}
-	name1 := "1-2-3-4"
-
-	// Compatible set of key and name
-	key2 := model.GlobalBGPPeerKey{
-		PeerIP: net.MustParseIP("11:22::"),
-	}
-	name2 := "11-22--"
+	name1 := "abcd"
 
 	// Compatible set of KVPair and Kubernetes Resource.
+	value1 := "test"
 	kvp1 := &model.KVPair{
-		Key: key2,
-		Value: &model.BGPPeer{
-			PeerIP: key2.PeerIP,
-			ASNum:  1212,
-		},
+		Key:      key1,
+		Value:    &value1,
 		Revision: "rv",
 	}
-	res1 := &thirdparty.GlobalBgpPeer{
+	res1 := &thirdparty.GlobalConfig{
 		Metadata: metav1.ObjectMeta{
-			Name:            name2,
+			Name:            name1,
 			ResourceVersion: "rv",
 		},
-		Spec: api.BGPPeerSpec{
-			ASNumber: 1212,
-		},
-	}
-
-	// Invalid Kubernetes resource, invalid name
-	resInvalid := &thirdparty.GlobalBgpPeer{
-		Metadata: metav1.ObjectMeta{
-			Name:            nameInvalid,
-			ResourceVersion: "test",
-		},
-		Spec: api.BGPPeerSpec{
-			ASNumber: 1234,
+		Spec: thirdparty.GlobalConfigSpec{
+			Name:  key1.Name,
+			Value: value1,
 		},
 	}
 
@@ -94,16 +73,9 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(n).To(Equal(name1))
 	})
 
-	It("should convert a resource name to the equivalent Key", func() {
-		k, err := converter.NameToKey(name2)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(k).To(Equal(key2))
-	})
-
-	It("should fail to convert an invalid resource name to the equivalent Key", func() {
-		k, err := converter.NameToKey(nameInvalid)
+	It("should not convert a resource name to the equivalent Key - this is not possible due to case switching", func() {
+		_, err := converter.NameToKey("test")
 		Expect(err).To(HaveOccurred())
-		Expect(k).To(Equal(nil))
 	})
 
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
@@ -111,8 +83,8 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&thirdparty.GlobalBgpPeer{}))
-		Expect(r.(*thirdparty.GlobalBgpPeer).Spec).To(Equal(res1.Spec))
+		Expect(r).To(BeAssignableToTypeOf(&thirdparty.GlobalConfig{}))
+		Expect(r.(*thirdparty.GlobalConfig).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
@@ -120,12 +92,7 @@ var _ = Describe("Global BGP conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&model.BGPPeer{}))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(&value1))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
-	})
-
-	It("should fail to convert an invalid Kuberenetes resource", func() {
-		_, err := converter.ToKVPair(resInvalid)
-		Expect(err).To(HaveOccurred())
 	})
 })

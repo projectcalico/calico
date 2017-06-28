@@ -40,8 +40,8 @@ func NewGlobalBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		name:            GlobalBGPPeerTPRName,
 		resource:        GlobalBGPPeerResourceName,
 		description:     "Calico Global BGP Peers",
-		k8sResourceType: reflect.TypeOf(thirdparty.GlobalBGPPeer{}),
-		k8sListType:     reflect.TypeOf(thirdparty.GlobalBGPPeerList{}),
+		k8sResourceType: reflect.TypeOf(thirdparty.GlobalBgpPeer{}),
+		k8sListType:     reflect.TypeOf(thirdparty.GlobalBgpPeerList{}),
 		converter:       GlobalBGPPeerConverter{},
 	}
 }
@@ -83,7 +83,7 @@ func (_ GlobalBGPPeerConverter) NameToKey(name string) (model.Key, error) {
 func (c GlobalBGPPeerConverter) ToKVPair(r CustomK8sResource) (*model.KVPair, error) {
 	// Since we are using the Calico API Spec definition to store the Calico
 	// BGP Peer, use the client conversion helper to convert between KV and API.
-	t := r.(*thirdparty.GlobalBGPPeer)
+	t := r.(*thirdparty.GlobalBgpPeer)
 	ip, err := ResourceNameToIP(t.Metadata.Name)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (c GlobalBGPPeerConverter) FromKVPair(kvp *model.KVPair) (CustomK8sResource
 		return nil, err
 	}
 
-	tpr := thirdparty.GlobalBGPPeer{
+	tpr := thirdparty.GlobalBgpPeer{
 		Metadata: metav1.ObjectMeta{
 			Name: tprName,
 		},

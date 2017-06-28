@@ -943,6 +943,8 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("applying a new object", func() {
+			// Revision should not be specified when creating.
+			gc.Revision = nil
 			updGC, err = c.Apply(gc)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updGC.Value.(string)).To(Equal(gc.Value.(string)))

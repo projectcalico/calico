@@ -21,7 +21,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/compat"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,7 +77,7 @@ func (k *realKubeAPI) NetworkPolicyWatch(opts metav1.ListOptions) (watch watch.I
 func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	globalConfigWatcher := cache.NewListWatchFromClient(
 		k.kc.tprClientV1,
-		"globalconfigs",
+		resources.GlobalConfigResourceName,
 		"kube-system",
 		fields.Everything())
 	watch, err = globalConfigWatcher.WatchFunc(opts)
@@ -88,7 +87,7 @@ func (k *realKubeAPI) GlobalConfigWatch(opts metav1.ListOptions) (watch watch.In
 func (k *realKubeAPI) IPPoolWatch(opts metav1.ListOptions) (watch watch.Interface, err error) {
 	ipPoolWatcher := cache.NewListWatchFromClient(
 		k.kc.tprClientV1,
-		resources.IPPoolsResourceName,
+		resources.IPPoolResourceName,
 		"kube-system",
 		fields.Everything())
 	watch, err = ipPoolWatcher.WatchFunc(opts)
@@ -134,7 +133,7 @@ func (k *realKubeAPI) PodList(namespace string, opts metav1.ListOptions) (list *
 }
 
 func (k *realKubeAPI) GlobalConfigList(l model.GlobalConfigListOptions) ([]*model.KVPair, string, error) {
-	return k.kc.listGlobalConfig(l)
+	return k.kc.globalConfigClient.List(l)
 }
 
 func (k *realKubeAPI) HostConfigList(l model.HostConfigListOptions) ([]*model.KVPair, error) {
@@ -998,21 +997,7 @@ func (syn *kubeSyncer) parseNetworkPolicyEvent(e watch.Event) *model.KVPair {
 }
 
 func (syn *kubeSyncer) parseGlobalConfigEvent(e watch.Event) *model.KVPair {
-	log.Debug("Parsing GlobalConfig watch event")
-	// First, check the event type.
-	gc, ok := e.Object.(*thirdparty.GlobalConfig)
-	if !ok {
-		log.Panicf("Invalid GlobalConfig event. Type: %s, Object: %+v", e.Type, e.Object)
-	}
-
-	// Convert the received GlobalConfig into a KVPair.
-	kvp := syn.converter.tprToGlobalConfig(gc)
-
-	// For deletes, we need to nil out the Value part of the KVPair
-	if e.Type == watch.Deleted {
-		kvp.Value = nil
-	}
-	return kvp
+	return syn.parseCustomK8sResourceEvent(e, resources.GlobalConfigConverter{}, "GlobalConfig")
 }
 
 func (syn *kubeSyncer) parseSystemNetworkPolicyEvent(e watch.Event) *model.KVPair {
