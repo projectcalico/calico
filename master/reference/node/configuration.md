@@ -29,6 +29,7 @@ The `calico/node` container is primarily configured through environment variable
 | CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. | off, always, cross-subnet | off |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. | boolean | true |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. | boolean | false |
+| CALICO_STARTUP_LOGLEVEL      | The log severity above which startup calico/node logs are sent to the stdout. | string | ERROR |
 | ETCD_ENDPOINTS    | A comma separated list of etcd endpoints (optional) | string | http://127.0.0.1:2379 |
 | ETCD_KEY_FILE     | Path to the etcd key file, e.g. `/etc/calico/key.pem` (optional)       | string | |
 | ETCD_CERT_FILE    | Path to the etcd client cert, e.g. `/etc/calico/cert.pem` (optional)    | string | |

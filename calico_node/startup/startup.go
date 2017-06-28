@@ -51,6 +51,9 @@ var exitFunction = os.Exit
 // -  Creating default IP Pools for quick-start use
 
 func main() {
+	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
+	configureLogging()
+
 	// Determine the name for this node and ensure the environment is always
 	// available in the startup env file that is sourced in rc.local.
 	nodeName := determineNodeName()
@@ -106,6 +109,24 @@ func main() {
 
 	// Tell the user what the name of the node is.
 	message("Using node name: %s", nodeName)
+}
+
+func configureLogging() {
+	// Default to error logging
+	logLevel := log.ErrorLevel
+
+	rawLogLevel := os.Getenv("CALICO_STARTUP_LOGLEVEL")
+	if rawLogLevel != "" {
+		parsedLevel, err := log.ParseLevel(rawLogLevel)
+		if err == nil {
+			logLevel = parsedLevel
+		} else {
+			log.WithError(err).Error("Failed to parse log level, defaulting to error.")
+		}
+	}
+
+	log.SetLevel(logLevel)
+	log.Infof("Early log level set to %v", logLevel)
 }
 
 // determineNodeName is called to determine the node name to use for this instance
