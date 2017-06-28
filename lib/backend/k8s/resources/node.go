@@ -17,7 +17,6 @@ package resources
 import (
 	log "github.com/Sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
@@ -26,7 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) api.Client {
+func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &nodeClient{
 		clientSet: c,
 	}
@@ -109,14 +108,31 @@ func (c *nodeClient) Get(key model.Key) (*model.KVPair, error) {
 	return kvp, nil
 }
 
-func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error) {
+//func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, error) {f
+func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, string, error) {
 	log.Debug("Received List request on Node type")
+	nl := list.(model.NodeListOptions)
+	kvps := []*model.KVPair{}
+
+	if nl.Hostname != "" {
+		// The node is already fully qualified, so perform a Get instead.
+		// If the entry does not exist then we just return an empty list.
+		kvp, err := c.Get(model.NodeKey{Hostname: nl.Hostname})
+		if err != nil {
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				return nil, "", err
+			}
+			return kvps, "", nil
+		}
+		kvps = append(kvps, kvp)
+		return kvps, kvp.Revision.(string), nil
+	}
+
+	// Listing all nodes.
 	nodes, err := c.clientSet.Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		K8sErrorToCalico(err, list)
 	}
-
-	kvps := []*model.KVPair{}
 
 	for _, node := range nodes.Items {
 		n, err := K8sNodeToCalico(&node)
@@ -126,17 +142,9 @@ func (c *nodeClient) List(list model.ListInterface) ([]*model.KVPair, error) {
 		kvps = append(kvps, n)
 	}
 
-	return kvps, nil
+	return kvps, nodes.GetListMeta().GetResourceVersion(), nil
 }
 
 func (c *nodeClient) EnsureInitialized() error {
-	return nil
-}
-
-func (c *nodeClient) EnsureCalicoNodeInitialized(node string) error {
-	return nil
-}
-
-func (c *nodeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	return nil
 }
