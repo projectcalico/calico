@@ -15,7 +15,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 
@@ -64,12 +63,6 @@ var (
 
 var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
-	// Get and log command line args.
-	k8sServerEndpoint = flag.Arg(0)
-	felixIP = flag.Arg(1)
-	felixHostname = flag.Arg(2)
-	prometheusPushURL = flag.Arg(3)
-	codeLevel = flag.Arg(4)
 	log.WithFields(log.Fields{
 		"k8sServerEndpoint": k8sServerEndpoint,
 		"felixIP":           felixIP,

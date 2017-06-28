@@ -15,6 +15,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"testing"
 
@@ -33,6 +34,11 @@ func init() {
 	logLevel, err := log.ParseLevel(os.Getenv("K8SFV_LOG_LEVEL"))
 	panicIfError(err)
 	log.SetLevel(logLevel)
+	flag.StringVar(&k8sServerEndpoint, "k8s-api-endpoint", "", "")
+	flag.StringVar(&felixIP, "felix-ip", "", "")
+	flag.StringVar(&felixHostname, "felix-hostname", "", "")
+	flag.StringVar(&prometheusPushURL, "prometheus-push-url", "", "")
+	flag.StringVar(&codeLevel, "code-level", "", "")
 }
 
 func TestMain(t *testing.T) {
