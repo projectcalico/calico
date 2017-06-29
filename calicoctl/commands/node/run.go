@@ -234,20 +234,11 @@ Description:
 	}
 	etcdcfg := cfg.Spec.EtcdConfig
 
-	// Convert the nopools boolean to either an empty string or "true".
-	noPoolsString := ""
-	if nopools {
-		noPoolsString = "true"
-	}
-
 	// Create a mapping of environment variables to values.
 	envs := map[string]string{
 		"NODENAME":                          name,
 		"CALICO_NETWORKING_BACKEND":         backend,
-		"NO_DEFAULT_POOLS":                  noPoolsString,
 		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
-		"IP_AUTODETECTION_METHOD":           ipv4ADMethod,
-		"IP6_AUTODETECTION_METHOD":          ipv6ADMethod,
 		"CALICO_LIBNETWORK_CREATE_PROFILES": fmt.Sprint(!useDockerContainerLabels),
 		"CALICO_LIBNETWORK_LABEL_ENDPOINTS": fmt.Sprint(useDockerContainerLabels),
 	}
@@ -269,6 +260,15 @@ Description:
 	}
 
 	// Add in optional environments.
+	if nopools {
+		envs["NO_DEFAULT_POOLS"] = "true"
+	}
+	if ipv4ADMethod != AUTODETECTION_METHOD_FIRST {
+		envs["IP_AUTODETECTION_METHOD"] = ipv4ADMethod
+	}
+	if ipv6ADMethod != AUTODETECTION_METHOD_FIRST {
+		envs["IP6_AUTODETECTION_METHOD"] = ipv6ADMethod
+	}
 	if asNumber != "" {
 		envs["AS"] = asNumber
 	}
