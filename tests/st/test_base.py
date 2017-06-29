@@ -43,6 +43,10 @@ class TestBase(TestCase):
     """
     Base class for test-wide methods.
     """
+    @classmethod
+    def setUpClass(cls):
+        wipe_etcd(HOST_IPV4)
+
     def setUp(self):
         """
         Clean up before every test.
