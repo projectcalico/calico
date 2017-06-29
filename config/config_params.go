@@ -154,6 +154,7 @@ type Config struct {
 	UsageReportingEnabled bool   `config:"bool;true"`
 	ClusterGUID           string `config:"string;baddecaf"`
 	ClusterType           string `config:"string;"`
+	CalicoVersion         string `config:"string;"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`

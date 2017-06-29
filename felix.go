@@ -379,6 +379,7 @@ configRetry:
 			24*time.Hour,
 			configParams.ClusterGUID,
 			configParams.ClusterType,
+			configParams.CalicoVersion,
 			statsChanOut,
 		)
 	} else {
