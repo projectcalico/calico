@@ -19,7 +19,7 @@ CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)
 CONFD_VER := v0.12.1-calico0.1.0
 
 SYSTEMTEST_CONTAINER_VER := latest
-GO_BUILD_VER:=latest
+GO_BUILD_VER:=v0.7
 # we can use "custom" build image and test image name
 SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
