@@ -73,11 +73,18 @@ var _ = Describe("Test parsing strings", func() {
 		Expect(ns).To(Equal(""))
 	})
 
-	It("should parse profile names", func() {
-		name := "k8s_ns.default"
+	It("should parse valid profile names", func() {
+		name := "ns.projectcalico.org/default"
 		ns, err := c.parseProfileName(name)
 		Expect(ns).To(Equal("default"))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should not parse invalid profile names", func() {
+		name := "k8s_ns.default"
+		ns, err := c.parseProfileName(name)
+		Expect(err).To(HaveOccurred())
+		Expect(ns).To(Equal(""))
 	})
 })
 

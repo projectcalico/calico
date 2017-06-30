@@ -471,6 +471,7 @@ func (c *KubeClient) listProfiles(l model.ProfileListOptions) ([]*model.KVPair, 
 	if l.Name != "" {
 		kvp, err := c.getProfile(model.ProfileKey{Name: l.Name})
 		if err != nil {
+			log.WithError(err).Debug("Error retrieving profile")
 			return []*model.KVPair{}, nil
 		}
 		return []*model.KVPair{kvp}, nil

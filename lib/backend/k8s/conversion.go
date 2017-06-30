@@ -17,7 +17,6 @@ package k8s
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	goerrors "errors"
 	"fmt"
 	"strings"
 
@@ -68,7 +67,7 @@ func (c converter) parsePolicyNameNamespace(name string) (string, error) {
 
 // parsePolicyNameNetworkPolicy extracts the Kubernetes Namespace and NetworkPolicy that backs the given Policy.
 func (c converter) parsePolicyNameNetworkPolicy(name string) (string, string, error) {
-	// Policies backed by NetworkPolicies have form "np.projectcalico.org/<ns_name>.<np_name>
+	// Policies backed by NetworkPolicies have form "np.projectcalico.org/<ns_name>.<np_name>"
 	if !strings.HasPrefix(name, "np.projectcalico.org/") {
 		// This is not backed by a Kubernetes NetworkPolicy.
 		return "", "", fmt.Errorf("Policy %s not backed by a NetworkPolicy", name)
@@ -84,11 +83,13 @@ func (c converter) parsePolicyNameNetworkPolicy(name string) (string, string, er
 
 // parseProfileName extracts the Namespace name from the given Profile name.
 func (c converter) parseProfileName(profileName string) (string, error) {
-	splits := strings.SplitN(profileName, ".", 2)
-	if len(splits) != 2 {
-		return "", goerrors.New(fmt.Sprintf("Invalid profile name: %s", profileName))
+	// Profile objects backed by Namespaces have form "ns.projectcalico.org/<ns_name>"
+	if !strings.HasPrefix(profileName, "ns.projectcalico.org/") {
+		// This is not backed by a Kubernetes Namespace.
+		return "", fmt.Errorf("Profile %s not backed by a Namespace", profileName)
 	}
-	return splits[1], nil
+
+	return strings.TrimPrefix(profileName, "ns.projectcalico.org/"), nil
 }
 
 // namespaceToProfile converts a Namespace to a Calico Profile.  The Profile stores
