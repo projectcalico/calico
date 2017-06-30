@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	goerrors "errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
@@ -240,7 +241,13 @@ func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, ns *string) stri
 
 	// matchLabels is a map key => value, it means match if (label[key] ==
 	// value) for all keys.
-	for k, v := range s.MatchLabels {
+	keys := make([]string, 0, len(s.MatchLabels))
+	for k := range s.MatchLabels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := s.MatchLabels[k]
 		selectors = append(selectors, fmt.Sprintf("%s%s == '%s'", prefix, k, v))
 	}
 

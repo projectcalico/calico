@@ -214,7 +214,10 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			},
 			Spec: extensions.NetworkPolicySpec{
 				PodSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{"label": "value"},
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
 				},
 				Ingress: []extensions.NetworkPolicyIngressRule{
 					{
@@ -225,7 +228,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 							{
 								PodSelector: &metav1.LabelSelector{
 									MatchLabels: map[string]string{
-										"k": "v",
+										"k":  "v",
+										"k2": "v2",
 									},
 								},
 							},
@@ -244,12 +248,14 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 		// Assert value fields are correct.
 		Expect(int(*pol.Value.(*model.Policy).Order)).To(Equal(1000))
-		Expect(pol.Value.(*model.Policy).Selector).To(Equal("calico/k8s_ns == 'default' && label == 'value'"))
+		// Check the selector is correct, and that the matches are sorted.
+		Expect(pol.Value.(*model.Policy).Selector).To(Equal(
+			"calico/k8s_ns == 'default' && label == 'value' && label2 == 'value2'"))
 		protoTCP := numorstring.ProtocolFromString("tcp")
 		Expect(pol.Value.(*model.Policy).InboundRules).To(ConsistOf(model.Rule{
 			Action:      "allow",
 			Protocol:    &protoTCP, // Defaulted to TCP.
-			SrcSelector: "calico/k8s_ns == 'default' && k == 'v'",
+			SrcSelector: "calico/k8s_ns == 'default' && k == 'v' && k2 == 'v2'",
 			DstPorts:    []numorstring.Port{numorstring.SinglePort(80)},
 		}))
 
