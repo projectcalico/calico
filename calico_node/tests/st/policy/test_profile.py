@@ -325,3 +325,5 @@ class MultiHostMainline(TestBase):
         self.assert_connectivity(pass_list=n2_workloads,
                                  fail_list=n1_workloads,
                                  type_list=types)
+
+MultiHostMainline.batchnumber = 1  # Adds a batch number for parallel testing

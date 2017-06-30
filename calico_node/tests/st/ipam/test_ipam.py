@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class MultiHostIpam(TestBase):
     @classmethod
     def setUpClass(cls):
-        super(TestBase, cls).setUpClass()
+        super(MultiHostIpam, cls).setUpClass()
         cls.hosts = []
         cls.hosts.append(DockerHost("host1",
                                     additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
@@ -223,3 +223,5 @@ class MultiHostIpam(TestBase):
         host.calicoctl("ipam release --ip=%s" % workload.ip)
         host.execute("docker rm -f %s" % workload.name)
         host.workloads.remove(workload)
+
+MultiHostIpam.batchnumber = 2  # Adds a batch number for parallel testing
