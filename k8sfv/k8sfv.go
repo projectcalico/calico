@@ -22,6 +22,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"k8s.io/client-go/kubernetes"
@@ -93,6 +94,7 @@ var _ = JustBeforeEach(func() {
 
 var _ = AfterEach(func() {
 	log.Info(">>> AfterEach <<<")
+	Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(BeNumerically("==", 0))
 	result := float64(1)
 	if CurrentGinkgoTestDescription().Failed {
 		result = 0
