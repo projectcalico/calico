@@ -47,7 +47,7 @@ coreos:
         TimeoutStartSec=1800
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.5.1/cni-v0.5.1.tgz
         ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.5.1.tgz -C /opt/cni/bin
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.7.0-beta.1/bin/linux/amd64/kubelet
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin
         ExecStart=/opt/bin/kubelet \
@@ -75,7 +75,7 @@ coreos:
         After=kubelet.service
         [Service]
         TimeoutStartSec=1800
-        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.7.0-beta.1/bin/linux/amd64/kube-proxy
+        ExecStartPre=/usr/bin/wget -N -P /opt/bin  https://storage.googleapis.com/kubernetes-release/release/v1.7.0/bin/linux/amd64/kube-proxy
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kube-proxy
         # --cluster-cidr must match the IP Pool defined in the manifest
         ExecStart=/opt/bin/kube-proxy \
