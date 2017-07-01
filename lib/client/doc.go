@@ -53,7 +53,7 @@ new HostEndpoints interface and call the appropriate methods on that interface. 
 	hostEndpoint, err := hostEndpoints.Create(&api.HostEndpoint{
 		Metadata: api.HostEndpointMetadata{
 			Name: "endpoint1",
-			Hostname: "hostname1",
+			Nodename: "hostname1",
 		},
 		Spec: api.HostEndpointSpec{
 			InterfaceName: "eth0"
@@ -66,7 +66,7 @@ new HostEndpoints interface and call the appropriate methods on that interface. 
 	hostEndpoint, err = hostEndpoints.Update(&api.HostEndpoint{
 		Metadata: api.HostEndpointMetadata{
 			Name: "endpoint1",
-			Hostname: "hostname1",
+			Nodename: "hostname1",
 		},
 		Spec: api.HostEndpointSpec{
 			InterfaceName: "eth0",
@@ -79,7 +79,7 @@ new HostEndpoints interface and call the appropriate methods on that interface. 
 	hostEndpoint, err = hostEndpoints.Apply(&api.HostEndpoint{
 		Metadata: api.HostEndpointMetadata{
 			Name: "endpoint1",
-			Hostname: "hostname1",
+			Nodename: "hostname1",
 		},
 		Spec: api.HostEndpointSpec{
 			InterfaceName: "eth1",
@@ -92,7 +92,7 @@ new HostEndpoints interface and call the appropriate methods on that interface. 
 	// unique identifiers does not exist.
 	hostEndpoint, err = hostEndpoints.Delete(api.HostEndpointMetadata{
 		Name: "endpoint1",
-		Hostname: "hostname1",
+		Nodename: "hostname1",
 	})
 
 	// Get a hostEndpoint.  All Get() methods return an error of type
@@ -100,7 +100,7 @@ new HostEndpoints interface and call the appropriate methods on that interface. 
 	// unique identifiers does not exist.
 	hostEndpoint, err = hostEndpoints.Get(api.HostEndpointMetadata{
 		Name: "endpoint1",
-		Hostname: "hostname1",
+		Nodename: "hostname1",
 	})
 
 	// List all hostEndpoints.  All List() methods take a (sub-)set of the resource

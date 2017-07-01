@@ -58,12 +58,15 @@ type KubeClient struct {
 	converter converter
 
 	// Clients for interacting with Calico resources.
-	globalBgpClient    resources.K8sResourceClient
-	nodeBgpClient      resources.K8sResourceClient
-	globalConfigClient resources.K8sResourceClient
-	ipPoolClient       resources.K8sResourceClient
-	snpClient          resources.K8sResourceClient
-	nodeClient         resources.K8sResourceClient
+	globalBgpPeerClient   resources.K8sResourceClient
+	nodeBgpPeerClient     resources.K8sResourceClient
+	globalBgpConfigClient resources.K8sResourceClient
+	nodeBgpConfigClient   resources.K8sResourceClient
+	globalConfigClient    resources.K8sResourceClient
+	nodeConfigClient      resources.K8sResourceClient
+	ipPoolClient          resources.K8sResourceClient
+	snpClient             resources.K8sResourceClient
+	nodeClient            resources.K8sResourceClient
 }
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
@@ -133,8 +136,10 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	kubeClient.ipPoolClient = resources.NewIPPoolClient(cs, tprClientV1)
 	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClientV1)
 	kubeClient.snpClient = resources.NewSystemNetworkPolicyClient(cs, tprClientV1alpha)
-	kubeClient.globalBgpClient = resources.NewGlobalBGPPeerClient(cs, tprClientV1)
-	kubeClient.nodeBgpClient = resources.NewNodeBGPPeerClient(cs)
+	kubeClient.globalBgpPeerClient = resources.NewGlobalBGPPeerClient(cs, tprClientV1)
+	kubeClient.nodeBgpPeerClient = resources.NewNodeBGPPeerClient(cs)
+	kubeClient.globalBgpConfigClient = resources.NewGlobalBGPConfigClient(cs, tprClientV1)
+	kubeClient.nodeBgpConfigClient = resources.NewNodeBGPConfigClient(cs)
 	kubeClient.globalConfigClient = resources.NewGlobalConfigClient(cs, tprClientV1)
 
 	return kubeClient, nil
@@ -183,13 +188,14 @@ func (c *KubeClient) createThirdPartyResources() error {
 	done := make(chan error)
 	go func() { done <- c.ipPoolClient.EnsureInitialized() }()
 	go func() { done <- c.snpClient.EnsureInitialized() }()
-	go func() { done <- c.globalBgpClient.EnsureInitialized() }()
+	go func() { done <- c.globalBgpPeerClient.EnsureInitialized() }()
 	go func() { done <- c.globalConfigClient.EnsureInitialized() }()
+	go func() { done <- c.globalBgpConfigClient.EnsureInitialized() }()
 
-	// Wait for all 4 registrations to complete and keep track of the last
+	// Wait for all registrations to complete and keep track of the last
 	// error to return.
 	var lastErr error
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		if err := <-done; err != nil {
 			log.WithError(err).Error("Hit error initializing TPR")
 			lastErr = err
@@ -324,9 +330,13 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Create(d)
 	case model.GlobalBGPPeerKey:
-		return c.globalBgpClient.Create(d)
+		return c.globalBgpPeerClient.Create(d)
 	case model.NodeBGPPeerKey:
-		return c.nodeBgpClient.Create(d)
+		return c.nodeBgpPeerClient.Create(d)
+	case model.GlobalBGPConfigKey:
+		return c.globalBgpConfigClient.Create(d)
+	case model.NodeBGPConfigKey:
+		return c.nodeBgpConfigClient.Create(d)
 	default:
 		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -348,9 +358,13 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Update(d)
 	case model.GlobalBGPPeerKey:
-		return c.globalBgpClient.Update(d)
+		return c.globalBgpPeerClient.Update(d)
 	case model.NodeBGPPeerKey:
-		return c.nodeBgpClient.Update(d)
+		return c.nodeBgpPeerClient.Update(d)
+	case model.GlobalBGPConfigKey:
+		return c.globalBgpConfigClient.Update(d)
+	case model.NodeBGPConfigKey:
+		return c.nodeBgpConfigClient.Update(d)
 	default:
 		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -374,9 +388,13 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Apply(d)
 	case model.GlobalBGPPeerKey:
-		return c.globalBgpClient.Apply(d)
+		return c.globalBgpPeerClient.Apply(d)
 	case model.NodeBGPPeerKey:
-		return c.nodeBgpClient.Apply(d)
+		return c.nodeBgpPeerClient.Apply(d)
+	case model.GlobalBGPConfigKey:
+		return c.globalBgpConfigClient.Apply(d)
+	case model.NodeBGPConfigKey:
+		return c.nodeBgpConfigClient.Apply(d)
 	case model.ActiveStatusReportKey, model.LastStatusReportKey,
 		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
 		// Felix periodically reports status to the datastore.  This isn't supported
@@ -403,9 +421,13 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 	case model.NodeKey:
 		return c.nodeClient.Delete(d)
 	case model.GlobalBGPPeerKey:
-		return c.globalBgpClient.Delete(d)
+		return c.globalBgpPeerClient.Delete(d)
 	case model.NodeBGPPeerKey:
-		return c.nodeBgpClient.Delete(d)
+		return c.nodeBgpPeerClient.Delete(d)
+	case model.GlobalBGPConfigKey:
+		return c.globalBgpConfigClient.Delete(d)
+	case model.NodeBGPConfigKey:
+		return c.nodeBgpConfigClient.Delete(d)
 	default:
 		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
 		return errors.ErrorOperationNotSupported{
@@ -436,9 +458,13 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 	case model.NodeKey:
 		return c.nodeClient.Get(k.(model.NodeKey))
 	case model.GlobalBGPPeerKey:
-		return c.globalBgpClient.Get(k)
+		return c.globalBgpPeerClient.Get(k)
 	case model.NodeBGPPeerKey:
-		return c.nodeBgpClient.Get(k)
+		return c.nodeBgpPeerClient.Get(k)
+	case model.GlobalBGPConfigKey:
+		return c.globalBgpConfigClient.Get(k)
+	case model.NodeBGPConfigKey:
+		return c.nodeBgpConfigClient.Get(k)
 	default:
 		return nil, errors.ErrorOperationNotSupported{
 			Identifier: k,
@@ -467,13 +493,19 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		k, _, err := c.nodeClient.List(l)
 		return k, err
 	case model.GlobalBGPPeerListOptions:
-		k, _, err := c.globalBgpClient.List(l)
+		k, _, err := c.globalBgpPeerClient.List(l)
 		return k, err
 	case model.NodeBGPPeerListOptions:
-		k, _, err := c.nodeBgpClient.List(l)
+		k, _, err := c.nodeBgpPeerClient.List(l)
 		return k, err
 	case model.GlobalConfigListOptions:
 		k, _, err := c.globalConfigClient.List(l)
+		return k, err
+	case model.GlobalBGPConfigListOptions:
+		k, _, err := c.globalBgpConfigClient.List(l)
+		return k, err
+	case model.NodeBGPConfigListOptions:
+		k, _, err := c.nodeBgpConfigClient.List(l)
 		return k, err
 	default:
 		return []*model.KVPair{}, nil

@@ -17,13 +17,18 @@ package model
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/errors"
 )
 
 var (
-	typeGlobalBGPConfig = rawStringType
-	typeHostBGPConfig   = rawStringType
+	matchGlobalBGPConfig = regexp.MustCompile("^/?calico/bgp/v1/global/(.+)$")
+	matchNodeBGPConfig   = regexp.MustCompile("^/?calico/bgp/v1/host/([^/]+)/(.+)$")
+	typeGlobalBGPConfig  = rawStringType
+	typeNodeBGPConfig    = rawStringType
 )
 
 type GlobalBGPConfigKey struct {
@@ -55,37 +60,103 @@ func (key GlobalBGPConfigKey) String() string {
 	return fmt.Sprintf("GlobalBGPConfig(name=%s)", key.Name)
 }
 
-type HostBGPConfigKey struct {
+type GlobalBGPConfigListOptions struct {
+	Name string
+}
+
+func (options GlobalBGPConfigListOptions) defaultPathRoot() string {
+	k := "/calico/bgp/v1/global"
+	if options.Name == "" {
+		return k
+	}
+	k = k + fmt.Sprintf("/%s", options.Name)
+	return k
+}
+
+func (options GlobalBGPConfigListOptions) KeyFromDefaultPath(path string) Key {
+	log.Debugf("Get GlobalConfig key from %s", path)
+	r := matchGlobalBGPConfig.FindAllStringSubmatch(path, -1)
+	if len(r) != 1 {
+		log.Debugf("Didn't match regex")
+		return nil
+	}
+	name := r[0][1]
+	if options.Name != "" && name != options.Name {
+		log.Debugf("Didn't match name %s != %s", options.Name, name)
+		return nil
+	}
+	return GlobalConfigKey{Name: name}
+}
+
+type NodeBGPConfigKey struct {
 	// The hostname for the host specific BGP config
-	Hostname string `json:"-" validate:"required,name"`
+	Nodename string `json:"-" validate:"required,name"`
 
 	// The name of the host specific BGP config key.
 	Name string `json:"-" validate:"required,name"`
 }
 
-func (key HostBGPConfigKey) defaultPath() (string, error) {
+func (key NodeBGPConfigKey) defaultPath() (string, error) {
 	return key.defaultDeletePath()
 }
 
-func (key HostBGPConfigKey) defaultDeletePath() (string, error) {
-	if key.Hostname == "" {
+func (key NodeBGPConfigKey) defaultDeletePath() (string, error) {
+	if key.Nodename == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
 	}
 	if key.Name == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
 	}
-	e := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", key.Hostname, key.Name)
+	e := fmt.Sprintf("/calico/bgp/v1/host/%s/%s", key.Nodename, key.Name)
 	return e, nil
 }
 
-func (key HostBGPConfigKey) defaultDeleteParentPaths() ([]string, error) {
+func (key NodeBGPConfigKey) defaultDeleteParentPaths() ([]string, error) {
 	return nil, nil
 }
 
-func (key HostBGPConfigKey) valueType() reflect.Type {
-	return typeHostBGPConfig
+func (key NodeBGPConfigKey) valueType() reflect.Type {
+	return typeNodeBGPConfig
 }
 
-func (key HostBGPConfigKey) String() string {
-	return fmt.Sprintf("HostBGPConfig(node=%s; name=%s)", key.Hostname, key.Name)
+func (key NodeBGPConfigKey) String() string {
+	return fmt.Sprintf("HostBGPConfig(node=%s; name=%s)", key.Nodename, key.Name)
+}
+
+type NodeBGPConfigListOptions struct {
+	Nodename string
+	Name     string
+}
+
+func (options NodeBGPConfigListOptions) defaultPathRoot() string {
+	k := "/calico/bgp/v1/host/%s"
+	if options.Nodename == "" {
+		return k
+	}
+	k = k + fmt.Sprintf("/%s", options.Nodename)
+	if options.Name == "" {
+		return k
+	}
+	k = k + fmt.Sprintf("/%s", options.Name)
+	return k
+}
+
+func (options NodeBGPConfigListOptions) KeyFromDefaultPath(path string) Key {
+	log.Debugf("Get HostConfig key from %s", path)
+	r := matchNodeBGPConfig.FindAllStringSubmatch(path, -1)
+	if len(r) != 1 {
+		log.Debugf("Didn't match regex")
+		return nil
+	}
+	nodename := r[0][1]
+	name := r[0][2]
+	if options.Nodename != "" && nodename != options.Nodename {
+		log.Debugf("Didn't match nodename %s != %s", options.Nodename, nodename)
+		return nil
+	}
+	if options.Name != "" && name != options.Name {
+		log.Debugf("Didn't match name %s != %s", options.Name, name)
+		return nil
+	}
+	return NodeBGPConfigKey{Nodename: nodename, Name: name}
 }
