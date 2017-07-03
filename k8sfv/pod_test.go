@@ -29,7 +29,6 @@ var _ = Context("with a k8s clientset", func() {
 	var (
 		clientset *kubernetes.Clientset
 		nsPrefix  string
-		d         deployment
 	)
 
 	BeforeEach(func() {
