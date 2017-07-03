@@ -85,7 +85,11 @@ var _ = BeforeSuite(func() {
 	prometheus.MustRegister(gaugeVecTestResult)
 })
 
-var testName string
+// State that is common to most tests.
+var (
+	testName string
+	d        deployment
+)
 
 var _ = JustBeforeEach(func() {
 	log.Info(">>> JustBeforeEach <<<")
@@ -94,7 +98,14 @@ var _ = JustBeforeEach(func() {
 
 var _ = AfterEach(func() {
 	log.Info(">>> AfterEach <<<")
-	Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(BeNumerically("==", 0))
+
+	// If we got as far as fully configuring the local Felix, check that the test finishes with
+	// no left-over endpoints.
+	if d != nil {
+		Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(BeNumerically("==", 0))
+	}
+
+	// Store the result of each test in a Prometheus metric.
 	result := float64(1)
 	if CurrentGinkgoTestDescription().Failed {
 		result = 0
@@ -175,7 +186,7 @@ func initializeCalicoDeployment(k8sServerEndpoint string) {
 
 func create1000Pods(clientset *kubernetes.Clientset, nsPrefix string) error {
 
-	d := NewDeployment(clientset, 49, true)
+	d = NewDeployment(clientset, 49, true)
 	nsName := nsPrefix + "test"
 
 	// Create 1000 pods.
