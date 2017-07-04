@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
+	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 )
@@ -77,22 +78,33 @@ type AsyncCalcGraph struct {
 	eventBuffer      *EventSequencer
 	beenInSync       bool
 	needToSendInSync bool
+	syncStatusNow    api.SyncStatus
+	healthAggregator *health.HealthAggregator
 
 	flushTicks       <-chan time.Time
 	flushLeakyBucket int
 	dirty            bool
 }
 
-func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}) *AsyncCalcGraph {
+const (
+	healthName     = "async_calc_graph"
+	healthInterval = 10 * time.Second
+)
+
+func NewAsyncCalcGraph(conf *config.Config, outputEvents chan<- interface{}, healthAggregator *health.HealthAggregator) *AsyncCalcGraph {
 	eventBuffer := NewEventBuffer(conf)
 	disp := NewCalculationGraph(eventBuffer, conf.FelixHostname)
 	g := &AsyncCalcGraph{
-		inputEvents:  make(chan interface{}, 10),
-		outputEvents: outputEvents,
-		Dispatcher:   disp,
-		eventBuffer:  eventBuffer,
+		inputEvents:      make(chan interface{}, 10),
+		outputEvents:     outputEvents,
+		Dispatcher:       disp,
+		eventBuffer:      eventBuffer,
+		healthAggregator: healthAggregator,
 	}
 	eventBuffer.Callback = g.onEvent
+	if healthAggregator != nil {
+		healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+	}
 	return g
 }
 
@@ -112,6 +124,8 @@ func (acg *AsyncCalcGraph) OnStatusUpdated(status api.SyncStatus) {
 
 func (acg *AsyncCalcGraph) loop() {
 	log.Info("AsyncCalcGraph running")
+	healthTicks := time.NewTicker(healthInterval).C
+	acg.reportHealth()
 	for {
 		select {
 		case update := <-acg.inputEvents:
@@ -133,6 +147,7 @@ func (acg *AsyncCalcGraph) loop() {
 				// Sync status changed, check if we're now in-sync.
 				log.WithField("status", update).Debug(
 					"Pulled status update off channel")
+				acg.syncStatusNow = update
 				acg.Dispatcher.OnStatusUpdated(update)
 				if update == api.InSync && !acg.beenInSync {
 					log.Info("First time we've been in sync")
@@ -144,6 +159,7 @@ func (acg *AsyncCalcGraph) loop() {
 						acg.flushLeakyBucket++
 					}
 				}
+				acg.reportHealth()
 			default:
 				log.Fatalf("Unexpected update: %#v", update)
 			}
@@ -153,8 +169,19 @@ func (acg *AsyncCalcGraph) loop() {
 			if acg.flushLeakyBucket < leakyBucketSize {
 				acg.flushLeakyBucket++
 			}
+		case <-healthTicks:
+			acg.reportHealth()
 		}
 		acg.maybeFlush()
+	}
+}
+
+func (acg *AsyncCalcGraph) reportHealth() {
+	if acg.healthAggregator != nil {
+		acg.healthAggregator.Report(healthName, &health.HealthReport{
+			Live:  true,
+			Ready: acg.syncStatusNow == api.InSync,
+		})
 	}
 }
 

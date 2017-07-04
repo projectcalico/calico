@@ -80,8 +80,9 @@ var _ = BeforeSuite(func() {
 
 // State that is common to most tests.
 var (
-	testName string
-	d        deployment
+	testName             string
+	d                    deployment
+	localFelixConfigured bool
 )
 
 var _ = JustBeforeEach(func() {
@@ -94,7 +95,7 @@ var _ = AfterEach(func() {
 
 	// If we got as far as fully configuring the local Felix, check that the test finishes with
 	// no left-over endpoints.
-	if d != nil {
+	if localFelixConfigured {
 		Eventually(getNumEndpointsDefault(-1), "10s", "1s").Should(BeNumerically("==", 0))
 	}
 

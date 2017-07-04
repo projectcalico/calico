@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/extdataplane"
+	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/intdataplane"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -226,6 +227,9 @@ configRetry:
 	buildInfoLogCxt.WithField("config", configParams).Info(
 		"Successfully loaded configuration.")
 
+	// Health monitoring, for liveness and readiness endpoints.
+	healthAggregator := health.NewHealthAggregator()
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dataplaneDriver
@@ -287,6 +291,7 @@ configRetry:
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 
 			PostInSyncCallback: func() { dumpHeapMemoryProfile(configParams) },
+			HealthAggregator:   healthAggregator,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
@@ -339,7 +344,7 @@ configRetry:
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies
 	// etc.
-	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, dpConnector.ToDataplane)
+	asyncCalcGraph := calc.NewAsyncCalcGraph(configParams, dpConnector.ToDataplane, healthAggregator)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -448,6 +453,11 @@ configRetry:
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
 		go servePrometheusMetrics(configParams)
+	}
+
+	if configParams.HealthEnabled {
+		log.WithField("port", configParams.HealthPort).Info("Health enabled.  Starting server.")
+		go healthAggregator.ServeHTTP(configParams.HealthPort)
 	}
 
 	// On receipt of SIGUSR1, write out heap profile.

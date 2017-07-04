@@ -28,6 +28,7 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -105,6 +106,7 @@ type Config struct {
 	StatusReportingInterval time.Duration
 
 	PostInSyncCallback func()
+	HealthAggregator   *health.HealthAggregator
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -164,6 +166,7 @@ type InternalDataplane struct {
 	dataplaneNeedsSync    bool
 	forceDataplaneRefresh bool
 	cleanupPending        bool
+	doneFirstApply        bool
 
 	reschedTimer *time.Timer
 	reschedC     <-chan time.Time
@@ -172,6 +175,11 @@ type InternalDataplane struct {
 
 	config Config
 }
+
+const (
+	healthName     = "int_dataplane"
+	healthInterval = 10 * time.Second
+)
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
@@ -326,6 +334,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allIptablesTables = append(dp.allIptablesTables, t)
 	}
 
+	// Register that we will report a liveness indicator.
+	if config.HealthAggregator != nil {
+		config.HealthAggregator.RegisterReporter(
+			healthName,
+			&health.HealthReport{Live: true, Ready: true},
+			healthInterval*2,
+		)
+	}
+
 	return dp
 }
 
@@ -461,6 +478,8 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 
 func (d *InternalDataplane) loopUpdatingDataplane() {
 	log.Info("Started internal iptables dataplane driver loop")
+	healthTicks := time.NewTicker(healthInterval).C
+	d.reportHealth()
 
 	// Retry any failed operations every 10s.
 	retryTicker := time.NewTicker(10 * time.Second)
@@ -478,7 +497,6 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 	beingThrottled := false
 
 	datastoreInSync := false
-	doneFirstApply := false
 
 	processMsgFromCalcGraph := func(msg interface{}) {
 		log.WithField("msg", msgStringer{msg: msg}).Infof(
@@ -578,6 +596,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		case <-throttleC:
 			log.Debug("Throttle kick received")
 			d.applyThrottle.Refill()
+		case <-healthTicks:
+			d.reportHealth()
 		case <-retryTicker.C:
 		}
 
@@ -610,11 +630,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					beingThrottled = true
 				}
 			}
-			if !doneFirstApply {
+			if !d.doneFirstApply {
 				log.WithField(
 					"secsSinceStart", monotime.Since(processStartTime).Seconds(),
 				).Info("Completed first update to dataplane.")
-				doneFirstApply = true
+				d.doneFirstApply = true
 				if d.config.PostInSyncCallback != nil {
 					d.config.PostInSyncCallback()
 				}
@@ -870,4 +890,13 @@ func (m msgStringer) String() string {
 		}
 	}
 	return fmt.Sprintf("%v", m.msg)
+}
+
+func (d *InternalDataplane) reportHealth() {
+	if d.config.HealthAggregator != nil {
+		d.config.HealthAggregator.Report(
+			healthName,
+			&health.HealthReport{Live: true, Ready: d.doneFirstApply},
+		)
+	}
 }
