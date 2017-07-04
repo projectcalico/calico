@@ -159,7 +159,8 @@ type RuleRenderer interface {
 type DefaultRuleRenderer struct {
 	Config
 
-	inputAcceptActions []iptables.Action
+	inputAcceptActions  []iptables.Action
+	iptablesAllowAction iptables.Action
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -192,6 +193,7 @@ type Config struct {
 
 	IptablesLogPrefix    string
 	EndpointToHostAction string
+	IptablesAllowAction  string
 
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
@@ -216,8 +218,20 @@ func NewRenderer(config Config) RuleRenderer {
 		inputAcceptActions = []iptables.Action{iptables.ReturnAction{}}
 	}
 
+	//What should we do with packets that are accepted in the forwarding chain
+	var iptablesAllowAction iptables.Action
+	switch config.IptablesAllowAction {
+	case "RETURN":
+		log.Info("Accepted forward packets will be returned to FORWARD chain.")
+		iptablesAllowAction = iptables.ReturnAction{}
+	default:
+		log.Info("Accepted forward packets will be accepted immediately.")
+		iptablesAllowAction = iptables.AcceptAction{}
+	}
+
 	return &DefaultRuleRenderer{
-		Config:             config,
-		inputAcceptActions: inputAcceptActions,
+		Config:              config,
+		inputAcceptActions:  inputAcceptActions,
+		iptablesAllowAction: iptablesAllowAction,
 	}
 }

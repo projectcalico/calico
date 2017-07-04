@@ -59,6 +59,7 @@ var _ = Describe("Constructor test", func() {
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
+				IptablesAllowAction:  configParams.IptablesAllowAction,
 			},
 			IPIPMTU: configParams.IpInIpMtu,
 		}

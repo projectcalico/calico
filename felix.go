@@ -270,6 +270,7 @@ configRetry:
 
 				IptablesLogPrefix:    configParams.LogPrefix,
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
+				IptablesAllowAction:  configParams.IptablesAllowAction,
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,

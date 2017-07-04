@@ -89,7 +89,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  AcceptAction{},
+			Action:  r.iptablesAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -296,7 +296,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  AcceptAction{},
+			Action:  r.iptablesAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -350,7 +350,7 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  AcceptAction{},
+			Action:  r.iptablesAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)

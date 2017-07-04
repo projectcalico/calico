@@ -82,6 +82,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"ACCEPT", "ACCEPT"),
 
+	Entry("IptablesAllowAction", "IptablesAllowAction",
+		"RETURN", "RETURN"),
+
 	Entry("LogFilePath", "LogFilePath", "/tmp/felix.log", "/tmp/felix.log"),
 
 	Entry("LogSeverityFile", "LogSeverityFile", "debug", "DEBUG"),

@@ -480,6 +480,99 @@ var _ = Describe("Static", func() {
 			}))
 		})
 	})
+
+	Describe("with RETURN accept action", func() {
+		BeforeEach(func() {
+			conf = Config{
+				WorkloadIfacePrefixes:    []string{"cali"},
+				IptablesMarkAccept:       0x10,
+				IptablesMarkPass:         0x20,
+				IptablesMarkFromWorkload: 0x40,
+				IptablesAllowAction:      "RETURN",
+			}
+		})
+
+		for _, ipVersion := range []uint8{4, 6} {
+			It("should include the expected forward chain in the filter chains", func() {
+				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
+					Name: "cali-FORWARD",
+					Rules: []Rule{
+						// Untracked packets already matched in raw table.
+						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							Action: AcceptAction{}},
+
+						// Per-prefix workload jump rules.
+						{Match: Match().InInterface("cali+"),
+							Action: JumpAction{Target: ChainFromWorkloadDispatch}},
+						{Match: Match().OutInterface("cali+"),
+							Action: JumpAction{Target: ChainToWorkloadDispatch}},
+
+						// Accept if workload policy matched.
+						{Match: Match().InInterface("cali+"),
+							Action: AcceptAction{}},
+						{Match: Match().OutInterface("cali+"),
+							Action: AcceptAction{}},
+
+						// Non-workload through-traffic, pass to host endpoint chains.
+						{Action: ClearMarkAction{Mark: 0x70}},
+						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+						{
+							Match:   Match().MarkSet(0x10),
+							Action:  ReturnAction{},
+							Comment: "Host endpoint policy accepted packet.",
+						},
+					},
+				}))
+			})
+			It("should include the expected input chain in the filter chains", func() {
+				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-INPUT")).To(Equal(&Chain{
+					Name: "cali-INPUT",
+					Rules: []Rule{
+						// Untracked packets already matched in raw table.
+						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							Action: AcceptAction{}},
+
+						// Per-prefix workload jump rules.  Note use of goto so that we
+						// don't return here.
+						{Match: Match().InInterface("cali+"),
+							Action: GotoAction{Target: "cali-wl-to-host"}},
+
+						// Non-workload traffic, send to host chains.
+						{Action: ClearMarkAction{Mark: 0x70}},
+						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{
+							Match:   Match().MarkSet(0x10),
+							Action:  ReturnAction{},
+							Comment: "Host endpoint policy accepted packet.",
+						},
+					},
+				}))
+			})
+			It("should include the expected output chain in the filter chains", func() {
+				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-OUTPUT")).To(Equal(&Chain{
+					Name: "cali-OUTPUT",
+					Rules: []Rule{
+						// Untracked packets already matched in raw table.
+						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							Action: AcceptAction{}},
+
+						// Return if to workload.
+						{Match: Match().OutInterface("cali+"), Action: ReturnAction{}},
+
+						// Non-workload traffic, send to host chains.
+						{Action: ClearMarkAction{Mark: 0x70}},
+						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
+						{
+							Match:   Match().MarkSet(0x10),
+							Action:  ReturnAction{},
+							Comment: "Host endpoint policy accepted packet.",
+						},
+					},
+				}))
+			})
+		}
+	})
 })
 
 func findChain(chains []*Chain, name string) *Chain {
