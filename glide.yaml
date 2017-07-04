@@ -58,4 +58,3 @@ import:
   version: ^0.3.0
 testImport:
 - package: github.com/onsi/gomega
-  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
