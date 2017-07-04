@@ -323,6 +323,45 @@ var _ = Describe("With an in-process Server", func() {
 			expectClientState(api.InSync, map[string]api.Update{})
 		})
 
+		It("after adding many keys and deleting half, should give correct state", func() {
+			// This test is a regression test for https://github.com/projectcalico/typha/issues/28.  That
+			// issue was caused by a bug in the Ctrie datastructure that we use: if there was an internal
+			// node of that trie that contained exactly two values and we delete one of them, then the
+			// other value would be skipped on subsequent iterations over the trie.  I've verified that,
+			// without the fix, this test fails (but setting numKeys=1000 wasn't enough to trigger the bug).
+			rev := 100
+			expectedState := map[string]api.Update{}
+			const numKeys = 10000
+			const halfNumKeys = numKeys / 2
+			for i := 0; i < numKeys; i++ {
+				upd := api.Update{
+					KVPair: model.KVPair{
+						Key:      model.GlobalConfigKey{Name: fmt.Sprintf("foobar%d", i)},
+						Value:    fmt.Sprintf("biff%d", i),
+						Revision: fmt.Sprintf("%d", rev),
+					},
+					UpdateType: api.UpdateTypeKVNew,
+				}
+				decoupler.OnUpdates([]api.Update{upd})
+				rev++
+				if i >= halfNumKeys {
+					expectedState[fmt.Sprintf("/calico/v1/config/foobar%d", i)] = upd
+				}
+			}
+			for i := 0; i < halfNumKeys; i++ {
+				decoupler.OnUpdates([]api.Update{{
+					KVPair: model.KVPair{
+						Key:      model.GlobalConfigKey{Name: fmt.Sprintf("foobar%d", i)},
+						Revision: fmt.Sprintf("%d", rev),
+					},
+					UpdateType: api.UpdateTypeKVDeleted,
+				}})
+				rev++
+			}
+			decoupler.OnStatusUpdated(api.InSync)
+			expectClientState(api.InSync, expectedState)
+		})
+
 		It("should pass through many KVs", func() {
 			expectedEndState := sendNUpdatesThenInSync(1000)
 			expectClientState(api.InSync, expectedEndState)
