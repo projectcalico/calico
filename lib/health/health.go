@@ -21,144 +21,142 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-// Any kind of value that can be used as a map key and is unique across multiple packages.  For
-// example, "type myHealthSource string".
-type HealthSource interface{}
-
-type HealthIndicator struct {
-	// The source of this health indicator.
-	Source HealthSource
-
-	// How long the indicator is valid for.  In other words, if it continues operating normally,
-	// the source expects to refresh this indicator before this timeout.
-	Timeout time.Duration
+// The HealthReport struct has slots for the levels of health that we monitor and aggregate.
+type HealthReport struct {
+	Live  bool
+	Ready bool
 }
 
-// For a component that provides health indications, return the sources that it provides to indicate
-// readiness, and those that it provides to indicate liveness.
-type HealthProvider interface {
-	ReadySources() []HealthSource
-	LiveSources() []HealthSource
+type reporterState struct {
+	// The health indicators that this reporter reports.
+	reports HealthReport
+
+	// Expiry time for this reporter's reports.
+	timeout time.Duration
+
+	// The most recent report.
+	latest HealthReport
+
+	// Time of that most recent report.
+	timestamp time.Time
 }
 
-type HealthState struct {
-	// Whether we are overall 'ready'.
-	ready bool
-
-	// Whether we are overall 'live'.
-	live bool
-
-	// Mutex used to protect against concurrently reading and writing those attributes.
+// A HealthAggregator receives health reports from individual reporters (which are typically
+// components of a particular daemon or application) and aggregates them into an overall health
+// summary.  For each monitored kind of health, all of the reporters that report that need to say
+// that it is good; for example, to be 'ready' overall, all of the reporters that report readiness
+// need to have recently said 'Ready: true'.
+type HealthAggregator struct {
+	// Mutex to protect concurrent access to this health aggregator.
 	mutex *sync.Mutex
+
+	// Map from reporter name to corresponding state.
+	reporters map[string]*reporterState
 }
 
-func (state *HealthState) Ready() bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
-	return state.ready
-}
-
-func (state *HealthState) Live() bool {
-	state.mutex.Lock()
-	defer state.mutex.Unlock()
-	return state.live
-}
-
-func NewHealthState() *HealthState {
-	// Start as 'live' but not 'ready'.
-	return &HealthState{ready: false, live: true, mutex: &sync.Mutex{}}
-}
-
-func MonitorHealth(
-	state *HealthState,
-	neededForReady set.Set,
-	neededForLive set.Set,
-	c <-chan HealthIndicator,
-) {
-	currentHealth := set.New()
-	timer := map[HealthSource]*time.Timer{}
-	timeoutC := make(chan HealthSource)
-
-	for {
-		select {
-		case indicator, ok := <-c:
-			if !ok {
-				log.Warningf("Health channel closed")
-				state.mutex.Lock()
-				state.ready = false
-				state.live = false
-				state.mutex.Unlock()
-				return
-			}
-			log.WithField("source", indicator.Source).Debug("Health indicator current")
-			if timer[indicator.Source] != nil {
-				timer[indicator.Source].Stop()
-			}
-			if indicator.Timeout > 0 {
-				currentHealth.Add(indicator.Source)
-				timer[indicator.Source] = time.AfterFunc(indicator.Timeout, func() {
-					timeoutC <- indicator.Source
-				})
-			} else {
-				// Shortcut immediate timeout.  A health source can use an
-				// indication with zero timeout to cancel a previous indication that
-				// might otherwise take a long time to expire.
-				log.WithField("source", indicator.Source).Debug("Health indicator cancelled")
-				currentHealth.Discard(indicator.Source)
-			}
-		case source := <-timeoutC:
-			log.WithField("source", source).Debug("Health indicator expired")
-			currentHealth.Discard(source)
-		}
-		state.mutex.Lock()
-		state.ready = currentHealth.ContainsAll(neededForReady)
-		state.live = currentHealth.ContainsAll(neededForLive)
-		log.WithFields(log.Fields{
-			"ready": state.ready,
-			"live":  state.live,
-		}).Debug("Health now")
-		state.mutex.Unlock()
+// RegisterReporter registers a reporter with a HealthAggregator.  The aggregator uses NAME to
+// identify the reporter.  REPORTS indicates the kinds of health that this reporter will report.
+// TIMEOUT is the expiry time for this reporter's reports; the implication of which is that the
+// reporter should normally refresh its reports well before this time has expired.
+func (aggregator *HealthAggregator) RegisterReporter(name string, reports *HealthReport, timeout time.Duration) {
+	aggregator.mutex.Lock()
+	defer aggregator.mutex.Unlock()
+	aggregator.reporters[name] = &reporterState{
+		reports:   *reports,
+		timeout:   timeout,
+		latest:    HealthReport{Live: true},
+		timestamp: time.Now(),
 	}
+	return
+}
+
+// Report reports current health from a reporter to a HealthAggregator.  NAME is the reporter's name
+// and REPORTS conveys the current status, for each kind of health that the reporter said it was
+// going to report when it called RegisterReporter.
+func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
+	aggregator.mutex.Lock()
+	defer aggregator.mutex.Unlock()
+	reporter := aggregator.reporters[name]
+	reporter.latest = *report
+	reporter.timestamp = time.Now()
+	return
+}
+
+func NewHealthAggregator() *HealthAggregator {
+	return &HealthAggregator{mutex: &sync.Mutex{}, reporters: map[string]*reporterState{}}
+}
+
+// Summary calculates the current overall health for a HealthAggregator.
+func (aggregator *HealthAggregator) Summary() *HealthReport {
+	aggregator.mutex.Lock()
+	defer aggregator.mutex.Unlock()
+
+	// In the absence of any reporters, default to indicating that we are both live and ready.
+	summary := &HealthReport{Live: true, Ready: true}
+
+	// Now for each reporter...
+	for name, reporter := range aggregator.reporters {
+		log.WithFields(log.Fields{
+			"name":           name,
+			"reporter-state": reporter,
+		}).Debug("Detailed health state")
+
+		// Reset Live to false if that reporter is registered to report liveness and hasn't
+		// recently said that it is live.
+		if summary.Live && reporter.reports.Live && (!reporter.latest.Live ||
+			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			summary.Live = false
+		}
+
+		// Reset Ready to false if that reporter is registered to report readiness and
+		// hasn't recently said that it is ready.
+		if summary.Ready && reporter.reports.Ready && (!reporter.latest.Ready ||
+			(time.Since(reporter.timestamp) > reporter.timeout)) {
+			summary.Ready = false
+		}
+	}
+
+	log.WithField("summary", summary).Info("Overall health")
+	return summary
 }
 
 const (
 	// The HTTP status that we use for 'ready' or 'live'.  204 means "No Content: The server
 	// successfully processed the request and is not returning any content."  (Kubernetes
 	// interpets any 200<=status<400 as 'good'.)
-	STATUS_GOOD = 204
+	StatusGood = 204
 
 	// The HTTP status that we use for 'not ready' or 'not live'.  503 means "Service
 	// Unavailable: The server is currently unavailable (because it is overloaded or down for
 	// maintenance). Generally, this is a temporary state."  (Kubernetes interpets any
 	// status>=400 as 'bad'.)
-	STATUS_BAD = 503
+	StatusBad = 503
 )
 
-func ServeHealth(port int, neededForReady set.Set, neededForLive set.Set, c <-chan HealthIndicator) {
-
-	state := NewHealthState()
-
-	go MonitorHealth(state, neededForReady, neededForLive, c)
+// ServeHTTP publishes the current overall liveness and readiness at http://*:PORT/liveness and
+// http://*:PORT/readiness respectively.  A GET request on those URLs returns StatusGood or
+// StatusBad, according to the current overall liveness or readiness.  These endpoints are designed
+// for use by Kubernetes liveness and readiness probes.
+func (aggregator *HealthAggregator) ServeHTTP(port int) {
 
 	log.WithField("port", port).Info("Starting health endpoints")
 	http.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /readiness")
-		status := STATUS_BAD
-		if state.Ready() {
+		status := StatusBad
+		if aggregator.Summary().Ready {
 			log.Debug("Felix is ready")
-			status = STATUS_GOOD
+			status = StatusGood
 		}
 		rsp.WriteHeader(status)
 	})
 	http.HandleFunc("/liveness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /liveness")
-		status := STATUS_BAD
-		if state.Live() {
+		status := StatusBad
+		if aggregator.Summary().Live {
 			log.Debug("Felix is live")
-			status = STATUS_GOOD
+			status = StatusGood
 		}
 		rsp.WriteHeader(status)
 	})

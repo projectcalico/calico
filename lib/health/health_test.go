@@ -20,96 +20,85 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/health"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type healthSource string
-
-var (
-	SOURCE1 = healthSource("source1")
-	SOURCE2 = healthSource("source2")
-	SOURCE3 = healthSource("source3")
+const (
+	SOURCE1 = "source1"
+	SOURCE2 = "source2"
+	SOURCE3 = "source3"
 )
 
 var _ = Describe("Health", func() {
 
 	var (
-		healthChannel chan health.HealthIndicator
-		state         *health.HealthState
+		aggregator *health.HealthAggregator
 	)
 
-	notifySource := func(source healthSource) func() {
+	notifySource := func(source string) func() {
 		return func() {
-			healthChannel <- health.HealthIndicator{source, 1 * time.Second}
+			switch source {
+			case SOURCE1:
+				aggregator.Report(source, &health.HealthReport{Ready: true})
+			case SOURCE2:
+				aggregator.Report(source, &health.HealthReport{Live: true, Ready: true})
+			case SOURCE3:
+				aggregator.Report(source, &health.HealthReport{Live: true})
+			}
 		}
 	}
 
-	cancelSource := func(source healthSource) func() {
+	cancelSource := func(source string) func() {
 		return func() {
-			healthChannel <- health.HealthIndicator{source, 0}
+			aggregator.Report(source, &health.HealthReport{Live: false, Ready: false})
 		}
 	}
 
 	BeforeEach(func() {
-		healthChannel = make(chan health.HealthIndicator)
-		// Note: use a new HealthState, in each test.  Otherwise what can happen is that the
-		// closing goroutine from the previous test changes it and confuses the test that is
-		// running now...
-		state = health.NewHealthState()
-
-		go health.MonitorHealth(
-			state,
-			set.From(SOURCE1, SOURCE2),
-			set.From(SOURCE2, SOURCE3),
-			healthChannel,
-		)
+		aggregator = health.NewHealthAggregator()
+		aggregator.RegisterReporter(SOURCE1, &health.HealthReport{Ready: true}, 1*time.Second)
+		aggregator.RegisterReporter(SOURCE2, &health.HealthReport{Live: true, Ready: true}, 1*time.Second)
+		aggregator.RegisterReporter(SOURCE3, &health.HealthReport{Live: true}, 1*time.Second)
 	})
 
-	AfterEach(func() {
-		close(healthChannel)
-		Eventually(state.Ready).Should(BeFalse())
-		Eventually(state.Live).Should(BeFalse())
+	It("is initially live but not ready", func() {
+		Expect(aggregator.Summary().Ready).To(BeFalse())
+		Expect(aggregator.Summary().Live).To(BeTrue())
 	})
 
-	It("initially reports live but not ready", func() {
-		Expect(state.Ready()).To(BeFalse())
-		Expect(state.Live()).To(BeTrue())
-	})
-
-	Context("with indicators for readiness sources", func() {
+	Context("with ready reports", func() {
 
 		BeforeEach(func() {
 			notifySource(SOURCE1)()
 			notifySource(SOURCE2)()
 		})
 
-		It("is ready but not live", func() {
-			Eventually(state.Ready).Should(BeTrue())
-			Expect(state.Live()).To(BeFalse())
+		It("is ready and live", func() {
+			Expect(aggregator.Summary().Ready).To(BeTrue())
+			Expect(aggregator.Summary().Live).To(BeTrue())
 		})
 
-		Context("with liveness source also", func() {
+		Context("with live report", func() {
 
 			BeforeEach(notifySource(SOURCE3))
 
 			It("is ready and live", func() {
-				Eventually(state.Ready).Should(BeTrue())
-				Eventually(state.Live).Should(BeTrue())
+				Expect(aggregator.Summary().Ready).To(BeTrue())
+				Expect(aggregator.Summary().Live).To(BeTrue())
 			})
 		})
 
-		Context("with a source cancelled", func() {
+		Context("with not-ready report", func() {
 
 			BeforeEach(cancelSource(SOURCE1))
 
-			It("is not ready and not live", func() {
-				Eventually(state.Ready).Should(BeFalse())
-				Eventually(state.Live).Should(BeFalse())
+			It("is live but not ready", func() {
+				Expect(aggregator.Summary().Ready).To(BeFalse())
+				Expect(aggregator.Summary().Live).To(BeTrue())
 			})
 		})
 	})
 
-	Context("with indicators for liveness sources", func() {
+	Context("with live reports", func() {
 
 		BeforeEach(func() {
 			notifySource(SOURCE3)()
@@ -117,39 +106,39 @@ var _ = Describe("Health", func() {
 		})
 
 		It("is live but not ready", func() {
-			Eventually(state.Live).Should(BeTrue())
-			Expect(state.Ready()).To(BeFalse())
+			Expect(aggregator.Summary().Live).To(BeTrue())
+			Expect(aggregator.Summary().Ready).To(BeFalse())
 		})
 
-		Context("with readiness source also", func() {
+		Context("with ready report also", func() {
 
 			BeforeEach(notifySource(SOURCE1))
 
 			It("is ready and live", func() {
-				Eventually(state.Ready).Should(BeTrue())
-				Eventually(state.Live).Should(BeTrue())
+				Expect(aggregator.Summary().Ready).To(BeTrue())
+				Expect(aggregator.Summary().Live).To(BeTrue())
 			})
 
-			Context("with time passing so that indicators expire", func() {
+			Context("with time passing so that reports expire", func() {
 
 				BeforeEach(func() {
 					time.Sleep(2 * time.Second)
 				})
 
 				It("is not ready and not live", func() {
-					Eventually(state.Ready).Should(BeFalse())
-					Eventually(state.Live).Should(BeFalse())
+					Expect(aggregator.Summary().Ready).To(BeFalse())
+					Expect(aggregator.Summary().Live).To(BeFalse())
 				})
 			})
 		})
 
-		Context("with a source cancelled", func() {
+		Context("with not-live report", func() {
 
 			BeforeEach(cancelSource(SOURCE3))
 
 			It("is not ready and not live", func() {
-				Eventually(state.Ready).Should(BeFalse())
-				Eventually(state.Live).Should(BeFalse())
+				Expect(aggregator.Summary().Ready).To(BeFalse())
+				Expect(aggregator.Summary().Live).To(BeFalse())
 			})
 		})
 	})
