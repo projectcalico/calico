@@ -28,8 +28,8 @@ import (
 	"math"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/buildinfo"
-	"github.com/projectcalico/typha/pkg/health"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
 	"github.com/projectcalico/typha/pkg/syncproto"
@@ -133,8 +133,13 @@ type Config struct {
 	PongTimeout             time.Duration
 	DropInterval            time.Duration
 	MaxConns                int
-	HealthChannel           chan<- health.HealthIndicator
+	HealthAggregator        *health.HealthAggregator
 }
+
+const (
+	healthName     = "sync_server"
+	healthInterval = 10 * time.Second
+)
 
 func (c *Config) ApplyDefaults() {
 	if c.MaxMessageSize < 1 {
@@ -215,6 +220,15 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		maxConns:     config.MaxConns,
 		connIDToConn: map[uint64]*connection{},
 		listeningC:   make(chan struct{}),
+	}
+
+	// Register that we will report liveness.
+	if config.HealthAggregator != nil {
+		config.HealthAggregator.RegisterReporter(
+			healthName,
+			&health.HealthReport{Live: true},
+			healthInterval*2,
+		)
 	}
 }
 
@@ -322,14 +336,12 @@ func (s *Server) recordConnection(conn *connection) {
 	s.connTrackingLock.Lock()
 	s.connIDToConn[conn.ID] = conn
 	s.connTrackingLock.Unlock()
-	s.reportHealth()
 }
 
 func (s *Server) discardConnection(conn *connection) {
 	s.connTrackingLock.Lock()
 	delete(s.connIDToConn, conn.ID)
 	s.connTrackingLock.Unlock()
-	s.reportHealth()
 }
 
 func (s *Server) governNumberOfConnections(cxt context.Context) {
@@ -337,10 +349,7 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 	logCxt := log.WithField("thread", "numConnsGov")
 	maxConns := s.maxConns
 	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
-	var healthTicks <-chan time.Time
-	if s.config.HealthChannel != nil {
-		healthTicks = time.NewTicker(10 * time.Second).C
-	}
+	healthTicks := time.NewTicker(healthInterval).C
 	s.reportHealth()
 	for {
 		select {
@@ -385,32 +394,9 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 	}
 }
 
-type healthSource string
-
-var (
-	SERVER_RUNNING = healthSource("running")
-	SERVER_READY   = healthSource("ready")
-)
-
-func (s *Server) ReadySources() []health.HealthSource {
-	return []health.HealthSource{SERVER_READY}
-}
-
-func (s *Server) LiveSources() []health.HealthSource {
-	return []health.HealthSource{SERVER_RUNNING}
-}
-
 func (s *Server) reportHealth() {
-	if s.config.HealthChannel != nil {
-		s.config.HealthChannel <- health.HealthIndicator{SERVER_RUNNING, 20 * time.Second}
-		if !s.atConnLimit() {
-			// Ready to accept more connections.
-			s.config.HealthChannel <- health.HealthIndicator{SERVER_READY, 20 * time.Second}
-		} else {
-			// Immediately report that we're now out of capacity - rather than waiting
-			// for a previous 'ready' indication to expire.
-			s.config.HealthChannel <- health.HealthIndicator{SERVER_READY, 0}
-		}
+	if s.config.HealthAggregator != nil {
+		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
 	}
 }
 

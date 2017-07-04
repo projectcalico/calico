@@ -37,7 +37,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
-	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
@@ -81,9 +80,7 @@ type TyphaDaemon struct {
 	ConfigureLogging      func(configParams *config.Config)
 
 	// Health monitoring.
-	healthChannel  chan health.HealthIndicator
-	neededForReady set.Set
-	neededForLive  set.Set
+	healthAggregator *health.HealthAggregator
 }
 
 func New() *TyphaDaemon {
@@ -222,14 +219,8 @@ configRetry:
 func (t *TyphaDaemon) CreateServer() {
 	// Now create the Syncer; our caching layer and the TCP server.
 
-	// Health monitoring: as we create Typha components after this point, we'll add health
-	// sources that we expect those components to report, to feed into the determination of
-	// Typha's liveness and readiness.
-	t.neededForReady = set.New()
-	t.neededForLive = set.New()
-	if t.ConfigParams.HealthEnabled {
-		t.healthChannel = make(chan health.HealthIndicator)
-	}
+	// Health monitoring, for liveness and readiness endpoints.
+	t.healthAggregator = health.NewHealthAggregator()
 
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
@@ -257,11 +248,9 @@ func (t *TyphaDaemon) CreateServer() {
 			DropInterval:            t.ConfigParams.ConnectionDropIntervalSecs,
 			MaxConns:                t.ConfigParams.MaxConnectionsUpperLimit,
 			Port:                    t.ConfigParams.ServerPort,
-			HealthChannel:           t.healthChannel,
+			HealthAggregator:        t.healthAggregator,
 		},
 	)
-	t.neededForReady.AddAll(t.Server.ReadySources())
-	t.neededForLive.AddAll(t.Server.LiveSources())
 }
 
 // Start starts all the server components in background goroutines.
@@ -289,13 +278,8 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	}
 
 	if t.ConfigParams.HealthEnabled {
-		log.Info("Health enabled.  Starting server.")
-		go health.ServeHealth(
-			t.ConfigParams.HealthPort,
-			t.neededForReady,
-			t.neededForLive,
-			t.healthChannel,
-		)
+		log.WithField("port", t.ConfigParams.HealthPort).Info("Health enabled.  Starting server.")
+		go t.healthAggregator.ServeHTTP(t.ConfigParams.HealthPort)
 	}
 }
 
