@@ -40,7 +40,8 @@ import:
 - package: github.com/onsi/ginkgo
   version: f40a49d81e5c12e90400620b6242fb29a8e7c9
 - package: github.com/Workiva/go-datastructures
-  version: ^1.0.36
+  repo: https://github.com/fasaxc/go-datastructures.git
+  version: fix-ctrie-traverse
   subpackages:
   - trie/ctrie
 - package: golang.org/x/text
@@ -53,6 +54,8 @@ import:
   version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
 - package: k8s.io/apimachinery
   version: b317fa7ec8e0e7d1f77ac63bf8c3ec7b29a2a215
+- package: github.com/gogo/protobuf
+  version: ^0.3.0
 testImport:
 - package: github.com/onsi/gomega
   version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
