@@ -212,7 +212,7 @@ func (c *Config) ListenPort() int {
 func New(cache BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
-	return &Server{
+	s := &Server{
 		config:       config,
 		cache:        cache,
 		maxConnsC:    make(chan int),
@@ -230,6 +230,8 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 			healthInterval*2,
 		)
 	}
+
+	return s
 }
 
 func (s *Server) Start(cxt context.Context) {

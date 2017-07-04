@@ -233,7 +233,8 @@ func (t *TyphaDaemon) CreateServer() {
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	t.Cache = snapcache.New(snapcache.Config{
-		MaxBatchSize: t.ConfigParams.SnapshotCacheMaxBatchSize,
+		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
+		HealthAggregator: t.healthAggregator,
 	})
 
 	// Create the server, which listens for connections from Felix.
