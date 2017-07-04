@@ -183,10 +183,10 @@ felix_ip=$(get_container_ip ${prefix}-felix)
 felix_hostname=$(get_container_hostname ${prefix}-felix)
 
 # Run the test suite.
-run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v"
+run="cd /testcode/k8sfv/output && /testcode/bin/k8sfv.test -ginkgo.v -k8s-api-endpoint ${k8s_api_endpoint} -felix-ip ${felix_ip} -felix-hostname ${felix_hostname} -prometheus-push-url \"${PROMPG_URL}\" -code-level \"${CODE_LEVEL}\""
 if test -n "${GINKGO_FOCUS}"; then
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\" ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+	   "${run} -ginkgo.focus \"${GINKGO_FOCUS}\""
 elif ${JUST_A_MINUTE}; then
     # Run all the tests that are _not_ marked as "[slow]", and fail
     # the test if any of those takes longer than 2 minutes.  A k8sfv
@@ -194,10 +194,10 @@ elif ${JUST_A_MINUTE}; then
     # than 1 minute - so this allows a buffer of 1 extra minute to
     # allow for executor slowness.
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120 ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\"" | perl -pe 'END { exit $status } $status=1 if /SLOW TEST|FAIL!/;'
+	   "${run} -ginkgo.skip \"\\[slow\\]\" -ginkgo.slowSpecThreshold 120" | perl -pe 'END { exit $status } $status=1 if /SLOW TEST|FAIL!/;'
 else
     docker exec ${prefix}-felix /bin/sh -c \
-	   "${run} ${k8s_api_endpoint} ${felix_ip} ${felix_hostname} \"${PROMPG_URL}\" \"${CODE_LEVEL}\""
+	   "${run}"
 fi
 
 # Save the status of the test run.
