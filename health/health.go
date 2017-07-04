@@ -126,37 +126,37 @@ const (
 	// The HTTP status that we use for 'ready' or 'live'.  204 means "No Content: The server
 	// successfully processed the request and is not returning any content."  (Kubernetes
 	// interpets any 200<=status<400 as 'good'.)
-	STATUS_GOOD = 204
+	StatusGood = 204
 
 	// The HTTP status that we use for 'not ready' or 'not live'.  503 means "Service
 	// Unavailable: The server is currently unavailable (because it is overloaded or down for
 	// maintenance). Generally, this is a temporary state."  (Kubernetes interpets any
 	// status>=400 as 'bad'.)
-	STATUS_BAD = 503
+	StatusBad = 503
 )
 
 // ServeHTTP publishes the current overall liveness and readiness at http://*:PORT/liveness and
-// http://*:PORT/readiness respectively.  A GET request on those URLs returns STATUS_GOOD or
-// STATUS_BAD, according to the current overall liveness or readiness.  These endpoints are designed
+// http://*:PORT/readiness respectively.  A GET request on those URLs returns StatusGood or
+// StatusBad, according to the current overall liveness or readiness.  These endpoints are designed
 // for use by Kubernetes liveness and readiness probes.
 func (aggregator *HealthAggregator) ServeHTTP(port int) {
 
 	log.WithField("port", port).Info("Starting health endpoints")
 	http.HandleFunc("/readiness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /readiness")
-		status := STATUS_BAD
+		status := StatusBad
 		if aggregator.Summary().Ready {
 			log.Debug("Felix is ready")
-			status = STATUS_GOOD
+			status = StatusGood
 		}
 		rsp.WriteHeader(status)
 	})
 	http.HandleFunc("/liveness", func(rsp http.ResponseWriter, req *http.Request) {
 		log.Debug("GET /liveness")
-		status := STATUS_BAD
+		status := StatusBad
 		if aggregator.Summary().Live {
 			log.Debug("Felix is live")
-			status = STATUS_GOOD
+			status = StatusGood
 		}
 		rsp.WriteHeader(status)
 	})

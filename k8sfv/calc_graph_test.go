@@ -51,7 +51,7 @@ var _ = Describe("calculation graph scale test", func() {
 		// Because there is no config for the local node.
 		triggerFelixRestart()
 		for i := 0; i < 20; i++ {
-			Expect(getHealthStatus("readiness")()).To(BeNumerically("==", health.STATUS_BAD))
+			Expect(getHealthStatus("readiness")()).To(BeNumerically("==", health.StatusBad))
 			time.Sleep(500 * time.Millisecond)
 		}
 	})
@@ -60,7 +60,7 @@ var _ = Describe("calculation graph scale test", func() {
 		// Because there is no config for the local node.
 		triggerFelixRestart()
 		for i := 0; i < 20; i++ {
-			Expect(getHealthStatus("liveness")()).To(BeNumerically("==", health.STATUS_BAD))
+			Expect(getHealthStatus("liveness")()).To(BeNumerically("==", health.StatusBad))
 			time.Sleep(500 * time.Millisecond)
 		}
 	})
@@ -72,11 +72,11 @@ var _ = Describe("calculation graph scale test", func() {
 		})
 
 		It("should see health readiness endpoint", func() {
-			Eventually(getHealthStatus("readiness"), "20s", "0.5s").Should(BeNumerically("==", health.STATUS_GOOD))
+			Eventually(getHealthStatus("readiness"), "20s", "0.5s").Should(BeNumerically("==", health.StatusGood))
 		})
 
 		It("should see health liveness endpoint", func() {
-			Eventually(getHealthStatus("liveness"), "20s", "0.5s").Should(BeNumerically("==", health.STATUS_GOOD))
+			Eventually(getHealthStatus("liveness"), "20s", "0.5s").Should(BeNumerically("==", health.StatusGood))
 		})
 	})
 
@@ -92,7 +92,7 @@ func getHealthStatus(endpoint string) func() int {
 		resp, err := http.Get("http://" + felixIP + ":9099/" + endpoint)
 		if err != nil {
 			log.WithError(err).Error("HTTP GET failed")
-			return health.STATUS_BAD
+			return health.StatusBad
 		}
 		log.WithField("resp", resp).Info("Health response")
 		defer resp.Body.Close()
