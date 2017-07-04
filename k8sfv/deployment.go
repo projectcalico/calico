@@ -64,6 +64,7 @@ func NewDeployment(
 	// Regardless of whether we're going to place _pods_ on the local host, we need to define a
 	// Node resource for the local host, so that Felix can get going.
 	d.ensureNodeDefined(clientset, felixHostname, felixIP+"/24")
+	localFelixConfigured = true
 	return d
 }
 
@@ -124,4 +125,5 @@ func cleanupAllNodes(clientset *kubernetes.Clientset) {
 		}
 	}
 	log.Info("Cleaned up all nodes")
+	localFelixConfigured = false
 }
