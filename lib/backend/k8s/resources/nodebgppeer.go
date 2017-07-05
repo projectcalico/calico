@@ -24,7 +24,7 @@ const (
 	perNodeBgpPeerAnnotationNamespace = "peer.bgp.projectcalico.org"
 )
 
-func NewNodeBGPPeerClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewNodeBGPPeerClient(c *kubernetes.Clientset) K8sNodeResourceClient {
 	return NewCustomK8sNodeResourceClient(CustomK8sNodeResourceClientConfig{
 		ClientSet:    c,
 		ResourceType: "NodeBGPPeer",

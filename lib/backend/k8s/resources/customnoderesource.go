@@ -61,13 +61,25 @@ type CustomK8sNodeResourceClientConfig struct {
 }
 
 // NewCustomK8sNodeResourceClient creates a new per-node K8sResourceClient.
-func NewCustomK8sNodeResourceClient(config CustomK8sNodeResourceClientConfig) K8sResourceClient {
-	return &retryWrapper{
-		client: &customK8sNodeResourceClient{
-			CustomK8sNodeResourceClientConfig: config,
-			annotationKeyPrefix:               config.Namespace + "/",
+func NewCustomK8sNodeResourceClient(config CustomK8sNodeResourceClientConfig) K8sNodeResourceClient {
+	return &nodeRetryWrapper{
+		retryWrapper: &retryWrapper{
+			client: &customK8sNodeResourceClient{
+				CustomK8sNodeResourceClientConfig: config,
+				annotationKeyPrefix:               config.Namespace + "/",
+			},
 		},
 	}
+}
+
+// nodeRetryWrapper extends the retryWrapper to include the ExtractResourcesFromNode
+// method.
+type nodeRetryWrapper struct {
+	*retryWrapper
+}
+
+func (r *nodeRetryWrapper) ExtractResourcesFromNode(node *apiv1.Node) ([]*model.KVPair, error) {
+	return r.client.(*customK8sNodeResourceClient).ExtractResourcesFromNode(node)
 }
 
 // customK8sNodeResourceClient implements the K8sResourceClient interface.  It
@@ -432,4 +444,11 @@ func (c *customK8sNodeResourceClient) extractResourcesFromAnnotation(node *apiv1
 	}
 
 	return kvps, nil
+}
+
+// ExtractResourcesFromNode returns the resources stored in the Node configuration.
+//
+// This convenience method is expected to be removed in a future libcalico-go release.
+func (c *customK8sNodeResourceClient) ExtractResourcesFromNode(node *apiv1.Node) ([]*model.KVPair, error) {
+	return c.extractResourcesFromAnnotation(node, "")
 }

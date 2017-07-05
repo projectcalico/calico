@@ -761,7 +761,6 @@ func toDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
 	return &d
 }
 
-
 // fromDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair from the format required in the
 // datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
 func fromDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
