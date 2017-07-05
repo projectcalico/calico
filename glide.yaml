@@ -131,18 +131,9 @@ import:
   version: f7716cbe52baa25d2e9b0d0da546fcf909fc16b4
 - package: github.com/projectcalico/libcalico-go
   subpackages:
+  - lib/backend/k8s
   - lib/backend/k8s/resources
   - lib/backend/k8s/thirdparty
   - lib/backend/model
-- package: k8s.io/client-go
-  subpackages:
-  - kubernetes
-  - pkg/api
-  - pkg/api/errors
-  - pkg/api/v1
-  - pkg/apis/meta/v1
-  - pkg/runtime
-  - pkg/runtime/schema
-  - pkg/runtime/serializer
-  - rest
-  - tools/clientcmd
+- package: github.com/emicklei/go-restful
+  version: 09691a3b6378b740595c1002f40c34dd5f218a22
