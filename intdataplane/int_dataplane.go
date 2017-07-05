@@ -699,6 +699,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 						d.config.PostInSyncCallback()
 					}
 				}
+				d.reportHealth()
 			} else {
 				if !beingThrottled {
 					log.Info("Dataplane updates throttled")
