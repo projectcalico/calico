@@ -15,6 +15,10 @@
 package converter
 
 import (
+	"sync"
+
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -46,6 +50,8 @@ func RulesBackendToAPI(brs []model.Rule) []api.Rule {
 	return ars
 }
 
+var logDeprecationOnce sync.Once
+
 // ruleAPIToBackend converts an API Rule structure to a Backend Rule structure.
 func ruleAPIToBackend(ar api.Rule) model.Rule {
 	var icmpCode, icmpType, notICMPCode, notICMPType *int
@@ -57,6 +63,14 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 	if ar.NotICMP != nil {
 		notICMPCode = ar.NotICMP.Code
 		notICMPType = ar.NotICMP.Type
+	}
+
+	if ar.Source.Net != nil || ar.Source.NotNet != nil ||
+		ar.Destination.Net != nil || ar.Destination.NotNet != nil {
+		logDeprecationOnce.Do(func() {
+			log.Warning("The Net and NotNet fields in Source/Destination " +
+				"EntityRules are deprecated.  Please use Nets or NotNets.")
+		})
 	}
 
 	return model.Rule{
@@ -71,31 +85,47 @@ func ruleAPIToBackend(ar api.Rule) model.Rule {
 
 		SrcTag:      ar.Source.Tag,
 		SrcNet:      ar.Source.Net,
+		SrcNets:     ar.Source.Nets,
 		SrcSelector: ar.Source.Selector,
 		SrcPorts:    ar.Source.Ports,
 		DstTag:      ar.Destination.Tag,
 		DstNet:      normalizeIPNet(ar.Destination.Net),
+		DstNets:     normalizeIPNets(ar.Destination.Nets),
 		DstSelector: ar.Destination.Selector,
 		DstPorts:    ar.Destination.Ports,
 
 		NotSrcTag:      ar.Source.NotTag,
 		NotSrcNet:      ar.Source.NotNet,
+		NotSrcNets:     ar.Source.NotNets,
 		NotSrcSelector: ar.Source.NotSelector,
 		NotSrcPorts:    ar.Source.NotPorts,
 		NotDstTag:      ar.Destination.NotTag,
 		NotDstNet:      normalizeIPNet(ar.Destination.NotNet),
+		NotDstNets:     normalizeIPNets(ar.Destination.NotNets),
 		NotDstSelector: ar.Destination.NotSelector,
 		NotDstPorts:    ar.Destination.NotPorts,
 	}
 }
 
-// normalizeIPNet converts an IPNet to a network by ensuring the IP address
-// is correctly masked.
+// normalizeIPNet converts an IPNet to a network by ensuring the IP address is correctly masked.
 func normalizeIPNet(n *net.IPNet) *net.IPNet {
 	if n == nil {
 		return nil
 	}
 	return n.Network()
+}
+
+// normalizeIPNets converts an []*IPNet to a slice of networks by ensuring the IP addresses
+// are correctly masked.
+func normalizeIPNets(nets []*net.IPNet) []*net.IPNet {
+	if nets == nil {
+		return nil
+	}
+	out := make([]*net.IPNet, len(nets))
+	for i, n := range nets {
+		out[i] = normalizeIPNet(n)
+	}
+	return out
 }
 
 // ruleBackendToAPI convert a Backend Rule structure to an API Rule structure.
@@ -122,22 +152,22 @@ func ruleBackendToAPI(br model.Rule) api.Rule {
 		NotICMP:     notICMP,
 		Source: api.EntityRule{
 			Tag:         br.SrcTag,
-			Net:         br.SrcNet,
+			Nets:        br.AllSrcNets(),
 			Selector:    br.SrcSelector,
 			Ports:       br.SrcPorts,
 			NotTag:      br.NotSrcTag,
-			NotNet:      br.NotSrcNet,
+			NotNets:     br.AllNotSrcNets(),
 			NotSelector: br.NotSrcSelector,
 			NotPorts:    br.NotSrcPorts,
 		},
 
 		Destination: api.EntityRule{
 			Tag:         br.DstTag,
-			Net:         br.DstNet,
+			Nets:        br.AllDstNets(),
 			Selector:    br.DstSelector,
 			Ports:       br.DstPorts,
 			NotTag:      br.NotDstTag,
-			NotNet:      br.NotDstNet,
+			NotNets:     br.AllNotDstNets(),
 			NotSelector: br.NotDstSelector,
 			NotPorts:    br.NotDstPorts,
 		},

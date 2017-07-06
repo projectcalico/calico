@@ -49,18 +49,30 @@ var profileSpec1 = api.ProfileSpec{
 	IngressRules: []api.Rule{testutils.InRule1, testutils.InRule2},
 	EgressRules:  []api.Rule{testutils.EgressRule1, testutils.EgressRule2},
 }
+
+// When reading back, the rules should have been updated to the newer format.
+var profileSpec1AfterRead = api.ProfileSpec{
+	IngressRules: []api.Rule{testutils.InRule1AfterRead, testutils.InRule2AfterRead},
+	EgressRules:  []api.Rule{testutils.EgressRule1AfterRead, testutils.EgressRule2AfterRead},
+}
 var tags1 = []string{"profile1-tag1", "profile1-tag2"}
 
 var profileSpec2 = api.ProfileSpec{
 	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
 	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
 }
+
+// When reading back, the rules should have been updated to the newer format.
+var profileSpec2AfterRead = api.ProfileSpec{
+	IngressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
+	EgressRules:  []api.Rule{testutils.EgressRule2AfterRead, testutils.EgressRule1AfterRead},
+}
 var tags2 = []string{"profile2-tag1", "profile2-tag2"}
 
 var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("Profile e2e tests",
-		func(meta1, meta2 api.ProfileMetadata, spec1, spec2 api.ProfileSpec) {
+		func(meta1, meta2 api.ProfileMetadata, spec1, spec2, spec1AfterRead, spec2AfterRead api.ProfileSpec) {
 			c := testutils.CreateCleanClient(config)
 
 			By("Updating the profile before it is created")
@@ -90,8 +102,8 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			// Should match spec1 & outProfile1 and outProfile2 & spec2 and errors to be nil.
 			Expect(outError1).NotTo(HaveOccurred())
 			Expect(outError2).NotTo(HaveOccurred())
-			Expect(outProfile1.Spec).To(Equal(spec1))
-			Expect(outProfile2.Spec).To(Equal(spec2))
+			Expect(outProfile1.Spec).To(Equal(spec1AfterRead))
+			Expect(outProfile2.Spec).To(Equal(spec2AfterRead))
 
 			By("Update, Get and compare")
 
@@ -104,7 +116,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 
 			// Assert the Spec for profile with meta1 matches spec2 and no error.
 			Expect(outError1).NotTo(HaveOccurred())
-			Expect(outProfile1.Spec).To(Equal(spec2))
+			Expect(outProfile1.Spec).To(Equal(spec2AfterRead))
 
 			By("List all the profiles and compare")
 
@@ -192,6 +204,8 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			},
 			profileSpec1,
 			profileSpec2,
+			profileSpec1AfterRead,
+			profileSpec2AfterRead,
 		),
 
 		// Test 2: Pass one fully populated ProfileSpec and another empty ProfileSpec and expect the series of operations to succeed.
@@ -212,6 +226,8 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				},
 			},
 			profileSpec1,
+			api.ProfileSpec{},
+			profileSpec1AfterRead,
 			api.ProfileSpec{},
 		),
 
@@ -235,6 +251,10 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 				IngressRules: []api.Rule{testutils.InRule1},
 			},
 			profileSpec2,
+			api.ProfileSpec{
+				IngressRules: []api.Rule{testutils.InRule1AfterRead},
+			},
+			profileSpec2AfterRead,
 		),
 	)
 })
