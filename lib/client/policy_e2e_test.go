@@ -111,6 +111,9 @@ var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2
 			Expect(outError1).NotTo(HaveOccurred())
 			Expect(outPolicy1.Spec).To(Equal(spec2))
 
+			// Assert the Metadata for policy with meta1 matches meta1.
+			Expect(outPolicy1.Metadata).To(Equal(meta1))
+
 			By("List all the policies and compare")
 
 			// Get a list of policiess.
@@ -179,7 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2
 
 		// Test 1: Pass two fully populated PolicySpecs and expect the series of operations to succeed.
 		Entry("Two fully populated PolicySpecs",
-			api.PolicyMetadata{Name: "policy-1/with.foo"},
+			api.PolicyMetadata{Name: "policy-1/with.foo", Annotations: map[string]string{"key": "value"}},
 			api.PolicyMetadata{Name: "policy.1"},
 			policySpec1,
 			policySpec2,

@@ -89,11 +89,12 @@ func (options PolicyListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type Policy struct {
-	Order         *float64 `json:"order,omitempty" validate:"omitempty"`
-	InboundRules  []Rule   `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
-	OutboundRules []Rule   `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
-	Selector      string   `json:"selector" validate:"selector"`
-	DoNotTrack    bool     `json:"untracked,omitempty"`
+	Order         *float64          `json:"order,omitempty" validate:"omitempty"`
+	InboundRules  []Rule            `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
+	OutboundRules []Rule            `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
+	Selector      string            `json:"selector" validate:"selector"`
+	DoNotTrack    bool              `json:"untracked,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
 func (p Policy) String() string {
