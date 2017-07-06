@@ -24,6 +24,11 @@ Vagrant.configure("2") do |config|
     v.functional_vboxsf     = false
   end
 
+  # plugin conflict
+  if Vagrant.has_plugin?("vagrant-vbguest") then
+    config.vbguest.auto_update = false
+  end
+
   # Set up each box
   (1..num_instances).each do |i|
     if i == 1
