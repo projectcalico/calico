@@ -50,6 +50,9 @@ var DEFAULT_INTERFACES_TO_EXCLUDE []string = []string{
 	"cali.*", "tunl.*", "flannel.*",
 }
 
+// Version string, set during build.
+var VERSION string
+
 // For testing purposes we define an exit function that we can override.
 var exitFunction = os.Exit
 
@@ -760,6 +763,11 @@ func ensureDefaultConfig(c *client.Client, node *api.Node) error {
 	// pods speaking to k8s api-server, and mesos tasks registering with agent
 	// on startup).
 	if err := ensureFelixConfig(c, node.Metadata.Name, "DefaultEndpointToHostAction", "RETURN"); err != nil {
+		return err
+	}
+
+	// Store the Calico Version as a global felix config setting.
+	if err := c.Config().SetFelixConfig("CalicoVersion", "", VERSION); err != nil {
 		return err
 	}
 
