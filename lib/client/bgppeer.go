@@ -111,7 +111,7 @@ func (h *bgpPeers) convertMetadataToListInterface(m unversioned.ResourceMetadata
 	} else {
 		return model.NodeBGPPeerListOptions{
 			PeerIP:   pm.PeerIP,
-			Hostname: pm.Node,
+			Nodename: pm.Node,
 		}, nil
 	}
 }

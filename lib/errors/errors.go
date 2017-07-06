@@ -119,6 +119,7 @@ func (e ErrorInsufficientIdentifiers) Error() string {
 
 // Error indicating an atomic update attempt that failed due to a update conflict.
 type ErrorResourceUpdateConflict struct {
+	Err        error
 	Identifier interface{}
 }
 

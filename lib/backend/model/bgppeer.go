@@ -66,30 +66,30 @@ func (key NodeBGPPeerKey) String() string {
 }
 
 type NodeBGPPeerListOptions struct {
-	Hostname string
+	Nodename string
 	PeerIP   net.IP
 }
 
 func (options NodeBGPPeerListOptions) defaultPathRoot() string {
-	if options.Hostname == "" {
+	if options.Nodename == "" {
 		return "/calico/bgp/v1/host"
 	} else if options.PeerIP.IP == nil {
 		return fmt.Sprintf("/calico/bgp/v1/host/%s",
-			options.Hostname)
+			options.Nodename)
 	} else {
 		return fmt.Sprintf("/calico/bgp/v1/host/%s/peer_v%d/%s",
-			options.Hostname, options.PeerIP.Version(), options.PeerIP)
+			options.Nodename, options.PeerIP.Version(), options.PeerIP)
 	}
 }
 
 func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
-	hostname := ""
+	nodename := ""
 	peerIP := net.IP{}
 	ekeyb := []byte(path)
 
 	if r := matchHostBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
-		hostname = string(r[0][1])
+		nodename = string(r[0][1])
 		if err := peerIP.UnmarshalText(r[0][2]); err != nil {
 			log.WithError(err).WithField("PeerIP", r[0][2]).Error("Error unmarshalling GlobalBGPPeer IP address")
 			return nil
@@ -103,11 +103,11 @@ func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match peerIP %s != %s", options.PeerIP.String(), peerIP.String())
 		return nil
 	}
-	if options.Hostname != "" && hostname != options.Hostname {
-		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
+	if options.Nodename != "" && nodename != options.Nodename {
+		log.Debugf("Didn't match hostname %s != %s", options.Nodename, nodename)
 		return nil
 	}
-	return NodeBGPPeerKey{PeerIP: peerIP, Nodename: hostname}
+	return NodeBGPPeerKey{PeerIP: peerIP, Nodename: nodename}
 }
 
 type GlobalBGPPeerKey struct {

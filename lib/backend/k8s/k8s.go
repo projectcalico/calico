@@ -59,6 +59,7 @@ type KubeClient struct {
 
 	// Clients for interacting with Calico resources.
 	globalBgpClient    resources.K8sResourceClient
+	nodeBgpClient      resources.K8sResourceClient
 	globalConfigClient resources.K8sResourceClient
 	ipPoolClient       resources.K8sResourceClient
 	snpClient          resources.K8sResourceClient
@@ -133,6 +134,7 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	kubeClient.nodeClient = resources.NewNodeClient(cs, tprClientV1)
 	kubeClient.snpClient = resources.NewSystemNetworkPolicyClient(cs, tprClientV1alpha)
 	kubeClient.globalBgpClient = resources.NewGlobalBGPPeerClient(cs, tprClientV1)
+	kubeClient.nodeBgpClient = resources.NewNodeBGPPeerClient(cs)
 	kubeClient.globalConfigClient = resources.NewGlobalConfigClient(cs, tprClientV1)
 
 	return kubeClient, nil
@@ -323,6 +325,8 @@ func (c *KubeClient) Create(d *model.KVPair) (*model.KVPair, error) {
 		return c.nodeClient.Create(d)
 	case model.GlobalBGPPeerKey:
 		return c.globalBgpClient.Create(d)
+	case model.NodeBGPPeerKey:
+		return c.nodeBgpClient.Create(d)
 	default:
 		log.Warn("Attempt to 'Create' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -345,6 +349,8 @@ func (c *KubeClient) Update(d *model.KVPair) (*model.KVPair, error) {
 		return c.nodeClient.Update(d)
 	case model.GlobalBGPPeerKey:
 		return c.globalBgpClient.Update(d)
+	case model.NodeBGPPeerKey:
+		return c.nodeBgpClient.Update(d)
 	default:
 		log.Warn("Attempt to 'Update' using kubernetes backend is not supported.")
 		return nil, errors.ErrorOperationNotSupported{
@@ -369,6 +375,8 @@ func (c *KubeClient) Apply(d *model.KVPair) (*model.KVPair, error) {
 		return c.nodeClient.Apply(d)
 	case model.GlobalBGPPeerKey:
 		return c.globalBgpClient.Apply(d)
+	case model.NodeBGPPeerKey:
+		return c.nodeBgpClient.Apply(d)
 	case model.ActiveStatusReportKey, model.LastStatusReportKey,
 		model.HostEndpointStatusKey, model.WorkloadEndpointStatusKey:
 		// Felix periodically reports status to the datastore.  This isn't supported
@@ -396,6 +404,8 @@ func (c *KubeClient) Delete(d *model.KVPair) error {
 		return c.nodeClient.Delete(d)
 	case model.GlobalBGPPeerKey:
 		return c.globalBgpClient.Delete(d)
+	case model.NodeBGPPeerKey:
+		return c.nodeBgpClient.Delete(d)
 	default:
 		log.Warn("Attempt to 'Delete' using kubernetes backend is not supported.")
 		return errors.ErrorOperationNotSupported{
@@ -427,6 +437,8 @@ func (c *KubeClient) Get(k model.Key) (*model.KVPair, error) {
 		return c.nodeClient.Get(k.(model.NodeKey))
 	case model.GlobalBGPPeerKey:
 		return c.globalBgpClient.Get(k)
+	case model.NodeBGPPeerKey:
+		return c.nodeBgpClient.Get(k)
 	default:
 		return nil, errors.ErrorOperationNotSupported{
 			Identifier: k,
@@ -456,6 +468,9 @@ func (c *KubeClient) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return k, err
 	case model.GlobalBGPPeerListOptions:
 		k, _, err := c.globalBgpClient.List(l)
+		return k, err
+	case model.NodeBGPPeerListOptions:
+		k, _, err := c.nodeBgpClient.List(l)
 		return k, err
 	case model.GlobalConfigListOptions:
 		k, _, err := c.globalConfigClient.List(l)

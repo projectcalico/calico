@@ -103,7 +103,7 @@ var _ = Describe("Global BGP conversion methods", func() {
 	It("should fail to convert an invalid resource name to the equivalent Key", func() {
 		k, err := converter.NameToKey(nameInvalid)
 		Expect(err).To(HaveOccurred())
-		Expect(k).To(Equal(nil))
+		Expect(k).To(BeNil())
 	})
 
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {

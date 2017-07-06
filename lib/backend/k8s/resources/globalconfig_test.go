@@ -45,7 +45,7 @@ var _ = Describe("Global Felix config conversion methods", func() {
 	value1 := "test"
 	kvp1 := &model.KVPair{
 		Key:      key1,
-		Value:    &value1,
+		Value:    value1,
 		Revision: "rv",
 	}
 	res1 := &thirdparty.GlobalConfig{
@@ -92,7 +92,7 @@ var _ = Describe("Global Felix config conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))
 		Expect(kvp.Revision).To(Equal(kvp1.Revision))
-		Expect(kvp.Value).To(BeAssignableToTypeOf(&value1))
+		Expect(kvp.Value).To(BeAssignableToTypeOf(value1))
 		Expect(kvp.Value).To(Equal(kvp1.Value))
 	})
 })

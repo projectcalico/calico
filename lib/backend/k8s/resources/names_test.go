@@ -24,46 +24,68 @@ import (
 
 var _ = Describe("Name conversion methods", func() {
 	It("should convert an IPv4 address to a resource compatible name", func() {
-		Expect(resources.IPToResourceName(net.MustParseIP("11.223.3.41"))).To(Equal("11-223-3-441"))
+		Expect(resources.IPToResourceName(net.MustParseIP("11.223.3.41"))).To(Equal("11-223-3-41"))
 	})
 	It("should convert an IPv6 address to a resource compatible name", func() {
 		Expect(resources.IPToResourceName(net.MustParseIP("AA:1234::BBee:CC"))).To(Equal("aa-1234--bbee-cc"))
 	})
 	It("should convert an IPv4 Network to a resource compatible name", func() {
-		Expect(resources.IPNetToResourceName(net.MustParseNetwork("11.223.3.41/43"))).To(Equal("11-223-3-41-43"))
+		Expect(resources.IPNetToResourceName(net.MustParseNetwork("11.223.3.0/24"))).To(Equal("11-223-3-0-24"))
 	})
 	It("should convert an IPv4 Network to a resource compatible name", func() {
-		Expect(resources.IPNetToResourceName(net.MustParseNetwork("11.223.3.41"))).To(Equal("11-223-3-41-32"))
+		Expect(resources.IPNetToResourceName(net.MustParseNetwork("11.223.3.41/32"))).To(Equal("11-223-3-41-32"))
 	})
 	It("should convert an IPv6 Network to a resource compatible name", func() {
-		Expect(resources.IPNetToResourceName(net.MustParseNetwork("AA:1234::BBee:CC/2"))).To(Equal("aa-1234--bbee-cc-2"))
+		Expect(resources.IPNetToResourceName(net.MustParseNetwork("AA:1234::BBee:CC00/120"))).To(Equal("aa-1234--bbee-cc00-120"))
 	})
 	It("should convert an IPv6 Network to a resource compatible name", func() {
 		Expect(resources.IPNetToResourceName(net.MustParseNetwork("AA:1234:BBee::/120"))).To(Equal("aa-1234-bbee---120"))
 	})
 	It("should convert an IPv6 Network to a resource compatible name", func() {
-		Expect(resources.IPNetToResourceName(net.MustParseNetwork("AA:1234:BBee::0000"))).To(Equal("aa-1234-bbee--0000-128"))
+		Expect(resources.IPNetToResourceName(net.MustParseNetwork("aa:1234:bbee::/128"))).To(Equal("aa-1234-bbee---128"))
 	})
 
 	It("should convert a resource name to the equivalent IPv4 address", func() {
-		Expect(resources.ResourceNameToIP("11-223-3-441")).To(Equal(net.MustParseIP("11.223.3.41")))
+		i, err := resources.ResourceNameToIP("11-223-3-41")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*i).To(Equal(net.MustParseIP("11.223.3.41")))
 	})
 	It("should convert a resource name to the equivalent IPv6 address", func() {
-		Expect(resources.ResourceNameToIP("aa-1234--bbee-cc")).To(Equal(net.MustParseIP("AA:1234::BBee:CC")))
+		i, err := resources.ResourceNameToIP("aa-1234--bbee-cc")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*i).To(Equal(net.MustParseIP("AA:1234::BBee:CC")))
+	})
+	It("should not convert an invalid resource name to an IP address", func() {
+		_, err := resources.ResourceNameToIP("11-223-3-4a")
+		Expect(err).To(HaveOccurred())
 	})
 	It("should convert a resource name to the equivalent IPv4 Network", func() {
-		Expect(resources.ResourceNameToIPNet("11-223-3-41-43")).To(Equal(net.MustParseNetwork("11.223.3.41/43")))
+		n, err := resources.ResourceNameToIPNet("11-223-3-128-25")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*n).To(Equal(net.MustParseNetwork("11.223.3.128/25")))
 	})
 	It("should convert a resource name to the equivalent IPv4 Network", func() {
-		Expect(resources.ResourceNameToIPNet("11-223-3-41-32")).To(Equal(net.MustParseNetwork("11.223.3.41")))
+		n, err := resources.ResourceNameToIPNet("11-223-3-41-32")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*n).To(Equal(net.MustParseNetwork("11.223.3.41/32")))
 	})
 	It("should convert a resource name to the equivalent IPv6 Network", func() {
-		Expect(resources.ResourceNameToIPNet("aa-1234--bbee-cc-2")).To(Equal(net.MustParseNetwork("AA:1234::BBee:CC/2")))
+		n, err := resources.ResourceNameToIPNet("aa-1234--bbee-cc-2")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*n).To(Equal(net.MustParseNetwork("AA:1234::BBee:CC/2")))
 	})
 	It("should convert a resource name to the equivalent IPv6 Network", func() {
-		Expect(resources.ResourceNameToIPNet("aa-1234-bbee---120")).To(Equal(net.MustParseNetwork("AA:1234:BBee::/120")))
+		n, err := resources.ResourceNameToIPNet("aa-1234-bbee---120")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*n).To(Equal(net.MustParseNetwork("AA:1234:BBee::/120")))
 	})
 	It("should convert a resource name to the equivalent IPv6 Network", func() {
-		Expect(resources.ResourceNameToIPNet("aa-1234-bbee--0000-128")).To(Equal(net.MustParseNetwork("AA:1234:BBee::0000")))
+		n, err := resources.ResourceNameToIPNet("aa-1234-bbee---128")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*n).To(Equal(net.MustParseNetwork("AA:1234:BBee::/128")))
+	})
+	It("should not convert an invalid resource name to an IP network", func() {
+		_, err := resources.ResourceNameToIPNet("11--223--3-41")
+		Expect(err).To(HaveOccurred())
 	})
 })
