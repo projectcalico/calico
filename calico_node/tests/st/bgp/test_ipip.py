@@ -417,3 +417,5 @@ class TestIPIP(TestBase):
             # Flip the IP-in-IP state for the next iteration.
             with_ipip = not with_ipip
             host1.set_ipip_enabled(with_ipip)
+
+TestIPIP.batchnumber = 4  # Add batch label to these tests for parallel running

@@ -43,6 +43,9 @@ class TestBase(TestCase):
     """
     Base class for test-wide methods.
     """
+    @classmethod
+    def setUpClass(cls):
+        wipe_etcd(HOST_IPV4)
 
     def setUp(self):
         """
@@ -303,3 +306,6 @@ class TestBase(TestCase):
                    banner + "\n"
                             "| " + msg + " |\n" +
                    banner)
+
+# Add a default batch number to all tests (used for running tests in parallel)
+TestBase.batchnumber = 0

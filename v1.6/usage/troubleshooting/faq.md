@@ -29,7 +29,7 @@ In a Calico network, each host acts as a gateway router for the
 workloads that it hosts.  In container deployments, Calico uses 
 169.254.1.1 as the address for the Calico router.  By using a 
 link-local address, Calico saves precious IP addresses and avoids 
-burdoning the user with configuring a suitable address.
+burdening the user with configuring a suitable address.
 
 While the routing table may look a little odd to someone who is used to 
 configuring  LAN networking, using explicit routes rather than 
