@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,21 +15,18 @@
 package resourcemgr
 
 import (
+	"bytes"
 	"errors"
-
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"strings"
 
-	"io/ioutil"
-	"os"
-
-	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
-
-	"bytes"
-
 	log "github.com/Sirupsen/logrus"
+	yamlsep "github.com/projectcalico/calicoctl/calicoctl/util/yaml"
 	"github.com/projectcalico/go-yaml-wrapper"
+	"github.com/projectcalico/libcalico-go/lib/api/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/validator"
 )
@@ -57,7 +54,7 @@ type ResourceActionCommand func(*client.Client, unversioned.Resource) (unversion
 //	-  Template strings used to format output for each resource type.
 //	-  Functions to handle resource management actions (apply, create, update, delete, list).
 //         These functions are an untyped interface (generic Resource interfaces) that map through
-//         to the Calicc clients typed interface.
+//         to the Calico clients typed interface.
 type resourceHelper struct {
 	typeMetadata      unversioned.TypeMetadata
 	resourceType      reflect.Type
@@ -228,19 +225,37 @@ func unmarshalSliceOfResources(tml []unversioned.TypeMetadata, b []byte) ([]unve
 // Resources.  If the file does not contain any valid Resources this function returns an error.
 func CreateResourcesFromFile(f string) ([]unversioned.Resource, error) {
 	// Load the bytes from file or from stdin.
-	var b []byte
+	var reader io.Reader
 	var err error
-
 	if f == "-" {
-		b, err = ioutil.ReadAll(os.Stdin)
+		reader = os.Stdin
 	} else {
-		b, err = ioutil.ReadFile(f)
+		reader, err = os.Open(f)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return createResourcesFromBytes(b)
+	var resources []unversioned.Resource
+	separator := yamlsep.NewYAMLDocumentSeparator(reader)
+	for {
+		b, err := separator.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		r, err := createResourcesFromBytes(b)
+		if err != nil {
+			return nil, err
+		}
+
+		resources = append(resources, r...)
+	}
+
+	return resources, nil
 }
 
 // Implement the ResourceManager interface on the resourceHelper struct.
