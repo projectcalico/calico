@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	perNodeBgpPeerAnnotationNamespace = "bgppeer.projectcalico.org"
+	perNodeBgpPeerAnnotationNamespace = "peer.bgp.projectcalico.org"
 )
 
 func NewNodeBGPPeerClient(c *kubernetes.Clientset) K8sResourceClient {
