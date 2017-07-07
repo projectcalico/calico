@@ -44,7 +44,7 @@ Options:
                             create an entry that already exists.
   -c --config=<CONFIG>      Path to the file containing connection
                             configuration in YAML or JSON format.
-                            [default: /etc/calico/calicoctl.cfg]
+                            [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   The create command is used to create a set of resources by filename or stdin.

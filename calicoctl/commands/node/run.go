@@ -29,6 +29,7 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
@@ -155,7 +156,7 @@ Options:
                            and Calico profiles are disabled.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
-                           [default: /etc/calico/calicoctl.cfg]
+                           [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   This command is used to start a calico/node container instance which provides

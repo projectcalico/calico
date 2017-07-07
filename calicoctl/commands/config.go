@@ -63,7 +63,7 @@ Options:
                         expected.
   -c --config=<CONFIG>  Path to the file containing connection configuration in
                         YAML or JSON format.
-                        [default: /etc/calico/calicoctl.cfg]
+                        [default: ` + constants.DefaultConfigPath + `]
 
 Description:
 
