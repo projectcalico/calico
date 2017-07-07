@@ -126,3 +126,31 @@ type ErrorResourceUpdateConflict struct {
 func (e ErrorResourceUpdateConflict) Error() string {
 	return fmt.Sprintf("update conflict: '%s'", e.Identifier)
 }
+
+// UpdateErrorIdentifier modifies the supplied error to use the new resource
+// identifier.
+func UpdateErrorIdentifier(err error, id interface{}) error {
+	if err == nil {
+		return nil
+	}
+
+	switch e := err.(type) {
+	case ErrorDatastoreError:
+		e.Identifier = id
+		err = e
+	case ErrorResourceDoesNotExist:
+		e.Identifier = id
+		err = e
+	case ErrorOperationNotSupported:
+		e.Identifier = id
+		err = e
+	case ErrorResourceAlreadyExists:
+		e.Identifier = id
+		err = e
+	case ErrorResourceUpdateConflict:
+		e.Identifier = id
+		err = e
+	}
+	return err
+}
+

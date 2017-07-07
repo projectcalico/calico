@@ -135,7 +135,7 @@ func KeyToDefaultDeletePath(key Key) (string, error) {
 //
 // For example,
 // 	KeyToDefaultDeletePaths(WorkloadEndpointKey{
-//		Hostname: "h",
+//		Nodename: "h",
 //		OrchestratorID: "o",
 //		WorkloadID: "w",
 //		EndpointID: "e",

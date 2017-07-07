@@ -35,8 +35,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 
 	DescribeTable("BGPPeer e2e tests",
 		func(meta1, meta2 api.BGPPeerMetadata, spec1, spec2 api.BGPPeerSpec) {
-			c := testutils.CreateClient(config)
-			testutils.CleanBGPPeers(c)
+			c := testutils.CreateCleanClient(config)
 
 			By("Updating the BGPPeer before it is created")
 			_, outError := c.BGPPeers().Update(&api.BGPPeer{Metadata: meta1, Spec: spec1})
@@ -138,8 +137,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 	)
 
 	Describe("Checking operations perform data validation", func() {
-		c := testutils.CreateClient(config)
-		testutils.CleanBGPPeers(c)
+		c := testutils.CreateCleanClient(config)
 		var err error
 		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})
 

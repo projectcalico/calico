@@ -89,6 +89,89 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(cs).To(Equal(client.ConfigLocationGlobal))
 	})
 
+	It("should handle node IP in IP tunnel address", func() {
+		var err error
+		var ip *net.IP
+
+		By("checking unset value")
+		ip, err = config.GetNodeIPIPTunnelAddress("node1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip).To(BeNil())
+
+		By("checking address set to 1.2.3.4")
+		ipv4 := net.MustParseIP("1.2.3.4")
+		err = config.SetNodeIPIPTunnelAddress("node1", &ipv4)
+		Expect(err).NotTo(HaveOccurred())
+
+		ip, err = config.GetNodeIPIPTunnelAddress("node1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*ip).To(Equal(ipv4))
+
+		By("checking address set to aa::ff")
+		ipv6 := net.MustParseIP("aa::ff")
+		err = config.SetNodeIPIPTunnelAddress("node1", &ipv6)
+		Expect(err).NotTo(HaveOccurred())
+
+		ip, err = config.GetNodeIPIPTunnelAddress("node1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(*ip).To(Equal(ipv6))
+
+		By("checking address set to nil")
+		err = config.SetNodeIPIPTunnelAddress("node1", nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		ip, err = config.GetNodeIPIPTunnelAddress("node1")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ip).To(BeNil())
+	})
+
+	It("should handle per-node felix config", func() {
+		var err error
+		var value string
+		var set bool
+
+		By("checking unset value")
+		value, set, err = config.GetFelixConfig("TEST", "NODE")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value).To(Equal(""))
+		Expect(set).To(BeFalse())
+
+		By("setting value and checking it")
+		err = config.SetFelixConfig("TEST", "NODE", "VALUE")
+		Expect(err).NotTo(HaveOccurred())
+
+		value, set, err = config.GetFelixConfig("TEST", "NODE")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value).To(Equal("VALUE"))
+		Expect(set).To(BeTrue())
+
+		By("checking global value is still unset")
+		value, set, err = config.GetFelixConfig("TEST", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value).To(Equal(""))
+		Expect(set).To(BeFalse())
+
+		By("unsetting value and checking it")
+		err = config.UnsetFelixConfig("TEST", "NODE")
+		Expect(err).NotTo(HaveOccurred())
+
+		value, set, err = config.GetFelixConfig("TEST", "NODE")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(value).To(Equal(""))
+		Expect(set).To(BeFalse())
+	})
+
+})
+
+var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils.DatastoreAll, func(calicoConfig api.CalicoAPIConfig) {
+
+	var config client.ConfigInterface
+
+	BeforeEach(func() {
+		c := testutils.CreateCleanClient(calicoConfig)
+		config = c.Config()
+	})
+
 	It("should handle node to node mesh configuration", func() {
 		var err error
 		var n bool
@@ -159,42 +242,6 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(n).To(Equal(false))
 	})
 
-	It("should handle node IP in IP tunnel address", func() {
-		var err error
-		var ip *net.IP
-
-		By("checking unset value")
-		ip, err = config.GetNodeIPIPTunnelAddress("node1")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ip).To(BeNil())
-
-		By("checking address set to 1.2.3.4")
-		ipv4 := net.MustParseIP("1.2.3.4")
-		err = config.SetNodeIPIPTunnelAddress("node1", &ipv4)
-		Expect(err).NotTo(HaveOccurred())
-
-		ip, err = config.GetNodeIPIPTunnelAddress("node1")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(*ip).To(Equal(ipv4))
-
-		By("checking address set to aa::ff")
-		ipv6 := net.MustParseIP("aa::ff")
-		err = config.SetNodeIPIPTunnelAddress("node1", &ipv6)
-		Expect(err).NotTo(HaveOccurred())
-
-		ip, err = config.GetNodeIPIPTunnelAddress("node1")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(*ip).To(Equal(ipv6))
-
-		By("checking address set to nil")
-		err = config.SetNodeIPIPTunnelAddress("node1", nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		ip, err = config.GetNodeIPIPTunnelAddress("node1")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ip).To(BeNil())
-	})
-
 	It("should handle global felix config", func() {
 		var err error
 		var value string
@@ -220,42 +267,6 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(err).NotTo(HaveOccurred())
 
 		value, set, err = config.GetFelixConfig("TEST", "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(value).To(Equal(""))
-		Expect(set).To(BeFalse())
-	})
-
-	It("should handle per-node felix config", func() {
-		var err error
-		var value string
-		var set bool
-
-		By("checking unset value")
-		value, set, err = config.GetFelixConfig("TEST", "NODE")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(value).To(Equal(""))
-		Expect(set).To(BeFalse())
-
-		By("setting value and checking it")
-		err = config.SetFelixConfig("TEST", "NODE", "VALUE")
-		Expect(err).NotTo(HaveOccurred())
-
-		value, set, err = config.GetFelixConfig("TEST", "NODE")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(value).To(Equal("VALUE"))
-		Expect(set).To(BeTrue())
-
-		By("checking global value is still unset")
-		value, set, err = config.GetFelixConfig("TEST", "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(value).To(Equal(""))
-		Expect(set).To(BeFalse())
-
-		By("unsetting value and checking it")
-		err = config.UnsetFelixConfig("TEST", "NODE")
-		Expect(err).NotTo(HaveOccurred())
-
-		value, set, err = config.GetFelixConfig("TEST", "NODE")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(value).To(Equal(""))
 		Expect(set).To(BeFalse())
@@ -297,16 +308,16 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		var set bool
 
 		By("checking unset value")
-		value, set, err = config.GetBGPConfig("TEST", "NODE")
+		value, set, err = config.GetBGPConfig("TEST", "127.0.0.1")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(value).To(Equal(""))
 		Expect(set).To(BeFalse())
 
 		By("setting value and checking it")
-		err = config.SetBGPConfig("TEST", "NODE", "VALUE")
+		err = config.SetBGPConfig("TEST", "127.0.0.1", "VALUE")
 		Expect(err).NotTo(HaveOccurred())
 
-		value, set, err = config.GetBGPConfig("TEST", "NODE")
+		value, set, err = config.GetBGPConfig("TEST", "127.0.0.1")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(value).To(Equal("VALUE"))
 		Expect(set).To(BeTrue())
@@ -318,10 +329,10 @@ var _ = testutils.E2eDatastoreDescribe("with config option API tests", testutils
 		Expect(set).To(BeFalse())
 
 		By("unsetting value and checking it")
-		err = config.UnsetBGPConfig("TEST", "NODE")
+		err = config.UnsetBGPConfig("TEST", "127.0.0.1")
 		Expect(err).NotTo(HaveOccurred())
 
-		value, set, err = config.GetBGPConfig("TEST", "NODE")
+		value, set, err = config.GetBGPConfig("TEST", "127.0.0.1")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(value).To(Equal(""))
 		Expect(set).To(BeFalse())

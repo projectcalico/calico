@@ -91,9 +91,9 @@ func newConfigs(c *Client) ConfigInterface {
 // When this is enabled, each calico/node instance automatically establishes a
 // full BGP peering mesh between all nodes that support BGP.
 func (c *config) SetNodeToNodeMesh(enabled bool) error {
-	b, _ := json.Marshal(nodeToNodeMesh{Enabled: enabled})
+	b, _ := json.Marshal(enabled)
 	_, err := c.c.Backend.Apply(&model.KVPair{
-		Key:   model.GlobalBGPConfigKey{Name: "node_mesh"},
+		Key:   model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"},
 		Value: string(b),
 	})
 	return err
@@ -102,19 +102,19 @@ func (c *config) SetNodeToNodeMesh(enabled bool) error {
 // GetNodeToNodeMesh returns the current enabled state of the system-wide
 // node-to-node mesh option.  See SetNodeToNodeMesh for details.
 func (c *config) GetNodeToNodeMesh() (bool, error) {
-	var n nodeToNodeMesh
-	if s, err := c.getValue(model.GlobalBGPConfigKey{Name: "node_mesh"}); err != nil {
+	var n bool
+	if s, err := c.getValue(model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"}); err != nil {
 		log.Info("Error getting node mesh")
 		return false, err
 	} else if s == nil {
 		log.Info("Return default node to node mesh")
 		return GlobalDefaultNodeToNodeMesh, nil
 	} else if err = json.Unmarshal([]byte(*s), &n); err != nil {
-		log.Info("Error parsing node to node mesh")
+		log.WithField("NodeMeshEnabled", *s).Error("Error parsing node to node mesh")
 		return false, err
 	} else {
 		log.Info("Returning configured node to node mesh")
-		return n.Enabled, nil
+		return n, nil
 	}
 }
 
@@ -123,7 +123,7 @@ func (c *config) GetNodeToNodeMesh() (bool, error) {
 // the node resource.
 func (c *config) SetGlobalASNumber(asNumber numorstring.ASNumber) error {
 	_, err := c.c.Backend.Apply(&model.KVPair{
-		Key:   model.GlobalBGPConfigKey{Name: "as_num"},
+		Key:   model.GlobalBGPConfigKey{Name: "AsNumber"},
 		Value: asNumber.String(),
 	})
 	return err
@@ -132,7 +132,7 @@ func (c *config) SetGlobalASNumber(asNumber numorstring.ASNumber) error {
 // SetGlobalASNumber gets the global AS Number used by the BGP agent running
 // on each node.  See SetGlobalASNumber for more details.
 func (c *config) GetGlobalASNumber() (numorstring.ASNumber, error) {
-	if s, err := c.getValue(model.GlobalBGPConfigKey{Name: "as_num"}); err != nil {
+	if s, err := c.getValue(model.GlobalBGPConfigKey{Name: "AsNumber"}); err != nil {
 		return 0, err
 	} else if s == nil {
 		return GlobalDefaultASNumber, nil
@@ -205,7 +205,7 @@ func (c *config) SetGlobalLogLevel(level string) error {
 	return c.setLogLevel(
 		level,
 		model.GlobalConfigKey{Name: "LogSeverityScreen"},
-		model.GlobalConfigKey{Name: "loglevel"})
+		model.GlobalBGPConfigKey{Name: "loglevel"})
 }
 
 // GetGlobalLogLevel gets the current system global log level.
@@ -225,13 +225,13 @@ func (c *config) GetGlobalLogLevel() (string, error) {
 func (c *config) SetNodeLogLevel(node string, level string) error {
 	return c.setLogLevel(level,
 		model.HostConfigKey{Hostname: node, Name: "LogSeverityScreen"},
-		model.HostBGPConfigKey{Hostname: node, Name: "loglevel"})
+		model.NodeBGPConfigKey{Nodename: node, Name: "loglevel"})
 }
 
 // SetNodeLogLevelUseGlobal sets the node to use the global log level.
 func (c *config) SetNodeLogLevelUseGlobal(node string) error {
 	kf := model.HostConfigKey{Hostname: node, Name: "LogSeverityScreen"}
-	kb := model.HostBGPConfigKey{Hostname: node, Name: "loglevel"}
+	kb := model.NodeBGPConfigKey{Nodename: node, Name: "loglevel"}
 	err1 := c.deleteConfig(kf)
 	err2 := c.deleteConfig(kb)
 
@@ -348,7 +348,7 @@ func getBGPConfigKey(name, node string) model.Key {
 	if node == "" {
 		return model.GlobalBGPConfigKey{Name: name}
 	}
-	return model.HostBGPConfigKey{Hostname: node, Name: name}
+	return model.NodeBGPConfigKey{Nodename: node, Name: name}
 }
 
 // setLogLevel sets the log level fields with the appropriate log string value.
@@ -411,10 +411,4 @@ func erroredField(name string, value interface{}) error {
 		},
 	}
 	return err
-}
-
-// nodeToNodeMesh is a struct containing whether node-to-node mesh is enabled.  It can be
-// JSON marshalled into the correct structure that is understood by the Calico BGP component.
-type nodeToNodeMesh struct {
-	Enabled bool `json:"enabled"`
 }
