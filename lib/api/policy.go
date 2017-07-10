@@ -48,6 +48,9 @@ type PolicyMetadata struct {
 
 	// The name of the selector-based security policy.
 	Name string `json:"name,omitempty" validate:"omitempty,namespacedname"`
+
+	// Arbitrary key-value information to be used by clients.
+	Annotations map[string]string `json:"annotations,omitempty" validate:"omitempty"`
 }
 
 // PolicySpec contains the specification for a selector-based security Policy resource.
