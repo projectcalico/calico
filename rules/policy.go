@@ -78,16 +78,19 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 
 func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule {
 	// Filter the CIDRs to the IP version that we're rendering.  In general, we should have an
-	// explicit IP version in the rule and all CIDRs should match it.  However, we try to handle
-	// a rule gracefully if it's missing a version.
+	// explicit IP version in the rule and all CIDRs should match it (and calicoctl, for
+	// example, enforces that).  However, we try to handle a rule gracefully if it's missing a
+	// version.
 	//
 	// We do that by rendering the rule, filtered to only have CIDRs of the right version,
-	// unless filtering the rule would completely remove one of its match fields.  That handles
-	// the mainline cas well, where the IP version is missing but the rule is otherwise
-	// consistent since we'll render the rule only for the matching version.  It also handles
-	// rules like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only rules of the form
-	// "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out, and only for IPv6,
-	// where there's no obvious meaning to the rule.
+	// unless filtering the rule would completely remove one of its match fields.
+	//
+	// That handles the mainline case well, where the IP version is missing but the rule is
+	// otherwise consistent since we'll render the rule only for the matching version.
+	//
+	// It also handles rules like "allow from 10.0.0.1,feed::beef" in an intuitive way.  Only
+	// rules of the form "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out,
+	// and only for IPv6, where there's no obvious meaning to the rule.
 	ruleCopy := *pRule
 	var filteredAll bool
 	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
@@ -111,7 +114,27 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 
 	// iptables only supports one source and one destination match in a rule (irrespective of
 	// negation).  If we have more than one of either, we'll render blocks of rules for the
-	// ones that won't fit.
+	// ones that won't fit as follows:
+	//
+	//     rule to initialise mark bits
+	//     positive matches on source address
+	//     positive matches on dest address
+	//     negated matches on source address
+	//     negated matches on dest address
+	//     rule containing rest of match critera
+	//
+	// We use one match bit to record whether all the blocks accept the packet and one as a
+	// scratch bit for each block to use.  As an invariant, at the end of each block, the
+	// "all blocks pass" bit should only be set if all previous blocks match the packet.
+	//
+	// We do a some optimisations to keep the number of rules down:
+	//
+	//    - if there is only one positive match, we don't render a block and we add the match
+	//      to the final rule
+	//    - if the first block implements a positive match then we have it write directly to the
+	//      "AllBlocks" bit instead of using the scratch bit and copying
+	//    - negative match blocks don't need to use the scratch bit, they simply clear the
+	//      "AllBlocks" bit immediately if any of their rules match.
 	numSrcMatches := len(ruleCopy.SrcNet) + len(ruleCopy.NotSrcNet)
 	numDstMatches := len(ruleCopy.DstNet) + len(ruleCopy.NotDstNet)
 	var usingCIDRBlocks bool
@@ -144,7 +167,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 
 		appendCIDRMatchBlock := func(cidrs []string, srcOrDst srcOrDst) {
 			// Implementation a positive match requires us to implement a logical
-			// "or" operation within the block and then and that with the result from
+			// "or" operation within the block and then "and" that with the result from
 			// the previous block.
 			//
 			// As an optimization, if rendering the first block, we simply set the
