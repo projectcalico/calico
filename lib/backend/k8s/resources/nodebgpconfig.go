@@ -24,7 +24,7 @@ const (
 	perNodeBgpConfigAnnotationNamespace = "config.bgp.projectcalico.org"
 )
 
-func NewNodeBGPConfigClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewNodeBGPConfigClient(c *kubernetes.Clientset) K8sNodeResourceClient {
 	return NewCustomK8sNodeResourceClient(CustomK8sNodeResourceClientConfig{
 		ClientSet:    c,
 		ResourceType: "NodeBGPConfig",

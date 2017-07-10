@@ -64,7 +64,7 @@ func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 		err = K8sErrorToCalico(err, kvp.Key)
 
 		// If this is an update conflict and we didn't specify a revision in the
-		// request, indicate to the retryWrapper that we can retry the action.
+		// request, indicate to the nodeRetryWrapper that we can retry the action.
 		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && kvp.Revision == nil {
 			err = retryError{err: err}
 		}

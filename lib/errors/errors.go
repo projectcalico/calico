@@ -153,4 +153,3 @@ func UpdateErrorIdentifier(err error, id interface{}) error {
 	}
 	return err
 }
-
