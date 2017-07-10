@@ -67,7 +67,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 run-k8s-apiserver
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e LOCAL_USER_ID=0 \
-		$(GO_BUILD_CONTAINER) /tests/test_kdd.sh
+		$(GO_BUILD_CONTAINER) /tests/test_suite_kdd.sh
 
 .PHONY: test-etcd
 ## Run template tests against etcd
@@ -76,7 +76,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 run-etcd
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e LOCAL_USER_ID=0 \
-		$(GO_BUILD_CONTAINER) /tests/test_etcd.sh
+		$(GO_BUILD_CONTAINER) /tests/test_suite_etcd.sh
 
 ## Etcd is used by the kubernetes
 run-etcd: stop-etcd
