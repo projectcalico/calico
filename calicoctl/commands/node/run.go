@@ -34,12 +34,13 @@ import (
 )
 
 const (
-	ETCD_KEY_NODE_FILE             = "/etc/calico/certs/key.pem"
-	ETCD_CERT_NODE_FILE            = "/etc/calico/certs/cert.crt"
-	ETCD_CA_CERT_NODE_FILE         = "/etc/calico/certs/ca_cert.crt"
-	AUTODETECTION_METHOD_FIRST     = "first-found"
-	AUTODETECTION_METHOD_CAN_REACH = "can-reach="
-	AUTODETECTION_METHOD_INTERFACE = "interface="
+	ETCD_KEY_NODE_FILE                  = "/etc/calico/certs/key.pem"
+	ETCD_CERT_NODE_FILE                 = "/etc/calico/certs/cert.crt"
+	ETCD_CA_CERT_NODE_FILE              = "/etc/calico/certs/ca_cert.crt"
+	AUTODETECTION_METHOD_FIRST          = "first-found"
+	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
+	AUTODETECTION_METHOD_INTERFACE      = "interface="
+	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
 )
 
 var (
@@ -103,9 +104,17 @@ Options:
                              Use the interface determined by your host routing
                              tables that will be used to reach the supplied
                              destination IP or domain name.
-                           > interface=<IFACE NAME REGEX>
+                           > interface=<IFACE NAME REGEX LIST>
                              Use the first valid IP address found on interfaces
-                             named as per the supplied interface name regex.
+                             named as per the first matching supplied interface 
+			     name regex. Regexes are separated by commas
+			     (e.g. eth.*,enp0s.*).
+			   > skip-interface=<IFACE NAME REGEX LIST>
+			     Use the first valid IP address on the first
+			     enumerated interface (same logic as first-found
+			     above) that does NOT match with any of the
+			     specified interface name regexes. Regexes are
+			     separated by commas (e.g. eth.*,enp0s.*).
                            [default: first-found]
      --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
                            Specify the autodetection method for detecting the
@@ -526,9 +535,28 @@ func validateIpAutodetectionMethod(method string, version int) {
 		// Auto-detection method is "interface", validate that the interface
 		// regex is a valid golang regex.
 		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_INTERFACE)
-		if _, err := regexp.Compile(ifStr); err != nil {
-			fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifStr)
-			os.Exit(1)
+
+		// Regexes are provided in a string separated by ","
+		ifRegexes := strings.Split(ifStr, ",")
+		for _, ifRegex := range ifRegexes {
+			if _, err := regexp.Compile(ifStr); err != nil {
+				fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifRegex)
+				os.Exit(1)
+			}
+		}
+		return
+	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE) {
+		// Auto-detection method is "skip-interface", validate that the
+		// interface regexes used are valid golang regexes.
+		ifStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_SKIP_INTERFACE)
+
+		// Regexes are provided in a string separated by ","
+		ifRegexes := strings.Split(ifStr, ",")
+		for _, ifRegex := range ifRegexes {
+			if _, err := regexp.Compile(ifRegex); err != nil {
+				fmt.Printf("Error executing command: invalid interface regex specified for IP autodetection: %s\n", ifRegex)
+				os.Exit(1)
+			}
 		}
 		return
 	}
