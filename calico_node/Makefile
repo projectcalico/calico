@@ -6,7 +6,7 @@ VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
 # For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
 YAML_CMD?=$(shell which yaml || echo docker run -i calico/go-build yaml)
 CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
-CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
+CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
 BIRD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
 GOBGPD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
 FELIX_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
@@ -62,7 +62,6 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
-# TODO - This should be changed
 PACKAGE_NAME?=github.com/projectcalico/calico/calico_node
 
 LIBCALICOGO_PATH?=none
@@ -184,8 +183,8 @@ dist/startup: $(STARTUP_FILES) vendor
 		-v $(VERSIONS_FILE):/versions.yaml:ro \
         -e VERSIONS_FILE=/versions.yaml \
 	  	$(CALICO_BUILD) sh -c '\
-	    	cd /go/src/$(PACKAGE_NAME) && \
-	    	make startup'
+			cd /go/src/$(PACKAGE_NAME) && \
+			make CALICO_GIT_VER=$(CALICO_GIT_VER) startup'
 
 ## Build allocate_ipip_addr.go
 .PHONY: allocate-ipip-addr
@@ -203,8 +202,8 @@ dist/allocate-ipip-addr: $(ALLOCATE_IPIP_FILES) vendor
     -e VERSIONS_FILE=/versions.yaml \
 	-v $(CURDIR)/dist:/go/src/$(PACKAGE_NAME)/dist \
 	  $(CALICO_BUILD) sh -c '\
-	    cd /go/src/$(PACKAGE_NAME) && \
-	    make allocate-ipip-addr'
+		cd /go/src/$(PACKAGE_NAME) && \
+		make CALICO_GIT_VER=$(CALICO_GIT_VER) allocate-ipip-addr'
 
 ###############################################################################
 # Tests
