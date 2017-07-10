@@ -104,7 +104,8 @@ spec:
   - action: allow
     protocol: tcp
     source:
-      net: 172.24.197.101/32
+      nets:
+      - 172.24.197.101/32
     destination:
       ports: [80]
 EOF

@@ -208,7 +208,8 @@ cat << EOF | calicoctl create -f -
     - action: allow
       protocol: tcp
       source:
-        net: "<your management CIDR>"
+        nets:
+        - "<your management CIDR>"
       destination:
         ports: [22]
     - action: allow
@@ -217,7 +218,8 @@ cat << EOF | calicoctl create -f -
     - action: allow
       protocol: tcp
       destination:
-        net: "<your etcd IP>/32"
+        nets:
+        - "<your etcd IP>/32"
         ports: [<your etcd ports>]
     - action: allow
       protocol: udp

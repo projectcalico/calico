@@ -42,7 +42,7 @@ spec:
 | Field | Description  | Accepted Values   | Schema |
 |-------|--------------|-------------------|--------|
 | name | The name of the policy. |         | string |
-| annotations | Opaque key/value information to be used by clients. | | map
+| annotations | Opaque key/value information to be used by clients. | | map |
 
 
 #### Spec
@@ -93,8 +93,10 @@ applied action is deny.
 |-------------|-----------------------------|-------------------|--------|------------|
 | tag (deprecated)      | Match on tag. |  | string | |
 | notTag (deprecated)   | Negative match on tag. |  | string | |
-| net    | Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
-| notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
+| nets                  | Match packets with IP in any of the listed CIDRs. | List of valid IPv4 or IPv6 CIDRs  | list of cidrs |
+| net                   | Deprecated (use "nets" instead): Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
+| notNets               | Negative match on CIDRs. Match packets with IP not in any of the listed CIDRs. | List of valid IPv4 or IPv6 CIDRs  | list of cidrs |
+| notNet                | Deprecated (use "notNets" instead): Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
 | selector    | Positive match on selected endpoints. | Valid selector | [selector](#selector) | |
 | notSelector | Negative match on selected endpoints. | Valid selector | [selector](#selector) | |
 | ports | Positive match on the specified ports | | list of [ports](#ports) | |

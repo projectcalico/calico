@@ -30,7 +30,8 @@ spec:
   ingress:
   - action: deny
     source:
-      net: 10.0.20.0/24
+      nets:
+      - 10.0.20.0/24
   - action: allow
     source:
       selector: profile == 'profile1'
@@ -80,8 +81,10 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | tag (deprecated)      | Positive match on tag. |  | string | |
 | notTag (deprecated)   | Negative match on tag. |  | string | |
-| net    | Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
-| notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
+| nets                  | Match packets with IP in any of the listed CIDRs. | List of valid IPv4 or IPv6 CIDRs  | list of cidrs |
+| net                   | Deprecated (use "nets" instead): Match on CIDR. | Valid IPv4 or IPv6 CIDR  | cidr | |
+| notNets               | Negative match on CIDRs. Match packets with IP not in any of the listed CIDRs. | List of valid IPv4 or IPv6 CIDRs  | list of cidrs |
+| notNet                | Deprecated (use "notNets" instead): Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
 | selector    | Positive match on selected endpoints. | | [selector](#selector) | |
 | notSelector | Negative match on selected endpoints. | | [selector](#selector) | |
 | ports | Positive match on the specified ports | | list of [ports](#ports) | |
