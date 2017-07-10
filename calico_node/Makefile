@@ -436,6 +436,9 @@ release: clean
 	# Build the calico/node images.
 	$(MAKE) $(NODE_CONTAINER_NAME)
 
+	# Create the release archive
+	$(MAKE) release-archive
+
 	# Retag images with corect version and quay
 	docker tag $(NODE_CONTAINER_NAME) $(NODE_CONTAINER_NAME):$(CALICO_VER)
 	docker tag $(NODE_CONTAINER_NAME) quay.io/$(NODE_CONTAINER_NAME):$(CALICO_VER)
