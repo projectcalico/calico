@@ -1,5 +1,5 @@
-hash: cd1a6c9583bffce90dee08a18ae34181b7c360bb0c97a1b8c789d3fd04f99c1d
-updated: 2017-07-06T14:43:46.048376752Z
+hash: 0f2aa1d38b547e5ea14c56a699af14b5ee3e825d1a4c7ec8c3d1a0316f64abbc
+updated: 2017-07-13T10:44:47.275820101Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -69,7 +69,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 6a1fa9404c0aebf36c879bc50152edcc953910d2
+  version: 0a4f71a498b7c4812f64969510bcb4eca251e33a
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -117,6 +117,20 @@ imports:
   - reporters/stenographer/support/go-colorable
   - reporters/stenographer/support/go-isatty
   - types
+- name: github.com/onsi/gomega
+  version: 334b8f472b3af5d541c5642701c1e29e2126f486
+  subpackages:
+  - format
+  - internal/assertion
+  - internal/asyncassertion
+  - internal/oraclematcher
+  - internal/testingtsupport
+  - matchers
+  - matchers/support/goraph/bipartitegraph
+  - matchers/support/goraph/edge
+  - matchers/support/goraph/node
+  - matchers/support/goraph/util
+  - types
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -126,8 +140,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d22bc15766f568e3ce3afa8c5f5837dd988587cb
-  repo: https://github.com/fasaxc/libcalico-go.git
+  version: 02e76aa020564ee8a5d79339e10a6b29aba64513
   subpackages:
   - lib
   - lib/api
@@ -170,7 +183,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: fb369f752a7f8b880c4a5199af7bfcb8aaaabaa4
+  version: 3e6a7635bac6573d43f49f97b47eb9bda195dba8
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -194,11 +207,11 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: b1eba2e91649a362960311a447af7fc080427e78
+  version: 8c5a115d793b6d223efadbdba04d1de197d386e8
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 86bef332bfc3b59b7624a600bd53009ce91a9829
 - name: golang.org/x/crypto
   version: d172538b2cfce0c13cee31e647d0367aa8cd2486
   subpackages:
@@ -212,7 +225,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 6faef541c73732f438fb660a212750a9ba9f9362
+  version: abf9c25f54453410d0c6668e519582a9e1115027
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -365,18 +378,4 @@ imports:
   - util/flowcontrol
   - util/homedir
   - util/integer
-testImports:
-- name: github.com/onsi/gomega
-  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
-  subpackages:
-  - format
-  - internal/assertion
-  - internal/asyncassertion
-  - internal/oraclematcher
-  - internal/testingtsupport
-  - matchers
-  - matchers/support/goraph/bipartitegraph
-  - matchers/support/goraph/edge
-  - matchers/support/goraph/node
-  - matchers/support/goraph/util
-  - types
+testImports: []
