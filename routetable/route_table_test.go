@@ -116,8 +116,9 @@ var _ = Describe("RouteTable", func() {
 		})
 
 		Describe("with a slow conntrack deletion", func() {
+			const delay = 300 * time.Millisecond
 			BeforeEach(func() {
-				dataplane.ConntrackSleep = 30 * time.Millisecond
+				dataplane.ConntrackSleep = delay
 			})
 			It("should block a route add until conntrack finished", func() {
 				// Initial apply starts a background thread to delete
@@ -129,7 +130,7 @@ var _ = Describe("RouteTable", func() {
 				})
 				start := time.Now()
 				rt.Apply()
-				Expect(time.Since(start)).To(BeNumerically(">=", 30*time.Millisecond))
+				Expect(time.Since(start)).To(BeNumerically(">=", delay))
 			})
 			It("should not block an unrelated route add ", func() {
 				// Initial apply starts a background thread to delete
@@ -141,7 +142,7 @@ var _ = Describe("RouteTable", func() {
 				})
 				start := time.Now()
 				rt.Apply()
-				Expect(time.Since(start)).To(BeNumerically("<", 10*time.Millisecond))
+				Expect(time.Since(start)).To(BeNumerically("<", delay/2))
 			})
 		})
 

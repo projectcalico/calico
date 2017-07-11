@@ -357,6 +357,10 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 
 // startConntrackDeletion starts the deletion of conntrack entries for the given CIDR in the background.  Pending
 // deletions are tracked in the pendingConntrackCleanups map so we can block waiting for them later.
+//
+// It's important to do the conntrack deletions in the background because scanning the conntrack
+// table is very slow if there are a lot of entries.  Previously, we did the deletion synchronously
+// but that led to lengthy Apply() calls on the critical path.
 func (r *RouteTable) startConntrackDeletion(ipAddr ip.Addr) {
 	log.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
 	done := make(chan struct{})
