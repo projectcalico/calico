@@ -42,6 +42,7 @@ const (
 	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
 	AUTODETECTION_METHOD_INTERFACE      = "interface="
 	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
+	DEFAULT_DOCKER_IFPREFIX             = "cali"
 )
 
 var (
@@ -146,7 +147,7 @@ Options:
                            Interface prefix to use for the network interface
                            within the Docker containers that have been networked
                            by the Calico driver.
-                           [default: cali]
+                           [default: ` + DEFAULT_DOCKER_IFPREFIX + `]
      --use-docker-networking-container-labels
                            Extract the Calico-namespaced Docker container labels
                            (org.projectcalico.label.*) and apply them to the
@@ -249,8 +250,6 @@ Description:
 		"NODENAME":                          name,
 		"CALICO_NETWORKING_BACKEND":         backend,
 		"CALICO_LIBNETWORK_ENABLED":         fmt.Sprint(!disableDockerNw),
-		"CALICO_LIBNETWORK_CREATE_PROFILES": fmt.Sprint(!useDockerContainerLabels),
-		"CALICO_LIBNETWORK_LABEL_ENDPOINTS": fmt.Sprint(useDockerContainerLabels),
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
@@ -264,12 +263,16 @@ Description:
 		os.Exit(1)
 	}
 
-	// Set CALICO_LIBNETWORK_IFPREFIX env variable if Docker network is enabled.
-	if !disableDockerNw {
+	// Set CALICO_LIBNETWORK_IFPREFIX env variable if Docker network is enabled and set to non-default value.
+	if !disableDockerNw && ifprefix != DEFAULT_DOCKER_IFPREFIX {
 		envs["CALICO_LIBNETWORK_IFPREFIX"] = ifprefix
 	}
 
 	// Add in optional environments.
+	if useDockerContainerLabels {
+		envs["CALICO_LIBNETWORK_CREATE_PROFILES"] = "false"
+		envs["CALICO_LIBNETWORK_LABEL_ENDPOINTS"] = "true"
+	}
 	if nopools {
 		envs["NO_DEFAULT_POOLS"] = "true"
 	}
