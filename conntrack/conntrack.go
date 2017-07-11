@@ -22,11 +22,22 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
-var conntrackDirections = []string{
+// For TCP/UDP, each conntrack entry holds two copies of the tuple
+// (src addr, dst addr, src port, dst port).  One copy for the original direction and one copy for
+// the reply direction.  This is how the kernel handles NAT: by looking up the tuple for a packet
+// by its original tuple and mapping onto the corresponding reply direction tuple (or vice versa).
+// The reply tuple is calculated when the original outgoing packet is processed (and possibly
+// NATted).
+//
+// When we delete conntrack entries by IP address, we need to specify which element of the tuple
+// to look in.  This slice holds the flags corresponding to the fields we care about.  Since we're
+// deleting entries for local workload endpoints, either the endpoint originated the traffic, or it
+// received the traffic and replied to it.  In the originating case, the "original source" will be
+// set to the endpoint's IP; in the other case, the "reply source". Hence, it's sufficient to only
+// look in those two fields.
+var deleteDirections = []string{
 	"--orig-src",
-	"--orig-dst",
 	"--reply-src",
-	"--reply-dst",
 }
 
 const numRetries = 3
@@ -65,7 +76,7 @@ func (c Conntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 		log.WithField("version", ipVersion).Panic("Unknown IP version")
 	}
 	log.WithField("ip", ipAddr).Info("Removing conntrack flows")
-	for _, direction := range conntrackDirections {
+	for _, direction := range deleteDirections {
 		logCxt := log.WithFields(log.Fields{"ip": ipAddr, "direction": direction})
 		// Retry a few times because the conntrack command seems to fail at random.
 		for retry := 0; retry <= numRetries; retry += 1 {

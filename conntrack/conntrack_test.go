@@ -35,18 +35,14 @@ var _ = Describe("Conntrack", func() {
 		conntrack.RemoveConntrackFlows(4, net.ParseIP("10.0.0.1"))
 		Expect(cmdRec.cmdArgs).To(Equal([][]string{
 			[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
-			[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
 			[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
-			[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
 		}))
 	})
 	It("IPv6: Should remove all directions", func() {
 		conntrack.RemoveConntrackFlows(6, net.ParseIP("fe80::beef"))
 		Expect(cmdRec.cmdArgs).To(Equal([][]string{
 			[]string{"--family", "ipv6", "--delete", "--orig-src", "fe80::beef"},
-			[]string{"--family", "ipv6", "--delete", "--orig-dst", "fe80::beef"},
 			[]string{"--family", "ipv6", "--delete", "--reply-src", "fe80::beef"},
-			[]string{"--family", "ipv6", "--delete", "--reply-dst", "fe80::beef"},
 		}))
 	})
 	It("should panic on unknown IP version", func() {
@@ -62,9 +58,7 @@ var _ = Describe("Conntrack", func() {
 			conntrack.RemoveConntrackFlows(4, net.ParseIP("10.0.0.1"))
 			Expect(cmdRec.cmdArgs).To(Equal([][]string{
 				[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
 			}))
 		})
 	})
@@ -78,9 +72,7 @@ var _ = Describe("Conntrack", func() {
 			Expect(cmdRec.cmdArgs).To(Equal([][]string{
 				[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
 			}))
 		})
 	})
@@ -97,20 +89,10 @@ var _ = Describe("Conntrack", func() {
 				[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--orig-src", "10.0.0.1"},
 
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--orig-dst", "10.0.0.1"},
-
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
 				[]string{"--family", "ipv4", "--delete", "--reply-src", "10.0.0.1"},
-
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
-				[]string{"--family", "ipv4", "--delete", "--reply-dst", "10.0.0.1"},
 			}))
 		})
 	})
