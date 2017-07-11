@@ -82,3 +82,9 @@ calicoctl config set --raw=felix IpInIpMtu 1480
 
 > **Note:** Setting the `IpInIpMtu` config option will result in an immediate
 update the tunnel interface MTU on all of the active nodes in your cluster.
+
+## Configuring MTU in Kubernetes self-hosted manifests
+
+When using self-hosted manifests with Kubernetes, the MTU should be set by
+updating the Calico manifest, applying the manifest with those changes, and
+then restarting each of the calico-node pods.
