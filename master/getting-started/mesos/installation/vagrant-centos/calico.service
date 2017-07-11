@@ -19,6 +19,7 @@ ExecStart=/usr/bin/docker run \
 -v /var/log/calico:/var/log/calico \
 -v /run/docker/plugins:/run/docker/plugins \
 -v /var/run/docker.sock:/var/run/docker.sock \
+-v /run:/run \
 -v /var/run/calico:/var/run/calico quay.io/calico/node:{{site.data.versions[page.version].first.title}}
 
 

@@ -171,6 +171,9 @@ spec:
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
+            - mountPath: /run
+              name: run
+              readOnly: false
             - mountPath: /calico-secrets
               name: etcd-certs
         # This container installs the Calico CNI binaries
@@ -206,6 +209,11 @@ spec:
         - name: var-run-calico
           hostPath:
             path: /var/run/calico
+        # /run is required by Felix to access the xtables lockfile.  We can't map the individual
+        # file in because it may not exist, leading to Docker creating a directory instead.
+        - name: run
+          hostPath:
+            path: /run
         # Used to install CNI.
         - name: cni-bin-dir
           hostPath:
