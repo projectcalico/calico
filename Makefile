@@ -50,6 +50,7 @@ NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
 FELIX_CONTAINER_NAME?=calico/felix:$(FELIX_VER)
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:$(LIBNETWORK_PLUGIN_VER)
+CTL_CONTAINER_NAME?=calico/ctl:master
 
 STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
 STARTUP_FILES=$(shell find $(STARTUP_DIR) -name '*.go')
@@ -90,9 +91,14 @@ dist/calicoctl-v1.0.2:
 	wget https://github.com/projectcalico/calicoctl/releases/download/v1.0.2/calicoctl -O dist/calicoctl-v1.0.2
 	chmod +x dist/calicoctl-v1.0.2
 
+# Pull the latest calicoctl binary.  Used for STs
 dist/calicoctl:
-	wget https://github.com/projectcalico/calicoctl/releases/download/$(CALICOCTL_VER)/calicoctl -O dist/calicoctl
-	chmod +x dist/calicoctl
+	-docker rm -f calicoctl
+	docker create --name calicoctl $(CTL_CONTAINER_NAME)
+	docker cp calicoctl:calicoctl dist/calicoctl && \
+	  test -e dist/calicoctl && \
+	  touch dist/calicoctl
+	-docker rm -f calicoctl
 
 test_image: calico_test.created ## Create the calico/test image
 
