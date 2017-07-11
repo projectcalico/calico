@@ -26,6 +26,8 @@ import (
 // (src addr, dst addr, src port, dst port).  One copy for the original direction and one copy for
 // the reply direction.  This is how the kernel handles NAT: by looking up the tuple for a packet
 // by its original tuple and mapping onto the corresponding reply direction tuple (or vice versa).
+// The reply tuple is calculated when the original outgoing packet is processed (and possibly
+// NATted).
 //
 // When we delete conntrack entries by IP address, we need to specify which element of the tuple
 // to look in.  This slice holds the flags corresponding to the fields we care about.  Since we're
