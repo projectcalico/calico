@@ -76,3 +76,5 @@ class TestSingleRouteReflector(TestBase):
     @attr('slow')
     def test_gobgp_single_route_reflector(self):
         self._test_single_route_reflector(backend='gobgp')
+
+TestSingleRouteReflector.batchnumber = 1  # Adds a batch number for parallel testing
