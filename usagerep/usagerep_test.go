@@ -27,7 +27,7 @@ import (
 
 var _ = Describe("Usagerep", func() {
 	It("should calculate correct URL mainline", func() {
-		rawURL := calculateURL("theguid", "atype", calc.StatsUpdate{
+		rawURL := calculateURL("theguid", "atype", "testVer", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -35,9 +35,10 @@ var _ = Describe("Usagerep", func() {
 		url, err := url.Parse(rawURL)
 		Expect(err).NotTo(HaveOccurred())
 		q := url.Query()
-		Expect(len(q)).To(Equal(7))
+		Expect(len(q)).To(Equal(8))
 		Expect(q.Get("guid")).To(Equal("theguid"))
 		Expect(q.Get("type")).To(Equal("atype"))
+		Expect(q.Get("cal_ver")).To(Equal("testVer"))
 		Expect(q.Get("size")).To(Equal("10"))
 		Expect(q.Get("weps")).To(Equal("234"))
 		Expect(q.Get("heps")).To(Equal("123"))
@@ -48,8 +49,8 @@ var _ = Describe("Usagerep", func() {
 		Expect(url.Scheme).To(Equal("https"))
 		Expect(url.Path).To(Equal("/UsageCheck/calicoVersionCheck"))
 	})
-	It("should default cluster type and GUID", func() {
-		rawURL := calculateURL("", "", calc.StatsUpdate{
+	It("should default cluster type, GUID, and Calico Version", func() {
+		rawURL := calculateURL("", "", "", calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,
@@ -57,9 +58,10 @@ var _ = Describe("Usagerep", func() {
 		url, err := url.Parse(rawURL)
 		Expect(err).NotTo(HaveOccurred())
 		q := url.Query()
-		Expect(len(q)).To(Equal(7))
+		Expect(len(q)).To(Equal(8))
 		Expect(q.Get("guid")).To(Equal("baddecaf"))
 		Expect(q.Get("type")).To(Equal("unknown"))
+		Expect(q.Get("cal_ver")).To(Equal("unknown"))
 	})
 	It("should delay at least 5 minutes", func() {
 		Expect(calculateInitialDelay(0)).To(BeNumerically(">=", 5*time.Minute))
