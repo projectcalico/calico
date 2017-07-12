@@ -58,7 +58,7 @@ Options:
                                peer or node-specific.
   -c --config=<CONFIG>         Path to the file containing connection
                                configuration in YAML or JSON format.
-                               [default: /etc/calico/calicoctl.cfg]
+                               [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   The get command is used to display a set of resources by filename or stdin,

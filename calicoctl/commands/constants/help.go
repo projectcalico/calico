@@ -19,4 +19,5 @@ const (
 or supply details in a config file.
 
 `
+	DefaultConfigPath = "/etc/calico/calicoctl.cfg"
 )

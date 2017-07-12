@@ -15,9 +15,11 @@
 package clientmgr
 
 import (
+	"fmt"
 	"os"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 )
@@ -45,7 +47,11 @@ func NewClient(cf string) (*client.Client, error) {
 // otherwise will load from environment variables.
 func LoadClientConfig(cf string) (*api.CalicoAPIConfig, error) {
 	if _, err := os.Stat(cf); err != nil {
-		log.Infof("Config file cannot be read - reading config from environment")
+		if (cf != constants.DefaultConfigPath) {
+			fmt.Printf("Error reading config file: %s\n", cf)
+			os.Exit(1)
+		}
+		log.Infof("Config file: %s cannot be read - reading config from environment", cf)
 		cf = ""
 	}
 

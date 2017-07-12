@@ -36,7 +36,7 @@ Options:
      --ip=<IP>          IP address to show.
   -c --config=<CONFIG>  Path to the file containing connection configuration in
                         YAML or JSON format.
-                        [default: /etc/calico/calicoctl.cfg]
+                        [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   The ipam show command prints information about a given IP address, such as
