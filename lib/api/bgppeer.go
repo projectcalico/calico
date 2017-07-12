@@ -33,6 +33,10 @@ type BGPPeer struct {
 	Spec BGPPeerSpec `json:"spec,omitempty"`
 }
 
+func (t BGPPeer) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // BGPPeerMetadata contains the metadata for a BGPPeer resource.
 type BGPPeerMetadata struct {
 	unversioned.ObjectMetadata

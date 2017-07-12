@@ -33,6 +33,10 @@ type IPPool struct {
 	Spec     IPPoolSpec     `json:"spec,omitempty"`
 }
 
+func (t IPPool) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // IPPoolMetadata contains the metadata for an IP pool resource.
 type IPPoolMetadata struct {
 	unversioned.ObjectMetadata

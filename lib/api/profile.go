@@ -29,6 +29,10 @@ type Profile struct {
 	Spec     ProfileSpec     `json:"spec,omitempty"`
 }
 
+func (t Profile) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // ProfileMetadata contains the metadata for a security Profile resource.
 type ProfileMetadata struct {
 	unversioned.ObjectMetadata

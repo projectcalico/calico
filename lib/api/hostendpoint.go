@@ -27,6 +27,10 @@ type HostEndpoint struct {
 	Spec     HostEndpointSpec     `json:"spec,omitempty"`
 }
 
+func (t HostEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // HostEndpointMetadata contains the Metadata for a HostEndpoint resource.
 type HostEndpointMetadata struct {
 	unversioned.ObjectMetadata
