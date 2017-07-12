@@ -1,5 +1,5 @@
-hash: e4f077ed2b4b9f98f45c13b056763df1b4a3f5b6888b562ae2c0e0f7ad643bdb
-updated: 2017-07-17T12:31:42.378152377Z
+hash: 8fa32f3339726894cf249af552b1cd2f957c8b7e431679edc970e998ab148a38
+updated: 2017-07-17T16:32:57.611594-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -140,7 +140,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 565f839a3bf08650d787337a562e4c0aa3d2d9ce
+  version: 7c8b6d628b83f5b7d609989e2633c18e55dc6a54
   subpackages:
   - lib
   - lib/api
@@ -159,6 +159,7 @@ imports:
   - lib/hash
   - lib/hwm
   - lib/ipip
+  - lib/logutils
   - lib/net
   - lib/numorstring
   - lib/scope
