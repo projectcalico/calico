@@ -20,20 +20,20 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/felix/testutils"
-
-	"strings"
-
-	"github.com/projectcalico/felix/ifacemonitor"
 )
 
 var (
@@ -106,6 +106,44 @@ var _ = Describe("RouteTable", func() {
 			rt.Apply()
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
+		})
+		It("should delete only our conntrack entries", func() {
+			rt.Apply()
+			Eventually(dataplane.GetDeletedConntrackEntries).Should(ConsistOf(
+				net.ParseIP("10.0.0.1").To4(),
+				net.ParseIP("10.0.0.3").To4(),
+			))
+		})
+
+		Describe("with a slow conntrack deletion", func() {
+			const delay = 300 * time.Millisecond
+			BeforeEach(func() {
+				dataplane.ConntrackSleep = delay
+			})
+			It("should block a route add until conntrack finished", func() {
+				// Initial apply starts a background thread to delete
+				// 10.0.0.1 and 10.0.0.3.
+				rt.Apply()
+				// We try to add 10.0.0.1 back in.
+				rt.SetRoutes("cali1", []Target{
+					{CIDR: ip.MustParseCIDR("10.0.0.1/32"), DestMAC: mac1},
+				})
+				start := time.Now()
+				rt.Apply()
+				Expect(time.Since(start)).To(BeNumerically(">=", delay))
+			})
+			It("should not block an unrelated route add ", func() {
+				// Initial apply starts a background thread to delete
+				// 10.0.0.1 and 10.0.0.3.
+				rt.Apply()
+				// We try to add 10.0.0.10, which hasn't been seen before.
+				rt.SetRoutes("cali1", []Target{
+					{CIDR: ip.MustParseCIDR("10.0.0.10/32"), DestMAC: mac1},
+				})
+				start := time.Now()
+				rt.Apply()
+				Expect(time.Since(start)).To(BeNumerically("<", delay/2))
+			})
 		})
 
 		// We do the following tests in different failure (and non-failure) scenarios.  In
@@ -379,6 +417,10 @@ type mockDataplane struct {
 	deletedRouteKeys set.Set
 
 	failuresToSimulate failFlags
+
+	mutex                   sync.Mutex
+	deletedConntrackEntries []net.IP
+	ConntrackSleep          time.Duration
 }
 
 func (d *mockDataplane) addIface(idx int, name string, up bool, running bool) *mockLink {
@@ -506,7 +548,20 @@ func (d *mockDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"ipAddr":    ipAddr,
+		"sleepTime": d.ConntrackSleep,
 	}).Info("Mock dataplane: Removing conntrack flows")
+	d.mutex.Lock()
+	d.deletedConntrackEntries = append(d.deletedConntrackEntries, ipAddr)
+	d.mutex.Unlock()
+	time.Sleep(d.ConntrackSleep)
+}
+
+func (d *mockDataplane) GetDeletedConntrackEntries() []net.IP {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	cpy := make([]net.IP, len(d.deletedConntrackEntries))
+	copy(cpy, d.deletedConntrackEntries)
+	return cpy
 }
 
 func keyForRoute(route *netlink.Route) string {
