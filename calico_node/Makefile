@@ -9,10 +9,10 @@ CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STRE
 CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
 BIRD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
 GOBGPD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bgp-daemon.version')
-FELIX_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
-CALICOCTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
+FELIX_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.felix.version')
+CALICOCTL_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
 LIBNETWORK_PLUGIN_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.libnetwork-plugin.version')
-TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+TYPHA_VER ?= $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
 K8S_POLICY_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
 CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
@@ -428,10 +428,9 @@ semaphore:
 	$(MAKE) node-test-containerized
 
 	# Actually run the tests (refreshing the images as required), we only run a
-	# small subset of the tests for testing SSL support.  These tests are run
-	# using "latest" tagged images.
-	$(MAKE) $(NODE_CONTAINER_NAME) st
-	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
+	# small subset of the tests for testing SSL support.
+	FELIX_VER=master $(MAKE) $(NODE_CONTAINER_NAME)
+	FELIX_VER=master ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 release: clean
 	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
