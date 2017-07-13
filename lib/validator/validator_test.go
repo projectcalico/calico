@@ -59,10 +59,10 @@ func init() {
 	DescribeTable("Validator",
 		func(input interface{}, valid bool) {
 			if valid {
-				Expect(validator.Validate(input)).To(BeNil(),
+				Expect(validator.Validate(input)).NotTo(HaveOccurred(),
 					"expected value to be valid")
 			} else {
-				Expect(validator.Validate(input)).ToNot(BeNil(),
+				Expect(validator.Validate(input)).To(HaveOccurred(),
 					"expected value to be invalid")
 			}
 		},
@@ -527,6 +527,110 @@ func init() {
 				IPVersion: &V4,
 				Destination: api.EntityRule{
 					Net: &netv6_1,
+				},
+			}, false),
+		Entry("net list: should reject rule with net and nets",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Source: api.EntityRule{
+					Net:  &netv4_3,
+					Nets: []*net.IPNet{&netv4_3},
+				},
+			}, false),
+		Entry("net list: should reject rule with not net and not nets",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Source: api.EntityRule{
+					NotNet:  &netv4_3,
+					NotNets: []*net.IPNet{&netv4_3},
+				},
+			}, false),
+		Entry("net list: should reject rule with net and nets",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Destination: api.EntityRule{
+					Net:  &netv4_3,
+					Nets: []*net.IPNet{&netv4_3},
+				},
+			}, false),
+		Entry("net list: should reject rule with not net and not nets",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Destination: api.EntityRule{
+					NotNet:  &netv4_3,
+					NotNets: []*net.IPNet{&netv4_3},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPv4 (src) and IPv6 (dest)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Source: api.EntityRule{
+					Nets: []*net.IPNet{&netv4_3},
+				},
+				Destination: api.EntityRule{
+					Nets: []*net.IPNet{&netv6_3},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPv6 (src) and IPv4 (dest)",
+			api.Rule{
+				Action:   "allow",
+				Protocol: protocolFromString("tcp"),
+				Source: api.EntityRule{
+					Nets: []*net.IPNet{&netv6_2},
+				},
+				Destination: api.EntityRule{
+					Nets: []*net.IPNet{&netv4_2},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPv6 version and IPv4 Net",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V6,
+				Source: api.EntityRule{
+					Nets: []*net.IPNet{&netv4_4},
+				},
+				Destination: api.EntityRule{
+					Nets: []*net.IPNet{&netv4_2},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPv6 version and IPv4 Net",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V6,
+				Source: api.EntityRule{
+					Net: &netv4_4,
+				},
+				Destination: api.EntityRule{
+					NotNets: []*net.IPNet{&netv4_2},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPVersion and Source Net IP version",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V6,
+				Source: api.EntityRule{
+					Nets: []*net.IPNet{&netv4_1},
+				},
+			}, false),
+		Entry("net list: should reject rule mixed IPVersion and Dest Net IP version",
+			api.Rule{
+				Action:    "allow",
+				Protocol:  protocolFromString("tcp"),
+				IPVersion: &V4,
+				Destination: api.EntityRule{
+					Nets: []*net.IPNet{&netv6_1},
 				},
 			}, false),
 

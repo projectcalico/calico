@@ -23,6 +23,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 	"github.com/projectcalico/libcalico-go/lib/selector"
@@ -406,25 +407,47 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		}
 	}
 
-	// Check for mismatch in IP versions
-	if rule.Source.Net != nil && rule.IPVersion != nil {
-		if rule.Source.Net.Version() != *(rule.IPVersion) {
-			structLevel.ReportError(reflect.ValueOf(rule.Source.Net), "Source.Net",
-				"", reason("rule contains an IP version that does not match src CIDR version"))
-		}
+	// Check that only one of the net or nets fields is specified.
+	hasNetField := rule.Source.Net != nil ||
+		rule.Destination.Net != nil ||
+		rule.Source.NotNet != nil ||
+		rule.Destination.NotNet != nil
+	hasNetsField := len(rule.Source.Nets) != 0 ||
+		len(rule.Destination.Nets) != 0 ||
+		len(rule.Source.NotNets) != 0 ||
+		len(rule.Destination.NotNets) != 0
+	if hasNetField && hasNetsField {
+		structLevel.ReportError(reflect.ValueOf(rule.Source.Nets),
+			"Source/Destination.Net/Nets",
+			"Source/Destination.Net/Nets",
+			reason("only one of Net and Nets fields allowed"))
 	}
-	if rule.Destination.Net != nil && rule.IPVersion != nil {
-		if rule.Destination.Net.Version() != *(rule.IPVersion) {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Net), "Destination.Net",
-				"", reason("rule contains an IP version that does not match dst CIDR version"))
+
+	var seenV4, seenV6 bool
+
+	scanNets := func(nets []*calinet.IPNet, fieldName string) {
+		var v4, v6 bool
+		for _, n := range nets {
+			v4 = v4 || n.Version() == 4
+			v6 = v6 || n.Version() == 6
 		}
-	}
-	if rule.Source.Net != nil && rule.Destination.Net != nil {
-		if rule.Source.Net.Version() != rule.Destination.Net.Version() {
-			structLevel.ReportError(reflect.ValueOf(rule.Destination.Net), "Destination.Net",
-				"", reason("rule does not support mixing of IPv4/v6 CIDRs"))
+		if rule.IPVersion != nil && ((v4 && *rule.IPVersion != 4) || (v6 && *rule.IPVersion != 6)) {
+			structLevel.ReportError(reflect.ValueOf(rule.Source.Net), fieldName,
+				"", reason("rule IP version doesn't match CIDR version"))
 		}
+		if v4 && seenV6 || v6 && seenV4 || v4 && v6 {
+			// This field makes the rule inconsistent.
+			structLevel.ReportError(reflect.ValueOf(nets), fieldName,
+				"", reason("rule contains both IPv4 and IPv6 CIDRs"))
+		}
+		seenV4 = seenV4 || v4
+		seenV6 = seenV6 || v6
 	}
+
+	scanNets(rule.Source.GetNets(), "Source.Net(s)")
+	scanNets(rule.Source.GetNotNets(), "Source.NotNet(s)")
+	scanNets(rule.Destination.GetNets(), "Destination.Net(s)")
+	scanNets(rule.Destination.GetNotNets(), "Destination.NotNet(s)")
 }
 
 func validateBackendRule(v *validator.Validate, structLevel *validator.StructLevel) {
