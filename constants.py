@@ -41,19 +41,12 @@ WATCH_URLS = {RESOURCE_TYPE_POD: "%s/api/v1/watch/pods",
               RESOURCE_TYPE_NAMESPACE: "%s/api/v1/watch/namespaces",
               RESOURCE_TYPE_NETWORK_POLICY: NET_POLICY_WATCH_PATH}
 
-# Annotation to look for network-isolation on namespaces.
-NS_POLICY_ANNOTATION = "net.beta.kubernetes.io/network-policy"
-
 # Tier name /order to use for policies.
 NET_POL_TIER_ORDER = 1000
 
 # The priority assigned to network policies created by the controller.
 # Lower order -> higher priority.
 NET_POL_ORDER = 1000
-
-# The priority assigned to the backstop policy that applies
-# to traffic which doesn't match one of the configured policies.
-NET_POL_NO_MATCH_ORDER = int(os.environ.get("NO_MATCH_ORDER", 2000))
 
 # Environment variables for getting the Kubernetes API.
 K8S_SERVICE_PORT = "KUBERNETES_SERVICE_PORT"
