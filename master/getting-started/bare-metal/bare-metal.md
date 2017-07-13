@@ -31,12 +31,12 @@ However, for host endpoints, Calico is more lenient; it only polices
 traffic to/from interfaces that it's been explicitly told about. Traffic
 to/from other interfaces is left alone.
 
-As of Calico v2.1.0, Calico applies host endpoint security policy both to traffic 
-that is terminated locally, and to traffic that is forwarded between host 
-endpoints.  Previously, policy was only applied to traffic that was terminated 
+As of Calico v2.1.0, Calico applies host endpoint security policy both to traffic
+that is terminated locally, and to traffic that is forwarded between host
+endpoints.  Previously, policy was only applied to traffic that was terminated
 locally.  The change allows Calico to be used to secure a NAT gateway or router.
 Calico supports selector-based policy as normal when running on a gateway or router
-allowing for rich, dynamic security policy based on the labels attached to your 
+allowing for rich, dynamic security policy based on the labels attached to your
 workloads.
 
 > **NOTE**
@@ -429,3 +429,24 @@ an ingress rule allowing access *to* port 999 and an egress rule allowing
 outbound traffic *from* port 999.  (Whereas for a connection tracked policy, it
 is usually enough to specify the ingress rule only, and then connection
 tracking will automatically allow the return path.)
+
+## Pre-DNAT policy
+
+Policy for host endpoints can be marked as 'preDNAT'.  This means that rules in
+that policy should be applied before any DNAT, which is useful if it is more
+convenient to specify Calico policy in terms of a packet's original destination
+IP address and port, than in terms of that packet's destination IP address and
+port after it has been DNAT'd.
+
+An example is securing access to Kubernetes NodePorts from outside the cluster.
+Traffic from outside is addressed to any node's IP address, on a known
+NodePort, and Kubernetes (kube-proxy) then DNATs that to the IP address of one
+of the pods that provides the corresponding Service, and the relevant port
+number on that port (which is usually different from the NodePort).
+
+As NodePorts are the externally advertised way of connecting to Services (and a
+NodePort uniquely identifies a Service, whereas an internal port number may
+not), it makes sense to express Calico policy to expose or secure particular
+Services in terms of the corresponding NodePorts.  But that is only possible if
+the Calico policy is applied before DNAT changes the NodePort to something
+else - and hence this kind of policy needs 'preDNAT' set to true.
