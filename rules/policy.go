@@ -127,7 +127,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	// scratch bit for each block to use.  As an invariant, at the end of each block, the
 	// "all blocks pass" bit should only be set if all previous blocks match the packet.
 	//
-	// We do a some optimisations to keep the number of rules down:
+	// We do some optimisations to keep the number of rules down:
 	//
 	//    - if there is only one positive match, we don't render a block and we add the match
 	//      to the final rule

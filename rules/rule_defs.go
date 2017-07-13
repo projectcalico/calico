@@ -206,7 +206,7 @@ type Config struct {
 }
 
 func (c *Config) validate() {
-	// Scan for unset iptables mark bits.  We use reflection so taht we have a hope of catching
+	// Scan for unset iptables mark bits.  We use reflection so that we have a hope of catching
 	// newly-added fields.
 	myValue := reflect.ValueOf(c).Elem()
 	myType := myValue.Type()
@@ -229,7 +229,7 @@ func (c *Config) validate() {
 		}
 	}
 	if found == 0 {
-		// Check the reflection found everything we were expecting.
+		// Check the reflection found something we were expecting.
 		log.Panic("Didn't find any IptablesMarkXXX fields.")
 	}
 }
