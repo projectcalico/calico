@@ -18,12 +18,13 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: ^1.0.0
+  version: 7c8b6d628b83f5b7d609989e2633c18e55dc6a54
   subpackages:
   - lib/api
   - lib/client
   - lib/errors
   - lib/net
+  - lib/logutils
 - package: github.com/vishvananda/netlink
 - package: k8s.io/client-go
   # Pin to this commit to match libcalico-go, which includes

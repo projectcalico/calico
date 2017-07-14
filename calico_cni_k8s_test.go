@@ -2,13 +2,13 @@ package main_test
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"os"
 	"syscall"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,6 +18,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/vishvananda/netlink"
@@ -30,6 +31,8 @@ import (
 func init() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
+	log.SetFormatter(&logutils.Formatter{})
+	log.AddHook(&logutils.ContextHook{})
 }
 
 var _ = Describe("CalicoCni", func() {
