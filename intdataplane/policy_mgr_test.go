@@ -27,15 +27,17 @@ var _ = Describe("Policy manager", func() {
 	var (
 		policyMgr    *policyManager
 		rawTable     *mockTable
+		mangleTable  *mockTable
 		filterTable  *mockTable
 		ruleRenderer *mockPolRenderer
 	)
 
 	BeforeEach(func() {
 		rawTable = newMockTable("raw")
+		mangleTable = newMockTable("mangle")
 		filterTable = newMockTable("filter")
 		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, filterTable, ruleRenderer, 4)
+		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4)
 	})
 
 	It("shouldn't touch iptables", func() {

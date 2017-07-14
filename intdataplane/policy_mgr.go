@@ -26,6 +26,7 @@ import (
 // them to the dataplane layer.
 type policyManager struct {
 	rawTable     iptablesTable
+	mangleTable  iptablesTable
 	filterTable  iptablesTable
 	ruleRenderer policyRenderer
 	ipVersion    uint8
@@ -36,9 +37,10 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
 }
 
-func newPolicyManager(rawTable, filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
+func newPolicyManager(rawTable, mangleTable, filterTable iptablesTable, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
 	return &policyManager{
 		rawTable:     rawTable,
+		mangleTable:  mangleTable,
 		filterTable:  filterTable,
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
@@ -51,6 +53,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
 		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
 		m.rawTable.UpdateChains(chains)
+		m.mangleTable.UpdateChains(chains)
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
@@ -58,6 +61,8 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		outName := rules.PolicyChainName(rules.PolicyOutboundPfx, msg.Id)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
+		m.mangleTable.RemoveChainByName(inName)
+		m.mangleTable.RemoveChainByName(outName)
 		m.rawTable.RemoveChainByName(inName)
 		m.rawTable.RemoveChainByName(outName)
 	case *proto.ActiveProfileUpdate:

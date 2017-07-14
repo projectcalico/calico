@@ -40,10 +40,10 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 	}
 }
 
-func (r *DefaultRuleRenderer) acceptUntrackedRules() []Rule {
+func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	return []Rule{
 		{
-			Match:  Match().MarkSet(r.IptablesMarkAccept).ConntrackState("UNTRACKED"),
+			Match:  Match().MarkSet(r.IptablesMarkAccept),
 			Action: AcceptAction{},
 		},
 	}
@@ -52,9 +52,8 @@ func (r *DefaultRuleRenderer) acceptUntrackedRules() []Rule {
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	inputRules = append(inputRules, r.acceptUntrackedRules()...)
+	// Accept immediately if we've already accepted this packet in the raw or mangle table.
+	inputRules = append(inputRules, r.acceptAlreadyAccepted()...)
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
@@ -234,9 +233,8 @@ func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	rules = append(rules, r.acceptUntrackedRules()...)
+	// Accept immediately if we've already accepted this packet in the raw or mangle table.
+	rules = append(rules, r.acceptAlreadyAccepted()...)
 
 	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
@@ -317,9 +315,8 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains() []*Chain {
 func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	rules := []Rule{}
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	rules = append(rules, r.acceptUntrackedRules()...)
+	// Accept immediately if we've already accepted this packet in the raw or mangle table.
+	rules = append(rules, r.acceptAlreadyAccepted()...)
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
@@ -453,6 +450,53 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 		Name:  ChainNATOutput,
 		Rules: rules,
 	}}
+}
+
+func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains []*Chain) {
+	chains = append(chains, r.StaticManglePreroutingChain(ipVersion))
+	return
+}
+
+func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chain {
+	rules := []Rule{}
+
+	// Accept immediately if we've already accepted this packet in the raw table.
+	rules = append(rules, r.acceptAlreadyAccepted()...)
+
+	// Set a mark on the packet if it's from a workload interface.
+	markFromWorkload := r.IptablesMarkScratch0
+	rules = append(rules, Rule{Action: ClearMarkAction{Mark: markFromWorkload}})
+	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
+		rules = append(rules, Rule{
+			Match:  Match().InInterface(ifacePrefix + "+"),
+			Action: SetMarkAction{Mark: markFromWorkload},
+		})
+	}
+
+	// If not from a workload, dispatch to host endpoint chain for the incoming interface.
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkClear(markFromWorkload),
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
+		},
+		// Following that...  If the packet was explicitly allowed by a pre-DNAT policy, it
+		// will have MarkAccept set.  If the packet was denied, it will have been dropped
+		// already.  If the incoming interface isn't one that we're policing, or the packet
+		// isn't governed by any pre-DNAT policy on that interface, it will fall through to
+		// here without any Calico bits set.
+
+		// In the MarkAccept case, we ACCEPT or RETURN according to IptablesAllowAction
+		Rule{
+			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Action:  r.iptablesAllowAction,
+			Comment: "Host endpoint policy accepted packet.",
+		},
+	)
+
+	return &Chain{
+		Name:  ChainManglePrerouting,
+		Rules: rules,
+	}
 }
 
 func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {

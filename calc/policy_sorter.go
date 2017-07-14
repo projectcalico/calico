@@ -45,7 +45,8 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 			newPolicy := update.Value.(*model.Policy)
 			if oldPolicy == nil ||
 				oldPolicy.Order != newPolicy.Order ||
-				oldPolicy.DoNotTrack != newPolicy.DoNotTrack {
+				oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
+				oldPolicy.PreDNAT != newPolicy.PreDNAT {
 				dirty = true
 			}
 			poc.tier.Policies[key] = newPolicy
@@ -135,8 +136,12 @@ func (t tierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
 		untracked := "t"
-		if pol.Value != nil && pol.Value.DoNotTrack {
-			untracked = "u"
+		if pol.Value != nil {
+			if pol.Value.DoNotTrack {
+				untracked = "u"
+			} else if pol.Value.PreDNAT {
+				untracked = "p"
+			}
 		}
 		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, untracked)
 	}

@@ -81,7 +81,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-FORWARD",
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
 							// Per-prefix workload jump rules.
@@ -113,7 +113,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-INPUT",
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
 							// Per-prefix workload jump rules.  Note use of goto so that we
@@ -137,7 +137,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-OUTPUT",
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
 							// Return if to workload.
@@ -399,7 +399,7 @@ var _ = Describe("Static", func() {
 			Name: "cali-INPUT",
 			Rules: []Rule{
 				// Untracked packets already matched in raw table.
-				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
 				// IPIP rule
@@ -428,7 +428,7 @@ var _ = Describe("Static", func() {
 			Name: "cali-INPUT",
 			Rules: []Rule{
 				// Untracked packets already matched in raw table.
-				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
 				// Per-prefix workload jump rules.  Note use of goto so that we
@@ -503,7 +503,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-FORWARD",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
 						// Per-prefix workload jump rules.
@@ -535,7 +535,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-INPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
 						// Per-prefix workload jump rules.  Note use of goto so that we
@@ -559,7 +559,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-OUTPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
 						// Return if to workload.

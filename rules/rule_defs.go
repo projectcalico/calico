@@ -52,6 +52,8 @@ const (
 	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
 	ChainNATOutgoing    = ChainNamePrefix + "nat-outgoing"
 
+	ChainManglePrerouting = ChainNamePrefix + "PREROUTING"
+
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
@@ -129,6 +131,7 @@ type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
+	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
@@ -147,6 +150,10 @@ type RuleRenderer interface {
 	HostEndpointToRawChains(
 		ifaceName string,
 		untrackedPolicyNames []string,
+	) []*iptables.Chain
+	HostEndpointToMangleChains(
+		ifaceName string,
+		preDNATPolicyNames []string,
 	) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain

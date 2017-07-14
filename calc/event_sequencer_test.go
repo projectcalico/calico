@@ -63,7 +63,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 
 var _ = DescribeTable("ModelHostEndpointToProto",
 	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, expected proto.HostEndpoint) {
-		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers)
+		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers, nil)
 		Expect(*out).To(Equal(expected))
 	},
 	Entry("minimal endpoint",

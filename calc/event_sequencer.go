@@ -321,7 +321,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 	}
 }
 
-func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo) *proto.HostEndpoint {
+func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, preDNATTiers []*proto.TierInfo) *proto.HostEndpoint {
 	return &proto.HostEndpoint{
 		Name:              ep.Name,
 		ExpectedIpv4Addrs: ipsToStrings(ep.ExpectedIPv4Addrs),
@@ -329,6 +329,7 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers []*p
 		ProfileIds:        ep.ProfileIDs,
 		Tiers:             tiers,
 		UntrackedTiers:    untrackedTiers,
+		PreDnatTiers:      preDNATTiers,
 	}
 }
 
@@ -354,7 +355,7 @@ func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 
 func (buf *EventSequencer) flushEndpointTierUpdates() {
 	for key, endpoint := range buf.pendingEndpointUpdates {
-		tiers, untrackedTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
+		tiers, untrackedTiers, preDNATTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
@@ -372,7 +373,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 				Id: &proto.HostEndpointID{
 					EndpointId: key.EndpointID,
 				},
-				Endpoint: ModelHostEndpointToProto(hep, tiers, untrackedTiers),
+				Endpoint: ModelHostEndpointToProto(hep, tiers, untrackedTiers, preDNATTiers),
 			})
 		}
 		// Record that we've sent this endpoint.
@@ -576,27 +577,35 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 	return strings.Replace(cidr.String(), "/", "-", 1)
 }
 
-func tierInfoToProtoTierInfo(filteredTiers []tierInfo) (trackedTiers, untrackedTiers []*proto.TierInfo) {
+func tierInfoToProtoTierInfo(filteredTiers []tierInfo) (normalTiers, untrackedTiers, preDNATTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
 		for _, ti := range filteredTiers {
-			var trackedPols, untrackedPols []string
+			var normalPols, untrackedPols, preDNATPols []string
 			for _, pol := range ti.OrderedPolicies {
 				if pol.Value.DoNotTrack {
 					untrackedPols = append(untrackedPols, pol.Key.Name)
+				} else if pol.Value.PreDNAT {
+					preDNATPols = append(preDNATPols, pol.Key.Name)
 				} else {
-					trackedPols = append(trackedPols, pol.Key.Name)
+					normalPols = append(normalPols, pol.Key.Name)
 				}
 			}
-			if len(trackedPols) > 0 {
-				trackedTiers = append(trackedTiers, &proto.TierInfo{
+			if len(normalPols) > 0 {
+				normalTiers = append(normalTiers, &proto.TierInfo{
 					Name:     ti.Name,
-					Policies: trackedPols,
+					Policies: normalPols,
 				})
 			}
 			if len(untrackedPols) > 0 {
 				untrackedTiers = append(untrackedTiers, &proto.TierInfo{
 					Name:     ti.Name,
 					Policies: untrackedPols,
+				})
+			}
+			if len(preDNATPols) > 0 {
+				preDNATTiers = append(preDNATTiers, &proto.TierInfo{
+					Name:     ti.Name,
+					Policies: preDNATPols,
 				})
 			}
 		}

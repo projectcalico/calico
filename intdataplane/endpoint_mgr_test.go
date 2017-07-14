@@ -355,6 +355,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 		var (
 			epMgr           *endpointManager
 			rawTable        *mockTable
+			mangleTable     *mockTable
 			filterTable     *mockTable
 			rrConfigNormal  rules.Config
 			eth0Addrs       set.Set
@@ -389,6 +390,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 		JustBeforeEach(func() {
 			renderer := rules.NewRenderer(rrConfigNormal)
 			rawTable = newMockTable("raw")
+			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")
 			routeTable = &mockRouteTable{
 				currentRoutes: map[string][]routetable.Target{},
@@ -397,6 +399,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
+				mangleTable,
 				filterTable,
 				renderer,
 				routeTable,

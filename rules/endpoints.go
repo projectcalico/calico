@@ -40,7 +40,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 		WorkloadFromEndpointPfx,
 		"", // No fail-safe chains for workloads.
 		"", // No fail-safe chains for workloads.
-		chainTypeTracked,
+		chainTypeNormal,
 		adminUp,
 	)
 }
@@ -63,7 +63,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 		HostFromEndpointPfx,
 		ChainFailsafeOut,
 		ChainFailsafeIn,
-		chainTypeTracked,
+		chainTypeNormal,
 		true, // Host endpoints are always admin up.
 	)
 }
@@ -90,11 +90,34 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	)
 }
 
+func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
+	ifaceName string,
+	preDNATPolicyNames []string,
+) []*Chain {
+	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
+	return r.endpointToIptablesChains(
+		preDNATPolicyNames,
+		nil, // We don't render profiles into the raw chain.
+		ifaceName,
+		PolicyOutboundPfx,
+		PolicyInboundPfx,
+		ProfileOutboundPfx,
+		ProfileInboundPfx,
+		HostToEndpointPfx,
+		HostFromEndpointPfx,
+		ChainFailsafeOut,
+		ChainFailsafeIn,
+		chainTypePreDNAT, // Render "pre-DNAT" version of chain for the nat table.
+		true,             // Host endpoints are always admin up.
+	)
+}
+
 type endpointChainType int
 
 const (
-	chainTypeTracked endpointChainType = iota
+	chainTypeNormal endpointChainType = iota
 	chainTypeUntracked
+	chainTypePreDNAT
 )
 
 func (r *DefaultRuleRenderer) endpointToIptablesChains(
@@ -140,7 +163,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		return []*Chain{&toEndpointChain, &fromEndpointChain}
 	}
 
-	if chainType == chainTypeTracked {
+	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
 		toRules = r.appendConntrackRules(toRules)
@@ -243,12 +266,12 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 			})
 		}
 
-		if chainType == chainTypeTracked {
+		if chainType == chainTypeNormal {
 			// When rendering normal rules, if no policy marked the packet as "pass", drop the
 			// packet.
 			//
-			// For untracked rules, we don't do that because there may be tracked rules
-			// still to be applied to the packet in the filter table.
+			// For untracked and pre-DNAT rules, we don't do that because there may be
+			// normal rules still to be applied to the packet in the filter table.
 			toRules = append(toRules, Rule{
 				Match:   Match().MarkClear(r.IptablesMarkPass),
 				Action:  DropAction{},
@@ -262,7 +285,7 @@ func (r *DefaultRuleRenderer) endpointToIptablesChains(
 		}
 	}
 
-	if chainType == chainTypeTracked {
+	if chainType == chainTypeNormal {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
 			toProfChainName := ProfileChainName(toProfilePrefix, &proto.ProfileID{Name: profileID})
