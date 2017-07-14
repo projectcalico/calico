@@ -80,6 +80,23 @@ var policySpec2AfterRead = api.PolicySpec{
 	DoNotTrack:   true,
 }
 
+var policySpec3 = api.PolicySpec{
+	Order:        &order2,
+	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
+	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
+	Selector:     "thing2 == 'value2'",
+	PreDNAT:      true,
+}
+
+// When reading back, the rules should have been updated to the newer format.
+var policySpec3AfterRead = api.PolicySpec{
+	Order:        &order2,
+	IngressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
+	EgressRules:  []api.Rule{testutils.EgressRule2AfterRead, testutils.EgressRule1AfterRead},
+	Selector:     "thing2 == 'value2'",
+	PreDNAT:      true,
+}
+
 var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2, func(config api.CalicoAPIConfig) {
 
 	DescribeTable("Policy e2e tests",
@@ -228,6 +245,16 @@ var _ = testutils.E2eDatastoreDescribe("Policy tests", testutils.DatastoreEtcdV2
 			api.PolicySpec{
 				Selector: "has(myLabel-8.9/88-._9)",
 			},
+			policySpec2AfterRead,
+		),
+
+		// Test 4: Two fully populated PolicySpecs, one untracked and one pre-DNAT.
+		Entry("Two fully populated PolicySpecs, one untracked and one pre-DNAT",
+			api.PolicyMetadata{Name: "policy-1/with.foo", Annotations: map[string]string{"key": "value"}},
+			api.PolicyMetadata{Name: "policy.1"},
+			policySpec3,
+			policySpec2,
+			policySpec3AfterRead,
 			policySpec2AfterRead,
 		),
 	)
