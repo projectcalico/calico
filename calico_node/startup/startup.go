@@ -205,17 +205,6 @@ func waitForConnection(c *client.Client) {
 func writeStartupEnv(nodeName string, ip, ip6 *net.IPNet) {
 	text := "export NODENAME=" + nodeName + "\n"
 
-	// TODO:  See https://github.com/projectcalico/calico-bgp-daemon/issues/18
-	// The following entries are required for go-bgp.  Once updated to use
-	// NODENAME and the node IP parameters, these entries can be removed.
-	text += "export HOSTNAME=" + nodeName + "\n"
-	if ip != nil {
-		text += "export IP=" + ip.IP.String() + "\n"
-	}
-	if ip6 != nil {
-		text += "export IP6=" + ip6.IP.String() + "\n"
-	}
-
 	// Write out the startup.env file to ensure required environments are
 	// set (which they might not otherwise be).
 	if err := ioutil.WriteFile("startup.env", []byte(text), 0666); err != nil {
