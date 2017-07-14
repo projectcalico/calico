@@ -30,16 +30,19 @@ import (
 var _ = Describe("Table with an empty dataplane", func() {
 	var dataplane *mockDataplane
 	var table *Table
+	var iptLock *mockMutex
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
 			"INPUT":   {},
 			"OUTPUT":  {},
 		})
+		iptLock = &mockMutex{}
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
+			iptLock,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
@@ -56,6 +59,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(dataplane.CmdNames).To(Equal([]string{
 			"iptables-save",
 		}))
+		Expect(iptLock.Held).To(BeFalse())
+		Expect(iptLock.WasTaken).To(BeFalse())
 	})
 
 	It("should have a refresh scheduled at start-of-day", func() {
@@ -91,6 +96,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				"filter",
 				4,
 				rules.RuleHashPrefix,
+				&mockMutex{},
 				TableOptions{
 					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 					NewCmdOverride:        dataplane.newCmd,
@@ -107,6 +113,12 @@ var _ = Describe("Table with an empty dataplane", func() {
 				{Action: DropAction{}},
 			})
 			table.Apply()
+		})
+		It("should acquire the iptables lock", func() {
+			Expect(iptLock.WasTaken).To(BeTrue())
+		})
+		It("should release the iptables lock", func() {
+			Expect(iptLock.Held).To(BeFalse())
 		})
 		It("should be in the dataplane", func() {
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
@@ -425,6 +437,7 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
+			&mockMutex{},
 			options,
 		)
 		table.SetRuleInsertions("FORWARD", []Rule{
@@ -613,6 +626,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 			"filter",
 			4,
 			rules.RuleHashPrefix,
+			&mockMutex{},
 			TableOptions{
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: "sneaky-rule",
@@ -973,15 +987,18 @@ func describeDirtyDataplaneTests(appendMode bool) {
 var _ = Describe("Table with inserts and a non-Calico chain", func() {
 	var dataplane *mockDataplane
 	var table *Table
+	var iptLock *mockMutex
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD":    {},
 			"non-calico": {"-m comment \"foo\""},
 		})
+		iptLock = &mockMutex{}
 		table = NewTable(
 			"filter",
 			6,
 			rules.RuleHashPrefix,
+			iptLock,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
@@ -1008,6 +1025,8 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 				"FORWARD": {"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP"},
 			}
 			dataplane.ResetCmds()
+			iptLock.WasTaken = false
+			iptLock.Held = false
 			table.Apply()
 		})
 
@@ -1019,5 +1038,28 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 		It("should make no changes to the dataplane", func() {
 			Expect(dataplane.CmdNames).To(BeEmpty())
 		})
+		It("should not take the lock", func() {
+			Expect(iptLock.WasTaken).To(BeFalse())
+		})
 	})
 })
+
+type mockMutex struct {
+	Held     bool
+	WasTaken bool
+}
+
+func (m *mockMutex) Lock() {
+	if m.Held {
+		Fail("Mutex already held")
+	}
+	m.Held = true
+	m.WasTaken = true
+}
+
+func (m *mockMutex) Unlock() {
+	if !m.Held {
+		Fail("Mutex not held")
+	}
+	m.Held = false
+}

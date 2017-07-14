@@ -140,6 +140,20 @@ func (p *SecondsParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+type MillisParam struct {
+	Metadata
+}
+
+func (p *MillisParam) Parse(raw string) (result interface{}, err error) {
+	millis, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		err = p.parseFailed(raw, "invalid float")
+		return
+	}
+	result = time.Duration(millis * float64(time.Millisecond))
+	return
+}
+
 type RegexpParam struct {
 	Metadata
 	Regexp *regexp.Regexp

@@ -78,7 +78,7 @@ help:
 .SUFFIXES:
 
 all: deb rpm calico/felix
-test: ut
+test: ut fv
 
 GO_BUILD_CONTAINER?=calico/go-build:v0.6
 
@@ -292,6 +292,12 @@ bin/calico-felix: $(FELIX_GO_FILES) vendor/.up-to-date
                ( ldd bin/calico-felix 2>&1 | grep -q "Not a valid dynamic program" || \
 	             ( echo "Error: bin/calico-felix was not statically linked"; false ) )'
 
+bin/iptables-locker: $(FELIX_GO_FILES) vendor/.up-to-date
+	@echo Building iptables-locker...
+	mkdir -p bin
+	$(DOCKER_GO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "github.com/projectcalico/felix/fv/iptables-locker"'
+
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_GO_BUILD) \
@@ -323,6 +329,16 @@ check-licenses/dependency-licenses.txt: vendor/.up-to-date
 ut combined.coverprofile: vendor/.up-to-date $(FELIX_GO_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
+
+fv/fv.test: vendor/.up-to-date $(FELIX_GO_FILES)
+	$(DOCKER_GO_BUILD) go test ./fv -c --tags fvtests -o fv/fv.test
+
+.PHONY: fv
+fv: calico/felix bin/iptables-locker fv/fv.test
+	@echo Running Go FVs.
+	# For now, we pre-build the binary so that we can run it outside a container and allow it
+	# to interact with docker.
+	cd fv && ./fv.test
 
 bin/check-licenses: $(FELIX_GO_FILES)
 	$(DOCKER_GO_BUILD) go build -v -i -o $@ "github.com/projectcalico/felix/check-licenses"
@@ -403,6 +419,7 @@ clean:
 	       docker-image/bin \
 	       dist \
 	       build \
+	       fv/fv.test \
 	       $(GENERATED_GO_FILES) \
 	       go/docs/calc.pdf \
 	       .glide \

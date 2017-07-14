@@ -110,7 +110,24 @@ Ginkgo will re-run tests as files are modified and saved.
 
 After building the docker image (see above), you can run Felix and log to screen 
 with, for example:
-`docker run --privileged --net=host -e FELIX_LOGSEVERITYSCREEN=INFO calico/felix`
+
+```
+docker run --privileged \
+           --net=host \
+           -v /run:/run \
+           -e FELIX_LOGSEVERITYSCREEN=INFO \
+           calico/felix
+```
+
+Notes:
+
+- `--privileged` is required because Felix needs to execute iptables and other privileged commands.
+- `--net=host` is required so that Felix can manipulate the routes and iptables tables in the host
+  namespace (outside its container).
+- `-v /run:/run` is required so that Felix shares the global iptables file lock with other
+  processes; this allows Felix and other daemons that manipulate iptables to avoid clobbering each
+  other's updates.
+- `-e FELIX_LOGSEVERITYSCREEN=INFO` tells Felix to log at info level to stderr.
 
 ### Debs and RPMs
 

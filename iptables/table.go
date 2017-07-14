@@ -28,6 +28,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"sync"
+
 	"github.com/projectcalico/felix/set"
 )
 
@@ -226,6 +228,8 @@ type Table struct {
 	postWriteInterval        time.Duration
 	refreshInterval          time.Duration
 
+	writeLock sync.Locker
+
 	logCxt *log.Entry
 
 	gaugeNumChains        prometheus.Gauge
@@ -258,6 +262,7 @@ func NewTable(
 	name string,
 	ipVersion uint8,
 	hashPrefix string,
+	iptablesWriteLock sync.Locker,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -346,6 +351,8 @@ func NewTable(
 		postWriteInterval:        options.PostWriteInterval,
 
 		refreshInterval: options.RefreshInterval,
+
+		writeLock: iptablesWriteLock,
 
 		newCmd:    newCmd,
 		timeSleep: sleep,
@@ -959,7 +966,9 @@ func (t *Table) applyUpdates() error {
 		cmd.SetStdout(&outputBuf)
 		cmd.SetStderr(&errBuf)
 		countNumRestoreCalls.Inc()
+		t.writeLock.Lock()
 		err := cmd.Run()
+		t.writeLock.Unlock()
 		if err != nil {
 			t.logCxt.WithFields(log.Fields{
 				"output":      outputBuf.String(),

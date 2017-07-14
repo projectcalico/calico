@@ -22,8 +22,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/health"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/felix/health"
 )
 
 var _ = Describe("calculation graph scale test", func() {

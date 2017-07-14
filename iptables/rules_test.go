@@ -17,6 +17,8 @@ package iptables
 import (
 	"bytes"
 
+	"sync"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -70,6 +72,7 @@ var _ = Describe("Hash extraction tests", func() {
 			"filter",
 			4,
 			"cali:",
+			&sync.Mutex{},
 			TableOptions{
 				HistoricChainPrefixes:    []string{"felix-", "cali"},
 				ExtraCleanupRegexPattern: "an-old-rule",

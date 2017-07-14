@@ -109,8 +109,14 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
-	IptablesRefreshInterval            time.Duration `config:"seconds;10"`
-	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
+	RouteRefreshInterval               time.Duration `config:"seconds;90"`
+	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
+	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;30"`
+	IptablesLockFilePath               string        `config:"file;/run/xtables.lock"`
+	IptablesLockTimeoutSecs            time.Duration `config:"seconds;30"`
+	IptablesLockProbeIntervalMillis    time.Duration `config:"millis;50"`
+	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
+	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
@@ -137,8 +143,6 @@ type Config struct {
 
 	EndpointReportingEnabled   bool          `config:"bool;false"`
 	EndpointReportingDelaySecs time.Duration `config:"seconds;1"`
-
-	MaxIpsetSize int `config:"int;1048576;non-zero"`
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xff000000;non-zero,die-on-fail"`
 
@@ -459,6 +463,8 @@ func loadParams() {
 			param = &FloatParam{}
 		case "seconds":
 			param = &SecondsParam{}
+		case "millis":
+			param = &MillisParam{}
 		case "iface-list":
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}
