@@ -48,7 +48,7 @@ spec:
 #### Spec
 
 | Field      | Description                                                                                                                                           | Accepted Values | Schema                | Default |
-|------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------+---------|
+|------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------|-----------------------|---------|
 | order      | (Optional) Indicates priority of this policy, with lower order taking precedence.  No value indicates highest order (lowest precedence)               |                 | float                 |         |
 | selector   | Selects the endpoints to which this policy applies.                                                                                                   |                 | [selector](#selector) | all()   |
 | ingress    | Ordered list of ingress rules applied by policy.                                                                                                      |                 | List of [Rule](#rule) |         |
