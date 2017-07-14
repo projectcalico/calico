@@ -15,7 +15,8 @@ Calico can run on any Kubernetes cluster which meets the following criteria.
 - The kube-proxy must be started without the `--masquerade-all` flag, which conflicts with Calico policy.
 - The Kubernetes NetworkPolicy API requires at least Kubernetes version v1.3.0.
 - When RBAC is enabled, the proper accounts, roles, and bindings must be defined
-  and utilized by the Calico components.
+  and utilized by the Calico components.  See the cluster roles and bindings used
+  in the [hosted](hosted#rbac) approach for an example.
 
 ## [Calico Hosted Install](hosted)
 
