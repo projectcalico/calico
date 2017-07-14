@@ -7,7 +7,7 @@ running on Kubernetes.  It then configures network policy on each service.
 ## Pre-requisites
 
 To create a Kubernetes cluster which supports the Kubernetes network policy API, follow
-one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
+one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).
 
 ## Running the stars example
 
@@ -42,16 +42,7 @@ represented by a single node in the graph.
 
 ### 2) Enable isolation
 
-The following will prevent all access to the frontend, backend, and client Services.
-
-#### When using the etcd datastore
-
-```shell
-kubectl annotate ns stars "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
-kubectl annotate ns client "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
-```
-
-#### When using the Kubernetes API datastore
+Running following commands will prevent all access to the frontend, backend, and client Services.
 
 ```shell
 kubectl create -n stars -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml

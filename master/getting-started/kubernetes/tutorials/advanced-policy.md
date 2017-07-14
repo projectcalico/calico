@@ -29,10 +29,18 @@ We'll use a new namespace for this guide.  Run the following command to create i
 kubectl create ns advanced-policy-demo
 ```
 
-And then enable isolation on the Namespace.
+And then enable isolation on the Namespace using a [default policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-policies).
 
 ```
-kubectl annotate ns advanced-policy-demo "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
+kubectl create -f - <<EOF
+kind: NetworkPolicy
+apiVersion: extensions/v1beta1
+metadata:
+  name: default-deny
+  namespace: policy-demo
+spec:
+  podSelector:
+EOF
 ```
 
 #### Run an nginx Service
