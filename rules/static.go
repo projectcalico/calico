@@ -474,10 +474,11 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	)
 
 	// Set a mark on the packet if it's from a workload interface.
+	markFromWorkload := r.IptablesMarkScratch0
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
 		rules = append(rules, Rule{
 			Match:  Match().InInterface(ifacePrefix + "+"),
-			Action: SetMarkAction{Mark: r.IptablesMarkFromWorkload},
+			Action: SetMarkAction{Mark: markFromWorkload},
 		})
 	}
 
@@ -490,14 +491,14 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		// In addition, the IPv4 check is complicated by the fact that we have special
 		// case handling for DHCP to the host, which would require an exclusion.
 		rules = append(rules, Rule{
-			Match:  Match().MarkSet(r.IptablesMarkFromWorkload).RPFCheckFailed(),
+			Match:  Match().MarkSet(markFromWorkload).RPFCheckFailed(),
 			Action: DropAction{},
 		})
 	}
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
-		Rule{Match: Match().MarkClear(r.IptablesMarkFromWorkload),
+		Rule{Match: Match().MarkClear(markFromWorkload),
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 		// Then, if the packet was marked as allowed, accept it.  Packets also return here
 		// without the mark bit set if the interface wasn't one that we're policing.  We
@@ -513,9 +514,10 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 }
 
 func (r *DefaultRuleRenderer) allCalicoMarkBits() uint32 {
-	return r.IptablesMarkFromWorkload |
-		r.IptablesMarkAccept |
-		r.IptablesMarkPass
+	return r.IptablesMarkAccept |
+		r.IptablesMarkPass |
+		r.IptablesMarkScratch0 |
+		r.IptablesMarkScratch1
 }
 
 func (r *DefaultRuleRenderer) StaticRawOutputChain() *Chain {

@@ -42,9 +42,9 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	Protocol: &proto123,
 
-	SrcNet:   mustParseCalicoIPNet("10.0.0.0/8"),
+	SrcNets:  []*net.IPNet{mustParseCalicoIPNet("10.0.0.0/8")},
 	SrcPorts: []numorstring.Port{numorstring.SinglePort(10)},
-	DstNet:   mustParseCalicoIPNet("11.0.0.0/16"),
+	DstNets:  []*net.IPNet{mustParseCalicoIPNet("11.0.0.0/16")},
 	DstPorts: []numorstring.Port{portFromRange(123, 456)},
 
 	ICMPType: &icmpType10,
@@ -55,9 +55,9 @@ var fullyLoadedParsedRule = ParsedRule{
 
 	NotProtocol: &protoTCP,
 
-	NotSrcNet:   mustParseCalicoIPNet("12.0.0.0/8"),
+	NotSrcNets:  []*net.IPNet{mustParseCalicoIPNet("12.0.0.0/8")},
 	NotSrcPorts: []numorstring.Port{numorstring.SinglePort(11)},
-	NotDstNet:   mustParseCalicoIPNet("13.0.0.0/16"),
+	NotDstNets:  []*net.IPNet{mustParseCalicoIPNet("13.0.0.0/16")},
 	NotDstPorts: []numorstring.Port{portFromRange(678, 910)},
 
 	NotICMPType: &icmpType11,
@@ -75,9 +75,9 @@ var fullyLoadedProtoRule = proto.Rule{
 		NumberOrName: &proto.Protocol_Number{123},
 	},
 
-	SrcNet:   "10.0.0.0/8",
+	SrcNet:   []string{"10.0.0.0/8"},
 	SrcPorts: []*proto.PortRange{{First: 10, Last: 10}},
-	DstNet:   "11.0.0.0/16",
+	DstNet:   []string{"11.0.0.0/16"},
 	DstPorts: []*proto.PortRange{{First: 123, Last: 456}},
 
 	Icmp: &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{
@@ -92,9 +92,9 @@ var fullyLoadedProtoRule = proto.Rule{
 		NumberOrName: &proto.Protocol_Name{"tcp"},
 	},
 
-	NotSrcNet:   "12.0.0.0/8",
+	NotSrcNet:   []string{"12.0.0.0/8"},
 	NotSrcPorts: []*proto.PortRange{{First: 11, Last: 11}},
-	NotDstNet:   "13.0.0.0/16",
+	NotDstNet:   []string{"13.0.0.0/16"},
 	NotDstPorts: []*proto.PortRange{{First: 678, Last: 910}},
 
 	NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{

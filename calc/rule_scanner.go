@@ -14,16 +14,17 @@
 package calc
 
 import (
-	log "github.com/Sirupsen/logrus"
-
 	"fmt"
 
-	"github.com/projectcalico/felix/multidict"
-	"github.com/projectcalico/felix/set"
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+
+	"github.com/projectcalico/felix/multidict"
+	"github.com/projectcalico/felix/set"
 )
 
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for tags and
@@ -193,9 +194,9 @@ type ParsedRule struct {
 
 	Protocol *numorstring.Protocol
 
-	SrcNet      *net.IPNet
+	SrcNets     []*net.IPNet
 	SrcPorts    []numorstring.Port
-	DstNet      *net.IPNet
+	DstNets     []*net.IPNet
 	DstPorts    []numorstring.Port
 	ICMPType    *int
 	ICMPCode    *int
@@ -203,9 +204,9 @@ type ParsedRule struct {
 	DstIPSetIDs []string
 
 	NotProtocol    *numorstring.Protocol
-	NotSrcNet      *net.IPNet
+	NotSrcNets     []*net.IPNet
 	NotSrcPorts    []numorstring.Port
-	NotDstNet      *net.IPNet
+	NotDstNets     []*net.IPNet
 	NotDstPorts    []numorstring.Port
 	NotICMPType    *int
 	NotICMPCode    *int
@@ -223,9 +224,9 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 
 		Protocol: rule.Protocol,
 
-		SrcNet:      rule.SrcNet,
+		SrcNets:     rule.AllSrcNets(),
 		SrcPorts:    rule.SrcPorts,
-		DstNet:      rule.DstNet,
+		DstNets:     rule.AllDstNets(),
 		DstPorts:    rule.DstPorts,
 		ICMPType:    rule.ICMPType,
 		ICMPCode:    rule.ICMPCode,
@@ -233,9 +234,9 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allTagOrSels []
 		DstIPSetIDs: selectors(dst).ToUIDs(),
 
 		NotProtocol:    rule.NotProtocol,
-		NotSrcNet:      rule.NotSrcNet,
+		NotSrcNets:     rule.AllNotSrcNets(),
 		NotSrcPorts:    rule.NotSrcPorts,
-		NotDstNet:      rule.NotDstNet,
+		NotDstNets:     rule.AllNotDstNets(),
 		NotDstPorts:    rule.NotDstPorts,
 		NotICMPType:    rule.NotICMPType,
 		NotICMPCode:    rule.NotICMPCode,

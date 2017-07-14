@@ -19,6 +19,9 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 
+	"reflect"
+	"strings"
+
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -180,9 +183,10 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept       uint32
-	IptablesMarkPass         uint32
-	IptablesMarkFromWorkload uint32
+	IptablesMarkAccept   uint32
+	IptablesMarkPass     uint32
+	IptablesMarkScratch0 uint32
+	IptablesMarkScratch1 uint32
 
 	OpenStackMetadataIP          net.IP
 	OpenStackMetadataPort        uint16
@@ -201,8 +205,38 @@ type Config struct {
 	DisableConntrackInvalid bool
 }
 
+func (c *Config) validate() {
+	// Scan for unset iptables mark bits.  We use reflection so that we have a hope of catching
+	// newly-added fields.
+	myValue := reflect.ValueOf(c).Elem()
+	myType := myValue.Type()
+	found := 0
+	usedBits := uint32(0)
+	for i := 0; i < myValue.NumField(); i++ {
+		fieldName := myType.Field(i).Name
+		if strings.HasPrefix(fieldName, "IptablesMark") {
+			bits := myValue.Field(i).Interface().(uint32)
+			if bits == 0 {
+				log.WithField("field", fieldName).Panic(
+					"IptablesMarkXXX field not set.")
+			}
+			if usedBits&bits > 0 {
+				log.WithField("field", fieldName).Panic(
+					"IptablesMarkXXX field overlapped with another's bits.")
+			}
+			usedBits |= bits
+			found++
+		}
+	}
+	if found == 0 {
+		// Check the reflection found something we were expecting.
+		log.Panic("Didn't find any IptablesMarkXXX fields.")
+	}
+}
+
 func NewRenderer(config Config) RuleRenderer {
 	log.WithField("config", config).Info("Creating rule renderer.")
+	config.validate()
 	// Convert configured actions to rule slices.
 	// First, what should we do with packets that come from workloads to the host itself.
 	var inputAcceptActions []iptables.Action

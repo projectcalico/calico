@@ -39,7 +39,7 @@ var ruleTestData = []TableEntry{
 		"-p 8"),
 
 	Entry("Source net", 4,
-		proto.Rule{SrcNet: "10.0.0.0/16"},
+		proto.Rule{SrcNet: []string{"10.0.0.0/16"}},
 		"--source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
 		proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
@@ -71,7 +71,7 @@ var ruleTestData = []TableEntry{
 		"-m icmp6 --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{DstNet: "10.0.0.0/16"},
+		proto.Rule{DstNet: []string{"10.0.0.0/16"}},
 		"--destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
@@ -100,7 +100,7 @@ var ruleTestData = []TableEntry{
 		"! -p 8"),
 
 	Entry("Source net", 4,
-		proto.Rule{NotSrcNet: "10.0.0.0/16"},
+		proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
 		"! --source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
 		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
@@ -147,7 +147,7 @@ var ruleTestData = []TableEntry{
 		"-m icmp6 ! --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{NotDstNet: "10.0.0.0/16"},
+		proto.Rule{NotDstNet: []string{"10.0.0.0/16"}},
 		"! --destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
 		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
@@ -184,13 +184,15 @@ var ruleTestData = []TableEntry{
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	var rrConfigNormal = Config{
-		IPIPEnabled:        true,
-		IPIPTunnelAddress:  nil,
-		IPSetConfigV4:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:      ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept: 0x8,
-		IptablesMarkPass:   0x10,
-		IptablesLogPrefix:  "calico-packet",
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x80,
+		IptablesMarkPass:     0x100,
+		IptablesMarkScratch0: 0x200,
+		IptablesMarkScratch1: 0x400,
+		IptablesLogPrefix:    "calico-packet",
 	}
 
 	DescribeTable(
@@ -202,9 +204,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			// mark and returns.
 			Expect(len(rules)).To(Equal(2))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x8}))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
 			Expect(rules[1]).To(Equal(iptables.Rule{
-				Match:  iptables.Match().MarkSet(0x8),
+				Match:  iptables.Match().MarkSet(0x80),
 				Action: iptables.ReturnAction{},
 			}))
 
@@ -228,9 +230,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				// that reads the mark and returns.
 				Expect(len(rules)).To(Equal(2))
 				Expect(rules[0].Match.Render()).To(Equal(expMatch))
-				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x10}))
+				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
 				Expect(rules[1]).To(Equal(iptables.Rule{
-					Match:  iptables.Match().MarkSet(0x10),
+					Match:  iptables.Match().MarkSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
 			}
@@ -285,6 +287,129 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		ruleTestData...,
 	)
 
+	const (
+		clearBothMarksRule      = "-A test --jump MARK --set-mark 0x0/0x600"
+		preSetAllBlocksMarkRule = "-A test --jump MARK --set-mark 0x200/0x600"
+		allowIfAllMarkRule      = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		returnRule              = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
+	)
+	DescribeTable(
+		"CIDR split tests",
+		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
+			renderer := NewRenderer(rrConfigNormal)
+			pRule := proto.Rule{
+				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
+				NotSrcNet: []string{"11.0.0.0/24", "11.0.1.0/24"}[:numNotSrc],
+				DstNet:    []string{"12.0.0.0/24", "12.0.1.0/24"}[:numDst],
+				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
+				Action:    "allow",
+			}
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := ir.RenderAppend("test", "")
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+		// Simple overflow of each match criteria...
+
+		Entry("2 src, 0 !src, 0 dst, 0 !dst", 2, 0, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 2 !src, 0 dst, 0 !dst", 0, 2, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 0 !dst", 0, 0, 2, 0, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 0 dst, 2 !dst", 0, 0, 0, 2, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// Overflow of source even though each type would fit.
+		Entry("1 src, 1 !src, 0 dst, 0 !dst", 1, 1, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 10.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+		Entry("2 src, 1 !src, 0 dst, 0 !dst", 2, 1, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// Ditto for dest.
+		Entry("0 src, 0 !src, 1 dst, 1 !dst", 0, 0, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 1 !dst", 0, 0, 2, 1, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// One of everything; only !src and !dst should overflow
+		Entry("1 src, 1 !src, 1 dst, 1 !dst", 1, 1, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 10.0.0.0/24 --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+
+		// Two of everything; everything overflows.
+		Entry("2 src, 2 !src, 2 dst, 2 !dst", 2, 2, 2, 2, []string{
+			// Both marks start as 0.
+			clearBothMarksRule,
+
+			// Source match directly sets the AllBlocks bit.
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+
+			// Then the Dest match sets a scratch bit.
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x400/0x400",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x400/0x400",
+			// If the scratch bit isn't set then we clear the AllBlocks bit.
+			"-A test -m mark --mark 0/0x400 --jump MARK --set-mark 0/0x200",
+
+			// The negated matches clear the AllBlocks bit directly if they match.
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
+
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+	)
+
 	var renderer *DefaultRuleRenderer
 	BeforeEach(func() {
 		renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)
@@ -296,42 +421,42 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "10.0.0.1"}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: "feed::beef"}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4)
 		Expect(rules).To(BeEmpty())
 	})
 
@@ -368,30 +493,30 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[:7]).
 					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x8},
+				Action: iptables.SetMarkAction{Mark: 0x80},
 			},
-			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[:7]).
 					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x8},
+				Action: iptables.SetMarkAction{Mark: 0x80},
 			},
-			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[7:8]).
 					DestPortRanges(dstPorts[:7]),
-				Action: iptables.SetMarkAction{Mark: 0x8},
+				Action: iptables.SetMarkAction{Mark: 0x80},
 			},
-			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
 			{
 				Match: iptables.Match().Protocol("tcp").
 					SourcePortRanges(srcPorts[7:8]).
 					DestPortRanges(dstPorts[7:8]),
-				Action: iptables.SetMarkAction{Mark: 0x8},
+				Action: iptables.SetMarkAction{Mark: 0x80},
 			},
-			{Match: iptables.Match().MarkSet(0x8), Action: iptables.ReturnAction{}},
+			{Match: iptables.Match().MarkSet(0x80), Action: iptables.ReturnAction{}},
 		}))
 	})
 })
