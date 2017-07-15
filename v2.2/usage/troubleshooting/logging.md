@@ -39,15 +39,15 @@ Bird and Bird6 are used for distributing IPv4 and IPv6 routes between Calico
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
 of the calico/node logging directory.
 
-Use the `calicoctl config loglevel` command on any host to change the
+Use the `calicoctl config set loglevel` command on any host to change the
 log level across all Calico nodes, _or_ use the same command with the `--node`
 option to run the command for that specific node.  This command affects the
 logging level for both Bird/Bird6 and Felix.
 
 Valid log levels are:  none, debug, info, warning, error, critical.  For example:
 
-        calicoctl config logLevel error
-        calicoctl config logLevel debug --node=Calico-Node-1
+        calicoctl config set logLevel error
+        calicoctl config set logLevel debug --node=Calico-Node-1
 
 ### Felix
 
@@ -56,15 +56,15 @@ endpoints.  Felix is responsible for the programming of iptables rules on the
 host.  The logs are output in the `felix` sub-directory of the calico/node
 logging directory.
 
-Use the `calicoctl config loglevel` command on any host to change the
+Use the `calicoctl config set loglevel` command on any host to change the
 log level across all Calico nodes, _or_ use the same command with the `--node`
 option to run the command for that specific node.  This command affects the
 logging level for both Bird/Bird6 and Felix.
 
 Valid log levels are:  none, debug, info, warning, error, critical.  For example:
 
-        calicoctl config logLevel none
-        calicoctl config logLevel error --node=Calico-Node-1
+        calicoctl config set logLevel none
+        calicoctl config set logLevel error --node=Calico-Node-1
 
 ### confd
 
