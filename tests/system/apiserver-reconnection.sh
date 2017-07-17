@@ -32,6 +32,9 @@ docker run --detach --name=calico-policy-controller \
        calico/kube-policy-controller
 sleep 2
 
+# Create a trap which emits policy controller logs on failure.
+trap "echo 'Test failed - printing logs:'; docker logs calico-policy-controller" ERR
+
 # Create a namespace.
 NS_NAME=chocolate
 create_namespace ${NS_NAME}
