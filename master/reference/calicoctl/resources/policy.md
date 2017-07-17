@@ -42,6 +42,7 @@ spec:
 | Field | Description  | Accepted Values   | Schema |
 |-------|--------------|-------------------|--------|
 | name | The name of the policy. |         | string |
+| annotations | Opaque key/value information to be used by clients. | | map
 
 
 #### Spec
