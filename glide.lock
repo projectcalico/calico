@@ -1,5 +1,5 @@
-hash: 0f2aa1d38b547e5ea14c56a699af14b5ee3e825d1a4c7ec8c3d1a0316f64abbc
-updated: 2017-07-13T10:44:47.275820101Z
+hash: e4f077ed2b4b9f98f45c13b056763df1b4a3f5b6888b562ae2c0e0f7ad643bdb
+updated: 2017-07-17T12:31:42.378152377Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -118,7 +118,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 334b8f472b3af5d541c5642701c1e29e2126f486
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
@@ -140,7 +140,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 02e76aa020564ee8a5d79339e10a6b29aba64513
+  version: 565f839a3bf08650d787337a562e4c0aa3d2d9ce
   subpackages:
   - lib
   - lib/api
@@ -168,7 +168,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 1259fa7110789a4f5b08da8406f17a3f2dbd06a2
+  version: 4e38222620373879525868b8ca37fe60fb0f3f2a
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -220,20 +220,34 @@ imports:
   version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
+  - html
+  - html/atom
+  - html/charset
   - http2
   - http2/hpack
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: abf9c25f54453410d0c6668e519582a9e1115027
+  version: 4cd6d1a821c7175768725b55ca82f14683a29ea4
   subpackages:
   - unix
 - name: golang.org/x/text
   version: 19e51611da83d6be54ddafce4a4af510cb3e9ea4
   subpackages:
   - cases
+  - encoding
+  - encoding/charmap
+  - encoding/htmlindex
+  - encoding/internal
+  - encoding/internal/identifier
+  - encoding/japanese
+  - encoding/korean
+  - encoding/simplifiedchinese
+  - encoding/traditionalchinese
+  - encoding/unicode
   - internal
   - internal/tag
+  - internal/utf8internal
   - language
   - runes
   - secure/bidirule
