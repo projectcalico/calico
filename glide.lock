@@ -1,12 +1,12 @@
-hash: d5a5e99f1da2f3be24e7ba203a0a65d471f3faaaa146ce336e19cc6e243c2118
-updated: 2017-07-03T16:55:32.290366582Z
+hash: 9350592c048d75bd62c29eeab377284ccb241452b882efc544f635dd490f6e74
+updated: 2017-07-17T12:11:01.484302382Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
-  version: 61fc123e7a8b14a0a258aa3f5c4159861b1ec2e7
+  version: ae23b0ef2f1f6708f9a34d287a28ab02767c2a16
   subpackages:
   - client
   - pkg/pathutil
@@ -57,7 +57,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 6a1fa9404c0aebf36c879bc50152edcc953910d2
+  version: 0a4f71a498b7c4812f64969510bcb4eca251e33a
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -114,7 +114,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3cfe5e8e5098611579da4d1cbc7457b8035c176e
+  version: 565f839a3bf08650d787337a562e4c0aa3d2d9ce
   subpackages:
   - lib
   - lib/api
@@ -194,7 +194,7 @@ imports:
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: 0e0164865330d5cf1c00247be08330bf96e2f87c
+  version: 4cd6d1a821c7175768725b55ca82f14683a29ea4
   subpackages:
   - unix
 - name: golang.org/x/text
