@@ -127,7 +127,7 @@ type EntityRule struct {
 
 	// NotNets is an optional field that restricts the rule to only apply to traffic that
 	// does not originate from (or terminate at) an IP address in any of the given subnets.
-	NotNets []*net.IPNet `json:"nets,omitempty" validate:"omitempty"`
+	NotNets []*net.IPNet `json:"notNets,omitempty" validate:"omitempty"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.
