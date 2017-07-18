@@ -726,9 +726,6 @@ master:
       url: ""
       download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.6.0/calico
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.6.0/calico-ipam
-     libcalico-go:
-      version: master
-      url: ""
      calico-bird:
       version: master
       url: ""
