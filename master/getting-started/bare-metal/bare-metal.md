@@ -433,10 +433,10 @@ tracking will automatically allow the return path.)
 ## Pre-DNAT policy
 
 Policy for host endpoints can be marked as 'preDNAT'.  This means that rules in
-that policy should be applied before any DNAT, which is useful if it is more
-convenient to specify Calico policy in terms of a packet's original destination
-IP address and port, than in terms of that packet's destination IP address and
-port after it has been DNAT'd.
+that policy should be applied before any DNAT (Destination Network Address
+Translation), which is useful if it is more convenient to specify Calico policy
+in terms of a packet's original destination IP address and port, than in terms
+of that packet's destination IP address and port after it has been DNAT'd.
 
 An example is securing access to Kubernetes NodePorts from outside the cluster.
 Traffic from outside is addressed to any node's IP address, on a known
