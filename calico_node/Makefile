@@ -48,8 +48,10 @@ NODE_CONTAINER_FILES=$(shell find $(NODE_CONTAINER_DIR)/filesystem -type f)
 NODE_CONTAINER_CREATED=$(NODE_CONTAINER_DIR)/.calico_node.created
 NODE_CONTAINER_BIN_DIR=$(NODE_CONTAINER_DIR)/filesystem/bin
 NODE_CONTAINER_BINARIES=startup allocate-ipip-addr calico-felix bird calico-bgp-daemon confd libnetwork-plugin
-FELIX_CONTAINER_NAME?=calico/felix:$(FELIX_VER)
-LIBNETWORK_PLUGIN_CONTAINER_NAME?=calico/libnetwork-plugin:$(LIBNETWORK_PLUGIN_VER)
+FELIX_REPO?=calico/felix
+FELIX_CONTAINER_NAME?=$(FELIX_REPO):$(FELIX_VER)
+LIBNETWORK_PLUGIN_REPO?=calico/libnetwork-plugin
+LIBNETWORK_PLUGIN_CONTAINER_NAME?=$(LIBNETWORK_PLUGIN_REPO):$(LIBNETWORK_PLUGIN_VER)
 CTL_CONTAINER_NAME?=calico/ctl:master
 
 STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
@@ -417,8 +419,8 @@ node-test-containerized: vendor run-etcd-host
 	--net=host \
 	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && make node-fv'
 
-
 # This depends on clean to ensure that dependent images get untagged and repulled
+# THIS JOB DELETES LOTS OF THINGS - DO NOT RUN IT ON YOUR LOCAL DEV MACHINE.
 .PHONY: semaphore
 semaphore:
 	# Clean up unwanted files to free disk space.
@@ -430,8 +432,8 @@ semaphore:
 	# Actually run the tests (refreshing the images as required), we only run a
 	# small subset of the tests for testing SSL support.  These tests are run
 	# using "latest" tagged images.
-	$(MAKE) $(NODE_CONTAINER_NAME) st
-	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
+	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
+	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
 
 release: clean
 	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
