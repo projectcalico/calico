@@ -450,3 +450,69 @@ not), it makes sense to express Calico policy to expose or secure particular
 Services in terms of the corresponding NodePorts.  But that is only possible if
 the Calico policy is applied before DNAT changes the NodePort to something
 else - and hence this kind of policy needs 'preDNAT' set to true.
+
+## When do host endpoint policies apply?
+
+As stated above, normal host endpoint policies apply to traffic that arrives on
+and/or is sent to a host interface, except if that traffic comes from or is
+destined for a workload on the same host.  The rules for applying untracked and
+pre-DNAT policies are different in some cases, so here we present all of those
+rules together, for all possible flows and all types of host endpoints policy.
+
+For packets that arrive on a host interface and are destined for a local
+workload - i.e. a locally-hosted pod, container or VM:
+
+- Normal policies do not apply - by design, because Calico enforces the
+  destination workload's ingress policy in that case.
+
+- Untracked policies do not apply - because there is no way to make them work
+  in both the forwards and reverse directions.
+
+  > **NOTE**
+  >
+  > To be precise, untracked policy for the incoming host interface may apply in
+  > the forwards direction, and if so it will have the effect of forwarding the
+  > packet to the workload without any connection tracking.  Then, in the reverse
+  > direction, there will be no conntrack state for the return packets to match,
+  > and there is no application of any outbound rules that may be defined by the
+  > untracked policy - so unless the workload's policy specifically allows the
+  > relevant source IP, the return packet will be dropped.  That is the same
+  > overall result as if there was no untracked policy at all, so in practice we
+  > can describe this as untracked policies not applying to this flow.
+
+- Pre-DNAT policies _do_ apply.
+
+For packets that arrive on a host interface and are destined for a local
+server in the host namespace:
+
+- Normal, untracked and pre-DNAT policies all apply.
+
+For packets that arrive on a host interface (A) and are forwarded out of the
+same or another host interface (B):
+
+- Normal policies apply, according to the inbound rules of the normal policies
+  that apply to interface A, and the outbound rules of the normal policies that
+  apply to interface B.  (The reverse direction is allowed by conntrack state.)
+
+- Untracked policies apply, for both host interfaces A and B, but only the
+  inbound rules that are defined in those policies.  The forwards direction is
+  governed by the inbound rules of untracked policies that apply to interface
+  A, and the reverse direction is governed by the inbound rules of untracked
+  policies that apply to interface B, so those rules should be defined
+  symmetrically.
+
+- Pre-DNAT policies apply, according to the inbound rules of the pre-DNAT
+  policies that apply to interface A.  (The reverse direction is allowed by
+  conntrack state.)
+
+For packets that are sent from a local server (in the host namespace) out of a
+host interface:
+
+- Normal policies apply, according to the outbound rules of the normal policies
+  that apply to that host interface.
+
+- Untracked and pre-DNAT policies do not apply.
+
+For packets that are sent from a local workload out of a host interface:
+
+- No host endpoint policies apply.
