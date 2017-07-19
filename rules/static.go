@@ -453,8 +453,10 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 }
 
 func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains []*Chain) {
-	chains = append(chains, r.StaticManglePreroutingChain(ipVersion))
-	return
+	return []*Chain{
+		r.failsafeInChain(),
+		r.StaticManglePreroutingChain(ipVersion),
+	}
 }
 
 func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chain {
