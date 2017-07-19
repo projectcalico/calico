@@ -95,6 +95,7 @@ type Policy struct {
 	Selector      string            `json:"selector" validate:"selector"`
 	DoNotTrack    bool              `json:"untracked,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
+	PreDNAT       bool              `json:"pre_dnat,omitempty"`
 }
 
 func (p Policy) String() string {
@@ -114,5 +115,6 @@ func (p Policy) String() string {
 	}
 	parts = append(parts, fmt.Sprintf("outbound:%v", strings.Join(outRules, ";")))
 	parts = append(parts, fmt.Sprintf("untracked:%v", p.DoNotTrack))
+	parts = append(parts, fmt.Sprintf("pre_dnat:%v", p.PreDNAT))
 	return strings.Join(parts, ",")
 }

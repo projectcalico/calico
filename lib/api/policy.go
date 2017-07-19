@@ -102,6 +102,9 @@ type PolicySpec struct {
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked.
 	DoNotTrack bool `json:"doNotTrack,omitempty"`
+
+	// PreDNAT indicates to apply the rules in this policy before any DNAT.
+	PreDNAT bool `json:"preDNAT,omitempty"`
 }
 
 // NewPolicy creates a new (zeroed) Policy struct with the TypeMetadata initialised to the current

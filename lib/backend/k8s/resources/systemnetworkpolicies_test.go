@@ -100,6 +100,41 @@ var _ = Describe("System Network Policies conversion methods", func() {
 		},
 	}
 
+	Context("with pre-DNAT flag", func() {
+
+		BeforeEach(func() {
+			kvp1.Value.(*model.Policy).DoNotTrack = false
+			kvp1.Value.(*model.Policy).PreDNAT = true
+			res1.Spec.DoNotTrack = false
+			res1.Spec.PreDNAT = true
+		})
+
+		AfterEach(func() {
+			kvp1.Value.(*model.Policy).DoNotTrack = true
+			kvp1.Value.(*model.Policy).PreDNAT = false
+			res1.Spec.DoNotTrack = true
+			res1.Spec.PreDNAT = false
+		})
+
+		It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
+			r, err := converter.FromKVPair(kvp1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
+			Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
+			Expect(r).To(BeAssignableToTypeOf(&thirdparty.SystemNetworkPolicy{}))
+			Expect(r.(*thirdparty.SystemNetworkPolicy).Spec).To(Equal(res1.Spec))
+		})
+
+		It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+			kvp, err := converter.ToKVPair(res1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvp.Key).To(Equal(kvp1.Key))
+			Expect(kvp.Revision).To(Equal(kvp1.Revision))
+			Expect(kvp.Value).To(BeAssignableToTypeOf(&model.Policy{}))
+			Expect(kvp.Value).To(Equal(kvp1.Value))
+		})
+	})
+
 	It("should convert an incomplete ListInterface to no Key", func() {
 		Expect(converter.ListInterfaceToKey(listIncomplete)).To(BeNil())
 	})
