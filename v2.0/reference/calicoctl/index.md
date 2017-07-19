@@ -14,7 +14,7 @@ by running in a container, this will not have the full functionality of the
 binary running directly on the host (notably the `calicoctl node ...` commands 
 do not work in a container).
 
-Follow the setup in the [Configuing calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) section.
+Follow the setup in the [Configuring calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) section.
 This section describes how to do the initial setup of calicoctl, configuring
 the connection information for your Calico datastore.
 
