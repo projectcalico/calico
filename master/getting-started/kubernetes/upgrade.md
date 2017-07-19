@@ -24,7 +24,8 @@ impact on Calico.
 > **NOTE**
 >
 > When upgrading Calico using the Kubernetes datastore driver from a version < v2.3.0
-> to a version >= v2.3.0, you should follow the steps for [upgrading to v1 NetworkPolicy semantics](#upgrading-to-v1-networkpolicy-semantics)
+> to a version >= v2.3.0, or when upgrading Calico using the etcd datastore from a version < v2.4.0
+> to a version >= v2.4.0, you should follow the steps for [upgrading to v1 NetworkPolicy semantics](#upgrading-to-v1-networkpolicy-semantics)
 
 ## Upgrading a Hosted Installation of Calico
 
@@ -175,12 +176,11 @@ standard [Deployment mechanism](http://kubernetes.io/docs/user-guide/deployments
 
 ## Upgrading to v1 NetworkPolicy semantics
 
-Calico v2.3.0 (when using the Kubernetes datastore driver) interprets the Kubernetes `NetworkPolicy` differently
-than previous releases, as specified in [upstream Kubernetes](https://github.com/kubernetes/kubernetes/pull/39164#issue-197243974).
+Calico v2.3.0 (when using the Kubernetes datastore driver) and Calico v2.4.0 (when using the etcd datastore driver)
+interpret the Kubernetes `NetworkPolicy` differently than previous releases, as specified
+in [upstream Kubernetes](https://github.com/kubernetes/kubernetes/pull/39164#issue-197243974).
 
-**If your Calico deployment uses the etcd datastore driver, there is no change in behavior in v2.3.0+ (this change is planned for a future release).**
-
-To maintain behavior when upgrading to Calico v2.3.0+, you should follow these steps prior to upgrading Calico to ensure your configured policy is
+To maintain behavior when upgrading, you should follow these steps prior to upgrading Calico to ensure your configured policy is
 enforced consistently throughout the upgrade process.
 
 - In any Namespace that previously did _not_ have a "DefaultDeny" annotation:
@@ -202,4 +202,5 @@ spec:
 > **Note**:
 >
 > The above steps should be followed when upgrading to Calico v2.3.0+ using the Kubernetes
-> datastore driver, independent of the Kubernetes version being used.
+> datastore driver, and Calico v2.4.0+ using the etcd datastore,
+> independent of the Kubernetes version being used.

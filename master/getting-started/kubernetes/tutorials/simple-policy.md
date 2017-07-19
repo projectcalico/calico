@@ -46,13 +46,7 @@ You should see a response from `nginx`.  Great! Our Service is accessible.  You 
 
 Let's turn on isolation in our policy-demo Namespace.  Calico will then prevent connections to pods in this Namespace.
 
-#### When using the etcd datastore
-
-```
-kubectl annotate ns policy-demo "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
-```
-
-#### When using the Kubernetes API datastore
+Running the following command creates a NetworkPolicy which implements a default deny behavior for all pods in the `policy-demo` Namespace.
 
 ```
 kubectl create -f - <<EOF
