@@ -60,6 +60,7 @@ test-circle: update-version
 
 image.created: update-version
 	# Build the docker image for the policy controller.
+	GOOS=linux GOARCH=386 go build -o ./k8s-policy-go
 	docker build -t $(CONTAINER_NAME) .
 	touch image.created
 
