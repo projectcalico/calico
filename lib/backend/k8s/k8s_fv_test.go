@@ -315,7 +315,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 
 		By("Performing a Get on the Profile and ensure no error in the Calico API", func() {
-			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -372,7 +372,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 
 		// Perform a Get and ensure no error in the Calico API.
 		By("getting a Profile", func() {
-			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("default.%s", ns.ObjectMeta.Name)})
+			_, err := c.Get(model.ProfileKey{Name: fmt.Sprintf("ns.projectcalico.org/%s", ns.ObjectMeta.Name)})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -495,20 +495,20 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// to fan-out Policy CRUD operations to the appropriate KDD client
 		// based on the prefix).
 		kvp1Name := "snp.projectcalico.org/my-test-snp"
-		kvp1 := &model.KVPair{
+		kvp1a := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp1Name},
 			Value: &calicoAllowPolicyModel,
 		}
-		kvp1_2 := &model.KVPair{
+		kvp1b := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp1Name},
 			Value: &calicoDisallowPolicyModel,
 		}
 		kvp2Name := "snp.projectcalico.org/my-test-snp2"
-		kvp2 := &model.KVPair{
+		kvp2a := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp2Name},
 			Value: &calicoAllowPolicyModel,
 		}
-		kvp2_2 := &model.KVPair{
+		kvp2b := &model.KVPair{
 			Key:   model.PolicyKey{Name: kvp2Name},
 			Value: &calicoDisallowPolicyModel,
 		}
@@ -516,71 +516,71 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Make sure we clean up after ourselves.  We allow this to fail because
 		// part of our explicit testing below is to delete the resource.
 		defer func() {
-			c.snpClient.Delete(kvp1)
-			c.snpClient.Delete(kvp2)
+			c.snpClient.Delete(kvp1a)
+			c.snpClient.Delete(kvp2a)
 		}()
 
 		// Check our syncer has the correct SNP entries for the two
 		// System Network Protocols that this test manipulates.  Neither
 		// have been created yet.
 		By("Checking cache does not have System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValuePresentFunc(kvp1.Key)).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1a.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
 		By("Creating a System Network Policy", func() {
-			_, err := c.snpClient.Create(kvp1)
+			_, err := c.snpClient.Create(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1.Value))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1a.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
 		By("Attempting to recreate an existing System Network Policy", func() {
-			_, err := c.snpClient.Create(kvp1)
+			_, err := c.snpClient.Create(kvp1a)
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating an existing System Network Policy", func() {
-			_, err := c.snpClient.Update(kvp1_2)
+			_, err := c.snpClient.Update(kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
 		By("Applying a non-existent System Network Policy", func() {
-			_, err := c.snpClient.Apply(kvp2)
+			_, err := c.snpClient.Apply(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
-			Eventually(cb.GetSyncerValueFunc(kvp2.Key)).Should(Equal(kvp2.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp2a.Key)).Should(Equal(kvp2a.Value))
 		})
 
 		By("Updating the System Network Policy created by Apply", func() {
-			_, err := c.snpClient.Apply(kvp2_2)
+			_, err := c.snpClient.Apply(kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
-			Eventually(cb.GetSyncerValueFunc(kvp2.Key)).Should(Equal(kvp2_2.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
+			Eventually(cb.GetSyncerValueFunc(kvp2a.Key)).Should(Equal(kvp2b.Value))
 		})
 
 		By("Deleted the System Network Policy created by Apply", func() {
-			err := c.snpClient.Delete(kvp2)
+			err := c.snpClient.Delete(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1.Key)).Should(Equal(kvp1_2.Value))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp1a.Key)).Should(Equal(kvp1b.Value))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 
 		// Perform Get operations directly on the main client - this
@@ -601,7 +601,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvp, err := c.Get(model.PolicyKey{Name: "snp.projectcalico.org/my-test-snp"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvp.Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
-			Expect(kvp.Value.(*model.Policy)).To(Equal(kvp1_2.Value))
+			Expect(kvp.Value.(*model.Policy)).To(Equal(kvp1b.Value))
 		})
 
 		By("Listing all policies (including a System Network Policy)", func() {
@@ -611,22 +611,22 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
 			Expect(kvps[len(kvps)-1].Key.(model.PolicyKey).Name).To(Equal("snp.projectcalico.org/my-test-snp"))
-			Expect(kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(kvp1_2.Value))
+			Expect(kvps[len(kvps)-1].Value.(*model.Policy)).To(Equal(kvp1b.Value))
 		})
 
 		By("Deleting an existing System Network Policy", func() {
-			err := c.snpClient.Delete(kvp1)
+			err := c.snpClient.Delete(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has no System Network Policy entries", func() {
-			Eventually(cb.GetSyncerValuePresentFunc(kvp1.Key)).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1a.Key)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
 		})
 	})
 
 	It("should handle a CRUD of Global BGP Peer", func() {
-		kvp1 := &model.KVPair{
+		kvp1a := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("10.0.0.1"),
 			},
@@ -635,7 +635,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6512),
 			},
 		}
-		kvp1_2 := &model.KVPair{
+		kvp1b := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("10.0.0.1"),
 			},
@@ -644,7 +644,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6513),
 			},
 		}
-		kvp2 := &model.KVPair{
+		kvp2a := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("aa:bb::cc"),
 			},
@@ -653,7 +653,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 				ASNum:  numorstring.ASNumber(6514),
 			},
 		}
-		kvp2_2 := &model.KVPair{
+		kvp2b := &model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: cnet.MustParseIP("aa:bb::cc"),
 			},
@@ -665,32 +665,32 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		// Make sure we clean up after ourselves.  We allow this to fail because
 		// part of our explicit testing below is to delete the resource.
 		defer func() {
-			c.Delete(kvp1)
-			c.Delete(kvp2)
+			c.Delete(kvp1a)
+			c.Delete(kvp2a)
 		}()
 
 		By("Creating a Global BGP Peer", func() {
-			_, err := c.Create(kvp1)
+			_, err := c.Create(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Attempting to recreate an existing Global BGP Peer", func() {
-			_, err := c.Create(kvp1)
+			_, err := c.Create(kvp1a)
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating an existing Global BGP Peer", func() {
-			_, err := c.Update(kvp1_2)
+			_, err := c.Update(kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Applying a non-existent Global BGP Peer", func() {
-			_, err := c.Apply(kvp2)
+			_, err := c.Apply(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Updating the Global BGP Peer created by Apply", func() {
-			_, err := c.Apply(kvp2_2)
+			_, err := c.Apply(kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -709,22 +709,22 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{PeerIP: cnet.MustParseIP("10.0.0.1")})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
-			Expect(kvps[0].Key).To(Equal(kvp1_2.Key))
-			Expect(kvps[0].Value).To(Equal(kvp1_2.Value))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
 		})
 
 		By("Listing all Global BGP Peers (should be 2)", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(2))
-			Expect(kvps[0].Key).To(Equal(kvp1_2.Key))
-			Expect(kvps[0].Value).To(Equal(kvp1_2.Value))
-			Expect(kvps[1].Key).To(Equal(kvp2_2.Key))
-			Expect(kvps[01].Value).To(Equal(kvp2_2.Value))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
+			Expect(kvps[1].Key).To(Equal(kvp2b.Key))
+			Expect(kvps[01].Value).To(Equal(kvp2b.Value))
 		})
 
 		By("Deleting the Global BGP Peer created by Apply", func() {
-			err := c.Delete(kvp2)
+			err := c.Delete(kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -732,13 +732,175 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 			kvps, err := c.List(model.GlobalBGPPeerListOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
-			Expect(kvps[0].Key).To(Equal(kvp1_2.Key))
-			Expect(kvps[0].Value).To(Equal(kvp1_2.Value))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
 		})
 
 		By("Deleting an existing Global BGP Peer", func() {
-			err := c.Delete(kvp1)
+			err := c.Delete(kvp1a)
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	It("should handle a CRUD of Node BGP Peer", func() {
+		var kvp1a, kvp1b, kvp2a, kvp2b *model.KVPair
+		var nodename string
+
+		// Make sure we clean up after ourselves.  We allow this to fail because
+		// part of our explicit testing below is to delete the resource.
+		defer func() {
+			log.Debug("Deleting Node BGP Peers")
+			if peers, err := c.List(model.NodeBGPPeerListOptions{}); err == nil {
+				log.WithField("Peers", peers).Debug("Deleting resources")
+				for _, peer := range peers {
+					log.WithField("Key", peer.Key).Debug("Deleting resource")
+					peer.Revision = nil
+					_ = c.Delete(peer)
+				}
+			}
+		}()
+
+		By("Listing all Nodes to find a suitable Node name", func() {
+			nodes, err := c.List(model.NodeListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			// Get the hostname so we can make a Get call
+			kvp := *nodes[0]
+			nodename = kvp.Key.(model.NodeKey).Hostname
+			kvp1a = &model.KVPair{
+				Key: model.NodeBGPPeerKey{
+					PeerIP:   cnet.MustParseIP("10.0.0.1"),
+					Nodename: nodename,
+				},
+				Value: &model.BGPPeer{
+					PeerIP: cnet.MustParseIP("10.0.0.1"),
+					ASNum:  numorstring.ASNumber(6512),
+				},
+			}
+			kvp1b = &model.KVPair{
+				Key: model.NodeBGPPeerKey{
+					PeerIP:   cnet.MustParseIP("10.0.0.1"),
+					Nodename: nodename,
+				},
+				Value: &model.BGPPeer{
+					PeerIP: cnet.MustParseIP("10.0.0.1"),
+					ASNum:  numorstring.ASNumber(6513),
+				},
+			}
+			kvp2a = &model.KVPair{
+				Key: model.NodeBGPPeerKey{
+					PeerIP:   cnet.MustParseIP("aa:bb::cc"),
+					Nodename: nodename,
+				},
+				Value: &model.BGPPeer{
+					PeerIP: cnet.MustParseIP("aa:bb::cc"),
+					ASNum:  numorstring.ASNumber(6514),
+				},
+			}
+			kvp2b = &model.KVPair{
+				Key: model.NodeBGPPeerKey{
+					PeerIP:   cnet.MustParseIP("aa:bb::cc"),
+					Nodename: nodename,
+				},
+				Value: &model.BGPPeer{
+					PeerIP: cnet.MustParseIP("aa:bb::cc"),
+				},
+			}
+		})
+
+		By("Creating a Node BGP Peer", func() {
+			_, err := c.Create(kvp1a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Attempting to recreate an existing Node BGP Peer", func() {
+			_, err := c.Create(kvp1a)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing Node BGP Peer", func() {
+			_, err := c.Update(kvp1b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Applying a non-existent Node BGP Peer", func() {
+			_, err := c.Apply(kvp2a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Updating the Node BGP Peer created by Apply", func() {
+			_, err := c.Apply(kvp2b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Getting a missing Node BGP Peer (wrong IP)", func() {
+			_, err := c.Get(model.NodeBGPPeerKey{Nodename: nodename, PeerIP: cnet.MustParseIP("1.1.1.1")})
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Getting a missing Node BGP Peer (wrong nodename)", func() {
+			_, err := c.Get(model.NodeBGPPeerKey{Nodename: "foobarbaz", PeerIP: cnet.MustParseIP("10.0.0.1")})
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing a missing Node BGP Peer (wrong IP)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{PeerIP: cnet.MustParseIP("aa:bb:cc:dd::ee")})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(0))
+		})
+
+		By("Listing a missing Node BGP Peer (wrong nodename)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{Nodename: "foobarbaz"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(0))
+		})
+
+		By("Listing an explicit Node BGP Peer (IP specific, Node is missing)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{PeerIP: cnet.MustParseIP("10.0.0.1")})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(1))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
+		})
+
+		By("Listing an explicit Node BGP Peer (IP and Node are specified)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{Nodename: nodename, PeerIP: cnet.MustParseIP("10.0.0.1")})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(1))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
+		})
+
+		By("Listing all Node BGP Peers (should be 2)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(2))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
+			Expect(kvps[1].Key).To(Equal(kvp2b.Key))
+			Expect(kvps[1].Value).To(Equal(kvp2b.Value))
+		})
+
+		By("Deleting the Node BGP Peer created by Apply", func() {
+			err := c.Delete(kvp2a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Listing all Node BGP Peers (should now be 1)", func() {
+			kvps, err := c.List(model.NodeBGPPeerListOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps).To(HaveLen(1))
+			Expect(kvps[0].Key).To(Equal(kvp1b.Key))
+			Expect(kvps[0].Value).To(Equal(kvp1b.Value))
+		})
+
+		By("Deleting an existing Node BGP Peer", func() {
+			err := c.Delete(kvp1a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Deleting a non-existent Node BGP Peer", func() {
+			err := c.Delete(kvp1a)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -864,7 +1026,7 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 	}()
 
 	It("should not error on unsupported List() calls", func() {
-		objs, err := c.List(model.NodeBGPPeerListOptions{})
+		objs, err := c.List(model.BlockAffinityListOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(objs)).To(Equal(0))
 	})

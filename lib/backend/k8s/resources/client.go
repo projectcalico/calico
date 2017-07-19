@@ -16,6 +16,8 @@ package resources
 
 import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
+	apiv1 "k8s.io/client-go/pkg/api/v1"
 )
 
 // K8sResourceClient is the interface to the k8s datastore for CRUD operations
@@ -62,4 +64,12 @@ type K8sResourceClient interface {
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.
 	EnsureInitialized() error
+}
+
+// K8sNodeResourceClient extends the K8sResourceClient to add a helper method to
+// extract resources from the supplied K8s Node.  This convenience interface is
+// expected to be removed in a future libcalico-go release.
+type K8sNodeResourceClient interface {
+	K8sResourceClient
+	ExtractResourcesFromNode(node *apiv1.Node) ([]*model.KVPair, error)
 }

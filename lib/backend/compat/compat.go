@@ -15,9 +15,11 @@
 package compat
 
 import (
+	"encoding/json"
 	goerrors "errors"
 
 	log "github.com/Sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
@@ -46,7 +48,7 @@ func (c *ModelAdaptor) EnsureCalicoNodeInitialized(node string) error {
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 	var err error
-	switch d.Key.(type) {
+	switch k := d.Key.(type) {
 	case model.ProfileKey:
 		t, l, r := ToTagsLabelsRules(d)
 		if t, err = c.client.Create(t); err != nil {
@@ -76,6 +78,14 @@ func (c *ModelAdaptor) Create(d *model.KVPair) (*model.KVPair, error) {
 		b, err := c.client.Create(d)
 		if err != nil {
 			return nil, err
+		}
+		d.Revision = b.Revision
+		return d, nil
+	case model.GlobalBGPConfigKey:
+		nd := toDatastoreGlobalBGPConfig(*d)
+		b, err := c.client.Create(nd)
+		if err != nil {
+			return nil, errors.UpdateErrorIdentifier(err, k)
 		}
 		d.Revision = b.Revision
 		return d, nil
@@ -121,6 +131,14 @@ func (c *ModelAdaptor) Update(d *model.KVPair) (*model.KVPair, error) {
 		}
 		d.Revision = b.Revision
 		return d, nil
+	case model.GlobalBGPConfigKey:
+		nd := toDatastoreGlobalBGPConfig(*d)
+		b, err := c.client.Update(nd)
+		if err != nil {
+			return nil, errors.UpdateErrorIdentifier(err, d.Key)
+		}
+		d.Revision = b.Revision
+		return d, nil
 	default:
 		return c.client.Update(d)
 	}
@@ -138,7 +156,7 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		} else if _, err := c.client.Apply(l); err != nil {
 			return nil, err
 		} else if _, err := c.client.Apply(r); err != nil {
-			return nil, err
+			return nil, errors.UpdateErrorIdentifier(err, d.Key)
 		} else {
 			d.Revision = t.Revision
 			return d, nil
@@ -163,6 +181,14 @@ func (c *ModelAdaptor) Apply(d *model.KVPair) (*model.KVPair, error) {
 		}
 		d.Revision = b.Revision
 		return d, nil
+	case model.GlobalBGPConfigKey:
+		nd := toDatastoreGlobalBGPConfig(*d)
+		b, err := c.client.Apply(nd)
+		if err != nil {
+			return nil, errors.UpdateErrorIdentifier(err, d.Key)
+		}
+		d.Revision = b.Revision
+		return d, nil
 	default:
 		return c.client.Apply(d)
 	}
@@ -181,6 +207,10 @@ func (c *ModelAdaptor) Delete(d *model.KVPair) error {
 			return err
 		}
 		return nil
+	case model.GlobalBGPConfigKey:
+		nd := toDatastoreGlobalBGPConfig(*d)
+		err := c.client.Delete(nd)
+		return errors.UpdateErrorIdentifier(err, d.Key)
 	default:
 		return c.client.Delete(d)
 	}
@@ -195,6 +225,13 @@ func (c *ModelAdaptor) Get(k model.Key) (*model.KVPair, error) {
 		return c.getNode(kt)
 	case model.BlockKey:
 		return c.getBlock(k)
+	case model.GlobalBGPConfigKey:
+		nk := toDatastoreGlobalBGPConfigKey(kt)
+		if kvp, err := c.client.Get(nk); err != nil {
+			return nil, errors.UpdateErrorIdentifier(err, k)
+		} else {
+			return fromDatastoreGlobalBGPConfig(*kvp), nil
+		}
 	default:
 		return c.client.Get(k)
 	}
@@ -208,6 +245,16 @@ func (c *ModelAdaptor) List(l model.ListInterface) ([]*model.KVPair, error) {
 		return c.listNodes(lt)
 	case model.BlockListOptions:
 		return c.listBlock(lt)
+	case model.GlobalBGPConfigListOptions:
+		nl := toDatastoreGlobalBGPConfigList(lt)
+		if kvps, err := c.client.List(nl); err != nil {
+			return nil, errors.UpdateErrorIdentifier(err, l)
+		} else {
+			for i, kvp := range kvps {
+				kvps[i] = fromDatastoreGlobalBGPConfig(*kvp)
+			}
+			return kvps, nil
+		}
 	default:
 		return c.client.List(l)
 	}
@@ -371,7 +418,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 	var strval string
 
 	// Fill in the Metadata specific part of the node configuration.
-	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "ip_addr_v4"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v4"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			nv.BGPIPv4Addr = &net.IP{}
@@ -385,7 +432,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "network_v4"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v4"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			_, nv.BGPIPv4Net, err = net.ParseCIDR(strval)
@@ -398,7 +445,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "ip_addr_v6"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "ip_addr_v6"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			nv.BGPIPv6Addr = &net.IP{}
@@ -412,7 +459,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "network_v6"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "network_v6"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			_, nv.BGPIPv6Net, err = net.ParseCIDR(strval)
@@ -425,7 +472,7 @@ func (c *ModelAdaptor) getNodeSubcomponents(nk model.NodeKey, nv *model.Node) er
 		return err
 	}
 
-	if component, err = c.client.Get(model.HostBGPConfigKey{Hostname: nk.Hostname, Name: "as_num"}); err == nil {
+	if component, err = c.client.Get(model.NodeBGPConfigKey{Nodename: nk.Hostname, Name: "as_num"}); err == nil {
 		strval = component.Value.(string)
 		if strval != "" {
 			asn, err := numorstring.ASNumberFromString(strval)
@@ -521,15 +568,15 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 	// Add the BGP IPv4 and IPv6 values - these are always present.
 	optional = []*model.KVPair{
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "ip_addr_v4",
 			},
 			Value: ipv4Str,
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "ip_addr_v6",
 			},
 			Value: ipv6Str,
@@ -553,48 +600,48 @@ func toNodeComponents(d *model.KVPair) (primary *model.KVPair, optional []*model
 
 	if n.BGPASNumber != nil {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "as_num",
 			},
 			Value: n.BGPASNumber.String(),
 		})
 	} else {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "as_num",
 			},
 		})
 	}
 	if n.BGPIPv4Net != nil {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v4",
 			},
 			Value: n.BGPIPv4Net.String(),
 		})
 	} else {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v4",
 			},
 		})
 	}
 	if n.BGPIPv6Net != nil {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v6",
 			},
 			Value: n.BGPIPv6Net.String(),
 		})
 	} else {
 		optional = append(optional, &model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v6",
 			},
 		})
@@ -617,36 +664,132 @@ func toNodeDeleteComponents(d *model.KVPair) (primary *model.KVPair, optional []
 			Key: model.HostIPKey{nk.Hostname},
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "ip_addr_v4",
 			},
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "ip_addr_v6",
 			},
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "as_num",
 			},
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v4",
 			},
 		},
 		&model.KVPair{
-			Key: model.HostBGPConfigKey{
-				Hostname: nk.Hostname,
+			Key: model.NodeBGPConfigKey{
+				Nodename: nk.Hostname,
 				Name:     "network_v6",
 			},
 		},
 	}
 
 	return primary, optional
+}
+
+// toDatastoreGlobalBGPConfigKey modifies the Global BGP Config key to the one required by
+// the datastore (for back-compatibility).
+func toDatastoreGlobalBGPConfigKey(key model.GlobalBGPConfigKey) model.GlobalBGPConfigKey {
+	switch key.Name {
+	case "AsNumber":
+		key = model.GlobalBGPConfigKey{Name: "as_num"}
+	case "LogLevel":
+		key = model.GlobalBGPConfigKey{Name: "loglevel"}
+	case "NodeMeshEnabled":
+		key = model.GlobalBGPConfigKey{Name: "node_mesh"}
+	}
+	return key
+}
+
+// toDatastoreGlobalBGPConfigList modifies the Global BGP Config List interface to the one required by
+// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+func toDatastoreGlobalBGPConfigList(l model.GlobalBGPConfigListOptions) model.GlobalBGPConfigListOptions {
+	switch l.Name {
+	case "AsNumber":
+		l = model.GlobalBGPConfigListOptions{Name: "as_num"}
+	case "LogLevel":
+		l = model.GlobalBGPConfigListOptions{Name: "loglevel"}
+	case "NodeMeshEnabled":
+		l = model.GlobalBGPConfigListOptions{Name: "node_mesh"}
+	}
+	return l
+}
+
+// fromDatastoreGlobalBGPKey modifies the Global BGP Config key from the one required by
+// the datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+func fromDatastoreGlobalBGPKey(key model.GlobalBGPConfigKey) model.GlobalBGPConfigKey {
+	switch key.Name {
+	case "as_num":
+		key = model.GlobalBGPConfigKey{Name: "AsNumber"}
+	case "loglevel":
+		key = model.GlobalBGPConfigKey{Name: "LogLevel"}
+	case "node_mesh":
+		key = model.GlobalBGPConfigKey{Name: "NodeMeshEnabled"}
+	}
+	return key
+}
+
+// toDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair to the format required in the
+// datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+func toDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
+	// Copy the KVPair, so we aren't modifying the original.
+	modifiedKey := toDatastoreGlobalBGPConfigKey(d.Key.(model.GlobalBGPConfigKey))
+	d.Key = modifiedKey
+
+	switch modifiedKey.Name {
+	case "node_mesh":
+		// In the datastore the node_mesh parm is expected to be a JSON object with an
+		// enabled field, but the new value just uses a boolean string.
+		if d.Value != nil {
+			enabled := d.Value.(string) == "true"
+			v, _ := json.Marshal(nodeToNodeMesh{Enabled: enabled})
+			d.Value = string(v)
+		}
+	}
+
+	return &d
+}
+
+// fromDatastoreGlobalBGPConfig modifies the Global BGP Config KVPair from the format required in the
+// datastore (for back-compatibility with what is expected in teh etcdv2 datastore driver).
+func fromDatastoreGlobalBGPConfig(d model.KVPair) *model.KVPair {
+	modifiedKey := fromDatastoreGlobalBGPKey(d.Key.(model.GlobalBGPConfigKey))
+	d.Key = modifiedKey
+
+	switch modifiedKey.Name {
+	case "NodeMeshEnabled":
+		// In the datastore the node_mesh parm is expected to be a JSON object with an
+		// enabled field, but the new value just uses a boolean string.
+		if d.Value != nil {
+			var n nodeToNodeMesh
+			if err := json.Unmarshal([]byte(d.Value.(string)), &n); err != nil {
+				log.Info("Error parsing node to node mesh")
+				v, _ := json.Marshal(false)
+				d.Value = string(v)
+			} else {
+				log.Info("Returning configured node to node mesh")
+				v, _ := json.Marshal(n.Enabled)
+				d.Value = string(v)
+			}
+		}
+	}
+
+	return &d
+}
+
+// nodeToNodeMesh is a struct containing whether node-to-node mesh is enabled.  It can be
+// JSON marshalled into the correct structure that is understood by the Calico BGP component.
+type nodeToNodeMesh struct {
+	Enabled bool `json:"enabled"`
 }

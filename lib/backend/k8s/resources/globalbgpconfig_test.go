@@ -25,18 +25,18 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Global Felix config conversion methods", func() {
+var _ = Describe("Global BGP config conversion methods", func() {
 
-	converter := resources.GlobalConfigConverter{}
+	converter := resources.GlobalBgpConfigConverter{}
 
 	// Define some useful test data.
-	listIncomplete := model.GlobalConfigListOptions{}
+	listIncomplete := model.GlobalBGPConfigListOptions{}
 
 	// Compatible set of list, key and name (used for Key to Name conversion)
-	list1 := model.GlobalConfigListOptions{
+	list1 := model.GlobalBGPConfigListOptions{
 		Name: "AbCd",
 	}
-	key1 := model.GlobalConfigKey{
+	key1 := model.GlobalBGPConfigKey{
 		Name: "AbCd",
 	}
 	name1 := "abcd"
@@ -48,12 +48,12 @@ var _ = Describe("Global Felix config conversion methods", func() {
 		Value:    value1,
 		Revision: "rv",
 	}
-	res1 := &thirdparty.GlobalConfig{
+	res1 := &thirdparty.GlobalBgpConfig{
 		Metadata: metav1.ObjectMeta{
 			Name:            name1,
 			ResourceVersion: "rv",
 		},
-		Spec: thirdparty.GlobalConfigSpec{
+		Spec: thirdparty.GlobalBgpConfigSpec{
 			Name:  key1.Name,
 			Value: value1,
 		},
@@ -83,11 +83,11 @@ var _ = Describe("Global Felix config conversion methods", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
-		Expect(r).To(BeAssignableToTypeOf(&thirdparty.GlobalConfig{}))
-		Expect(r.(*thirdparty.GlobalConfig).Spec).To(Equal(res1.Spec))
+		Expect(r).To(BeAssignableToTypeOf(&thirdparty.GlobalBgpConfig{}))
+		Expect(r.(*thirdparty.GlobalBgpConfig).Spec).To(Equal(res1.Spec))
 	})
 
-	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {
+	It("should convert between a Kubernetes resource and the equivalent KVPair", func() {
 		kvp, err := converter.ToKVPair(res1)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvp.Key).To(Equal(kvp1.Key))

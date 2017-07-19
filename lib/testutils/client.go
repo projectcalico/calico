@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"golang.org/x/net/context"
 )
 
@@ -76,26 +77,6 @@ func CreateClient(config api.CalicoAPIConfig) *client.Client {
 	return c
 }
 
-func CleanIPPools(c *client.Client) {
-	if pools, err := c.IPPools().List(api.IPPoolMetadata{}); err == nil {
-		for _, pool := range pools.Items {
-			if err := c.IPPools().Delete(pool.Metadata); err != nil {
-				panic(err)
-			}
-		}
-	}
-}
-
-func CleanBGPPeers(c *client.Client) {
-	if peers, err := c.BGPPeers().List(api.BGPPeerMetadata{}); err == nil {
-		for _, peer := range peers.Items {
-			if err := c.BGPPeers().Delete(peer.Metadata); err != nil {
-				panic(err)
-			}
-		}
-	}
-}
-
 func CleanDatastore(config api.CalicoAPIConfig) {
 	var err error
 
@@ -103,6 +84,7 @@ func CleanDatastore(config api.CalicoAPIConfig) {
 
 	switch config.Spec.DatastoreType {
 	case api.EtcdV2:
+		// To clean etcd, just create a new etcd client and delete the entire calico tree.
 		cfg := etcdclient.Config{
 			Endpoints: []string{config.Spec.EtcdScheme + "://" + config.Spec.EtcdAuthority},
 		}
@@ -117,6 +99,28 @@ func CleanDatastore(config api.CalicoAPIConfig) {
 		} else {
 			log.Errorf("Can't create etcd backend %v", err)
 		}
+	case api.Kubernetes:
+		// To clean Kuberenetes, we create a Client and use the backend interface to
+		// list and remove each of the resource types currently supported by the KDD.  We
+		// can't remove everything though because some of the resources are owned by Kubernetes.
+		backend := CreateClient(config).Backend
+
+		types := []model.ListInterface{
+			model.GlobalBGPConfigListOptions{},
+			model.NodeBGPConfigListOptions{},
+			model.GlobalBGPPeerListOptions{},
+			model.NodeBGPPeerListOptions{},
+			model.GlobalConfigListOptions{},
+			model.IPPoolListOptions{},
+		}
+		for _, t := range types {
+			rs, _ := backend.List(t)
+			for _, r := range rs {
+				log.WithField("Key", r.Key).Info("Deleting from KDD")
+				backend.Delete(r)
+			}
+		}
+
 	default:
 		err = errors.New(fmt.Sprintf("Unknown datastore type: %v", config.Spec.DatastoreType))
 	}

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend_test
+package converter_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-func TestBackend(t *testing.T) {
+func TestConverter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Backend Suite")
+	RunSpecs(t, "Converter Suite")
 }

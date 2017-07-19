@@ -26,8 +26,10 @@ import (
 )
 
 func NewNodeClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
-	return &nodeClient{
-		clientSet: c,
+	return &retryWrapper{
+		client: &nodeClient{
+			clientSet: c,
+		},
 	}
 }
 
@@ -58,7 +60,15 @@ func (c *nodeClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
 
 	newNode, err := c.clientSet.Nodes().Update(node)
 	if err != nil {
-		return nil, K8sErrorToCalico(err, kvp.Key)
+		log.WithError(err).Info("Error updating Node resource")
+		err = K8sErrorToCalico(err, kvp.Key)
+
+		// If this is an update conflict and we didn't specify a revision in the
+		// request, indicate to the nodeRetryWrapper that we can retry the action.
+		if _, ok := err.(errors.ErrorResourceUpdateConflict); ok && kvp.Revision == nil {
+			err = retryError{err: err}
+		}
+		return nil, err
 	}
 
 	newCalicoNode, err := K8sNodeToCalico(newNode)

@@ -46,7 +46,7 @@ func NewGlobalBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 	}
 }
 
-// GlobalBGPPeerConverter implements the K8sResourceConverter interface.
+// GlobalBGPPeerConverter implements the CustomK8sResourceConverter interface.
 type GlobalBGPPeerConverter struct {
 	// Since the Spec is identical to the Calico API Spec, we use the
 	// API converter to convert to and from the model representation.

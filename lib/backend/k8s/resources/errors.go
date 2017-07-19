@@ -44,6 +44,12 @@ func K8sErrorToCalico(ke error, id interface{}) error {
 			Err: ke,
 		}
 	}
+	if kerrors.IsConflict(ke) {
+		return errors.ErrorResourceUpdateConflict{
+			Err:        ke,
+			Identifier: id,
+		}
+	}
 	return errors.ErrorDatastoreError{
 		Err:        ke,
 		Identifier: id,

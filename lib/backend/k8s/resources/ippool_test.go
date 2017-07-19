@@ -66,7 +66,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 			ResourceVersion: "rv",
 		},
 		Spec: thirdparty.IpPoolSpec{
-			Value: "{}",
+			Value: "{\"cidr\":\"11:22::/120\",\"ipip\":\"tunl0\",\"ipip_mode\":\"cross-subnet\",\"masquerade\":true,\"ipam\":false,\"disabled\":false}",
 		},
 	}
 
@@ -115,7 +115,7 @@ var _ = Describe("IP Pool conversion methods", func() {
 	It("should fail to convert an invalid resource name to the equivalent Key", func() {
 		k, err := converter.NameToKey(nameInvalid)
 		Expect(err).To(HaveOccurred())
-		Expect(k).To(Equal(nil))
+		Expect(k).To(BeNil())
 	})
 
 	It("should convert between a KVPair and the equivalent Kubernetes resource", func() {
@@ -124,7 +124,6 @@ var _ = Describe("IP Pool conversion methods", func() {
 		Expect(r.GetObjectMeta().GetName()).To(Equal(res1.Metadata.Name))
 		Expect(r.GetObjectMeta().GetResourceVersion()).To(Equal(res1.Metadata.ResourceVersion))
 		Expect(r).To(BeAssignableToTypeOf(&thirdparty.IpPool{}))
-		Expect(r.(*thirdparty.IpPool).Spec).To(Equal(res1.Spec))
 	})
 
 	It("should convert between a Kuberenetes resource and the equivalent KVPair", func() {

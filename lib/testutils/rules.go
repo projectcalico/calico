@@ -51,6 +51,18 @@ var InRule1 = api.Rule{
 	},
 }
 
+var InRule1AfterRead = api.Rule{
+	Action:    "allow",
+	IPVersion: &ipv4,
+	Protocol:  &strProtocol1,
+	ICMP:      &icmp1,
+	Source: api.EntityRule{
+		Tag:      "tag1",
+		Nets:     []*net.IPNet{&cidr1},
+		Selector: "label1 == 'value1'",
+	},
+}
+
 var InRule2 = api.Rule{
 	Action:    "deny",
 	IPVersion: &ipv6,
@@ -59,6 +71,18 @@ var InRule2 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag2",
 		Net:      &cidrv61,
+		Selector: "has(label2)",
+	},
+}
+
+var InRule2AfterRead = api.Rule{
+	Action:    "deny",
+	IPVersion: &ipv6,
+	Protocol:  &numProtocol1,
+	ICMP:      &icmp1,
+	Source: api.EntityRule{
+		Tag:      "tag2",
+		Nets:     []*net.IPNet{&cidrv61},
 		Selector: "has(label2)",
 	},
 }
@@ -75,6 +99,18 @@ var EgressRule1 = api.Rule{
 	},
 }
 
+var EgressRule1AfterRead = api.Rule{
+	Action:    "pass",
+	IPVersion: &ipv4,
+	Protocol:  &numProtocol1,
+	ICMP:      &icmp1,
+	Source: api.EntityRule{
+		Tag:      "tag3",
+		Nets:     []*net.IPNet{&cidr2},
+		Selector: "all()",
+	},
+}
+
 var EgressRule2 = api.Rule{
 	Action:    "allow",
 	IPVersion: &ipv6,
@@ -83,6 +119,18 @@ var EgressRule2 = api.Rule{
 	Source: api.EntityRule{
 		Tag:      "tag4",
 		Net:      &cidrv62,
+		Selector: "label2 == '1234'",
+	},
+}
+
+var EgressRule2AfterRead = api.Rule{
+	Action:    "allow",
+	IPVersion: &ipv6,
+	Protocol:  &strProtocol2,
+	ICMP:      &icmp1,
+	Source: api.EntityRule{
+		Tag:      "tag4",
+		Nets:     []*net.IPNet{&cidrv62},
 		Selector: "label2 == '1234'",
 	},
 }

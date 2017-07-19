@@ -54,8 +54,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 
 	DescribeTable("IPPool e2e tests",
 		func(meta1, meta2 api.IPPoolMetadata, spec1, spec2 api.IPPoolSpec) {
-			c := testutils.CreateClient(apiConfig)
-			testutils.CleanIPPools(c)
+			c := testutils.CreateCleanClient(apiConfig)
 
 			By("Updating the pool before it is created")
 			_, outError := c.IPPools().Update(&api.IPPool{Metadata: meta1, Spec: spec1})
@@ -260,8 +259,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool e2e tests", testutils.DatastoreAl
 	)
 
 	Describe("Checking operations perform data validation", func() {
-		c := testutils.CreateClient(apiConfig)
-		testutils.CleanIPPools(c)
+		c := testutils.CreateCleanClient(apiConfig)
 
 		var err error
 		valErrorType := reflect.TypeOf(cerrors.ErrorValidation{})

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ type ICMPFields struct {
 // to a particular entity (that is either the source or destination).
 //
 // A source EntityRule matches the source endpoint and originating traffic.
-// A desination EntityRule matches the destination endpoint and terminating traffic.
+// A destination EntityRule matches the destination endpoint and terminating traffic.
 type EntityRule struct {
 	// Tag is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) endpoints that have profiles with the given tag
@@ -84,7 +84,12 @@ type EntityRule struct {
 
 	// Net is an optional field that restricts the rule to only apply to traffic that
 	// originates from (or terminates at) IP addresses in the given subnet.
+	// Deprecated: superseded by the Nets field.
 	Net *net.IPNet `json:"net,omitempty" validate:"omitempty"`
+
+	// Nets is an optional field that restricts the rule to only apply to traffic that
+	// originates from (or terminates at) IP addresses in any of the given subnets.
+	Nets []*net.IPNet `json:"nets,omitempty" validate:"omitempty"`
 
 	// Selector is an optional field that contains a selector expression (see Policy for
 	// sample syntax).  Only traffic that originates from (terminates at) endpoints matching
@@ -115,8 +120,14 @@ type EntityRule struct {
 	// NotTag is the negated version of the Tag field.
 	NotTag string `json:"notTag,omitempty" validate:"omitempty,tag"`
 
-	// NotNet is the negated version of the Net field.
+	// NotNet is an optional field that restricts the rule to only apply to traffic that
+	// does not originate from (or terminate at) an IP address in the given subnet.
+	// Deprecated: superseded by NotNets.
 	NotNet *net.IPNet `json:"notNet,omitempty" validate:"omitempty"`
+
+	// NotNets is an optional field that restricts the rule to only apply to traffic that
+	// does not originate from (or terminate at) an IP address in any of the given subnets.
+	NotNets []*net.IPNet `json:"notNets,omitempty" validate:"omitempty"`
 
 	// NotSelector is the negated version of the Selector field.  See Selector field for
 	// subtleties with negated selectors.
@@ -127,4 +138,29 @@ type EntityRule struct {
 	// Since only some protocols have ports, if any ports are specified it requires the
 	// Protocol match in the Rule to be set to "tcp" or "udp".
 	NotPorts []numorstring.Port `json:"notPorts,omitempty" validate:"omitempty,dive"`
+}
+
+func combineNets(n *net.IPNet, nets []*net.IPNet) []*net.IPNet {
+	if n == nil {
+		return nets
+	}
+	if len(nets) == 0 {
+		return []*net.IPNet{n}
+	}
+	combined := make([]*net.IPNet, len(nets)+1)
+	copy(combined, nets)
+	combined[len(combined)-1] = n
+	return combined
+}
+
+// GetNets returns either r.Nets or a slice containing r.Net.  It is useful for unifying the
+// two representations.
+func (r EntityRule) GetNets() []*net.IPNet {
+	return combineNets(r.Net, r.Nets)
+}
+
+// GetNets returns either r.NotNets or a slice containing NotNet.  It is useful for unifying the
+// two representations.
+func (r EntityRule) GetNotNets() []*net.IPNet {
+	return combineNets(r.NotNet, r.NotNets)
 }

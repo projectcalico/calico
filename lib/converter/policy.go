@@ -50,6 +50,8 @@ func (p PolicyConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPa
 			OutboundRules: RulesAPIToBackend(ap.Spec.EgressRules),
 			Selector:      ap.Spec.Selector,
 			DoNotTrack:    ap.Spec.DoNotTrack,
+			Annotations:   ap.Metadata.Annotations,
+			PreDNAT:       ap.Spec.PreDNAT,
 		},
 	}
 
@@ -64,11 +66,13 @@ func (p PolicyConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 
 	ap := api.NewPolicy()
 	ap.Metadata.Name = bk.Name
+	ap.Metadata.Annotations = bp.Annotations
 	ap.Spec.Order = bp.Order
 	ap.Spec.IngressRules = RulesBackendToAPI(bp.InboundRules)
 	ap.Spec.EgressRules = RulesBackendToAPI(bp.OutboundRules)
 	ap.Spec.Selector = bp.Selector
 	ap.Spec.DoNotTrack = bp.DoNotTrack
+	ap.Spec.PreDNAT = bp.PreDNAT
 
 	return ap, nil
 }
