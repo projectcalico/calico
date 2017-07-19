@@ -71,6 +71,13 @@ PACKAGE_NAME?=github.com/projectcalico/calico/calico_node
 
 LIBCALICOGO_PATH?=none
 
+ifdef BATCHNUMBER
+  ST_OPTIONS="-A batchnumber==$(BATCHNUMBER)"
+endif
+
+test:
+	echo $(ST_OPTIONS)
+
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.yaml
