@@ -223,7 +223,9 @@ func (c *Client) populateFromKVPairs(kvps []*model.KVPair, vars map[string]strin
 	// compat adaptor to write the values in etcdv2 format.
 	client := compat.NewAdaptor(&etcdVarClient{vars: vars})
 	for _, kvp := range kvps {
-		client.Apply(kvp)
+		if _, err := client.Apply(kvp); err != nil {
+			log.Error("Failed to convert k8s data to etcdv2 equivalent: %s = %s", kvp.Key, kvp.Value)
+		}
 	}
 }
 
@@ -260,8 +262,9 @@ func (c *etcdVarClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
 }
 
 func (c *etcdVarClient) Delete(kvp *model.KVPair) error {
-	// Delete may be invoked as part of the multi-key resources, but since we start
-	// from an empty map each time, we never need to delete entries.
+	// Delete may be invoked as part of the Apply processing for  multi-key resource.
+	// However, since we start from an empty map each time, we never need to delete entries,
+	// so just ignore this request.
 	log.Debug("Delete ignored")
 	return nil
 }
