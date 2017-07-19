@@ -5,7 +5,9 @@ source ${script_dir}/utils.sh
 
 declare -a TESTS_TO_RUN=( 'mesh/ipip-always'
                           'mesh/ipip-cross-subnet'
-                          'mesh/ipip-off' )
+                          'mesh/ipip-off'
+                          'explicit_peering/global'
+                          'explicit_peering/specific_node' )
 
 success=0
 
