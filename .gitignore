@@ -4,3 +4,4 @@ bin
 vendor
 .idea
 .go-pkg-cache
+junit.xml
