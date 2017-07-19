@@ -27,12 +27,35 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var exitCode int
 
 func fakeExitFunction(ec int) {
 	exitCode = ec
+}
+
+// makeNode creates an api.Node with some BGPSpec info populated.
+func makeNode(ipv4 string, ipv6 string) *api.Node {
+	ip4, ip4net, _ := net.ParseCIDR(ipv4)
+	ip4net.IP = ip4.IP
+
+	ip6, ip6net, _ := net.ParseCIDR(ipv6)
+	// Guard against nil here in case we pass in an empty string for IPv6.
+	if ip6 != nil {
+		ip6net.IP = ip6.IP
+	}
+
+	n := &api.Node{
+		Spec: api.NodeSpec{
+			BGP: &api.NodeBGPSpec{
+				IPv4Address: ip4net,
+				IPv6Address: ip6net,
+			},
+		},
+	}
+	return n
 }
 
 var _ = Describe("Non-etcd related tests", func() {
@@ -69,7 +92,7 @@ type EnvItem struct {
 }
 
 var _ = Describe("FV tests against a real etcd", func() {
-	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING"}
+	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING", "IP"}
 
 	BeforeEach(func() {
 		for _, envName := range changedEnvVars {
@@ -290,4 +313,29 @@ var _ = Describe("FV tests against a real etcd", func() {
 			}
 		}
 	})
+})
+
+var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
+
+	DescribeTable("Test variations on how IPs are detected.",
+		func(node *api.Node, items []EnvItem, expected bool) {
+
+			for _, item := range items {
+				os.Setenv(item.key, item.value)
+			}
+
+			check := configureIPsAndSubnets(node)
+
+			Expect(check).To(Equal(expected))
+		},
+
+		Entry("Test with no \"IP\" env var set", &api.Node{}, []EnvItem{{"IP", ""}}, true),
+		Entry("Test with \"IP\" env var set to IP", &api.Node{}, []EnvItem{{"IP", "192.168.1.10/24"}}, true),
+		Entry("Test with \"IP\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", ""), []EnvItem{{"IP", "192.168.1.10/24"}}, false),
+		Entry("Test with \"IP\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", ""), []EnvItem{{"IP", "192.168.1.11/24"}}, true),
+		Entry("Test with no \"IP6\" env var set", &api.Node{}, []EnvItem{{"IP6", ""}}, true),
+		Entry("Test with \"IP6\" env var set to IP", &api.Node{}, []EnvItem{{"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, true),
+		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with same IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"}}, false),
+		Entry("Test with \"IP6\" env var set to IP and BGP spec populated with different IP", makeNode("192.168.1.10/24", "2001:db8:85a3:8d3:1319:8a2e:370:7348/32"), []EnvItem{{"IP", "192.168.1.10/24"}, {"IP6", "2001:db8:85a3:8d3:1319:8a2e:370:7349/32"}}, true),
+	)
 })

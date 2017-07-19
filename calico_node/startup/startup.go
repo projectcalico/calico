@@ -87,13 +87,16 @@ func main() {
 	node := getNode(client, nodeName)
 
 	// Configure and verify the node IP addresses and subnets.
-	configureIPsAndSubnets(node)
+	checkConflicts := configureIPsAndSubnets(node)
+
+	// If we report an IP change (v4 or v6) we should verify there are no
+	// conflicts between Nodes.
+	if checkConflicts && os.Getenv("DISABLE_NODE_IP_CHECK") != "true" {
+		checkConflictingNodes(client, node)
+	}
 
 	// Configure the node AS number.
 	configureASNumber(node)
-
-	// Check for conflicting node configuration
-	checkConflictingNodes(client, node)
 
 	// Check expected filesystem
 	ensureFilesystemAsExpected()
@@ -238,8 +241,8 @@ func getNode(client *client.Client, nodeName string) *api.Node {
 }
 
 // configureIPsAndSubnets updates the supplied node resource with IP and Subnet
-// information to use for BGP.
-func configureIPsAndSubnets(node *api.Node) {
+// information to use for BGP.  This returns true if we detect a change in Node IP address.
+func configureIPsAndSubnets(node *api.Node) bool {
 	// If the node resource currently has no BGP configuration, add an empty
 	// set of configuration as it makes the processing below easier, and we
 	// must end up configuring some BGP fields before we complete.
@@ -247,6 +250,9 @@ func configureIPsAndSubnets(node *api.Node) {
 		log.Info("Initialise BGP data")
 		node.Spec.BGP = &api.NodeBGPSpec{}
 	}
+
+	oldIpv4 := node.Spec.BGP.IPv4Address
+	oldIpv6 := node.Spec.BGP.IPv6Address
 
 	// Determine the autodetection type for IPv4 and IPv6.  Note that we
 	// only autodetect IPv4 when it has not been specified.  IPv6 must be
@@ -311,6 +317,17 @@ func configureIPsAndSubnets(node *api.Node) {
 		validateIP(node.Spec.BGP.IPv6Address)
 	}
 
+	// Detect if we've seen the IP address change, and flag that we need to check for conflicting Nodes
+	if oldIpv4 == nil || !node.Spec.BGP.IPv4Address.IP.Equal(oldIpv4.IP) {
+		log.Info("Node IPv4 changed, will check for conflicts")
+		return true
+	}
+	if (oldIpv6 == nil && node.Spec.BGP.IPv6Address != nil) || (oldIpv6 != nil && !node.Spec.BGP.IPv6Address.IP.Equal(oldIpv6.IP)) {
+		log.Info("Node IPv6 changed, will check for conflicts")
+		return true
+	}
+
+	return false
 }
 
 // fetchAndValidateIPAndNetwork fetches and validates the IP configuration from
