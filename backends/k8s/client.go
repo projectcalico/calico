@@ -3,23 +3,19 @@ package k8s
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/kelseyhightower/confd/log"
+	capi "github.com/projectcalico/libcalico-go/lib/api"
+	backendapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/compat"
+	calicok8s "github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/thirdparty"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	clientapi "k8s.io/client-go/pkg/api"
-	kerrors "k8s.io/client-go/pkg/api/errors"
 	kapiv1 "k8s.io/client-go/pkg/api/v1"
-	metav1 "k8s.io/client-go/pkg/apis/meta/v1"
-	"k8s.io/client-go/pkg/runtime"
-	"k8s.io/client-go/pkg/runtime/schema"
-	"k8s.io/client-go/pkg/runtime/serializer"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -39,7 +35,14 @@ var (
 
 type Client struct {
 	clientSet *kubernetes.Clientset
-	tprClient *rest.RESTClient
+
+	// We use the calico K8s backend client to access the various Calico related config
+	// with the exception of the node-specific config (BGP peers and BGP config) where we
+	// use the Kubernetes API to query the nodes and use the Calico node clients to
+	// convert to Calico KVPairs -- this results in fewer Node list queries.
+	calicoK8sClient   *calicok8s.KubeClient
+	nodeBgpPeerClient resources.K8sNodeResourceClient
+	nodeBgpCfgClient  resources.K8sNodeResourceClient
 }
 
 func NewK8sClient(kubeconfig string) (*Client, error) {
@@ -62,20 +65,28 @@ func NewK8sClient(kubeconfig string) (*Client, error) {
 		return nil, err
 	}
 
-	// Create the clientset
+	// Create the clientset (we use this for Node queries).
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug(fmt.Sprintf("Created k8s clientSet: %+v", cs))
 
-	tprClient, err := buildTPRClient(config)
+	// Create the Calico backend client.  We use this to access all of the
+	// custom resources.
+	calicoK8sClient, err := calicok8s.NewKubeClient(&capi.KubeConfig{
+		Kubeconfig: kubeconfig,
+	})
+
 	if err != nil {
 		return nil, err
 	}
+
 	kubeClient := &Client{
-		clientSet: cs,
-		tprClient: tprClient,
+		clientSet:         cs,
+		calicoK8sClient:   calicoK8sClient,
+		nodeBgpPeerClient: resources.NewNodeBGPPeerClient(cs),
+		nodeBgpCfgClient:  resources.NewNodeBGPConfigClient(cs),
 	}
 
 	return kubeClient, nil
@@ -83,7 +94,7 @@ func NewK8sClient(kubeconfig string) (*Client, error) {
 
 // GetValues takes the etcd like keys and route it to the appropriate k8s API endpoint.
 func (c *Client) GetValues(keys []string) (map[string]string, error) {
-	var kvps = make(map[string]string)
+	var vars = make(map[string]string)
 	for _, key := range keys {
 		log.Debug(fmt.Sprintf("Getting key %s", key))
 		if m := singleNode.FindStringSubmatch(key); m != nil {
@@ -92,7 +103,7 @@ func (c *Client) GetValues(keys []string) (map[string]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			err = populateNodeDetails(kNode, kvps)
+			err = c.populateNodeDetails(kNode, vars)
 			if err != nil {
 				return nil, err
 			}
@@ -106,212 +117,179 @@ func (c *Client) GetValues(keys []string) (map[string]string, error) {
 			cidr := kNode.Spec.PodCIDR
 			parts := strings.Split(cidr, "/")
 			cidr = strings.Join(parts, "-")
-			kvps[key+"/"+cidr] = "{}"
+			vars[key+"/"+cidr] = "{}"
 		}
+
 		switch key {
 		case global:
-			// Default to "info" until this makes it into k8s.
-			kvps[globalLogging] = "info"
-			// Default to 64512
-			kvps[globalASN] = "64512"
-			// Default to true until peering info is available in k8s.
-			kvps[globalNodeMesh] = `{"enabled": true}`
+			// Set default values for fields that we always expect to have.
+			vars[globalLogging] = "info"
+			vars[globalASN] = "64512"
+			vars[globalNodeMesh] = `{"enabled": true}`
+
+			// Global data consists of both global config and global peers.
+			kvps, err := c.calicoK8sClient.List(model.GlobalBGPConfigListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			c.populateFromKVPairs(kvps, vars)
+
+			kvps, err = c.calicoK8sClient.List(model.GlobalBGPPeerListOptions{})
+			if err != nil {
+				return nil, err
+			}
+			c.populateFromKVPairs(kvps, vars)
 		case globalNodeMesh:
 			// This is needed as there are calls to 'global' and directly to 'global/node_mesh'
-			// Default to true until peering configuration is available in k8s.
-			kvps[globalNodeMesh] = `{"enabled": true}`
-		case ipPool:
-			tprs := thirdparty.IpPoolList{}
-			err := c.tprClient.Get().
-				Resource("ippools").
-				Namespace("kube-system").
-				Do().Into(&tprs)
+			// Default to true, but we may override this if a value is configured.
+			vars[globalNodeMesh] = `{"enabled": true}`
 
-			// Ignore not found errors, as this simply means ippools does
-			// not exist.
+			// Get the configured value.
+			kvps, err := c.calicoK8sClient.List(model.GlobalBGPConfigListOptions{Name: "NodeMeshEnabled"})
 			if err != nil {
-				if !kerrors.IsNotFound(err) {
-					return nil, err
-				}
+				return nil, err
 			}
-
-			for _, tpr := range tprs.Items {
-				kvp := resources.ThirdPartyToIPPool(&tpr)
-				cidr := kvp.Key.(model.IPPoolKey).CIDR
-
-				if cidr.Version() == 4 {
-					kvps[ipPool+"/"+tpr.Metadata.Name] = tpr.Spec.Value
-				}
+			c.populateFromKVPairs(kvps, vars)
+		case ipPool:
+			kvps, err := c.calicoK8sClient.List(model.IPPoolListOptions{})
+			if err != nil {
+				return nil, err
 			}
+			c.populateFromKVPairs(kvps, vars)
 		case allNodes:
-			nodes, err := c.clientSet.Nodes().List(kapiv1.ListOptions{})
+			nodes, err := c.clientSet.Nodes().List(metav1.ListOptions{})
 			if err != nil {
 				return nil, err
 			}
 
 			for _, kNode := range nodes.Items {
-				err := populateNodeDetails(&kNode, kvps)
+				err := c.populateNodeDetails(&kNode, vars)
 				if err != nil {
 					return nil, err
 				}
 			}
 		}
 	}
-	log.Debug(fmt.Sprintf("%v", kvps))
-	return kvps, nil
+	log.Debug(fmt.Sprintf("%v", vars))
+	return vars, nil
 }
 
+// WatchPrefix is not implemented - K8s backend only supports interval watches.
 func (c *Client) WatchPrefix(prefix string, keys []string, waitIndex uint64, stopChan chan bool) (uint64, error) {
-
-	if waitIndex == 0 {
-		switch prefix {
-		case global:
-			// We only have defaults for this, and they won't change in the
-			// API at this time, so we can safely assume we won't be refreshing.
-			time.Sleep(10 * time.Second)
-			return waitIndex, nil
-		case globalNodeMesh:
-			// This is currently not changeable in k8s.
-			time.Sleep(10 * time.Second)
-			return waitIndex, nil
-		case allNodes:
-			// Get all nodes.  The k8s client does not expose a way to watch a single Node.
-			nodes, err := c.clientSet.Nodes().List(kapiv1.ListOptions{})
-			if err != nil {
-				return 0, err
-			}
-			ver := nodes.ListMeta.ResourceVersion
-
-			return convertResourceVersionToUint(ver, prefix)
-		case ipPool:
-			tprs := thirdparty.IpPoolList{}
-			err := c.tprClient.Get().
-				Name("ippool").
-				Namespace("kube-system").
-				Do().Into(&tprs)
-			if err != nil {
-				if !kerrors.IsNotFound(err) {
-					return 0, err
-				}
-			}
-
-			ver := tprs.Metadata.ResourceVersion
-			return convertResourceVersionToUint(ver, prefix)
-		default:
-			// We aren't tracking this key, default to 10 second refresh.
-			time.Sleep(60 * time.Second)
-			log.Debug(fmt.Sprintf("Receieved unknown key: %v", prefix))
-			return waitIndex + 1, nil
-		}
-	}
-
-	switch prefix {
-	case global:
-		// These are currently not changeable in k8s.
-		time.Sleep(10 * time.Second)
-		return waitIndex, nil
-	case globalNodeMesh:
-		// This is currently not changeable in k8s.
-		time.Sleep(10 * time.Second)
-		return waitIndex, nil
-	case allNodes:
-		w, err := c.clientSet.Nodes().Watch(kapiv1.ListOptions{})
-		if err != nil {
-			return waitIndex, err
-		}
-		event := <-w.ResultChan()
-		ver := event.Object.(*kapiv1.NodeList).ListMeta.ResourceVersion
-		w.Stop()
-		log.Debug(fmt.Sprintf("%d : %s", waitIndex, ver))
-
-		return convertResourceVersionToUint(ver, prefix)
-	case ipPool:
-		w, err := c.tprClient.Get().
-			Name("ippool").
-			Namespace("kube-system").
-			Watch()
-		if err != nil {
-			return waitIndex, err
-		}
-		event := <-w.ResultChan()
-		ver := event.Object.(*thirdparty.IpPoolList).Metadata.ResourceVersion
-		w.Stop()
-
-		return convertResourceVersionToUint(ver, prefix)
-	default:
-		// We aren't tracking this key, default to 10 second refresh.
-		time.Sleep(60 * time.Second)
-		log.Debug(fmt.Sprintf("Receieved unknown key: %v", prefix))
-		return waitIndex + 1, nil
-	}
-	return waitIndex, nil
-}
-
-// buildTPRClient builds a RESTClient configured to interact with Calico ThirdPartyResources.
-func buildTPRClient(baseConfig *rest.Config) (*rest.RESTClient, error) {
-	// Generate config using the base config.
-	cfg := baseConfig
-	cfg.GroupVersion = &schema.GroupVersion{
-		Group:   "projectcalico.org",
-		Version: "v1",
-	}
-	cfg.APIPath = "/apis"
-	cfg.ContentType = runtime.ContentTypeJSON
-	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: clientapi.Codecs}
-
-	cli, err := rest.RESTClientFor(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// We also need to register resources.
-	schemeBuilder := runtime.NewSchemeBuilder(
-		func(scheme *runtime.Scheme) error {
-			scheme.AddKnownTypes(
-				*cfg.GroupVersion,
-				&thirdparty.GlobalConfig{},
-				&thirdparty.GlobalConfigList{},
-				&thirdparty.IpPool{},
-				&thirdparty.IpPoolList{},
-				&kapiv1.ListOptions{},
-				&kapiv1.DeleteOptions{},
-			)
-			return nil
-		})
-	schemeBuilder.AddToScheme(clientapi.Scheme)
-
-	return cli, nil
+	<-stopChan
+	return 0, nil
 }
 
 // populateNodeDetails populates the given kvps map with values we track from the k8s Node object.
-func populateNodeDetails(kNode *kapiv1.Node, kvps map[string]string) error {
+func (c *Client) populateNodeDetails(kNode *kapiv1.Node, vars map[string]string) error {
+	kvps := []*model.KVPair{}
+
+	// Start with the main Node configuration
 	cNode, err := resources.K8sNodeToCalico(kNode)
 	if err != nil {
 		log.Error("Failed to parse k8s Node into Calico Node")
 		return err
 	}
-	node := cNode.Value.(*model.Node)
-	nodeKey := allNodes + "/" + kNode.Name
+	kvps = append(kvps, cNode)
 
-	if node.FelixIPv4 != nil {
-		kvps[nodeKey+"/ip_addr_v4"] = node.FelixIPv4.String()
-	}
-	if node.BGPIPv4Net != nil {
-		kvps[nodeKey+"/network_v4"] = node.BGPIPv4Net.String()
+	// Add per-node BGP config (each of the per-node resource clients also implements
+	// the CustomK8sNodeResourceList interface, used to extract per-node resources from
+	// the Node resource.
+	if cfg, err := c.nodeBgpCfgClient.ExtractResourcesFromNode(kNode); err != nil {
+		log.Error("Failed to parse BGP configs from node resource - skip config data")
+	} else {
+		kvps = append(kvps, cfg...)
 	}
 
-	// Some empty defaults for ipv6
-	kvps[nodeKey+"/ip_addr_v6"] = ""
+	if peers, err := c.nodeBgpPeerClient.ExtractResourcesFromNode(kNode); err != nil {
+		log.Error("Failed to parse BGP peers from node resource - skip config data")
+	} else {
+		kvps = append(kvps, peers...)
+	}
+
+	// Populate the vars map from the KVPairs.
+	c.populateFromKVPairs(kvps, vars)
 
 	return nil
 }
 
-// convertResourceVersionToUint converts the k8s string resource version to a uint64 expected by confd.
-func convertResourceVersionToUint(rv string, prefix string) (uint64, error) {
-	i, err := strconv.ParseUint(rv, 10, 64)
-	if err != nil {
-		log.Error(fmt.Sprintf("Could not convert '%s' resource version %s to uint64", prefix, rv))
-		return 0, err
+// populateFromKVPairs populates the vars KV map from the supplied set of
+// KVPairs.  This uses the libcalico-go compat module and serialization functions
+// to write out the KVPairs in etcdv2 format.  This works in conjunction with the
+// etcdVarClient defined below which provides a "mock" etcd backend which actually
+// just writes out data to the vars map.
+func (c *Client) populateFromKVPairs(kvps []*model.KVPair, vars map[string]string) {
+	// Create a etcdVarClient to write the KVP results in the vars map, using the
+	// compat adaptor to write the values in etcdv2 format.
+	client := compat.NewAdaptor(&etcdVarClient{vars: vars})
+	for _, kvp := range kvps {
+		if _, err := client.Apply(kvp); err != nil {
+			log.Error("Failed to convert k8s data to etcdv2 equivalent: %s = %s", kvp.Key, kvp.Value)
+		}
 	}
-	return i, nil
+}
+
+// etcdVarClient implements the libcalico-go backend api.Client interface.  It is used to
+// write the KVPairs retrieved from the Kubernetes datastore driver into the KV map
+// using etcdv2 naming scheme.
+type etcdVarClient struct {
+	vars map[string]string
+}
+
+func (c *etcdVarClient) Create(kvp *model.KVPair) (*model.KVPair, error) {
+	log.Fatal("Create should not be invoked")
+	return nil, nil
+}
+
+func (c *etcdVarClient) Update(kvp *model.KVPair) (*model.KVPair, error) {
+	log.Fatal("Update should not be invoked")
+	return nil, nil
+}
+
+func (c *etcdVarClient) Apply(kvp *model.KVPair) (*model.KVPair, error) {
+	path, err := model.KeyToDefaultPath(kvp.Key)
+	if err != nil {
+		log.Error("Unable to create path from Key: %s", kvp.Key)
+		return nil, err
+	}
+	value, err := model.SerializeValue(kvp)
+	if err != nil {
+		log.Error("Unable to serialize value: %s", kvp.Key)
+		return nil, err
+	}
+	c.vars[path] = string(value)
+	return kvp, nil
+}
+
+func (c *etcdVarClient) Delete(kvp *model.KVPair) error {
+	// Delete may be invoked as part of the Apply processing for  multi-key resource.
+	// However, since we start from an empty map each time, we never need to delete entries,
+	// so just ignore this request.
+	log.Debug("Delete ignored")
+	return nil
+}
+
+func (c *etcdVarClient) Get(key model.Key) (*model.KVPair, error) {
+	log.Fatal("Get should not be invoked")
+	return nil, nil
+}
+
+func (c *etcdVarClient) List(list model.ListInterface) ([]*model.KVPair, error) {
+	log.Fatal("List should not be invoked")
+	return nil, nil
+}
+
+func (c *etcdVarClient) Syncer(callbacks backendapi.SyncerCallbacks) backendapi.Syncer {
+	log.Fatal("Syncer should not be invoked")
+	return nil
+}
+
+func (c *etcdVarClient) EnsureInitialized() error {
+	log.Fatal("EnsureIntialized should not be invoked")
+	return nil
+}
+
+func (c *etcdVarClient) EnsureCalicoNodeInitialized(node string) error {
+	log.Fatal("EnsureCalicoNodeInitialized should not be invoked")
+	return nil
 }
