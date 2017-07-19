@@ -707,12 +707,16 @@ v2.1:
     networking-calico:
       version: 1.4.1
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.1
+
+# The master release stream is used to generate the master version of the docs,
+# as well as for builds of `calico/node:master` via CI.  Submit PRs to update the
+# versions when a component changes.
 master:
 - title: master
   note: ""
   components:
      felix:
-      version: master
+      version: 2.3.0-30-ge35f251 
       url: ""
      calicoctl:
       version: master
@@ -722,18 +726,18 @@ master:
       version: master
       url: ""
      calico/cni:
-      version: master
+      version: master 
       url: ""
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.6.0/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.6.0/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.9.1/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v1.9.1/calico-ipam
      calico-bird:
-      version: master
-      url: ""
+      version: v0.3.1
+      url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
      calico-bgp-daemon:
-      version: master
-      url: ""
+      version: v0.2.1
+      url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
      libnetwork-plugin:
-      version: master
+      version: v1.1.0 
       url: ""
      calico/kube-policy-controller:
       version: master
