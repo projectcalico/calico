@@ -227,14 +227,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	iptablesNATOptions := iptablesOptions
 	iptablesNATOptions.ExtraCleanupRegexPattern = rules.HistoricInsertedNATRuleRegex
 
-	// Create the shared iptables lock.  This allows us to block other processes from
-	// manipulating iptables while we make our updates.  We use a shared lock because we
-	// actually do multiple updates in parallel (but to different tables), which is safe.
-	iptablesLock := iptables.NewSharedLock(
-		config.IptablesLockFilePath,
-		config.IptablesLockTimeout,
-		config.IptablesLockProbeInterval,
-	)
+	var iptablesLock sync.Locker
+	if config.IptablesLockTimeout <= 0 {
+		log.Info("iptables lock disabled.")
+		iptablesLock = dummyLock{}
+	} else {
+		// Create the shared iptables lock.  This allows us to block other processes from
+		// manipulating iptables while we make our updates.  We use a shared lock because we
+		// actually do multiple updates in parallel (but to different tables), which is safe.
+		log.WithField("timeout", config.IptablesLockTimeout).Info(
+			"iptables lock enabled")
+		iptablesLock = iptables.NewSharedLock(
+			config.IptablesLockFilePath,
+			config.IptablesLockTimeout,
+			config.IptablesLockProbeInterval,
+		)
+	}
 
 	natTableV4 := iptables.NewTable(
 		"nat",
@@ -929,4 +937,14 @@ func (d *InternalDataplane) reportHealth() {
 			&health.HealthReport{Live: true, Ready: d.doneFirstApply},
 		)
 	}
+}
+
+type dummyLock struct{}
+
+func (d dummyLock) Lock() {
+
+}
+
+func (d dummyLock) Unlock() {
+
 }

@@ -111,9 +111,9 @@ type Config struct {
 
 	RouteRefreshInterval               time.Duration `config:"seconds;90"`
 	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
-	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;30"`
+	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
 	IptablesLockFilePath               string        `config:"file;/run/xtables.lock"`
-	IptablesLockTimeoutSecs            time.Duration `config:"seconds;30"`
+	IptablesLockTimeoutSecs            time.Duration `config:"seconds;0"`
 	IptablesLockProbeIntervalMillis    time.Duration `config:"millis;50"`
 	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
 	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
