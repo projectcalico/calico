@@ -135,15 +135,15 @@ func NewTierInfo(name string) *tierInfo {
 func (t tierInfo) String() string {
 	policies := make([]string, len(t.OrderedPolicies))
 	for ii, pol := range t.OrderedPolicies {
-		untracked := "t"
+		polType := "t"
 		if pol.Value != nil {
 			if pol.Value.DoNotTrack {
-				untracked = "u"
+				polType = "u"
 			} else if pol.Value.PreDNAT {
-				untracked = "p"
+				polType = "p"
 			}
 		}
-		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, untracked)
+		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, polType)
 	}
 	return fmt.Sprintf("%v -> %v", t.Name, policies)
 }

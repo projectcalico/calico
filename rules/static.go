@@ -463,20 +463,18 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 	// Accept immediately if we've already accepted this packet in the raw table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
-	// Set a mark on the packet if it's from a workload interface.
-	markFromWorkload := r.IptablesMarkScratch0
-	rules = append(rules, Rule{Action: ClearMarkAction{Mark: markFromWorkload}})
+	// If packet is from a workload interface, ACCEPT or RETURN immediately according to
+	// IptablesAllowAction (because pre-DNAT policy is only for host endpoints).
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
 		rules = append(rules, Rule{
 			Match:  Match().InInterface(ifacePrefix + "+"),
-			Action: SetMarkAction{Mark: markFromWorkload},
+			Action: r.iptablesAllowAction,
 		})
 	}
 
-	// If not from a workload, dispatch to host endpoint chain for the incoming interface.
+	// Now (=> not from a workload) dispatch to host endpoint chain for the incoming interface.
 	rules = append(rules,
 		Rule{
-			Match:  Match().MarkClear(markFromWorkload),
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		// Following that...  If the packet was explicitly allowed by a pre-DNAT policy, it
@@ -485,7 +483,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		// isn't governed by any pre-DNAT policy on that interface, it will fall through to
 		// here without any Calico bits set.
 
-		// In the MarkAccept case, we ACCEPT or RETURN according to IptablesAllowAction
+		// In the MarkAccept case, we ACCEPT or RETURN according to IptablesAllowAction.
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
 			Action:  r.iptablesAllowAction,

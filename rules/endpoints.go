@@ -75,7 +75,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint chain.")
 	return r.endpointToIptablesChains(
 		untrackedPolicyNames,
-		nil, // We don't render profiles into the raw chain.
+		nil, // We don't render profiles into the raw table.
 		ifaceName,
 		PolicyOutboundPfx,
 		PolicyInboundPfx,
@@ -97,7 +97,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return r.endpointToIptablesChains(
 		preDNATPolicyNames,
-		nil, // We don't render profiles into the raw chain.
+		nil, // We don't render profiles into the mangle table.
 		ifaceName,
 		PolicyOutboundPfx,
 		PolicyInboundPfx,
@@ -107,7 +107,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 		HostFromEndpointPfx,
 		ChainFailsafeOut,
 		ChainFailsafeIn,
-		chainTypePreDNAT, // Render "pre-DNAT" version of chain for the nat table.
+		chainTypePreDNAT, // Render "pre-DNAT" version of chain for the mangle table.
 		true,             // Host endpoints are always admin up.
 	)
 }

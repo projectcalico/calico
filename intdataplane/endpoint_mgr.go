@@ -92,7 +92,11 @@ type endpointManager struct {
 	activeHostIfaceToRawChains    map[string][]*iptables.Chain
 	activeHostIfaceToFiltChains   map[string][]*iptables.Chain
 	activeHostIfaceToMangleChains map[string][]*iptables.Chain
-	// Dispatch chains that we've programmed for host endpoints.
+	// Dispatch chains that we've programmed for host endpoints.  We program the same dispatch
+	// tree (i.e. for the same set of host endpoints) in the filter and mangle tables, so can
+	// share a variable to track those.  In the raw table there is generally a smaller set of
+	// relevant host endpoints, and so a different dispatch tree, so we have separate tracking
+	// for that.
 	activeHostRawDispatchChains        map[string]*iptables.Chain
 	activeHostFiltMangleDispatchChains map[string]*iptables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
@@ -696,7 +700,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 	m.activeHostIfaceToMangleChains = newHostIfaceMangleChains
 	m.activeHostIfaceToRawChains = newHostIfaceRawChains
 
-	// Rewrite the filter dispatch chains if they've changed.
+	// Rewrite the filter and mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
 	newFiltMangleDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
 	m.updateDispatchChains(m.activeHostFiltMangleDispatchChains, newFiltMangleDispatchChains, m.filterTable, m.mangleTable)
