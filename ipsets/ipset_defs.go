@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/projectcalico/felix/ip"
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var (

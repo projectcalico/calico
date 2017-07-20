@@ -28,8 +28,8 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/felix/testutils"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 var wlDispatchEmpty = []*iptables.Chain{

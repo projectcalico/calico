@@ -23,7 +23,7 @@ import (
 	"github.com/projectcalico/felix/ip"
 	. "github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/felix/set"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (

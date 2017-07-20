@@ -25,9 +25,9 @@ import (
 
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
-	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 const (

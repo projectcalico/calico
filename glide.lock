@@ -1,5 +1,5 @@
-hash: 8fa32f3339726894cf249af552b1cd2f957c8b7e431679edc970e998ab148a38
-updated: 2017-07-17T16:32:57.611594-07:00
+hash: 61968ec828d44a6523e18d88ac7cd2eb8bbd3a08138f8f4e31e51e59489193ae
+updated: 2017-07-20T10:32:22.392864782Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -140,7 +140,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7c8b6d628b83f5b7d609989e2633c18e55dc6a54
+  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
   subpackages:
   - lib
   - lib/api
@@ -157,6 +157,7 @@ imports:
   - lib/converter
   - lib/errors
   - lib/hash
+  - lib/health
   - lib/hwm
   - lib/ipip
   - lib/logutils
@@ -166,10 +167,11 @@ imports:
   - lib/selector
   - lib/selector/parser
   - lib/selector/tokenizer
+  - lib/set
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: 4e38222620373879525868b8ca37fe60fb0f3f2a
+  version: ba7de8493be8276290720eeb38406de46dd11c2e
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -208,7 +210,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/vishvananda/netlink
-  version: 8c5a115d793b6d223efadbdba04d1de197d386e8
+  version: 8d7f7aad193e778023f06a843a26ffc9615ca840
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -229,7 +231,7 @@ imports:
   - idna
   - lex/httplex
 - name: golang.org/x/sys
-  version: 4cd6d1a821c7175768725b55ca82f14683a29ea4
+  version: 7a4fde3fda8ef580a89dbae8138c26041be14299
   subpackages:
   - unix
 - name: golang.org/x/text

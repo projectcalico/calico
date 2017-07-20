@@ -22,9 +22,9 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/multidict"
-	"github.com/projectcalico/felix/set"
 )
 
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for tags and

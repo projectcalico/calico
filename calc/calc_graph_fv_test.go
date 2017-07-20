@@ -16,7 +16,6 @@ package calc_test
 
 import (
 	. "github.com/projectcalico/felix/calc"
-	"github.com/projectcalico/felix/health"
 
 	"fmt"
 	"reflect"
@@ -30,10 +29,11 @@ import (
 	"github.com/projectcalico/felix/config"
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/proto"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // Canned hostnames.

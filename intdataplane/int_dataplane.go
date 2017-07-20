@@ -28,7 +28,6 @@ import (
 	"github.com/gavv/monotime"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/projectcalico/felix/health"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -36,8 +35,9 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/felix/set"
 	"github.com/projectcalico/felix/throttle"
+	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
