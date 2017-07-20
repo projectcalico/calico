@@ -23,7 +23,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/onsi/ginkgo/reporters"
 
-	"github.com/projectcalico/felix/logutils"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
