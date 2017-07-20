@@ -127,7 +127,7 @@ class TestBase(TestCase):
         # Check that all tests passed
         if False in results:
             # We've failed, lets put together some diags.
-            header = ["source.ip", "dest.ip", "type", "exp_result", "pass/fail"]
+            header = ["source.ip", "dest.ip", "type", "expected", "actual"]
             diagstring = "{: >18} {: >18} {: >7} {: >6} {: >6}\r\n".format(*header)
             for i in range(len(conn_check_list)):
                 source, dest, test_type, exp_result, retries = conn_check_list[i]
