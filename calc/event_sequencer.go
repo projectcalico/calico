@@ -231,6 +231,7 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 					"pol-out-default/"+key.Name,
 				),
 				Untracked: rulesOrNil.Untracked,
+				PreDnat:   rulesOrNil.PreDNAT,
 			},
 		})
 		buf.sentPolicies.Add(key)

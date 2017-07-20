@@ -66,23 +66,34 @@ var hostDispatchEmpty = []*iptables.Chain{
 	},
 }
 
+var fromHostDispatchEmpty = []*iptables.Chain{
+	{
+		Name:  "cali-from-host-endpoint",
+		Rules: []iptables.Rule{},
+	},
+}
+
 func hostChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, true, false)
+	return chainsForIfaces(ifaceMetadata, true, "normal")
 }
 
 func rawChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, true, true)
+	return chainsForIfaces(ifaceMetadata, true, "untracked")
+}
+
+func preDNATChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
+	return chainsForIfaces(ifaceMetadata, true, "preDNAT")
 }
 
 func wlChainsForIfaces(ifaceMetadata []string) []*iptables.Chain {
-	return chainsForIfaces(ifaceMetadata, false, false)
+	return chainsForIfaces(ifaceMetadata, false, "normal")
 }
 
-func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Chain {
+func chainsForIfaces(ifaceMetadata []string, host bool, tableKind string) []*iptables.Chain {
 	log.WithFields(log.Fields{
-		"ifaces": ifaceMetadata,
-		"host":   host,
-		"raw":    raw,
+		"ifaces":    ifaceMetadata,
+		"host":      host,
+		"tableKind": tableKind,
 	}).Debug("Calculating chains for interface")
 	chains := []*iptables.Chain{}
 	dispatchOut := []iptables.Rule{}
@@ -96,34 +107,34 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 	for _, ifaceMetadata := range ifaceMetadata {
 		var ifaceName, polName string
 		nameParts := strings.Split(ifaceMetadata, "_")
-		var untracked bool
+		var ifaceKind string
 		if len(nameParts) == 1 {
 			// Just an interface name "eth0", apply no tweaks.
 			log.Debug("Interface name only")
 			ifaceName = nameParts[0]
 			polName = ""
-			untracked = false
+			ifaceKind = "normal"
 		} else if len(nameParts) == 2 {
 			// Interface name and a policy name  "eth0_polA".
 			log.Debug("Interface name and policy name")
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
-			untracked = false
+			ifaceKind = "normal"
 		} else {
 			// Interface name, policy name and untracked "eth0_polA_untracked".
 			log.Debug("Interface name policy name and untracked")
 			ifaceName = nameParts[0]
 			polName = nameParts[1]
-			untracked = true
+			ifaceKind = nameParts[2]
 		}
 
-		if raw && !untracked {
+		if tableKind != ifaceKind && tableKind != "normal" {
 			continue
 		}
 
 		outRules := []iptables.Rule{}
 
-		if !raw {
+		if tableKind != "untracked" {
 			outRules = append(outRules,
 				iptables.Rule{
 					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
@@ -146,7 +157,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 			Match:  iptables.Match(),
 			Action: iptables.ClearMarkAction{Mark: 8},
 		})
-		if polName != "" && (raw == untracked) {
+		if polName != "" && tableKind == ifaceKind {
 			outRules = append(outRules, iptables.Rule{
 				Match:   iptables.Match(),
 				Action:  iptables.ClearMarkAction{Mark: 16},
@@ -156,7 +167,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 				Match:  iptables.Match().MarkClear(16),
 				Action: iptables.JumpAction{Target: "cali-po-" + polName},
 			})
-			if untracked {
+			if tableKind == "untracked" {
 				outRules = append(outRules, iptables.Rule{
 					Match:  iptables.Match().MarkSet(8),
 					Action: iptables.NoTrackAction{},
@@ -167,7 +178,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if !raw {
+			if tableKind == "normal" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -179,7 +190,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 			}
 		}
 
-		if !raw {
+		if tableKind == "normal" {
 			outRules = append(outRules, iptables.Rule{
 				Match:   iptables.Match(),
 				Action:  iptables.DropAction{},
@@ -189,7 +200,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 
 		inRules := []iptables.Rule{}
 
-		if !raw {
+		if tableKind != "untracked" {
 			inRules = append(inRules,
 				iptables.Rule{
 					Match:  iptables.Match().ConntrackState("RELATED,ESTABLISHED"),
@@ -212,7 +223,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 			Match:  iptables.Match(),
 			Action: iptables.ClearMarkAction{Mark: 8},
 		})
-		if polName != "" && (raw == untracked) {
+		if polName != "" && tableKind == ifaceKind {
 			inRules = append(inRules, iptables.Rule{
 				Match:   iptables.Match(),
 				Action:  iptables.ClearMarkAction{Mark: 16},
@@ -223,7 +234,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 				Match:  iptables.Match().MarkClear(16),
 				Action: iptables.JumpAction{Target: "cali-pi-" + polName},
 			})
-			if untracked {
+			if tableKind == "untracked" {
 				inRules = append(inRules, iptables.Rule{
 					Match:  iptables.Match().MarkSet(8),
 					Action: iptables.NoTrackAction{},
@@ -234,7 +245,7 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 				Action:  iptables.ReturnAction{},
 				Comment: "Return if policy accepted",
 			})
-			if !untracked {
+			if tableKind == "normal" {
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
@@ -245,23 +256,32 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 				})
 			}
 		}
-		if !raw {
+		if tableKind == "normal" {
 			inRules = append(inRules, iptables.Rule{
 				Match:   iptables.Match(),
 				Action:  iptables.DropAction{},
 				Comment: "Drop if no profiles matched",
 			})
 		}
-		chains = append(chains,
-			&iptables.Chain{
-				Name:  "cali-t" + hostOrWlLetter + "-" + ifaceName,
-				Rules: outRules,
-			},
-			&iptables.Chain{
-				Name:  "cali-f" + hostOrWlLetter + "-" + ifaceName,
-				Rules: inRules,
-			},
-		)
+		if tableKind == "preDNAT" {
+			chains = append(chains,
+				&iptables.Chain{
+					Name:  "cali-f" + hostOrWlLetter + "-" + ifaceName,
+					Rules: inRules,
+				},
+			)
+		} else {
+			chains = append(chains,
+				&iptables.Chain{
+					Name:  "cali-t" + hostOrWlLetter + "-" + ifaceName,
+					Rules: outRules,
+				},
+				&iptables.Chain{
+					Name:  "cali-f" + hostOrWlLetter + "-" + ifaceName,
+					Rules: inRules,
+				},
+			)
+		}
 		dispatchOut = append(dispatchOut,
 			iptables.Rule{
 				Match:  iptables.Match().OutInterface(ifaceName),
@@ -291,16 +311,25 @@ func chainsForIfaces(ifaceMetadata []string, host bool, raw bool) []*iptables.Ch
 			},
 		)
 	}
-	chains = append(chains,
-		&iptables.Chain{
-			Name:  "cali-to-" + hostOrWlDispatch,
-			Rules: dispatchOut,
-		},
-		&iptables.Chain{
-			Name:  "cali-from-" + hostOrWlDispatch,
-			Rules: dispatchIn,
-		},
-	)
+	if tableKind == "preDNAT" {
+		chains = append(chains,
+			&iptables.Chain{
+				Name:  "cali-from-" + hostOrWlDispatch,
+				Rules: dispatchIn,
+			},
+		)
+	} else {
+		chains = append(chains,
+			&iptables.Chain{
+				Name:  "cali-to-" + hostOrWlDispatch,
+				Rules: dispatchOut,
+			},
+			&iptables.Chain{
+				Name:  "cali-from-" + hostOrWlDispatch,
+				Rules: dispatchIn,
+			},
+		)
+	}
 	return chains
 }
 
@@ -417,6 +446,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 		configureHostEp := func(spec *hostEpSpec) func() {
 			tiers := []*proto.TierInfo{}
 			untrackedTiers := []*proto.TierInfo{}
+			preDNATTiers := []*proto.TierInfo{}
 			if spec.polName != "" {
 				parts := strings.Split(spec.polName, "_")
 				if len(parts) == 1 {
@@ -426,6 +456,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 				} else if len(parts) == 2 && parts[1] == "untracked" {
 					untrackedTiers = append(untrackedTiers, &proto.TierInfo{
+						Name:     "default",
+						Policies: []string{parts[0]},
+					})
+				} else if len(parts) == 2 && parts[1] == "preDNAT" {
+					preDNATTiers = append(preDNATTiers, &proto.TierInfo{
 						Name:     "default",
 						Policies: []string{parts[0]},
 					})
@@ -443,6 +478,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						ProfileIds:        []string{},
 						Tiers:             tiers,
 						UntrackedTiers:    untrackedTiers,
+						PreDnatTiers:      preDNATTiers,
 						ExpectedIpv4Addrs: spec.ipv4Addrs,
 						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
@@ -460,6 +496,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 				rawTable.checkChains([][]*iptables.Chain{
 					rawChainsForIfaces(names),
 				})
+				mangleTable.checkChains([][]*iptables.Chain{
+					preDNATChainsForIfaces(names),
+				})
 			}
 		}
 
@@ -471,6 +510,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 				rawTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmpty,
+				})
+				mangleTable.checkChains([][]*iptables.Chain{
+					fromHostDispatchEmpty,
 				})
 			}
 		}
@@ -600,6 +642,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}))
 					It("should have expected chains", expectChainsFor("eth0_polA_untracked"))
 				})
+
+				Describe("replaced with pre-DNAT version", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:      "id1",
+						name:    "eth0",
+						polName: "polA_preDNAT",
+					}))
+					It("should have expected chains", expectChainsFor("eth0_polA_preDNAT"))
+				})
 			})
 
 			Describe("with host endpoint with untracked tier matching eth0", func() {
@@ -648,6 +699,54 @@ func endpointManagerTests(ipVersion uint8) func() {
 				}))
 
 				It("should have expected chains", expectChainsFor("eth0_polB_untracked"))
+			})
+
+			Describe("with host endpoint with pre-DNAT tier matching eth0", func() {
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:      "id1",
+					name:    "eth0",
+					polName: "polA_preDNAT",
+				}))
+				It("should have expected chains", expectChainsFor("eth0_polA_preDNAT"))
+
+				Context("with another host ep (<ID) that matches the IPv4 address", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:        "id0",
+						ipv4Addrs: []string{ipv4},
+						polName:   "polB_preDNAT",
+					}))
+
+					It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
+
+					Context("with the first host ep removed", func() {
+						JustBeforeEach(removeHostEp("id1"))
+						It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
+
+						Context("with both host eps removed", func() {
+							JustBeforeEach(removeHostEp("id0"))
+							It("should have empty dispatch chains", expectEmptyChains())
+						})
+					})
+				})
+
+				Describe("replaced with a tracked version", func() {
+					JustBeforeEach(configureHostEp(&hostEpSpec{
+						id:      "id1",
+						name:    "eth0",
+						polName: "polA",
+					}))
+					It("should have expected chains", expectChainsFor("eth0_polA"))
+				})
+			})
+
+			Context("with a host ep that matches the IPv4 address with pre-DNAT policy", func() {
+				JustBeforeEach(configureHostEp(&hostEpSpec{
+					id:        "id0",
+					ipv4Addrs: []string{ipv4},
+					polName:   "polB_preDNAT",
+				}))
+
+				It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
 			})
 
 			Describe("with host endpoint matching eth0", func() {
@@ -873,6 +972,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 				filterTable.checkChains([][]*iptables.Chain{
 					hostDispatchEmpty,
 					wlChainsForIfaces(names),
+				})
+				mangleTable.checkChains([][]*iptables.Chain{
+					fromHostDispatchEmpty,
 				})
 			}
 		}
@@ -1112,7 +1214,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				})
 			})
 
-			Context("with an inactiveworkload endpoint", func() {
+			Context("with an inactive workload endpoint", func() {
 				wlEPID1 := proto.WorkloadEndpointID{
 					OrchestratorId: "k8s",
 					WorkloadId:     "pod-11",
@@ -1153,6 +1255,10 @@ func endpointManagerTests(ipVersion uint8) func() {
 							}},
 						},
 					))
+					_, ok := mangleTable.currentChains["cali-tw-cali12345-ab"]
+					Expect(ok).To(BeFalse())
+					_, ok = mangleTable.currentChains["cali-fw-cali12345-ab"]
+					Expect(ok).To(BeFalse())
 				})
 
 				It("should remove routes", func() {

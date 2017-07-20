@@ -148,6 +148,7 @@ message Policy {
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
+  bool pre_dnat = 4;
 }
 
 enum IPVersion {
