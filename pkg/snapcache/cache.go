@@ -26,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/syncproto"
 )
@@ -125,11 +126,18 @@ type Cache struct {
 	currentBreadcrumb unsafe.Pointer
 
 	wakeUpTicker *jitter.Ticker
+	healthTicks  <-chan time.Time
 }
 
+const (
+	healthName     = "cache"
+	healthInterval = 10 * time.Second
+)
+
 type Config struct {
-	MaxBatchSize   int
-	WakeUpInterval time.Duration
+	MaxBatchSize     int
+	WakeUpInterval   time.Duration
+	HealthAggregator *health.HealthAggregator
 }
 
 func (config *Config) ApplyDefaults() {
@@ -158,14 +166,20 @@ func New(config Config) *Cache {
 		nextCond:  cond,
 		KVs:       kvs.ReadOnlySnapshot(),
 	}
-	return &Cache{
+	c := &Cache{
 		config:            config,
 		inputC:            make(chan interface{}, config.MaxBatchSize*2),
 		breadcrumbCond:    cond,
 		kvs:               kvs,
 		currentBreadcrumb: (unsafe.Pointer)(snap),
 		wakeUpTicker:      jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
+		healthTicks:       time.NewTicker(healthInterval).C,
 	}
+	if config.HealthAggregator != nil {
+		config.HealthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
+	}
+	c.reportHealth()
+	return c
 }
 
 // CurrentBreadcrumb returns the current Breadcrumb, which contains a snapshot of the datastore
@@ -252,8 +266,19 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 		// wake all the clients so they can check if their Context is done.
 		log.Debug("Waking all clients.")
 		c.breadcrumbCond.Broadcast()
+	case <-c.healthTicks:
+		c.reportHealth()
 	}
 	return ctx.Err()
+}
+
+func (c *Cache) reportHealth() {
+	if c.config.HealthAggregator != nil {
+		c.config.HealthAggregator.Report(healthName, &health.HealthReport{
+			Live:  true,
+			Ready: c.pendingStatus == api.InSync,
+		})
+	}
 }
 
 // publishBreadcrumbs sends a series of Breadcrumbs, draining the pending updates list.

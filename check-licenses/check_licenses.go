@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
 	"github.com/projectcalico/typha/pkg/logutils"
-	"github.com/projectcalico/typha/pkg/set"
 )
 
 var (

@@ -28,6 +28,7 @@ import (
 	"math"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/jitter"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -132,7 +133,13 @@ type Config struct {
 	PongTimeout             time.Duration
 	DropInterval            time.Duration
 	MaxConns                int
+	HealthAggregator        *health.HealthAggregator
 }
+
+const (
+	healthName     = "sync_server"
+	healthInterval = 10 * time.Second
+)
 
 func (c *Config) ApplyDefaults() {
 	if c.MaxMessageSize < 1 {
@@ -205,7 +212,7 @@ func (c *Config) ListenPort() int {
 func New(cache BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
-	return &Server{
+	s := &Server{
 		config:       config,
 		cache:        cache,
 		maxConnsC:    make(chan int),
@@ -214,6 +221,17 @@ func New(cache BreadcrumbProvider, config Config) *Server {
 		connIDToConn: map[uint64]*connection{},
 		listeningC:   make(chan struct{}),
 	}
+
+	// Register that we will report liveness.
+	if config.HealthAggregator != nil {
+		config.HealthAggregator.RegisterReporter(
+			healthName,
+			&health.HealthReport{Live: true},
+			healthInterval*2,
+		)
+	}
+
+	return s
 }
 
 func (s *Server) Start(cxt context.Context) {
@@ -333,6 +351,8 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 	logCxt := log.WithField("thread", "numConnsGov")
 	maxConns := s.maxConns
 	ticker := jitter.NewTicker(s.dropInterval, s.dropInterval/10)
+	healthTicks := time.NewTicker(healthInterval).C
+	s.reportHealth()
 	for {
 		select {
 		case newMax := <-s.maxConnsC:
@@ -370,7 +390,15 @@ func (s *Server) governNumberOfConnections(cxt context.Context) {
 		case <-cxt.Done():
 			logCxt.Info("Context asked us to stop")
 			return
+		case <-healthTicks:
+			s.reportHealth()
 		}
+	}
+}
+
+func (s *Server) reportHealth() {
+	if s.config.HealthAggregator != nil {
+		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
 	}
 }
 

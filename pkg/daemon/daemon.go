@@ -29,13 +29,14 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/docopt/docopt-go"
+	docopt "github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/typha/pkg/buildinfo"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/config"
@@ -77,6 +78,9 @@ type TyphaDaemon struct {
 	NewBackendClient      func(config api.CalicoAPIConfig) (BackendClient, error)
 	ConfigureEarlyLogging func()
 	ConfigureLogging      func(configParams *config.Config)
+
+	// Health monitoring.
+	healthAggregator *health.HealthAggregator
 }
 
 func New() *TyphaDaemon {
@@ -215,6 +219,9 @@ configRetry:
 func (t *TyphaDaemon) CreateServer() {
 	// Now create the Syncer; our caching layer and the TCP server.
 
+	// Health monitoring, for liveness and readiness endpoints.
+	t.healthAggregator = health.NewHealthAggregator()
+
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
 	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
 	t.Syncer = t.DatastoreClient.Syncer(t.SyncerToValidator)
@@ -226,7 +233,8 @@ func (t *TyphaDaemon) CreateServer() {
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	t.Cache = snapcache.New(snapcache.Config{
-		MaxBatchSize: t.ConfigParams.SnapshotCacheMaxBatchSize,
+		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
+		HealthAggregator: t.healthAggregator,
 	})
 
 	// Create the server, which listens for connections from Felix.
@@ -241,6 +249,7 @@ func (t *TyphaDaemon) CreateServer() {
 			DropInterval:            t.ConfigParams.ConnectionDropIntervalSecs,
 			MaxConns:                t.ConfigParams.MaxConnectionsUpperLimit,
 			Port:                    t.ConfigParams.ServerPort,
+			HealthAggregator:        t.healthAggregator,
 		},
 	)
 }
@@ -267,6 +276,11 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	if t.ConfigParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.  Starting server.")
 		go servePrometheusMetrics(t.ConfigParams)
+	}
+
+	if t.ConfigParams.HealthEnabled {
+		log.WithField("port", t.ConfigParams.HealthPort).Info("Health enabled.  Starting server.")
+		go t.healthAggregator.ServeHTTP(t.ConfigParams.HealthPort)
 	}
 }
 
