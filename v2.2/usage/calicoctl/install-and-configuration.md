@@ -49,7 +49,7 @@ DATASTORE_TYPE=kubernetes KUBECONFIG=~/.kube/config calicoctl get nodes
 ```
 
 For the possible options and configuration guidance see
-[Configuing calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup).
+[Configuring calicoctl]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup).
 
 ### Checking the configuration
 
