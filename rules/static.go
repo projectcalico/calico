@@ -462,8 +462,29 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains [
 func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chain {
 	rules := []Rule{}
 
-	// Accept immediately if we've already accepted this packet in the raw table.
-	rules = append(rules, r.acceptAlreadyAccepted()...)
+	// ACCEPT or RETURN immediately if packet matches an existing connection.  Note that we also
+	// have a rule like this at the start of each pre-endpoint chain; the functional difference
+	// with placing this rule here is that it will also apply to packets that may be unrelated
+	// to Calico (i.e. not to or from Calico workloads, and not via Calico host endpoints).  We
+	// think this is appropriate in the mangle table here - whereas we don't have a rule like
+	// this in the filter table - because the mangle table is generally not used (except by us)
+	// for dropping packets, so it is very unlikely that we would be circumventing someone
+	// else's rule to drop a packet.  (And in that case, the user can configure
+	// IptablesMangleAllowAction to be RETURN.)
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: r.mangleAllowAction,
+		},
+	)
+
+	// Or if we've already accepted this packet in the raw table.
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Action: r.mangleAllowAction,
+		},
+	)
 
 	// If packet is from a workload interface, ACCEPT or RETURN immediately according to
 	// IptablesMangleAllowAction (because pre-DNAT policy is only for host endpoints).
