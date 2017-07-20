@@ -42,6 +42,10 @@ type Policy struct {
 	Spec     PolicySpec     `json:"spec,omitempty"`
 }
 
+func (t Policy) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // PolicyMetadata contains the metadata for a selector-based security Policy resource.
 type PolicyMetadata struct {
 	unversioned.ObjectMetadata

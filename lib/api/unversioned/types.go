@@ -19,6 +19,12 @@ type Resource interface {
 	GetTypeMetadata() TypeMetadata
 }
 
+// All singular resources (all resources not including lists) implement the ResourceObject interface
+type ResourceObject interface {
+	Resource
+	GetResourceMetadata() ResourceMetadata
+}
+
 // Define available versions.
 var (
 	// `apiVersion` in the config yaml files

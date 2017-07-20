@@ -40,6 +40,10 @@ type Node struct {
 	Spec     NodeSpec     `json:"spec,omitempty"`
 }
 
+func (t Node) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // NodeMetadata contains the metadata for a Calico Node resource.
 type NodeMetadata struct {
 	unversioned.ObjectMetadata

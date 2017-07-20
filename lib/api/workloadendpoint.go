@@ -27,6 +27,10 @@ type WorkloadEndpoint struct {
 	Spec     WorkloadEndpointSpec     `json:"spec,omitempty"`
 }
 
+func (t WorkloadEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
+	return t.Metadata
+}
+
 // WorkloadEndpointMetadata contains the Metadata for a WorkloadEndpoint resource.
 type WorkloadEndpointMetadata struct {
 	unversioned.ObjectMetadata
