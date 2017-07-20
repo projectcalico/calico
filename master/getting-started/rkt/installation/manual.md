@@ -73,6 +73,8 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --mount=volume=mods,target=/lib/modules \
   --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
   --mount=volume=logs,target=/var/log/calico \
+  --volume=run,kind=host,source=/run,readOnly=false \
+  --mount=volume=run,target=/run \
   --net=host \
   quay.io/calico/node:{{site.data.versions[page.version].first.title}} &
 ```
