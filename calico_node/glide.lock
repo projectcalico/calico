@@ -1,19 +1,25 @@
-hash: d193d13ff5e3b54ec6c158bf97bd470b81f295ef95bf602fe79813d706d0e597
-updated: 2017-06-16T22:20:48.977274261Z
+hash: 5d61f4ce198ea6a2627e5e92e63547b596d08f97f8c02b4ba07554986266c427
+updated: 2017-07-20T00:40:29.661107391Z
 imports:
 - name: github.com/coreos/etcd
-  version: 17ae440991da3bdb2df4309936dd2074f66ec394
+  version: cdde0368ad6de945cf262e529cf950c9e0922a49
   subpackages:
   - client
+  - pkg/fileutil
   - pkg/pathutil
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
-  - version
-- name: github.com/coreos/go-semver
-  version: 568e959cd89871e61434c1143528d9162da89ef2
+- name: github.com/coreos/go-systemd
+  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
   subpackages:
-  - semver
+  - daemon
+  - journal
+  - util
+- name: github.com/coreos/pkg
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  subpackages:
+  - capnslog
 - name: github.com/davecgh/go-spew
   version: 5215b55f46b2b919f50a1df0eaa5886afe4e3b3d
   subpackages:
@@ -54,7 +60,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 8bf4bbfc795e2c7c8a5ea47b707453ed019e2ad4
+  version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -62,7 +68,7 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/onsi/ginkgo
-  version: f40a49d81e5c12e90400620b6242fb29a8e7c9d9
+  version: 00054c0bb96fc880d4e0be1b90937fad438c5290
   subpackages:
   - config
   - extensions/table
@@ -72,7 +78,6 @@ imports:
   - internal/leafnodes
   - internal/remote
   - internal/spec
-  - internal/spec_iterator
   - internal/specrunner
   - internal/suite
   - internal/testingtproxy
@@ -91,7 +96,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e40a090d7d025f7ab60f7a5e5bc362f875116754
+  version: e1ab5e5bf4a57ea6fa71bf4a7712af27b824a005
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -128,7 +133,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/ugorji/go
-  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  version: 9c7f9b7a2bc3a520f7c7b30b34b7f85f47fe27b6
   subpackages:
   - codec
 - name: golang.org/x/crypto
@@ -138,13 +143,12 @@ imports:
   - blowfish
   - ssh/terminal
 - name: golang.org/x/net
-  version: f2499483f923065a842d38eb4c7f1927e6fc6e6d
+  version: 6acef71eb69611914f7a30939ea9f6e194c78172
   subpackages:
   - context
   - http2
   - http2/hpack
   - idna
-  - lex/httplex
 - name: golang.org/x/sys
   version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
@@ -310,7 +314,7 @@ imports:
   - util/integer
 testImports:
 - name: github.com/onsi/gomega
-  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
+  version: f1f0f388b31eca4e2cbe7a6dd8a3a1dfddda5b1c
   subpackages:
   - format
   - internal/assertion

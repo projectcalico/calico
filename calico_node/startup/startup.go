@@ -110,13 +110,10 @@ func main() {
 	// Configure IP Pool configuration.
 	configureIPPools(client)
 
-	// Set other Felix config that is not yet in the node resource.  Skip for Kubernetes as
-	// the keys do not yet exist
-	if cfg.Spec.DatastoreType != api.Kubernetes {
-		if err := ensureDefaultConfig(client, node); err != nil {
-			fatal("Unable to set global default configuration: %s", err)
-			terminate()
-		}
+	// Set default configuration required for the cluster.
+	if err := ensureDefaultConfig(cfg, client, node); err != nil {
+		fatal("Unable to set global default configuration: %s", err)
+		terminate()
 	}
 
 	// Write the startup.env file now that we are ready to start other
@@ -760,7 +757,7 @@ func ensureFilesystemAsExpected() {
 
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
-func ensureDefaultConfig(c *client.Client, node *api.Node) error {
+func ensureDefaultConfig(cfg *api.CalicoAPIConfig, c *client.Client, node *api.Node) error {
 	// By default we set the global reporting interval to 0 - this is
 	// different from the defaults defined in Felix.
 	//
@@ -778,9 +775,11 @@ func ensureDefaultConfig(c *client.Client, node *api.Node) error {
 	// This is important for container deployments, where it is common
 	// for containers to speak to services running on the host (e.g. k8s
 	// pods speaking to k8s api-server, and mesos tasks registering with agent
-	// on startup).
-	if err := ensureFelixConfig(c, node.Metadata.Name, "DefaultEndpointToHostAction", "RETURN"); err != nil {
-		return err
+	// on startup).  Note: KDD does not yet support per-node felix config.
+	if cfg.Spec.DatastoreType != api.Kubernetes {
+		if err := ensureNodeFelixConfig(c, node.Metadata.Name, "DefaultEndpointToHostAction", "RETURN"); err != nil {
+			return err
+		}
 	}
 
 	// Store the Calico Version as a global felix config setting.
@@ -789,18 +788,13 @@ func ensureDefaultConfig(c *client.Client, node *api.Node) error {
 	}
 
 	// Set the default values for some of the global BGP config values and
-	// per-node directory structure.
-	// These are required by both confd and the GoBGP daemon.  Some of this
-	// can only be done directly by the backend (since it requires access to
-	// datastore features not exposed in the main API).
-	//
-	// TODO: This is only required for the current BIRD and GoBGP integrations,
-	//       but should be removed once we switch over to a better watcher interface.
-	if err := ensureGlobalBGPConfig(c, "node_mesh", fmt.Sprintf("{\"enabled\": %v}", client.GlobalDefaultNodeToNodeMesh)); err != nil {
+	// per-node directory structure. - this makes it easier to change the
+	// default values in the future without impacting existing clusters.
+	if err := ensureGlobalBGPConfig(c, "NodeMeshEnabled", fmt.Sprintf("%v", client.GlobalDefaultNodeToNodeMesh)); err != nil {
 		return err
-	} else if err := ensureGlobalBGPConfig(c, "as_num", strconv.Itoa(client.GlobalDefaultASNumber)); err != nil {
+	} else if err := ensureGlobalBGPConfig(c, "AsNumber", strconv.Itoa(client.GlobalDefaultASNumber)); err != nil {
 		return err
-	} else if err = ensureGlobalBGPConfig(c, "loglevel", client.GlobalDefaultLogLevel); err != nil {
+	} else if err = ensureGlobalBGPConfig(c, "LogLevel", client.GlobalDefaultLogLevel); err != nil {
 		return err
 	} else if err = c.Backend.EnsureCalicoNodeInitialized(node.Metadata.Name); err != nil {
 		return err
@@ -821,9 +815,9 @@ func ensureGlobalFelixConfig(c *client.Client, key, def string) error {
 	}
 }
 
-// ensureFelixConfig ensures that the supplied felix config value
+// ensureNodeFelixConfig ensures that the supplied felix config value
 // is initialized, and if not initialize it with the supplied default.
-func ensureFelixConfig(c *client.Client, host, key, def string) error {
+func ensureNodeFelixConfig(c *client.Client, host, key, def string) error {
 	if val, assigned, err := c.Config().GetFelixConfig(key, host); err != nil {
 		return err
 	} else if !assigned {
