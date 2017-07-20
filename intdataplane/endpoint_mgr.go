@@ -92,13 +92,10 @@ type endpointManager struct {
 	activeHostIfaceToRawChains    map[string][]*iptables.Chain
 	activeHostIfaceToFiltChains   map[string][]*iptables.Chain
 	activeHostIfaceToMangleChains map[string][]*iptables.Chain
-	// Dispatch chains that we've programmed for host endpoints.  We program the same dispatch
-	// tree (i.e. for the same set of host endpoints) in the filter and mangle tables, so can
-	// share a variable to track those.  In the raw table there is generally a smaller set of
-	// relevant host endpoints, and so a different dispatch tree, so we have separate tracking
-	// for that.
-	activeHostRawDispatchChains        map[string]*iptables.Chain
-	activeHostFiltMangleDispatchChains map[string]*iptables.Chain
+	// Dispatch chains that we've programmed for host endpoints.
+	activeHostRawDispatchChains    map[string]*iptables.Chain
+	activeHostFilterDispatchChains map[string]*iptables.Chain
+	activeHostMangleDispatchChains map[string]*iptables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
 	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
@@ -187,10 +184,11 @@ func newEndpointManagerWithShims(
 
 		// Caches of the current dispatch chains indexed by chain name.  We use these to
 		// calculate deltas when we need to update the chains.
-		activeWlDispatchChains:             map[string]*iptables.Chain{},
-		activeHostFiltMangleDispatchChains: map[string]*iptables.Chain{},
-		activeHostRawDispatchChains:        map[string]*iptables.Chain{},
-		needToCheckDispatchChains:          true, // Need to do start-of-day update.
+		activeWlDispatchChains:         map[string]*iptables.Chain{},
+		activeHostFilterDispatchChains: map[string]*iptables.Chain{},
+		activeHostMangleDispatchChains: map[string]*iptables.Chain{},
+		activeHostRawDispatchChains:    map[string]*iptables.Chain{},
+		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 	}
@@ -527,6 +525,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
 	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	newPreDNATIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
 	newUntrackedIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
 	newHostEpIDToIfaceNames := map[proto.HostEndpointID][]string{}
 	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
@@ -589,6 +588,11 @@ func (m *endpointManager) resolveHostEndpoints() {
 				logCxt.Debug("Endpoint has untracked policies.")
 				newUntrackedIfaceNameToHostEpID[ifaceName] = bestHostEpId
 			}
+			if len(bestHostEp.PreDnatTiers) > 0 {
+				// Similar optimisation (or neatness) for pre-DNAT policy.
+				logCxt.Debug("Endpoint has pre-DNAT policies.")
+				newPreDNATIfaceNameToHostEpID[ifaceName] = bestHostEpId
+			}
 			// Note, in contrast to the check above, we unconditionally record the
 			// match in newHostEpIDToIfaceNames so that we always render the endpoint
 			// into the filter table.  This ensures that we get the correct "default
@@ -618,7 +622,6 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 	// Set up programming for the host endpoints that are now to be used.
 	newHostIfaceFiltChains := map[string][]*iptables.Chain{}
-	newHostIfaceMangleChains := map[string][]*iptables.Chain{}
 	for ifaceName, id := range newIfaceNameToHostEpID {
 		log.WithField("id", id).Info("Updating host endpoint chains.")
 		hostEp := m.rawHostEndpoints[id]
@@ -638,9 +641,15 @@ func (m *endpointManager) resolveHostEndpoints() {
 		}
 		newHostIfaceFiltChains[ifaceName] = filtChains
 		delete(m.activeHostIfaceToFiltChains, ifaceName)
+	}
+
+	newHostIfaceMangleChains := map[string][]*iptables.Chain{}
+	for ifaceName, id := range newPreDNATIfaceNameToHostEpID {
+		log.WithField("id", id).Info("Updating host endpoint mangle chains.")
+		hostEp := m.rawHostEndpoints[id]
 
 		// Update the mangle table, for preDNAT policy.
-		policyNames = nil
+		var policyNames []string
 		if len(hostEp.PreDnatTiers) > 0 {
 			policyNames = hostEp.PreDnatTiers[0].Policies
 		}
@@ -700,14 +709,21 @@ func (m *endpointManager) resolveHostEndpoints() {
 	m.activeHostIfaceToMangleChains = newHostIfaceMangleChains
 	m.activeHostIfaceToRawChains = newHostIfaceRawChains
 
-	// Rewrite the filter and mangle dispatch chains if they've changed.
-	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite dispatch chains?")
-	newFiltMangleDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
-	m.updateDispatchChains(m.activeHostFiltMangleDispatchChains, newFiltMangleDispatchChains, m.filterTable, m.mangleTable)
+	// Rewrite the filter dispatch chains if they've changed.
+	log.WithField("resolvedHostEpIds", newIfaceNameToHostEpID).Debug("Rewrite filter dispatch chains?")
+	newFilterDispatchChains := m.ruleRenderer.HostDispatchChains(newIfaceNameToHostEpID)
+	m.updateDispatchChains(m.activeHostFilterDispatchChains, newFilterDispatchChains, m.filterTable)
+
+	// Rewrite the mangle dispatch chains if they've changed.
+	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
+	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID)
+	m.updateDispatchChains(m.activeHostMangleDispatchChains, newMangleDispatchChains, m.mangleTable)
 
 	// Rewrite the raw dispatch chains if they've changed.
+	log.WithField("resolvedHostEpIds", newUntrackedIfaceNameToHostEpID).Debug("Rewrite raw dispatch chains?")
 	newRawDispatchChains := m.ruleRenderer.HostDispatchChains(newUntrackedIfaceNameToHostEpID)
 	m.updateDispatchChains(m.activeHostRawDispatchChains, newRawDispatchChains, m.rawTable)
+
 	log.Debug("Done resolving host endpoints.")
 }
 
