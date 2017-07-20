@@ -16,7 +16,7 @@ TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREA
 K8S_POLICY_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-policy-controller.version')
 CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 # TODO - Why isn't confd in versions.yaml
-CONFD_VER := v0.12.1-calico0.1.0
+CONFD_VER := v0.12.1-calico0.2.0
 
 SYSTEMTEST_CONTAINER_VER := latest
 GO_BUILD_VER:=v0.7
