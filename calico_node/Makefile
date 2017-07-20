@@ -1,10 +1,15 @@
 ###############################################################################
 # Versions:
 RELEASE_STREAM?=master
+
+GO_BUILD_VER:=v0.7
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+
 CALICO_NODE_DIR=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSIONS_FILE?=$(CALICO_NODE_DIR)/../_data/versions.yml
+
 # For local builds this can be made faster by running "go get github.com/mikefarah/yaml" and changing YAML_CMD to "yaml"
-YAML_CMD?=$(shell which yaml || echo docker run -i calico/go-build yaml)
+YAML_CMD?=$(shell which yaml || echo docker run --rm -i $(CALICO_BUILD) yaml)
 CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
 CALICO_GIT_VER ?= $(shell git describe --tags --dirty --always)
 BIRD_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico-bird.version')
@@ -19,7 +24,6 @@ CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)
 CONFD_VER := v0.12.1-calico0.1.0
 
 SYSTEMTEST_CONTAINER_VER := latest
-GO_BUILD_VER:=v0.7
 # we can use "custom" build image and test image name
 SYSTEMTEST_CONTAINER?=calico/test:$(SYSTEMTEST_CONTAINER_VER)
 
@@ -52,7 +56,7 @@ FELIX_REPO?=calico/felix
 FELIX_CONTAINER_NAME?=$(FELIX_REPO):$(FELIX_VER)
 LIBNETWORK_PLUGIN_REPO?=calico/libnetwork-plugin
 LIBNETWORK_PLUGIN_CONTAINER_NAME?=$(LIBNETWORK_PLUGIN_REPO):$(LIBNETWORK_PLUGIN_VER)
-CTL_CONTAINER_NAME?=calico/ctl:master
+CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)
 
 STARTUP_DIR=$(NODE_CONTAINER_DIR)/startup
 STARTUP_FILES=$(shell find $(STARTUP_DIR) -name '*.go')
@@ -62,7 +66,6 @@ ALLOCATE_IPIP_FILES=$(shell find $(ALLOCATE_IPIP_DIR) -name '*.go')
 TEST_CONTAINER_NAME?=calico/test:latest
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 LDFLAGS=-ldflags "-X main.VERSION=$(CALICO_GIT_VER)"
