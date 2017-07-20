@@ -278,9 +278,10 @@ configRetry:
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
-				IptablesLogPrefix:    configParams.LogPrefix,
-				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
-				IptablesAllowAction:  configParams.IptablesAllowAction,
+				IptablesLogPrefix:         configParams.LogPrefix,
+				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
+				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
+				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,

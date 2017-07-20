@@ -487,12 +487,13 @@ var _ = Describe("Static", func() {
 	Describe("with RETURN accept action", func() {
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes: []string{"cali"},
-				IptablesMarkAccept:    0x10,
-				IptablesMarkPass:      0x20,
-				IptablesMarkScratch0:  0x40,
-				IptablesMarkScratch1:  0x80,
-				IptablesAllowAction:   "RETURN",
+				WorkloadIfacePrefixes:     []string{"cali"},
+				IptablesMarkAccept:        0x10,
+				IptablesMarkPass:          0x20,
+				IptablesMarkScratch0:      0x40,
+				IptablesMarkScratch1:      0x80,
+				IptablesFilterAllowAction: "RETURN",
+				IptablesMangleAllowAction: "RETURN",
 			}
 		})
 

@@ -88,7 +88,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -294,7 +294,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -347,7 +347,7 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -466,11 +466,11 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
 	// If packet is from a workload interface, ACCEPT or RETURN immediately according to
-	// IptablesAllowAction (because pre-DNAT policy is only for host endpoints).
+	// IptablesMangleAllowAction (because pre-DNAT policy is only for host endpoints).
 	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
 		rules = append(rules, Rule{
 			Match:  Match().InInterface(ifacePrefix + "+"),
-			Action: r.iptablesAllowAction,
+			Action: r.mangleAllowAction,
 		})
 	}
 
@@ -485,10 +485,11 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		// isn't governed by any pre-DNAT policy on that interface, it will fall through to
 		// here without any Calico bits set.
 
-		// In the MarkAccept case, we ACCEPT or RETURN according to IptablesAllowAction.
+		// In the MarkAccept case, we ACCEPT or RETURN according to
+		// IptablesMangleAllowAction.
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.mangleAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)

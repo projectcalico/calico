@@ -90,7 +90,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("DefaultEndpointToHostAction", "DefaultEndpointToHostAction",
 		"ACCEPT", "ACCEPT"),
 
-	Entry("IptablesAllowAction", "IptablesAllowAction",
+	Entry("IptablesFilterAllowAction", "IptablesFilterAllowAction",
+		"RETURN", "RETURN"),
+	Entry("IptablesMangleAllowAction", "IptablesMangleAllowAction",
 		"RETURN", "RETURN"),
 
 	Entry("LogFilePath", "LogFilePath", "/tmp/felix.log", "/tmp/felix.log"),
