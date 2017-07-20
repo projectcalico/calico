@@ -2,14 +2,12 @@ package main_test
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
-	"os"
-
 	"net"
-
+	"os"
 	"syscall"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/containernetworking/cni/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

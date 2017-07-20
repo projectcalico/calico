@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/cni-plugin/utils"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -37,6 +38,11 @@ import (
 var VERSION string
 
 func main() {
+	// Set up logging formatting.
+	log.SetFormatter(&logutils.Formatter{})
+
+	// Install a hook that adds file/line no information.
+	log.AddHook(&logutils.ContextHook{})
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
