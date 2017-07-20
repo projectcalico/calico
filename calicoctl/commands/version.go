@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
 var VERSION, BUILD_DATE, GIT_REVISION string
@@ -31,24 +33,51 @@ func init() {
 
 func Version(args []string) {
 	doc := `Usage:
-  calicoctl version
+  calicoctl version [--config=<CONFIG>]
 
 Options:
-  -h --help   Show this screen.
+  -h --help             Show this screen.
+  -c --config=<CONFIG>  Path to the file containing connection configuration in
+                        YAML or JSON format.
+                        [default: ` + constants.DefaultConfigPath + `]
 
 Description:
   Display the version of calicoctl.
 `
-	arguments, err := docopt.Parse(doc, args, true, "", false, false)
+	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
 		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
 		os.Exit(1)
 	}
-	if len(arguments) == 0 {
+	if len(parsedArgs) == 0 {
 		return
 	}
 
-	fmt.Println("Version:     ", VERSION)
-	fmt.Println("Build date:  ", BUILD_DATE)
-	fmt.Println("Git commit:  ", GIT_REVISION)
+	fmt.Println("Client Version:   ", VERSION)
+	fmt.Println("Build date:       ", BUILD_DATE)
+	fmt.Println("Git commit:       ", GIT_REVISION)
+
+	// Load the client config and connect.
+	cf := parsedArgs["--config"].(string)
+	client, err := clientmgr.NewClient(cf)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	cfg := client.Config()
+
+	val, assigned, err := cfg.GetFelixConfig("CalicoVersion", "")
+	if err != nil {
+		val = fmt.Sprintf("unknown (%s)", err)
+	} else if !assigned {
+		val = "unknown"
+	}
+	fmt.Println("Server Version:   ", val)
+	val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
+	if err != nil {
+		val = fmt.Sprintf("unknown (%s)", err)
+	} else if !assigned {
+		val = "unknown"
+	}
+	fmt.Println("Cluster Type:     ", val)
 }
