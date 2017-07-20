@@ -80,7 +80,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-etcd
-          image: gcr.io/google_containers/etcd:2.2.1
+          image: quay.io/coreos/etcd:v3.1.10
           env:
             - name: CALICO_ETCD_IP
               valueFrom:

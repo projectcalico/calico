@@ -23,7 +23,7 @@ the need for etcd-proxy:
    (available at http://m1.dcos:2379):
 
    ```shell
-   docker run -d --net=host --name=etcd quay.io/coreos/etcd:v2.0.11 \
+   docker run -d --net=host --name=etcd quay.io/coreos/etcd:v3.1.10 \
    --advertise-client-urls "http://m1.dcos:2379" \
    --listen-client-urls "http://m1.dcos:2379,http://127.0.0.1:2379" \
    ```
