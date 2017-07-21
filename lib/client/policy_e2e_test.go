@@ -83,7 +83,6 @@ var policySpec2AfterRead = api.PolicySpec{
 var policySpec3 = api.PolicySpec{
 	Order:        &order2,
 	IngressRules: []api.Rule{testutils.InRule2, testutils.InRule1},
-	EgressRules:  []api.Rule{testutils.EgressRule2, testutils.EgressRule1},
 	Selector:     "thing2 == 'value2'",
 	PreDNAT:      true,
 }
@@ -92,7 +91,6 @@ var policySpec3 = api.PolicySpec{
 var policySpec3AfterRead = api.PolicySpec{
 	Order:        &order2,
 	IngressRules: []api.Rule{testutils.InRule2AfterRead, testutils.InRule1AfterRead},
-	EgressRules:  []api.Rule{testutils.EgressRule2AfterRead, testutils.EgressRule1AfterRead},
 	Selector:     "thing2 == 'value2'",
 	PreDNAT:      true,
 }

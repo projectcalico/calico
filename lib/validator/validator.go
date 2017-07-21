@@ -113,6 +113,7 @@ func init() {
 	registerStructValidator(validateBackendRule, model.Rule{})
 	registerStructValidator(validateNodeSpec, api.NodeSpec{})
 	registerStructValidator(validateBGPPeerMeta, api.BGPPeerMetadata{})
+	registerStructValidator(validatePolicySpec, api.PolicySpec{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -503,5 +504,19 @@ func validateBGPPeerMeta(v *validator.Validate, structLevel *validator.StructLev
 	if m.Scope == scope.Global && m.Node != "" {
 		structLevel.ReportError(reflect.ValueOf(m.Node),
 			"Metadata.Node", "", reason("no BGP Peer node name should be specified when scope is global"))
+	}
+}
+
+func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLevel) {
+	m := structLevel.CurrentStruct.Interface().(api.PolicySpec)
+
+	if m.DoNotTrack && m.PreDNAT {
+		structLevel.ReportError(reflect.ValueOf(m.PreDNAT),
+			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"))
+	}
+
+	if m.PreDNAT && len(m.EgressRules) > 0 {
+		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
+			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
 	}
 }
