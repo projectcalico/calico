@@ -80,10 +80,6 @@ var _ = Describe("Static", func() {
 					Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
 						Name: "cali-FORWARD",
 						Rules: []Rule{
-							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10),
-								Action: AcceptAction{}},
-
 							// Per-prefix workload jump rules.
 							{Match: Match().InInterface("cali+"),
 								Action: JumpAction{Target: ChainFromWorkloadDispatch}},
@@ -97,8 +93,10 @@ var _ = Describe("Static", func() {
 								Action: AcceptAction{}},
 
 							// Non-workload through-traffic, pass to host endpoint chains.
-							{Action: ClearMarkAction{Mark: 0xf0}},
-							{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+							{Action: ClearMarkAction{Mark: 0xe0}},
+							// Unless already matched in raw table...
+							{Match: Match().MarkClear(0x10),
+								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 							{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 							{
 								Match:   Match().MarkSet(0x10),
@@ -503,10 +501,6 @@ var _ = Describe("Static", func() {
 				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
 					Name: "cali-FORWARD",
 					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10),
-							Action: AcceptAction{}},
-
 						// Per-prefix workload jump rules.
 						{Match: Match().InInterface("cali+"),
 							Action: JumpAction{Target: ChainFromWorkloadDispatch}},
@@ -520,8 +514,10 @@ var _ = Describe("Static", func() {
 							Action: AcceptAction{}},
 
 						// Non-workload through-traffic, pass to host endpoint chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{Action: ClearMarkAction{Mark: 0xe0}},
+						// Unless already matched in raw table...
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 						{
 							Match:   Match().MarkSet(0x10),

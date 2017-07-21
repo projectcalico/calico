@@ -233,9 +233,6 @@ func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// Accept immediately if we've already accepted this packet in the raw or mangle table.
-	rules = append(rules, r.acceptAlreadyAccepted()...)
-
 	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
 	// The first dispatches the packet to our dispatch chains if it is going to/from an
@@ -279,17 +276,26 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		)
 	}
 
-	// If we get here, the packet is not going to or from a workload, but, since we're in the
-	// FORWARD chain, it is being forwarded.  Apply host endpoint rules in that case.  This
-	// allows Calico to police traffic that is flowing through a NAT gateway or router.
+	// If we get here, the packet is not going to or from a workload, and we are in the FORWARD
+	// chain, so we know that the packet is being forwarded from one host interface to another.
+	// In this scenario we generally apply any normal host endpoint policy that is configured,
+	// for both the incoming and outgoing interfaces; this allows Calico to police traffic
+	// flowing through a NAT gateway or router.  However, the packet may have already been
+	// marked as accepted by untracked or pre-DNAT policy for the incoming host endpoint.  In
+	// that case we skip any normal policy for the incoming host endpoint.
 	rules = append(rules,
 		Rule{
-			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+			// Clear marks except for IptablesMarkAccept.
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits() &^ r.IptablesMarkAccept},
 		},
 		Rule{
+			// Unless the packet has already been accepted by untracked or pre-DNAT
+			// processing, apply normal policy for the incoming host endpoint.
+			Match:  Match().MarkClear(r.IptablesMarkAccept),
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		Rule{
+			// Apply normal policy for the outgoing host endpoint.
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
