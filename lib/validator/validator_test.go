@@ -641,6 +641,30 @@ func init() {
 		Entry("should reject node with BGP but no IPs", api.NodeSpec{BGP: &api.NodeBGPSpec{}}, false),
 		Entry("should reject node with IPv6 address in IPv4 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: &netv6_1}}, false),
 		Entry("should reject node with IPv4 address in IPv6 field", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: &netv4_1}}, false),
+		Entry("should reject Policy with both PreDNAT and DoNotTrack",
+			api.PolicySpec{
+				PreDNAT:    true,
+				DoNotTrack: true,
+			}, false),
+		Entry("should accept Policy with PreDNAT but not DoNotTrack",
+			api.PolicySpec{
+				PreDNAT: true,
+			}, true),
+		Entry("should accept Policy with DoNotTrack but not PreDNAT",
+			api.PolicySpec{
+				PreDNAT:    false,
+				DoNotTrack: true,
+			}, true),
+		Entry("should reject pre-DNAT Policy with egress rules",
+			api.PolicySpec{
+				PreDNAT:     true,
+				EgressRules: []api.Rule{{Action: "allow"}},
+			}, false),
+		Entry("should accept pre-DNAT Policy with ingress rules",
+			api.PolicySpec{
+				PreDNAT:      true,
+				IngressRules: []api.Rule{{Action: "allow"}},
+			}, true),
 	)
 }
 
