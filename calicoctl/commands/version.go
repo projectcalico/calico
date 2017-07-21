@@ -72,7 +72,7 @@ Description:
 	} else if !assigned {
 		val = "unknown"
 	}
-	fmt.Println("Server Version:   ", val)
+	fmt.Println("Cluster Version:  ", val)
 	val, assigned, err = cfg.GetFelixConfig("ClusterType", "")
 	if err != nil {
 		val = fmt.Sprintf("unknown (%s)", err)
