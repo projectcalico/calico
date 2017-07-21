@@ -728,30 +728,26 @@ func (m *endpointManager) resolveHostEndpoints() {
 }
 
 // updateDispatchChains updates one of the sets of dispatch chains.  It sends the changes to the
-// given iptables.Table(s) and records the updates in the activeChains map.
+// given iptables.Table and records the updates in the activeChains map.
 //
-// Calculating the minimum update prevents log spam and reduces the work needed in the tables.
+// Calculating the minimum update prevents log spam and reduces the work needed in the Table.
 func (m *endpointManager) updateDispatchChains(
 	activeChains map[string]*iptables.Chain,
 	newChains []*iptables.Chain,
-	tables ...iptablesTable,
+	table iptablesTable,
 ) {
 	seenChains := set.New()
 	for _, newChain := range newChains {
 		seenChains.Add(newChain.Name)
 		oldChain := activeChains[newChain.Name]
 		if !reflect.DeepEqual(newChain, oldChain) {
-			for _, table := range tables {
-				table.UpdateChain(newChain)
-			}
+			table.UpdateChain(newChain)
 			activeChains[newChain.Name] = newChain
 		}
 	}
 	for name := range activeChains {
 		if !seenChains.Contains(name) {
-			for _, table := range tables {
-				table.RemoveChainByName(name)
-			}
+			table.RemoveChainByName(name)
 			delete(activeChains, name)
 		}
 	}
