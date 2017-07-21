@@ -1,5 +1,5 @@
-hash: bf35a63bb5c663298d6bc89a2682099a7d0abbc895f71d84a4d76d55e009e3de
-updated: 2017-07-20T08:42:22.874117758Z
+hash: dc862b89e90c2d3fc169a2ccec9b66e4427734157a038165cac29b247eb8d48d
+updated: 2017-07-21T13:49:59.322964923-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -57,7 +57,7 @@ imports:
 - name: github.com/golang/glog
   version: 44145f04b68cf362d9c4df2182967c2275eaefed
 - name: github.com/golang/protobuf
-  version: 0a4f71a498b7c4812f64969510bcb4eca251e33a
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
   subpackages:
   - proto
 - name: github.com/google/gofuzz
@@ -177,7 +177,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: 35e2d1cf2316766f1ab63d8260c173ccb21a4d85
+  version: d2b2290a45db4d6aa0e1b0beb0045a9dc7094aff
   repo: https://github.com/fasaxc/go-datastructures.git
   subpackages:
   - list
@@ -190,21 +190,35 @@ imports:
   version: 3da985ce5951d99de868be4385f21ea6c2b22f24
   subpackages:
   - context
+  - html
+  - html/atom
+  - html/charset
   - http2
   - http2/hpack
   - idna
   - idna/
   - lex/httplex
 - name: golang.org/x/sys
-  version: 7a4fde3fda8ef580a89dbae8138c26041be14299
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: golang.org/x/text
   version: 4ee4af566555f5fbe026368b75596286a312663a
   subpackages:
   - cases
+  - encoding
+  - encoding/charmap
+  - encoding/htmlindex
+  - encoding/internal
+  - encoding/internal/identifier
+  - encoding/japanese
+  - encoding/korean
+  - encoding/simplifiedchinese
+  - encoding/traditionalchinese
+  - encoding/unicode
   - internal
   - internal/tag
+  - internal/utf8internal
   - language
   - runes
   - secure/bidirule
@@ -351,7 +365,7 @@ imports:
   - util/integer
 testImports:
 - name: github.com/onsi/gomega
-  version: 9b8c753e8dfb382618ba8fa19b4197b5dcb0434c
+  version: c893efa28eb45626cdaa76c9f653b62488858837
   subpackages:
   - format
   - internal/assertion
