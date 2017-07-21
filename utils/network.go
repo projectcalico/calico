@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 
+	"reflect"
+
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -81,15 +83,20 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 				// Add a connected route to a dummy next hop so that a default route can be set
 				gw := net.IPv4(169, 254, 1, 1)
 				gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
-				if err = netlink.RouteAdd(&netlink.Route{
-					LinkIndex: contVeth.Attrs().Index,
-					Scope:     netlink.SCOPE_LINK,
-					Dst:       gwNet}); err != nil {
-					return fmt.Errorf("failed to add route %v", err)
+				err := netlink.RouteAdd(
+					&netlink.Route{
+						LinkIndex: contVeth.Attrs().Index,
+						Scope:     netlink.SCOPE_LINK,
+						Dst:       gwNet,
+					},
+				)
+
+				if err != nil {
+					return fmt.Errorf("failed to add route inside the container: %v", err)
 				}
 
 				if err = ip.AddDefaultRoute(gw, contVeth); err != nil {
-					return fmt.Errorf("failed to add route %v", err)
+					return fmt.Errorf("failed to add the default route inside the container: %v", err)
 				}
 
 				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
@@ -174,20 +181,49 @@ func DoNetworking(args *skel.CmdArgs, conf NetConf, result *current.Result, logg
 	return hostVethName, contVethMAC, err
 }
 
+var errFileExists = fmt.Errorf("file exists")
+
 // setupRoutes sets up the routes for the host side of the veth pair.
 func setupRoutes(hostVeth netlink.Link, result *current.Result) error {
-	for _, ip := range result.IPs {
-		err := netlink.RouteAdd(
-			&netlink.Route{
-				LinkIndex: hostVeth.Attrs().Index,
-				Scope:     netlink.SCOPE_LINK,
-				Dst:       &ip.Address,
-			})
+
+	// Go through all the IPs and add routes for each IP in the result.
+	for _, ipAddr := range result.IPs {
+		route := netlink.Route{
+			LinkIndex: hostVeth.Attrs().Index,
+			Scope:     netlink.SCOPE_LINK,
+			Dst:       &ipAddr.Address,
+		}
+		err := netlink.RouteAdd(&route)
+
 		if err != nil {
-			return fmt.Errorf("failed to add route %v", err)
+			switch err {
+
+			// Route already exists, but not necessarily pointing to the same interface.
+			case errFileExists:
+				// List all the routes for the interface.
+				routes, err := netlink.RouteList(hostVeth, netlink.FAMILY_ALL)
+				if err != nil {
+					return fmt.Errorf("error listing routes")
+				}
+
+				// Go through all the routes pointing to the interface, and see if any of them is
+				// exactly what we are intending to program.
+				// If the route we want is already there then most likely it's programmed by Felix, so we ignore it,
+				// and we return an error if none of the routes match the route we're trying to program.
+				for _, r := range routes {
+					if reflect.DeepEqual(r, route) {
+						// Route was already present on the host.
+						log.Infof("CNI skipping add route. Route already exists for %s\n", hostVeth.Attrs().Name)
+						return nil
+					}
+				}
+				return fmt.Errorf("route (Dst: %s, Scope: %s) already exists for an interface other than '%s'", route.Dst.String(), route.Scope, hostVeth.Attrs().Name)
+			default:
+				return fmt.Errorf("failed to add route (Dst: %s, Scope: %s, Iface: %s): %v", route.Dst.String(), route.Scope, hostVeth.Attrs().Name, err)
+			}
 		}
 
-		log.Debugf("CNI adding route for interface: %v, IP: %s", hostVeth, ip.Address)
+		log.Debugf("CNI adding route for interface: %v, IP: %s", hostVeth, ipAddr.Address)
 	}
 	return nil
 }
