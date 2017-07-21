@@ -415,7 +415,7 @@ in that policy should be applied before any data plane connection tracking, and
 that packets allowed by these rules should not be tracked.
 
 Untracked policy is designed for allowing untracked connections to a server
-running directly on a host - where by 'directly' we mean _not_ in a
+process running directly on a host - where by 'directly' we mean _not_ in a
 pod/VM/container workload.  A typical scenario for using 'doNotTrack' policy
 would be a server, running directly on a host, that accepts a very high rate of
 shortlived connections, such as `memcached`.  On Linux, if those connections
@@ -451,7 +451,7 @@ An example is securing access to Kubernetes NodePorts from outside the cluster.
 Traffic from outside is addressed to any node's IP address, on a known
 NodePort, and Kubernetes (kube-proxy) then DNATs that to the IP address of one
 of the pods that provides the corresponding Service, and the relevant port
-number on that port (which is usually different from the NodePort).
+number on that pod (which is usually different from the NodePort).
 
 As NodePorts are the externally advertised way of connecting to Services (and a
 NodePort uniquely identifies a Service, whereas an internal port number may
@@ -465,9 +465,9 @@ policy differs from that of normal host endpoint policy in three key details,
 reflecting that it is designed for the policing of incoming traffic from
 outside the cluster:
 
-1. Only the ingress rules of a pre-DNAT policy are enforced.  If the policy has
-   any egress rules defined, they will have no effect.  (Standard connection
-   tracking is sufficient to allow return path traffic.)
+1. Pre-DNAT policy may only have ingress rules, not egress.  (When incoming
+   traffic is allowed by the ingress rules, standard connection tracking is
+   sufficient to allow the return path traffic.)
 
 2. Pre-DNAT policy is enforced for all traffic arriving through a host
    endpoint, regardless of where that traffic is going, and - in particular -
@@ -494,6 +494,11 @@ host endpoints policy.
 For packets that arrive on a host interface and are destined for a local
 workload - i.e. a locally-hosted pod, container or VM:
 
+- Pre-DNAT policies apply.
+
+- Normal policies do not apply - by design, because Calico enforces the
+  destination workload's ingress policy in this case.
+
 - Untracked policies technically do apply, but never have any net positive
   effect for such flows.
 
@@ -510,13 +515,8 @@ workload - i.e. a locally-hosted pod, container or VM:
   > policy at all, so in practice it is as if untracked policies do not apply
   > to this flow.
 
-- Pre-DNAT policies apply.
-
-- Normal policies do not apply - by design, because Calico enforces the
-  destination workload's ingress policy in this case.
-
 For packets that arrive on a host interface and are destined for a local
-server in the host namespace:
+server process in the host namespace:
 
 - Untracked, pre-DNAT and normal policies all apply.
 
@@ -550,16 +550,16 @@ same or another host interface (B):
 - If a packet is explicitly allowed by pre-DNAT policy, it skips over any
   normal policy.
 
-For packets that are sent from a local server (in the host namespace) out of a
-host interface:
+For packets that are sent from a local server process (in the host namespace)
+out of a host interface:
 
 - Untracked policies apply, specifically the egress rules of the untracked
   policies that apply to the host interface.
 
-- Pre-DNAT policies do not apply.
-
 - Normal policies apply, specifically the egress rules of the normal policies
   that apply to that host interface.
+
+- Pre-DNAT policies do not apply.
 
 For packets that are sent from a local workload out of a host interface:
 
@@ -576,12 +576,16 @@ possible against incoming traffic from outside the cluster.  Let's suppose that:
 
 - Most of those Services, however, should not be accessed via _any_ node, but
   instead via a LoadBalancer IP that is routable from outside the cluster and
-  maps to one of just a few 'ingress' nodes.
+  maps to one of just a few 'ingress' nodes.  (The LoadBalancer IP is a virtual
+  IP that, at any given time, gets routed somehow to one of those 'ingress'
+  nodes.)
 
 - For a few Services, on the other hand, there is no LoadBalancer IP set up, so
   those Services should be accessible through their NodePorts on any node.
 
 - All other incoming traffic from outside the cluster should be disallowed.
+
+![]({{site.baseurl}}/images/bare-metal-example.png)
 
 For each Service in the first set, we want to allow traffic from outside the
 cluster that is addressed to `<service-load-balancer-ip>:<service-port>`, but
