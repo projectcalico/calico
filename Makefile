@@ -36,7 +36,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
 
 LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
-	-X $(PACKAGE_NAME)/calicoctl/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
+	-X $(PACKAGE_NAME)/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
 LIBCALICOGO_PATH?=none
