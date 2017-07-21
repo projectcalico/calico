@@ -462,18 +462,18 @@ else - and hence this kind of policy needs 'preDNAT' set to true.
 
 In addition to being applied before any DNAT, the enforcement of pre-DNAT
 policy differs from that of normal host endpoint policy in three key details,
-reflecting that it is primarily designed for the policing of incoming traffic
-from outside the cluster:
+reflecting that it is designed for the policing of incoming traffic from
+outside the cluster:
 
 1. Only the ingress rules of a pre-DNAT policy are enforced.  If the policy has
    any egress rules defined, they will have no effect.  (Standard connection
    tracking is sufficient to allow return path traffic.)
 
-2. Pre-DNAT policy is enforced, for traffic arriving through a host endpoint,
-   regardless of where that traffic is going, and - in particular - even if
-   that traffic is routed to a local workload on the same host.  (Whereas
-   normal host endpoint policy is skipped, for traffic going to a local
-   workload.)
+2. Pre-DNAT policy is enforced for all traffic arriving through a host
+   endpoint, regardless of where that traffic is going, and - in particular -
+   even if that traffic is routed to a local workload on the same host.
+   (Whereas normal host endpoint policy is skipped, for traffic going to a
+   local workload.)
 
 3. There is no 'default drop' semantic for pre-DNAT policy (as there is for
    normal host endpoint policy).  In other words, if a host endpoint is defined
@@ -507,13 +507,13 @@ workload - i.e. a locally-hosted pod, container or VM:
   > be defined by the untracked policy - so unless the workload's policy
   > specifically allows the relevant source IP, the return packet will be
   > dropped.  That is the same overall result as if there was no untracked
-  > policy at all, so in practice we can describe this as untracked policies
-  > not applying to this flow.
+  > policy at all, so in practice it is as if untracked policies do not apply
+  > to this flow.
 
 - Pre-DNAT policies apply.
 
 - Normal policies do not apply - by design, because Calico enforces the
-  destination workload's ingress policy in that case.
+  destination workload's ingress policy in this case.
 
 For packets that arrive on a host interface and are destined for a local
 server in the host namespace:
