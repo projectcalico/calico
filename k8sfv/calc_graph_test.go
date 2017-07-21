@@ -21,8 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/libcalico-go/lib/health"
 )
 
 var _ = Describe("calculation graph scale test", func() {
