@@ -191,6 +191,7 @@ func waitForConnection(c *client.Client) {
 				fatal("Connection to the datastore is unauthorized")
 				terminate()
 			case errors.ErrorDatastoreError:
+				log.WithError(err).Info("Hit error connecting to datastore - retry")
 				time.Sleep(1000 * time.Millisecond)
 				continue
 			}
