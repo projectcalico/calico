@@ -17,6 +17,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -26,8 +27,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/client"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 var exitCode int
@@ -92,7 +93,7 @@ type EnvItem struct {
 }
 
 var _ = Describe("FV tests against a real etcd", func() {
-	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING", "IP"}
+	changedEnvVars := []string{"CALICO_IPV4POOL_CIDR", "CALICO_IPV6POOL_CIDR", "NO_DEFAULT_POOLS", "CALICO_IPV4POOL_IPIP", "CALICO_IPV6POOL_NAT_OUTGOING", "CALICO_IPV4POOL_NAT_OUTGOING", "IP", "CLUSTER_TYPE"}
 
 	BeforeEach(func() {
 		for _, envName := range changedEnvVars {
@@ -312,6 +313,120 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 			}
 		}
+	})
+
+	Describe("Test CLUSTER_TYPE env variable", func() {
+		Context("With no env var, Cluster Type should be empty string", func() {
+			// Create a new client.
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
+
+			nodeName := determineNodeName()
+			node := getNode(c, nodeName)
+
+			err := ensureDefaultConfig(cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			if assigned {
+				It("should be emtpy", func() {
+					Expect(val).To(Equal(""))
+				})
+			}
+		})
+		Context("With env var set, Cluster Type should have that value", func() {
+			// Create a new client.
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
+
+			nodeName := determineNodeName()
+			node := getNode(c, nodeName)
+
+			os.Setenv("CLUSTER_TYPE", "theType")
+
+			err := ensureDefaultConfig(cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("should be assigned", func() {
+				Expect(assigned).To(BeTrue())
+			})
+			It("should have the set value", func() {
+				Expect(val).To(Equal("theType"))
+			})
+		})
+		Context("With env var and Cluster Type prepopulated, Cluster Type should have both", func() {
+			// Create a new client.
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
+
+			nodeName := determineNodeName()
+			node := getNode(c, nodeName)
+
+			c.Config().SetFelixConfig("ClusterType", "", "prePopulated")
+			os.Setenv("CLUSTER_TYPE", "theType")
+
+			err := ensureDefaultConfig(cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("should be assigned", func() {
+				Expect(assigned).To(BeTrue())
+			})
+			It("should have the set value", func() {
+				Expect(val).To(ContainSubstring("theType"))
+			})
+			It("should have the prepopulated value", func() {
+				Expect(val).To(ContainSubstring("prePopulated"))
+			})
+		})
+
+		Context("With the same entries in both sources", func() {
+			// Create a new client.
+			cfg, _ := client.LoadClientConfigFromEnvironment()
+			c := testutils.CreateCleanClient(*cfg)
+
+			nodeName := determineNodeName()
+			node := getNode(c, nodeName)
+
+			c.Config().SetFelixConfig("ClusterType", "", "type1,type2")
+			os.Setenv("CLUSTER_TYPE", "type1,type1")
+
+			err := ensureDefaultConfig(cfg, c, node)
+			It("should be able to ensureDefaultConfig", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			val, assigned, err := c.Config().GetFelixConfig("ClusterType", "")
+			It("should be able to access the ClusterType", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("should be assigned", func() {
+				Expect(assigned).To(BeTrue())
+			})
+			It("should have only one instance of the expected value", func() {
+				Expect(strings.Count(val, "type1")).To(Equal(1), "Should only have one instance of type1, read '%s", val)
+			})
+			It("should have only one instance of the expected value", func() {
+				Expect(strings.Count(val, "type2")).To(Equal(1), "Should only have one instance of type1, read '%s", val)
+			})
+		})
 	})
 })
 

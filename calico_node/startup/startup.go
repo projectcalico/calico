@@ -787,6 +787,11 @@ func ensureDefaultConfig(cfg *api.CalicoAPIConfig, c *client.Client, node *api.N
 		return err
 	}
 
+	// Update the ClusterType with the type in CLUSTER_TYPE
+	if err := updateClusterType(c, "ClusterType", os.Getenv("CLUSTER_TYPE")); err != nil {
+		return err
+	}
+
 	// Set the default values for some of the global BGP config values and
 	// per-node directory structure. - this makes it easier to change the
 	// default values in the future without impacting existing clusters.
@@ -825,6 +830,51 @@ func ensureNodeFelixConfig(c *client.Client, host, key, def string) error {
 	} else {
 		log.WithField(key, val).Debug("Host Felix value already assigned")
 		return nil
+	}
+}
+
+// updateClusterType ensures that the ClusterType in the Felix global
+// config has the data contained in the passed in clusterType.  This includes
+// merging what was already set in ClusterType with the passed in clusterType.
+func updateClusterType(c *client.Client, key, clusterType string) error {
+	// If no data is passed in to add, then nothing to do.
+	if clusterType == "" {
+		return nil
+	}
+	global := ""
+	if val, assigned, err := c.Config().GetFelixConfig("ClusterType", global); err != nil {
+		return err
+	} else if !assigned {
+		return c.Config().SetFelixConfig(key, global, clusterType)
+	} else if val == "" {
+		return c.Config().SetFelixConfig(key, global, clusterType)
+	} else {
+		// If we're here then both val and clusterType have data, this means
+		// the Split will not have any empty string values
+		updateNeeded := false // keep track if we add any elements
+		cts := strings.Split(val, ",")
+		for _, ct := range strings.Split(clusterType, ",") {
+			found := false
+			for _, x := range cts {
+				if ct == x {
+					found = true
+					break
+				}
+			}
+			if !found {
+				cts = append(cts, ct)
+				updateNeeded = true
+			}
+		}
+
+		// If no cluster types need adding then we're done
+		if !updateNeeded {
+			return nil
+		}
+
+		newClusterTypes := strings.Join(cts, ",")
+
+		return c.Config().SetFelixConfig(key, global, newClusterTypes)
 	}
 }
 
