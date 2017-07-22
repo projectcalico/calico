@@ -12,7 +12,7 @@ packages up the `BIRD` BGP daemon along with the `confd` templating engine to
 provide a simple route reflector image which may be used for scaled-out Calico
 deployments.
 
-The image is currently experimental due to some key limitations discussed below.
+The image is currently experimental and has some key limitations discussed below.
 However, it may provide a useful framework for future development.
 
 These instructions are focused around container-based deployments that use the
@@ -20,21 +20,35 @@ calico/node container image.
 
 For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
 
+> NOTE: The API and behavior of the calico/routereflector is likely to change in 
+> future releases.
+
 #### Known limitations
 
 -  The calico/routereflector instance will automatically peer with the Calico 
    nodes, but it currently has no mechanism to configure peerings with non-Calico
    BGP speakers (e.g. edge routers)
--  There is no `calicoctl` integration or similar - it is necessary to configure 
-   data directly into the `etcd` datastore each time a new route reflector 
-   is added to the deployment.
--  Each Route Reflector will form a full mesh between all other Route Reflectors
-   in the cluster.  It is not possible to form multiple separate meshed groups 
-   of Route Reflectors using this image.
+-  There is no `calicoctl` integration or similar.  
+-  If you are using Kubernetes API as the Calico datastore, the Route Reflector container
+   currently only supports running as a single-instance.
+-  For etcdv2, the Route Reflector container may be used to form a cluster of route reflectors that
+   automatically create a full mesh between each Route Reflector.
+   -  Note that there is no `calicoctl` integration and to form a cluster it is necessary to 
+      configure data directly into the `etcd` datastore for each Route Reflector instance.
+   -  It is not possible to form multiple separate meshed groups 
+      of Route Reflectors using this image.
 
-## Using the Route Reflector image
+## Starting and configuring your route reflectors
 
-### Starting a Route Reflector instance
+Follow the appropriate section to start and configure your route reflectors depending on
+the datastore you are using for Calico:
+
+-  [Using etcdv2 as the Calico datastore](#using-etcdv2-as-the-calico-datastore)
+-  [Using the Kubernetes API as the Calico datastore](#using-the-kubernetes-api-as-the-calico-datastore)
+
+### Using etcdv2 as the Calico datastore
+
+#### Starting a Route Reflector instance
 
 On your Route Reflector host, ensure you have [Docker v1.6](http://www.docker.com) or greater
 installed.
@@ -63,15 +77,16 @@ Where:
 > Note: If you require TLS/SSL enabled etcd, see the [section below](#route-reflector-with-tlsssl-etcd)
 > for details on how to start the route reflector.
 
-#### Configuring the Route Reflector
+#### Configuring a cluster of Route Reflectors
 
-Each Route Reflector instance reads its configuration from etcd (necessarily the
-same etcdv2 cluster that Calico is using).  At present, there is no `calicoctl` 
-integration to allow you to configure the Route Reflector.  
-To configure Calico to use the Route Reflector it is necessary to explicitly
-add an entry into etcd.  The etcd configuration serves two purposes: it tells the 
-Route Reflector to participate in peering, and it provides sufficient information 
-to allow all of the Route Reflector instances to automatically form a full BGP mesh.
+If you want to use more than one route reflector, the Route Reflector container supports 
+running as a single cluster of route reflectors.  The Calico BIRD Route Reflector
+takes care of creating a full mesh between all of the route reflectors in the 
+cluster.
+
+To operate a cluster of these route reflectorsm it is necessary to explicitly
+add an entry into etcd for each route reflector.  The following steps indicate how
+to add an entry into etcd.
 
 The configuration for the Route Reflector is stored for IPv4 at:
 
@@ -116,28 +131,80 @@ about large networks and the use and format of the cluster ID.
 
 Repeat the above instructions for every Route Reflector in the cluster.
 
-### Route reflector cluster
+#### Route Reflector with TLS/SSL Etcd
 
-When starting a cluster of route reflectors, the Calico BIRD Route Reflector
-takes care of creating a full mesh between all of the route reflectors in the 
-cluster. When adding a new Route Reflector instance, add an entry into etcd.
-All Route Reflector instances watch for new Route Reflectors and update their
-peerings accordingly.
+If you are running secure etcd, you will need to pass in additional options
+and set environment variables for the certificate and key files associated
+with your etcd instance.
 
-### Route reflector peering with Calico Docker nodes
+When starting the Route Reflector container image, you need to mount the
+certificate files and environment variable filepaths for each file:
 
-The Calico BIRD Route Reflector image hooks into the same etcd datastore used
-by the Calico Docker nodes to determine which nodes to peer with.
+```
+docker run --privileged --net=host -d                              \
+           -e IP=<IPv4_RR>                                         \
+           [-e IP6=<IPv6_RR>]                                      \
+           -e ETCD_ENDPOINTS=<https://ETCD_IP:PORT>                \
+           -v <FULL_PATH_TO_CERT_DIR>:<MOUNT_DIR>                  \
+           -e ETCD_CA_CERT_FILE=<MOUNT_DIR>/<CA_FILE>              \
+           -e ETCD_CERT_FILE=<MOUNT_DIR>/<CERT_FILE>               \
+           -e ETCD_KEY_FILE=<MOUNT_DIR>/<KEY_FILE>                 \
+           calico/routereflector:{{site.data.versions[page.version].first.components["calico/routereflector"].version}}
+```
 
-The peering between the Calico Docker nodes and each route reflector is 
-configured using `calicoctl` by configuring each Route Reflector as a BGP peer
-of each node,  the route reflector automatically sets up the reverse peering
-and requires no additional configuration.
+Where `<FULL_PATH_TO_CERT_DIR>` is a directory on the host that contains
+the certificate files (you can mount multiple directories with additional
+`-v <DIR>` parameters if they are in separate directories, but be sure
+to choose different `<MOUNT_DIR>` locations if this is the case).
+
+You will also need to pass the certificate and key files as parameters
+in the curl statement when adding entries:
+
+```
+# IPv4 entries
+curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
+# IPv6 entries
+curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v6/<IPv6_RR> -XPUT -d value="{\"ip\":\"<IPv6_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
+```
+
+### Using the Kubernetes API as the Calico datastore
+
+If you are using Kuberenetes as the datastore for Calico, the Calico Route 
+Reflector container only supports running as a single route reflector.  It is not
+possible with this image to set up a cluster of route reflectors.
+
+#### Starting up the Route Reflector
+
+On your Route Reflector host, ensure you have [Docker v1.6][docker] or greater
+installed.
+
+You will need a kubeconfig file that you need to mount into the route reflector
+container.
+
+Run the following command to start the Route Reflector container image.
+
+```
+docker run --privileged --net=host -d                              \
+           -e DATASTORE_TYPE=kubernetes                            \
+           -e KUBECONFIG=/kubeconfig                               \
+           -e IP=<IPv4_RR>                                         \
+           -v <KUBECONFIG FILE PATH>:/kubeconfig                   \
+           calico/routereflector:{{site.data.versions[page.version].first.components["calico/routereflector"].version}}
+```
+
+Where:
+
+-  `<IPv4_RR>` is the IPv4 address of the RR host (the BIRD instance binds to
+   the hosts IPv4 address)
+-  `<KUBECONFIG FILE PATH>` is the path to the kubeconfig file.
+
+When using Kubernetes API as the datastore, this route reflector image only works
+as a single standalone reflector.
 
 
-## Global Calico Docker configuration
+## Configuring Calico to use the route reflectors
 
-Run through this section  to set up the global Calico Docker configuration
+Run through this section  to set up the global Calico configuration
 before configuring any nodes.  This only needs to be done once.
 
 -  Disable the full node-to-node BGP mesh
@@ -154,9 +221,6 @@ global configuration.
 From any Calico Docker node, run the following:
 
     calicoctl config set nodeToNodeMesh off
-
-You may need to set the ETCD_ENDPOINTS environment variable to run the 
-calicoctl commands.
 
 
 ### Determine the AS number for your network
@@ -245,70 +309,15 @@ When the topology includes a cluster of Route Reflectors, BGP uses the concept
 of a cluster ID to ensure there are no routing loops when distributing routes.
 
 The Route Reflector image provided assumes that it has a fixed cluster ID for
-each Route Reflector rather than being configurable on a per peer basis.  This 
-simplifies the overall configuration of the network, but does place some 
-limitations on the topology as described here.
+each Route Reflector rather than being configurable on a per peer basis.
 
-The topology is based on the Top of Rack model where you would have a set of 
-redundant route reflectors peering with all of the servers in the rack.
+For example, the topology outlined in the diagram below is based on the Top of 
+Rack model:
 
 -  Each rack is assigned its own cluster ID (a unique number in IPv4 address
    format).
 -  Each node (server in the rack) peers with a redundant set of route
-   reflectors specific to that set rack.
--  All of the Route Reflectors across all racks form a full BGP mesh (this is
-   handled automatically by the Calico BIRD Route Reflector image and does not
-   require additional configuration).
+   reflectors specific to that rack.
+-  All of the ToR route reflectors form a full mesh with each other.
    
 ![Example scale topology](mesh-topology.png)
-
-For example, to set up the topology described above, you would:
-
--  Spin up nodes N1 - N9
--  Spin up Route Reflectors RR1 - RR6
--  Add [node specific peers](#configuring-a-node-specific-route-reflector-peering),
-   peering:
-  * N1, N2 and N3 with RR1 and RR2
-  * N4, N5 and N6 with RR3 and RR4
-  * N7, N8 and N9 with RR5 and RR6
--  Add [etcd config](#configuring-the-route-reflector) for the Route 
-   Reflectors:
-  * RR1 and RR2 both using the cluster ID 1.0.0.1
-  * RR2 and RR3 both using the cluster ID 1.0.0.2  
-  * RR4 and RR5 both using the cluster ID 1.0.0.3
-
-### Route Reflector with TLS/SSL Etcd
-
-If you are running secure etcd, you will need to pass in additional options
-and set environment variables for the certificate and key files associated
-with your etcd instance.
-
-When starting the Route Reflector container image, you need to mount the
-certificate files and environment variable filepaths for each file:
-
-```
-docker run -privileged -net=host -d                                \
-           -e IP=<IPv4_RR>                                         \
-           [-e IP6=<IPv6_RR>]                                      \
-           -e ETCD_ENDPOINTS=<https://ETCD_IP:PORT>                \
-           -v <FULL_PATH_TO_CERT_DIR>:<MOUNT_DIR>                  \
-           -e ETCD_CA_CERT_FILE=<MOUNT_DIR>/<CA_FILE>              \
-           -e ETCD_CERT_FILE=<MOUNT_DIR>/<CERT_FILE>               \
-           -e ETCD_KEY_FILE=<MOUNT_DIR>/<KEY_FILE>                 \
-           calico/routereflector:{{site.data.versions[page.version].first.components["calico/routereflector"].version}}
-```
-
-Where `<FULL_PATH_TO_CERT_DIR>` is a directory on the host that contains
-the certificate files (you can mount multiple directories with additional
-`-v <DIR>` parameters if they are in separate directories, but be sure
-to choose different `<MOUNT_DIR>` locations if this is the case).
-
-You will also need to pass the certificate and key files as parameters
-in the curl statement when adding entries:
-
-```
-# IPv4 entries
-curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
-# IPv6 entries
-curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v6/<IPv6_RR> -XPUT -d value="{\"ip\":\"<IPv6_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
-```
