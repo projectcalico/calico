@@ -1,5 +1,5 @@
-hash: d1a2c0e69c2d652507661c66994b27d5b3bfe4491f5d81592819b8c495553e01
-updated: 2017-07-21T14:12:11.07486886-07:00
+hash: a1a6e727d774908cda0d14a92843c8bfe3cba9f249f583fe5c864fffc6dd220f
+updated: 2017-07-24T19:34:43.661032526Z
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -171,7 +171,7 @@ imports:
   - lib/testutils
   - lib/validator
 - name: github.com/projectcalico/typha
-  version: ba7de8493be8276290720eeb38406de46dd11c2e
+  version: 28bec615f73b277e92728f6ce6aa847a0354647f
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
