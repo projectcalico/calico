@@ -130,7 +130,7 @@ var _ = Describe("RouteTable", func() {
 				})
 				start := time.Now()
 				rt.Apply()
-				Expect(time.Since(start)).To(BeNumerically(">=", delay))
+				Expect(time.Since(start)).To(BeNumerically(">=", delay*9/10))
 			})
 			It("should not block an unrelated route add ", func() {
 				// Initial apply starts a background thread to delete
