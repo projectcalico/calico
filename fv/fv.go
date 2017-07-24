@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The fv packge contains FV tests that execute Felix for-real.
+// The fv package contains FV tests that execute Felix for real.
 package fv

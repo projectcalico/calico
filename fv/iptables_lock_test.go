@@ -99,7 +99,11 @@ var _ = Describe("with running container", func() {
 			// lock.
 			log.Info("Waiting for iptables-locker to acquire lock")
 			scanner := bufio.NewScanner(stdErr)
-			Expect(scanner.Scan()).To(BeTrue())
+			scanResult := scanner.Scan()
+			if !scanResult {
+				log.WithError(scanner.Err()).Warning("Scan failed")
+			}
+			Expect(scanResult).To(BeTrue())
 			Expect(scanner.Text()).To(Equal("LOCKED"))
 			Expect(scanner.Err()).NotTo(HaveOccurred())
 			log.Info("iptables-locker acquired lock")
