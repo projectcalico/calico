@@ -17,23 +17,24 @@ package k8s
 import (
 	"os/exec"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/kelseyhightower/envconfig"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
+
 	log "github.com/Sirupsen/logrus"
-	"net/http"
+	"github.com/kelseyhightower/envconfig"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 type EnvConfig struct {
 	FelixVersion string
-	K8sVersion string `default:"1.6.4"`
-	PromPGURL string
-	CodeLevel string
-	UseTypha bool
+	K8sVersion   string `default:"1.6.4"`
+	PromPGURL    string
+	CodeLevel    string
+	UseTypha     bool
 }
 
 var config EnvConfig
@@ -46,6 +47,15 @@ var k8sName string
 var k8sCmd *exec.Cmd
 var k8sStopped chan struct{} = make(chan struct{})
 
+func command(name string, args ...string) *exec.Cmd {
+	log.WithFields(log.Fields{
+		"command":     name,
+		"commandArgs": args,
+	}).Info("Creating Command.")
+
+	return exec.Command(name, args...)
+}
+
 var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
 	err := envconfig.Process("k8sfv", &config)
@@ -55,7 +65,7 @@ var _ = BeforeSuite(func() {
 	// Start etcd, which will back the k8s API server.
 	etcdName = nameForContainer("etcd")
 	log.WithField("name", etcdName).Info("Starting etcd")
-	etcdCmd = exec.Command("docker", "run",
+	etcdCmd = command("docker", "run",
 		"--rm",
 		"--name", etcdName,
 		"quay.io/coreos/etcd",
@@ -75,10 +85,10 @@ var _ = BeforeSuite(func() {
 	// Start the k8s API server.
 	k8sName = nameForContainer("k8s-api")
 	log.WithField("name", k8sName).Info("Starting k8s")
-	k8sCmd = exec.Command("docker", "run",
+	k8sCmd = command("docker", "run",
 		"--rm",
 		"--name", k8sName,
-		"gcr.io/google_containers/hyperkube-amd64:v" + config.K8sVersion,
+		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
 		"/hyperkube", "apiserver",
 		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIP),
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -145,20 +155,20 @@ func waitForContainer(name string, stopChan chan struct{}) {
 		if err == nil {
 			return
 		}
-		if strings.Contains(string(out), "No such object") {
+		if strings.Contains(string(out), "No such") {
 			log.Info("Waiting for ", name)
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", string(out)))
 	}
 }
 
 func getContainerIP(name string) string {
 	out, err := exec.Command("docker", "inspect",
-		"--format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name).Output()
+		"--format={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name).Output()
 	Expect(err).NotTo(HaveOccurred())
-	return string(out)
+	return strings.TrimSpace(string(out))
 }
 
 var containerIdx int
