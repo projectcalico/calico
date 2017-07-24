@@ -31,6 +31,15 @@ func (t WorkloadEndpoint) GetResourceMetadata() unversioned.ResourceMetadata {
 	return t.Metadata
 }
 
+// String() returns the human-readable string representation of a WorkloadEndpoint which is
+// defined by its Node, Orchestrator, Workload, Name, and Active Instance ID (if it exists).
+func (t WorkloadEndpoint) String() string {
+	if t.Metadata.ActiveInstanceID == "" {
+		return fmt.Sprintf("WorkloadEndpoint(Node=%s, Orchestrator=%s, Workload=%s, Name=%s)", t.Metadata.Node, t.Metadata.Orchestrator, t.Metadata.Workload, t.Metadata.Name)
+	}
+	return fmt.Sprintf("WorkloadEndpoint(Node=%s, Orchestrator=%s, Workload=%s, Name=%s, ActiveInstanceID=%s)", t.Metadata.Node, t.Metadata.Orchestrator, t.Metadata.Workload, t.Metadata.Name, t.Metadata.ActiveInstanceID)
+}
+
 // WorkloadEndpointMetadata contains the Metadata for a WorkloadEndpoint resource.
 type WorkloadEndpointMetadata struct {
 	unversioned.ObjectMetadata
