@@ -1,6 +1,6 @@
 ###############################################################################
 # Versions:
-RELEASE_STREAM?=v2.3
+RELEASE_STREAM?=master
 
 GO_BUILD_VER:=v0.7
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
@@ -437,8 +437,8 @@ semaphore:
 	# Actually run the tests (refreshing the images as required), we only run a
 	# small subset of the tests for testing SSL support.  These tests are run
 	# using "latest" tagged images.
-	$(MAKE) RELEASE_STREAM=master $(NODE_CONTAINER_NAME) st
-	ST_TO_RUN=tests/st/policy $(MAKE) RELEASE_STREAM=master st-ssl
+	$(MAKE) $(NODE_CONTAINER_NAME) st
+	ST_TO_RUN=tests/st/policy $(MAKE) st-ssl
 
 release: clean
 	@if [[ `git rev-parse --abbrev-ref HEAD` == "master" ]]; then echo 'Release process should not be run from master'; exit 1; fi
