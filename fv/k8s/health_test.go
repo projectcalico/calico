@@ -23,10 +23,25 @@ import (
 	"strings"
 	"time"
 
+	"bufio"
+	"crypto/tls"
+	"io"
+	"io/ioutil"
+	"net"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
+
+	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/client"
+	"github.com/projectcalico/libcalico-go/lib/api"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/pkg/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type EnvConfig struct {
@@ -39,22 +54,34 @@ type EnvConfig struct {
 
 var config EnvConfig
 
-var etcdName string
-var etcdCmd *exec.Cmd
-var etcdStopped chan struct{} = make(chan struct{})
+var etcdContainer *Container
+var apiServerContainer *Container
+var k8sAPIEndpoint string
+var k8sCertFilename string
+var calicoClient *client.Client
+var k8sClient *kubernetes.Clientset
 
-var k8sName string
-var k8sCmd *exec.Cmd
-var k8sStopped chan struct{} = make(chan struct{})
-
-func command(name string, args ...string) *exec.Cmd {
-	log.WithFields(log.Fields{
-		"command":     name,
-		"commandArgs": args,
-	}).Info("Creating Command.")
-
-	return exec.Command(name, args...)
-}
+var (
+	// This transport is based on  http.DefaultTransport, with InsecureSkipVerify set.
+	insecureTransport = &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	insecureHTTPClient = http.Client{
+		Transport: insecureTransport,
+	}
+)
 
 var _ = BeforeSuite(func() {
 	log.Info(">>> BeforeSuite <<<")
@@ -63,55 +90,35 @@ var _ = BeforeSuite(func() {
 	log.WithField("config", config).Info("Loaded config")
 
 	// Start etcd, which will back the k8s API server.
-	etcdName = nameForContainer("etcd")
-	log.WithField("name", etcdName).Info("Starting etcd")
-	etcdCmd = command("docker", "run",
-		"--rm",
-		"--name", etcdName,
+
+	etcdContainer, err = NewContainer("etcd",
 		"quay.io/coreos/etcd",
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379,http://127.0.0.1:4001",
 		"--listen-client-urls", "http://0.0.0.0:2379,http://0.0.0.0:4001",
 	)
-	err = etcdCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
-	go func() {
-		defer close(etcdStopped)
-		etcdCmd.Wait()
-	}()
-	waitForContainer(etcdName, etcdStopped)
-	etcdIP := getContainerIP(etcdName)
 
 	// Start the k8s API server.
-	k8sName = nameForContainer("k8s-api")
-	log.WithField("name", k8sName).Info("Starting k8s")
-	k8sCmd = command("docker", "run",
-		"--rm",
-		"--name", k8sName,
+	apiServerContainer, err = NewContainer("apiserver",
 		"gcr.io/google_containers/hyperkube-amd64:v"+config.K8sVersion,
 		"/hyperkube", "apiserver",
-		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdIP),
+		fmt.Sprintf("--etcd-servers=http://%s:2379", etcdContainer.IP),
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"-v=10",
-		"--authorization-mode=RBAC")
-	k8sCmd.Stdout = os.Stdout
-	k8sCmd.Stderr = os.Stderr
-	err = k8sCmd.Start()
+		"--authorization-mode=RBAC",
+	)
 	Expect(err).NotTo(HaveOccurred())
-	go func() {
-		defer close(k8sStopped)
-		k8sCmd.Wait()
-	}()
-	waitForContainer(k8sName, k8sStopped)
-	k8sIP := getContainerIP(k8sName)
 
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
 	for {
-		rbCmd := exec.Command("docker", "exec", k8sName,
-			"kubectl", "create", "clusterrolebinding", "anonymous-admin",
-			"--clusterrole=cluster-admin", "--user=system:anonymous")
-		err = rbCmd.Run()
+		err := apiServerContainer.RunInContainer(
+			"kubectl", "create", "clusterrolebinding",
+			"anonymous-admin",
+			"--clusterrole=cluster-admin",
+			"--user=system:anonymous",
+		)
 		if err != nil {
 			log.Info("Waiting for API server to accept cluster role binding")
 			time.Sleep(2 * time.Second)
@@ -120,47 +127,238 @@ var _ = BeforeSuite(func() {
 		break
 	}
 
-	http.Get(fmt.Sprintf("https://%s:6443/apis/extensions/v1beta1/thirdpartyresources", k8sIP))
+	k8sAPIEndpoint = fmt.Sprintf("https://%s:6443", apiServerContainer.IP)
+	for {
+		resp, err := insecureHTTPClient.Get(k8sAPIEndpoint + "/apis/extensions/v1beta1/thirdpartyresources")
+		if err != nil {
+			log.WithError(err).Info("Waiting for API server to respond to requests")
+			continue
+		}
+		body, err := ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			log.WithError(err).Info("Waiting for API server to respond to requests")
+			continue
+		}
+		log.WithField("body", string(body)).Info("Response from API server")
+		break
+	}
+	log.Info("API server is up.")
+
+	// Get the API server's cert, which we need to pass to Felix/Typha
+	k8sCertFilename = "/tmp/" + apiServerContainer.Name + ".crt"
+	for {
+		cmd := exec.Command("docker", "cp",
+			apiServerContainer.Name+":/var/run/kubernetes/apiserver.crt",
+			k8sCertFilename,
+		)
+		err := cmd.Run()
+		if err != nil {
+			log.WithError(err).Warn("Waiting for API cert to appear")
+			continue
+		}
+		break
+	}
+
+	for {
+		calicoClient, err = client.New(api.CalicoAPIConfig{
+			Spec: api.CalicoAPIConfigSpec{
+				DatastoreType: api.Kubernetes,
+				KubeConfig: api.KubeConfig{
+					K8sAPIEndpoint:           k8sAPIEndpoint,
+					K8sInsecureSkipTLSVerify: true,
+				},
+			},
+		})
+		if err != nil {
+			log.WithError(err).Warn("Failed to init datastore")
+			continue
+		}
+		err = calicoClient.EnsureInitialized()
+		if err != nil {
+			log.WithError(err).Warn("Failed to init datastore")
+			continue
+		}
+		break
+	}
+
+	for {
+		k8sClient, err = kubernetes.NewForConfig(&rest.Config{
+			Transport: insecureTransport,
+			Host:     "https://" + apiServerContainer.IP + ":6443",
+		})
+		if err == nil {
+			break
+		}
+	}
 })
 
 var _ = AfterSuite(func() {
-	stopContainer(k8sCmd)
-	stopContainer(etcdCmd)
+	apiServerContainer.Stop()
+	etcdContainer.Stop()
 })
 
-func stopContainer(cmd *exec.Cmd) {
-	if cmd == nil {
+var _ = Describe("with Felix running", func() {
+	var felixContainer *Container
+	var felixReady func() int
+
+	BeforeEach(func() {
+		var err error
+		felixContainer, err = NewContainer("felix",
+			"--privileged",
+			//${typha_felix_args}",
+			"-e", "CALICO_DATASTORE_TYPE=kubernetes",
+			"-e", "FELIX_HEALTHENABLED=true",
+			"-e", "FELIX_LOGSEVERITYSCREEN=info",
+			"-e", "FELIX_DATASTORETYPE=kubernetes",
+			"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
+			"-e", "FELIX_USAGEREPORTINGENABLED=false",
+			"-e", "FELIX_HEALTHENABLED=true",
+			"-e", "FELIX_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+			"-e", "K8S_API_ENDPOINT="+k8sAPIEndpoint,
+			"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
+			"-v", k8sCertFilename+":/tmp/apiserver.crt",
+			"calico/felix", // TODO Felix version
+			"calico-felix")
+		Expect(err).NotTo(HaveOccurred())
+
+		felixReady = getHealthStatus(felixContainer.IP, "9099", "readiness")
+	})
+
+	Describe("with no per-node config in datastore", func() {
+		It("Should become ready", func() {
+			// With no config, Felix won't even open the socket.
+			Consistently(felixReady, "10s", "1s").Should(BeErr())
+		})
+	})
+
+	Describe("with per-node config in datastore", func() {
+		BeforeEach(func() {
+			// Make a k8s Node.
+			_, err := k8sClient.Nodes().Create(&v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: felixContainer.Hostname,
+				},
+				Spec: v1.NodeSpec{
+
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Should become ready", func() {
+			Eventually(felixReady, "10s", "100ms").Should(BeGood())
+			Consistently(felixReady, "30s", "1s").Should(BeGood())
+		})
+	})
+
+	AfterEach(func() {
+		felixContainer.Stop()
+	})
+})
+
+type Container struct {
+	Name    string
+	Cmd     *exec.Cmd
+	IP      string
+	Hostname string
+	stopped chan struct{}
+}
+
+func NewContainer(nameStem string, dockerRunArgs ...string) (*Container, error) {
+	name := nameForContainer(nameStem)
+	args := []string{"run", "--rm", "--name", name, "--hostname", name}
+	args = append(args, dockerRunArgs...)
+
+	cmd := command("docker", args...)
+
+	stdout, err := cmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	stderr, err := cmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	go copyOutputToLog(nameStem, "stdout", stdout)
+	go copyOutputToLog(nameStem, "stderr", stderr)
+
+	stoppedChan := make(chan struct{})
+	go func() {
+		defer close(stoppedChan)
+		err := cmd.Wait()
+		log.WithError(err).WithField("name", name).Info("Container stopped")
+	}()
+	waitForContainer(name, stoppedChan)
+	return &Container{
+		Name:    name,
+		Cmd:     cmd,
+		stopped: stoppedChan,
+		IP:      getContainerIP(name),
+		Hostname:      name,
+	}, nil
+}
+
+func (c *Container) RunInContainer(args ...string) error {
+	dockerArgs := append([]string{"exec", c.Name}, args...)
+	cmd := exec.Command("docker", dockerArgs...)
+	return cmd.Run()
+}
+
+func copyOutputToLog(name string, streamName string, stream io.Reader) {
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		log.Info(name, "[", streamName, "] ", scanner.Text())
+	}
+	logCxt := log.WithFields(log.Fields{
+		"name":   name,
+		"stream": stream,
+	})
+	if scanner.Err() != nil {
+		logCxt.WithError(scanner.Err()).Warn("Error reading container stream")
+	}
+	logCxt.Info("Stream finished")
+}
+
+func (c *Container) Stop() {
+	if c == nil {
+		return
+	}
+	if c.Cmd == nil {
 		// Command was never started.
 		return
 	}
-	if cmd.Process == nil {
+	if c.Cmd.Process == nil {
 		// Command didn't get as far as forking.
 		return
 	}
 	// Use interrupt rather than kill or the container will detach and run in the
 	// background.
-	cmd.Process.Signal(os.Interrupt)
+	c.Cmd.Process.Signal(os.Interrupt)
+	timeout := time.NewTimer(10 * time.Second)
+	select {
+	case <-timeout.C:
+		c.Cmd.Process.Kill()
+	case <-c.stopped:
+		timeout.Stop()
+	}
 }
 
-var _ = Describe("With a k8s API server", func() {
-	It("should", func() {
-
-	})
-})
-
-func waitForContainer(name string, stopChan chan struct{}) {
+func waitForContainer(name string, stopChan chan struct{}) error {
 	for {
 		Expect(stopChan).NotTo(BeClosed())
 		out, err := exec.Command("docker", "inspect", name).CombinedOutput()
 		if err == nil {
-			return
+			return nil
 		}
 		if strings.Contains(string(out), "No such") {
 			log.Info("Waiting for ", name)
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", string(out)))
+		return err
 	}
 }
 
@@ -177,6 +375,46 @@ func nameForContainer(stem string) string {
 	containerName := fmt.Sprintf("k8sfv-%s-%d-%d", stem, os.Getpid(), containerIdx)
 	containerIdx++
 	return containerName
+}
+
+func command(name string, args ...string) *exec.Cmd {
+	log.WithFields(log.Fields{
+		"command":     name,
+		"commandArgs": args,
+	}).Info("Creating Command.")
+
+	return exec.Command(name, args...)
+}
+
+const statusErr = -1
+func getHealthStatus(ip, port, endpoint string) func() int {
+	return func() int {
+		resp, err := http.Get("http://" + ip + ":" + port + "/" + endpoint)
+		if err != nil {
+			log.WithError(err).WithField("resp", resp).Warn("HTTP GET failed")
+			return statusErr
+		}
+		defer resp.Body.Close()
+		log.WithField("resp", resp).Info("Health response")
+		return resp.StatusCode
+	}
+}
+
+//
+//func getTyphaStatus(endpoint string) func() int {
+//	return getHealthStatus(typhaIP, "9098", endpoint)
+//}
+
+func BeErr() types.GomegaMatcher {
+	return BeNumerically("==", statusErr)
+}
+
+func BeBad() types.GomegaMatcher {
+	return BeNumerically("==", health.StatusBad)
+}
+
+func BeGood() types.GomegaMatcher {
+	return BeNumerically("==", health.StatusGood)
 }
 
 //var _ = Describe("health", func() {
@@ -278,34 +516,7 @@ func nameForContainer(stem string) string {
 //	})
 //})
 //
-//func BeBad() types.GomegaMatcher {
-//	return BeNumerically("==", health.StatusBad)
-//}
 //
-//func BeGood() types.GomegaMatcher {
-//	return BeNumerically("==", health.StatusGood)
-//}
-//
-//func getHealthStatus(ip, port, endpoint string) func() int {
-//	return func() int {
-//		resp, err := http.Get("http://" + ip + ":" + port + "/" + endpoint)
-//		if err != nil {
-//			log.WithError(err).Error("HTTP GET failed")
-//			return health.StatusBad
-//		}
-//		log.WithField("resp", resp).Info("Health response")
-//		defer resp.Body.Close()
-//		return resp.StatusCode
-//	}
-//}
-//
-//func getFelixStatus(endpoint string) func() int {
-//	return getHealthStatus(felixIP, "9099", endpoint)
-//}
-//
-//func getTyphaStatus(endpoint string) func() int {
-//	return getHealthStatus(typhaIP, "9098", endpoint)
-//}
 //
 //func triggerFelixRestart() {
 //	log.Info("Killing felix")
