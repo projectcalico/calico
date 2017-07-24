@@ -34,9 +34,11 @@ type State struct {
 	ExpectedIPSets                       map[string]set.Set
 	ExpectedPolicyIDs                    set.Set
 	ExpectedUntrackedPolicyIDs           set.Set
+	ExpectedPreDNATPolicyIDs             set.Set
 	ExpectedProfileIDs                   set.Set
 	ExpectedEndpointPolicyOrder          map[string][]tierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]tierInfo
+	ExpectedPreDNATEndpointPolicyOrder   map[string][]tierInfo
 }
 
 func (s State) String() string {
@@ -52,9 +54,11 @@ func NewState() State {
 		ExpectedIPSets:                       make(map[string]set.Set),
 		ExpectedPolicyIDs:                    set.New(),
 		ExpectedUntrackedPolicyIDs:           set.New(),
+		ExpectedPreDNATPolicyIDs:             set.New(),
 		ExpectedProfileIDs:                   set.New(),
 		ExpectedEndpointPolicyOrder:          make(map[string][]tierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]tierInfo),
+		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]tierInfo),
 	}
 }
 
@@ -71,9 +75,13 @@ func (s State) Copy() State {
 	for k, v := range s.ExpectedUntrackedEndpointPolicyOrder {
 		cpy.ExpectedUntrackedEndpointPolicyOrder[k] = v
 	}
+	for k, v := range s.ExpectedPreDNATEndpointPolicyOrder {
+		cpy.ExpectedPreDNATEndpointPolicyOrder[k] = v
+	}
 
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
+	cpy.ExpectedPreDNATPolicyIDs = s.ExpectedPreDNATPolicyIDs.Copy()
 	cpy.ExpectedProfileIDs = s.ExpectedProfileIDs.Copy()
 
 	cpy.Name = s.Name
@@ -126,17 +134,19 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 }
 
 func (s State) withEndpoint(id string, tiers []tierInfo) State {
-	return s.withEndpointUntracked(id, tiers, []tierInfo{})
+	return s.withEndpointUntracked(id, tiers, []tierInfo{}, []tierInfo{})
 }
 
-func (s State) withEndpointUntracked(id string, tiers, untrackedTiers []tierInfo) State {
+func (s State) withEndpointUntracked(id string, tiers, untrackedTiers, preDNATTiers []tierInfo) State {
 	newState := s.Copy()
 	if tiers == nil {
 		delete(newState.ExpectedEndpointPolicyOrder, id)
 		delete(newState.ExpectedUntrackedEndpointPolicyOrder, id)
+		delete(newState.ExpectedPreDNATEndpointPolicyOrder, id)
 	} else {
 		newState.ExpectedEndpointPolicyOrder[id] = tiers
 		newState.ExpectedUntrackedEndpointPolicyOrder[id] = untrackedTiers
+		newState.ExpectedPreDNATEndpointPolicyOrder[id] = preDNATTiers
 	}
 	return newState
 }
@@ -161,6 +171,15 @@ func (s State) withUntrackedPolicies(ids ...proto.PolicyID) (newState State) {
 	newState.ExpectedUntrackedPolicyIDs = set.New()
 	for _, id := range ids {
 		newState.ExpectedUntrackedPolicyIDs.Add(id)
+	}
+	return newState
+}
+
+func (s State) withPreDNATPolicies(ids ...proto.PolicyID) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedPreDNATPolicyIDs = set.New()
+	for _, id := range ids {
+		newState.ExpectedPreDNATPolicyIDs.Add(id)
 	}
 	return newState
 }

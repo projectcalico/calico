@@ -47,7 +47,19 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 func (r *DefaultRuleRenderer) HostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
 ) []*Chain {
+	return r.hostDispatchChains(endpoints, false)
+}
 
+func (r *DefaultRuleRenderer) FromHostDispatchChains(
+	endpoints map[string]proto.HostEndpointID,
+) []*Chain {
+	return r.hostDispatchChains(endpoints, true)
+}
+
+func (r *DefaultRuleRenderer) hostDispatchChains(
+	endpoints map[string]proto.HostEndpointID,
+	fromOnly bool,
+) []*Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering host dispatch chains")
 	names := make([]string, 0, len(endpoints))
@@ -55,14 +67,25 @@ func (r *DefaultRuleRenderer) HostDispatchChains(
 		names = append(names, ifaceName)
 	}
 
-	return r.dispatchChains(
-		names,
-		HostFromEndpointPfx,
-		HostToEndpointPfx,
-		ChainDispatchFromHostEndpoint,
-		ChainDispatchToHostEndpoint,
-		false,
-	)
+	if fromOnly {
+		return r.dispatchChains(
+			names,
+			HostFromEndpointPfx,
+			"",
+			ChainDispatchFromHostEndpoint,
+			"",
+			false,
+		)
+	} else {
+		return r.dispatchChains(
+			names,
+			HostFromEndpointPfx,
+			HostToEndpointPfx,
+			ChainDispatchFromHostEndpoint,
+			ChainDispatchToHostEndpoint,
+			false,
+		)
+	}
 }
 
 func (r *DefaultRuleRenderer) dispatchChains(
@@ -200,7 +223,12 @@ func (r *DefaultRuleRenderer) dispatchChains(
 				Name:  childToChainName,
 				Rules: childToEndpointRules,
 			}
-			chains = append(chains, childFromEndpointChain, childToEndpointChain)
+			if toEndpointPfx != "" {
+				chains = append(chains, childFromEndpointChain, childToEndpointChain)
+			} else {
+				// Only emit from endpoint chains.
+				chains = append(chains, childFromEndpointChain)
+			}
 		} else {
 			// Only one name with this prefix, render rules directly into the root
 			// chains.
@@ -243,7 +271,12 @@ func (r *DefaultRuleRenderer) dispatchChains(
 		Name:  dispatchToEndpointChainName,
 		Rules: rootToEndpointRules,
 	}
-	chains = append(chains, fromEndpointDispatchChain, toEndpointDispatchChain)
+	if toEndpointPfx != "" {
+		chains = append(chains, fromEndpointDispatchChain, toEndpointDispatchChain)
+	} else {
+		// Only emit from endpoint chains.
+		chains = append(chains, fromEndpointDispatchChain)
+	}
 
 	return chains
 }

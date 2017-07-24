@@ -27,19 +27,22 @@ var _ = Describe("Policy manager", func() {
 	var (
 		policyMgr    *policyManager
 		rawTable     *mockTable
+		mangleTable  *mockTable
 		filterTable  *mockTable
 		ruleRenderer *mockPolRenderer
 	)
 
 	BeforeEach(func() {
 		rawTable = newMockTable("raw")
+		mangleTable = newMockTable("mangle")
 		filterTable = newMockTable("filter")
 		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, filterTable, ruleRenderer, 4)
+		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4)
 	})
 
 	It("shouldn't touch iptables", func() {
 		Expect(filterTable.UpdateCalled).To(BeFalse())
+		Expect(mangleTable.UpdateCalled).To(BeFalse())
 	})
 
 	Describe("after a policy update", func() {
@@ -63,6 +66,10 @@ var _ = Describe("Policy manager", func() {
 				{Name: "cali-pi-pol1"},
 				{Name: "cali-po-pol1"},
 			}})
+			mangleTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
+			}})
 		})
 
 		Describe("after a policy remove", func() {
@@ -74,6 +81,7 @@ var _ = Describe("Policy manager", func() {
 
 			It("should remove the in and out chain", func() {
 				filterTable.checkChains([][]*iptables.Chain{})
+				mangleTable.checkChains([][]*iptables.Chain{})
 			})
 		})
 	})
@@ -101,8 +109,14 @@ var _ = Describe("Policy manager", func() {
 				{Name: "cali-po-pol1"},
 			}})
 		})
-		It("should install to the filter chain", func() {
+		It("should install to the filter table", func() {
 			filterTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
+			}})
+		})
+		It("should install to the mangle table", func() {
+			mangleTable.checkChains([][]*iptables.Chain{{
 				{Name: "cali-pi-pol1"},
 				{Name: "cali-po-pol1"},
 			}})
@@ -120,6 +134,64 @@ var _ = Describe("Policy manager", func() {
 			})
 			It("should not insert any filter chains", func() {
 				filterTable.checkChains([][]*iptables.Chain{})
+			})
+			It("should remove any mangle chains", func() {
+				mangleTable.checkChains([][]*iptables.Chain{})
+			})
+		})
+	})
+
+	Describe("after a pre-DNAT policy update", func() {
+		BeforeEach(func() {
+			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+				Policy: &proto.Policy{
+					InboundRules: []*proto.Rule{
+						{Action: "deny"},
+					},
+					OutboundRules: []*proto.Rule{
+						{Action: "allow"},
+					},
+					PreDnat: true,
+				},
+			})
+			policyMgr.CompleteDeferredWork()
+		})
+
+		It("should install the raw chains", func() {
+			rawTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
+			}})
+		})
+		It("should install to the filter table", func() {
+			filterTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
+			}})
+		})
+		It("should install to the mangle table", func() {
+			mangleTable.checkChains([][]*iptables.Chain{{
+				{Name: "cali-pi-pol1"},
+				{Name: "cali-po-pol1"},
+			}})
+		})
+
+		Describe("after a policy remove", func() {
+			BeforeEach(func() {
+				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+				})
+			})
+
+			It("should remove the raw chains", func() {
+				rawTable.checkChains([][]*iptables.Chain{})
+			})
+			It("should not insert any filter chains", func() {
+				filterTable.checkChains([][]*iptables.Chain{})
+			})
+			It("should remove any mangle chains", func() {
+				mangleTable.checkChains([][]*iptables.Chain{})
 			})
 		})
 	})
@@ -147,6 +219,10 @@ var _ = Describe("Policy manager", func() {
 			}})
 		})
 
+		It("should not install to the mangle table", func() {
+			mangleTable.checkChains([][]*iptables.Chain{})
+		})
+
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActiveProfileRemove{
@@ -156,6 +232,7 @@ var _ = Describe("Policy manager", func() {
 
 			It("should remove the in and out chain", func() {
 				filterTable.checkChains([][]*iptables.Chain{})
+				mangleTable.checkChains([][]*iptables.Chain{})
 			})
 		})
 	})

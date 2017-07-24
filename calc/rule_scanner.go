@@ -74,26 +74,26 @@ func NewRuleScanner() *RuleScanner {
 }
 
 func (rs *RuleScanner) OnProfileActive(key model.ProfileRulesKey, profile *model.ProfileRules) {
-	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false)
+	parsedRules := rs.updateRules(key, profile.InboundRules, profile.OutboundRules, false, false)
 	rs.RulesUpdateCallbacks.OnProfileActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
-	rs.updateRules(key, nil, nil, false)
+	rs.updateRules(key, nil, nil, false, false)
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
 func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack)
+	parsedRules := rs.updateRules(key, policy.InboundRules, policy.OutboundRules, policy.DoNotTrack, policy.PreDNAT)
 	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
-	rs.updateRules(key, nil, nil, false)
+	rs.updateRules(key, nil, nil, false, false)
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
 }
 
-func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked bool) (parsedRules *ParsedRules) {
+func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Rule, untracked, preDNAT bool) (parsedRules *ParsedRules) {
 	log.Debugf("Scanning rules (%v in, %v out) for key %v",
 		len(inbound), len(outbound), key)
 	// Extract all the new selectors/tags.
@@ -118,6 +118,7 @@ func (rs *RuleScanner) updateRules(key interface{}, inbound, outbound []model.Ru
 		InboundRules:  parsedInbound,
 		OutboundRules: parsedOutbound,
 		Untracked:     untracked,
+		PreDNAT:       preDNAT,
 	}
 
 	// Figure out which selectors/tags are new.
@@ -183,6 +184,9 @@ type ParsedRules struct {
 
 	// Untracked is true if these rules should not be "conntracked".
 	Untracked bool
+
+	// PreDNAT is true if these rules should be applied before any DNAT.
+	PreDNAT bool
 }
 
 // Rule is like a backend.model.Rule, except the tag and selector matches are

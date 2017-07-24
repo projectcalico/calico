@@ -148,6 +148,7 @@ message Policy {
   repeated Rule inbound_rules = 1;
   repeated Rule outbound_rules = 2;
   bool untracked = 3;
+  bool pre_dnat = 4;
 }
 
 enum IPVersion {
@@ -192,7 +193,7 @@ message Rule {
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
-  
+
   // An opaque ID/hash for the rule.
   string rule_id = 201;
 }
@@ -263,6 +264,7 @@ message HostEndpoint {
   repeated string profile_ids = 2;
   repeated TierInfo tiers = 3;
   repeated TierInfo untracked_tiers = 6;
+  repeated TierInfo pre_dnat_tiers = 7;
   repeated string expected_ipv4_addrs = 4;
   repeated string expected_ipv6_addrs = 5;
 }

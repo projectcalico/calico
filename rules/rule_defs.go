@@ -52,6 +52,8 @@ const (
 	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
 	ChainNATOutgoing    = ChainNamePrefix + "nat-outgoing"
 
+	ChainManglePrerouting = ChainNamePrefix + "PREROUTING"
+
 	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
@@ -129,6 +131,7 @@ type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
+	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*iptables.Chain
 	WorkloadEndpointToIptablesChains(
@@ -139,6 +142,7 @@ type RuleRenderer interface {
 	) []*iptables.Chain
 
 	HostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
+	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
 		policyNames []string,
@@ -147,6 +151,10 @@ type RuleRenderer interface {
 	HostEndpointToRawChains(
 		ifaceName string,
 		untrackedPolicyNames []string,
+	) []*iptables.Chain
+	HostEndpointToMangleChains(
+		ifaceName string,
+		preDNATPolicyNames []string,
 	) []*iptables.Chain
 
 	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*iptables.Chain
@@ -162,8 +170,9 @@ type RuleRenderer interface {
 type DefaultRuleRenderer struct {
 	Config
 
-	inputAcceptActions  []iptables.Action
-	iptablesAllowAction iptables.Action
+	inputAcceptActions []iptables.Action
+	filterAllowAction  iptables.Action
+	mangleAllowAction  iptables.Action
 }
 
 func (r *DefaultRuleRenderer) ipSetConfig(ipVersion uint8) *ipsets.IPVersionConfig {
@@ -195,9 +204,10 @@ type Config struct {
 	IPIPEnabled       bool
 	IPIPTunnelAddress net.IP
 
-	IptablesLogPrefix    string
-	EndpointToHostAction string
-	IptablesAllowAction  string
+	IptablesLogPrefix         string
+	EndpointToHostAction      string
+	IptablesFilterAllowAction string
+	IptablesMangleAllowAction string
 
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
@@ -253,19 +263,28 @@ func NewRenderer(config Config) RuleRenderer {
 	}
 
 	//What should we do with packets that are accepted in the forwarding chain
-	var iptablesAllowAction iptables.Action
-	switch config.IptablesAllowAction {
+	var filterAllowAction, mangleAllowAction iptables.Action
+	switch config.IptablesFilterAllowAction {
 	case "RETURN":
-		log.Info("Accepted forward packets will be returned to FORWARD chain.")
-		iptablesAllowAction = iptables.ReturnAction{}
+		log.Info("filter table allowed packets will be returned to FORWARD chain.")
+		filterAllowAction = iptables.ReturnAction{}
 	default:
-		log.Info("Accepted forward packets will be accepted immediately.")
-		iptablesAllowAction = iptables.AcceptAction{}
+		log.Info("filter table allowed packets will be accepted immediately.")
+		filterAllowAction = iptables.AcceptAction{}
+	}
+	switch config.IptablesMangleAllowAction {
+	case "RETURN":
+		log.Info("mangle table allowed packets will be returned to PREROUTING chain.")
+		mangleAllowAction = iptables.ReturnAction{}
+	default:
+		log.Info("mangle table allowed packets will be accepted immediately.")
+		mangleAllowAction = iptables.AcceptAction{}
 	}
 
 	return &DefaultRuleRenderer{
-		Config:              config,
-		inputAcceptActions:  inputAcceptActions,
-		iptablesAllowAction: iptablesAllowAction,
+		Config:             config,
+		inputAcceptActions: inputAcceptActions,
+		filterAllowAction:  filterAllowAction,
+		mangleAllowAction:  mangleAllowAction,
 	}
 }

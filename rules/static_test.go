@@ -80,10 +80,6 @@ var _ = Describe("Static", func() {
 					Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
 						Name: "cali-FORWARD",
 						Rules: []Rule{
-							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
-								Action: AcceptAction{}},
-
 							// Per-prefix workload jump rules.
 							{Match: Match().InInterface("cali+"),
 								Action: JumpAction{Target: ChainFromWorkloadDispatch}},
@@ -97,8 +93,10 @@ var _ = Describe("Static", func() {
 								Action: AcceptAction{}},
 
 							// Non-workload through-traffic, pass to host endpoint chains.
-							{Action: ClearMarkAction{Mark: 0xf0}},
-							{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+							{Action: ClearMarkAction{Mark: 0xe0}},
+							// Unless already matched in raw table...
+							{Match: Match().MarkClear(0x10),
+								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 							{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 							{
 								Match:   Match().MarkSet(0x10),
@@ -113,7 +111,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-INPUT",
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
 							// Per-prefix workload jump rules.  Note use of goto so that we
@@ -137,7 +135,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-OUTPUT",
 						Rules: []Rule{
 							// Untracked packets already matched in raw table.
-							{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+							{Match: Match().MarkSet(0x10),
 								Action: AcceptAction{}},
 
 							// Return if to workload.
@@ -399,7 +397,7 @@ var _ = Describe("Static", func() {
 			Name: "cali-INPUT",
 			Rules: []Rule{
 				// Untracked packets already matched in raw table.
-				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
 				// IPIP rule
@@ -428,7 +426,7 @@ var _ = Describe("Static", func() {
 			Name: "cali-INPUT",
 			Rules: []Rule{
 				// Untracked packets already matched in raw table.
-				{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+				{Match: Match().MarkSet(0x10),
 					Action: AcceptAction{}},
 
 				// Per-prefix workload jump rules.  Note use of goto so that we
@@ -487,12 +485,13 @@ var _ = Describe("Static", func() {
 	Describe("with RETURN accept action", func() {
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes: []string{"cali"},
-				IptablesMarkAccept:    0x10,
-				IptablesMarkPass:      0x20,
-				IptablesMarkScratch0:  0x40,
-				IptablesMarkScratch1:  0x80,
-				IptablesAllowAction:   "RETURN",
+				WorkloadIfacePrefixes:     []string{"cali"},
+				IptablesMarkAccept:        0x10,
+				IptablesMarkPass:          0x20,
+				IptablesMarkScratch0:      0x40,
+				IptablesMarkScratch1:      0x80,
+				IptablesFilterAllowAction: "RETURN",
+				IptablesMangleAllowAction: "RETURN",
 			}
 		})
 
@@ -502,10 +501,6 @@ var _ = Describe("Static", func() {
 				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-FORWARD")).To(Equal(&Chain{
 					Name: "cali-FORWARD",
 					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
-							Action: AcceptAction{}},
-
 						// Per-prefix workload jump rules.
 						{Match: Match().InInterface("cali+"),
 							Action: JumpAction{Target: ChainFromWorkloadDispatch}},
@@ -519,8 +514,10 @@ var _ = Describe("Static", func() {
 							Action: AcceptAction{}},
 
 						// Non-workload through-traffic, pass to host endpoint chains.
-						{Action: ClearMarkAction{Mark: 0xf0}},
-						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{Action: ClearMarkAction{Mark: 0xe0}},
+						// Unless already matched in raw table...
+						{Match: Match().MarkClear(0x10),
+							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{Action: JumpAction{Target: ChainDispatchToHostEndpoint}},
 						{
 							Match:   Match().MarkSet(0x10),
@@ -535,7 +532,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-INPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
 						// Per-prefix workload jump rules.  Note use of goto so that we
@@ -559,7 +556,7 @@ var _ = Describe("Static", func() {
 					Name: "cali-OUTPUT",
 					Rules: []Rule{
 						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSet(0x10).ConntrackState("UNTRACKED"),
+						{Match: Match().MarkSet(0x10),
 							Action: AcceptAction{}},
 
 						// Return if to workload.

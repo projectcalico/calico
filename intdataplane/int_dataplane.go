@@ -147,6 +147,7 @@ type InternalDataplane struct {
 	fromDataplane chan interface{}
 
 	allIptablesTables    []*iptables.Table
+	iptablesMangleTables []*iptables.Table
 	iptablesNATTables    []*iptables.Table
 	iptablesRawTables    []*iptables.Table
 	iptablesFilterTables []*iptables.Table
@@ -244,6 +245,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 	}
 
+	mangleTableV4 := iptables.NewTable(
+		"mangle",
+		4,
+		rules.RuleHashPrefix,
+		iptablesLock,
+		iptablesOptions)
 	natTableV4 := iptables.NewTable(
 		"nat",
 		4,
@@ -267,6 +274,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipSetsV4 := ipsets.NewIPSets(ipSetsConfigV4)
 	dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV4)
 	dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV4)
+	dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV4)
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
@@ -276,9 +284,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
 	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
-	dp.RegisterManager(newPolicyManager(rawTableV4, filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newEndpointManager(
 		rawTableV4,
+		mangleTableV4,
 		filterTableV4,
 		ruleRenderer,
 		routeTableV4,
@@ -293,6 +302,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(dp.ipipManager) // IPv4-only
 	}
 	if config.IPv6Enabled {
+		mangleTableV6 := iptables.NewTable(
+			"mangle",
+			6,
+			rules.RuleHashPrefix,
+			iptablesLock,
+			iptablesOptions,
+		)
 		natTableV6 := iptables.NewTable(
 			"nat",
 			6,
@@ -320,15 +336,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.ipSets = append(dp.ipSets, ipSetsV6)
 		dp.iptablesNATTables = append(dp.iptablesNATTables, natTableV6)
 		dp.iptablesRawTables = append(dp.iptablesRawTables, rawTableV6)
+		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV6, filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
+			mangleTableV6,
 			filterTableV6,
 			ruleRenderer,
 			routeTableV6,
@@ -339,6 +357,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
 
+	for _, t := range dp.iptablesMangleTables {
+		dp.allIptablesTables = append(dp.allIptablesTables, t)
+	}
 	for _, t := range dp.iptablesNATTables {
 		dp.allIptablesTables = append(dp.allIptablesTables, t)
 	}
@@ -487,6 +508,13 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 		}})
 		t.SetRuleInsertions("OUTPUT", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainNATOutput},
+		}})
+	}
+
+	for _, t := range d.iptablesMangleTables {
+		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion))
+		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainManglePrerouting},
 		}})
 	}
 }

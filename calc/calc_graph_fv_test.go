@@ -203,6 +203,15 @@ var policy1_order20_untracked = Policy{
 	DoNotTrack: true,
 }
 
+var policy1_order20_pre_dnat = Policy{
+	Order:    &order20,
+	Selector: "a == 'a'",
+	InboundRules: []Rule{
+		{SrcSelector: allSelector},
+	},
+	PreDNAT: true,
+}
+
 var profileRules1 = ProfileRules{
 	InboundRules: []Rule{
 		{SrcSelector: allSelector},
@@ -276,6 +285,11 @@ var withPolicy = initialisedStore.withKVUpdates(
 var withUntrackedPolicy = initialisedStore.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-1"}, Value: &policy1_order20_untracked},
 ).withName("with untracked policy")
+
+// withPreDNATPolicy adds a tier and policy containing selectors for all and b=="b"
+var withPreDNATPolicy = initialisedStore.withKVUpdates(
+	KVPair{Key: PolicyKey{Name: "pre-dnat-pol-1"}, Value: &policy1_order20_pre_dnat},
+).withName("with pre-DNAT policy")
 
 // localEp1WithPolicy adds a local endpoint to the mix.  It matches all and b=="b".
 var localEp1WithPolicy = withPolicy.withKVUpdates(
@@ -354,6 +368,36 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	[]tierInfo{
 		{"default", []string{"pol-1"}},
 	},
+	[]tierInfo{},
+).withName("host ep1, untracked policy")
+
+var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
+	KVPair{Key: hostEpWithNameKey, Value: &hostEpWithName},
+).withIPSet(allSelectorId, []string{
+	"10.0.0.1", // ep1
+	"fc00:fe11::1",
+	"10.0.0.2", // ep1 and ep2
+	"fc00:fe11::2",
+}).withIPSet(bEqBSelectorId, []string{
+	"10.0.0.1",
+	"fc00:fe11::1",
+	"10.0.0.2",
+	"fc00:fe11::2",
+}).withActivePolicies(
+	proto.PolicyID{"default", "pre-dnat-pol-1"},
+).withPreDNATPolicies(
+	proto.PolicyID{"default", "pre-dnat-pol-1"},
+).withActiveProfiles(
+	proto.ProfileID{"prof-1"},
+	proto.ProfileID{"prof-2"},
+	proto.ProfileID{"prof-missing"},
+).withEndpointUntracked(
+	hostEpWithNameId,
+	[]tierInfo{},
+	[]tierInfo{},
+	[]tierInfo{
+		{"default", []string{"pre-dnat-pol-1"}},
+	},
 ).withName("host ep1, untracked policy")
 
 var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
@@ -369,6 +413,7 @@ var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpda
 	[]tierInfo{
 		{"default", []string{"pol-1"}},
 	},
+	[]tierInfo{},
 ).withName("host ep1, tracked+untracked policy")
 
 var hostEp2WithPolicy = withPolicy.withKVUpdates(
@@ -1095,8 +1140,14 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		Expect(tracker.endpointToUntrackedPolicyOrder).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
 			"Untracked endpoint policy order incorrect after moving to state: %v",
 			state.Name)
+		Expect(tracker.endpointToPreDNATPolicyOrder).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
+			"Untracked endpoint policy order incorrect after moving to state: %v",
+			state.Name)
 		Expect(tracker.activeUntrackedPolicies).To(Equal(state.ExpectedUntrackedPolicyIDs),
 			"Untracked policies incorrect after moving to state: %v",
+			state.Name)
+		Expect(tracker.activePreDNATPolicies).To(Equal(state.ExpectedPreDNATPolicyIDs),
+			"PreDNAT policies incorrect after moving to state: %v",
 			state.Name)
 	}))
 }
@@ -1105,9 +1156,11 @@ type stateTracker struct {
 	ipsets                         map[string]set.Set
 	activePolicies                 set.Set
 	activeUntrackedPolicies        set.Set
+	activePreDNATPolicies          set.Set
 	activeProfiles                 set.Set
 	endpointToPolicyOrder          map[string][]tierInfo
 	endpointToUntrackedPolicyOrder map[string][]tierInfo
+	endpointToPreDNATPolicyOrder   map[string][]tierInfo
 	config                         map[string]string
 }
 
@@ -1117,8 +1170,10 @@ func newStateTracker() *stateTracker {
 		activePolicies:                 set.New(),
 		activeProfiles:                 set.New(),
 		activeUntrackedPolicies:        set.New(),
+		activePreDNATPolicies:          set.New(),
 		endpointToPolicyOrder:          make(map[string][]tierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]tierInfo),
+		endpointToPreDNATPolicyOrder:   make(map[string][]tierInfo),
 	}
 	return s
 }
@@ -1170,10 +1225,16 @@ func (s *stateTracker) onEvent(event interface{}) {
 		} else {
 			s.activeUntrackedPolicies.Discard(policyID)
 		}
+		if event.Policy.PreDnat {
+			s.activePreDNATPolicies.Add(policyID)
+		} else {
+			s.activePreDNATPolicies.Discard(policyID)
+		}
 	case *proto.ActivePolicyRemove:
 		policyID := *event.Id
 		s.activePolicies.Discard(policyID)
 		s.activeUntrackedPolicies.Discard(policyID)
+		s.activePreDNATPolicies.Discard(policyID)
 	case *proto.ActiveProfileUpdate:
 		// TODO: check rules against expected rules
 		s.activeProfiles.Add(*event.Id)
@@ -1189,10 +1250,12 @@ func (s *stateTracker) onEvent(event interface{}) {
 		id := workloadId(*event.Id)
 		s.endpointToPolicyOrder[id.String()] = tierInfos
 		s.endpointToUntrackedPolicyOrder[id.String()] = []tierInfo{}
+		s.endpointToPreDNATPolicyOrder[id.String()] = []tierInfo{}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(*event.Id)
 		delete(s.endpointToPolicyOrder, id.String())
 		delete(s.endpointToUntrackedPolicyOrder, id.String())
+		delete(s.endpointToPreDNATPolicyOrder, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
 		tierInfos := make([]tierInfo, len(tiers))
@@ -1210,10 +1273,19 @@ func (s *stateTracker) onEvent(event interface{}) {
 			uTierInfos[i].PolicyNames = tier.Policies
 		}
 		s.endpointToUntrackedPolicyOrder[id.String()] = uTierInfos
+
+		pTiers := event.Endpoint.PreDnatTiers
+		pTierInfos := make([]tierInfo, len(pTiers))
+		for i, tier := range pTiers {
+			pTierInfos[i].Name = tier.Name
+			pTierInfos[i].PolicyNames = tier.Policies
+		}
+		s.endpointToPreDNATPolicyOrder[id.String()] = pTierInfos
 	case *proto.HostEndpointRemove:
 		id := hostEpId(*event.Id)
 		delete(s.endpointToPolicyOrder, id.String())
 		delete(s.endpointToUntrackedPolicyOrder, id.String())
+		delete(s.endpointToPreDNATPolicyOrder, id.String())
 	}
 }
 

@@ -40,10 +40,10 @@ func (r *DefaultRuleRenderer) StaticFilterInputChains(ipVersion uint8) []*Chain 
 	}
 }
 
-func (r *DefaultRuleRenderer) acceptUntrackedRules() []Rule {
+func (r *DefaultRuleRenderer) acceptAlreadyAccepted() []Rule {
 	return []Rule{
 		{
-			Match:  Match().MarkSet(r.IptablesMarkAccept).ConntrackState("UNTRACKED"),
+			Match:  Match().MarkSet(r.IptablesMarkAccept),
 			Action: AcceptAction{},
 		},
 	}
@@ -52,9 +52,8 @@ func (r *DefaultRuleRenderer) acceptUntrackedRules() []Rule {
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	inputRules = append(inputRules, r.acceptUntrackedRules()...)
+	// Accept immediately if we've already accepted this packet in the raw or mangle table.
+	inputRules = append(inputRules, r.acceptAlreadyAccepted()...)
 
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
@@ -89,7 +88,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -234,10 +233,6 @@ func (r *DefaultRuleRenderer) failsafeOutChain() *Chain {
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 	rules := []Rule{}
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	rules = append(rules, r.acceptUntrackedRules()...)
-
 	// To handle multiple workload interface prefixes, we want 2 batches of rules.
 	//
 	// The first dispatches the packet to our dispatch chains if it is going to/from an
@@ -281,22 +276,31 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		)
 	}
 
-	// If we get here, the packet is not going to or from a workload, but, since we're in the
-	// FORWARD chain, it is being forwarded.  Apply host endpoint rules in that case.  This
-	// allows Calico to police traffic that is flowing through a NAT gateway or router.
+	// If we get here, the packet is not going to or from a workload, and we are in the FORWARD
+	// chain, so we know that the packet is being forwarded from one host interface to another.
+	// In this scenario we generally apply any normal host endpoint policy that is configured,
+	// for both the incoming and outgoing interfaces; this allows Calico to police traffic
+	// flowing through a NAT gateway or router.  However, the packet may have already been
+	// marked as accepted by untracked or pre-DNAT policy for the incoming host endpoint.  In
+	// that case we skip any normal policy for the incoming host endpoint.
 	rules = append(rules,
 		Rule{
-			Action: ClearMarkAction{Mark: r.allCalicoMarkBits()},
+			// Clear marks except for IptablesMarkAccept.
+			Action: ClearMarkAction{Mark: r.allCalicoMarkBits() &^ r.IptablesMarkAccept},
 		},
 		Rule{
+			// Unless the packet has already been accepted by untracked or pre-DNAT
+			// processing, apply normal policy for the incoming host endpoint.
+			Match:  Match().MarkClear(r.IptablesMarkAccept),
 			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 		},
 		Rule{
+			// Apply normal policy for the outgoing host endpoint.
 			Action: JumpAction{Target: ChainDispatchToHostEndpoint},
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -317,9 +321,8 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains() []*Chain {
 func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 	rules := []Rule{}
 
-	// Match immediately if this is an UNTRACKED packet that we've already accepted in the
-	// raw chain.
-	rules = append(rules, r.acceptUntrackedRules()...)
+	// Accept immediately if we've already accepted this packet in the raw or mangle table.
+	rules = append(rules, r.acceptAlreadyAccepted()...)
 
 	// We don't currently police host -> endpoint according to the endpoint's ingress policy.
 	// That decision is based on pragmatism; it's generally very useful to be able to contact
@@ -350,7 +353,7 @@ func (r *DefaultRuleRenderer) filterOutputChain() *Chain {
 		},
 		Rule{
 			Match:   Match().MarkSet(r.IptablesMarkAccept),
-			Action:  r.iptablesAllowAction,
+			Action:  r.filterAllowAction,
 			Comment: "Host endpoint policy accepted packet.",
 		},
 	)
@@ -453,6 +456,75 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*Chain {
 		Name:  ChainNATOutput,
 		Rules: rules,
 	}}
+}
+
+func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) (chains []*Chain) {
+	return []*Chain{
+		r.failsafeInChain(),
+		r.StaticManglePreroutingChain(ipVersion),
+	}
+}
+
+func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chain {
+	rules := []Rule{}
+
+	// ACCEPT or RETURN immediately if packet matches an existing connection.  Note that we also
+	// have a rule like this at the start of each pre-endpoint chain; the functional difference
+	// with placing this rule here is that it will also apply to packets that may be unrelated
+	// to Calico (i.e. not to or from Calico workloads, and not via Calico host endpoints).  We
+	// think this is appropriate in the mangle table here - whereas we don't have a rule like
+	// this in the filter table - because the mangle table is generally not used (except by us)
+	// for dropping packets, so it is very unlikely that we would be circumventing someone
+	// else's rule to drop a packet.  (And in that case, the user can configure
+	// IptablesMangleAllowAction to be RETURN.)
+	rules = append(rules,
+		Rule{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: r.mangleAllowAction,
+		},
+	)
+
+	// Or if we've already accepted this packet in the raw table.
+	rules = append(rules,
+		Rule{
+			Match:  Match().MarkSet(r.IptablesMarkAccept),
+			Action: r.mangleAllowAction,
+		},
+	)
+
+	// If packet is from a workload interface, ACCEPT or RETURN immediately according to
+	// IptablesMangleAllowAction (because pre-DNAT policy is only for host endpoints).
+	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
+		rules = append(rules, Rule{
+			Match:  Match().InInterface(ifacePrefix + "+"),
+			Action: r.mangleAllowAction,
+		})
+	}
+
+	// Now (=> not from a workload) dispatch to host endpoint chain for the incoming interface.
+	rules = append(rules,
+		Rule{
+			Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
+		},
+		// Following that...  If the packet was explicitly allowed by a pre-DNAT policy, it
+		// will have MarkAccept set.  If the packet was denied, it will have been dropped
+		// already.  If the incoming interface isn't one that we're policing, or the packet
+		// isn't governed by any pre-DNAT policy on that interface, it will fall through to
+		// here without any Calico bits set.
+
+		// In the MarkAccept case, we ACCEPT or RETURN according to
+		// IptablesMangleAllowAction.
+		Rule{
+			Match:   Match().MarkSet(r.IptablesMarkAccept),
+			Action:  r.mangleAllowAction,
+			Comment: "Host endpoint policy accepted packet.",
+		},
+	)
+
+	return &Chain{
+		Name:  ChainManglePrerouting,
+		Rules: rules,
+	}
 }
 
 func (r *DefaultRuleRenderer) StaticRawTableChains(ipVersion uint8) []*Chain {
