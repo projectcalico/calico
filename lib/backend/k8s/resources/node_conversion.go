@@ -67,9 +67,11 @@ func K8sNodeToCalico(node *kapiv1.Node) (*model.KVPair, error) {
 func mergeCalicoK8sNode(calicoNode *model.Node, k8sNode *kapiv1.Node) (*kapiv1.Node, error) {
 	// In order to make sure we always end up with a CIDR that has the IP and not just network
 	// we assemble the CIDR from BGPIPv4Addr and BGPIPv4Net.
-	subnet, _ := calicoNode.BGPIPv4Net.Mask.Size()
-	ipCidr := fmt.Sprintf("%s/%d", calicoNode.BGPIPv4Addr.String(), subnet)
-	k8sNode.Annotations["projectcalico.org/IPv4Address"] = ipCidr
+	if calicoNode.BGPIPv4Net != nil {
+		subnet, _ := calicoNode.BGPIPv4Net.Mask.Size()
+		ipCidr := fmt.Sprintf("%s/%d", calicoNode.BGPIPv4Addr.String(), subnet)
+		k8sNode.Annotations["projectcalico.org/IPv4Address"] = ipCidr
+	}
 
 	// Don't set the ASNumber if it is nil, and ensure it does not exist in k8s.
 	if calicoNode.BGPASNumber != nil {
